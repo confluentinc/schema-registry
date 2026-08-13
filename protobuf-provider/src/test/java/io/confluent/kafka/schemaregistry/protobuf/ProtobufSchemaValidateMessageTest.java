@@ -301,6 +301,76 @@ public class ProtobufSchemaValidateMessageTest {
   }
 
   @Test
+  public void scalarFieldRule_seesTheSchemasRepresentationNotTheProducers() {
+    // bytes and string are interchangeable at the same number — a compatible change — so a
+    // producer can write bytes against a schema that declares a string. The rule is authored
+    // against the schema, so `this == 'hello'` has to be handed the string: CEL's byte
+    // strings only compare equal to other byte strings, so the producer's ByteString would
+    // reject a valid message. Naming is not the only thing the schema's view fixes.
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message M {\n"
+        + "  string payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"this == 'hello'\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    String producer = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message M { bytes payload = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor producerDesc = new ProtobufSchema(producer).toDescriptor("test.M");
+    DynamicMessage msg = DynamicMessage.newBuilder(producerDesc)
+        .setField(producerDesc.findFieldByName("payload"), ByteString.copyFromUtf8("hello"))
+        .build();
+
+    // Stands in for the CEL rule above: it can only match if it is handed the schema's
+    // representation of the value.
+    ValidationRuleExecutor stringValued = (rule, sch, value) -> "hello".equals(value);
+
+    assertEquals(Collections.emptyList(),
+        firedRules(schema.validateMessage(stringValued, msg)));
+  }
+
+  @Test
+  public void mapEntries_arePairedToTheirOwnSchemaView() {
+    // Map entries reach the walk as a list of entry messages, and the schema's view of that
+    // list comes from re-reading the same bytes — so the two lists carry the entries in the
+    // order the producer serialized them, and pair up positionally.
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer { map<string, test.Inner> labels = 1; }\n"
+        + "message Inner {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"m\", expr: \"this.renamed == 'x'\"}]\n"
+        + "  };\n"
+        + "  string renamed = 1;\n"
+        + "}\n";
+    String producer = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { map<string, test.Inner> labels = 1; }\n"
+        + "message Inner { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    ProtobufSchema producerSchema = new ProtobufSchema(producer);
+    Descriptor outerDesc = producerSchema.toDescriptor("test.Outer");
+    Descriptor innerDesc = producerSchema.toDescriptor("test.Inner");
+    FieldDescriptor labels = outerDesc.findFieldByName("labels");
+    Descriptor entryDesc = labels.getMessageType();
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(outerDesc);
+    for (String[] entry : new String[][] {{"a", "x"}, {"b", "wrong"}, {"c", "x"}}) {
+      builder.addRepeatedField(labels, DynamicMessage.newBuilder(entryDesc)
+          .setField(entryDesc.findFieldByName("key"), entry[0])
+          .setField(entryDesc.findFieldByName("value"), DynamicMessage.newBuilder(innerDesc)
+              .setField(innerDesc.findFieldByName("original"), entry[1]).build())
+          .build());
+    }
+
+    assertEquals(Collections.singletonList("m@labels[1].value"),
+        firedRules(schema.validateMessage(SCHEMA_NAMED, builder.build())));
+  }
+
+  @Test
   public void descriptorsThatAgree_areNotReReadThroughTheSchema() {
     // A generated class's descriptor is never the same object as the one built from the
     // registered schema text, so an identity check alone would re-read every record. When

@@ -3134,7 +3134,7 @@ public class ProtobufSchema implements ParsedSchema {
    */
   private static boolean presentsSameValues(
       Descriptor desc, Descriptor runtimeDesc, Set<String> visited) {
-    if (!visited.add(desc.getFullName() + ' ' + runtimeDesc.getFullName())) {
+    if (!visited.add(desc.getFullName() + '\0' + runtimeDesc.getFullName())) {
       // Already compared on another path, or cycling back to it. Either way this pair
       // contributes no new disagreement.
       return true;
@@ -3252,20 +3252,20 @@ public class ProtobufSchema implements ParsedSchema {
         String childPath = path.isEmpty()
             ? schemaFd.getName()
             : path + "." + schemaFd.getName();
-        // Only a message-valued field needs the schema's view of its value: a scalar, or a
-        // list of scalars, carries no field names for a rule to resolve.
-        Object schemaFieldValue = null;
-        if (schemaMsg != null
-            && fd.getJavaType() == FieldDescriptor.JavaType.MESSAGE
-            && schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE) {
-          schemaFieldValue = schemaMsg.getField(schemaFd);
-        }
-        // Field-level rules: this = fieldValue. Hint is the field's own
-        // message descriptor for nested messages, or the containing-type
-        // descriptor for primitives.
+        // Where a schema view exists, every value comes from it, not just message-valued
+        // ones: the two descriptors can disagree about representation as well as naming.
+        // bytes and string are interchangeable at the same number — a compatible change —
+        // and a rule authored as `this == 'hello'` cannot match a ByteString. The same goes
+        // for a renamed enum value. Reading the field is cheap next to the re-read that
+        // already happened, so there is nothing to gain from narrowing this further.
+        Object schemaFieldValue = schemaMsg == null ? null : schemaMsg.getField(schemaFd);
+        // Field-level rules: this = the field value as the schema presents it. Hint is the
+        // field's own message descriptor for nested messages, or the containing-type
+        // descriptor for primitives — taken from the schema's field, since that is where
+        // the value being bound comes from.
         if (schemaFd.getOptions().hasExtension(MetaProto.fieldMeta)) {
           Meta meta = schemaFd.getOptions().getExtension(MetaProto.fieldMeta);
-          Descriptor hint = (fd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+          Descriptor hint = (schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
               ? schemaFd.getMessageType()
               : schemaFd.getContainingType();
           Object thisValue = schemaFieldValue != null ? schemaFieldValue : fieldValue;
