@@ -881,7 +881,7 @@ public abstract class AbstractKafkaSchemaSerDe
             default:
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
-          boolean ruleSucceeded = message != null;
+          boolean ruleSucceeded = message != null && !ctx.hasFieldFailure();
           runAction(ctx, ruleMode, rule,
               ruleSucceeded ? getOnSuccess(ctx) : getOnFailure(ctx),
               message, null, ruleSucceeded ? null : ErrorAction.TYPE,

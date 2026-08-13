@@ -2383,6 +2383,7 @@ public abstract class FieldEncryptionExecutorTest {
 
     RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull("expected an ENCRYPT RuleResult under NONE-action failure", rr);
+    assertEquals(RuleResult.Result.FAILURE, rr.result());
     assertEquals(1, rr.fieldMetadata().size());
     Map<String, String> meta = firstFieldEntry(rr).getValue();
     assertEquals(EncryptionExecutor.Status.FAILED.name(),
@@ -2444,9 +2445,14 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("testUser2", record.get("name2").toString());
     assertEquals(18, record.get("age"));
 
-    // The failure is recorded per field rather than failing the whole rule.
+    // Deserialization itself does not throw (onFailure=NONE), but the RuleResult must
+    // still report FAILURE overall -- not SUCCESS -- since a field could not be
+    // decrypted. Consumers that gate on RuleResult.result() (e.g. Flink's
+    // SchemaDrivenEncryptionRuleEvaluator) rely on FAILURE being set here even though
+    // the per-field detail lives in fieldMetadata.
     RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(RuleResult.Result.FAILURE, rr.result());
     assertEquals(1, rr.fieldMetadata().size());
     Map<String, String> meta = firstFieldEntry(rr).getValue();
     assertEquals(EncryptionExecutor.Status.FAILED.name(),

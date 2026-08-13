@@ -672,6 +672,9 @@ public class EncryptionExecutor implements RuleExecutor {
         ctx.putFieldMetadata(path, META_DEK_VERSION, String.valueOf(dekVersion));
       }
       ctx.putFieldMetadata(path, META_ERROR_MESSAGE, errorMessage);
+      if (status == Status.FAILED) {
+        ctx.setFieldFailure();
+      }
     }
 
     private byte[] prefixVersion(int version, byte[] ciphertext) {
