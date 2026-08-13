@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.TopicOwnedSubjectReferenceException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -503,6 +504,8 @@ public class SubjectVersionsResource {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
+    } catch (TopicOwnedSubjectReferenceException e) {
+      throw Errors.topicOwnedSubjectReferenceException(e.getMessage());
     } catch (SchemaTooLargeException e) {
       throw Errors.schemaTooLargeException("Register operation failed because schema is too large");
     } catch (OperationNotPermittedException e) {
@@ -717,6 +720,8 @@ public class SubjectVersionsResource {
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
+    } catch (TopicOwnedSubjectReferenceException e) {
+      throw Errors.topicOwnedSubjectReferenceException(e.getMessage());
     } catch (SchemaTooLargeException e) {
       throw Errors.schemaTooLargeException("Register operation failed because schema is too large");
     } catch (OperationNotPermittedException e) {

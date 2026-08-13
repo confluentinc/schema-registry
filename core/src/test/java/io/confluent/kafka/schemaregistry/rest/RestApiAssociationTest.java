@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
@@ -32,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
@@ -45,6 +47,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.InputStream;
@@ -3727,6 +3731,113 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         Collections.singletonList("value"), null, 0, -1);
     assertEquals(1, associations.size());
     assertTrue(associations.get(0).isFrozen());
+  }
+
+  @Test
+  public void testRegisterSchemaRejectsReferenceToTopicOwnedSubject() throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String resourceName = "owned-topic";
+    String resourceNamespace = "lkc-abc123";
+    String resourceId = "topic-owned-ref-123";
+    // Frozen (STRONG) associations must use the auto-derived default subject format, which
+    // also happens to be what matchesTopicOwnedSubjectName looks for.
+    String ownedSubject = ":." + resourceNamespace + ":" + resourceName + "-value";
+
+    RegisterSchemaRequest ownedSchema = new RegisterSchemaRequest();
+    ownedSchema.setSchema(schemas.get(0));
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            ownedSubject, "value", LifecyclePolicy.STRONG, true, ownedSchema, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(schemas.get(1));
+    referrer.setReferences(Collections.singletonList(
+        new SchemaReference("otherns.Subrecord", ownedSubject, 1)));
+
+    try {
+      restApp.restClient.registerSchema(referrer, "referrer-subject", false);
+      fail("Registering a reference to a topic-owned subject should fail with "
+          + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "Reference to topic-owned subject should be rejected");
+    }
+  }
+
+  @Test
+  public void testRegisterSchemaAllowsReferenceToTopicOwnedSubjectInImportMode() throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String resourceName = "owned-topic-import";
+    String resourceNamespace = "lkc-abc123";
+    String resourceId = "topic-owned-ref-import-123";
+    String ownedSubject = ":." + resourceNamespace + ":" + resourceName + "-value";
+
+    RegisterSchemaRequest ownedSchema = new RegisterSchemaRequest();
+    ownedSchema.setSchema(schemas.get(0));
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            ownedSubject, "value", LifecyclePolicy.STRONG, true, ownedSchema, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    String referrerSubject = "referrer-subject-import";
+    restApp.restClient.setMode("IMPORT", referrerSubject, true);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(schemas.get(1));
+    referrer.setReferences(Collections.singletonList(
+        new SchemaReference("otherns.Subrecord", ownedSubject, 1)));
+    referrer.setVersion(1);
+    referrer.setId(1001);
+
+    int registeredId =
+        restApp.restClient.registerSchema(referrer, referrerSubject, false).getId();
+    assertEquals(1001, registeredId,
+        "IMPORT mode should be exempt from the topic-owned-subject reference check");
+  }
+
+  @Test
+  public void testRegisterSchemaRejectsReferenceToTopicOwnedSubjectAcrossContexts()
+      throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String resourceName = "owned-topic-ctx";
+    String resourceNamespace = "lkc-ctx1";
+    String resourceId = "topic-owned-ref-ctx-123";
+    String ownedSubject = ":." + resourceNamespace + ":" + resourceName + "-value";
+
+    RegisterSchemaRequest ownedSchema = new RegisterSchemaRequest();
+    ownedSchema.setSchema(schemas.get(0));
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            ownedSubject, "value", LifecyclePolicy.STRONG, true, ownedSchema, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Referrer lives in the same context and references the owned subject by its bare
+    // (unqualified) name -- exercises reference resolution's parent-context inheritance,
+    // which is what the topic-owned check must also honor to avoid checking the wrong subject.
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(schemas.get(1));
+    referrer.setReferences(Collections.singletonList(
+        new SchemaReference("otherns.Subrecord", resourceName + "-value", 1)));
+
+    try {
+      restApp.restClient.registerSchema(referrer, ":.lkc-ctx1:referrer-subject-ctx", false);
+      fail("Registering a reference to a topic-owned subject should fail with "
+          + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "Cross-context reference to topic-owned subject should be rejected");
+    }
   }
 
   private String rawGet(String path) throws Exception {
