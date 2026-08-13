@@ -3126,8 +3126,13 @@ public class ProtobufSchema implements ParsedSchema {
   /**
    * Whether {@code desc} and {@code runtimeDesc} present every field they share — paired by
    * number, which is how protobuf identifies a field — under the same name, type and label,
-   * recursively through message-valued fields. Fields only one of them declares are ignored:
-   * the walk visits the intersection either way.
+   * recursively through message-valued fields.
+   *
+   * <p>A field the registered schema declares and the caller's does not counts as a
+   * difference: adding a field is a compatible change, and a message-level rule may reference
+   * the added field expecting the schema's default for it, which only a message read through
+   * the schema can supply. Fields only the caller declares are ignored — no rule can name
+   * them, and the walk skips them.
    *
    * <p>{@code visited} holds the descriptor pairs already compared, so a self-referential
    * message type terminates.
@@ -3138,6 +3143,11 @@ public class ProtobufSchema implements ParsedSchema {
       // Already compared on another path, or cycling back to it. Either way this pair
       // contributes no new disagreement.
       return true;
+    }
+    for (FieldDescriptor schemaFd : desc.getFields()) {
+      if (runtimeDesc.findFieldByNumber(schemaFd.getNumber()) == null) {
+        return false;
+      }
     }
     for (FieldDescriptor runtimeFd : runtimeDesc.getFields()) {
       FieldDescriptor schemaFd = desc.findFieldByNumber(runtimeFd.getNumber());

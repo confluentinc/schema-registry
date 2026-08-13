@@ -371,6 +371,44 @@ public class ProtobufSchemaValidateMessageTest {
   }
 
   @Test
+  public void fieldOnlyTheSchemaDeclares_isVisibleToMessageRules() {
+    // Adding a field is the most ordinary compatible change there is, so the registered schema
+    // can declare one the producer's class has never heard of — and a message-level rule can
+    // reference it, expecting the schema's default. The rule's environment comes from the
+    // value it is handed, so that only works if the message is read through the schema: a
+    // field with no counterpart is itself a reason to re-read, even when every shared field
+    // agrees.
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message M {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"m\", expr: \"this.added == ''\"}]\n"
+        + "  };\n"
+        + "  string kept = 1;\n"
+        + "  string added = 2;\n"
+        + "}\n";
+    String producer = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message M { string kept = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor producerDesc = new ProtobufSchema(producer).toDescriptor("test.M");
+    DynamicMessage msg = DynamicMessage.newBuilder(producerDesc)
+        .setField(producerDesc.findFieldByName("kept"), "here").build();
+
+    // Stands in for the CEL rule above: it can only read the added field if the message it is
+    // handed declares it.
+    ValidationRuleExecutor readsAdded = (rule, sch, value) -> {
+      Message evaluated = (Message) value;
+      FieldDescriptor fd = evaluated.getDescriptorForType().findFieldByName("added");
+      return fd != null && "".equals(evaluated.getField(fd));
+    };
+
+    assertEquals(Collections.emptyList(),
+        firedRules(schema.validateMessage(readsAdded, msg)));
+  }
+
+  @Test
   public void descriptorsThatAgree_areNotReReadThroughTheSchema() {
     // A generated class's descriptor is never the same object as the one built from the
     // registered schema text, so an identity check alone would re-read every record. When
