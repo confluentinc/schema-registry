@@ -74,6 +74,7 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMaskProto;
@@ -3060,7 +3061,22 @@ public class ProtobufSchema implements ParsedSchema {
     if (desc == null) {
       return violations;
     }
-    toValidatedMessage(desc, msg, "", executor, failFast, violations);
+    // Re-read the message through that descriptor. Protobuf pairs fields by number on the
+    // wire, so this carries every value across a rename, and it means a message-level rule
+    // binds `this` to a message whose fields the rule's own environment - built from the
+    // same schema - can resolve. Without it, `this.renamed` reads a missing field and a
+    // valid message is rejected. The runtime descriptor is still what bounds the walk, so
+    // both walks visit the same fields.
+    Descriptor runtimeDesc = msg.getDescriptorForType();
+    if (runtimeDesc != desc) {
+      try {
+        msg = DynamicMessage.parseFrom(desc, msg.toByteString());
+      } catch (InvalidProtocolBufferException e) {
+        throw new IllegalArgumentException(
+            "Could not read the message through the registered schema", e);
+      }
+    }
+    toValidatedMessage(desc, runtimeDesc, msg, "", executor, failFast, violations);
     return violations;
   }
 
@@ -3084,7 +3100,7 @@ public class ProtobufSchema implements ParsedSchema {
    * </ul>
    */
   private static void toValidatedMessage(
-      Descriptor desc, Object value, String path,
+      Descriptor desc, Descriptor runtimeDesc, Object value, String path,
       ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
     if (desc == null) {
       return;
@@ -3092,7 +3108,8 @@ public class ProtobufSchema implements ParsedSchema {
     if (value instanceof List) {
       int i = 0;
       for (Object element : (List<?>) value) {
-        toValidatedMessage(desc, element, path + "[" + i + "]", executor, failFast, out);
+        toValidatedMessage(desc, runtimeDesc, element, path + "[" + i + "]", executor,
+            failFast, out);
         if (failFast && !out.isEmpty()) {
           return;
         }
@@ -3114,14 +3131,13 @@ public class ProtobufSchema implements ParsedSchema {
           }
         }
       }
-      // Iterate fields — same shape as toTransformedMessage's field loop.
+      // Iterate fields — same shape as toTransformedMessage's field loop. The message is in
+      // the schema's terms, so these are the schema's fields; runtimeDesc bounds the walk to
+      // the fields the caller's message class declares, which is the set the transform walk
+      // visits too.
       for (FieldDescriptor fd : msg.getDescriptorForType().getFields()) {
-        // Resolve by number, as the transform walk does: protobuf identifies a field by
-        // its number, and renaming a field at the same number is a compatible change (see
-        // SchemaDiff.COMPATIBLE_CHANGES), so with use.latest.version the registered
-        // schema's name for a field can differ from the message's.
-        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
-        if (schemaFd == null) {
+        FieldDescriptor schemaFd = fd;
+        if (runtimeDesc != null && runtimeDesc.findFieldByNumber(fd.getNumber()) == null) {
           continue;
         }
         // Skip-on-null per proto3 presence: hasPresence() returns true for
@@ -3162,7 +3178,14 @@ public class ProtobufSchema implements ParsedSchema {
         Descriptor childDesc = (schemaFd.getType() == Type.MESSAGE)
             ? schemaFd.getMessageType()
             : desc;
-        toValidatedMessage(childDesc, fieldValue, childPath, executor, failFast, out);
+        FieldDescriptor runtimeFd =
+            runtimeDesc == null ? null : runtimeDesc.findFieldByNumber(fd.getNumber());
+        Descriptor childRuntimeDesc =
+            runtimeFd != null && runtimeFd.getType() == Type.MESSAGE
+                ? runtimeFd.getMessageType()
+                : runtimeDesc;
+        toValidatedMessage(childDesc, childRuntimeDesc, fieldValue, childPath, executor,
+            failFast, out);
         if (failFast && !out.isEmpty()) {
           return;
         }
