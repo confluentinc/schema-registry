@@ -59,6 +59,9 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
@@ -123,10 +126,12 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     private static final String SEQ_HEADER = "seq";
 
     // Per-record captures, keyed by word, so each IQv2 result is asserted against its own record's
-    // produced schema-id GUIDs (see HeadersIQv2IntegrationTestBase#assertSchemaIdHeaders) and its
-    // own produced timestamp -- not a single shared value that every record would trivially match.
+    // produced schema-id GUIDs (see HeadersIQv2IntegrationTestBase#assertSchemaIdHeaders), its own
+    // produced count and its own produced timestamp -- not a single shared value that every record
+    // would trivially match.
     private final Map<String, CapturedSchemaIds> capturedByWord = new HashMap<>();
     private final Map<String, Long> timestampByWord = new HashMap<>();
+    private final Map<String, Long> countByWord = new HashMap<>();
 
     // A fixed, explicit base timestamp so each record's timestamp is known and assertable.
     private static final long BASE_TIMESTAMP = 1_600_000_000_000L;
@@ -205,6 +210,10 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             produceTombstone(input, "word-1");
             consumeRecords(output, appId + "-post", 2);
             assertPointReturnsNull(streams, storeName, "word-1", "tombstoned key", false);
+            // The range path is pinned to drop a tombstoned key by
+            // shouldDropTombstonedKeyFromRangeScan rather than here: caching is enabled in this test,
+            // and a range header-query reads the store without consulting the record cache, so the
+            // still-unflushed delete would not be visible to a scan run at this point.
 
             // A key that was never written is likewise absent.
             assertPointReturnsNull(streams, storeName, "no-such-word", "never-written key", false);
@@ -222,6 +231,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 reput.headers().add("phase", "after".getBytes(StandardCharsets.UTF_8));
                 capturedByWord.put("word-1", sendAndCapture(producer, reput));
                 timestampByWord.put("word-1", reputTs);
+                countByWord.put("word-1", 99L);
                 producer.flush();
             }
             consumeRecords(output, appId + "-reput", 3);
@@ -271,6 +281,67 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         }
     }
 
+    /**
+     * Covers the position-bound path for both header queries. Every other test here uses the default
+     * unbounded position, so neither {@code withPositionBound(...)} nor
+     * {@link StateQueryResult#getPosition()} would otherwise be exercised at all.
+     */
+    @Test
+    public void shouldReportPositionAndRejectQueryBoundedBeyondIt() throws Exception {
+        String input = "iqv2-position-input";
+        String output = "iqv2-position-output";
+        String storeName = "iqv2-position-store";
+        String appId = "iqv2-position-test";
+
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
+        try {
+            // A query served under the default (unbounded) bound reports the position the store had
+            // reached when it answered.
+            StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> unbounded =
+                streams.query(StateQueryRequest.inStore(storeName)
+                    .withQuery(TimestampedKeyWithHeadersQuery
+                        .<GenericRecord, GenericRecord>withKey(createKey("word-1"))));
+            Position position = unbounded.getPosition();
+            assertNotNull(position, "unbounded query should report a position");
+            assertTrue(position.getTopics().contains(input),
+                "reported position should cover the input topic but was: " + position);
+
+            // A bound at an offset the store cannot have reached must fail the query with
+            // NOT_UP_TO_BOUND rather than quietly serving a result from behind the bound.
+            PositionBound beyond = PositionBound.at(
+                Position.emptyPosition().withComponent(input, 0, Long.MAX_VALUE));
+            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
+                .withQuery(TimestampedKeyWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withKey(createKey("word-1")))
+                .withPositionBound(beyond)), "point query");
+            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
+                .withQuery(TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withNoBounds())
+                .withPositionBound(beyond)), "range query");
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
+     * Asserts every partition result failed with {@link FailureReason#NOT_UP_TO_BOUND} -- checking
+     * the reason, not merely that the query failed, so an unrelated failure can't pass as coverage.
+     */
+    private static <R> void assertNotUpToBound(StateQueryResult<R> result, String context) {
+        Map<Integer, QueryResult<R>> partitionResults = result.getPartitionResults();
+        assertFalse(partitionResults.isEmpty(), context + " should return a partition result");
+        for (Map.Entry<Integer, QueryResult<R>> e : partitionResults.entrySet()) {
+            QueryResult<R> pr = e.getValue();
+            assertTrue(pr.isFailure(), context
+                + " bounded beyond the store's position should fail on partition " + e.getKey());
+            assertEquals(FailureReason.NOT_UP_TO_BOUND, pr.getFailureReason(),
+                context + " should fail with NOT_UP_TO_BOUND on partition " + e.getKey());
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // TimestampedRangeWithHeadersQuery (range / scan)
     // ---------------------------------------------------------------------------------------------
@@ -310,7 +381,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> records =
                 queryRange(streams, storeName, query, expectedWords.size());
             assertEquals(expectedWords, wordsOf(records), "range " + label);
-            assertHeadersOnEach(records, "IQv2 range " + label);
+            assertRecordsMatchProduced(records, "IQv2 range " + label);
             closeStreams(streams);
         } finally {
             closeStreamsQuietly(streams);
@@ -355,7 +426,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                     .<GenericRecord, GenericRecord>withNoBounds().withAscendingKeys(),
                 3);
             assertEquals(Arrays.asList("word-1", "word-2", "word-3"), wordsOf(asc), "ascending keys");
-            assertHeadersOnEach(asc, "IQv2 ascending");
+            assertRecordsMatchProduced(asc, "IQv2 ascending");
 
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> desc = queryRange(
                 streams, storeName,
@@ -363,7 +434,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                     .<GenericRecord, GenericRecord>withNoBounds().withDescendingKeys(),
                 3);
             assertEquals(Arrays.asList("word-3", "word-2", "word-1"), wordsOf(desc), "descending keys");
-            assertHeadersOnEach(desc, "IQv2 descending");
+            assertRecordsMatchProduced(desc, "IQv2 descending");
 
             // Bounded + descending: the ordering flip must also apply to a bounded range, not just a
             // full scan -- guards against an ordering bug that only surfaces on the bounded path.
@@ -375,7 +446,53 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 2);
             assertEquals(Arrays.asList("word-2", "word-1"), wordsOf(boundedDesc),
                 "bounded descending [word-1, word-2]");
-            assertHeadersOnEach(boundedDesc, "IQv2 bounded descending");
+            assertRecordsMatchProduced(boundedDesc, "IQv2 bounded descending");
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
+     * Pins the range path to drop a tombstoned key, not just the point path -- every other range test
+     * here runs against a store where nothing was ever deleted.
+     *
+     * <p>Caching is disabled so the delete is store-visible. A range header-query reads the store
+     * directly and does not consult the record cache, so with caching enabled the tombstone would
+     * still be sitting unflushed in the cache and the scan would return the stale entry -- which
+     * would make this a test of cache-flush timing rather than of the store contract.
+     */
+    @Test
+    public void shouldDropTombstonedKeyFromRangeScan() throws Exception {
+        String input = "iqv2-range-tombstone-input";
+        String output = "iqv2-range-tombstone-output";
+        String storeName = "iqv2-range-tombstone-store";
+        String appId = "iqv2-range-tombstone-test";
+
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Arrays.asList("word-1", "word-2", "word-3"), Arrays.asList(10L, 20L, 30L), false, null);
+        try {
+            // Positive control: all three keys are visible to the range path before any delete, so a
+            // post-delete scan that returns fewer keys is doing so because of the tombstone.
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> before = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withNoBounds().withAscendingKeys(), 3);
+            assertEquals(Arrays.asList("word-1", "word-2", "word-3"), wordsOf(before),
+                "range scan before tombstone");
+            assertRecordsMatchProduced(before, "range before tombstone");
+
+            // The processor forwards the null-value record too, so a 4th output record marks the
+            // tombstone as applied to the store.
+            produceTombstone(input, "word-2");
+            consumeRecords(output, appId + "-post", 4);
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> after = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withNoBounds().withAscendingKeys(), 2);
+            assertEquals(Arrays.asList("word-1", "word-3"), wordsOf(after),
+                "range scan should drop the tombstoned key");
+            assertRecordsMatchProduced(after, "range after tombstone");
             closeStreams(streams);
         } finally {
             closeStreamsQuietly(streams);
@@ -591,18 +708,24 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 }
             }
         };
-        KafkaStreams restored = new KafkaStreams(
-            buildTopology(input, output, storeName, true), createStreamsProps(appId, null));
-        restored.cleanUp();
-        restored.setGlobalStateRestoreListener(restoreListener);
-        CountDownLatch restoredRunning = new CountDownLatch(1);
-        restored.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.RUNNING) {
-                restoredRunning.countDown();
-            }
-        });
-        restored.start();
+        // Construct, configure and start inside the try: this instance is created here rather than
+        // through the base helper, so it is not in the base's startedStreams and teardown will not
+        // close it. If cleanUp() or start() threw outside the try, nothing would ever close it and
+        // its state-directory lock and StreamThreads would leak for the rest of the fork JVM.
+        KafkaStreams restored = null;
         try {
+            restored = new KafkaStreams(
+                buildTopology(input, output, storeName, true), createStreamsProps(appId, null));
+            restored.cleanUp();
+            restored.setGlobalStateRestoreListener(restoreListener);
+            CountDownLatch restoredRunning = new CountDownLatch(1);
+            restored.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    restoredRunning.countDown();
+                }
+            });
+            restored.start();
+
             assertTrue(restoredRunning.await(90, TimeUnit.SECONDS),
                 "restored KafkaStreams should reach RUNNING");
 
@@ -615,7 +738,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 restored, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 3);
             assertEquals(new HashSet<>(Arrays.asList("word-1", "word-2", "word-3")),
                 new HashSet<>(wordsOf(all)), "restored scan keys");
-            assertHeadersOnEach(all, "restored scan");
+            assertRecordsMatchProduced(all, "restored scan");
 
             // Pin that the store was genuinely rebuilt from the changelog, not repopulated by a
             // silent reprocess of the input topic.
@@ -696,7 +819,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 "should read every distinct key across partitions (none dropped or duplicated)");
             assertTrue(partitionsSeen.size() > 1,
                 "records should span more than one partition but saw: " + partitionsSeen);
-            assertHeadersOnEach(all, "IQv2 multi-partition scan");
+            assertRecordsMatchProduced(all, "IQv2 multi-partition scan");
             closeStreams(streams);
         } finally {
             closeStreamsQuietly(streams);
@@ -820,12 +943,23 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             .collect(Collectors.toList());
     }
 
-    private void assertHeadersOnEach(
+    /**
+     * Asserts every record in a range/scan result matches what was produced for its own key: value,
+     * timestamp and headers. The point-query path checks all three (see {@link #assertPointQuery}),
+     * so the range path must too -- otherwise a range that returned the right key and headers but
+     * another entry's value or timestamp would pass unnoticed.
+     */
+    private void assertRecordsMatchProduced(
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> records, String context) {
         for (int i = 0; i < records.size(); i++) {
             ReadOnlyRecord<GenericRecord, GenericRecord> record = records.get(i);
             String word = record.key().get("word").toString();
-            assertRecordHeaders(record, word, context + " entry " + i);
+            String entryContext = context + " entry " + i;
+            Long expectedCount = countByWord.get(word);
+            assertNotNull(expectedCount, entryContext + ": no produced count for " + word);
+            assertEquals(expectedCount, record.value().get("count"), entryContext + " value");
+            assertEquals(timestampByWord.get(word), record.timestamp(), entryContext + " timestamp");
+            assertRecordHeaders(record, word, entryContext);
         }
     }
 
@@ -917,6 +1051,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 record.headers().add(SEQ_HEADER, word.getBytes(StandardCharsets.UTF_8));
                 capturedByWord.put(word, sendAndCapture(producer, record));
                 timestampByWord.put(word, timestamp);
+                countByWord.put(word, counts.get(i));
             }
             producer.flush();
         }
