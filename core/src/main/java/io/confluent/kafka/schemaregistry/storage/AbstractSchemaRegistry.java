@@ -115,6 +115,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -181,6 +182,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   };
 
+  // A Kafka cluster context. CC: lkc-*. CP: 22 characters.
+  // Allowed characters: A-Z, a-z, 0-9, -, _
+  private static final Pattern KAFKA_CLUSTER_CONTEXT = Pattern.compile(
+      Pattern.quote(QualifiedSubject.CONTEXT_SEPARATOR) + "(lkc-.+|[A-Za-z0-9_-]{22})");
+  private static final String KEY_ASSOCIATION_SUFFIX = "-key";
+  private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
+
   protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
 
   protected final SchemaRegistryConfig config;
@@ -206,6 +214,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final int contextSearchDefaultLimit;
   protected final int subjectSearchMaxLimit;
   protected final boolean allowModeChanges;
+  protected final boolean associationsEnabled;
   protected final AtomicBoolean initialized;
   protected final Time time;
 
@@ -269,6 +278,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     this.subjectSearchMaxLimit =
         config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+    this.associationsEnabled = config.getBoolean(SchemaRegistryConfig.ASSOCIATIONS_ENABLE);
     this.initialized = new AtomicBoolean(false);
     this.time = config.getTime();
   }
@@ -402,6 +412,55 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  /**
+   * True if the subject is named &lt;cluster&gt;:&lt;topic&gt;-key or -value, the canonical name a
+   * topic's strong association uses. A cluster context is either lkc-* (CC), or 22 characters
+   * of A-Z, a-z, 0-9, -, _ (CP). That second shape is not distinctive, so a user context of
+   * the same length and charset is reserved too — ".staging" is not, "production-us-east-1-a" is.
+   *
+   * <p>{@code MockSchemaRegistryClient} carries the same check and the two must agree.
+   */
+  private boolean matchesTopicOwnedSubjectName(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (qs == null || !KAFKA_CLUSTER_CONTEXT.matcher(qs.getContext()).matches()) {
+      return false;
+    }
+    String unqualified = qs.getSubject();
+    return unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        || unqualified.endsWith(VALUE_ASSOCIATION_SUFFIX);
+  }
+
+  /**
+   * True if the subject is the canonical form above and no schema has ever been registered
+   * under it. Soft-deleted versions still count as existing — they remain readable and the
+   * name stays taken — so a delete does not re-expose it.
+   */
+  protected boolean isTopicOwnedSubjectNonexistent(String subject)
+      throws SchemaRegistryException {
+    if (!matchesTopicOwnedSubjectName(subject)) {
+      return false;
+    }
+    // Ranged over this subject's keys only. hasSubjects() would answer the same question by
+    // streaming the whole store, and the miss case here is exactly its worst case.
+    return !getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext();
+  }
+
+  /**
+   * Names the topic and cluster a canonical subject belongs to, so a rejection tells the caller
+   * which topic to create rather than leaving them to decode the subject name.
+   */
+  protected String describeOwningTopic(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    String context = qs.getContext();
+    String cluster = context.startsWith(QualifiedSubject.CONTEXT_SEPARATOR)
+        ? context.substring(QualifiedSubject.CONTEXT_SEPARATOR.length()) : context;
+    String unqualified = qs.getSubject();
+    String suffix = unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        ? KEY_ASSOCIATION_SUFFIX : VALUE_ASSOCIATION_SUFFIX;
+    String topic = unqualified.substring(0, unqualified.length() - suffix.length());
+    return "topic " + topic + " in kafka cluster " + cluster;
   }
 
   protected void checkRegisterMode(
