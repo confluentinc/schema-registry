@@ -2391,16 +2391,17 @@ public class ProtobufSchema implements ParsedSchema {
           // validation walk never evaluates anything on it either.
           continue;
         }
-        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        // Resolve by number, not by name: protobuf identifies a field by its number, and
+        // renaming a field at the same number is a compatible change
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
         if (schemaFd == null) {
           // The schema does not declare this field, so it carries no tags and no
-          // transform applies to it. Reading options off it would throw; the validation
-          // walk skips it the same way.
+          // transform applies to it. Reading options off it would throw.
           continue;
         }
         try (FieldContext fc = ctx.enterField(
-            message, fd.getFullName(), fd.getName(), getType(fd),
-            getInlineTags(schemaFd)) // use schema-based fd which has the tags
+            message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
+            getInlineTags(schemaFd))
         ) {
           // Skip-on-null, as in the validation walk: a field with explicit presence that
           // is unset has no value to transform, and writing one back would materialize

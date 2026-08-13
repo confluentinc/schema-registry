@@ -44,6 +44,7 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
@@ -3376,5 +3377,57 @@ public class ProtobufSchemaTest {
     Message item = (Message) itemEntryResult.getField(itemEntryDesc.findFieldByName("value"));
     assertEquals("x-suffix",
         item.getField(item.getDescriptorForType().findFieldByName("v")));
+  }
+
+  /** Records the field context of every leaf the walk hands over, and suffixes strings. */
+  private static class RecordingTransform implements FieldTransform {
+    private final List<String> visited = new ArrayList<>();
+
+    @Override
+    public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue) {
+      visited.add(fieldCtx.getName() + "|" + fieldCtx.getFullName());
+      return fieldValue instanceof String ? fieldValue + "-suffix" : fieldValue;
+    }
+  }
+
+  /**
+   * Protobuf identifies a field by its number, and renaming a field at the same number is a
+   * compatible change, so with use.latest.version the registered schema's name for a field
+   * can differ from the message's. Resolving the schema-side field by name would find
+   * nothing and silently skip the field's rules - including CSFLE and redaction - leaving a
+   * tagged field untouched. The names reported to the rule come from the registered schema,
+   * which is what the rule was written against.
+   */
+  @Test
+  public void testTransformMessageResolvesRenamedFieldsByNumber() throws Exception {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  string renamed = 1 [(confluent.field_meta).tags = \"PII\"];\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    // The rule only applies to fields tagged PII, so it fires only if the tag was found on
+    // the registered field.
+    Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
+        Collections.singleton("PII"), null, null, null, null, false);
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+        "topic-value", "topic", null, null, null, false,
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+    RecordingTransform recorder = new RecordingTransform();
+
+    Message result = (Message) schema.transformMessage(ctx, recorder, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("original")));
+    // The name reported is the registered schema's, not the message's.
+    assertEquals(Collections.singletonList("renamed|test.Outer.renamed"), recorder.visited);
   }
 }
