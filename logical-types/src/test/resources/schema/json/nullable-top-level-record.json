@@ -1,0 +1,15 @@
+{
+  "oneOf": [
+    {
+      "type": "null"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "f0": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

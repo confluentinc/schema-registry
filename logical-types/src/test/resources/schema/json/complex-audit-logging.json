@@ -1,0 +1,875 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "This is v1.2 of the Confluent Cloud audit log event schema.",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Uniquely identifies the event.",
+      "examples": [
+        "c72a3d0c-e6f3-4196-9b49-a835614452df"
+      ]
+    },
+    "specversion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The version of the CloudEvents specification which the event uses.",
+      "examples": [
+        "1.0"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "format": "uri-reference",
+      "minLength": 1,
+      "description": "Identifies the context in which an event happened.",
+      "examples": [
+        "crn://confluent.cloud",
+        "crn://confluent.cloud/kafka=lkc-a1b2c",
+        "crn:///kafka=lkc-a1b2c"
+      ]
+    },
+    "subject": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "description": "Identifies the resource that would be affected by the event.",
+      "examples": [
+        "crn:///kafka=lkc-a1b2c",
+        "crn://confluent.cloud/kafka=lkc-a1b2c",
+        "crn://confluent.cloud/kafka=lkc-xyz01/topic=departures",
+        "crn://confluent.cloud/kafka=lkc-xyz01/group=delivery-estimator"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Describes the type of event.",
+      "examples": [
+        "io.confluent.kafka.server/authentication",
+        "io.confluent.kafka.server/authorization",
+        "io.confluent.cloud/request"
+      ]
+    },
+    "time": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "description": "Timestamp of when the occurrence happened. Adheres to RFC 3339.",
+      "examples": [
+        "2020-12-06T13:39:03Z",
+        "2020-12-06T13:39:03.123Z"
+      ]
+    },
+    "datacontenttype": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Content type of the data value. Adheres to RFC 2046 format.",
+      "minLength": 1,
+      "examples": [
+        "application/json"
+      ]
+    },
+    "dataschema": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "minLength": 1,
+      "description": "Identifies the schema that data adheres to. Currently unused."
+    },
+    "data": {
+      "type": "object",
+      "description": "Additional details about the audited occurrence.",
+      "properties": {
+        "serviceName": {
+          "type": "string",
+          "description": "The resource identifier of the service (the source) that received the request being logged.",
+          "examples": [
+            "crn://confluent.cloud",
+            "crn://confluent.cloud/kafka=lkc-a1b2c",
+            "crn:///kafka=lkc-a1b2c"
+          ]
+        },
+        "methodName": {
+          "type": "string",
+          "description": "The type of request being logged.",
+          "examples": [
+            "CreateKafkaCluster",
+            "GetAPIKeys",
+            "DeleteEnvironment",
+            "CreateConnector",
+            "DeleteAPIKey"
+          ]
+        },
+        "cloudResources": {
+          "type": "array",
+          "description": "The resource(s) or collection(s) targeted in the operation.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "object",
+                "description": "Defines the scope of the action.",
+                "properties": {
+                  "resources": {
+                    "type": "array",
+                    "description": "The list of cloud resources that define the scope of the action.",
+                    "items": {
+                      "$ref": "#/$defs/resource"
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "$ref": "#/$defs/resource"
+              }
+            }
+          }
+        },
+        "resourceName": {
+          "type": "string",
+          "description": "The resource identifier of the target of the request for compatibility with other request types. Will be deprecated in future.",
+          "examples": [
+            "crn:///kafka=lkc-a1b2c",
+            "crn://confluent.cloud/kafka=lkc-a1b2c",
+            "crn://confluent.cloud/kafka=lkc-xyz01/topic=departures",
+            "crn://confluent.cloud/kafka=lkc-xyz01/group=delivery-estimator"
+          ]
+        },
+        "authenticationInfo": {
+          "type": "object",
+          "description": "Information about the principal and the credentials used to prove its identity.",
+          "properties": {
+            "principal": {
+              "$ref": "#/$defs/principal",
+              "description": "Identifies the authenticated principal that is used for any authorization checks. Also identifies the authenticated principal that made the request, unless originalPrincipal is set."
+            },
+            "originalPrincipal": {
+              "$ref": "#/$defs/principal",
+              "description": "If set, indicates the original principal that made the request. Used for situations where one principal can assume the identity of a different principal."
+            },
+            "result": {
+              "description": "The result of authentication checks on the provided credentials.",
+              "enum": [
+                "UNSET",
+                "SUCCESS",
+                "FAILURE"
+              ]
+            },
+            "errorMessage": {
+              "type": "string",
+              "description": "A short, human-readable description of the reason authentication failed.",
+              "examples": [
+                "Authentication Failed. Wrong Credentials"
+              ]
+            },
+            "credentials": {
+              "$ref": "#/$defs/credentials"
+            },
+            "identity": {
+              "type": "string",
+              "description": "Identity of the requester in the format.",
+              "examples": [
+                "crn://confluent.cloud/organization=uuid-for-ourcorp/identity-provider=ourcorp-idp/identity=u-yw9507"
+              ]
+            }
+          }
+        },
+        "authorizationInfo": {
+          "type": "object",
+          "description": "The result of this authorization check.",
+          "properties": {
+            "dryRun": {
+              "type": "boolean"
+            },
+            "result": {
+              "description": "Whether the authorization was granted",
+              "enum": [
+                "UNSET",
+                "ALLOW",
+                "DENY"
+              ]
+            },
+            "operation": {
+              "$ref": "#/$defs/operation",
+              "description": "The operation being checked for authorization"
+            },
+            "resourceName": {
+              "$ref": "#/$defs/resourceName",
+              "description": "the name of the resource being checked for authorization"
+            },
+            "resourceType": {
+              "$ref": "#/$defs/resourceType",
+              "description": "the type of the resource being checked for authorization"
+            },
+            "assignedPrincipals": {
+              "type": "array",
+              "description": "The list of principals the user has access to, including user itself and identity pools",
+              "items": {
+                "$ref": "#/$defs/principal"
+              }
+            },
+            "superUserAuthorization": {
+              "$ref": "#/$defs/superUserAuthorization"
+            },
+            "rbacAuthorization": {
+              "type": "object",
+              "description": "A RBAC rule that resulted in the authorization check being allowed.",
+              "properties": {
+                "role": {
+                  "$ref": "#/$defs/role"
+                },
+                "cloudScope": {
+                  "type": "object",
+                  "description": "The list of cloud resources involved in the scope of an action.",
+                  "properties": {
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/resource"
+                      }
+                    }
+                  }
+                },
+                "resourceType": {
+                  "$ref": "#/$defs/resourceType"
+                },
+                "patternType": {
+                  "$ref": "#/$defs/patternType"
+                },
+                "patternName": {
+                  "$ref": "#/$defs/patternName"
+                },
+                "actingPrincipal": {
+                  "$ref": "#/$defs/principal",
+                  "description": "The decisive principal used for authorization."
+                },
+                "operation": {
+                  "$ref": "#/$defs/operation",
+                  "description": "The operation which was assigned to the rbac role"
+                }
+              }
+            },
+            "aclAuthorization": {
+              "type": "object",
+              "description": "An ACL rule that resulted in the authorization check being denied or allowed.",
+              "properties": {
+                "permissionType": {
+                  "$ref": "#/$defs/permissionType"
+                },
+                "host": {
+                  "$ref": "#/$defs/host"
+                },
+                "resourceType": {
+                  "$ref": "#/$defs/resourceType"
+                },
+                "patternType": {
+                  "$ref": "#/$defs/patternType"
+                },
+                "patternName": {
+                  "$ref": "#/$defs/patternName"
+                },
+                "actingPrincipal": {
+                  "$ref": "#/$defs/principal",
+                  "description": "The decisive principal used for authorization."
+                }
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "allOf": [
+                {
+                  "required": [
+                    "superUserAuthorization"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "rbacAuthorization"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "aclAuthorization"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "required": [
+                    "aclAuthorization"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "rbacAuthorization"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "aclAuthorization"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "required": [
+                    "rbacAuthorization"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "superUserAuthorization"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "aclAuthorization"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "not": {
+                    "required": [
+                      "rbacAuthorization"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "superUserAuthorization"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "aclAuthorization"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "requestMetadata": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "description": "Uniquely identifies an authenticated connection. Only present for successfully authenticated connections."
+            },
+            "requestId": {
+              "type": "array",
+              "description": "Uniquely identifies a client request.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "clientAddress": {
+              "type": "array",
+              "description": "Network address of the remote client.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "string",
+                    "description": "IPv4 or IPv6 address.",
+                    "anyOf": [
+                      {
+                        "format": "ipv4"
+                      },
+                      {
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "port": {
+                    "type": "number",
+                    "description": "Port number, if known."
+                  }
+                }
+              }
+            },
+            "clientId": {
+              "type": "string",
+              "description": "A client-provided identifier, logged for correlation, as a courtesy to the client."
+            },
+            "clientTraceId": {
+              "type": "string",
+              "description": "A client-provided identifier, logged for correlation, as a courtesy to the client."
+            }
+          }
+        },
+        "request": {
+          "type": "object",
+          "description": "Describes additional audit-worthy details about the request.",
+          "properties": {
+            "accessType": {
+              "description": "The type of the request",
+              "enum": [
+                "UNKNOWN",
+                "READ_ONLY",
+                "MODIFICATION"
+              ]
+            },
+            "data": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Audit-worthy details from the request. There are currently no guarantees of backwards-compatibility on the contents of this field. The contents of this field should not be relied on for any programmatic access.",
+              "additionalProperties": {
+                "type": [
+                  "array",
+                  "boolean",
+                  "number",
+                  "object",
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "description": "Describes the result of the overall operation (i.e. success, failure, etc) along with any audit-worthy details. For example, this field contains the resource identifier of a newly created resource from a CREATE request.",
+          "properties": {
+            "status": {
+              "description": "The status of the result.",
+              "enum": [
+                "UNSET",
+                "SUCCESS",
+                "FAILURE"
+              ]
+            },
+            "data": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Audit-worthy details from the operation's result. There are currently no guarantees of backwards-compatibility on the contents of this field. The contents of this field should not be relied on for any programmatic access.",
+              "additionalProperties": {
+                "type": [
+                  "array",
+                  "boolean",
+                  "number",
+                  "object",
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "id",
+    "source",
+    "specversion",
+    "type"
+  ],
+  "$defs": {
+    "user": {
+      "type": "object",
+      "properties": {
+        "resourceId": {
+          "type": "string",
+          "description": "Resource identifier",
+          "examples": [
+            "u-8191a"
+          ]
+        }
+      }
+    },
+    "operation": {
+      "type": "string",
+      "description": "Identifies the operation being checked for authorization.",
+      "examples": [
+        "Alter",
+        "AlterConfigs",
+        "Create",
+        "Delete",
+        "DescribeConfigs"
+      ]
+    },
+    "resourceType": {
+      "type": "string",
+      "description": "The type of the resource being checked for authorization.",
+      "examples": [
+        "Cluster",
+        "Group",
+        "Topic"
+      ]
+    },
+    "resourceName": {
+      "type": "string",
+      "description": "The resource name of the checked authorization rule.",
+      "examples": [
+        "kafka-cluster",
+        "delivery-estimator",
+        "departures"
+      ]
+    },
+    "patternType": {
+      "type": "string",
+      "description": "The pattern, LITERAL or PREFIX, used to match the resource against the authorization rule.",
+      "examples": [
+        "LITERAL",
+        "PREFIX"
+      ]
+    },
+    "patternName": {
+      "type": "string",
+      "description": "The resource name or prefix matched by this ACL rule.",
+      "examples": [
+        "*"
+      ]
+    },
+    "permissionType": {
+      "type": "string",
+      "examples": [
+        "ALLOW",
+        "DENY"
+      ]
+    },
+    "host": {
+      "type": "string",
+      "description": "Host to which the ACL rule applies, usually wildcard (*).",
+      "examples": [
+        "*"
+      ]
+    },
+    "role": {
+      "type": "string",
+      "description": "A role that the principal has, granting authorization to perform the operation on the resource.",
+      "examples": [
+        "OrganizationAdmin",
+        "EnvironmentAdmin",
+        "CloudClusterAdmin",
+        "MetricsViewer"
+      ]
+    },
+    "resource": {
+      "type": "object",
+      "description": "The actual resource affected within the identified scope.",
+      "properties": {
+        "type": {
+          "enum": [
+            "ALL",
+            "ORGANIZATION",
+            "ENVIRONMENT",
+            "CLOUD_CLUSTER",
+            "USER",
+            "SERVICE_ACCOUNT",
+            "API_KEY",
+            "KAFKA_CLUSTER",
+            "TOPIC",
+            "GROUP",
+            "TRANSACTIONAL_ID",
+            "SCHEMA_REGISTRY",
+            "SUBJECT",
+            "VERSION",
+            "SCHEMA",
+            "KSQL",
+            "KSQL_CLUSTER",
+            "QUERY",
+            "STREAM",
+            "TABLE",
+            "TYPE",
+            "VARIABLE",
+            "CONNECT_CLUSTER",
+            "CONNECTOR",
+            "SECRET",
+            "SECURITY_METADATA",
+            "SSO_CONNECTION",
+            "USER_INVITATION",
+            "MARKETPLACE_ENTITLEMENT",
+            "NETWORK",
+            "PEERING",
+            "PRIVATE_LINK_ACCESS",
+            "TRANSIT_GATEWAY_ATTACHMENT",
+            "PIPELINE",
+            "CLUSTER_LINK",
+            "IDENTITY_PROVIDER",
+            "IDENTITY_POOL",
+            "CUSTOM_CONNECTOR_PLUGIN",
+            "CUSTOM_CONNECTOR_PLUGIN_VERSION",
+            "FLINK_CLUSTER",
+            "NETWORK_LINK_ENDPOINT",
+            "NETWORK_LINK_SERVICE",
+            "NETWORK_LINK_SERVICE_ASSOCIATION",
+            "NS_NOTIFICATION_TYPE",
+            "NS_SUBSCRIPTION",
+            "NS_INTEGRATION",
+            "NS_TEMPLATE",
+            "NS_NOTIFICATION",
+            "COMPUTE_POOL",
+            "STATEMENT",
+            "FLINK_REGION",
+            "PRIVATE_LINK_ATTACHMENT",
+            "PRIVATE_LINK_ATTACHMENT_CONNECTION",
+            "HEIMDALL_RULE",
+            "HEIMDALL_ALERT",
+            "HEALTHPLUS_CLUSTER",
+            "CUSTOM_CONNECTOR_PLUGIN",
+            "CUSTOM_CONNECTOR_PLUGIN_VERSION",
+            "FLINK_WORKSPACE",
+            "DOMAIN"
+          ]
+        },
+        "resourceId": {
+          "type": "string",
+          "description": "Resource Identifier",
+          "examples": [
+            "sa-8191a",
+            "lkc-a1b2c"
+          ]
+        }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Email address of the principal.",
+          "examples": [
+            "abc@confluent.io"
+          ]
+        },
+        "confluentUser": {
+          "$ref": "#/$defs/user"
+        },
+        "confluentServiceAccount": {
+          "$ref": "#/$defs/user"
+        },
+        "externalAccount": {
+          "type": "object",
+          "properties": {
+            "namespace": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "examples": [
+                      "idp",
+                      "tenant"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "examples": [
+                      "confluent.cloud",
+                      "a2efbdb2-af88-4b38-99a4-9a1e9d700963"
+                    ]
+                  }
+                }
+              }
+            },
+            "subject": {
+              "type": "string",
+              "description": "Identity of the requesting party, known to the IdP.",
+              "examples": [
+                "bilbo.baggins",
+                "harry.potter"
+              ]
+            }
+          }
+        },
+        "identityPool": {
+          "$ref": "#/$defs/user"
+        },
+        "group": {
+          "$ref": "#/$defs/user"
+        },
+        "confluentInternal": {
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "confluentServiceAccount"
+          ]
+        },
+        {
+          "required": [
+            "confluentUser"
+          ]
+        },
+        {
+          "required": [
+            "externalAccount"
+          ]
+        },
+        {
+          "required": [
+            "identityPool"
+          ]
+        },
+        {
+          "required": [
+            "group"
+          ]
+        },
+        {
+          "required": [
+            "confluentInternal"
+          ]
+        }
+      ]
+    },
+    "credentials": {
+      "type": "object",
+      "description": "Information sent to prove the identity of the principal.",
+      "properties": {
+        "idSecretCredentials": {
+          "type": "object",
+          "properties": {
+            "credentialId": {
+              "type": "string",
+              "description": "Identifies the credential",
+              "examples": [
+                "bilbo.baggins",
+                "harry.potter"
+              ]
+            }
+          }
+        },
+        "idTokenCredentials": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of the Id Token Credential. JWT for the foreseeable future.",
+              "examples": [
+                "JWT"
+              ]
+            },
+            "issuer": {
+              "type": "string",
+              "description": "Who signed the token."
+            },
+            "subject": {
+              "type": "string",
+              "description": "Identifies the principal."
+            },
+            "audience": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "certificateCredentials": {
+          "type": "object",
+          "properties": {
+            "dname": {
+              "type": "object",
+              "description": "The principal identified by this certificate.",
+              "properties": {
+                "cn": {
+                  "type": "string",
+                  "description": "Common name"
+                },
+                "ou": {
+                  "type": "string",
+                  "description": "Organizational unit"
+                },
+                "o": {
+                  "type": "string",
+                  "description": "Organization"
+                },
+                "l": {
+                  "type": "string",
+                  "description": "Locality"
+                },
+                "st": {
+                  "type": "string",
+                  "description": "State or province"
+                },
+                "c": {
+                  "type": "string",
+                  "description": "Country"
+                }
+              }
+            }
+          }
+        },
+        "mechanism": {
+          "$ref": "#/$defs/mechanism"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "idSecretCredentials"
+          ]
+        },
+        {
+          "required": [
+            "idTokenCredentials"
+          ]
+        },
+        {
+          "required": [
+            "certificateCredentials"
+          ]
+        }
+      ]
+    },
+    "mechanism": {
+      "enum": [
+        "UNSET",
+        "SASL_PLAIN",
+        "SASL_SCRAM",
+        "SASL_OAUTHBEARER",
+        "SASL_GSSAPI",
+        "MTLS",
+        "HTTP_BASIC",
+        "HTTP_BEARER"
+      ]
+    },
+    "superUserAuthorization": {
+      "type": "boolean",
+      "description": "If true, access was authorized because principal is a super-user."
+    }
+  }
+}

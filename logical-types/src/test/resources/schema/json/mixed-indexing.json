@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ILC valid and transformed Value Schema",
+  "type": "object",
+  "properties": {
+    "upcId": {
+      "type": "number",
+      "connect.index": 0
+    },
+    "storeId": {
+      "minimum": 1,
+      "type": "integer",
+      "connect.index": 4
+    },
+    "ilcPrimary": {
+      "type": ["null","string"]
+    },
+    "productId": {
+      "type": "string"
+    },
+    "ilcs": {
+      "type": ["null","string"]
+    }
+  },
+  "required": [
+    "upcId",
+    "storeId",
+    "productId"
+  ]
+}

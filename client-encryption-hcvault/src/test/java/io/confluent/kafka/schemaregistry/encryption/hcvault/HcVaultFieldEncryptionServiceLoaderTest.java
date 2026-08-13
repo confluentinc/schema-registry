@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption.hcvault;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionServiceLoaderTest;
 import java.util.List;
 
@@ -30,8 +30,8 @@ public class HcVaultFieldEncryptionServiceLoaderTest extends FieldEncryptionServ
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new HcVaultFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
+    return new HcVaultEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
   }
 }

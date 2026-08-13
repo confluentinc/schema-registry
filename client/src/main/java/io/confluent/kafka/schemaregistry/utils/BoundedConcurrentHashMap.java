@@ -93,6 +93,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @param <V> the type of mapped values
  * @author Doug Lea
  */
+@Deprecated
 public class BoundedConcurrentHashMap<K, V> extends AbstractMap<K, V>
     implements ConcurrentMap<K, V>, Serializable {
 

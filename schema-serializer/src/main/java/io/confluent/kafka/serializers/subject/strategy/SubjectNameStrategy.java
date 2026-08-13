@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.subject.strategy;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import org.apache.kafka.common.Configurable;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -27,6 +28,19 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
  * in the schema registry. The default is {@link TopicNameStrategy}.
  */
 public interface SubjectNameStrategy extends Configurable {
+
+  /**
+   * Set the schema registry client.
+   */
+  default void setSchemaRegistryClient(SchemaRegistryClient client) {
+  }
+
+  /**
+   * Set the Kafka cluster ID discovered via
+   * {@link org.apache.kafka.common.ClusterResourceListener}.
+   */
+  default void setKafkaClusterId(String clusterId) {
+  }
 
   /**
    * Whether the strategy depends on the schema.

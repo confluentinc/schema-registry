@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.10-0</version>
+        <version>8.0.8-0</version>
     </parent>
 
     <licenses>
@@ -119,6 +119,11 @@
             <artifactId>kafka-schema-registry-client-encryption-hcvault</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption-alicloud</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <!-- kafka -> zookeeper -> jline ends up including junit 3.8.1 here. Explicitly list the
              dependency and scope it to test to avoid pulling it in -->
         <dependency>
@@ -133,12 +138,12 @@
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-runtime</artifactId>
             <scope>provided</scope>
-	    <exclusions>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-log4j12</artifactId>
-            </exclusion>
-        </exclusions>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
