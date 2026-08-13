@@ -25,12 +25,16 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
@@ -38,6 +42,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatCont
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
@@ -3201,5 +3207,392 @@ public class ProtobufSchemaTest {
     ResourceLoader resourceLoader = new ResourceLoader(
         "/io/confluent/kafka/schemaregistry/protobuf/diff/");
     return resourceLoader.toString(fileName);
+  }
+
+  /**
+   * A re-export-only schema (no local messages or enums, just an
+   * {@code import public}) should expose the publicly-imported type as its
+   * canonical name. Without the fall-through, {@link ProtobufSchema#name()}
+   * throws "Protobuf schema definition contains no type definitions".
+   */
+  @Test
+  public void testNameFallsThroughToPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String reExportProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema reExport = new ProtobufSchema(
+        reExportProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must resolve through the public import to com.Foo.
+    assertEquals("com.Foo", reExport.name());
+
+    // canonicalString() preserves the `import public` form (re-emitted by the
+    // existing publicDependency-aware rendering — verifying it isn't broken).
+    assertTrue("expected `import public` in canonical form, got: "
+            + reExport.canonicalString(),
+        reExport.canonicalString().contains("import public \"leaf.proto\""));
+
+    // toDescriptor() should resolve through the public dep and return the
+    // imported type's Descriptor.
+    Descriptor desc = reExport.toDescriptor();
+    assertNotNull("expected a Descriptor for the publicly-imported type", desc);
+    assertEquals("Foo", desc.getName());
+    assertEquals("com.Foo", desc.getFullName());
+  }
+
+  /**
+   * Index round-trip for an empty public-import file: encoding a leaf type's
+   * fully-qualified name to {@link MessageIndexes} and back must produce the
+   * same name. With two messages in the leaf, a non-zero index ({@code Bar}
+   * at position 1) verifies the wrapper delegates to the leaf's index space
+   * rather than collapsing everything to {@code [0]}.
+   */
+  @Test
+  public void testIndexesRoundTripThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Bar {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    MessageIndexes fooIdx = top.toMessageIndexes("com.Foo");
+    assertEquals(Collections.singletonList(0), fooIdx.indexes());
+    assertEquals("com.Foo", top.toMessageName(fooIdx));
+
+    MessageIndexes barIdx = top.toMessageIndexes("com.Bar");
+    assertEquals(Collections.singletonList(1), barIdx.indexes());
+    assertEquals("com.Bar", top.toMessageName(barIdx));
+  }
+
+  /**
+   * {@link ProtobufSchema#hasTopLevelField} for an empty public-import wrapper
+   * must report fields from the publicly-imported file, not from the wrapper's
+   * (empty) local types.
+   */
+  @Test
+  public void testHasTopLevelFieldThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    assertTrue(top.hasTopLevelField("id"));
+    assertFalse(top.hasTopLevelField("nonexistent"));
+  }
+
+  /**
+   * {@link ProtobufSchema#fullName} for an empty public-import wrapper returns
+   * the wrapper file's own generated class name (e.g.,
+   * {@code com.LeafWrapper}), not the imported type's class. This matches
+   * what {@code protoc} generates for an empty {@code import public} file —
+   * a real Java class with a {@code getDescriptor()} returning the
+   * {@link FileDescriptor}. {@code toSpecificDescriptor} can then load that
+   * class and return the file descriptor.
+   */
+  @Test
+  public void testFullNameOfEmptyPublicImportWrapper() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // Without a path or java_outer_classname there's nothing to derive the
+    // class name from, so fullName() with no path returns null (existing
+    // contract for any schema with no java_outer_classname).
+    assertNull(top.fullName());
+    // With an originalPath, fullName derives the outer class name from the
+    // file name — for an empty wrapper that's the file-level class protoc
+    // generates (e.g. "Wrapper" → "com.Wrapper").
+    assertEquals("com.Wrapper", top.fullName("Wrapper.proto"));
+  }
+
+  /**
+   * Empty public-import wrapper around a well-known proto (e.g.,
+   * {@code google/protobuf/timestamp.proto}) must be detected as a wrapper.
+   * Well-known types live in {@code KNOWN_DEPENDENCIES}, not user-provided
+   * {@code dependencies}, so wrapper resolution must consult the same
+   * dep map that descriptor resolution uses.
+   */
+  @Test
+  public void testPublicImportOfWellKnownType() {
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"google/protobuf/timestamp.proto\";\n";
+
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        1,
+        null);
+
+    // name() should resolve through to the well-known Timestamp type.
+    assertEquals("google.protobuf.Timestamp", top.name());
+    // hasTopLevelField sees Timestamp's fields (seconds, nanos).
+    assertTrue(top.hasTopLevelField("seconds"));
+    assertTrue(top.hasTopLevelField("nanos"));
+  }
+
+  /**
+   * A schema with both its own local types AND an {@code import public} is
+   * NOT a public-import wrapper — its local types take precedence. The
+   * delegating methods ({@link ProtobufSchema#name},
+   * {@link ProtobufSchema#toMessageIndexes}, {@link ProtobufSchema#hasTopLevelField})
+   * must read the wrapper's local types, not the imported file's.
+   */
+  @Test
+  public void testLocalTypesWinOverPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Imported {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n"
+        + "message Local {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must return the LOCAL type, not the imported one.
+    assertEquals("com.Local", top.name());
+    // hasTopLevelField must see the local type's fields, not the imported one's.
+    assertTrue(top.hasTopLevelField("n"));
+    assertFalse(top.hasTopLevelField("id"));
+    // toMessageIndexes must encode the local type at index 0.
+    MessageIndexes localIdx = top.toMessageIndexes("com.Local");
+    assertEquals(Collections.singletonList(0), localIdx.indexes());
+    assertEquals("com.Local", top.toMessageName(localIdx));
+  }
+
+  /** Appends a suffix to every string leaf, so a transform walk's reach is observable. */
+  private static final FieldTransform SUFFIX_TRANSFORM =
+      (ctx, fieldCtx, value) -> value instanceof String ? value + "-suffix" : value;
+
+  private static RuleContext transformContext(ProtobufSchema schema) {
+    Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
+        null, null, null, null, null, false);
+    return new RuleContext(Collections.emptyMap(), null, null, schema,
+        "topic-value", "topic", null, null, null, false,
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+  }
+
+  /**
+   * A field with explicit presence that is unset has nothing to transform. Writing a
+   * transformed default back would materialize it: an absent message would become present,
+   * carrying a value the producer never set. The validation walk already skips such fields.
+   */
+  @Test
+  public void testTransformMessageLeavesAbsentFieldsAbsent() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  test.Inner inner = 1;\n"
+        + "  string top = 2;\n"
+        + "  optional string maybe = 3;\n"
+        + "}\n"
+        + "message Inner { string s = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    // Only `top` is set: `inner` is an absent message, `maybe` an unset optional scalar.
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("top"), "hello").build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertFalse("the absent message was materialized",
+        result.hasField(resultDesc.findFieldByName("inner")));
+    assertFalse("the unset optional scalar was materialized",
+        result.hasField(resultDesc.findFieldByName("maybe")));
+    // The field that is set is still transformed.
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("top")));
+  }
+
+  /**
+   * With use.latest.version the registered schema and the message's own descriptor can
+   * differ. A field the schema does not declare carries no tags, so no transform applies to
+   * it - and reading its options off a null descriptor would throw.
+   */
+  @Test
+  public void testTransformMessageSkipsFieldsAbsentFromTheSchema() throws Exception {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string top = 1; }\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string top = 1; string extra = 2; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("top"), "hello")
+        .setField(runtimeDesc.findFieldByName("extra"), "x").build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("top")));
+    // The field the schema does not know is left as it is, rather than throwing.
+    assertEquals("x", result.getField(resultDesc.findFieldByName("extra")));
+  }
+
+  /**
+   * The fields the transform walk reaches, for comparison with the validation walk: a
+   * nested message is descended into with its own descriptor, and every element of a
+   * repeated field is visited.
+   */
+  @Test
+  public void testTransformMessageReachesNestedAndRepeatedFields() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  test.Inner inner = 1;\n"
+        + "  repeated string tags = 2;\n"
+        + "  repeated test.Inner items = 3;\n"
+        + "}\n"
+        + "message Inner { string s = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    Descriptor innerDesc = schema.toDescriptor("test.Inner");
+    FieldDescriptor innerS = innerDesc.findFieldByName("s");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("inner"),
+            DynamicMessage.newBuilder(innerDesc).setField(innerS, "a").build())
+        .addRepeatedField(desc.findFieldByName("tags"), "t1")
+        .addRepeatedField(desc.findFieldByName("tags"), "t2")
+        .addRepeatedField(desc.findFieldByName("items"),
+            DynamicMessage.newBuilder(innerDesc).setField(innerS, "b").build())
+        .build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    Message inner = (Message) result.getField(resultDesc.findFieldByName("inner"));
+    assertEquals("a-suffix",
+        inner.getField(inner.getDescriptorForType().findFieldByName("s")));
+    assertEquals(Arrays.asList("t1-suffix", "t2-suffix"),
+        result.getField(resultDesc.findFieldByName("tags")));
+    Message item = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("items"), 0);
+    assertEquals("b-suffix",
+        item.getField(item.getDescriptorForType().findFieldByName("s")));
+  }
+
+  /**
+   * A map field arrives as a list of entry messages, so the transform walk reaches the
+   * entry's key as well as its value. A key is part of the map's identity rather than a
+   * value to transform - rewriting it moves the entry - and the validation walk never
+   * evaluates anything on a key either.
+   */
+  @Test
+  public void testTransformMessageLeavesMapKeysAlone() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  map<string, string> labels = 1;\n"
+        + "  map<string, test.Item> items = 2;\n"
+        + "}\n"
+        + "message Item { string v = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    Descriptor itemDesc = schema.toDescriptor("test.Item");
+    FieldDescriptor labels = desc.findFieldByName("labels");
+    FieldDescriptor items = desc.findFieldByName("items");
+    Descriptor labelEntry = labels.getMessageType();
+    Descriptor itemEntry = items.getMessageType();
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .addRepeatedField(labels, DynamicMessage.newBuilder(labelEntry)
+            .setField(labelEntry.findFieldByName("key"), "k1")
+            .setField(labelEntry.findFieldByName("value"), "v1").build())
+        .addRepeatedField(items, DynamicMessage.newBuilder(itemEntry)
+            .setField(itemEntry.findFieldByName("key"), "a")
+            .setField(itemEntry.findFieldByName("value"),
+                DynamicMessage.newBuilder(itemDesc)
+                    .setField(itemDesc.findFieldByName("v"), "x").build()).build())
+        .build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    Message labelEntryResult = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("labels"), 0);
+    Descriptor labelEntryDesc = labelEntryResult.getDescriptorForType();
+    assertEquals("k1", labelEntryResult.getField(labelEntryDesc.findFieldByName("key")));
+    assertEquals("v1-suffix",
+        labelEntryResult.getField(labelEntryDesc.findFieldByName("value")));
+
+    Message itemEntryResult = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("items"), 0);
+    Descriptor itemEntryDesc = itemEntryResult.getDescriptorForType();
+    assertEquals("a", itemEntryResult.getField(itemEntryDesc.findFieldByName("key")));
+    Message item = (Message) itemEntryResult.getField(itemEntryDesc.findFieldByName("value"));
+    assertEquals("x-suffix",
+        item.getField(item.getDescriptorForType().findFieldByName("v")));
   }
 }
