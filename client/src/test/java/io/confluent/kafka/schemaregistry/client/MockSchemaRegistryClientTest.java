@@ -1252,6 +1252,34 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testTwentyTwoCharUserContextIsAlsoReserved() throws Exception {
+        // Known tradeoff: a cluster id is 22 chars of [A-Za-z0-9_-], which is not a distinctive
+        // shape, so a user context of that length is reserved too. Recorded here so the cost of
+        // the heuristic is visible rather than discovered in production.
+        String userContext = "production-us-east-1-a";
+        assertEquals(22, userContext.length());
+
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+        assertThrows(RestClientException.class,
+            () -> client.register(":." + userContext + ":orders-key", schema));
+
+        // One character shorter is not treated as a cluster.
+        client.register(":.production-us-east-1:orders-key", schema);
+        assertEquals(1, client.getAllVersions(":.production-us-east-1:orders-key").size());
+    }
+
+    @Test
+    public void testContextLevelImportModeExempts() throws Exception {
+        // The server resolves mode subject -> context -> global; setting IMPORT on the context
+        // must exempt subjects inside it, not just an exact subject match.
+        String canonical = ":.lkc-abc123:topic5-key";
+        client.setMode("IMPORT", ":.lkc-abc123:");
+
+        client.register(canonical, new AvroSchema(SIMPLE_AVRO_SCHEMA));
+        assertEquals(1, client.getAllVersions(canonical).size());
+    }
+
+    @Test
     public void testSoftDeleteKeepsTopicOwnedNameClaimed() throws Exception {
         String canonical = ":.lkc-abc123:topic4-key";
         AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);

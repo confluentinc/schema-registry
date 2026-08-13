@@ -415,9 +415,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value, the canonical name a topic's
-   * strong association uses. Only lkc-* contexts are reserved: a user context such as ".staging"
-   * holding "orders-value" is ordinary TopicNameStrategy usage and must keep working.
+   * True if the subject is named &lt;cluster&gt;:&lt;topic&gt;-key or -value, the canonical name a
+   * topic's strong association uses. A cluster context is either lkc-* (CC), or 22 characters
+   * of A-Z, a-z, 0-9, -, _ (CP). That second shape is not distinctive, so a user context of
+   * the same length and charset is reserved too — ".staging" is not, "production-us-east-1-a" is.
    *
    * <p>{@code MockSchemaRegistryClient} carries the same check and the two must agree.
    */
@@ -456,7 +457,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     String cluster = context.startsWith(QualifiedSubject.CONTEXT_SEPARATOR)
         ? context.substring(QualifiedSubject.CONTEXT_SEPARATOR.length()) : context;
     String unqualified = qs.getSubject();
-    String topic = unqualified.substring(0, unqualified.lastIndexOf('-'));
+    String suffix = unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        ? KEY_ASSOCIATION_SUFFIX : VALUE_ASSOCIATION_SUFFIX;
+    String topic = unqualified.substring(0, unqualified.length() - suffix.length());
     return "topic " + topic + " in kafka cluster " + cluster;
   }
 
