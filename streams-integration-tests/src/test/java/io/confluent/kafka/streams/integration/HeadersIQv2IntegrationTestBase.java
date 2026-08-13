@@ -274,6 +274,12 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         }
     }
 
+    /**
+     * Closes {@code streams} and asserts it shut down cleanly within the timeout. Call this as the
+     * last statement of the test body -- never from a {@code finally}, where a close timeout would
+     * throw an {@link AssertionError} that replaces whatever actually failed the test. Use
+     * {@link #closeStreamsQuietly} in a {@code finally}.
+     */
     protected void closeStreams(KafkaStreams streams) {
         if (streams != null) {
             assertTrue(streams.close(Duration.ofSeconds(10)),
@@ -282,11 +288,12 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     }
 
     /**
-     * Closes {@code streams} best-effort without asserting on a clean shutdown -- for teardown and
-     * the start-failure path, where a close timeout must not replace the error that actually failed
-     * the test. Success-path callers should use {@link #closeStreams} to assert a clean shutdown.
+     * Closes {@code streams} best-effort without asserting on a clean shutdown -- for {@code finally}
+     * blocks, teardown and the start-failure path, where a close timeout must not replace the error
+     * that actually failed the test. Closing an already-closed instance is a no-op, so this is safe
+     * to call in a {@code finally} whose {@code try} ended in {@link #closeStreams}.
      */
-    private static void closeStreamsQuietly(KafkaStreams streams) {
+    protected static void closeStreamsQuietly(KafkaStreams streams) {
         if (streams != null) {
             try {
                 streams.close(Duration.ofSeconds(10));
