@@ -45,7 +45,6 @@ public class RuleContext {
   private static final String RULE_EXECUTORS_PREFIX = "rule.executors";
   private static final String ON_SUCCESS = "onSuccess";
   private static final String ON_FAILURE = "onFailure";
-  private static final String DISABLED = "disabled";
 
   private final Map<String, ?> configs;
   private final ExecutionEnvironment enabledEnv;
@@ -255,30 +254,7 @@ public class RuleContext {
     return rule.getOnSuccess();
   }
 
-  /**
-   * Ported from step 1 of AbstractKafkaSchemaSerDe#isDisabled (the config-override
-   * check): checks a per-rule-name override, then a per-rule-type override, then a
-   * default override. Returns {@code null} if none is set, since steps 2 (ruleSet
-   * enabled-environment check) and 3 (the rule's own {@code disabled} flag) depend on
-   * this serde instance's own execution environment, which is not part of RuleContext.
-   */
-  public Boolean getDisabledOverride() {
-    Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
-    if (propertyValue != null) {
-      return Boolean.parseBoolean(propertyValue.toString());
-    }
-    propertyValue = getRuleConfig("_" + rule.getType() + "_", DISABLED);
-    if (propertyValue != null) {
-      return Boolean.parseBoolean(propertyValue.toString());
-    }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
-    if (propertyValue != null) {
-      return Boolean.parseBoolean(propertyValue.toString());
-    }
-    return null;
-  }
-
-  private Object getRuleConfig(String name, String suffix) {
+  public Object getRuleConfig(String name, String suffix) {
     String propertyName = RULE_EXECUTORS_PREFIX + "." + name + "." + suffix;
     return configs.get(propertyName);
   }

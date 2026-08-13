@@ -163,6 +163,8 @@ public abstract class AbstractKafkaSchemaSerDe
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
 
+  private static final String DISABLED = "disabled";
+
   private static final String PARAM = ".param.";
 
   // Track the key for use when deserializing/serializing the value, such as for a DLQ.
@@ -1014,9 +1016,17 @@ public abstract class AbstractKafkaSchemaSerDe
   private boolean isDisabled(RuleContext ctx, Rule rule) {
     return disabledFlags.computeIfAbsent(rule, r -> {
       // 1. Check config overrides
-      Boolean override = ctx.getDisabledOverride();
-      if (override != null) {
-        return override;
+      Object propertyValue = ctx.getRuleConfig(rule.getName(), DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = ctx.getRuleConfig("_" + rule.getType() + "_", DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
+      }
+      propertyValue = ctx.getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
+      if (propertyValue != null) {
+        return Boolean.parseBoolean(propertyValue.toString());
       }
 
       // 2. Check ruleSet setting

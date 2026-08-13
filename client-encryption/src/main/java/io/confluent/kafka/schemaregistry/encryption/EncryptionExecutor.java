@@ -584,7 +584,7 @@ public class EncryptionExecutor implements RuleExecutor {
           return null;
         }
         if (kekUnavailable) {
-          recordResult(ctx, Status.FAILED, null, null);
+          recordResult(ctx, Status.FAILED, null, "fail to get kek");
           return value;
         }
         if (passthroughOnRead) {
