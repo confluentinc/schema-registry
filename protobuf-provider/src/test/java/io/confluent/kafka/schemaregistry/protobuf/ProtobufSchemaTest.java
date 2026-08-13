@@ -3216,7 +3216,7 @@ public class ProtobufSchemaTest {
   private static RuleContext transformContext(ProtobufSchema schema) {
     Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
         null, null, null, null, null, false);
-    return new RuleContext(Collections.emptyMap(), null, null, schema,
+    return new RuleContext(Collections.emptyMap(), null, schema,
         "topic-value", "topic", null, null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
   }
