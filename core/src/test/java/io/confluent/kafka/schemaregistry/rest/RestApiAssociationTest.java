@@ -3933,6 +3933,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
           rce.getErrorCode(),
           "Topic-owned subject's transitive reference to a different context should be "
               + "rejected even though its direct reference is in-context");
+      assertTrue(rce.getMessage().contains(ownedSubject),
+          "Error message should name the subject actually being registered ("
+              + ownedSubject + "), not the intermediate hop that surfaced the violation: "
+              + rce.getMessage());
     }
   }
 
@@ -3982,6 +3986,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
           Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
           rce.getErrorCode(),
           "A soft-deleted intermediate reference must not let an out-of-context leak through");
+      assertTrue(rce.getMessage().contains(ownedSubject),
+          "Error message should name the subject actually being registered ("
+              + ownedSubject + "), not the intermediate hop that surfaced the violation: "
+              + rce.getMessage());
     }
   }
 

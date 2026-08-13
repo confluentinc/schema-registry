@@ -703,11 +703,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return;
     }
     QualifiedSubject owner = QualifiedSubject.create(tenant(), schema.getSubject());
-    checkReferencesInContext(schema, owner.getContext(), new HashSet<>());
+    checkReferencesInContext(schema.getSubject(), schema, owner.getContext(), new HashSet<>());
   }
 
+  /**
+   * @param topicOwnedSubject the subject actually being registered, kept separate from {@code
+   *     schema} (which is rebound to each hop as the walk descends) so a violation found several
+   *     hops in still names the subject the caller registered, not the intermediate schema.
+   */
   private void checkReferencesInContext(
-      Schema schema, String requiredContext, Set<String> visited)
+      String topicOwnedSubject, Schema schema, String requiredContext, Set<String> visited)
       throws SchemaRegistryException {
     for (SchemaReference reference : schema.getReferences()) {
       QualifiedSubject qualified = QualifiedSubject.qualifySubjectWithParent(
@@ -716,9 +721,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           ? qualified.toQualifiedSubject() : reference.getSubject();
       if (qualified == null || !requiredContext.equals(qualified.getContext())) {
         log.debug("Rejecting registration of {}: reference to {} is outside context {}",
-            schema.getSubject(), refSubject, requiredContext);
+            topicOwnedSubject, refSubject, requiredContext);
         throw new TopicOwnedSubjectReferenceException(
-            "Topic-owned subject '" + schema.getSubject()
+            "Topic-owned subject '" + topicOwnedSubject
                 + "' cannot reference subject directly or indirectly '" + refSubject
                 + "' in a different context");
       }
@@ -728,7 +733,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         // to follow it too, or an out-of-context leak behind a soft-deleted hop goes unseen.
         Schema refSchema = get(refSubject, reference.getVersion(), true);
         if (refSchema != null) {
-          checkReferencesInContext(refSchema, requiredContext, visited);
+          checkReferencesInContext(topicOwnedSubject, refSchema, requiredContext, visited);
         }
       }
     }
