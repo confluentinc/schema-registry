@@ -1152,17 +1152,19 @@ public class JsonSchema implements ParsedSchema {
    *       each subschema and walk into matching ones.</li>
    *   <li>{@link ArraySchema} — recurse on each element with {@code [i]}
    *       path.</li>
-   *   <li>{@link ObjectSchema} — evaluate object-level rules with
-   *       {@code this = message}; iterate properties, evaluate
-   *       property-level rules (with skip-on-null), then recurse on each
+   *   <li>{@link ObjectSchema} — iterate properties and recurse on each
    *       property value.</li>
    *   <li>{@link ReferenceSchema} — resolve to the referred schema and
    *       recurse.</li>
    *   <li>{@link ConditionalSchema}, {@link EmptySchema},
    *       {@link FalseSchema}, {@link NotSchema} — no-op (return).</li>
-   *   <li>otherwise (primitive) — no-op; property-level rules were
-   *       already evaluated by the parent {@code ObjectSchema} case.</li>
+   *   <li>otherwise (primitive) — no-op.</li>
    * </ul>
+   *
+   * <p>Rules are evaluated once per location the walk reaches, before the
+   * dispatch below, so that a schema declaring rules is charged exactly
+   * once whether it is reached as the root, as a property value, or as an
+   * array element.
    */
   private void toValidatedMessage(
       Schema schema, String path, Object message,
@@ -1172,6 +1174,22 @@ public class JsonSchema implements ParsedSchema {
       return;
     }
     message = getValue(message);
+    // Skip-on-null: an absent or null value does not invoke the executor,
+    // and there is nothing below it to walk.
+    if (message == null) {
+      return;
+    }
+    // Rules declared at this level: this = the value at this location, hint
+    // = its class. This is the only place rules are read: a property's
+    // schema and the schema the walk recurses into for that property are
+    // the same Schema, so evaluating them in the property loop as well
+    // would charge every rule on an object-valued property twice.
+    for (ValidationRule rule : readRulesProp(schema)) {
+      evaluateOne(rule, message.getClass(), message, path, executor, out);
+      if (failFast && !out.isEmpty()) {
+        return;
+      }
+    }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
@@ -1228,16 +1246,6 @@ public class JsonSchema implements ParsedSchema {
       }
       return;
     } else if (schema instanceof ObjectSchema) {
-      if (message == null) {
-        return;
-      }
-      // Object-level rules: this = the object value, hint = its class.
-      for (ValidationRule rule : readRulesProp(schema)) {
-        evaluateOne(rule, message.getClass(), message, path, executor, out);
-        if (failFast && !out.isEmpty()) {
-          return;
-        }
-      }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
         String propertyName = entry.getKey();
@@ -1249,20 +1257,9 @@ public class JsonSchema implements ParsedSchema {
         if (propertyAccessor == null) {
           continue;
         }
-        Object propertyValue = getValue(propertyAccessor.getPropertyValue());
-        // Skip-on-null for property-level rules: when the property value
-        // is null (or the property is absent), don't evaluate. The
-        // recursion still happens but lands at branches that no-op for
-        // null values.
-        if (propertyValue != null) {
-          for (ValidationRule rule : readRulesProp(propertySchema)) {
-            evaluateOne(rule, propertyValue.getClass(), propertyValue,
-                fullName, executor, out);
-            if (failFast && !out.isEmpty()) {
-              return;
-            }
-          }
-        }
+        // The recursive call normalizes the value and skips a null one, so a
+        // property that is absent or null invokes no rules.
+        Object propertyValue = propertyAccessor.getPropertyValue();
         toValidatedMessage(propertySchema, fullName, propertyValue, executor, failFast, out);
         if (failFast && !out.isEmpty()) {
           return;
@@ -1270,9 +1267,6 @@ public class JsonSchema implements ParsedSchema {
       }
       return;
     } else if (schema instanceof ReferenceSchema) {
-      if (message == null) {
-        return;
-      }
       toValidatedMessage(((ReferenceSchema) schema).getReferredSchema(),
           path, message, executor, failFast, out);
       return;
@@ -1282,15 +1276,17 @@ public class JsonSchema implements ParsedSchema {
         || schema instanceof NotSchema) {
       return;
     }
-    // Primitive leaf — no rules at this level (property-level rules
-    // were evaluated by the parent ObjectSchema case).
+    // Primitive leaf — nothing below it to walk; its own rules were
+    // evaluated above.
   }
 
   /**
    * Read the {@code confluent:rules} property off a schema's unprocessed
    * properties map. Empty / missing / malformed entries return an empty
-   * list. Used for both object-level (the {@link ObjectSchema} itself)
-   * and property-level (each property's schema) rule reads.
+   * list. The loader attaches the keyword to exactly one {@link Schema} per
+   * JSON node — for a {@code "type"} array, to the enclosing
+   * {@link CombinedSchema} rather than to the synthesized members — so a
+   * single read per location covers every declaration site.
    */
   private static List<ValidationRule> readRulesProp(Schema schema) {
     Map<String, Object> unprocessed = schema.getUnprocessedProperties();
