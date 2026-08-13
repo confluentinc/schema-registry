@@ -32,6 +32,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
@@ -45,6 +48,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.InputStream;
@@ -57,6 +62,20 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 public class RestApiAssociationTest extends ClusterTestHarness {
+
+  private static final String SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"myrecord\","
+      + "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]}";
+  private static final String TAGGED_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"myrecord\","
+      + "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}],"
+      + "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
+  private static final String EVOLVED_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"myrecord\","
+      + "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"},"
+      + "{\"name\":\"f2\",\"type\":\"string\",\"default\":\"hi\"}]}";
+  private static final String TAGGED_EVOLVED_SCHEMA_STRING =
+      "{\"type\":\"record\",\"name\":\"myrecord\","
+      + "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"},"
+      + "{\"name\":\"f2\",\"type\":\"string\",\"default\":\"hi\"}],"
+      + "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
 
   public RestApiAssociationTest() {
     super(1, true);
@@ -3727,6 +3746,152 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         Collections.singletonList("value"), null, 0, -1);
     assertEquals(1, associations.size());
     assertTrue(associations.get(0).isFrozen());
+  }
+
+  @Test
+  public void testCreateAssociationWithSchemaTagsToAdd() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "schema-tags-add-123";
+    String subject = ":." + resourceNamespace + ":" + resourceName + "-value";
+
+    List<SchemaTags> schemaTags = ImmutableList.of(
+        new SchemaTags(new SchemaEntity("myrecord", EntityType.SR_RECORD),
+            ImmutableList.of("TAG1", "TAG2")));
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(SCHEMA_STRING);
+    schemaRequest.setSchemaTagsToAdd(schemaTags);
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(subject, response.getAssociations().get(0).getSubject());
+
+    // The schema returned by the association carries the requested tags
+    Schema registered = response.getAssociations().get(0).getSchema();
+    assertNotNull(registered);
+    assertEquals(TAGGED_SCHEMA_STRING, registered.getSchema());
+
+    // ...and so does the schema that was actually stored under the subject
+    Schema latest = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, Collections.singleton("*"));
+    assertEquals(TAGGED_SCHEMA_STRING, latest.getSchema());
+    assertEquals(schemaTags, latest.getSchemaTags());
+  }
+
+  @Test
+  public void testCreateAssociationWithUnresolvableSchemaTagPath() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "schema-tags-bad-path-123";
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(SCHEMA_STRING);
+    schemaRequest.setSchemaTagsToAdd(ImmutableList.of(
+        new SchemaTags(new SchemaEntity("nosuchrecord", EntityType.SR_RECORD),
+            ImmutableList.of("TAG1"))));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    // A tag path that does not resolve is an invalid schema, not a server error,
+    // for a dry run as well as a real create
+    RestClientException dryRunException = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, true, request));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, dryRunException.getErrorCode());
+
+    RestClientException exception = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, exception.getErrorCode());
+  }
+
+  @Test
+  public void testUpdateAssociationWithSchemaTags() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "schema-tags-update-123";
+    String subject = ":." + resourceNamespace + ":" + resourceName + "-value";
+
+    // A schema can only be carried by a STRONG association, which is always frozen, so the
+    // subject starts out from the schema passed to create
+    RegisterSchemaRequest createSchemaRequest = new RegisterSchemaRequest();
+    createSchemaRequest.setSchema(SCHEMA_STRING);
+
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, createSchemaRequest, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Updating with schemaTagsToAdd tags the schema that gets registered
+    List<SchemaTags> schemaTags = ImmutableList.of(
+        new SchemaTags(new SchemaEntity("myrecord", EntityType.SR_RECORD),
+            ImmutableList.of("TAG1", "TAG2")));
+    RegisterSchemaRequest taggedRequest = new RegisterSchemaRequest();
+    taggedRequest.setSchema(SCHEMA_STRING);
+    taggedRequest.setSchemaTagsToAdd(schemaTags);
+
+    AssociationCreateOrUpdateRequest updateRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", null, null, taggedRequest, null)));
+    restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, updateRequest);
+
+    Schema latest = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, Collections.singleton("*"));
+    assertEquals((Integer) 2, latest.getVersion());
+    assertEquals(TAGGED_SCHEMA_STRING, latest.getSchema());
+    assertEquals(schemaTags, latest.getSchemaTags());
+
+    // Updating with propagateSchemaTags carries the tags onto the evolved schema
+    RegisterSchemaRequest propagateRequest = new RegisterSchemaRequest();
+    propagateRequest.setSchema(EVOLVED_SCHEMA_STRING);
+    propagateRequest.setPropagateSchemaTags(true);
+
+    updateRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", null, null, propagateRequest, null)));
+    restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, updateRequest);
+
+    latest = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, Collections.singleton("*"));
+    assertEquals((Integer) 3, latest.getVersion());
+    assertEquals(TAGGED_EVOLVED_SCHEMA_STRING, latest.getSchema());
+    assertEquals(schemaTags, latest.getSchemaTags());
+
+    // Removing a tag applies to the schema that gets registered
+    RegisterSchemaRequest removeRequest = new RegisterSchemaRequest();
+    removeRequest.setSchema(TAGGED_EVOLVED_SCHEMA_STRING);
+    removeRequest.setSchemaTagsToRemove(ImmutableList.of(
+        new SchemaTags(new SchemaEntity("myrecord", EntityType.SR_RECORD),
+            ImmutableList.of("TAG2"))));
+
+    updateRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", null, null, removeRequest, null)));
+    restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, updateRequest);
+
+    latest = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, Collections.singleton("*"));
+    assertEquals((Integer) 4, latest.getVersion());
+    assertEquals(ImmutableList.of(
+            new SchemaTags(new SchemaEntity("myrecord", EntityType.SR_RECORD),
+                ImmutableList.of("TAG1"))),
+        latest.getSchemaTags());
   }
 
   private String rawGet(String path) throws Exception {
