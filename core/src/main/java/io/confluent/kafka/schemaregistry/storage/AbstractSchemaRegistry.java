@@ -683,6 +683,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String refSubject = qualified != null
           ? qualified.toQualifiedSubject() : reference.getSubject();
       if (matchesTopicOwnedSubjectName(refSubject)) {
+        log.debug("Rejecting registration of {}: references topic-owned subject {}",
+            schema.getSubject(), refSubject);
         throw new TopicOwnedSubjectReferenceException(
             "Cannot reference topic-owned subject '" + refSubject + "'");
       }
@@ -713,13 +715,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String refSubject = qualified != null
           ? qualified.toQualifiedSubject() : reference.getSubject();
       if (qualified == null || !requiredContext.equals(qualified.getContext())) {
+        log.debug("Rejecting registration of {}: reference to {} is outside context {}",
+            schema.getSubject(), refSubject, requiredContext);
         throw new TopicOwnedSubjectReferenceException(
             "Topic-owned subject '" + schema.getSubject()
                 + "' cannot reference subject directly or indirectly '" + refSubject
                 + "' in a different context");
       }
       if (visited.add(refSubject + "#" + reference.getVersion())) {
-        Schema refSchema = get(refSubject, reference.getVersion(), false);
+        // returnDeletedSchema=true: reference resolution itself may have permitted a
+        // soft-deleted target (schema.validate.new.schemas=false), so the walk must be able
+        // to follow it too, or an out-of-context leak behind a soft-deleted hop goes unseen.
+        Schema refSchema = get(refSubject, reference.getVersion(), true);
         if (refSchema != null) {
           checkReferencesInContext(refSchema, requiredContext, visited);
         }

@@ -46,6 +46,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -3932,6 +3933,94 @@ public class RestApiAssociationTest extends ClusterTestHarness {
           rce.getErrorCode(),
           "Topic-owned subject's transitive reference to a different context should be "
               + "rejected even though its direct reference is in-context");
+    }
+  }
+
+  @Test
+  public void testTopicOwnedSubjectRejectsTransitiveReferenceBehindSoftDeletedHop()
+      throws Exception {
+    String resourceNamespace = "lkc-softdel";
+    String ownedSubject = ":." + resourceNamespace + ":owned-topic-softdel-value";
+    String middleSubject = ":." + resourceNamespace + ":middle-subject-softdel";
+    String leafSubject = ":.other-ctx:leaf-subject-softdel";
+
+    createTopicOwnedSubject(resourceNamespace, "owned-topic-softdel", ownedSubject);
+    restApp.restClient.registerSchema(
+        "{\"type\":\"record\",\"name\":\"LeafRecord\",\"namespace\":\"chainns\","
+            + "\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}",
+        leafSubject);
+
+    RegisterSchemaRequest middle = new RegisterSchemaRequest();
+    middle.setSchema("{\"type\":\"record\",\"name\":\"MiddleRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"leaf\",\"type\":\"chainns.LeafRecord\"}]}");
+    middle.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.LeafRecord", leafSubject, 1)));
+    restApp.restClient.registerSchema(middle, middleSubject, false);
+
+    // Soft-delete the only version of the middle hop, then disable new-schema validation so a
+    // reference to it still resolves -- this is exactly the condition the transitive walk must
+    // also be able to follow, not just the initial reference resolution.
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, middleSubject, "1", false);
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setValidateNewSchemas(false);
+    restApp.restClient.updateConfig(configUpdateRequest, ownedSubject);
+
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema("{\"type\":\"record\",\"name\":\"TopRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"mid\",\"type\":\"chainns.MiddleRecord\"}]}");
+    v2.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.MiddleRecord", middleSubject, 1)));
+
+    try {
+      restApp.restClient.registerSchema(v2, ownedSubject, false);
+      fail("A topic-owned subject's reference behind a soft-deleted hop should still be "
+          + "walked transitively and rejected with "
+          + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "A soft-deleted intermediate reference must not let an out-of-context leak through");
+    }
+  }
+
+  @Test
+  public void testTopicOwnedSubjectCannotReferenceAnotherTopicOwnedSubjectEvenInSameContext()
+      throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String resourceNamespace = "lkc-bothowned";
+    String ownedSubject = ":." + resourceNamespace + ":owned-topic-bothowned-value";
+    String otherOwnedSubject =
+        ":." + resourceNamespace + ":other-owned-topic-bothowned-value";
+
+    RegisterSchemaRequest otherOwnedSchema = new RegisterSchemaRequest();
+    otherOwnedSchema.setSchema(schemas.get(0));
+    AssociationCreateOrUpdateRequest otherOwnedRequest = new AssociationCreateOrUpdateRequest(
+        "other-owned-topic-bothowned", resourceNamespace,
+        "other-owned-topic-bothowned-id", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            otherOwnedSubject, "value", LifecyclePolicy.STRONG, true, otherOwnedSchema, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, otherOwnedRequest);
+
+    createTopicOwnedSubject(resourceNamespace, "owned-topic-bothowned", ownedSubject);
+
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema(schemas.get(1));
+    v2.setReferences(Collections.singletonList(
+        new SchemaReference("otherns.Subrecord", otherOwnedSubject, 1)));
+
+    try {
+      restApp.restClient.registerSchema(v2, ownedSubject, false);
+      fail("Referencing any topic-owned subject is rejected regardless of context, so this "
+          + "must fail with " + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "Rule #1 rejects referencing a topic-owned subject even when it's in the same "
+              + "context as the referrer");
     }
   }
 
