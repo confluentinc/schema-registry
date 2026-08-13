@@ -210,8 +210,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
             assertEquals(50L, word2Result.value().get("count"), "IQv1: word-2 count should be 50");
             assertWellFormedSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -344,8 +345,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
             // APPROXIMATE NUM ENTRIES
             assertTrue(store.approximateNumEntries() >= 4, "approximateNumEntries should be at least 4");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -520,8 +522,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
             // Test IQv1 approximateNumEntries()
             assertTrue(store.approximateNumEntries() >= 5, "IQv1 approximateNumEntries should be at least 5");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -570,8 +573,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
                 "Store state checks should pass (isOpen=true, persistent=true, name matches)");
             assertEquals("state-store", results.get(0).key().get("word").toString());
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -787,8 +791,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
                 "Deleted keys should include word-1, word-99, word-3, word-4 but got: "
                     + deletedKeys);
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -817,8 +822,11 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
                 producer.flush();
             }
             consumeRecords(outputTopic, "restore-pre-consumer", 3, KafkaAvroDeserializer.class);
-        } finally {
+            // Assert the clean shutdown here: the restart below reuses this application.id and
+            // state dir, so a timed-out close would resurface as a confusing cleanUp() failure.
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
 
         // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
@@ -844,8 +852,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
             assertNotNull(word3, "Restored store should contain word-3");
             assertEquals(30L, word3.value().get("count"));
             assertWellFormedSchemaIdHeaders(word3.headers(), "Restored word-3");
-        } finally {
             closeStreams(restoredStreams);
+        } finally {
+            closeStreamsQuietly(restoredStreams);
         }
     }
 
@@ -927,8 +936,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest
             }
             assertTrue(partitions.size() > 1,
                 "Changelog records should span multiple partitions but only saw: " + partitions);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 

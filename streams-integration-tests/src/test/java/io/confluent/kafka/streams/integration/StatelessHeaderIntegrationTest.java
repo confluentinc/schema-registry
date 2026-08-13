@@ -67,7 +67,8 @@ public class StatelessHeaderIntegrationTest extends HeadersIQv2IntegrationTestBa
    * Verifies that header-based schema IDs survive every stateless operator that re-serializes
    * records: filter, mapValues, map, selectKey, flatMapValues, and branch. Each operator's output
    * is written to its own topic via {@code .to(...)} so re-serialization is forced; we then assert
-   * the schema-ID headers are present on each output topic.
+   * each output record's schema-ID headers are byte-for-byte the GUIDs the producer wrote to the
+   * input topic.
    */
   @Test
   public void shouldPreserveHeadersAcrossStatelessOperators() throws Exception {
@@ -120,17 +121,21 @@ public class StatelessHeaderIntegrationTest extends HeadersIQv2IntegrationTestBa
       GenericRecord value = new GenericData.Record(valueSchema);
       value.put("temperature", 42.0);
       value.put("timestamp", System.currentTimeMillis());
-      produce(INPUT_TOPIC, key, value, System.currentTimeMillis());
+      CapturedSchemaIds produced = produce(INPUT_TOPIC, key, value, System.currentTimeMillis());
 
       for (String outputTopic : Arrays.asList(
           filterOutput, mapValuesOutput, mapOutput, selectKeyOutput, flatMapValuesOutput,
           branchHotOutput)) {
         ConsumerRecord<GenericRecord, GenericRecord> result =
             consumeRecords(outputTopic, "stateless-" + outputTopic + "-consumer", 1).get(0);
-        assertWellFormedSchemaIdHeaders(result.headers(), outputTopic);
+        // Every operator here is identity, so the re-serialized output must carry the exact GUID
+        // bytes the producer wrote: a schema GUID is a content hash, so re-registering the same
+        // schema under each output topic's own subject yields the same GUID.
+        assertSchemaIdHeaders(result.headers(), produced, outputTopic);
       }
-    } finally {
       closeStreams(streams);
+    } finally {
+      closeStreamsQuietly(streams);
     }
   }
 }

@@ -199,8 +199,9 @@ public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest
           "header-aware store recovers the stored key's own schema, not the in-flight OrderKey id");
       assertEquals("cust-1", report.get("reconstructedValue").toString(),
           "customerId round-trips correctly");
-    } finally {
       closeStreams(streams);
+    } finally {
+      closeStreamsQuietly(streams);
     }
   }
 
