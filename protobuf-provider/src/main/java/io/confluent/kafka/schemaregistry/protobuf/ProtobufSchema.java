@@ -432,7 +432,9 @@ public class ProtobufSchema implements ParsedSchema {
 
   // Keyed by the runtime descriptor of a message passed to validateMessage: whether that
   // message has to be re-read through this schema's descriptor before rules can bind `this`
-  // to it. Identity-keyed, and a serializer sees a small fixed set of message types.
+  // to it. Identity-keyed, and a serializer sees a small fixed set of message types. The
+  // answer is no only for a class that describes the same fields as the registered schema;
+  // a class that has fallen behind it re-reads every record. See needsSchemaView.
   private final transient Map<Descriptor, Boolean> schemaViewNeeded = new ConcurrentHashMap<>();
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
@@ -3079,11 +3081,13 @@ public class ProtobufSchema implements ParsedSchema {
     // caller's class calls something else. Protobuf pairs fields by number on the wire, so
     // re-reading the message through the registered descriptor produces exactly that view.
     //
-    // Re-reading is only worth its cost when the two descriptors actually present values
-    // differently, which is decided once per runtime descriptor (see needsSchemaView) rather
-    // than per record: for the common case of a generated class that matches the registered
-    // schema, the two descriptors are distinct objects but describe the same fields, so no
-    // re-read happens at all.
+    // Whether that is needed is decided once per runtime descriptor (see needsSchemaView)
+    // rather than per record. A generated class describing the same fields as the registered
+    // schema skips it entirely, even though the two descriptors are distinct objects. A class
+    // that has fallen behind the schema does not: under use.latest.version the schema may
+    // declare a field the class has never heard of, and a rule that binds `this` can read the
+    // schema's default for it, so those producers re-read every record. That cost is the
+    // price of evaluating rules in the schema's terms, not an accident.
     Message schemaMsg = null;
     if (needsSchemaView(desc, msg.getDescriptorForType())) {
       try {
@@ -3111,6 +3115,14 @@ public class ProtobufSchema implements ParsedSchema {
    * <p>Presence deliberately does not count. Whether an unset field is absent is decided by
    * the producer's field on the producer's message, which the walk reads directly, so a
    * schema that only moved a field into or out of a oneof needs no re-read.
+   *
+   * <p>A field the schema declares and the caller's class does not <em>does</em> count, which
+   * means a class running behind the registered schema — the {@code use.latest.version} case
+   * — re-reads every record. Only an exact match skips the re-read. Narrowing that to the
+   * rules that could actually observe the added field is possible but not simple: a rule
+   * binding {@code this} at any ancestor can traverse into the field, and a field-level rule
+   * on a message-valued field binds {@code this} to a type that need not declare rules of its
+   * own, so a per-descriptor test for message-level rules would be wrong in both directions.
    *
    * <p>Memoized per runtime descriptor: both descriptors are stable for the lifetime of a
    * serializer, so this is one map lookup per record rather than a tree comparison.
