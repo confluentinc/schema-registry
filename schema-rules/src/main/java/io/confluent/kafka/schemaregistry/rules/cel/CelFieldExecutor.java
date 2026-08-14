@@ -83,8 +83,14 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       // answers wrongly above Long.MAX_VALUE. The field's own value stays untouched — only
       // what CEL is handed changes, so a transform that writes the result back, or an
       // executor that encrypts it, still sees the type protobuf uses.
+      //
+      // Presenting a uint as CEL's uint is what protobuf's own type says, but it is not what
+      // this executor has always done, and an existing rule comparing such a field to a plain
+      // integer literal only compiles under the signed reading. Which one applies is therefore
+      // declared per rule, defaulting to the historical signed one.
       Object celFieldValue =
-          fieldCtx.getFieldDescriptor() instanceof FieldDescriptor
+          celExecutor.resolveUnsignedFieldType(ctx) == CelExecutor.UnsignedFieldType.UINT
+              && fieldCtx.getFieldDescriptor() instanceof FieldDescriptor
               ? CelUtils.toCelValueForProtobufField(
                   (FieldDescriptor) fieldCtx.getFieldDescriptor(), fieldValue)
               : fieldValue;
