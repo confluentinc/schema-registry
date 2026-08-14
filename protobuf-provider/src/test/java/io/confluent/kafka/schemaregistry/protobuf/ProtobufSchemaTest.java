@@ -48,6 +48,7 @@ import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
@@ -3778,5 +3779,44 @@ public class ProtobufSchemaTest {
     MessageIndexes localIdx = top.toMessageIndexes("com.Local");
     assertEquals(Collections.singletonList(0), localIdx.indexes());
     assertEquals("com.Local", top.toMessageName(localIdx));
+  }
+
+  /**
+   * A message-level rule binds {@code this} to the message and its CEL environment is built
+   * from the registered schema, so the message it evaluates has to be in the schema's terms
+   * too. Otherwise a rule written against a renamed field reads a missing field and rejects a
+   * valid message.
+   */
+  @Test
+  public void testValidateMessageEvaluatesMessageRulesInSchemaTerms() {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"m\", expr: \"this.renamed == 'hello'\"}]\n"
+        + "  };\n"
+        + "  string renamed = 1;\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    // Stands in for a CEL environment built from the registered schema: the rule can only
+    // read the value if the message it is handed is in the schema's terms.
+    ValidationRuleExecutor executor = (rule, sch, value) -> {
+      Message evaluated = (Message) value;
+      FieldDescriptor fd = evaluated.getDescriptorForType().findFieldByName("renamed");
+      return fd != null && "hello".equals(evaluated.getField(fd));
+    };
+
+    List<ValidationRuleError> errors = schema.validateMessage(executor, msg);
+
+    assertEquals("the rule was evaluated against the wrong names: " + errors,
+        Collections.emptyList(), errors);
   }
 }
