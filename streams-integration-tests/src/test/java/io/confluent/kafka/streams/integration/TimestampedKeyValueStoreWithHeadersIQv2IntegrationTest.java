@@ -36,8 +36,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -690,7 +688,6 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         // be rebuilt from the changelog. Attach a StateRestoreListener BEFORE start() to prove the
         // rebuild actually happened: cleanUp() clears local state but not committed offsets, so
         // without this the restart could silently reprocess the input and pass with no restore at all.
-        // (The base start helper can't set a restore listener, so this instance is started inline.)
         AtomicLong restoredCount = new AtomicLong(0);
         StateRestoreListener restoreListener = new StateRestoreListener() {
             @Override
@@ -708,27 +705,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 }
             }
         };
-        // Construct, configure and start inside the try: this instance is created here rather than
-        // through the base helper, so it is not in the base's startedStreams and teardown will not
-        // close it. If cleanUp() or start() threw outside the try, nothing would ever close it and
-        // its state-directory lock and StreamThreads would leak for the rest of the fork JVM.
-        KafkaStreams restored = null;
+        KafkaStreams restored = startStreamsAndAwaitRunning(
+            buildTopology(input, output, storeName, true), appId, 90, null, restoreListener);
         try {
-            restored = new KafkaStreams(
-                buildTopology(input, output, storeName, true), createStreamsProps(appId, null));
-            restored.cleanUp();
-            restored.setGlobalStateRestoreListener(restoreListener);
-            CountDownLatch restoredRunning = new CountDownLatch(1);
-            restored.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    restoredRunning.countDown();
-                }
-            });
-            restored.start();
-
-            assertTrue(restoredRunning.await(90, TimeUnit.SECONDS),
-                "restored KafkaStreams should reach RUNNING");
-
             ReadOnlyRecord<GenericRecord, GenericRecord> word1 =
                 queryPointExpectPresent(restored, storeName, createKey("word-1"), false);
             assertEquals(10L, word1.value().get("count"), "restored word-1 value");
