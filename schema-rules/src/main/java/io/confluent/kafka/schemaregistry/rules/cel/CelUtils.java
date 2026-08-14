@@ -22,9 +22,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.primitives.UnsignedLong;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
@@ -57,6 +60,7 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -227,6 +231,118 @@ public final class CelUtils {
     }
   }
 
+  /**
+   * Heterogeneous numeric comparisons let a rule compare across the numeric types, so
+   * {@code this > 0} holds for an unsigned field and not only {@code this > 0u}. Unsigned
+   * protobuf fields are bound as CEL uints (see {@link CelValidator}), and without this an
+   * existing rule written with a plain integer literal would stop compiling; with it,
+   * cel-java answers the same way cel-go does for the same schema.
+   */
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.DEFAULT.toBuilder().enableHeterogeneousNumericComparisons(true).build();
+
+  /**
+   * Map a protobuf field's declared type to a {@link CelType}.
+   *
+   * <p>Taking the type from the schema rather than from the value's Java class is what keeps
+   * the two in step: Java has no unsigned primitive, so a {@code uint64} and an {@code int64}
+   * both arrive as {@code Long}, and an enum arrives as an {@code EnumValueDescriptor} that
+   * no Java class mapping recognizes. Mirrors protovalidate-java's DescriptorMappings.
+   */
+  public static CelType findCelTypeForProtobufField(FieldDescriptor field) {
+    CelType type = protoKindToCelType(field.getType());
+    return field.isRepeated() ? ListType.create(type) : type;
+  }
+
+  private static CelType protoKindToCelType(FieldDescriptor.Type kind) {
+    switch (kind) {
+      case FLOAT:
+      case DOUBLE:
+        return SimpleType.DOUBLE;
+      case INT32:
+      case INT64:
+      case SINT32:
+      case SINT64:
+      case SFIXED32:
+      case SFIXED64:
+      case ENUM:
+        return SimpleType.INT;
+      case UINT32:
+      case UINT64:
+      case FIXED32:
+      case FIXED64:
+        return SimpleType.UINT;
+      case BOOL:
+        return SimpleType.BOOL;
+      case STRING:
+        return SimpleType.STRING;
+      case BYTES:
+        return SimpleType.BYTES;
+      default:
+        // MESSAGE and GROUP never reach here: the walker hands those to the executor under
+        // their own message descriptor, not their field. DYN lets the runtime dispatch on
+        // whatever the value turns out to be.
+        return SimpleType.DYN;
+    }
+  }
+
+  /**
+   * The value a protobuf field should be bound to, in the terms its declared type implies:
+   * an unsigned integer as an {@link UnsignedLong}, an enum as its number. Everything else
+   * is already what CEL expects, or is normalized by {@link #toCelValue}.
+   *
+   * <p>Only what CEL is handed changes — the caller keeps the value protobuf gave it, so a
+   * field transform that writes a result back still works in protobuf's own terms.
+   */
+  public static Object toCelValueForProtobufField(FieldDescriptor field, Object value) {
+    if (value instanceof List) {
+      List<?> values = (List<?>) value;
+      List<Object> converted = new ArrayList<>(values.size());
+      for (Object element : values) {
+        converted.add(toCelValueForProtobufField(field, element));
+      }
+      return converted;
+    }
+    switch (field.getType()) {
+      case UINT32:
+      case UINT64:
+      case FIXED32:
+      case FIXED64:
+        return toCelUnsigned(value);
+      case ENUM:
+        return value instanceof EnumValueDescriptor
+            ? (long) ((EnumValueDescriptor) value).getNumber()
+            : value;
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * The value as CEL wants an unsigned integer: an {@link UnsignedLong}, which is what
+   * cel-java's uint overloads dispatch on. 32-bit unsigned values widen losslessly. A
+   * repeated field binds the whole list, so every element is converted.
+   *
+   * <p>Only what CEL is handed changes — the caller keeps the value protobuf gave it, so a
+   * field transform that writes a result back still works in protobuf's own terms.
+   */
+  public static Object toCelUnsigned(Object value) {
+    if (value instanceof List) {
+      List<Object> converted = new ArrayList<>(((List<?>) value).size());
+      for (Object element : (List<?>) value) {
+        converted.add(toCelUnsigned(element));
+      }
+      return converted;
+    }
+    if (value instanceof Long) {
+      return UnsignedLong.fromLongBits((Long) value);
+    }
+    if (value instanceof Integer) {
+      return UnsignedLong.fromLongBits(Integer.toUnsignedLong((Integer) value));
+    }
+    return value;
+  }
+
   private static CompiledRule doBuildProgram(
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
       RegexEngine regexEngine)
@@ -239,19 +355,19 @@ public final class CelUtils {
     // exists_one/map/filter); they have to be wired in explicitly. Without
     // them, expressions like `tags.exists_one(x, x == 'PII')` fail to compile.
     CelCompilerBuilder compilerBuilder = CelCompilerFactory.standardCelCompilerBuilder()
-        .setOptions(CelOptions.DEFAULT)
+        .setOptions(CEL_OPTIONS)
         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
         .addLibraries(
             new BuiltinLibrary(),
             CelExtensions.strings(),
-            CelExtensions.math(CelOptions.DEFAULT))
+            CelExtensions.math(CEL_OPTIONS))
         .addVarDeclarations(varDecls);
     CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.standardCelRuntimeBuilder()
-        .setOptions(CelOptions.DEFAULT)
+        .setOptions(CEL_OPTIONS)
         .addLibraries(
             new BuiltinLibrary(),
             CelExtensions.strings(),
-            CelExtensions.math(CelOptions.DEFAULT));
+            CelExtensions.math(CEL_OPTIONS));
 
     if (regexEngine == RegexEngine.PCRE) {
       // Replace stdlib RE2-backed matches with java.util.regex. Despite what
