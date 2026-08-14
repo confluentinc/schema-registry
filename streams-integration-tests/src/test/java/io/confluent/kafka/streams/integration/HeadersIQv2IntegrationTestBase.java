@@ -60,6 +60,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.junit.jupiter.api.AfterEach;
 
 /**
@@ -231,6 +232,19 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
 
     protected KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId,
         int timeoutSeconds, Integer commitIntervalMs) throws Exception {
+        return startStreamsAndAwaitRunning(topology, appId, timeoutSeconds, commitIntervalMs, null);
+    }
+
+    /**
+     * Starts {@code topology} with {@code restoreListener} attached before {@code start()}, so a
+     * restart that must rebuild its state from the changelog can assert the restore actually
+     * happened. Exists so a restore test does not hand-roll its own start block: an inline copy
+     * loses the terminal-state count-down below (a failed restore then blocks for the whole timeout
+     * and reports no observed state) and leaves the instance untracked, so teardown never closes it.
+     */
+    protected KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId,
+        int timeoutSeconds, Integer commitIntervalMs, StateRestoreListener restoreListener)
+        throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         AtomicReference<KafkaStreams.State> lastState =
             new AtomicReference<>(KafkaStreams.State.CREATED);
@@ -243,6 +257,11 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         boolean running = false;
         try {
             streams.cleanUp();
+            if (restoreListener != null) {
+                // Must be attached before start(), or the restore it is meant to observe can be
+                // under way (or over) before the listener is registered.
+                streams.setGlobalStateRestoreListener(restoreListener);
+            }
             streams.setStateListener((newState, oldState) -> {
                 lastState.set(newState);
                 // Count down on RUNNING and on any shutdown/error state, so a startup failure fails
