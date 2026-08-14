@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
@@ -127,6 +128,19 @@ public final class CelValidator implements ValidationRuleExecutor {
       } else {
         thisType = CelUtils.findCelTypeForClass(value.getClass());
       }
+    } else if (schema instanceof FieldDescriptor) {
+      scriptType = ScriptType.PROTOBUF;
+      FieldDescriptor field = (FieldDescriptor) schema;
+      // Both the declared type and the value come from the field, not from the value's Java
+      // class. Java's boxes do not carry protobuf's distinctions: a uint64 and an int64 are
+      // both Long, and an enum is an EnumValueDescriptor that no class mapping recognizes.
+      // The walker hands message-valued fields over under their own message descriptor, so
+      // only scalars and enums - singular or repeated - reach here.
+      thisType = CelUtils.findCelTypeForProtobufField(field);
+      value = CelUtils.toCelValueForProtobufField(field, value);
+      // The containing message is what identifies the program in the cache; the field
+      // itself has served its purpose above.
+      schema = field.getContainingType();
     } else if (schema instanceof Schema) {
       scriptType = ScriptType.AVRO;
       // Mirror the protobuf path: use the value's own schema for type registration so
