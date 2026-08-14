@@ -2969,7 +2969,9 @@ public class ProtobufSchema implements ParsedSchema {
         }
         try (FieldContext fc = ctx.enterField(
             message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
-            getInlineTags(schemaFd))
+            // The producer's own field: the value below is read through it, so it is what
+            // says how the value should be presented to a rule.
+            getInlineTags(schemaFd), fd)
         ) {
           // Skip-on-null, as in the validation walk: a field with explicit presence that
           // is unset has no value to transform, and writing one back would materialize
@@ -3282,14 +3284,16 @@ public class ProtobufSchema implements ParsedSchema {
         // already happened, so there is nothing to gain from narrowing this further.
         Object schemaFieldValue = schemaMsg == null ? null : schemaMsg.getField(schemaFd);
         // Field-level rules: this = the field value as the schema presents it. Hint is the
-        // field's own message descriptor for nested messages, or the containing-type
-        // descriptor for primitives — taken from the schema's field, since that is where
-        // the value being bound comes from.
+        // field's own message descriptor for nested messages, and the field itself for
+        // everything else — the declared type is what an executor needs to present the
+        // value faithfully, and Java's boxes lose it: a uint64 and an int64 both arrive
+        // as Long. Both come from the schema's field, since that is where the value being
+        // bound comes from.
         if (schemaFd.getOptions().hasExtension(MetaProto.fieldMeta)) {
           Meta meta = schemaFd.getOptions().getExtension(MetaProto.fieldMeta);
-          Descriptor hint = (schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+          Object hint = (schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
               ? schemaFd.getMessageType()
-              : schemaFd.getContainingType();
+              : schemaFd;
           Object thisValue = schemaFieldValue != null ? schemaFieldValue : fieldValue;
           for (MetaProto.Rule rule : meta.getRulesList()) {
             evaluateOne(rule, hint, thisValue, childPath, executor, out);

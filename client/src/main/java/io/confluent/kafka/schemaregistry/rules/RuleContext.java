@@ -187,6 +187,12 @@ public class RuleContext {
 
   public FieldContext enterField(Object containingMessage,
       String fullName, String name, RuleContext.Type type, Set<String> tags) {
+    return enterField(containingMessage, fullName, name, type, tags, null);
+  }
+
+  public FieldContext enterField(Object containingMessage,
+      String fullName, String name, RuleContext.Type type, Set<String> tags,
+      Object fieldDescriptor) {
     Set<String> metadataTags = getTags(fullName);
     if (!metadataTags.isEmpty()) {
       tags = new HashSet<>(tags);
@@ -194,7 +200,8 @@ public class RuleContext {
     }
     Set<String> ruleTags = rule().getTags();
     if (!type.isPrimitive() || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
-      return new FieldContext(containingMessage, fullName, name, type, tags);
+      return new FieldContext(containingMessage, fullName, name, type, tags,
+          fieldDescriptor);
     } else {
       return null;
     }
@@ -220,15 +227,22 @@ public class RuleContext {
     private Type type;
     private boolean inCombined;
     private final Set<String> tags;
+    private final Object fieldDescriptor;
 
     public FieldContext(Object containingMessage, String fullName,
         String name, Type type, Set<String> tags) {
+      this(containingMessage, fullName, name, type, tags, null);
+    }
+
+    public FieldContext(Object containingMessage, String fullName,
+        String name, Type type, Set<String> tags, Object fieldDescriptor) {
       this.containingMessage = containingMessage;
       this.fullName = fullName;
       this.name = name;
       this.type = type;
       this.inCombined = type == Type.COMBINED;
       this.tags = tags;
+      this.fieldDescriptor = fieldDescriptor;
       fieldContexts.addLast(this);
     }
 
@@ -242,6 +256,22 @@ public class RuleContext {
 
     public String getName() {
       return name;
+    }
+
+    /**
+     * The producer's own handle on the field, for formats that have one: a protobuf
+     * {@code FieldDescriptor}. Null for Avro and JSON Schema, whose walks carry no such
+     * object.
+     *
+     * <p>{@link #getName()} and {@link #getFullName()} are the <em>registered schema's</em>
+     * names for the field, which can differ from the producer's under a compatible rename,
+     * and {@link Type} collapses distinctions the format makes — a {@code uint64} and an
+     * {@code int64} both arrive as {@link Type#LONG}, and Java has no unsigned primitive to
+     * carry the difference in the value either. An executor that has to present the value
+     * faithfully therefore goes through this rather than re-deriving the field from a name.
+     */
+    public Object getFieldDescriptor() {
+      return fieldDescriptor;
     }
 
     public Type getType() {
