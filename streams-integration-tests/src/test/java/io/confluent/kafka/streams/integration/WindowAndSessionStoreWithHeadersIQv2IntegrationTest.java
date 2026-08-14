@@ -17,6 +17,7 @@
 package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,8 +39,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -66,6 +65,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
@@ -114,6 +114,11 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
 
     // How long an IQv2 query helper keeps retrying before failing (matches the sibling KV IQv2 test).
     private static final long QUERY_DEADLINE_MS = 30_000;
+
+    // How long an "expected to stay empty" assertion keeps re-querying. An absence needs a settle
+    // window, not a single lucky attempt: a record that has merely not landed yet looks identical to
+    // one that is genuinely absent. See assertQueryStaysEmpty.
+    private static final long EMPTY_SETTLE_MS = 2_000;
 
     private static final Duration WINDOW_SIZE = Duration.ofMinutes(10);
     private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
@@ -355,12 +360,30 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                 send(producer, input, base + 55, "sensor-1", createValue(3), "s1-merge-3");
                 // A distant record (> gap away) forms a separate, zero-length session [base+500, base+500].
                 send(producer, input, base + 500, "sensor-1", createValue(4), "s1-distant");
-                // Noise key sensor-2: a session written then tombstoned -- must not survive or leak.
+                // Noise key sensor-2: a session written, then tombstoned below -- must not survive
+                // or leak.
                 send(producer, input, base, "sensor-2", createValue(20), "s2-sess");
+                producer.flush();
+            }
+            consumeRecords(output, appId + "-barrier", 5);
+
+            // Prove sensor-2's session was genuinely written before removing it. Without this, a put
+            // that silently no-oped would leave nothing for the tombstone to remove and the
+            // post-tombstone emptiness assertion below would pass for the wrong reason.
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> sensor2 = queryWindowed(
+                streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-2")), 1);
+            assertEquals(1, sensor2.size(), "sensor-2 should have exactly one session before the "
+                + "tombstone");
+            assertSessionRecord(sensor2.get(0), "sensor-2", base, base, 20L, "s2-sess",
+                "sensor-2 session before tombstone");
+
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
                 send(producer, input, base, "sensor-2", null, "s2-tomb");
                 producer.flush();
             }
-            consumeRecords(output, appId + "-barrier", 6);
+            consumeRecords(output, appId + "-tombstone-barrier", 6);
 
             // sensor-1 has two variable-length sessions. The withKey session query documents no
             // iteration order, so sort locally (recordsForSensor) to assert the set order-independently.
@@ -378,11 +401,11 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                 "session zero-length");
 
             // sensor-2's only session was tombstoned -> empty; a never-written key is likewise empty.
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-2")), 0).isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-2")),
                 "sensor-2's tombstoned session should be excluded");
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-999")), 0).isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-999")),
                 "never-written key returns no sessions");
 
             closeStreams(streams);
@@ -655,10 +678,9 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             assertWindowServedFromCache(streams, storeName, "sensor-1", base, 1L, "s1-cache",
                 "wincache IQv1 control");
 
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
-                        createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 0)
-                    .isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)),
                 "cached-but-unflushed window write must be invisible to the IQv2 query");
 
             closeStreams(streams);
@@ -690,8 +712,8 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             assertSessionServedFromCache(streams, storeName, "sensor-1", base,
                 base + SESSION_DURATION_MS, 1L, "s1-cache", "sesscache IQv1 control");
 
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 0).isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")),
                 "cached-but-unflushed session write must be invisible to the IQv2 query");
 
             closeStreams(streams);
@@ -839,6 +861,156 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         }
     }
 
+    /**
+     * Session counterpart to {@link #shouldPreserveFullHeaderSetIncludingDuplicatesAndEmpty}: the
+     * session store encodes headers through {@code AggregationWithHeadersSerializer} /
+     * {@code HeadersSerializer}, a different path from the window store's
+     * {@code ValueTimestampHeadersSerde}, so the duplicate key and empty value need pinning there too.
+     */
+    @Test
+    public void shouldPreserveFullHeaderSetIncludingDuplicatesAndEmptyForSession() throws Exception {
+        String input = "iqv2-sessheaderset-input";
+        String output = "iqv2-sessheaderset-output";
+        String storeName = "iqv2-sessheaderset-store";
+        String appId = "iqv2-sessheaderset-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildSessionTopology(input, output, storeName), appId);
+        try {
+            List<String> producedHeaders;
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
+                    input, null, base, createKey("sensor-1"), createValue(1));
+                record.headers().add(SEQ_HEADER, "s1-full".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "A".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "B".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("empty", new byte[0]);
+                producer.send(record).get();
+                producer.flush();
+                producedHeaders = headerEntries(record.headers());
+            }
+            consumeRecords(output, appId + "-barrier", 1);
+
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> records = queryWindowed(
+                streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 1);
+            assertEquals(producedHeaders, headerEntries(records.get(0).headers()),
+                "session query should return the full produced header set -- order, the duplicate "
+                    + "'trace' key, the empty value and the schema-id headers -- and nothing else");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
+     * The cache tests above pin that an unflushed write is invisible; this pins the other half of
+     * that pair -- that a header-bearing record written through {@code CachingWindowStore} reaches
+     * RocksDB with its headers intact once the cache is flushed. A short commit interval drives the
+     * flush, and the query helper polls until it lands.
+     */
+    @Test
+    public void shouldServeWindowWithHeadersAfterCacheFlush() throws Exception {
+        String input = "iqv2-winflush-input";
+        String output = "iqv2-winflush-output";
+        String storeName = "iqv2-winflush-store";
+        String appId = "iqv2-winflush-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        // Caching enabled, but a 1s commit interval so the record cache is flushed into the store
+        // during the test rather than sitting there for the whole run.
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildWindowTopology(input, output, storeName, true, false), appId, 30, 1000);
+        try {
+            produceOne(input, base, "sensor-1", createValue(7), "s1-flush");
+            consumeRecords(output, appId + "-barrier", 1);
+
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> records = queryWindowed(
+                streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 1);
+            assertWindowedRecord(records.get(0), "sensor-1", base, 7L, "s1-flush",
+                "window after cache flush");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
+     * Negative control on query dispatch: each headers-aware query form is bound to one store type,
+     * and sending the other form must fail with {@link FailureReason#UNKNOWN_QUERY_TYPE} rather than
+     * being silently answered. Needs no data -- the store type alone decides.
+     */
+    @Test
+    public void shouldRejectMismatchedQueryTypeWithUnknownQueryType() throws Exception {
+        String windowInput = "iqv2-mismatch-win-input";
+        String windowOutput = "iqv2-mismatch-win-output";
+        String windowStore = "iqv2-mismatch-win-store";
+        String sessionInput = "iqv2-mismatch-sess-input";
+        String sessionOutput = "iqv2-mismatch-sess-output";
+        String sessionStore = "iqv2-mismatch-sess-store";
+        long base = baseTimestamp();
+
+        createTopics(windowInput, windowOutput);
+        KafkaStreams windowStreams = startStreamsAndAwaitRunning(
+            buildWindowTopology(windowInput, windowOutput, windowStore), "iqv2-mismatch-win-test");
+        try {
+            // A session query (withKey) sent to a window store.
+            assertUnknownQueryType(windowStreams, windowStore,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")),
+                "session withKey query against a window store");
+            closeStreams(windowStreams);
+        } finally {
+            closeStreamsQuietly(windowStreams);
+        }
+
+        createTopics(sessionInput, sessionOutput);
+        KafkaStreams sessionStreams = startStreamsAndAwaitRunning(
+            buildSessionTopology(sessionInput, sessionOutput, sessionStore),
+            "iqv2-mismatch-sess-test");
+        try {
+            // A window query (withKeyAndWindowStartRange) sent to a session store.
+            assertUnknownQueryType(sessionStreams, sessionStore,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)),
+                "window start-range query against a session store");
+            closeStreams(sessionStreams);
+        } finally {
+            closeStreamsQuietly(sessionStreams);
+        }
+    }
+
+    /**
+     * Asserts every partition result failed with {@link FailureReason#UNKNOWN_QUERY_TYPE} -- the
+     * reason, not merely that it failed, so an unrelated failure cannot pass as coverage.
+     */
+    private static void assertUnknownQueryType(KafkaStreams streams, String storeName,
+        Query<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> query, String context) {
+        StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
+            streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
+        Map<Integer, QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>>
+            partitionResults = result.getPartitionResults();
+        assertFalse(partitionResults.isEmpty(), context + " should return a partition result");
+        for (Map.Entry<Integer,
+                QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>> e
+                : partitionResults.entrySet()) {
+            QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> pr =
+                e.getValue();
+            assertTrue(pr.isFailure(),
+                context + " should fail on partition " + e.getKey() + " but succeeded");
+            assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, pr.getFailureReason(),
+                context + " should fail with UNKNOWN_QUERY_TYPE on partition " + e.getKey()
+                    + " but got: " + pr.getFailureReason() + ": " + pr.getFailureMessage());
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // IQv2 query helpers
     // ---------------------------------------------------------------------------------------------
@@ -884,6 +1056,40 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         assertEquals(expected, out.size(),
             "IQv2 windowed query returned an unexpected count" + failureSuffix);
         return out;
+    }
+
+    /**
+     * Asserts {@code query} keeps returning nothing for a settle window, failing on the first
+     * non-empty attempt.
+     *
+     * <p>{@link #queryWindowed} is the wrong tool for an empty expectation: its {@code out.size() >=
+     * expected} check is trivially true for {@code expected == 0}, so it returns on the very first
+     * successful attempt and gives an emptiness claim no margin at all -- a record that had simply
+     * not landed yet would read as a confirmed absence. Polling across a window instead means the
+     * assertion has to hold repeatedly, and requiring at least one success keeps a query that failed
+     * on every attempt (an unsupported query type, say) from passing as "empty".
+     */
+    private void assertQueryStaysEmpty(KafkaStreams streams, String storeName,
+        Query<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> query, String context) {
+        long deadline = System.currentTimeMillis() + EMPTY_SETTLE_MS;
+        boolean sawSuccess = false;
+        String lastFailure = null;
+        while (System.currentTimeMillis() < deadline) {
+            StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
+                streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> served = new ArrayList<>();
+            String failure = drainPartitions(result, (partition, record) -> served.add(record));
+            if (failure != null) {
+                lastFailure = failure;
+            } else {
+                sawSuccess = true;
+            }
+            assertTrue(served.isEmpty(), context + " but got " + served.size() + " record(s)");
+            sleepQuietly(200);
+        }
+        assertTrue(sawSuccess, context + ": query never succeeded within " + EMPTY_SETTLE_MS
+            + "ms, so its emptiness proves nothing"
+            + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
     }
 
     /**
@@ -1156,8 +1362,10 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
      * Starts a KafkaStreams that must rebuild its store from the changelog and returns it once
      * RUNNING, wiring a {@link StateRestoreListener} that sums the records restored for
      * {@code storeName} into {@code restoredCount} -- so a test can prove the store was genuinely
-     * restored, not silently reprocessed from the input topic. The base start helper cannot set a
-     * restore listener, so the instance is started inline here.
+     * restored, not silently reprocessed from the input topic. Starting through the base helper --
+     * rather than hand-rolling the start here -- keeps its count-down on a terminal state (so a
+     * failed restore fails fast with the observed state instead of blocking for the full 90s) and
+     * keeps the instance tracked for teardown.
      */
     private KafkaStreams startRestoredAndAwaitRunning(Topology topology, String appId,
         String storeName, AtomicLong restoredCount) throws Exception {
@@ -1177,27 +1385,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                 }
             }
         };
-        KafkaStreams restored = new KafkaStreams(topology, createStreamsProps(appId, null));
-        boolean running = false;
-        try {
-            restored.cleanUp();
-            restored.setGlobalStateRestoreListener(restoreListener);
-            CountDownLatch runningLatch = new CountDownLatch(1);
-            restored.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    runningLatch.countDown();
-                }
-            });
-            restored.start();
-            assertTrue(runningLatch.await(90, TimeUnit.SECONDS),
-                "restored KafkaStreams should reach RUNNING within 90s");
-            running = true;
-            return restored;
-        } finally {
-            if (!running) {
-                closeStreamsQuietly(restored);
-            }
-        }
+        return startStreamsAndAwaitRunning(topology, appId, 90, null, restoreListener);
     }
 
     // ---------------------------------------------------------------------------------------------
