@@ -279,67 +279,6 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         }
     }
 
-    /**
-     * Covers the position-bound path for both header queries. Every other test here uses the default
-     * unbounded position, so neither {@code withPositionBound(...)} nor
-     * {@link StateQueryResult#getPosition()} would otherwise be exercised at all.
-     */
-    @Test
-    public void shouldReportPositionAndRejectQueryBoundedBeyondIt() throws Exception {
-        String input = "iqv2-position-input";
-        String output = "iqv2-position-output";
-        String storeName = "iqv2-position-store";
-        String appId = "iqv2-position-test";
-
-        KafkaStreams streams = startAndPopulate(
-            storeName, input, output, appId,
-            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
-        try {
-            // A query served under the default (unbounded) bound reports the position the store had
-            // reached when it answered.
-            StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> unbounded =
-                streams.query(StateQueryRequest.inStore(storeName)
-                    .withQuery(TimestampedKeyWithHeadersQuery
-                        .<GenericRecord, GenericRecord>withKey(createKey("word-1"))));
-            Position position = unbounded.getPosition();
-            assertNotNull(position, "unbounded query should report a position");
-            assertTrue(position.getTopics().contains(input),
-                "reported position should cover the input topic but was: " + position);
-
-            // A bound at an offset the store cannot have reached must fail the query with
-            // NOT_UP_TO_BOUND rather than quietly serving a result from behind the bound.
-            PositionBound beyond = PositionBound.at(
-                Position.emptyPosition().withComponent(input, 0, Long.MAX_VALUE));
-            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
-                .withQuery(TimestampedKeyWithHeadersQuery
-                    .<GenericRecord, GenericRecord>withKey(createKey("word-1")))
-                .withPositionBound(beyond)), "point query");
-            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
-                .withQuery(TimestampedRangeWithHeadersQuery
-                    .<GenericRecord, GenericRecord>withNoBounds())
-                .withPositionBound(beyond)), "range query");
-            closeStreams(streams);
-        } finally {
-            closeStreamsQuietly(streams);
-        }
-    }
-
-    /**
-     * Asserts every partition result failed with {@link FailureReason#NOT_UP_TO_BOUND} -- checking
-     * the reason, not merely that the query failed, so an unrelated failure can't pass as coverage.
-     */
-    private static <R> void assertNotUpToBound(StateQueryResult<R> result, String context) {
-        Map<Integer, QueryResult<R>> partitionResults = result.getPartitionResults();
-        assertFalse(partitionResults.isEmpty(), context + " should return a partition result");
-        for (Map.Entry<Integer, QueryResult<R>> e : partitionResults.entrySet()) {
-            QueryResult<R> pr = e.getValue();
-            assertTrue(pr.isFailure(), context
-                + " bounded beyond the store's position should fail on partition " + e.getKey());
-            assertEquals(FailureReason.NOT_UP_TO_BOUND, pr.getFailureReason(),
-                context + " should fail with NOT_UP_TO_BOUND on partition " + e.getKey());
-        }
-    }
-
     // ---------------------------------------------------------------------------------------------
     // TimestampedRangeWithHeadersQuery (range / scan)
     // ---------------------------------------------------------------------------------------------
@@ -657,6 +596,71 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             closeStreams(streams);
         } finally {
             closeStreamsQuietly(streams);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Position bounds (point + range)
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Covers the position-bound path for both header queries. Every other test here uses the default
+     * unbounded position, so neither {@code withPositionBound(...)} nor
+     * {@link StateQueryResult#getPosition()} would otherwise be exercised at all.
+     */
+    @Test
+    public void shouldReportPositionAndRejectQueryBoundedBeyondIt() throws Exception {
+        String input = "iqv2-position-input";
+        String output = "iqv2-position-output";
+        String storeName = "iqv2-position-store";
+        String appId = "iqv2-position-test";
+
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
+        try {
+            // A query served under the default (unbounded) bound reports the position the store had
+            // reached when it answered.
+            StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> unbounded =
+                streams.query(StateQueryRequest.inStore(storeName)
+                    .withQuery(TimestampedKeyWithHeadersQuery
+                        .<GenericRecord, GenericRecord>withKey(createKey("word-1"))));
+            Position position = unbounded.getPosition();
+            assertNotNull(position, "unbounded query should report a position");
+            assertTrue(position.getTopics().contains(input),
+                "reported position should cover the input topic but was: " + position);
+
+            // A bound at an offset the store cannot have reached must fail the query with
+            // NOT_UP_TO_BOUND rather than quietly serving a result from behind the bound.
+            PositionBound beyond = PositionBound.at(
+                Position.emptyPosition().withComponent(input, 0, Long.MAX_VALUE));
+            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
+                .withQuery(TimestampedKeyWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withKey(createKey("word-1")))
+                .withPositionBound(beyond)), "point query");
+            assertNotUpToBound(streams.query(StateQueryRequest.inStore(storeName)
+                .withQuery(TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withNoBounds())
+                .withPositionBound(beyond)), "range query");
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
+     * Asserts every partition result failed with {@link FailureReason#NOT_UP_TO_BOUND} -- checking
+     * the reason, not merely that the query failed, so an unrelated failure can't pass as coverage.
+     */
+    private static <R> void assertNotUpToBound(StateQueryResult<R> result, String context) {
+        Map<Integer, QueryResult<R>> partitionResults = result.getPartitionResults();
+        assertFalse(partitionResults.isEmpty(), context + " should return a partition result");
+        for (Map.Entry<Integer, QueryResult<R>> e : partitionResults.entrySet()) {
+            QueryResult<R> pr = e.getValue();
+            assertTrue(pr.isFailure(), context
+                + " bounded beyond the store's position should fail on partition " + e.getKey());
+            assertEquals(FailureReason.NOT_UP_TO_BOUND, pr.getFailureReason(),
+                context + " should fail with NOT_UP_TO_BOUND on partition " + e.getKey());
         }
     }
 
