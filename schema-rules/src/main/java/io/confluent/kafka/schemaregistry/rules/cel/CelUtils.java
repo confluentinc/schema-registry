@@ -584,6 +584,8 @@ public final class CelUtils {
   public static CelType findCelTypeForClass(Class<?> type) {
     if (type == boolean.class || type == Boolean.class) {
       return SimpleType.BOOL;
+    } else if (type == UnsignedLong.class) {
+      return SimpleType.UINT;
     } else if (type == long.class
         || type == Long.class
         || type == int.class
