@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -217,16 +218,14 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             assertWindowedRecord(subRange.get(0), "sensor-1", w1, 1L, "s1-w1", "winkey sub-range w1");
 
             // A never-written key -> empty.
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
-                        createKey("sensor-999"), Instant.ofEpochMilli(w0), Instant.ofEpochMilli(w4)), 0)
-                    .isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-999"), Instant.ofEpochMilli(w0), Instant.ofEpochMilli(w4)),
                 "never-written key returns no records");
             // A window-start range after sensor-1's last window -> empty.
-            assertTrue(queryWindowed(streams, storeName,
-                    TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
-                        createKey("sensor-1"), Instant.ofEpochMilli(w4), Instant.ofEpochMilli(w4 + 100)), 0)
-                    .isEmpty(),
+            assertQueryStaysEmpty(streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(w4), Instant.ofEpochMilli(w4 + 100)),
                 "window-start range excluding all of sensor-1's windows returns no records");
 
             // Bidirectional isolation: sensor-2 returns only its live windows (w1, w4; w0 tombstoned).
@@ -1030,11 +1029,22 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
      */
     private static void assertUnknownQueryType(KafkaStreams streams, String storeName,
         Query<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> query, String context) {
-        StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
-            streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
+        // Retry like every other query helper here. This one's callers produce no data and wait on no
+        // output-topic barrier, so RUNNING is their only synchronisation: a rebalance that leaves the
+        // partition results momentarily empty would otherwise fail the assertion below outright.
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         Map<Integer, QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>>
-            partitionResults = result.getPartitionResults();
-        assertFalse(partitionResults.isEmpty(), context + " should return a partition result");
+            partitionResults = Collections.emptyMap();
+        while (System.currentTimeMillis() < deadline) {
+            partitionResults = streams.query(StateQueryRequest.inStore(storeName).withQuery(query))
+                .getPartitionResults();
+            if (!partitionResults.isEmpty()) {
+                break;
+            }
+            sleepQuietly(200);
+        }
+        assertFalse(partitionResults.isEmpty(), context + " should return a partition result but "
+            + "none was served within " + QUERY_DEADLINE_MS + "ms");
         for (Map.Entry<Integer,
                 QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>> e
                 : partitionResults.entrySet()) {
@@ -1114,12 +1124,18 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         while (System.currentTimeMillis() < deadline) {
             StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
                 streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
+            // Take success from the partition results themselves, the way queryWindowed does.
+            // drainPartitions returning null means "no partition failed", which is NOT the same as
+            // "some partition succeeded": an empty partition-result map -- nobody served the query at
+            // all -- also reports no failure, and counting that as a success would put the emptiness
+            // claim below right back to proving nothing.
+            if (result.getPartitionResults().values().stream().anyMatch(QueryResult::isSuccess)) {
+                sawSuccess = true;
+            }
             List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> served = new ArrayList<>();
             String failure = drainPartitions(result, (partition, record) -> served.add(record));
             if (failure != null) {
                 lastFailure = failure;
-            } else {
-                sawSuccess = true;
             }
             assertTrue(served.isEmpty(), context + " but got " + served.size() + " record(s)");
             sleepQuietly(200);
