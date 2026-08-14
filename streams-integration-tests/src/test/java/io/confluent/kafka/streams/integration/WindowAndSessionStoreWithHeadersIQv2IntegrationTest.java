@@ -944,6 +944,43 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     }
 
     /**
+     * Session counterpart to {@link #shouldServeWindowWithHeadersAfterCacheFlush}. Not a duplicate of
+     * it: the session store flushes through {@code CachingSessionStore} and encodes its headers with
+     * {@code AggregationWithHeadersSerializer} / {@code HeadersSerializer}, both different from the
+     * window store's {@code CachingWindowStore} and {@code ValueTimestampHeadersSerde}, so the
+     * cache-to-RocksDB path carrying headers is a separate one and needs its own coverage.
+     */
+    @Test
+    public void shouldServeSessionWithHeadersAfterCacheFlush() throws Exception {
+        String input = "iqv2-sessflush-input";
+        String output = "iqv2-sessflush-output";
+        String storeName = "iqv2-sessflush-store";
+        String appId = "iqv2-sessflush-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        // Caching enabled with a 1s commit interval so the record cache is flushed into the store
+        // during the test -- the mirror of shouldNotServeSessionFromCacheBeforeFlush, which uses a
+        // ten-minute interval so nothing ever flushes.
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildSessionTopology(input, output, storeName, true), appId, 30, 1000);
+        try {
+            produceOne(input, base, "sensor-1", createValue(7), "s1-flush");
+            consumeRecords(output, appId + "-barrier", 1);
+
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> records = queryWindowed(
+                streams, storeName,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 1);
+            assertSessionRecord(records.get(0), "sensor-1", base, base + SESSION_DURATION_MS, 7L,
+                "s1-flush", "session after cache flush");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    /**
      * Negative control on query dispatch: each headers-aware query form is bound to one store type,
      * and sending the other form must fail with {@link FailureReason#UNKNOWN_QUERY_TYPE} rather than
      * being silently answered. Needs no data -- the store type alone decides.
