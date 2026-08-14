@@ -60,6 +60,30 @@ public class RuleContext {
   private final Deque<FieldContext> fieldContexts;
   private final boolean includeRuleResults;
 
+  /**
+   * Creates a context that does not collect rule results, for callers that execute rules
+   * only for their effect on the message. Equivalent to passing {@code false} for
+   * {@code includeRuleResults}.
+   */
+  public RuleContext(
+      Map<String, ?> configs,
+      ExecutionEnvironment enabledEnv,
+      ParsedSchema source,
+      ParsedSchema target,
+      String subject,
+      String topic,
+      Headers headers,
+      Object originalKey,
+      Object originalValue,
+      boolean isKey,
+      RuleMode ruleMode,
+      Rule rule,
+      int index,
+      List<Rule> rules) {
+    this(configs, enabledEnv, source, target, subject, topic, headers,
+        originalKey, originalValue, isKey, ruleMode, rule, index, rules, false);
+  }
+
   public RuleContext(
       Map<String, ?> configs,
       ExecutionEnvironment enabledEnv,
