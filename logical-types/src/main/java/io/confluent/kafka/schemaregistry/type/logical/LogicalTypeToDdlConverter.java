@@ -202,7 +202,7 @@ public final class LogicalTypeToDdlConverter {
     private void appendField(Schema.Field field) {
       sb.append(identifier(field.getName())).append(" ")
           .append(typeExpr(field.getSchema()));
-      if (field.hasDefaultValue()) {
+      if (field.hasDefaultValue() && !field.hasDerivedDefault()) {
         sb.append(" DEFAULT ").append(literal(field.getDefaultValue(), field.getSchema()));
       }
       // Per grammar order: defaultClause -> checkClause* -> commentClause
