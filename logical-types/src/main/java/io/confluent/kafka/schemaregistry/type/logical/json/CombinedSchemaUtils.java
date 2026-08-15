@@ -20,8 +20,10 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.NotSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ObjectSchema.Builder;
@@ -65,6 +67,11 @@ public class CombinedSchemaUtils {
         stringSchema = (StringSchema) subSchema;
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
+      } else if (subSchema instanceof ConditionalSchema || subSchema instanceof NotSchema) {
+        throw new ValidationException(
+            "JSON Schema if/then/else and `not` are not supported: a property declared only under "
+                + "a condition has no column to be read into, so its values would be silently "
+                + "dropped");
       }
       collectPropertySchemas(subSchema, properties, required,
           Collections.newSetFromMap(new IdentityHashMap<>()));
