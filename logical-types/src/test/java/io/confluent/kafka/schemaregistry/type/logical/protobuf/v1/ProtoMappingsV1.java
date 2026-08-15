@@ -125,6 +125,18 @@ public final class ProtoMappingsV1 {
     return new Field(name, schema, pos, null, false, doc, null, null);
   }
 
+  /**
+   * A NOT NULL {@code repeated} or map column, which the Protobuf reader gives a derived default:
+   * such a field cannot encode "absent" distinctly from "empty", so an absent one reads as an
+   * empty container. Marked derived, so no writer emits it as a declared default.
+   */
+  static Field containerField(int pos, String name, Schema schema, String doc) {
+    Object empty = schema.getType() == Schema.Type.MAP
+        ? Collections.emptyMap()
+        : Collections.emptyList();
+    return new Field(name, schema, pos, empty, true, true, doc, null, null, null);
+  }
+
   static String readResource(String path) {
     try (InputStream in =
              ProtoMappingsV1.class.getClassLoader().getResourceAsStream(path)) {
@@ -353,7 +365,7 @@ public final class ProtoMappingsV1 {
                 Schema.createArray(
                     Schema.create(Schema.Type.BIGINT).setNullable(false))
                     .setNullable(true), "arrayNullable comment"),
-            f(1, "elementNullable",
+            containerField(1, "elementNullable",
                 Schema.createArray(
                     Schema.create(Schema.Type.BIGINT).setNullable(true))
                     .setNullable(false), "elementNullable comment"),
@@ -373,7 +385,7 @@ public final class ProtoMappingsV1 {
                     Schema.create(Schema.Type.BIGINT).setNullable(false),
                     Schema.create(Schema.Type.BIGINT).setNullable(false))
                     .setNullable(true), "nullableMap comment"),
-            f(1, "arrayOfMaps",
+            containerField(1, "arrayOfMaps",
                 Schema.createArray(
                     Schema.createMap(
                         Schema.create(Schema.Type.BIGINT).setNullable(false),
@@ -387,7 +399,7 @@ public final class ProtoMappingsV1 {
                         Schema.create(Schema.Type.BIGINT).setNullable(false))
                         .setNullable(true))
                     .setNullable(true), "nullableArrayOfNullableMaps comment"),
-            f(3, "mapOfNullableArrays",
+            containerField(3, "mapOfNullableArrays",
                 Schema.createMap(
                     Schema.create(Schema.Type.BIGINT).setNullable(false),
                     Schema.createArray(
