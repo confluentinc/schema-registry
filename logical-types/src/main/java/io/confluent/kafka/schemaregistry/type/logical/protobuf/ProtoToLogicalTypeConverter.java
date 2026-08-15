@@ -536,12 +536,54 @@ public class ProtoToLogicalTypeConverter {
         ctx.putDefaultValue(indexPath, implicitDefault);
       }
     }
+    // Derived container defaults, recorded on the Field as well as in the path-keyed map above.
+    //
+    // A repeated field cannot encode "absent" distinctly from "empty" and cannot declare a
+    // default, so an absent one reads as an empty list and an absent map as an empty map. Without
+    // that fact a consumer sees only a NOT NULL container with no value for pre-existing rows, and
+    // rejects the most ordinary proto evolution there is -- adding a repeated field.
+    //
+    // Why the Field and not only the map: the map is keyed by index path, and the path a consumer
+    // computes from the schema does not always agree with the one recorded here (a referenced
+    // message's body is keyed under its declaration index, not the referencing field's position).
+    // The Field has no such addressing problem. The map write stays because the Flink converters
+    // read it and expect exactly today's keys.
+    //
+    // Marked derived so no writer emits it as a declared DEFAULT; see Schema.Field#derivedDefault.
+    // proto3's implicit scalar zeros are deliberately NOT given the same treatment: null and 0 are
+    // different values, whereas an absent container and an empty one are query-equivalent.
+    //
+    // Restricted to a NOT NULL container. If the derived schema came out nullable, the V1 wrapper
+    // encoding is in play and absence means null rather than empty, so an empty-container default
+    // would be a false statement -- and a nullable field needs no relaxation anyway.
+    //
+    // Keyed on the DERIVED type, not on the FieldDescriptor. The two disagree: V1 encodes a map of
+    // nullable arrays as a repeated wrapper message, so {@code isMapField()} is false for a field
+    // that becomes an SRLT MAP. The consumer sees the derived type, so the default has to match it.
+    boolean derivedDefault = false;
+    if (!hasDefault && !fieldSchema.isNullable()) {
+      switch (fieldSchema.getType()) {
+        case MAP:
+        case MULTISET:
+          defaultValue = Collections.emptyMap();
+          hasDefault = true;
+          derivedDefault = true;
+          break;
+        case ARRAY:
+          defaultValue = Collections.emptyList();
+          hasDefault = true;
+          derivedDefault = true;
+          break;
+        default:
+          break;
+      }
+    }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
     List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
-        defaultValue, hasDefault, description, fieldTags, fieldParams, fieldRules);
+        defaultValue, hasDefault, derivedDefault, description, fieldTags, fieldParams, fieldRules);
   }
 
   /**
