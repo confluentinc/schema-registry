@@ -637,11 +637,15 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
-   * The {@code flink.precision} annotation, if the schema carries one.
+   * The {@code flink.precision} annotation, if the schema carries one and it is a JSON number.
+   * A non-numeric value (e.g. hand-authored as a string) is treated as absent rather than
+   * throwing {@link ClassCastException}.
    */
   private static Optional<Integer> annotatedPrecision(final org.apache.avro.Schema avroSchema) {
-    return Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_PRECISION))
-        .map(i -> (Integer) i);
+    final Object annotated = avroSchema.getObjectProp(CommonConstants.FLINK_PRECISION);
+    return annotated instanceof Number
+        ? Optional.of(((Number) annotated).intValue())
+        : Optional.empty();
   }
 
   /**
@@ -695,10 +699,7 @@ public class AvroToLogicalTypeConverter {
       org.apache.avro.Schema avroSchema, boolean isNullable) {
     // Unguarded: this is the widest TIME carrier, so the writer has to use it for any precision
     // above 6. See resolvePrecision.
-    final int precision =
-        Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_PRECISION))
-            .map(i -> (Integer) i)
-            .orElse(6);
+    final int precision = annotatedPrecision(avroSchema).orElse(6);
     return Schema.createTime(precision).setNullable(isNullable);
   }
 
