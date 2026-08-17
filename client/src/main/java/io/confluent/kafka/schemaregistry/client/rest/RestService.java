@@ -677,13 +677,14 @@ public class RestService implements Closeable, Configurable {
   }
 
   /**
-   * Check if the given exception should not be retried.
-   * For RestClientException, determine whether to retry based on its HTTP status code.
+   * Check if the given exception should not be retried against the next base URL.
+   * For RestClientException, defers to the retry executor's own retriability predicate so that
+   * failover honours a custom predicate rather than only the default status codes.
    * For other exceptions, check if it is a network connection exception.
    */
   private boolean isNonRetriableException(Exception e) {
     if (e instanceof RestClientException) {
-      return !isRestClientExceptionRetriable((RestClientException) e);
+      return !retryExecutor.isRetriable((RestClientException) e);
     }
     return !ExceptionUtils.isNetworkConnectionException(e);
   }
