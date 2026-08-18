@@ -1141,9 +1141,12 @@ public class ProtoToLogicalTypeConverter {
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
-        // The wrapper's oneof is writer-synthesized for a nullable composite UNION; its branch
-        // numbers are regenerated on re-emission, so they are not recorded.
-        return toLogicalTypeOneof(oneof, ctx, indexPath, false);
+        // Apply the same all-or-nothing decision to the wrapper descriptor: a writer-produced
+        // wrapper numbers its branches sequentially (so nothing is recorded), but a wrapped UNION
+        // whose branches carry non-sequential numbers must record them, or the writer — which does
+        // honor branch numbers when re-synthesizing the wrapper via fromStructType — would renumber
+        // them positionally on the next round trip.
+        return toLogicalTypeOneof(oneof, ctx, indexPath, !messageNumbersAreSequential(wrapper));
       }
     }
     throw new ValidationException(

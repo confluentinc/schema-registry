@@ -3045,4 +3045,29 @@ class LogicalTypeToProtoConverterTest {
         LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(struct), "M"))
         .isInstanceOf(ValidationException.class);
   }
+
+  @Test
+  void testWrappedUnionBranchNumbersRoundTrip() {
+    // An ARRAY<UNION> wraps the union in a synthesized message; non-sequential branch numbers must
+    // survive that wrapper round trip rather than being renumbered positionally.
+    Map<String, Object> b1 = new LinkedHashMap<>();
+    b1.put(Schema.PROTOBUF_FIELD_NUMBER, "5");
+    Map<String, Object> b2 = new LinkedHashMap<>();
+    b2.put(Schema.PROTOBUF_FIELD_NUMBER, "9");
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("s", Schema.createString().setNullable(true), null, b1),
+        new UnionBranch("i", Schema.create(Schema.Type.INT).setNullable(true), null, b2)))
+        .setNullable(true);
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("arr", Schema.createArray(union).setNullable(false), 0)))
+        .setNullable(false);
+
+    ProtobufSchema proto =
+        LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(struct), "M");
+    Schema back = ProtoToLogicalTypeConverter.toRootSchema(proto);
+
+    Schema backUnion = back.getField("arr").getSchema().getElementType();
+    assertThat(backUnion.getBranches().get(0).getFieldNumber()).isEqualTo(5);
+    assertThat(backUnion.getBranches().get(1).getFieldNumber()).isEqualTo(9);
+  }
 }
