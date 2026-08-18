@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -223,5 +224,33 @@ class AvroToLogicalTypeConverterTest {
     final AvroSchema deep = new AvroSchema(inner);
     assertThrows(ValidationException.class,
         () -> AvroToLogicalTypeConverter.toRootSchema(deep));
+  }
+
+  @Test
+  void testFieldAliasesPopulatedFromAvro() {
+    String json = "{\"type\":\"record\",\"name\":\"M\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"a_old\",\"a_older\"]}]}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+
+    Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
+        .getNamedTypes().get("M");
+
+    assertThat(struct.getField("a").getAliases())
+        .containsExactlyInAnyOrder("a_old", "a_older");
+  }
+
+  @Test
+  void testStrayAliasParamOverriddenByNativeAliases() {
+    // A hand-authored schema that puts logical.aliases in confluent:params must not win over the
+    // authoritative native alias; the native "a_old" replaces the smuggled "stray".
+    String json = "{\"type\":\"record\",\"name\":\"M\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"a_old\"],"
+        + "\"confluent:params\":{\"logical.aliases\":\"stray\"}}]}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+
+    Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
+        .getNamedTypes().get("M");
+
+    assertThat(struct.getField("a").getAliases()).containsExactly("a_old");
   }
 }
