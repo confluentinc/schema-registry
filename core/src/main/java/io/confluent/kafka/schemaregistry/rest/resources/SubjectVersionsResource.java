@@ -176,9 +176,13 @@ public class SubjectVersionsResource {
         schemaRegistry.extractSchemaTags(schema, tags);
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         String originalGuid = schema.getGuid();
-        schema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          schema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, schema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+          schema.setSchema(parsedSchema.formattedString(format));
+        }
         schema.setGuid(originalGuid);
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
@@ -487,12 +491,18 @@ public class SubjectVersionsResource {
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
+      if (LogicalFormat.isLogical(format)) {
+        LogicalFormat.convertToNative(schemaRegistry, subjectName, request);
+      }
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
       Schema result =
           schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
-      if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
+      // format=logical governs how the request body is interpreted, not how the response is
+      // rendered -- the response always reflects the stored native schema.
+      if (result.getSchema() != null && format != null && !format.trim().isEmpty()
+          && !LogicalFormat.isLogical(format)) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
         String originalGuid = result.getGuid();
         result.setSchema(parsedSchema.formattedString(format));
