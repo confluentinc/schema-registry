@@ -160,12 +160,7 @@ public class KafkaGroupLeaderElectorPollLoopTest {
     assertTrue("loop should have made progress before being stopped", calls.get() > 0);
   }
 
-  /**
-   * A persistently failing poll must not emit an ERROR line on every retry. With a
-   * throttle window larger than the test run, only the very first failure should log
-   * ERROR, however many times the loop retries. This is the regression guarded against:
-   * at the default retry.backoff.ms=100 the unthrottled loop emitted ~10 ERROR/s forever.
-   */
+  /** Persistent failure logs ERROR once while within the throttle window (flood guard). */
   @Test(timeout = 10_000)
   public void throttlesRepeatedErrorLogsOnPersistentFailure() throws Exception {
     Logger mockLog = mock(Logger.class);
@@ -193,10 +188,7 @@ public class KafkaGroupLeaderElectorPollLoopTest {
         1L, countCalls(mockLog, "error"));
   }
 
-  /**
-   * While the failure persists past the throttle window, the loop must re-emit an ERROR
-   * heartbeat so the wedge stays visible/alertable -- but far fewer than one per retry.
-   */
+  /** Past the throttle window, ERROR re-emits as a heartbeat, but far below one per retry. */
   @Test(timeout = 10_000)
   public void emitsErrorHeartbeatAfterThrottleWindow() throws Exception {
     Logger mockLog = mock(Logger.class);
@@ -220,17 +212,12 @@ public class KafkaGroupLeaderElectorPollLoopTest {
     assertFalse(t.isAlive());
 
     long errors = countCalls(mockLog, "error");
-    // First failure plus at least one heartbeat, yet still far below one-per-retry.
     assertTrue("expected more than one ERROR (heartbeat), got " + errors, errors >= 2);
     assertTrue("ERROR logs (" + errors + ") should stay well below retry count ("
         + calls.get() + ")", errors < calls.get());
   }
 
-  /**
-   * When a failing poll recovers, the loop logs a single INFO recovery line and resets
-   * its failure state, so a subsequent failure episode logs a fresh ERROR rather than
-   * being swallowed by the earlier throttle window.
-   */
+  /** Recovery logs one INFO and resets, so a later failure episode logs a fresh ERROR. */
   @Test(timeout = 10_000)
   public void logsRecoveryAndResetsFailureCountOnSuccess() throws Exception {
     Logger mockLog = mock(Logger.class);
@@ -240,8 +227,7 @@ public class KafkaGroupLeaderElectorPollLoopTest {
     Runnable pollOnce = () -> {
       int n = calls.incrementAndGet();
       reachedSeventhCall.countDown();
-      // Two single-failure episodes: n==1 (episode 1) and n==5 (episode 2), each
-      // immediately recovered. Each first-failure logs ERROR; each recovery logs INFO.
+      // Two single-failure episodes (n==1, n==5), each immediately recovered.
       if (n == 1 || n == 5) {
         throw new IllegalStateException("simulated transient failure");
       }
@@ -265,10 +251,8 @@ public class KafkaGroupLeaderElectorPollLoopTest {
     t.join(2_000);
     assertFalse(t.isAlive());
 
-    // One ERROR per episode's first failure (reset makes episode 2 log again).
     assertEqualsLong("each failure episode should log exactly one ERROR",
         2L, countCalls(mockLog, "error"));
-    // One recovery INFO per episode that recovered.
     assertEqualsLong("each recovery should log exactly one INFO",
         2L, countCalls(mockLog, "info"));
   }

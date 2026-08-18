@@ -65,9 +65,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   private static final AtomicInteger SR_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
   private static final String JMX_PREFIX = "kafka.schema.registry";
 
-  // While the poll loop retries a persistent failure at retry.backoff.ms (default 100ms),
-  // re-log the ERROR at most once per this window so a wedged elector stays visible without
-  // flooding the log at ~10 lines/second. The first failure always logs immediately.
+  // Re-log a persistent poll failure at most once per this window (see runPollLoop).
   private static final long ERROR_LOG_THROTTLE_MS = 30_000L;
 
   private final int initTimeout;
@@ -243,16 +241,12 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
    * error code: 50002"} until a JVM restart. See upstream issues #1696, #2492, #3135,
    * #3910.
    *
-   * <p>To keep a persistent failure from flooding the log at {@code retryBackoffMs}
-   * cadence (~10 ERROR/s at the default {@code retry.backoff.ms=100}), the ERROR is
-   * throttled: the first failure of an episode logs immediately with the stack trace,
-   * then further failures re-log at most once per {@code errorLogThrottleMs} as a
-   * heartbeat carrying the consecutive-failure count and elapsed time, so a wedged
-   * elector stays visible without the flood. A successful poll logs a single INFO
-   * recovery line and resets the episode.
+   * <p>The ERROR is throttled to avoid ~10 lines/s at the default {@code retry.backoff.ms=100}:
+   * the first failure logs immediately, then re-logs at most once per {@code errorLogThrottleMs};
+   * a successful poll logs one INFO recovery line and resets.
    *
-   * <p>Package-private and static so it can be exercised in isolation by unit tests;
-   * the {@code errorLogThrottleMs} overload lets tests drive the throttle deterministically.
+   * <p>Package-private/static for unit testing; the {@code errorLogThrottleMs} overload drives
+   * the throttle deterministically.
    */
   static void runPollLoop(
       Runnable pollOnce,
@@ -289,15 +283,12 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
         consecutiveFailures++;
         long now = System.nanoTime();
         if (consecutiveFailures == 1) {
-          // First failure of an episode: log immediately with the stack trace.
           firstFailureNanos = now;
           lastErrorLogNanos = now;
           log.error(
               "Unexpected exception in schema registry group processing thread; "
               + "will retry after backoff", t);
         } else if (now - lastErrorLogNanos >= TimeUnit.MILLISECONDS.toNanos(errorLogThrottleMs)) {
-          // Still failing past the throttle window: emit a heartbeat so the wedged elector
-          // stays visible, instead of ~10 ERROR/s at the default retry.backoff.ms=100.
           lastErrorLogNanos = now;
           long elapsedMs = TimeUnit.NANOSECONDS.toMillis(now - firstFailureNanos);
           log.error(
