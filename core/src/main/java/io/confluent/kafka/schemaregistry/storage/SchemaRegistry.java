@@ -94,8 +94,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return register(subject, schema, normalize, false);
   }
 
-  Schema register(String subject, Schema schema, boolean normalize, boolean propagateSchemaTags)
-      throws SchemaRegistryException;
+  default Schema register(String subject, Schema schema, boolean normalize,
+      boolean propagateSchemaTags) throws SchemaRegistryException {
+    return register(subject, schema, normalize, false, propagateSchemaTags);
+  }
+
+  Schema register(String subject, Schema schema, boolean normalize, boolean force,
+      boolean propagateSchemaTags) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -343,6 +348,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default Schema registerOrForward(String subject, RegisterSchemaRequest request,
                                    boolean normalize, Map<String, String> headerProperties) throws
+          SchemaRegistryException {
+    return registerOrForward(subject, request, normalize, false, headerProperties);
+  }
+
+  default Schema registerOrForward(String subject, RegisterSchemaRequest request,
+                                   boolean normalize, boolean force,
+                                   Map<String, String> headerProperties) throws
           SchemaRegistryException {
     return null;
   }

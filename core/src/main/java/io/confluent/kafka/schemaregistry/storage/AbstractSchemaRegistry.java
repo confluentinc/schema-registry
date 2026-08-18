@@ -379,9 +379,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
           throws SchemaRegistryException {
+    return register(subject, request, normalize, false);
+  }
+
+  public Schema register(String subject, RegisterSchemaRequest request, boolean normalize,
+          boolean force) throws SchemaRegistryException {
     try {
       Schema schema = toSchemaWithTags(subject, request);
-      return register(subject, schema, normalize, request.doPropagateSchemaTags());
+      return register(subject, schema, normalize, force, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }
@@ -1254,6 +1259,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
+      // Additive: the native check above still runs; LOGICAL layers the Flink/Iceberg logical-type
+      // validity and compatibility checks on top, so it can only make registration stricter.
+      errorMessages.addAll(
+              LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
+    }
     if (!errorMessages.isEmpty()) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
