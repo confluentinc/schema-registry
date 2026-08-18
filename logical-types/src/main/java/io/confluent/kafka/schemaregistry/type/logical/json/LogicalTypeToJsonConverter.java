@@ -345,8 +345,11 @@ public class LogicalTypeToJsonConverter {
             if (!field.getTags().isEmpty()) {
               extendedProps.put("confluent:tags", field.getTags());
             }
-            if (!field.getParams().isEmpty()) {
-              extendedProps.put("confluent:params", field.getParams());
+            // JSON has no native slot for a format-native param, so strip avro.*/protobuf.* rather
+            // than emit them into confluent:params (see Schema#isFormatNativeParam).
+            Map<String, Object> fieldParams = Schema.stripFormatNativeParams(field.getParams());
+            if (!fieldParams.isEmpty()) {
+              extendedProps.put("confluent:params", fieldParams);
             }
             if (!field.getRules().isEmpty()) {
               extendedProps.put("confluent:rules", buildRulesWire(field.getRules()));

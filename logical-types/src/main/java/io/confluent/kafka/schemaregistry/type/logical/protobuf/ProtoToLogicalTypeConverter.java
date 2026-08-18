@@ -580,10 +580,28 @@ public class ProtoToLogicalTypeConverter {
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
+    // Carry the Protobuf field number as a reserved param so it survives into the SRLT (and
+    // round-trips through DDL), but ONLY when it deviates from the positional default the writer
+    // would otherwise assign. That default is (ordinal + 1), where the ordinal is this field's
+    // position in the writer's regulars-then-oneofs layout — the tail of indexPath, which is
+    // aligned to that same layout (see toLogicalTypeNested). It is NOT field.getIndex(): the
+    // Protobuf descriptor index has gaps where oneof members sit, so keying off it would omit a
+    // number the writer will not reproduce (and thus corrupt it) whenever a oneof is present. When
+    // number == ordinal + 1 the writer re-derives the identical number positionally, so recording
+    // it is redundant and the identity is losslessly reconstructable as getFieldNumber() ??
+    // (ordinal + 1); omitting it keeps sequential proto schemas free of field-number noise.
+    int ordinal = indexPath.get(indexPath.size() - 1);
+    Map<String, Object> effectiveParams = fieldParams;
+    if (field.getNumber() != ordinal + 1) {
+      effectiveParams = fieldParams != null
+          ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
+      effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
+    }
     List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
-        defaultValue, hasDefault, derivedDefault, description, fieldTags, fieldParams, fieldRules);
+        defaultValue, hasDefault, derivedDefault, description, fieldTags,
+        effectiveParams, fieldRules);
   }
 
   /**
@@ -659,14 +677,17 @@ public class ProtoToLogicalTypeConverter {
    * True if a Meta.params key represents user-supplied metadata (vs. an
    * internal type-encoding marker). Internal namespaces are flink.*, connect.*,
    * and logical.* — all reserved for the converter; user `WITH params` from
-   * SQL must not collide with these prefixes. Also reserved are unprefixed
-   * keys that the proto encoding writes for specific types: {@code precision}
-   * and {@code scale} for {@code .confluent.type.Decimal} fields.
+   * SQL must not collide with these prefixes. Also reserved are the format-native
+   * namespaces {@code avro.} and {@code protobuf.} (the field number arrives via
+   * the native slot, not as a user param), and the unprefixed keys the proto
+   * encoding writes for specific types: {@code precision} and {@code scale} for
+   * {@code .confluent.type.Decimal} fields.
    */
   private static boolean isUserParam(String key) {
     if (key.startsWith("flink.")
         || key.startsWith("connect.")
-        || key.startsWith(CommonConstants.LOGICAL_PREFIX)) {
+        || key.startsWith(CommonConstants.LOGICAL_PREFIX)
+        || Schema.isFormatNativeParam(key)) {
       return false;
     }
     return !CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)

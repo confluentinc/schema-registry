@@ -28,6 +28,7 @@ import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -518,5 +520,78 @@ class ProtoToLogicalTypeConverterTest {
     // References pass through unchanged.
     assertEquals(1, lt.getReferences().size());
     assertEquals("leaf.proto", lt.getReferences().get(0).getName());
+  }
+
+  @Test
+  void testFieldNumberPopulatedFromProto() throws Exception {
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(3).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(7).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema result = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+
+    assertThat(result.getField("a").getFieldNumber()).isEqualTo(3);
+    assertThat(result.getField("b").getFieldNumber()).isEqualTo(7);
+  }
+
+  @Test
+  void testFieldNumbersRoundTripPreservesNonSequential() throws Exception {
+    // Non-sequential, non-positional numbers: the round-trip must preserve them
+    // rather than renumbering positionally (the field-number fidelity fix).
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(3).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(7).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("c").setNumber(100).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(3);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(7);
+    assertThat(out.findFieldByName("c").getNumber()).isEqualTo(100);
+  }
+
+  @Test
+  void testRegularFieldNumberPreservedWhenOneofPresent() throws Exception {
+    // A oneof makes the reader lay out regulars before oneof members, so the regular field's
+    // Protobuf descriptor index (2) differs from its writer ordinal (0). The number capture keys
+    // off the ordinal, so the regular field's number survives the round-trip even though its
+    // descriptor index would have (mis-)matched the positional default.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addOneofDecl(OneofDescriptorProto.newBuilder().setName("o"))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(10).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(20).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("c").setNumber(3).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    assertThat(srlt.getField("c").getFieldNumber()).isEqualTo(3);
+
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+    assertThat(out.findFieldByName("c").getNumber()).isEqualTo(3);
+    // Known limitation: oneof branch numbers are NOT preserved (UnionBranch carries no number),
+    // so a and b are renumbered positionally rather than restored to 10/20.
+    assertThat(out.findFieldByName("a").getNumber()).isNotEqualTo(10);
+    assertThat(out.findFieldByName("b").getNumber()).isNotEqualTo(20);
   }
 }

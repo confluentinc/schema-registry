@@ -54,6 +54,7 @@ import io.confluent.protobuf.type.Decimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -596,7 +597,23 @@ public class LogicalTypeToProtoConverter {
     final List<DescriptorProto> nestedRows = new ArrayList<>();
     final List<EnumDescriptorProto> nestedEnums = new ArrayList<>();
     final List<Field> fields = schema.getFields();
-    int fieldNumber = 1;
+    // Pass 1: reserve every author-declared field number so unnumbered fields can be assigned
+    // around them, and reject a schema that declares the same number twice — an invalid proto that
+    // would otherwise surface as an opaque DescriptorValidationException from FileDescriptor build.
+    final Set<Integer> reservedNumbers = new LinkedHashSet<>();
+    for (Field field : fields) {
+      if (field.getSchema().getType() != Schema.Type.UNION) {
+        Integer declared = field.getFieldNumber();
+        if (declared != null && !reservedNumbers.add(declared)) {
+          throw new ValidationException("Duplicate " + Schema.PROTOBUF_FIELD_NUMBER + " "
+              + declared + " in struct '" + rowName + "'");
+        }
+      }
+    }
+    // Pass 2 (below) assigns numbers: an author-declared number is used as-is; an unnumbered field
+    // gets the next number not already reserved, so a positional fallback can never collide with an
+    // explicit number. The cursor is a 1-element array so nextFieldNumber can advance it.
+    final int[] numberCursor = {1};
 
     for (int i = 0; i < fields.size(); i++) {
       final Field field = fields.get(i);
@@ -620,7 +637,7 @@ public class LogicalTypeToProtoConverter {
                 branch.getSchema(),
                 branch.getName(),
                 branch.getDoc(),
-                fieldNumber++,
+                nextFieldNumber(numberCursor, reservedNumbers),
                 nestedRows,
                 dependencies,
                 ctx);
@@ -629,7 +646,7 @@ public class LogicalTypeToProtoConverter {
                 branch.getSchema(),
                 branch.getName(),
                 branch.getDoc(),
-                fieldNumber++,
+                nextFieldNumber(numberCursor, reservedNumbers),
                 nestedRows,
                 nestedEnums,
                 dependencies,
@@ -646,12 +663,17 @@ public class LogicalTypeToProtoConverter {
           builder.addField(fieldProtoBuilder.build());
         }
       } else {
+        // Emit the author-declared field number when present (the round-trip fidelity fix),
+        // otherwise assign the next number not reserved by an explicit one.
+        final Integer declaredNumber = field.getFieldNumber();
+        final int effectiveNumber = declaredNumber != null
+            ? declaredNumber : nextFieldNumber(numberCursor, reservedNumbers);
         final FieldDescriptorProto.Builder fieldProtoBuilder =
             fromField(
                 field.getSchema(),
                 field.getName(),
                 field.getDoc(),
-                fieldNumber++,
+                effectiveNumber,
                 nestedRows,
                 nestedEnums,
                 dependencies,
@@ -1337,9 +1359,26 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
+  /**
+   * Return the next positive field number not already reserved by an author-declared number,
+   * advancing {@code cursor} past it. Skipping reserved numbers guarantees a positional fallback
+   * never collides with an explicit number, and the monotonic cursor keeps successive fallbacks
+   * distinct.
+   */
+  private static int nextFieldNumber(int[] cursor, Set<Integer> reserved) {
+    while (reserved.contains(cursor[0])) {
+      cursor[0]++;
+    }
+    return cursor[0]++;
+  }
+
   private static void addFieldTagsAndParams(
       FieldDescriptorProto.Builder builder, Field field) {
-    if (field.getTags().isEmpty() && field.getParams().isEmpty()
+    // Format-native params are carried through native slots (the field number via
+    // FieldDescriptorProto.number), never through the field meta params, so strip them here:
+    // protobuf.* because it is emitted natively, avro.* because it is foreign to proto.
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(field.getParams());
+    if (field.getTags().isEmpty() && userParams.isEmpty()
         && field.getRules().isEmpty()) {
       return;
     }
@@ -1347,9 +1386,9 @@ public class LogicalTypeToProtoConverter {
     if (!field.getTags().isEmpty()) {
       metaBuilder.addAllTags(field.getTags());
     }
-    if (!field.getParams().isEmpty()) {
+    if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
-      field.getParams().forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+      userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
       metaBuilder.putAllParams(stringParams);
     }
     addRulesToMeta(metaBuilder, field.getRules());
