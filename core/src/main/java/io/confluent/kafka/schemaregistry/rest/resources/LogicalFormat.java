@@ -171,7 +171,7 @@ final class LogicalFormat {
     try {
       resolvedReferences = AbstractSchemaProvider.resolveReferences(
           schemaRegistry, subject, references, true, false);
-    } catch (Exception e) {
+    } catch (IllegalArgumentException | IllegalStateException e) {
       // resolveReferences throws IllegalArgument/IllegalState on a missing or conflicting
       // reference; surface it as a clean InvalidSchemaException (422), the same way the native
       // register path wraps it in AbstractSchemaRegistry.loadSchema.
