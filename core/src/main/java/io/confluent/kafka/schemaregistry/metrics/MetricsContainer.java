@@ -60,6 +60,14 @@ public class MetricsContainer {
   public static final String METRIC_NAME_CUSTOM_SCHEMA_PROVIDER = "custom-schema-provider-count";
   public static final String METRIC_NAME_API_SUCCESS_COUNT = "api-success-count";
   public static final String METRIC_NAME_API_FAILURE_COUNT = "api-failure-count";
+  public static final String METRIC_NAME_ASSOCIATION_BATCH_GET_SUCCESS_COUNT =
+      "association-batch-get-success-count";
+  public static final String METRIC_NAME_ASSOCIATION_BATCH_GET_FAILURE_COUNT =
+      "association-batch-get-failure-count";
+  public static final String METRIC_NAME_ASSOCIATION_BATCH_MUTATE_SUCCESS_COUNT =
+      "association-batch-mutate-success-count";
+  public static final String METRIC_NAME_ASSOCIATION_BATCH_MUTATE_FAILURE_COUNT =
+      "association-batch-mutate-failure-count";
   public static final String METRIC_NAME_REGISTERED_COUNT = "registered-count";
   public static final String METRIC_NAME_DELETED_COUNT = "deleted-count";
   public static final String METRIC_NAME_AVRO_SCHEMAS_CREATED = "avro-schemas-created";
@@ -82,6 +90,11 @@ public class MetricsContainer {
   private final SchemaRegistryMetric customSchemaProviders;
   private final SchemaRegistryMetric apiCallsSuccess;
   private final SchemaRegistryMetric apiCallsFailure;
+
+  private final SchemaRegistryMetric associationBatchGetSuccess;
+  private final SchemaRegistryMetric associationBatchGetFailure;
+  private final SchemaRegistryMetric associationBatchMutateSuccess;
+  private final SchemaRegistryMetric associationBatchMutateFailure;
 
   private final SchemaRegistryMetric avroSchemasCreated;
   private final SchemaRegistryMetric jsonSchemasCreated;
@@ -128,6 +141,17 @@ public class MetricsContainer {
             "Number of successful API calls", new CumulativeCount());
     this.apiCallsFailure = createMetric(METRIC_NAME_API_FAILURE_COUNT,
             "Number of failed API calls", new CumulativeCount());
+
+    this.associationBatchGetSuccess = createMetric(METRIC_NAME_ASSOCIATION_BATCH_GET_SUCCESS_COUNT,
+            "Number of successful associations within batchGet calls", new CumulativeCount());
+    this.associationBatchGetFailure = createMetric(METRIC_NAME_ASSOCIATION_BATCH_GET_FAILURE_COUNT,
+            "Number of failed associations within batchGet calls", new CumulativeCount());
+    this.associationBatchMutateSuccess = createMetric(
+            METRIC_NAME_ASSOCIATION_BATCH_MUTATE_SUCCESS_COUNT,
+            "Number of successful associations within batchMutate calls", new CumulativeCount());
+    this.associationBatchMutateFailure = createMetric(
+            METRIC_NAME_ASSOCIATION_BATCH_MUTATE_FAILURE_COUNT,
+            "Number of failed associations within batchMutate calls", new CumulativeCount());
 
     this.customSchemaProviders = createMetric(METRIC_NAME_CUSTOM_SCHEMA_PROVIDER,
             "Number of custom schema providers", new Value());
@@ -212,6 +236,22 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric getApiCallsFailure() {
     return apiCallsFailure;
+  }
+
+  public SchemaRegistryMetric getAssociationBatchGetSuccess() {
+    return associationBatchGetSuccess;
+  }
+
+  public SchemaRegistryMetric getAssociationBatchGetFailure() {
+    return associationBatchGetFailure;
+  }
+
+  public SchemaRegistryMetric getAssociationBatchMutateSuccess() {
+    return associationBatchMutateSuccess;
+  }
+
+  public SchemaRegistryMetric getAssociationBatchMutateFailure() {
+    return associationBatchMutateFailure;
   }
 
   public SchemaRegistryMetric getCustomSchemaProviderCount() {
