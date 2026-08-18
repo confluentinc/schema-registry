@@ -427,7 +427,7 @@ public final class CelUtils {
   }
 
   private static List<CelVarDecl> downgradeStructsToMap(List<CelVarDecl> varDecls) {
-    List<CelVarDecl> out = new java.util.ArrayList<>(varDecls.size());
+    List<CelVarDecl> out = new ArrayList<>(varDecls.size());
     for (CelVarDecl decl : varDecls) {
       if (decl.type() instanceof StructTypeReference) {
         out.add(CelVarDecl.newVarDeclaration(
@@ -719,7 +719,7 @@ public final class CelUtils {
     }
     if (value instanceof List) {
       List<?> in = (List<?>) value;
-      java.util.List<Object> out = new java.util.ArrayList<>(in.size());
+      java.util.List<Object> out = new ArrayList<>(in.size());
       for (Object e : in) {
         out.add(toCelValue(e));
       }

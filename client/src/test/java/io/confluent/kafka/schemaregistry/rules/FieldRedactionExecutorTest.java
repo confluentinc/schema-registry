@@ -70,7 +70,7 @@ public class FieldRedactionExecutorTest {
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
-        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
     List<String> redactRuleTypes = Collections.singletonList("ENCRYPT");
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
@@ -91,7 +91,7 @@ public class FieldRedactionExecutorTest {
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
-        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
     List<String> redactRuleTypes = Collections.singletonList("ENCRYPT");
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
@@ -107,7 +107,7 @@ public class FieldRedactionExecutorTest {
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
-        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
     List<String> redactRuleTypes = Collections.singletonList("ENCRYPT");
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
