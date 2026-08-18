@@ -646,12 +646,20 @@ public class LogicalTypeToProtoConverter {
           builder.addField(fieldProtoBuilder.build());
         }
       } else {
+        // Emit the author-declared field number when present (the round-trip
+        // fidelity fix), otherwise fall back to positional numbering. The
+        // positional counter still advances per field so unnumbered fields
+        // keep today's behavior; collision handling between the two is left
+        // for a later pass.
+        final Integer declaredNumber = field.getFieldNumber();
+        final int effectiveNumber = declaredNumber != null ? declaredNumber : fieldNumber;
+        fieldNumber++;
         final FieldDescriptorProto.Builder fieldProtoBuilder =
             fromField(
                 field.getSchema(),
                 field.getName(),
                 field.getDoc(),
-                fieldNumber++,
+                effectiveNumber,
                 nestedRows,
                 nestedEnums,
                 dependencies,
@@ -1339,7 +1347,11 @@ public class LogicalTypeToProtoConverter {
 
   private static void addFieldTagsAndParams(
       FieldDescriptorProto.Builder builder, Field field) {
-    if (field.getTags().isEmpty() && field.getParams().isEmpty()
+    // Format-native params are carried through native slots (the field number via
+    // FieldDescriptorProto.number), never through the field meta params, so strip them here:
+    // protobuf.* because it is emitted natively, avro.* because it is foreign to proto.
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(field.getParams());
+    if (field.getTags().isEmpty() && userParams.isEmpty()
         && field.getRules().isEmpty()) {
       return;
     }
@@ -1347,9 +1359,9 @@ public class LogicalTypeToProtoConverter {
     if (!field.getTags().isEmpty()) {
       metaBuilder.addAllTags(field.getTags());
     }
-    if (!field.getParams().isEmpty()) {
+    if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
-      field.getParams().forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+      userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
       metaBuilder.putAllParams(stringParams);
     }
     addRulesToMeta(metaBuilder, field.getRules());

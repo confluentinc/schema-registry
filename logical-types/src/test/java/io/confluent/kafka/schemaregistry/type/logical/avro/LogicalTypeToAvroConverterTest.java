@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2462,5 +2463,62 @@ class LogicalTypeToAvroConverterTest {
     assertEquals("Outer.Inner", innerAvro.getFullName());
     assertEquals("Outer", innerAvro.getNamespace());
     assertEquals("Inner", innerAvro.getName());
+  }
+
+  @Test
+  void testFieldAliasesEmittedNativelyAndStrippedFromParams() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.AVRO_ALIASES, "a_old,a_older");
+    params.put("owner", "team-a");
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+
+    org.apache.avro.Schema avro =
+        LogicalTypeToAvroConverter.fromLogicalType(new LogicalType(struct), "M").rawSchema();
+
+    org.apache.avro.Schema.Field a = avro.getField("a");
+    assertThat(a.aliases()).containsExactlyInAnyOrder("a_old", "a_older");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> cp = (Map<String, Object>) a.getObjectProp("confluent:params");
+    assertThat(cp)
+        .doesNotContainKey(Schema.AVRO_ALIASES)
+        .containsEntry("owner", "team-a");
+  }
+
+  @Test
+  void testFieldAliasesRoundTrip() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.AVRO_ALIASES, "a_old");
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+
+    org.apache.avro.Schema avro =
+        LogicalTypeToAvroConverter.fromLogicalType(new LogicalType(struct), "M").rawSchema();
+    Schema back = AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(avro));
+
+    assertThat(back.getField("a").getAliases()).containsExactly("a_old");
+  }
+
+  @Test
+  void testForeignFieldNumberStrippedByAvro() {
+    // A format-native param is authoritative only through a native slot, and Avro has none for a
+    // field number, so protobuf.field.number is dropped rather than carried in confluent:params.
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "42");
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+
+    org.apache.avro.Schema avro =
+        LogicalTypeToAvroConverter.fromLogicalType(new LogicalType(struct), "M").rawSchema();
+    assertThat(avro.getField("a").getObjectProp("confluent:params")).isNull();
+    Schema back = AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(avro));
+
+    assertThat(back.getField("a").getFieldNumber()).isNull();
   }
 }
