@@ -379,9 +379,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
           throws SchemaRegistryException {
+    return register(subject, request, normalize, false);
+  }
+
+  public Schema register(String subject, RegisterSchemaRequest request, boolean normalize,
+          boolean force) throws SchemaRegistryException {
     try {
       Schema schema = toSchemaWithTags(subject, request);
-      return register(subject, schema, normalize, request.doPropagateSchemaTags());
+      return register(subject, schema, normalize, force, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }

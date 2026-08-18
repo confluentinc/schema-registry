@@ -456,6 +456,8 @@ public class SubjectVersionsResource {
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to skip compatibility checks when registering the schema")
+      @QueryParam("force") boolean force,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
@@ -497,8 +499,8 @@ public class SubjectVersionsResource {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
-      Schema result =
-          schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
+      Schema result = schemaRegistry.registerOrForward(
+          subjectName, request, normalize, force, headerProperties);
       // format=logical governs how the request body is interpreted, not how the response is
       // rendered -- the response always reflects the stored native schema.
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()

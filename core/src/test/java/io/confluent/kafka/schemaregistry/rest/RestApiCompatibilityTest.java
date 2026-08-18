@@ -133,6 +133,41 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testForceSkipsCompatibilityCheck() throws Exception {
+    String subject = "testForceSubject";
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    restApp.restClient.registerSchema(schemaString1, subject);
+
+    // An added required field is not backward-compatible.
+    String incompatibleSchemaString = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
+
+    // Without force, registration is rejected by the compatibility check.
+    try {
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
+      fail("Registering an incompatible schema should fail without force");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE, e.getStatus(),
+          "Should get a conflict status");
+    }
+
+    // With force=true, the compatibility check is skipped and the schema registers.
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(incompatibleSchemaString);
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(
+        Collections.emptyMap(), request, subject, false, true, null);
+    assertTrue(response.getId() > 0, "Forced registration of an incompatible schema should succeed");
+  }
+
+  @Test
   public void testCompatibilityLevelChangeToNone() throws Exception {
     String subject = "testSubject";
 
