@@ -65,6 +65,11 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   private static final AtomicInteger SR_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
   private static final String JMX_PREFIX = "kafka.schema.registry";
 
+  // While the poll loop retries a persistent failure at retry.backoff.ms (default 100ms),
+  // re-log the ERROR at most once per this window so a wedged elector stays visible without
+  // flooding the log at ~10 lines/second. The first failure always logs immediately.
+  private static final long ERROR_LOG_THROTTLE_MS = 30_000L;
+
   private final int initTimeout;
   private final String clientId;
   private final ConsumerNetworkClient client;
@@ -238,7 +243,16 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
    * error code: 50002"} until a JVM restart. See upstream issues #1696, #2492, #3135,
    * #3910.
    *
-   * <p>Package-private and static so it can be exercised in isolation by unit tests.
+   * <p>To keep a persistent failure from flooding the log at {@code retryBackoffMs}
+   * cadence (~10 ERROR/s at the default {@code retry.backoff.ms=100}), the ERROR is
+   * throttled: the first failure of an episode logs immediately with the stack trace,
+   * then further failures re-log at most once per {@code errorLogThrottleMs} as a
+   * heartbeat carrying the consecutive-failure count and elapsed time, so a wedged
+   * elector stays visible without the flood. A successful poll logs a single INFO
+   * recovery line and resets the episode.
+   *
+   * <p>Package-private and static so it can be exercised in isolation by unit tests;
+   * the {@code errorLogThrottleMs} overload lets tests drive the throttle deterministically.
    */
   static void runPollLoop(
       Runnable pollOnce,
@@ -246,16 +260,51 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       long retryBackoffMs,
       Logger log
   ) {
+    runPollLoop(pollOnce, stopped, retryBackoffMs, ERROR_LOG_THROTTLE_MS, log);
+  }
+
+  static void runPollLoop(
+      Runnable pollOnce,
+      AtomicBoolean stopped,
+      long retryBackoffMs,
+      long errorLogThrottleMs,
+      Logger log
+  ) {
+    long consecutiveFailures = 0;
+    long firstFailureNanos = 0;
+    long lastErrorLogNanos = 0;
     while (!stopped.get()) {
       try {
         pollOnce.run();
+        if (consecutiveFailures > 0) {
+          log.info(
+              "Schema registry group processing thread recovered after {} consecutive failure(s)",
+              consecutiveFailures);
+          consecutiveFailures = 0;
+        }
       } catch (WakeupException we) {
         // do nothing because the thread is closing -- see stop()
         return;
       } catch (Throwable t) {
-        log.error(
-            "Unexpected exception in schema registry group processing thread; "
-            + "will retry after backoff", t);
+        consecutiveFailures++;
+        long now = System.nanoTime();
+        if (consecutiveFailures == 1) {
+          // First failure of an episode: log immediately with the stack trace.
+          firstFailureNanos = now;
+          lastErrorLogNanos = now;
+          log.error(
+              "Unexpected exception in schema registry group processing thread; "
+              + "will retry after backoff", t);
+        } else if (now - lastErrorLogNanos >= TimeUnit.MILLISECONDS.toNanos(errorLogThrottleMs)) {
+          // Still failing past the throttle window: emit a heartbeat so the wedged elector
+          // stays visible, instead of ~10 ERROR/s at the default retry.backoff.ms=100.
+          lastErrorLogNanos = now;
+          long elapsedMs = TimeUnit.NANOSECONDS.toMillis(now - firstFailureNanos);
+          log.error(
+              "Schema registry group processing thread still failing after {} consecutive "
+              + "attempts over {} ms; will keep retrying after backoff",
+              consecutiveFailures, elapsedMs, t);
+        }
         try {
           Thread.sleep(retryBackoffMs);
         } catch (InterruptedException ie) {
