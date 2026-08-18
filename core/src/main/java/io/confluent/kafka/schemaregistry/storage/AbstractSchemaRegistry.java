@@ -74,6 +74,7 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -2562,7 +2563,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         results.add(new AssociationResult(errMsg, null));
       }
     }
+    recordAssociationBatchMetrics(results,
+        metricsContainer.getAssociationBatchGetSuccess(),
+        metricsContainer.getAssociationBatchGetFailure());
     return new AssociationBatchResponse(results);
+  }
+
+  private void recordAssociationBatchMetrics(
+      List<AssociationResult> results,
+      SchemaRegistryMetric successMetric,
+      SchemaRegistryMetric failureMetric) {
+    for (AssociationResult result : results) {
+      if (result.getError() != null) {
+        failureMetric.record();
+      } else {
+        successMetric.record();
+      }
+    }
   }
 
   public AssociationBatchResponse mutateAssociations(
@@ -2687,6 +2704,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         lock.unlock();
       }
     }
+    recordAssociationBatchMetrics(results,
+        metricsContainer.getAssociationBatchMutateSuccess(),
+        metricsContainer.getAssociationBatchMutateFailure());
     return new AssociationBatchResponse(results);
   }
 
