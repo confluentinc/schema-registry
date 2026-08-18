@@ -651,12 +651,16 @@ public abstract class Schema {
 
     /**
      * The field's explicit Protobuf field number, or {@code null} when it is not recorded. The
-     * Protobuf reader records {@link Schema#PROTOBUF_FIELD_NUMBER} only when the number deviates
-     * from the positional default (the field's {@code position + 1}); when they coincide it is
-     * omitted, so {@code null} means "equal to {@code position + 1}", not "unknown". Callers that
-     * need the effective number should therefore read {@code getFieldNumber()} falling back to
-     * {@code position + 1}. A stable, format-agnostic read point for the rename/identity signal;
-     * the value's origin is Protobuf-specific but any {@code Field} can be asked.
+     * Protobuf reader records {@link Schema#PROTOBUF_FIELD_NUMBER} all-or-nothing per message: it
+     * records every field's number when the message's numbering is non-trivial, and records none
+     * when the numbers are exactly the sequence the writer reproduces positionally. So {@code null}
+     * means "the message was trivially sequential", not "unknown": the number is this field's
+     * ordinal (starting at 1) in the writer's regulars-then-oneofs emission order, which the writer
+     * re-derives on its own. Do <b>not</b> reconstruct it from {@link #getPosition()} — that is
+     * unreliable for a message containing a {@code oneof} (positions are duplicated/out of order),
+     * and oneof branches have no position at all. A stable, format-agnostic read point for the
+     * rename/identity signal; the value's origin is Protobuf-specific but any {@code Field} can be
+     * asked.
      */
     public Integer getFieldNumber() {
       return parseFieldNumber(params, name);
