@@ -580,10 +580,25 @@ public class ProtoToLogicalTypeConverter {
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
+    // Carry the Protobuf field number as a reserved logical param so it survives into the SRLT
+    // (and round-trips through DDL), but ONLY when it deviates from the positional default the
+    // writer would otherwise assign (index + 1). When number == index + 1 the writer re-derives
+    // the identical number positionally, so recording it is redundant and the identity is
+    // losslessly reconstructable as getFieldNumber() ?? (position + 1). Omitting the trivial case
+    // keeps sequential proto schemas free of field-number noise; the deviating case (gaps or
+    // out-of-order declaration) is what the writer would otherwise corrupt by renumbering.
+    // field.getIndex() (declaration position) is a distinct value used for the SRLT field position.
+    Map<String, Object> effectiveParams = fieldParams;
+    if (field.getNumber() != field.getIndex() + 1) {
+      effectiveParams = fieldParams != null
+          ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
+      effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
+    }
     List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
-        defaultValue, hasDefault, derivedDefault, description, fieldTags, fieldParams, fieldRules);
+        defaultValue, hasDefault, derivedDefault, description, fieldTags,
+        effectiveParams, fieldRules);
   }
 
   /**
@@ -659,14 +674,17 @@ public class ProtoToLogicalTypeConverter {
    * True if a Meta.params key represents user-supplied metadata (vs. an
    * internal type-encoding marker). Internal namespaces are flink.*, connect.*,
    * and logical.* — all reserved for the converter; user `WITH params` from
-   * SQL must not collide with these prefixes. Also reserved are unprefixed
-   * keys that the proto encoding writes for specific types: {@code precision}
-   * and {@code scale} for {@code .confluent.type.Decimal} fields.
+   * SQL must not collide with these prefixes. Also reserved are the format-native
+   * namespaces {@code avro.} and {@code protobuf.} (the field number arrives via
+   * the native slot, not as a user param), and the unprefixed keys the proto
+   * encoding writes for specific types: {@code precision} and {@code scale} for
+   * {@code .confluent.type.Decimal} fields.
    */
   private static boolean isUserParam(String key) {
     if (key.startsWith("flink.")
         || key.startsWith("connect.")
-        || key.startsWith(CommonConstants.LOGICAL_PREFIX)) {
+        || key.startsWith(CommonConstants.LOGICAL_PREFIX)
+        || Schema.isFormatNativeParam(key)) {
       return false;
     }
     return !CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)

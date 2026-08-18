@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2952,5 +2953,40 @@ class LogicalTypeToProtoConverterTest {
     assertEquals("com.Foo", rt.getRootSchema().getQualifiedName());
     assertTrue(rt.getNamedTypes().isEmpty(),
         "public-import round-trip should produce no local namedTypes");
+  }
+
+  @Test
+  void testFieldNumberEmittedNativelyAndStrippedFromParams() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "42");
+    params.put("owner", "team-a");
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("f", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+
+    Descriptor descriptor = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(struct), "M").toDescriptor();
+
+    FieldDescriptor f = descriptor.findFieldByName("f");
+    assertThat(f.getNumber()).isEqualTo(42);
+    Map<String, String> emitted = f.getOptions()
+        .getExtension(io.confluent.protobuf.MetaProto.fieldMeta).getParamsMap();
+    assertThat(emitted).doesNotContainKey(Schema.PROTOBUF_FIELD_NUMBER);
+    assertThat(emitted).containsEntry("owner", "team-a");
+  }
+
+  @Test
+  void testFieldWithoutDeclaredNumberFallsBackToPositional() {
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0),
+        new Field("b", Schema.create(Schema.Type.INT).setNullable(false), 1)))
+        .setNullable(false);
+
+    Descriptor descriptor = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(struct), "M").toDescriptor();
+
+    assertThat(descriptor.findFieldByName("a").getNumber()).isEqualTo(1);
+    assertThat(descriptor.findFieldByName("b").getNumber()).isEqualTo(2);
   }
 }
