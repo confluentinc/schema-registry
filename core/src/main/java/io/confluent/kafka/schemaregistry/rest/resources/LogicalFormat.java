@@ -17,26 +17,21 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
-import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
-import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
-import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.List;
 import java.util.Locale;
@@ -124,20 +119,10 @@ final class LogicalFormat {
   static String convertToLogical(final SchemaRegistry schemaRegistry, final Schema schema)
       throws InvalidSchemaException {
     ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
-    String schemaType = schema.getSchemaType();
     LogicalType logicalType;
     try {
-      if (schemaType == null || "AVRO".equalsIgnoreCase(schemaType)) {
-        logicalType = AvroToLogicalTypeConverter.toLogicalType((AvroSchema) parsedSchema);
-      } else if ("JSON".equalsIgnoreCase(schemaType)) {
-        logicalType = JsonToLogicalTypeConverter.toLogicalType((JsonSchema) parsedSchema);
-      } else if ("PROTOBUF".equalsIgnoreCase(schemaType)) {
-        logicalType = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) parsedSchema);
-      } else {
-        throw new InvalidSchemaException(
-            "format=logical is not supported for schema type '" + schemaType + "'");
-      }
-    } catch (ValidationException e) {
+      logicalType = LogicalPolicyChecker.toLogicalType(parsedSchema);
+    } catch (ValidationException | IllegalArgumentException e) {
       throw new InvalidSchemaException(
           "Stored schema cannot be represented as a logical type: " + e.getMessage(), e);
     }
