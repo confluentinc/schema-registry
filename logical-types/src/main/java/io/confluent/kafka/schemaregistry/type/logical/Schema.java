@@ -92,6 +92,25 @@ public abstract class Schema {
     return copy;
   }
 
+  /**
+   * Parse the {@link #PROTOBUF_FIELD_NUMBER} param from {@code params}, or {@code null} if absent.
+   * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
+   * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
+   * names the field or branch for the error message.
+   */
+  static Integer parseFieldNumber(Map<String, Object> params, String ownerName) {
+    Object v = params.get(PROTOBUF_FIELD_NUMBER);
+    if (v == null) {
+      return null;
+    }
+    try {
+      return Integer.valueOf(v.toString());
+    } catch (NumberFormatException e) {
+      throw new ValidationException("'" + ownerName + "' has a non-numeric "
+          + PROTOBUF_FIELD_NUMBER + " param: '" + v + "'");
+    }
+  }
+
   public enum Type {
     STRUCT, ENUM, UNION, MAP, ARRAY, MULTISET,
     BOOLEAN,
@@ -640,16 +659,7 @@ public abstract class Schema {
      * the value's origin is Protobuf-specific but any {@code Field} can be asked.
      */
     public Integer getFieldNumber() {
-      Object v = params.get(PROTOBUF_FIELD_NUMBER);
-      if (v == null) {
-        return null;
-      }
-      try {
-        return Integer.valueOf(v.toString());
-      } catch (NumberFormatException e) {
-        throw new ValidationException("Field '" + name + "' has a non-numeric "
-            + PROTOBUF_FIELD_NUMBER + " param: '" + v + "'");
-      }
+      return parseFieldNumber(params, name);
     }
 
     /**
@@ -811,6 +821,15 @@ public abstract class Schema {
 
     public Map<String, Object> getParams() {
       return params;
+    }
+
+    /**
+     * The branch's explicit Protobuf field number (a oneof member is a Protobuf field), or
+     * {@code null} when not recorded. Populated by the Protobuf reader; see
+     * {@link Field#getFieldNumber()} for the recording contract.
+     */
+    public Integer getFieldNumber() {
+      return parseFieldNumber(params, name);
     }
 
     @Override

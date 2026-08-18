@@ -564,11 +564,12 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
-  void testRegularFieldNumberPreservedWhenOneofPresent() throws Exception {
-    // A oneof makes the reader lay out regulars before oneof members, so the regular field's
-    // Protobuf descriptor index (2) differs from its writer ordinal (0). The number capture keys
-    // off the ordinal, so the regular field's number survives the round-trip even though its
-    // descriptor index would have (mis-)matched the positional default.
+  void testOneofBranchAndRegularFieldNumbersRoundTrip() throws Exception {
+    // Numbers are out of sequence (oneof members 10/20 declared before regular field 3), so the
+    // reader records all of them — regular field and oneof branches alike — and the writer restores
+    // each via the native slot. Regulars are laid out before oneof members, so the regular field's
+    // descriptor index differs from its emission position; the all-or-nothing recording is immune
+    // to that skew.
     DescriptorProto message = DescriptorProto.newBuilder()
         .setName("M")
         .addOneofDecl(OneofDescriptorProto.newBuilder().setName("o"))
@@ -589,9 +590,29 @@ class ProtoToLogicalTypeConverterTest {
     Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(srlt), "M").toDescriptor();
     assertThat(out.findFieldByName("c").getNumber()).isEqualTo(3);
-    // Known limitation: oneof branch numbers are NOT preserved (UnionBranch carries no number),
-    // so a and b are renumbered positionally rather than restored to 10/20.
-    assertThat(out.findFieldByName("a").getNumber()).isNotEqualTo(10);
-    assertThat(out.findFieldByName("b").getNumber()).isNotEqualTo(20);
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(10);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(20);
+  }
+
+  @Test
+  void testOutOfOrderRegularFieldNumbersRoundTrip() throws Exception {
+    // Regression for the mixed omit/record hole: with per-field omission, b (number 2 == its
+    // position + 1) was omitted while a (5) was recorded, and the writer's positional fallback then
+    // handed b the number 1. All-or-nothing recording keeps both.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(5).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(2).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(5);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(2);
   }
 }

@@ -441,17 +441,23 @@ public class ProtoToLogicalTypeConverter {
     // position in the resulting struct. Downstream consumers rely on the
     // regulars-then-oneofs layout, so we align path numbering to it rather than
     // reordering the fields.
+    // Record Protobuf field numbers all-or-nothing per message: when the numbers are exactly the
+    // sequence the writer reproduces positionally we record none (keeping ordinary schemas clean);
+    // otherwise we record every one — regular fields and oneof members alike. Recording all-or-
+    // nothing guarantees a reader/writer round-trip never mixes recorded and omitted numbers, the
+    // mix that would otherwise let the writer's positional fallback corrupt an omitted number.
+    final boolean recordNumbers = !messageNumbersAreSequential(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
     for (FieldDescriptor fieldDescriptor : schema.getFields()) {
       if (fieldDescriptor.getRealContainingOneof() != null) {
         continue;
       }
-      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++)));
+      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers));
     }
     for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
-          oneOfDescriptor, ctx, appendToList(indexPath, index));
+          oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
       fields.add(new Field(oneOfDescriptor.getName(), unionSchema, index++,
           null, false, null, null, null));
     }
@@ -470,10 +476,37 @@ public class ProtoToLogicalTypeConverter {
     return newList;
   }
 
+  /**
+   * True if the message's field numbers are exactly {@code 1..N} in the writer's emission order
+   * (regular fields first, then oneof members in declaration order) — i.e. the positional defaults
+   * the writer reproduces for free. When true no numbers need recording; when false every number
+   * is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
+   */
+  private static boolean messageNumbersAreSequential(Descriptor schema) {
+    int expected = 1;
+    for (FieldDescriptor f : schema.getFields()) {
+      if (f.getRealContainingOneof() != null) {
+        continue;
+      }
+      if (f.getNumber() != expected++) {
+        return false;
+      }
+    }
+    for (OneofDescriptor oneof : schema.getRealOneofs()) {
+      for (FieldDescriptor f : oneof.getFields()) {
+        if (f.getNumber() != expected++) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   private static Schema toLogicalTypeOneof(
       final OneofDescriptor oneOfDescriptor,
       final ToLogicalContext<String> ctx,
-      final List<Integer> indexPath) {
+      final List<Integer> indexPath,
+      final boolean recordNumbers) {
     List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
     final List<UnionBranch> branches = new ArrayList<>();
     for (int i = 0; i < fieldDescriptors.size(); i++) {
@@ -486,6 +519,13 @@ public class ProtoToLogicalTypeConverter {
       fieldSchema = fieldSchema.setNullable(true);
       ctx.popFieldPath();
       Map<String, Object> branchParams = getBranchParams(fieldDescriptor);
+      if (recordNumbers) {
+        // A oneof member is a Protobuf field; record its number the same way as a regular field so
+        // the writer can restore it. UnionBranch.params carries it and round-trips through DDL.
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
+      }
       branches.add(new UnionBranch(
           fieldDescriptor.getName(), fieldSchema, description, branchParams));
     }
@@ -495,7 +535,8 @@ public class ProtoToLogicalTypeConverter {
   private static Field toField(
       final ToLogicalContext<String> ctx,
       final FieldDescriptor field,
-      final List<Integer> indexPath) {
+      final List<Integer> indexPath,
+      final boolean recordNumber) {
     final String description = getDescription(field);
     ctx.pushFieldPath(field.getName());
     Schema fieldSchema = fieldToLogicalType(field, ctx, indexPath);
@@ -580,19 +621,11 @@ public class ProtoToLogicalTypeConverter {
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
-    // Carry the Protobuf field number as a reserved param so it survives into the SRLT (and
-    // round-trips through DDL), but ONLY when it deviates from the positional default the writer
-    // would otherwise assign. That default is (ordinal + 1), where the ordinal is this field's
-    // position in the writer's regulars-then-oneofs layout — the tail of indexPath, which is
-    // aligned to that same layout (see toLogicalTypeNested). It is NOT field.getIndex(): the
-    // Protobuf descriptor index has gaps where oneof members sit, so keying off it would omit a
-    // number the writer will not reproduce (and thus corrupt it) whenever a oneof is present. When
-    // number == ordinal + 1 the writer re-derives the identical number positionally, so recording
-    // it is redundant and the identity is losslessly reconstructable as getFieldNumber() ??
-    // (ordinal + 1); omitting it keeps sequential proto schemas free of field-number noise.
-    int ordinal = indexPath.get(indexPath.size() - 1);
+    // Record the Protobuf field number when the message is not trivially sequential (the caller's
+    // all-or-nothing decision; see toLogicalTypeNested). When recorded it survives into the SRLT
+    // and round-trips through DDL, and the writer restores it via the native number slot.
     Map<String, Object> effectiveParams = fieldParams;
-    if (field.getNumber() != ordinal + 1) {
+    if (recordNumber) {
       effectiveParams = fieldParams != null
           ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
       effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
@@ -1108,7 +1141,9 @@ public class ProtoToLogicalTypeConverter {
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
-        return toLogicalTypeOneof(oneof, ctx, indexPath);
+        // The wrapper's oneof is writer-synthesized for a nullable composite UNION; its branch
+        // numbers are regenerated on re-emission, so they are not recorded.
+        return toLogicalTypeOneof(oneof, ctx, indexPath, false);
       }
     }
     throw new ValidationException(

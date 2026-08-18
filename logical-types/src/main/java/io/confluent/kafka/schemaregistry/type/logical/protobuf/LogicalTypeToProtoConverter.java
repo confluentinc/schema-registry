@@ -602,12 +602,12 @@ public class LogicalTypeToProtoConverter {
     // would otherwise surface as an opaque DescriptorValidationException from FileDescriptor build.
     final Set<Integer> reservedNumbers = new LinkedHashSet<>();
     for (Field field : fields) {
-      if (field.getSchema().getType() != Schema.Type.UNION) {
-        Integer declared = field.getFieldNumber();
-        if (declared != null && !reservedNumbers.add(declared)) {
-          throw new ValidationException("Duplicate " + Schema.PROTOBUF_FIELD_NUMBER + " "
-              + declared + " in struct '" + rowName + "'");
+      if (field.getSchema().getType() == Schema.Type.UNION) {
+        for (UnionBranch branch : field.getSchema().getBranches()) {
+          reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
         }
+      } else {
+        reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);
       }
     }
     // Pass 2 (below) assigns numbers: an author-declared number is used as-is; an unnumbered field
@@ -628,6 +628,11 @@ public class LogicalTypeToProtoConverter {
         Schema unionSchema = field.getSchema();
         for (UnionBranch branch : unionSchema.getBranches()) {
           final FieldDescriptorProto.Builder fieldProtoBuilder;
+          // A oneof member is a Protobuf field: use its recorded number when present, else the next
+          // free number — same rule as a regular field.
+          final Integer branchDeclared = branch.getFieldNumber();
+          final int branchNumber = branchDeclared != null
+              ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           // Proto3 oneof can't contain repeated/map fields. Composite branches
           // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
           // regardless of nullability — fromField only wraps when nullable, so
@@ -637,7 +642,7 @@ public class LogicalTypeToProtoConverter {
                 branch.getSchema(),
                 branch.getName(),
                 branch.getDoc(),
-                nextFieldNumber(numberCursor, reservedNumbers),
+                branchNumber,
                 nestedRows,
                 dependencies,
                 ctx);
@@ -646,15 +651,17 @@ public class LogicalTypeToProtoConverter {
                 branch.getSchema(),
                 branch.getName(),
                 branch.getDoc(),
-                nextFieldNumber(numberCursor, reservedNumbers),
+                branchNumber,
                 nestedRows,
                 nestedEnums,
                 dependencies,
                 ctx);
           }
-          if (!branch.getParams().isEmpty()) {
+          // Strip the format-native number (emitted via the native slot) from the branch meta.
+          Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+          if (!branchParams.isEmpty()) {
             Map<String, String> stringParams = new LinkedHashMap<>();
-            branch.getParams().forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+            branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
             addMetaParams(fieldProtoBuilder, stringParams);
           }
           fieldProtoBuilder.setOneofIndex(oneofIndex);
@@ -1370,6 +1377,18 @@ public class LogicalTypeToProtoConverter {
       cursor[0]++;
     }
     return cursor[0]++;
+  }
+
+  /**
+   * Add an author-declared field number to the reserved set, rejecting a duplicate — an invalid
+   * proto that would otherwise surface as an opaque DescriptorValidationException. A {@code null}
+   * number (unnumbered field or branch) is ignored.
+   */
+  private static void reserveFieldNumber(Integer declared, Set<Integer> reserved, String rowName) {
+    if (declared != null && !reserved.add(declared)) {
+      throw new ValidationException("Duplicate " + Schema.PROTOBUF_FIELD_NUMBER + " "
+          + declared + " in struct '" + rowName + "'");
+    }
   }
 
   private static void addFieldTagsAndParams(
