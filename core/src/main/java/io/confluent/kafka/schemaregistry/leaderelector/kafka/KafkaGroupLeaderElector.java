@@ -66,6 +66,9 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   private static final AtomicInteger SR_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
   private static final String JMX_PREFIX = "kafka.schema.registry";
 
+  // Re-log a persistent poll failure at most once per this window (see runPollLoop).
+  private static final long ERROR_LOG_THROTTLE_MS = 30_000L;
+
   private final int initTimeout;
   private final String clientId;
   private final ConsumerNetworkClient client;
@@ -242,7 +245,12 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
    * error code: 50002"} until a JVM restart. See upstream issues #1696, #2492, #3135,
    * #3910.
    *
-   * <p>Package-private and static so it can be exercised in isolation by unit tests.
+   * <p>The ERROR is throttled to avoid ~10 lines/s at the default {@code retry.backoff.ms=100}:
+   * the first failure logs immediately, then re-logs at most once per {@code errorLogThrottleMs};
+   * a successful poll logs one INFO recovery line and resets.
+   *
+   * <p>Package-private/static for unit testing; the {@code errorLogThrottleMs} overload drives
+   * the throttle deterministically.
    */
   static void runPollLoop(
       Runnable pollOnce,
@@ -250,16 +258,48 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       long retryBackoffMs,
       Logger log
   ) {
+    runPollLoop(pollOnce, stopped, retryBackoffMs, ERROR_LOG_THROTTLE_MS, log);
+  }
+
+  static void runPollLoop(
+      Runnable pollOnce,
+      AtomicBoolean stopped,
+      long retryBackoffMs,
+      long errorLogThrottleMs,
+      Logger log
+  ) {
+    long consecutiveFailures = 0;
+    long firstFailureNanos = 0;
+    long lastErrorLogNanos = 0;
     while (!stopped.get()) {
       try {
         pollOnce.run();
+        if (consecutiveFailures > 0) {
+          log.info(
+              "Schema registry group processing thread recovered after {} consecutive failure(s)",
+              consecutiveFailures);
+          consecutiveFailures = 0;
+        }
       } catch (WakeupException we) {
         // do nothing because the thread is closing -- see stop()
         return;
       } catch (Throwable t) {
-        log.error(
-            "Unexpected exception in schema registry group processing thread; "
-            + "will retry after backoff", t);
+        consecutiveFailures++;
+        long now = System.nanoTime();
+        if (consecutiveFailures == 1) {
+          firstFailureNanos = now;
+          lastErrorLogNanos = now;
+          log.error(
+              "Unexpected exception in schema registry group processing thread; "
+              + "will retry after backoff", t);
+        } else if (now - lastErrorLogNanos >= TimeUnit.MILLISECONDS.toNanos(errorLogThrottleMs)) {
+          lastErrorLogNanos = now;
+          long elapsedMs = TimeUnit.NANOSECONDS.toMillis(now - firstFailureNanos);
+          log.error(
+              "Schema registry group processing thread still failing after {} consecutive "
+              + "attempts over {} ms; will keep retrying after backoff",
+              consecutiveFailures, elapsedMs, t);
+        }
         try {
           Thread.sleep(retryBackoffMs);
         } catch (InterruptedException ie) {
