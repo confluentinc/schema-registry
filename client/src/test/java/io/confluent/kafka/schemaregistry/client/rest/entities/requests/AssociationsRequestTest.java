@@ -89,7 +89,7 @@ public class AssociationsRequestTest {
   @Test
   public void testOpRequestValidAssociationsDoesNotThrow() {
     AssociationCreateOp op = new AssociationCreateOp(
-        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+        "test-subject", null, LifecyclePolicy.WEAK, null, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null, Collections.singletonList(op));
     request.validate(false);
@@ -211,6 +211,105 @@ public class AssociationsRequestTest {
     AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
         "test-subject", null, null, null, schema, null);
     info.validate(false, false);
+  }
+
+  // An upsert may only create a WEAK association: a STRONG association is owned by its topic
+  // and has to be created with it, and a schema implies STRONG.
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndStrongLifecycleThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndNoSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        null, null, null, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  /**
+   * An explicit STRONG lifecycle without a schema is left alone here: the registry rejects it,
+   * so that subjects in IMPORT mode can be exempted.
+   */
+  @Test
+  public void testUpsertInfoCreatingWithStrongLifecycleAndNoSchemaIsLeftToRegistry() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.TRUE, info.getFrozen());
+  }
+
+  @Test
+  public void testUpsertInfoCreatingFrozenStrongKeepsFrozenForImport() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, true, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.TRUE, info.getFrozen());
+  }
+
+  @Test
+  public void testUpsertInfoCreatingWeakDoesNotThrow() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.WEAK, info.getLifecycle());
+    assertEquals(Boolean.FALSE, info.getFrozen());
+  }
+
+  @Test
+  public void testCreateInfoWithSchemaAndSubjectStillDefaultsToStrongFrozen() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, schema, null);
+    info.applyDefaults(true);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.TRUE, info.getFrozen());
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertOpCreatingWithSchemaAndSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        "test-subject", null, null, null, schema, null);
+    op.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertOpCreatingWithSchemaAndNoSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        null, null, null, null, schema, null);
+    op.applyDefaults(false);
+  }
+
+  @Test
+  public void testUpsertOpCreatingWithStrongLifecycleAndNoSchemaIsLeftToRegistry() {
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+    op.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, op.getLifecycle());
+    assertEquals(Boolean.TRUE, op.getFrozen());
   }
 
   // Requirement #3: Default subject + subject required
@@ -374,7 +473,7 @@ public class AssociationsRequestTest {
     AssociationCreateOp frozenOp = new AssociationCreateOp(
         null, "key", null, null, schema, null);
     AssociationCreateOp nonFrozenOp = new AssociationCreateOp(
-        "test-subject", "value", LifecyclePolicy.STRONG, false, null, null);
+        "test-subject", "value", null, false, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(frozenOp, nonFrozenOp));
@@ -400,9 +499,9 @@ public class AssociationsRequestTest {
   @Test
   public void testCreateOpAllNonFrozenSucceeds() {
     AssociationCreateOp op1 = new AssociationCreateOp(
-        "subject1", "key", LifecyclePolicy.STRONG, false, null, null);
+        "subject1", "key", LifecyclePolicy.WEAK, false, null, null);
     AssociationCreateOp op2 = new AssociationCreateOp(
-        "subject2", "value", LifecyclePolicy.STRONG, false, null, null);
+        "subject2", "value", null, false, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(op1, op2));
@@ -416,7 +515,7 @@ public class AssociationsRequestTest {
     AssociationCreateOrUpdateInfo frozenInfo = new AssociationCreateOrUpdateInfo(
         null, "key", null, null, schema, null);
     AssociationCreateOrUpdateInfo nonFrozenInfo = new AssociationCreateOrUpdateInfo(
-        "test-subject", "value", LifecyclePolicy.STRONG, false, null, null);
+        "test-subject", "value", null, null, null, null);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(frozenInfo, nonFrozenInfo));

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import dev.cel.common.values.CelByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
@@ -75,9 +76,27 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       } else {
         inputMessage = message;
       }
+      // Present the value the way the field's declared type implies, through the same
+      // mapping the validator uses. Java has no unsigned primitive, so a uint64 arrives as
+      // a Long exactly as an int64 does: read as a signed int, a rule written against the
+      // field's own type (`value % 10u == 5u`) has no matching overload, and `value > 0`
+      // answers wrongly above Long.MAX_VALUE. The field's own value stays untouched — only
+      // what CEL is handed changes, so a transform that writes the result back, or an
+      // executor that encrypts it, still sees the type protobuf uses.
+      //
+      // Presenting a uint as CEL's uint is what protobuf's own type says, but it is not what
+      // this executor has always done, and an existing rule comparing such a field to a plain
+      // integer literal only compiles under the signed reading. Which one applies is therefore
+      // declared per rule, defaulting to the historical signed one.
+      Object celFieldValue =
+          celExecutor.resolveUnsignedFieldType(ctx) == CelExecutor.UnsignedFieldType.UINT
+              && fieldCtx.getFieldDescriptor() instanceof FieldDescriptor
+              ? CelUtils.toCelValueForProtobufField(
+                  (FieldDescriptor) fieldCtx.getFieldDescriptor(), fieldValue)
+              : fieldValue;
       Object result = celExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
             {
-              put("value", fieldValue != null ? fieldValue : NULL_VALUE);
+              put("value", celFieldValue != null ? celFieldValue : NULL_VALUE);
               put("fullName", fieldCtx.getFullName());
               put("name", fieldCtx.getName());
               put("typeName", fieldCtx.getType().name());

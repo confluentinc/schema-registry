@@ -152,36 +152,48 @@ public class AssociationCreateOrUpdateInfo {
   }
 
   /**
-   * Applies defaults for association creation or upsert.
-   * For CREATE: schema implies frozen STRONG; frozen=false or WEAK with schema are rejected.
-   * For UPSERT: schema implies non-frozen STRONG; frozen and lifecycle are only defaulted if null.
+   * Applies defaults for an association that does not yet exist. Only call this while creating
+   * the association: an upsert that updates an existing one keeps that association's stored
+   * lifecycle and would be wrongly rejected here for carrying a schema.
+   *
+   * <p>For a create op a schema implies frozen STRONG, and frozen=false or WEAK alongside a
+   * schema are rejected. For an upsert op no schema is accepted at all, since a schema implies
+   * a topic-owned STRONG association and those can only be created together with the topic.
+   * Either way frozen and lifecycle are defaulted when null.
+   *
+   * <p>The matching check on an explicit STRONG lifecycle lives in the registry, which can
+   * exempt subjects in IMPORT mode.
+   *
+   * @param isCreate whether this is a create op rather than an upsert op
    */
   public void applyDefaults(boolean isCreate) {
+    if (!isCreate && getSchema() != null) {
+      throw new IllegalPropertyException(
+              "schema", "cannot be provided when adding an association to an existing topic; "
+              + "an association with a schema must be created with the topic");
+    }
     if (getSchema() != null) {
       if (getLifecycle() == LifecyclePolicy.WEAK) {
         throw new IllegalPropertyException(
-            "lifecycle", "cannot be WEAK when schema is provided");
+                "lifecycle", "cannot be WEAK when schema is provided");
       }
-      if (getFrozen() != null && getFrozen() != isCreate) {
+      if (Boolean.FALSE.equals(getFrozen())) {
         throw new IllegalPropertyException(
-            "frozen", isCreate
-                ? "cannot be false when schema is provided for create"
-                : "cannot be true when creating via upsert; use create instead");
+                "frozen", "cannot be false when a schema is provided");
       }
       setLifecycle(LifecyclePolicy.STRONG);
-      setFrozen(isCreate);
     } else {
-      if (getFrozen() == null) {
-        setFrozen(false);
+      if (getLifecycle() == null) {
+        setLifecycle(LifecyclePolicy.WEAK);
       }
     }
-    if (getLifecycle() == null) {
-      setLifecycle(LifecyclePolicy.WEAK);
+    boolean desiredFrozen = getLifecycle() == LifecyclePolicy.STRONG;
+    if (getFrozen() != null && getFrozen() != desiredFrozen) {
+      throw new IllegalPropertyException("frozen",
+              String.format("association with lifecycle of %s cannot be frozen=%s",
+                      getLifecycle(), getFrozen()));
     }
-    if (getLifecycle() == LifecyclePolicy.WEAK && Boolean.TRUE.equals(getFrozen())) {
-      throw new IllegalPropertyException(
-          "frozen", "association with lifecycle of WEAK cannot be frozen");
-    }
+    setFrozen(desiredFrozen);
   }
 
   public void validate(boolean isCreate, boolean dryRun) {

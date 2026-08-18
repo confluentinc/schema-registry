@@ -334,7 +334,7 @@ public class LogicalTypeToJsonConverter {
           Schema fieldType = field.getSchema();
           final org.everit.json.schema.Schema.Builder<?> fieldSchema =
               fromLogicalTypeBuilder(fieldType, rowName + "_" + fieldName, ctx);
-          if (field.hasDefaultValue() && !ctx.isV1()) {
+          if (field.hasDefaultValue() && !field.hasDerivedDefault() && !ctx.isV1()) {
             fieldSchema.defaultValue(
                 JsonDefaultValueConverter.toJsonValue(fieldType, field.getDefaultValue()));
           }

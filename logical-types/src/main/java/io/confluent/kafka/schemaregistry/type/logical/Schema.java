@@ -468,6 +468,26 @@ public abstract class Schema {
     private final int position;
     private final Object defaultValue;
     private final boolean hasDefault;
+
+    /**
+     * Whether {@link #defaultValue} was <em>derived</em> by a converter from format semantics
+     * rather than declared by the schema's author.
+     *
+     * <p>Protobuf is the only source. A {@code repeated} field cannot encode "absent" distinctly
+     * from "empty" and cannot carry a declared default, so an absent one reads as an empty list —
+     * and a map as an empty map. That is a fact about the wire format, not a user declaration, but
+     * a consumer still needs it: without it, adding a {@code repeated} field looks like adding a
+     * NOT NULL column with no value for pre-existing rows.
+     *
+     * <p><b>Writers must not emit a derived default.</b> Doing so would put a {@code DEFAULT}
+     * clause into DDL, or a {@code default} into an Avro or JSON schema, that nobody wrote — and a
+     * round trip would then read it back as declared, losing the distinction for good.
+     *
+     * <p>Consumers deciding whether an added field is readable should <em>not</em> branch on this.
+     * A derived default and a declared one make a field equally readable; only emission differs.
+     */
+    private final boolean derivedDefault;
+
     private final String doc;
     private final List<String> tags;
     private final Map<String, Object> params;
@@ -477,12 +497,20 @@ public abstract class Schema {
                  Object defaultValue, boolean hasDefault, String doc,
                  List<String> tags, Map<String, Object> params,
                  List<Rule> rules) {
+      this(name, schema, position, defaultValue, hasDefault, false, doc, tags, params, rules);
+    }
+
+    public Field(String name, Schema schema, int position,
+                 Object defaultValue, boolean hasDefault, boolean derivedDefault, String doc,
+                 List<String> tags, Map<String, Object> params,
+                 List<Rule> rules) {
       validateUserName(name, "Field");
       this.name = name;
       this.schema = Objects.requireNonNull(schema, "schema");
       this.position = position;
       this.defaultValue = defaultValue;
       this.hasDefault = hasDefault;
+      this.derivedDefault = derivedDefault;
       this.doc = doc;
       this.tags = tags != null
           ? Collections.unmodifiableList(new ArrayList<>(tags))
@@ -525,6 +553,13 @@ public abstract class Schema {
       return hasDefault;
     }
 
+    /**
+     * See {@link #derivedDefault}. Always {@code false} unless a converter set it.
+     */
+    public boolean hasDerivedDefault() {
+      return derivedDefault;
+    }
+
     public String getDoc() {
       return doc;
     }
@@ -557,6 +592,7 @@ public abstract class Schema {
       Field that = (Field) o;
       return position == that.position
           && hasDefault == that.hasDefault
+          && derivedDefault == that.derivedDefault
           && Objects.equals(name, that.name)
           && Objects.equals(schema, that.schema)
           && Objects.equals(defaultValue, that.defaultValue)
@@ -569,7 +605,7 @@ public abstract class Schema {
     @Override
     public int hashCode() {
       return Objects.hash(name, schema, position, defaultValue, hasDefault,
-          doc, tags, params, rules);
+          derivedDefault, doc, tags, params, rules);
     }
 
     @Override

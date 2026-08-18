@@ -25,12 +25,16 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
@@ -40,6 +44,11 @@ import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
@@ -3303,6 +3312,257 @@ public class ProtobufSchemaTest {
     return resourceLoader.toString(fileName);
   }
 
+  /** Appends a suffix to every string leaf, so a transform walk's reach is observable. */
+  private static final FieldTransform SUFFIX_TRANSFORM =
+      (ctx, fieldCtx, value) -> value instanceof String ? value + "-suffix" : value;
+
+  private static RuleContext transformContext(ProtobufSchema schema) {
+    Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
+        null, null, null, null, null, false);
+    return new RuleContext(Collections.emptyMap(), null, null, schema,
+        "topic-value", "topic", null, null, null, false,
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
+  }
+
+  /**
+   * A field with explicit presence that is unset has nothing to transform. Writing a
+   * transformed default back would materialize it: an absent message would become present,
+   * carrying a value the producer never set. The validation walk already skips such fields.
+   */
+  @Test
+  public void testTransformMessageLeavesAbsentFieldsAbsent() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  test.Inner inner = 1;\n"
+        + "  string top = 2;\n"
+        + "  optional string maybe = 3;\n"
+        + "}\n"
+        + "message Inner { string s = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    // Only `top` is set: `inner` is an absent message, `maybe` an unset optional scalar.
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("top"), "hello").build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertFalse("the absent message was materialized",
+        result.hasField(resultDesc.findFieldByName("inner")));
+    assertFalse("the unset optional scalar was materialized",
+        result.hasField(resultDesc.findFieldByName("maybe")));
+    // The field that is set is still transformed.
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("top")));
+  }
+
+  /**
+   * With use.latest.version the registered schema and the message's own descriptor can
+   * differ. A field the schema does not declare carries no tags, so no transform applies to
+   * it - and reading its options off a null descriptor would throw.
+   */
+  @Test
+  public void testTransformMessageSkipsFieldsAbsentFromTheSchema() throws Exception {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string top = 1; }\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string top = 1; string extra = 2; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("top"), "hello")
+        .setField(runtimeDesc.findFieldByName("extra"), "x").build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("top")));
+    // The field the schema does not know is left as it is, rather than throwing.
+    assertEquals("x", result.getField(resultDesc.findFieldByName("extra")));
+  }
+
+  /**
+   * The fields the transform walk reaches, for comparison with the validation walk: a
+   * nested message is descended into with its own descriptor, and every element of a
+   * repeated field is visited.
+   */
+  @Test
+  public void testTransformMessageReachesNestedAndRepeatedFields() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  test.Inner inner = 1;\n"
+        + "  repeated string tags = 2;\n"
+        + "  repeated test.Inner items = 3;\n"
+        + "}\n"
+        + "message Inner { string s = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    Descriptor innerDesc = schema.toDescriptor("test.Inner");
+    FieldDescriptor innerS = innerDesc.findFieldByName("s");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("inner"),
+            DynamicMessage.newBuilder(innerDesc).setField(innerS, "a").build())
+        .addRepeatedField(desc.findFieldByName("tags"), "t1")
+        .addRepeatedField(desc.findFieldByName("tags"), "t2")
+        .addRepeatedField(desc.findFieldByName("items"),
+            DynamicMessage.newBuilder(innerDesc).setField(innerS, "b").build())
+        .build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    Message inner = (Message) result.getField(resultDesc.findFieldByName("inner"));
+    assertEquals("a-suffix",
+        inner.getField(inner.getDescriptorForType().findFieldByName("s")));
+    assertEquals(Arrays.asList("t1-suffix", "t2-suffix"),
+        result.getField(resultDesc.findFieldByName("tags")));
+    Message item = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("items"), 0);
+    assertEquals("b-suffix",
+        item.getField(item.getDescriptorForType().findFieldByName("s")));
+  }
+
+  /**
+   * A map field arrives as a list of entry messages, so the transform walk reaches the
+   * entry's key as well as its value. A key is part of the map's identity rather than a
+   * value to transform - rewriting it moves the entry - and the validation walk never
+   * evaluates anything on a key either.
+   */
+  @Test
+  public void testTransformMessageLeavesMapKeysAlone() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer {\n"
+        + "  map<string, string> labels = 1;\n"
+        + "  map<string, test.Item> items = 2;\n"
+        + "}\n"
+        + "message Item { string v = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor("test.Outer");
+    Descriptor itemDesc = schema.toDescriptor("test.Item");
+    FieldDescriptor labels = desc.findFieldByName("labels");
+    FieldDescriptor items = desc.findFieldByName("items");
+    Descriptor labelEntry = labels.getMessageType();
+    Descriptor itemEntry = items.getMessageType();
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .addRepeatedField(labels, DynamicMessage.newBuilder(labelEntry)
+            .setField(labelEntry.findFieldByName("key"), "k1")
+            .setField(labelEntry.findFieldByName("value"), "v1").build())
+        .addRepeatedField(items, DynamicMessage.newBuilder(itemEntry)
+            .setField(itemEntry.findFieldByName("key"), "a")
+            .setField(itemEntry.findFieldByName("value"),
+                DynamicMessage.newBuilder(itemDesc)
+                    .setField(itemDesc.findFieldByName("v"), "x").build()).build())
+        .build();
+
+    Message result = (Message) schema.transformMessage(
+        transformContext(schema), SUFFIX_TRANSFORM, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    Message labelEntryResult = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("labels"), 0);
+    Descriptor labelEntryDesc = labelEntryResult.getDescriptorForType();
+    assertEquals("k1", labelEntryResult.getField(labelEntryDesc.findFieldByName("key")));
+    assertEquals("v1-suffix",
+        labelEntryResult.getField(labelEntryDesc.findFieldByName("value")));
+
+    Message itemEntryResult = (Message) result.getRepeatedField(
+        resultDesc.findFieldByName("items"), 0);
+    Descriptor itemEntryDesc = itemEntryResult.getDescriptorForType();
+    assertEquals("a", itemEntryResult.getField(itemEntryDesc.findFieldByName("key")));
+    Message item = (Message) itemEntryResult.getField(itemEntryDesc.findFieldByName("value"));
+    assertEquals("x-suffix",
+        item.getField(item.getDescriptorForType().findFieldByName("v")));
+  }
+
+  /** Records the field context of every leaf the walk hands over, and suffixes strings. */
+  private static class RecordingTransform implements FieldTransform {
+    private final List<String> visited = new ArrayList<>();
+
+    @Override
+    public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue) {
+      visited.add(fieldCtx.getName() + "|" + fieldCtx.getFullName());
+      return fieldValue instanceof String ? fieldValue + "-suffix" : fieldValue;
+    }
+  }
+
+  /**
+   * Protobuf identifies a field by its number, and renaming a field at the same number is a
+   * compatible change, so with use.latest.version the registered schema's name for a field
+   * can differ from the message's. Resolving the schema-side field by name would find
+   * nothing and silently skip the field's rules - including CSFLE and redaction - leaving a
+   * tagged field untouched. The names reported to the rule come from the registered schema,
+   * which is what the rule was written against.
+   */
+  @Test
+  public void testTransformMessageResolvesRenamedFieldsByNumber() throws Exception {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  string renamed = 1 [(confluent.field_meta).tags = \"PII\"];\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    // The rule only applies to fields tagged PII, so it fires only if the tag was found on
+    // the registered field.
+    Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
+        Collections.singleton("PII"), null, null, null, null, false);
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
+        "topic-value", "topic", null, null, null, false,
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
+    RecordingTransform recorder = new RecordingTransform();
+
+    Message result = (Message) schema.transformMessage(ctx, recorder, msg);
+
+    Descriptor resultDesc = result.getDescriptorForType();
+    assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("original")));
+    // The name reported is the registered schema's, not the message's.
+    assertEquals(Collections.singletonList("renamed|test.Outer.renamed"), recorder.visited);
+  }
+
+  /**
+   * The validation walk resolves the schema-side field the same way, so a rule declared on a
+   * renamed field still fires - and reports the violation under the registered schema's name.
+   */
+  @Test
+  public void testValidateMessageResolvesRenamedFieldsByNumber() {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  string renamed = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"true\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    List<ValidationRuleError> errors =
+        schema.validateMessage((rule, sch, value) -> Boolean.FALSE, msg);
+
+    assertEquals(1, errors.size());
+    assertEquals("r", errors.get(0).getRule().getName());
+    assertEquals("renamed", errors.get(0).getFieldPath());
+  }
+
   /**
    * A re-export-only schema (no local messages or enums, just an
    * {@code import public}) should expose the publicly-imported type as its
@@ -3519,5 +3779,44 @@ public class ProtobufSchemaTest {
     MessageIndexes localIdx = top.toMessageIndexes("com.Local");
     assertEquals(Collections.singletonList(0), localIdx.indexes());
     assertEquals("com.Local", top.toMessageName(localIdx));
+  }
+
+  /**
+   * A message-level rule binds {@code this} to the message and its CEL environment is built
+   * from the registered schema, so the message it evaluates has to be in the schema's terms
+   * too. Otherwise a rule written against a renamed field reads a missing field and rejects a
+   * valid message.
+   */
+  @Test
+  public void testValidateMessageEvaluatesMessageRulesInSchemaTerms() {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"m\", expr: \"this.renamed == 'hello'\"}]\n"
+        + "  };\n"
+        + "  string renamed = 1;\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    // Stands in for a CEL environment built from the registered schema: the rule can only
+    // read the value if the message it is handed is in the schema's terms.
+    ValidationRuleExecutor executor = (rule, sch, value) -> {
+      Message evaluated = (Message) value;
+      FieldDescriptor fd = evaluated.getDescriptorForType().findFieldByName("renamed");
+      return fd != null && "hello".equals(evaluated.getField(fd));
+    };
+
+    List<ValidationRuleError> errors = schema.validateMessage(executor, msg);
+
+    assertEquals("the rule was evaluated against the wrong names: " + errors,
+        Collections.emptyList(), errors);
   }
 }

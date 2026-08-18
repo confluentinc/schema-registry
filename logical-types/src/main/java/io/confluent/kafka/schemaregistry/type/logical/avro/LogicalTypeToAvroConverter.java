@@ -284,7 +284,8 @@ public class LogicalTypeToAvroConverter {
           org.apache.avro.Schema notNullSchema = fromLogicalTypeIgnoreNullable(
               fieldType, rowName + "_" + fieldName, ctx);
           boolean hasNonNullDefault =
-              field.hasDefaultValue() && field.getDefaultValue() != null;
+              field.hasDefaultValue() && !field.hasDerivedDefault()
+              && field.getDefaultValue() != null;
           org.apache.avro.Schema fieldAvroSchema = maybeMakeNullable(
               fieldType, notNullSchema, hasNonNullDefault);
           Object defaultVal = computeAvroDefault(fieldType, field, ctx);
@@ -471,7 +472,8 @@ public class LogicalTypeToAvroConverter {
       org.apache.avro.Schema notNullSchema = fromLogicalTypeIgnoreNullable(
           fieldType, name + "_" + fieldName, ctx);
       boolean hasNonNullDefault =
-          field.hasDefaultValue() && field.getDefaultValue() != null;
+          field.hasDefaultValue() && !field.hasDerivedDefault()
+              && field.getDefaultValue() != null;
       org.apache.avro.Schema fieldAvroSchema = maybeMakeNullable(
           fieldType, notNullSchema, hasNonNullDefault);
       Object defaultValue = computeAvroDefault(fieldType, field, ctx);
@@ -765,7 +767,7 @@ public class LogicalTypeToAvroConverter {
    */
   private static Object computeAvroDefault(
       Schema fieldType, Field field, FromLogicalContext<?> ctx) {
-    if (field.hasDefaultValue()) {
+    if (field.hasDefaultValue() && !field.hasDerivedDefault()) {
       Object value = field.getDefaultValue();
       if (value == null) {
         return JsonProperties.NULL_VALUE;

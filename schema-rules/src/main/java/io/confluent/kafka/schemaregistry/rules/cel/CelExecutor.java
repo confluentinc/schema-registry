@@ -48,6 +48,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -71,6 +72,53 @@ public class CelExecutor implements RuleExecutor {
    * unconfigured falls back to {@link RegexEngine#DEFAULT}.
    */
   public static final String CEL_REGEX_ENGINE = "cel.regex.engine";
+
+  /**
+   * How an unsigned protobuf field is presented to a {@code CEL_FIELD} rule — {@code "int"}
+   * or {@code "uint"}, see {@link UnsignedFieldType}.
+   */
+  public static final String CEL_UNSIGNED_FIELD_TYPE = "cel.unsigned.field.type";
+
+  /**
+   * How a protobuf unsigned integer field is presented to CEL by {@link CelFieldExecutor},
+   * selected by {@link #CEL_UNSIGNED_FIELD_TYPE}.
+   *
+   * <ul>
+   *   <li>{@link #INT} — the field binds as a signed CEL {@code int} carrying the
+   *       {@code Long} or {@code Integer} protobuf reflection hands back. A rule written
+   *       with a plain integer literal ({@code value == 25}) compiles and one written
+   *       against the field's declared type ({@code value == 25u}) does not, and a value
+   *       above {@link Long#MAX_VALUE} compares as negative. This is what domain rules
+   *       shipped with, so it stays the default.</li>
+   *   <li>{@link #UINT} — the field binds as a CEL {@code uint} carrying an
+   *       {@link com.google.common.primitives.UnsignedLong}. That is what protobuf's own
+   *       type says, what the Go and Python clients and protovalidate-java do, and what
+   *       {@link CelValidator} does unconditionally for inline validation rules. Unsigned
+   *       literals work and large values compare correctly; equality and arithmetic
+   *       against a plain integer literal stop type-checking, because CEL declares no
+   *       mixed {@code uint}/{@code int} overloads for them. Ordering keeps working
+   *       either way, through heterogeneous numeric comparisons.</li>
+   * </ul>
+   */
+  public enum UnsignedFieldType {
+    INT,
+    UINT;
+
+    /** The mode when none is declared. Unsigned fields stay signed, as they always have. */
+    public static final UnsignedFieldType DEFAULT = INT;
+
+    public static UnsignedFieldType fromString(String s) {
+      if (s == null || s.isEmpty()) {
+        return DEFAULT;
+      }
+      try {
+        return UnsignedFieldType.valueOf(s.trim().toUpperCase(Locale.ROOT));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            "Unknown cel.unsigned.field.type value: " + s + " (expected 'int' or 'uint')");
+      }
+    }
+  }
 
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new ProtobufModule());
@@ -135,6 +183,23 @@ public class CelExecutor implements RuleExecutor {
       }
     }
     return defaultRegexEngine;
+  }
+
+  /**
+   * Resolve how unsigned protobuf fields are presented for {@code ctx}, from the setting
+   * the schema declares beside the rule. Used by {@link CelFieldExecutor} to decide how to
+   * bind {@code value}.
+   *
+   * <p>Deliberately not readable from the executor config, unlike the regex engine: which
+   * literals a rule may use is a property of the rule's own text, not of the client running
+   * it, and the same rule evaluated by two differently-configured clients has to agree.
+   */
+  UnsignedFieldType resolveUnsignedFieldType(RuleContext ctx) throws RuleException {
+    try {
+      return UnsignedFieldType.fromString(ctx.getParameter(CEL_UNSIGNED_FIELD_TYPE));
+    } catch (IllegalArgumentException e) {
+      throw new RuleException(ctx.rule(), e);
+    }
   }
 
   @Override

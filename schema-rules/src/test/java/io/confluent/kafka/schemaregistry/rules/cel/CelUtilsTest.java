@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+import com.google.common.primitives.UnsignedLong;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
 import dev.cel.common.types.MapType;
@@ -39,6 +40,17 @@ public class CelUtilsTest {
   @Test
   public void stringClass_mapsToString() {
     assertEquals(SimpleType.STRING, CelUtils.findCelTypeForClass(String.class));
+  }
+
+  @Test
+  public void unsignedLong_mapsToUint() {
+    // The transform path types each rule argument from its Java class, and CelFieldExecutor
+    // hands it an UnsignedLong for an unsigned protobuf field. Declaring DYN here would
+    // still evaluate correctly - cel-java dispatches uint overloads on the value itself -
+    // but the same expression on the same field would be compile-checked as uint through
+    // the validator and not checked at all through a transform.
+    assertEquals(SimpleType.UINT, CelUtils.findCelTypeForClass(UnsignedLong.class));
+    assertEquals(SimpleType.UINT, CelUtils.findCelType(UnsignedLong.fromLongBits(25L)));
   }
 
   @Test

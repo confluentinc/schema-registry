@@ -21,11 +21,17 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -287,5 +293,28 @@ public class BackupSchemaFetcherTest {
     assertEquals(schemaV1.canonicalString(), info1.getRawSchema());
     assertEquals(schemaV2.canonicalString(), info2.getRawSchema());
     assertEquals(schemaV3.canonicalString(), info3.getRawSchema());
+  }
+
+  @Test
+  public void testGetAllVersionsByIdFailurePropagates() throws Exception {
+    final AvroSchema avro = new AvroSchema(USER_SCHEMA);
+    BackupSchemaFetcher failingFetcher = new BackupSchemaFetcher(
+        new MockSchemaRegistryClient() {
+          @Override
+          public ParsedSchema getSchemaById(int id) {
+            return avro;
+          }
+
+          @Override
+          public Collection<SubjectVersion> getAllVersionsById(int id) {
+            throw new UncheckedIOException(new IOException("SR unreachable"));
+          }
+        });
+    try {
+      failingFetcher.fetchSchemaInfo(1);
+      fail("Expected exception to propagate instead of being swallowed as WARN");
+    } catch (UncheckedIOException expected) {
+      assertTrue(expected.getCause() instanceof IOException);
+    }
   }
 }

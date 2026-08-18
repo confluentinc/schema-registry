@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[8.4.0-0, 8.4.1-0)</version>
+        <version>[8.5.0-0, 8.5.1-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>8.4.0-0</version>
+    <version>8.5.0-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -107,6 +107,7 @@
         <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.6.4</jsonata-version>
+        <jackson3.version>3.2.1</jackson3.version>
         <json-schema.version>1.14.6</json-schema.version>
         <json-skema.version>0.30.0</json-skema.version>
         <kcache.version>5.2.3</kcache.version>
@@ -116,9 +117,9 @@
         <re2.version>1.8</re2.version>
         <tink.version>1.20.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>5.5.0</wire.version>
+        <wire.version>6.4.5</wire.version>
         <swagger.version>2.2.42</swagger.version>
-        <io.confluent.schema-registry.version>8.4.0-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>8.5.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
@@ -268,6 +269,18 @@
                 <groupId>com.fasterxml.jackson.module</groupId>
                 <artifactId>jackson-module-parameter-names</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+            <!-- Jackson 3 (tools.jackson.*) arrives transitively via JSONata4Java; pin it here
+                 since the parent only manages the Jackson 2 (com.fasterxml.jackson.*) groupIds. -->
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson3.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson3.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.hubspot.jackson</groupId>
