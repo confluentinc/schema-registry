@@ -651,6 +651,11 @@ public class JsonToLogicalTypeConverter {
         @SuppressWarnings("unchecked")
         Map<String, Object> branchParams = hint != null
             ? (Map<String, Object>) hint.get("params") : null;
+        // Drop any stray format-native key so a foreign protobuf.field.number cannot leak in
+        // through confluent:union; JSON owns no format-native concept.
+        if (branchParams != null) {
+          branchParams = Schema.stripFormatNativeParams(branchParams);
+        }
         Schema branchType = convertWithCycleDetection(
             subSchema, true, ctx, appendToList(indexPath, index));
         branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));

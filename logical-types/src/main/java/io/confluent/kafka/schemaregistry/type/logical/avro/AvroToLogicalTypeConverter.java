@@ -534,6 +534,11 @@ public class AvroToLogicalTypeConverter {
           @SuppressWarnings("unchecked")
           Map<String, Object> hintParams = hint != null
               ? (Map<String, Object>) hint.get("params") : null;
+          // Drop any stray format-native key (e.g. a foreign protobuf.field.number) so it does not
+          // leak in through confluent:union; Avro owns no branch-level format-native concept.
+          if (hintParams != null) {
+            hintParams = Schema.stripFormatNativeParams(hintParams);
+          }
           branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams));
         }
         return Schema.createUnion(branches).setNullable(hasNull);

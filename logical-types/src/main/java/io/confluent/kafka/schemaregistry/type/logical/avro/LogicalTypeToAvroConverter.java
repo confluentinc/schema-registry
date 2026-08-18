@@ -663,8 +663,11 @@ public class LogicalTypeToAvroConverter {
     if (branch.getDoc() != null) {
       entry.put("doc", branch.getDoc());
     }
-    if (!branch.getParams().isEmpty()) {
-      entry.put("params", branch.getParams());
+    // A oneof member's protobuf.field.number is format-native and has no Avro home, so keep it out
+    // of confluent:union just as regular field numbers are kept out of confluent:params.
+    Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+    if (!branchParams.isEmpty()) {
+      entry.put("params", branchParams);
     }
     return entry;
   }

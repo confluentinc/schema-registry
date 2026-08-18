@@ -2521,4 +2521,27 @@ class LogicalTypeToAvroConverterTest {
 
     assertThat(back.getField("a").getFieldNumber()).isNull();
   }
+
+  @Test
+  void testForeignBranchFieldNumberStrippedByAvro() {
+    // A oneof member's protobuf.field.number lives in UnionBranch.params; it must be kept out of
+    // confluent:union just like regular field numbers are kept out of confluent:params.
+    Map<String, Object> branchParams = new LinkedHashMap<>();
+    branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, "10");
+    branchParams.put("owner", "team-a");
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("s", Schema.createString().setNullable(true), null, branchParams),
+        new UnionBranch("i", Schema.create(Schema.Type.INT).setNullable(true))))
+        .setNullable(true);
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("u", union, 0))).setNullable(false);
+
+    org.apache.avro.Schema avro =
+        LogicalTypeToAvroConverter.fromLogicalType(new LogicalType(struct), "M").rawSchema();
+    Schema back = AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(avro));
+
+    UnionBranch s = back.getField("u").getSchema().getBranches().get(0);
+    assertThat(s.getFieldNumber()).isNull();
+    assertThat(s.getParams()).containsEntry("owner", "team-a");
+  }
 }

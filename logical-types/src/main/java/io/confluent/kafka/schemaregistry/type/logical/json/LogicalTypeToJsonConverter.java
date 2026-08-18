@@ -410,8 +410,11 @@ public class LogicalTypeToJsonConverter {
           if (branch.getDoc() != null) {
             entry.put("doc", branch.getDoc());
           }
-          if (!branch.getParams().isEmpty()) {
-            entry.put("params", branch.getParams());
+          // JSON has no native slot for a branch's protobuf.field.number, so keep format-native
+          // keys out of confluent:union, mirroring the strip applied to regular field params.
+          Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+          if (!branchParams.isEmpty()) {
+            entry.put("params", branchParams);
           }
           unionMeta.add(entry);
         }
