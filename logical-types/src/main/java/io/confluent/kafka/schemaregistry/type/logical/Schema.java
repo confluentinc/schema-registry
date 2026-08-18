@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,82 @@ public abstract class Schema {
   public static final int DEFAULT_DECIMAL_SCALE = 0;
   public static final int DEFAULT_TIME_PRECISION = 0;
   public static final int DEFAULT_TIMESTAMP_PRECISION = 6;
+
+  /**
+   * Reserved {@code params} key carrying a field's Protobuf field number, populated by the
+   * Protobuf reader from {@code FieldDescriptor.getNumber()}. Read via
+   * {@link Field#getFieldNumber()}. Part of the {@code protobuf.} format-native reserved namespace:
+   * it mirrors a Protobuf-native slot (the field number) that the LT type system has no home for,
+   * so it is emitted through that native slot and stripped from any generic param container. See
+   * {@link #isFormatNativeParam(String)}.
+   */
+  public static final String PROTOBUF_FIELD_NUMBER = "protobuf.field.number";
+
+  /**
+   * Reserved {@code params} key carrying a field's Avro aliases (its previous names) as a
+   * comma-delimited string, populated by the Avro reader from {@code Schema.Field.aliases()}.
+   * Read via {@link Field#getAliases()}. Avro field names cannot contain commas, so the delimiter
+   * is unambiguous. Part of the {@code avro.} format-native reserved namespace: it mirrors an
+   * Avro-native slot (aliases) that the LT type system has no home for, so it is emitted through
+   * that native slot and stripped from any generic param container. See
+   * {@link #isFormatNativeParam(String)}.
+   */
+  public static final String AVRO_ALIASES = "avro.aliases";
+
+  /**
+   * True if {@code key} belongs to a format-native reserved param namespace ({@code avro.} or
+   * {@code protobuf.}). Such params are authoritative only through their owning format's native
+   * slot (Avro aliases, Protobuf field number); in every generic param container
+   * ({@code confluent:params}, Protobuf {@code field_meta.params}) they are stripped on write and
+   * ignored on read. They enter and leave the LT param map only via the owning format's native
+   * slot or via a DDL {@code WITH} clause. This is distinct from the {@code logical.} /
+   * {@code connect.} / {@code flink.} namespaces, whose values are absorbed into the LT
+   * type/structure and never persist as LT params.
+   */
+  public static boolean isFormatNativeParam(String key) {
+    return key.startsWith("avro.") || key.startsWith("protobuf.");
+  }
+
+  /**
+   * Return {@code params} with every {@linkplain #isFormatNativeParam format-native} key removed,
+   * or the same map unchanged when it contains none. Used by the format writers/readers to keep
+   * their generic param containers ({@code confluent:params}, Protobuf {@code field_meta.params})
+   * free of keys that are authoritative only through a native slot.
+   */
+  public static Map<String, Object> stripFormatNativeParams(Map<String, Object> params) {
+    boolean any = false;
+    for (String key : params.keySet()) {
+      if (isFormatNativeParam(key)) {
+        any = true;
+        break;
+      }
+    }
+    if (!any) {
+      return params;
+    }
+    Map<String, Object> copy = new LinkedHashMap<>(params);
+    copy.keySet().removeIf(Schema::isFormatNativeParam);
+    return copy;
+  }
+
+  /**
+   * Parse the {@link #PROTOBUF_FIELD_NUMBER} param from {@code params}, or {@code null} if absent.
+   * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
+   * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
+   * names the field or branch for the error message.
+   */
+  static Integer parseFieldNumber(Map<String, Object> params, String ownerName) {
+    Object v = params.get(PROTOBUF_FIELD_NUMBER);
+    if (v == null) {
+      return null;
+    }
+    try {
+      return Integer.valueOf(v.toString());
+    } catch (NumberFormatException e) {
+      throw new ValidationException("'" + ownerName + "' has a non-numeric "
+          + PROTOBUF_FIELD_NUMBER + " param: '" + v + "'");
+    }
+  }
 
   public enum Type {
     STRUCT, ENUM, UNION, MAP, ARRAY, MULTISET,
@@ -573,6 +650,36 @@ public abstract class Schema {
     }
 
     /**
+     * The field's explicit Protobuf field number, or {@code null} when it is not recorded. The
+     * Protobuf reader records {@link Schema#PROTOBUF_FIELD_NUMBER} only when the number deviates
+     * from the positional default (the field's {@code position + 1}); when they coincide it is
+     * omitted, so {@code null} means "equal to {@code position + 1}", not "unknown". Callers that
+     * need the effective number should therefore read {@code getFieldNumber()} falling back to
+     * {@code position + 1}. A stable, format-agnostic read point for the rename/identity signal;
+     * the value's origin is Protobuf-specific but any {@code Field} can be asked.
+     */
+    public Integer getFieldNumber() {
+      return parseFieldNumber(params, name);
+    }
+
+    /**
+     * The field's Avro aliases (its previous names), or an empty list if the field did not
+     * originate from an Avro schema carrying aliases (only the Avro reader populates
+     * {@link Schema#AVRO_ALIASES}). Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
+     */
+    public List<String> getAliases() {
+      Object v = params.get(AVRO_ALIASES);
+      if (v == null) {
+        return Collections.emptyList();
+      }
+      String s = v.toString();
+      if (s.isEmpty()) {
+        return Collections.emptyList();
+      }
+      return Collections.unmodifiableList(Arrays.asList(s.split(",")));
+    }
+
+    /**
      * Validation rules attached to this field — CHECK constraints written at
      * the column level. Each rule's {@code expr} (CEL) must evaluate to true
      * for the field's value to be considered valid.
@@ -714,6 +821,15 @@ public abstract class Schema {
 
     public Map<String, Object> getParams() {
       return params;
+    }
+
+    /**
+     * The branch's explicit Protobuf field number (a oneof member is a Protobuf field), or
+     * {@code null} when not recorded. Populated by the Protobuf reader; see
+     * {@link Field#getFieldNumber()} for the recording contract.
+     */
+    public Integer getFieldNumber() {
+      return parseFieldNumber(params, name);
     }
 
     @Override
