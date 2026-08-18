@@ -784,10 +784,21 @@ public class AvroToLogicalTypeConverter {
   @SuppressWarnings("unchecked")
   private static Map<String, Object> readFieldParams(org.apache.avro.Schema.Field field) {
     Object params = field.getObjectProp("confluent:params");
-    if (params instanceof Map) {
-      return new LinkedHashMap<>((Map<String, Object>) params);
+    Map<String, Object> result = params instanceof Map
+        ? new LinkedHashMap<>((Map<String, Object>) params)
+        : new LinkedHashMap<>();
+    // Format-native params are authoritative only through a native slot, never through a generic
+    // param container, so drop any that a hand-authored schema smuggled into confluent:params
+    // (both the Avro-owned avro.* and any foreign protobuf.*) before injecting the native aliases.
+    result.keySet().removeIf(Schema::isFormatNativeParam);
+    // Carry Avro field aliases as the reserved avro.aliases param, comma-delimited, so they survive
+    // into the SRLT and round-trip through DDL; the writer re-emits them as native Avro aliases.
+    // Field names cannot contain commas, so the delimiter is unambiguous.
+    Set<String> aliases = field.aliases();
+    if (aliases != null && !aliases.isEmpty()) {
+      result.put(Schema.AVRO_ALIASES, String.join(",", aliases));
     }
-    return Collections.emptyMap();
+    return result.isEmpty() ? Collections.emptyMap() : result;
   }
 
   @SuppressWarnings("unchecked")

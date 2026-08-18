@@ -441,17 +441,23 @@ public class ProtoToLogicalTypeConverter {
     // position in the resulting struct. Downstream consumers rely on the
     // regulars-then-oneofs layout, so we align path numbering to it rather than
     // reordering the fields.
+    // Record Protobuf field numbers all-or-nothing per message: when the numbers are exactly the
+    // sequence the writer reproduces positionally we record none (keeping ordinary schemas clean);
+    // otherwise we record every one — regular fields and oneof members alike. Recording all-or-
+    // nothing guarantees a reader/writer round-trip never mixes recorded and omitted numbers, the
+    // mix that would otherwise let the writer's positional fallback corrupt an omitted number.
+    final boolean recordNumbers = !messageNumbersAreSequential(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
     for (FieldDescriptor fieldDescriptor : schema.getFields()) {
       if (fieldDescriptor.getRealContainingOneof() != null) {
         continue;
       }
-      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++)));
+      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers));
     }
     for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
-          oneOfDescriptor, ctx, appendToList(indexPath, index));
+          oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
       fields.add(new Field(oneOfDescriptor.getName(), unionSchema, index++,
           null, false, null, null, null));
     }
@@ -470,10 +476,37 @@ public class ProtoToLogicalTypeConverter {
     return newList;
   }
 
+  /**
+   * True if the message's field numbers are exactly {@code 1..N} in the writer's emission order
+   * (regular fields first, then oneof members in declaration order) — i.e. the positional defaults
+   * the writer reproduces for free. When true no numbers need recording; when false every number
+   * is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
+   */
+  private static boolean messageNumbersAreSequential(Descriptor schema) {
+    int expected = 1;
+    for (FieldDescriptor f : schema.getFields()) {
+      if (f.getRealContainingOneof() != null) {
+        continue;
+      }
+      if (f.getNumber() != expected++) {
+        return false;
+      }
+    }
+    for (OneofDescriptor oneof : schema.getRealOneofs()) {
+      for (FieldDescriptor f : oneof.getFields()) {
+        if (f.getNumber() != expected++) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   private static Schema toLogicalTypeOneof(
       final OneofDescriptor oneOfDescriptor,
       final ToLogicalContext<String> ctx,
-      final List<Integer> indexPath) {
+      final List<Integer> indexPath,
+      final boolean recordNumbers) {
     List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
     final List<UnionBranch> branches = new ArrayList<>();
     for (int i = 0; i < fieldDescriptors.size(); i++) {
@@ -486,6 +519,13 @@ public class ProtoToLogicalTypeConverter {
       fieldSchema = fieldSchema.setNullable(true);
       ctx.popFieldPath();
       Map<String, Object> branchParams = getBranchParams(fieldDescriptor);
+      if (recordNumbers) {
+        // A oneof member is a Protobuf field; record its number the same way as a regular field so
+        // the writer can restore it. UnionBranch.params carries it and round-trips through DDL.
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
+      }
       branches.add(new UnionBranch(
           fieldDescriptor.getName(), fieldSchema, description, branchParams));
     }
@@ -495,7 +535,8 @@ public class ProtoToLogicalTypeConverter {
   private static Field toField(
       final ToLogicalContext<String> ctx,
       final FieldDescriptor field,
-      final List<Integer> indexPath) {
+      final List<Integer> indexPath,
+      final boolean recordNumber) {
     final String description = getDescription(field);
     ctx.pushFieldPath(field.getName());
     Schema fieldSchema = fieldToLogicalType(field, ctx, indexPath);
@@ -580,10 +621,20 @@ public class ProtoToLogicalTypeConverter {
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
+    // Record the Protobuf field number when the message is not trivially sequential (the caller's
+    // all-or-nothing decision; see toLogicalTypeNested). When recorded it survives into the SRLT
+    // and round-trips through DDL, and the writer restores it via the native number slot.
+    Map<String, Object> effectiveParams = fieldParams;
+    if (recordNumber) {
+      effectiveParams = fieldParams != null
+          ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
+      effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
+    }
     List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
-        defaultValue, hasDefault, derivedDefault, description, fieldTags, fieldParams, fieldRules);
+        defaultValue, hasDefault, derivedDefault, description, fieldTags,
+        effectiveParams, fieldRules);
   }
 
   /**
@@ -659,14 +710,17 @@ public class ProtoToLogicalTypeConverter {
    * True if a Meta.params key represents user-supplied metadata (vs. an
    * internal type-encoding marker). Internal namespaces are flink.*, connect.*,
    * and logical.* — all reserved for the converter; user `WITH params` from
-   * SQL must not collide with these prefixes. Also reserved are unprefixed
-   * keys that the proto encoding writes for specific types: {@code precision}
-   * and {@code scale} for {@code .confluent.type.Decimal} fields.
+   * SQL must not collide with these prefixes. Also reserved are the format-native
+   * namespaces {@code avro.} and {@code protobuf.} (the field number arrives via
+   * the native slot, not as a user param), and the unprefixed keys the proto
+   * encoding writes for specific types: {@code precision} and {@code scale} for
+   * {@code .confluent.type.Decimal} fields.
    */
   private static boolean isUserParam(String key) {
     if (key.startsWith("flink.")
         || key.startsWith("connect.")
-        || key.startsWith(CommonConstants.LOGICAL_PREFIX)) {
+        || key.startsWith(CommonConstants.LOGICAL_PREFIX)
+        || Schema.isFormatNativeParam(key)) {
       return false;
     }
     return !CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)
@@ -1087,7 +1141,9 @@ public class ProtoToLogicalTypeConverter {
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
-        return toLogicalTypeOneof(oneof, ctx, indexPath);
+        // The wrapper's oneof is writer-synthesized for a nullable composite UNION; its branch
+        // numbers are regenerated on re-emission, so they are not recorded.
+        return toLogicalTypeOneof(oneof, ctx, indexPath, false);
       }
     }
     throw new ValidationException(
