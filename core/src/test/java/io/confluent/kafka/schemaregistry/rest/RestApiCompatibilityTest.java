@@ -163,7 +163,7 @@ public abstract class RestApiCompatibilityTest {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(incompatibleSchemaString);
     RegisterSchemaResponse response = restApp.restClient.registerSchema(
-        Collections.emptyMap(), request, subject, false, true, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, request, subject, false, true, null);
     assertTrue(response.getId() > 0, "Forced registration of an incompatible schema should succeed");
   }
 
