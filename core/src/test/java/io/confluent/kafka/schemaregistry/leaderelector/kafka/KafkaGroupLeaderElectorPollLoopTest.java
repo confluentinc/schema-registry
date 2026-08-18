@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.WakeupException;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,5 +158,112 @@ public class KafkaGroupLeaderElectorPollLoopTest {
     t.join(2_000);
     assertFalse(t.isAlive());
     assertTrue("loop should have made progress before being stopped", calls.get() > 0);
+  }
+
+  /** Persistent failure logs ERROR once while within the throttle window (flood guard). */
+  @Test(timeout = 10_000)
+  public void throttlesRepeatedErrorLogsOnPersistentFailure() throws Exception {
+    Logger mockLog = mock(Logger.class);
+    AtomicInteger calls = new AtomicInteger();
+
+    Runnable alwaysThrows = () -> {
+      calls.incrementAndGet();
+      throw new IllegalStateException("simulated persistent failure");
+    };
+
+    AtomicBoolean stopped = new AtomicBoolean(false);
+    Thread t = new Thread(() -> KafkaGroupLeaderElector.runPollLoop(
+        alwaysThrows, stopped, /* retryBackoffMs */ 20L,
+        /* errorLogThrottleMs */ 30_000L, mockLog), "test-poll-loop-throttle");
+    t.setDaemon(true);
+    t.start();
+
+    Thread.sleep(400);
+    stopped.set(true);
+    t.join(2_000);
+    assertFalse(t.isAlive());
+
+    assertTrue("loop should have retried many times, got " + calls.get(), calls.get() >= 3);
+    assertEqualsLong("only the first failure should log ERROR within the throttle window",
+        1L, countCalls(mockLog, "error"));
+  }
+
+  /** Past the throttle window, ERROR re-emits as a heartbeat, but far below one per retry. */
+  @Test(timeout = 10_000)
+  public void emitsErrorHeartbeatAfterThrottleWindow() throws Exception {
+    Logger mockLog = mock(Logger.class);
+    AtomicInteger calls = new AtomicInteger();
+
+    Runnable alwaysThrows = () -> {
+      calls.incrementAndGet();
+      throw new IllegalStateException("simulated persistent failure");
+    };
+
+    AtomicBoolean stopped = new AtomicBoolean(false);
+    Thread t = new Thread(() -> KafkaGroupLeaderElector.runPollLoop(
+        alwaysThrows, stopped, /* retryBackoffMs */ 10L,
+        /* errorLogThrottleMs */ 50L, mockLog), "test-poll-loop-heartbeat");
+    t.setDaemon(true);
+    t.start();
+
+    Thread.sleep(400);
+    stopped.set(true);
+    t.join(2_000);
+    assertFalse(t.isAlive());
+
+    long errors = countCalls(mockLog, "error");
+    assertTrue("expected more than one ERROR (heartbeat), got " + errors, errors >= 2);
+    assertTrue("ERROR logs (" + errors + ") should stay well below retry count ("
+        + calls.get() + ")", errors < calls.get());
+  }
+
+  /** Recovery logs one INFO and resets, so a later failure episode logs a fresh ERROR. */
+  @Test(timeout = 10_000)
+  public void logsRecoveryAndResetsFailureCountOnSuccess() throws Exception {
+    Logger mockLog = mock(Logger.class);
+    AtomicInteger calls = new AtomicInteger();
+    CountDownLatch reachedSeventhCall = new CountDownLatch(7);
+
+    Runnable pollOnce = () -> {
+      int n = calls.incrementAndGet();
+      reachedSeventhCall.countDown();
+      // Two single-failure episodes (n==1, n==5), each immediately recovered.
+      if (n == 1 || n == 5) {
+        throw new IllegalStateException("simulated transient failure");
+      }
+      try {
+        Thread.sleep(5);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
+    };
+
+    AtomicBoolean stopped = new AtomicBoolean(false);
+    Thread t = new Thread(() -> KafkaGroupLeaderElector.runPollLoop(
+        pollOnce, stopped, /* retryBackoffMs */ 10L,
+        /* errorLogThrottleMs */ 30_000L, mockLog), "test-poll-loop-recovery");
+    t.setDaemon(true);
+    t.start();
+
+    assertTrue("loop should reach the second failure episode and recover",
+        reachedSeventhCall.await(5, TimeUnit.SECONDS));
+    stopped.set(true);
+    t.join(2_000);
+    assertFalse(t.isAlive());
+
+    assertEqualsLong("each failure episode should log exactly one ERROR",
+        2L, countCalls(mockLog, "error"));
+    assertEqualsLong("each recovery should log exactly one INFO",
+        2L, countCalls(mockLog, "info"));
+  }
+
+  private static long countCalls(Logger log, String method) {
+    return Mockito.mockingDetails(log).getInvocations().stream()
+        .filter(inv -> inv.getMethod().getName().equals(method))
+        .count();
+  }
+
+  private static void assertEqualsLong(String message, long expected, long actual) {
+    assertTrue(message + " (expected " + expected + ", got " + actual + ")", expected == actual);
   }
 }
