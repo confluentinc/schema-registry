@@ -641,7 +641,15 @@ public abstract class Schema {
      */
     public Integer getFieldNumber() {
       Object v = params.get(PROTOBUF_FIELD_NUMBER);
-      return v == null ? null : Integer.valueOf(v.toString());
+      if (v == null) {
+        return null;
+      }
+      try {
+        return Integer.valueOf(v.toString());
+      } catch (NumberFormatException e) {
+        throw new ValidationException("Field '" + name + "' has a non-numeric "
+            + PROTOBUF_FIELD_NUMBER + " param: '" + v + "'");
+      }
     }
 
     /**

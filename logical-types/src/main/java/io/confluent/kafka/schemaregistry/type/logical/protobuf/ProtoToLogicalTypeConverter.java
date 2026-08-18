@@ -580,16 +580,19 @@ public class ProtoToLogicalTypeConverter {
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
-    // Carry the Protobuf field number as a reserved logical param so it survives into the SRLT
-    // (and round-trips through DDL), but ONLY when it deviates from the positional default the
-    // writer would otherwise assign (index + 1). When number == index + 1 the writer re-derives
-    // the identical number positionally, so recording it is redundant and the identity is
-    // losslessly reconstructable as getFieldNumber() ?? (position + 1). Omitting the trivial case
-    // keeps sequential proto schemas free of field-number noise; the deviating case (gaps or
-    // out-of-order declaration) is what the writer would otherwise corrupt by renumbering.
-    // field.getIndex() (declaration position) is a distinct value used for the SRLT field position.
+    // Carry the Protobuf field number as a reserved param so it survives into the SRLT (and
+    // round-trips through DDL), but ONLY when it deviates from the positional default the writer
+    // would otherwise assign. That default is (ordinal + 1), where the ordinal is this field's
+    // position in the writer's regulars-then-oneofs layout — the tail of indexPath, which is
+    // aligned to that same layout (see toLogicalTypeNested). It is NOT field.getIndex(): the
+    // Protobuf descriptor index has gaps where oneof members sit, so keying off it would omit a
+    // number the writer will not reproduce (and thus corrupt it) whenever a oneof is present. When
+    // number == ordinal + 1 the writer re-derives the identical number positionally, so recording
+    // it is redundant and the identity is losslessly reconstructable as getFieldNumber() ??
+    // (ordinal + 1); omitting it keeps sequential proto schemas free of field-number noise.
+    int ordinal = indexPath.get(indexPath.size() - 1);
     Map<String, Object> effectiveParams = fieldParams;
-    if (field.getNumber() != field.getIndex() + 1) {
+    if (field.getNumber() != ordinal + 1) {
       effectiveParams = fieldParams != null
           ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
       effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));

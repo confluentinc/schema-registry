@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Tests for Schema model-level validation invariants. */
@@ -88,5 +89,15 @@ class SchemaTest {
         null, false, null, null, params);
 
     assertThat(f.getAliases()).containsExactly("only");
+  }
+
+  @Test
+  void testNonNumericFieldNumberThrows() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "abc");
+    Field f = new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+        null, false, null, null, params);
+
+    assertThatThrownBy(f::getFieldNumber).isInstanceOf(ValidationException.class);
   }
 }

@@ -562,4 +562,36 @@ class ProtoToLogicalTypeConverterTest {
     assertThat(out.findFieldByName("b").getNumber()).isEqualTo(7);
     assertThat(out.findFieldByName("c").getNumber()).isEqualTo(100);
   }
+
+  @Test
+  void testRegularFieldNumberPreservedWhenOneofPresent() throws Exception {
+    // A oneof makes the reader lay out regulars before oneof members, so the regular field's
+    // Protobuf descriptor index (2) differs from its writer ordinal (0). The number capture keys
+    // off the ordinal, so the regular field's number survives the round-trip even though its
+    // descriptor index would have (mis-)matched the positional default.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addOneofDecl(OneofDescriptorProto.newBuilder().setName("o"))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(10).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(20).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("c").setNumber(3).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    assertThat(srlt.getField("c").getFieldNumber()).isEqualTo(3);
+
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+    assertThat(out.findFieldByName("c").getNumber()).isEqualTo(3);
+    // Known limitation: oneof branch numbers are NOT preserved (UnionBranch carries no number),
+    // so a and b are renumbered positionally rather than restored to 10/20.
+    assertThat(out.findFieldByName("a").getNumber()).isNotEqualTo(10);
+    assertThat(out.findFieldByName("b").getNumber()).isNotEqualTo(20);
+  }
 }
