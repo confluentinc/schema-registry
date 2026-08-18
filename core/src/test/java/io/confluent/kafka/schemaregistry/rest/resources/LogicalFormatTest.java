@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -179,10 +180,14 @@ class LogicalFormatTest {
         new SchemaReference("com.example.Address", "address-value", 1)));
 
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn(QualifiedSubject.DEFAULT_TENANT);
     String addressSchema =
         "{\"type\":\"record\",\"name\":\"Address\",\"namespace\":\"com.example\","
             + "\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}";
-    when(schemaRegistry.get("address-value", 1, false))
+    // Reference resolution now routes through AbstractSchemaProvider.resolveReferences, which
+    // qualifies the subject against the parent context and fetches via getByVersion with
+    // lookupDeletedSchema=false (validateAsNew=true for a new registration).
+    when(schemaRegistry.getByVersion("address-value", 1, false))
         .thenReturn(schemaEntityFor("AVRO", addressSchema));
 
     LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
@@ -207,11 +212,12 @@ class LogicalFormatTest {
         new SchemaReference("com.example.Address", "address-value", 1)));
 
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
-    when(schemaRegistry.get("address-value", 1, false)).thenReturn(null);
+    when(schemaRegistry.tenant()).thenReturn(QualifiedSubject.DEFAULT_TENANT);
+    when(schemaRegistry.getByVersion("address-value", 1, false)).thenReturn(null);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
         LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
-    assertTrue(e.getMessage().contains("Could not resolve reference"));
+    assertTrue(e.getMessage().contains("Could not resolve schema references"));
   }
 
   // -- convertToLogicalDdl: happy path, one per schemaType -------------------------------------

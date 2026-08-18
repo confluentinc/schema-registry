@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -37,7 +38,6 @@ import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConv
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -76,6 +76,9 @@ final class LogicalFormat {
     }
 
     LogicalType parsed;
+    if (request.getSchema() == null || request.getSchema().trim().isEmpty()) {
+      throw new InvalidSchemaException("Schema is required when format=logical");
+    }
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
       visitor.visit(LogicalTypesParserFactory.parse(request.getSchema()));
@@ -85,7 +88,7 @@ final class LogicalFormat {
     }
 
     LogicalType logicalType =
-        attachReferences(schemaRegistry, parsed, request.getReferences());
+        attachReferences(schemaRegistry, subject, parsed, request.getReferences());
     String rowName = rowNameFor(subject);
 
     ParsedSchema nativeSchema;
@@ -110,6 +113,7 @@ final class LogicalFormat {
           "Logical type schema cannot be represented as " + schemaType + ": "
               + e.getMessage(), e);
     }
+    request.setSchemaType(nativeSchema.schemaType());
     request.setSchema(nativeSchema.canonicalString());
   }
 
@@ -144,27 +148,34 @@ final class LogicalFormat {
    * Logical Type carries external-type bindings (name/alias to URI) but never SR coordinates, see
    * {@link LogicalType#getExternalImports()}. If the parsed type references anything external,
    * this resolves it against the caller-declared {@code references} the same way a native
-   * registration would: fetching each referenced subject/version's stored schema text and keying
-   * the result by the reference's own name, matching the convention every native format's
-   * {@code resolvedReferences} map already follows.
+   * registration would -- reusing {@link AbstractSchemaProvider#resolveReferences} so
+   * parent-context qualification and transitive resolution match native registration exactly, and
+   * keying the result by each reference's own name, the convention every native
+   * {@code resolvedReferences}
+   * map already follows.
    */
   private static LogicalType attachReferences(
       final SchemaRegistry schemaRegistry,
+      final String subject,
       final LogicalType parsed,
       final List<SchemaReference> references)
       throws SchemaRegistryException {
     if (references == null || references.isEmpty()) {
       return parsed;
     }
-    Map<String, String> resolvedReferences = new HashMap<>();
-    for (SchemaReference ref : references) {
-      Schema referenced = schemaRegistry.get(ref.getSubject(), ref.getVersion(), false);
-      if (referenced == null) {
-        throw new InvalidSchemaException(
-            "Could not resolve reference '" + ref.getName() + "' to subject '"
-                + ref.getSubject() + "' version " + ref.getVersion());
-      }
-      resolvedReferences.put(ref.getName(), referenced.getSchema());
+    // validateAsNew=true: this is a new registration, so references to deleted versions must not
+    // resolve, matching what the native register path does via canonicalizeSchema.
+    // referenceVersionsStrict defaults to false: it is a per-provider setting configured on the
+    // native SchemaProvider instances, which the logical registration path does not reach.
+    Map<String, String> resolvedReferences;
+    try {
+      resolvedReferences = AbstractSchemaProvider.resolveReferences(
+          schemaRegistry, subject, references, true, false);
+    } catch (Exception e) {
+      // resolveReferences throws IllegalArgument/IllegalState on a missing or conflicting
+      // reference; surface it as a clean InvalidSchemaException (422), the same way the native
+      // register path wraps it in AbstractSchemaRegistry.loadSchema.
+      throw new InvalidSchemaException("Could not resolve schema references: " + e.getMessage(), e);
     }
     return new LogicalType(
         parsed.getNamespace(),
