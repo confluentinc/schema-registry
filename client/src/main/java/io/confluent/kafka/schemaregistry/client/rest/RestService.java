@@ -882,8 +882,22 @@ public class RestService implements Closeable, Configurable {
                                                boolean normalize,
                                                String format)
       throws IOException, RestClientException {
+    return registerSchema(
+        requestProperties, registerSchemaRequest, subject, normalize, false, format);
+  }
+
+  public RegisterSchemaResponse registerSchema(Map<String, String> requestProperties,
+                                               RegisterSchemaRequest registerSchemaRequest,
+                                               String subject,
+                                               boolean normalize,
+                                               boolean force,
+                                               String format)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions")
         .queryParam("normalize", normalize);
+    if (force) {
+      builder.queryParam("force", true);
+    }
     if (format != null) {
       builder.queryParam("format", format);
     }

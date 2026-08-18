@@ -435,6 +435,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   public Schema register(String subject,
                          Schema schema,
                          boolean normalize,
+                         boolean force,
                          boolean propagateSchemaTags)
       throws SchemaRegistryException {
     try {
@@ -513,7 +514,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (!mode.isImportOrForwardMode()) {
+      // force skips the compatibility checks (both the native format-specific check and the
+      // logical check) even outside IMPORT mode, the same way IMPORT mode skips them.
+      if (!mode.isImportOrForwardMode() && !force) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -610,6 +613,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   public Schema registerOrForward(String subject,
                                   RegisterSchemaRequest request,
                                   boolean normalize,
+                                  boolean force,
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
     Schema schema = new Schema(subject, request);
@@ -647,11 +651,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        return register(subject, request, normalize);
+        return register(subject, request, normalize, force);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, request, normalize, headerProperties);
+          return forwardRegisterRequestToLeader(
+              subject, request, normalize, force, headerProperties);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
@@ -1067,14 +1072,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private Schema forwardRegisterRequestToLeader(
       String subject, RegisterSchemaRequest registerSchemaRequest, boolean normalize,
-      Map<String, String> headerProperties)
+      boolean force, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug("Forwarding registering schema request to {}", baseUrl);
     try {
       RegisterSchemaResponse response = leaderRestService.registerSchema(
-          headerProperties, registerSchemaRequest, subject, normalize);
+          headerProperties, registerSchemaRequest, subject, normalize, force, null);
       return new Schema(subject, response);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
