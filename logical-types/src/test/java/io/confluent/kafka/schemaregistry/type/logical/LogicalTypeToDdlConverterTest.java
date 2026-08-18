@@ -299,4 +299,24 @@ class LogicalTypeToDdlConverterTest {
         "nullable root should emit explicit TYPE, got:\n" + ddl);
     assertRoundTrip(lt);
   }
+
+  @Test
+  void testFieldNumberAndAliasesRoundTripThroughDdlWithClause() {
+    // DDL has no native slot for either signal, so both ride opaquely through WITH(...).
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "42");
+    params.put(Schema.AVRO_ALIASES, "a_old,a_older");
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Schema.Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+    LogicalType lt = new LogicalType(struct);
+
+    assertRoundTrip(lt);
+
+    LogicalType parsed = parse(LogicalTypeToDdlConverter.toDdl(lt));
+    Schema.Field a = parsed.getRootSchema().getField("a");
+    assertEquals(Integer.valueOf(42), a.getFieldNumber());
+    assertEquals(Arrays.asList("a_old", "a_older"), a.getAliases());
+  }
 }
