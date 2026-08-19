@@ -21,48 +21,27 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
@@ -85,7 +64,8 @@ import org.junit.jupiter.api.Test;
  * Integration test for {@link TimestampedKeyValueStoreWithHeaders} that verifies store operations
  * work correctly with header-based schema ID transport.
  */
-public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterTestHarness {
+public class TimestampedKeyValueStoreWithHeadersIntegrationTest
+    extends HeadersIQv2IntegrationTestBase {
 
     private static final String INPUT_TOPIC = "word-plaintext-input";
     private static final String OUTPUT_TOPIC = "word-count-output";
@@ -114,10 +94,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
     private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
     private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
-
-    public TimestampedKeyValueStoreWithHeadersIntegrationTest() {
-        super(1, true);
-    }
 
     /**
      * Test KeyValueStore operations (put, get, delete, putIfAbsent, putAll) with header-based schema ID transport.
@@ -232,10 +208,11 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             ValueTimestampHeaders<GenericRecord> word2Result = store.get(createKey("word-2"));
             assertNotNull(word2Result, "IQv1: word-2 should exist in store");
             assertEquals(50L, word2Result.value().get("count"), "IQv1: word-2 count should be 50");
-            assertSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
+            assertWellFormedSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -318,23 +295,23 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             ValueTimestampHeaders<GenericRecord> word2Result = store.get(createKey("word-2"));
             assertNotNull(word2Result, "IQv1: word-2 should exist in store");
             assertEquals(50L, word2Result.value().get("count"), "IQv1: word-2 count should be 50");
-            assertSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
+            assertWellFormedSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
 
             // Verify PUT_ALL: all 3 word entries should exist
             ValueTimestampHeaders<GenericRecord> word3Result = store.get(createKey("word-3"));
             assertNotNull(word3Result, "IQv1: word-3 should exist in store");
             assertEquals(25L, word3Result.value().get("count"), "IQv1: word-3 count should be 25");
-            assertSchemaIdHeaders(word3Result.headers(), "IQv1 get word-3");
+            assertWellFormedSchemaIdHeaders(word3Result.headers(), "IQv1 get word-3");
 
             ValueTimestampHeaders<GenericRecord> word4Result = store.get(createKey("word-4"));
             assertNotNull(word4Result, "IQv1: word-4 should exist in store");
             assertEquals(50L, word4Result.value().get("count"), "IQv1: word-4 count should be 50");
-            assertSchemaIdHeaders(word4Result.headers(), "IQv1 get word-4");
+            assertWellFormedSchemaIdHeaders(word4Result.headers(), "IQv1 get word-4");
 
             ValueTimestampHeaders<GenericRecord> word5Result = store.get(createKey("word-5"));
             assertNotNull(word5Result, "IQv1: word-5 should exist in store");
             assertEquals(75L, word5Result.value().get("count"), "IQv1: word-5 count should be 75");
-            assertSchemaIdHeaders(word5Result.headers(), "IQv1 get word-5");
+            assertWellFormedSchemaIdHeaders(word5Result.headers(), "IQv1 get word-5");
 
             // GET non-existent key
             assertNull(store.get(createKey("word-99")), "IQv1: word-99 should return null");
@@ -368,8 +345,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             // APPROXIMATE NUM ENTRIES
             assertTrue(store.approximateNumEntries() >= 4, "approximateNumEntries should be at least 4");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -522,7 +500,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 while (allIter.hasNext()) {
                     KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = allIter.next();
                     assertNotNull(kv.value, "IQv1 all() value should not be null");
-                    assertSchemaIdHeaders(kv.value.headers(), "IQv1 all() entry " + count);
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 all() entry " + count);
                     count++;
                 }
                 assertEquals(5, count, "IQv1 all() should return 5 entries");
@@ -535,7 +513,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 while (rangeIter.hasNext()) {
                     KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = rangeIter.next();
                     rangeKeys.add(kv.key.get("word").toString());
-                    assertSchemaIdHeaders(kv.value.headers(), "IQv1 range() " + kv.key.get("word"));
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 range() " + kv.key.get("word"));
                 }
                 assertEquals(Arrays.asList("word-2", "word-3", "word-4"), rangeKeys,
                     "IQv1 range(word-2, word-4) should return word-2, word-3, word-4");
@@ -544,8 +522,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             // Test IQv1 approximateNumEntries()
             assertTrue(store.approximateNumEntries() >= 5, "IQv1 approximateNumEntries should be at least 5");
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -594,8 +573,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 "Store state checks should pass (isOpen=true, persistent=true, name matches)");
             assertEquals("state-store", results.get(0).key().get("word").toString());
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -811,8 +791,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 "Deleted keys should include word-1, word-99, word-3, word-4 but got: "
                     + deletedKeys);
 
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -841,8 +822,11 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 producer.flush();
             }
             consumeRecords(outputTopic, "restore-pre-consumer", 3, KafkaAvroDeserializer.class);
-        } finally {
+            // Assert the clean shutdown here: the restart below reuses this application.id and
+            // state dir, so a timed-out close would resurface as a confusing cleanUp() failure.
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
 
         // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
@@ -857,19 +841,20 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             ValueTimestampHeaders<GenericRecord> word1 = store.get(createKey("word-1"));
             assertNotNull(word1, "Restored store should contain word-1");
             assertEquals(10L, word1.value().get("count"));
-            assertSchemaIdHeaders(word1.headers(), "Restored word-1");
+            assertWellFormedSchemaIdHeaders(word1.headers(), "Restored word-1");
 
             ValueTimestampHeaders<GenericRecord> word2 = store.get(createKey("word-2"));
             assertNotNull(word2, "Restored store should contain word-2");
             assertEquals(20L, word2.value().get("count"));
-            assertSchemaIdHeaders(word2.headers(), "Restored word-2");
+            assertWellFormedSchemaIdHeaders(word2.headers(), "Restored word-2");
 
             ValueTimestampHeaders<GenericRecord> word3 = store.get(createKey("word-3"));
             assertNotNull(word3, "Restored store should contain word-3");
             assertEquals(30L, word3.value().get("count"));
-            assertSchemaIdHeaders(word3.headers(), "Restored word-3");
-        } finally {
+            assertWellFormedSchemaIdHeaders(word3.headers(), "Restored word-3");
             closeStreams(restoredStreams);
+        } finally {
+            closeStreamsQuietly(restoredStreams);
         }
     }
 
@@ -920,24 +905,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             .process(() -> new WordCountProcessor(storeName), storeName)
             .to(outputTopic, Produced.with(keySerde, valueSerde));
 
-        Properties streamsProps = createStreamsProps(appId);
         // Low commit interval forces the cache to flush into the changelog topic.
-        streamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-
-        KafkaStreams streams = null;
+        KafkaStreams streams = startStreamsAndAwaitRunning(builder.build(), appId, 30, 1000);
         try {
-            CountDownLatch startedLatch = new CountDownLatch(1);
-            streams = new KafkaStreams(builder.build(), streamsProps);
-            streams.cleanUp();
-            streams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    startedLatch.countDown();
-                }
-            });
-            streams.start();
-            assertTrue(startedLatch.await(30, TimeUnit.SECONDS),
-                "KafkaStreams should reach RUNNING state");
-
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
                      new KafkaProducer<>(createProducerProps())) {
                 for (int i = 1; i <= numKeys; i++) {
@@ -947,11 +917,11 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 producer.flush();
             }
 
-            // Wait for outputs so we know the topology processed them, then briefly wait for the
-            // commit-driven cache flush (commit.interval.ms = 1s) to hit the changelog.
+            // Wait for the outputs so we know the topology processed them; the changelog read below
+            // then polls until the commit-driven cache flush (commit.interval.ms = 1s) lands the
+            // records -- no fixed sleep needed since consumeRecords already waits for numKeys.
             consumeRecords(outputTopic, "multi-partition-output-consumer", numKeys,
                 KafkaAvroDeserializer.class);
-            Thread.sleep(2000);
 
             List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
                 consumeRecords(changelogTopic, "multi-partition-changelog-consumer", numKeys,
@@ -960,25 +930,15 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             Set<Integer> partitions = new HashSet<>();
             for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
                 partitions.add(record.partition());
-                assertSchemaIdHeaders(record.headers(),
+                assertWellFormedSchemaIdHeaders(record.headers(),
                     "changelog partition=" + record.partition()
                         + " key=" + record.key().get("word"));
             }
             assertTrue(partitions.size() > 1,
                 "Changelog records should span multiple partitions but only saw: " + partitions);
-        } finally {
             closeStreams(streams);
-        }
-    }
-
-    private void createTopicsWithPartitions(int numPartitions, String... topicNames) throws Exception {
-        Properties adminProps = new Properties();
-        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        try (AdminClient admin = AdminClient.create(adminProps)) {
-            List<NewTopic> topics = Arrays.stream(topicNames)
-                .map(name -> new NewTopic(name, numPartitions, (short) 1))
-                .collect(Collectors.toList());
-            admin.createTopics(topics).all().get(30, TimeUnit.SECONDS);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -1435,140 +1395,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
     }
 
 
-    private void createTopics(String... topicNames) throws Exception {
-        Properties adminProps = new Properties();
-        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        try (AdminClient admin = AdminClient.create(adminProps)) {
-            List<NewTopic> topics = Arrays.stream(topicNames)
-                .map(name -> new NewTopic(name, 1, (short) 1))
-                .collect(Collectors.toList());
-            admin.createTopics(topics).all().get(30, TimeUnit.SECONDS);
-        }
-    }
-
-    private GenericAvroSerde createKeySerde() {
-        GenericAvroSerde serde = new GenericAvroSerde();
-        Map<String, Object> config = new HashMap<>();
-        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, true);
-        return serde;
-    }
-
-    private GenericAvroSerde createValueSerde() {
-        GenericAvroSerde serde = new GenericAvroSerde();
-        Map<String, Object> config = new HashMap<>();
-        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, false);
-        return serde;
-    }
-
-    private Properties createStreamsProps(String appId) {
-        Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        return props;
-    }
-
-    private Properties createProducerProps() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        return props;
-    }
-
-    private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
-        return startStreamsAndAwaitRunning(topology, appId, 30);
-    }
-
-    private KafkaStreams startStreamsAndAwaitRunning(
-        Topology topology, String appId, int timeoutSeconds) throws Exception {
-        CountDownLatch startedLatch = new CountDownLatch(1);
-        KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
-        streams.cleanUp();
-        final java.util.concurrent.atomic.AtomicReference<KafkaStreams.State> lastState =
-            new java.util.concurrent.atomic.AtomicReference<>(KafkaStreams.State.CREATED);
-        streams.setStateListener((newState, oldState) -> {
-            lastState.set(newState);
-            if (newState == KafkaStreams.State.RUNNING) {
-                startedLatch.countDown();
-            }
-        });
-        streams.start();
-        boolean running = false;
-        try {
-            running = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
-            assertTrue(running,
-                "KafkaStreams should reach RUNNING state (last observed state: "
-                    + lastState.get() + ")");
-            return streams;
-        } finally {
-            if (!running) {
-                closeStreams(streams);
-            }
-        }
-    }
-
-    private void closeStreams(KafkaStreams streams) {
-        if (streams != null) {
-            streams.close(Duration.ofSeconds(10));
-        }
-    }
-
-    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
-        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
-
-        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
-            consumer.subscribe(Collections.singletonList(topic));
-            long deadline = System.currentTimeMillis() + 30_000;
-            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, V> record : records) {
-                    results.add(record);
-                }
-            }
-        }
-        assertEquals(expectedCount, results.size(),
-            "Expected " + expectedCount + " records from " + topic
-                + " but got " + results.size() + " within 30s");
-        return results;
-    }
-
-    private void assertSchemaIdHeaders(ConsumerRecord<GenericRecord, GenericRecord> record, String context) {
-        assertSchemaIdHeaders(record.headers(), context);
-    }
-
-    private void assertSchemaIdHeaders(Headers headers, String context) {
-        Header keySchemaIdHeader = headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keySchemaIdHeader, context + ": should have __key_schema_id header");
-        byte[] keyHeaderBytes = keySchemaIdHeader.value();
-        assertEquals(17, keyHeaderBytes.length, context + ": Key GUID header should be 17 bytes");
-        assertEquals(SchemaId.MAGIC_BYTE_V1, keyHeaderBytes[0], context + ": Key header should have V1 magic byte");
-
-        Header valueSchemaIdHeader = headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-        assertNotNull(valueSchemaIdHeader, context + ": should have __value_schema_id header");
-        byte[] valueHeaderBytes = valueSchemaIdHeader.value();
-        assertEquals(17, valueHeaderBytes.length, context + ": Value GUID header should be 17 bytes");
-        assertEquals(SchemaId.MAGIC_BYTE_V1, valueHeaderBytes[0], context + ": Value header should have V1 magic byte");
+    private void assertSchemaIdHeaders(ConsumerRecord<GenericRecord, GenericRecord> record,
+        String context) {
+        assertWellFormedSchemaIdHeaders(record.headers(), context);
     }
 
     private GenericRecord createKey(String word) {
@@ -1596,7 +1425,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
             keys.add(kv.key.get("word").toString());
             counts.add((Long) kv.value.value().get("count"));
-            assertSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
+            assertWellFormedSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
             idx++;
         }
         assertEquals(expectedKeys.size(), idx, assertionContext + " number of records");
