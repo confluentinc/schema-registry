@@ -22,7 +22,11 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Tests for Schema model-level validation invariants. */
@@ -54,5 +58,46 @@ class SchemaTest {
             new EnumValue("RED"),
             new EnumValue("GREEN"),
             new EnumValue("RED"))));
+  }
+
+  // Field identity getters read the reserved params, typed.
+  @Test
+  void testFieldNumberAndAliasesGetters() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "7");
+    params.put(Schema.AVRO_ALIASES, "old1,old2");
+    Field f = new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+        null, false, null, null, params);
+
+    assertThat(f.getFieldNumber()).isEqualTo(7);
+    assertThat(f.getAliases()).containsExactly("old1", "old2");
+  }
+
+  @Test
+  void testFieldIdentityGettersDefaultWhenAbsent() {
+    Field f = new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0);
+
+    assertThat(f.getFieldNumber()).isNull();
+    assertThat(f.getAliases()).isEmpty();
+  }
+
+  @Test
+  void testSingleAliasSplitsToSingletonList() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.AVRO_ALIASES, "only");
+    Field f = new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+        null, false, null, null, params);
+
+    assertThat(f.getAliases()).containsExactly("only");
+  }
+
+  @Test
+  void testNonNumericFieldNumberThrows() {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, "abc");
+    Field f = new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+        null, false, null, null, params);
+
+    assertThatThrownBy(f::getFieldNumber).isInstanceOf(ValidationException.class);
   }
 }
