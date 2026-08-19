@@ -345,8 +345,11 @@ public class LogicalTypeToJsonConverter {
             if (!field.getTags().isEmpty()) {
               extendedProps.put("confluent:tags", field.getTags());
             }
-            if (!field.getParams().isEmpty()) {
-              extendedProps.put("confluent:params", field.getParams());
+            // JSON has no native slot for a format-native param, so strip avro.*/protobuf.* rather
+            // than emit them into confluent:params (see Schema#isFormatNativeParam).
+            Map<String, Object> fieldParams = Schema.stripFormatNativeParams(field.getParams());
+            if (!fieldParams.isEmpty()) {
+              extendedProps.put("confluent:params", fieldParams);
             }
             if (!field.getRules().isEmpty()) {
               extendedProps.put("confluent:rules", buildRulesWire(field.getRules()));
@@ -407,8 +410,11 @@ public class LogicalTypeToJsonConverter {
           if (branch.getDoc() != null) {
             entry.put("doc", branch.getDoc());
           }
-          if (!branch.getParams().isEmpty()) {
-            entry.put("params", branch.getParams());
+          // JSON has no native slot for a branch's protobuf.field.number, so keep format-native
+          // keys out of confluent:union, mirroring the strip applied to regular field params.
+          Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+          if (!branchParams.isEmpty()) {
+            entry.put("params", branchParams);
           }
           unionMeta.add(entry);
         }

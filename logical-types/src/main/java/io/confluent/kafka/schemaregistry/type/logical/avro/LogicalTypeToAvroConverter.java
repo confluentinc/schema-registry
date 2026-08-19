@@ -306,9 +306,7 @@ public class LogicalTypeToAvroConverter {
             if (!field.getTags().isEmpty()) {
               avroField.addProp("confluent:tags", field.getTags());
             }
-            if (!field.getParams().isEmpty()) {
-              avroField.addProp("confluent:params", field.getParams());
-            }
+            addFieldAliasesAndParams(avroField, field);
             addFieldRules(avroField, field);
             if (field.getSchema().getType() == Schema.Type.UNION) {
               List<Map<String, Object>> unionMeta = new ArrayList<>();
@@ -483,9 +481,7 @@ public class LogicalTypeToAvroConverter {
         if (!field.getTags().isEmpty()) {
           avroField.addProp("confluent:tags", field.getTags());
         }
-        if (!field.getParams().isEmpty()) {
-          avroField.addProp("confluent:params", field.getParams());
-        }
+        addFieldAliasesAndParams(avroField, field);
         addFieldRules(avroField, field);
         if (fieldType.getType() == Schema.Type.UNION) {
           List<Map<String, Object>> unionMeta = new ArrayList<>();
@@ -602,6 +598,25 @@ public class LogicalTypeToAvroConverter {
     addRulesProp(avroField::addProp, field.getRules());
   }
 
+  /**
+   * Emit the field aliases carried in {@link Schema#AVRO_ALIASES} through the
+   * native Avro alias slot, and write the remaining user params as
+   * {@code confluent:params}. All format-native params ({@code avro.*} /
+   * {@code protobuf.*}) are stripped from the container: the Avro-owned aliases
+   * because they are emitted natively, and any foreign {@code protobuf.*} because
+   * a format-native param never belongs in a generic container.
+   */
+  private static void addFieldAliasesAndParams(
+      org.apache.avro.Schema.Field avroField, Field field) {
+    for (String alias : field.getAliases()) {
+      avroField.addAlias(alias);
+    }
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(field.getParams());
+    if (!userParams.isEmpty()) {
+      avroField.addProp("confluent:params", userParams);
+    }
+  }
+
   private static void addRulesProp(
       java.util.function.BiConsumer<String, Object> propSetter,
       List<io.confluent.kafka.schemaregistry.type.logical.Rule> rules) {
@@ -648,8 +663,11 @@ public class LogicalTypeToAvroConverter {
     if (branch.getDoc() != null) {
       entry.put("doc", branch.getDoc());
     }
-    if (!branch.getParams().isEmpty()) {
-      entry.put("params", branch.getParams());
+    // A oneof member's protobuf.field.number is format-native and has no Avro home, so keep it out
+    // of confluent:union just as regular field numbers are kept out of confluent:params.
+    Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+    if (!branchParams.isEmpty()) {
+      entry.put("params", branchParams);
     }
     return entry;
   }
