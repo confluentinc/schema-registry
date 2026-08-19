@@ -60,6 +60,30 @@ public class RuleContext {
   private final Deque<FieldContext> fieldContexts;
   private final boolean includeRuleResults;
 
+  /**
+   * Creates a context that does not collect rule results, for callers that execute rules
+   * only for their effect on the message. Equivalent to passing {@code false} for
+   * {@code includeRuleResults}.
+   */
+  public RuleContext(
+      Map<String, ?> configs,
+      ExecutionEnvironment enabledEnv,
+      ParsedSchema source,
+      ParsedSchema target,
+      String subject,
+      String topic,
+      Headers headers,
+      Object originalKey,
+      Object originalValue,
+      boolean isKey,
+      RuleMode ruleMode,
+      Rule rule,
+      int index,
+      List<Rule> rules) {
+    this(configs, enabledEnv, source, target, subject, topic, headers,
+        originalKey, originalValue, isKey, ruleMode, rule, index, rules, false);
+  }
+
   public RuleContext(
       Map<String, ?> configs,
       ExecutionEnvironment enabledEnv,
@@ -155,6 +179,15 @@ public class RuleContext {
   }
 
   /**
+   * Whether the enclosing call opted into rule-result collection. When false,
+   * {@link #putMessageMetadata} and {@link #putFieldMetadata} discard their input,
+   * so executors can skip work whose only purpose is to produce that metadata.
+   */
+  public boolean includeRuleResults() {
+    return includeRuleResults;
+  }
+
+  /**
    * Record a message-level metadata key/value for this rule's execution.
    * When the enclosing deserialize call did not opt into rule-result
    * collection, or when {@code value} is null, the key is not stored.
@@ -229,6 +262,12 @@ public class RuleContext {
 
   public FieldContext enterField(Object containingMessage,
       String fullName, String name, RuleContext.Type type, Set<String> tags) {
+    return enterField(containingMessage, fullName, name, type, tags, null);
+  }
+
+  public FieldContext enterField(Object containingMessage,
+      String fullName, String name, RuleContext.Type type, Set<String> tags,
+      Object fieldDescriptor) {
     Set<String> metadataTags = getTags(fullName);
     if (!metadataTags.isEmpty()) {
       tags = new HashSet<>(tags);
@@ -236,7 +275,8 @@ public class RuleContext {
     }
     Set<String> ruleTags = rule().getTags();
     if (!type.isPrimitive() || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
-      return new FieldContext(containingMessage, fullName, name, type, tags);
+      return new FieldContext(containingMessage, fullName, name, type, tags,
+          fieldDescriptor);
     } else {
       return null;
     }
@@ -262,15 +302,22 @@ public class RuleContext {
     private Type type;
     private boolean inCombined;
     private final Set<String> tags;
+    private final Object fieldDescriptor;
 
     public FieldContext(Object containingMessage, String fullName,
         String name, Type type, Set<String> tags) {
+      this(containingMessage, fullName, name, type, tags, null);
+    }
+
+    public FieldContext(Object containingMessage, String fullName,
+        String name, Type type, Set<String> tags, Object fieldDescriptor) {
       this.containingMessage = containingMessage;
       this.fullName = fullName;
       this.name = name;
       this.type = type;
       this.inCombined = type == Type.COMBINED;
       this.tags = tags;
+      this.fieldDescriptor = fieldDescriptor;
       fieldContexts.addLast(this);
     }
 
@@ -284,6 +331,22 @@ public class RuleContext {
 
     public String getName() {
       return name;
+    }
+
+    /**
+     * The producer's own handle on the field, for formats that have one: a protobuf
+     * {@code FieldDescriptor}. Null for Avro and JSON Schema, whose walks carry no such
+     * object.
+     *
+     * <p>{@link #getName()} and {@link #getFullName()} are the <em>registered schema's</em>
+     * names for the field, which can differ from the producer's under a compatible rename,
+     * and {@link Type} collapses distinctions the format makes — a {@code uint64} and an
+     * {@code int64} both arrive as {@link Type#LONG}, and Java has no unsigned primitive to
+     * carry the difference in the value either. An executor that has to present the value
+     * faithfully therefore goes through this rather than re-deriving the field from a name.
+     */
+    public Object getFieldDescriptor() {
+      return fieldDescriptor;
     }
 
     public Type getType() {

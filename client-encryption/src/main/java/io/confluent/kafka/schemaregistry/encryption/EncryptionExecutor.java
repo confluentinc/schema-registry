@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.proto.AesGcmKey;
 import com.google.crypto.tink.proto.AesSivKey;
@@ -37,6 +40,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -186,7 +190,11 @@ public class EncryptionExecutor implements RuleExecutor {
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     EncryptionExecutorTransform transform = newTransform(ctx);
-    return transform.transform(ctx, Type.BYTES, message);
+    Object result = transform.transform(ctx, Type.BYTES, message);
+    // Payload-level transforms have no field walk to complete, so surface any
+    // deferred kek failure here rather than returning the ciphertext as a success.
+    transform.checkDeferredFailure();
+    return result;
   }
 
   public EncryptionExecutorTransform newTransform(RuleContext ctx) throws RuleException {
@@ -298,15 +306,42 @@ public class EncryptionExecutor implements RuleExecutor {
     private Kek kek;
     private int dekExpiryDays;
     private boolean passthroughOnRead;
+    private RuleException deferredKekFailure;
 
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
-      kek = getOrCreateKek(ctx);
+      try {
+        kek = getOrCreateKek(ctx);
+      } catch (RuleException e) {
+        if (ctx.ruleMode() != RuleMode.READ || !ctx.includeRuleResults()) {
+          // On write a missing kek means we cannot encrypt, so fail before any field
+          // is visited rather than risk emitting plaintext. Without rule-result
+          // collection the deferred walk would record nothing, so fail early there too
+          // - the rule ends up failing with this same exception either way.
+          throw e;
+        }
+        // On read, defer so the field walk still visits every field targeted by the
+        // rule and records a FAILED status for each; checkDeferredFailure() then
+        // rethrows so the rule itself still fails and its onFailure action runs.
+        deferredKekFailure = e;
+        return;
+      }
       dekExpiryDays = getDekExpiryDays(ctx);
       passthroughOnRead = nonsharedKekPassthrough
           && !kek.isShared()
           && ctx.ruleMode() == RuleMode.READ;
+    }
+
+    /**
+     * Rethrows a kek lookup failure that {@link #init(RuleContext)} deferred so the
+     * field walk could record per-field metadata. Must be called once the walk is
+     * done, before its result is used.
+     */
+    public void checkDeferredFailure() throws RuleException {
+      if (deferredKekFailure != null) {
+        throw deferredKekFailure;
+      }
     }
 
     public boolean isDekRotated() {
@@ -337,7 +372,11 @@ public class EncryptionExecutor implements RuleExecutor {
 
     protected Kek getOrCreateKek(RuleContext ctx) throws RuleException {
       boolean isRead = ctx.ruleMode() == RuleMode.READ;
-      KekId kekId = new KekId(kekName, isRead);
+      String context = QualifiedSubject.contextFor(DEFAULT_TENANT, ctx.subject());
+      if (DEFAULT_CONTEXT.equals(context)) {
+        context = null;
+      }
+      KekId kekId = new KekId(kekName, isRead, context);
 
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
@@ -396,7 +435,7 @@ public class EncryptionExecutor implements RuleExecutor {
 
     private Kek retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
       try {
-        return client.getKek(key.getName(), key.isLookupDeleted());
+        return client.getKek(key.getName(), key.isLookupDeleted(), key.getContext());
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
@@ -413,7 +452,7 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         Kek kek = client.createKek(
             key.getName(), kmsType, kmsKeyId,
-            null, null, shared);
+            null, null, shared, false, key.getContext());
         log.info("Registered kek " + key.getName());
         return kek;
       } catch (RestClientException e) {
@@ -559,6 +598,13 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         if (value == null) {
           return null;
+        }
+        if (deferredKekFailure != null) {
+          // No kek, so nothing can be decrypted. Record why for this field and leave
+          // the ciphertext in place; the walk continues so every targeted field is
+          // reported, and checkDeferredFailure() fails the rule once it completes.
+          recordResult(ctx, Status.FAILED, null, deferredKekFailure.getMessage());
+          return value;
         }
         if (passthroughOnRead) {
           recordResult(ctx, Status.PASSTHROUGH, null, null);

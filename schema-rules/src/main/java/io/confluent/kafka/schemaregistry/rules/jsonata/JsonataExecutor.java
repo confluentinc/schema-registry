@@ -60,7 +60,7 @@ public class JsonataExecutor implements RuleExecutor {
           @Override
           public Expressions load(String expr) throws Exception {
             try {
-              return Expressions.parse(expr);
+              return Expressions.parse(expr, RE2RegexPattern.engine());
             } catch (ParseException e) {
               throw new RuleException("Could not parse expression", e);
             } catch (EvaluateRuntimeException ere) {

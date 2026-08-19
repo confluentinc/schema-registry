@@ -78,6 +78,7 @@ import com.google.protobuf.EmptyProto;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMaskProto;
 import com.google.protobuf.GeneratedMessage.ExtendableMessage;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
@@ -166,6 +167,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
@@ -427,6 +429,13 @@ public class ProtobufSchema implements ParsedSchema {
   private transient volatile Descriptor descriptor;
 
   private transient volatile int hashCode = NO_HASHCODE;
+
+  // Keyed by the runtime descriptor of a message passed to validateMessage: whether that
+  // message has to be re-read through this schema's descriptor before rules can bind `this`
+  // to it. Identity-keyed, and a serializer sees a small fixed set of message types. The
+  // answer is no only for a class that describes the same fields as the registered schema;
+  // a class that has fallen behind it re-reads every record. See needsSchemaView.
+  private final transient Map<Descriptor, Boolean> schemaViewNeeded = new ConcurrentHashMap<>();
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -2920,6 +2929,14 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Whether a field is the key of a map entry. Proto3 maps are repeated messages of a
+   * synthesized entry type whose field 1 is the key.
+   */
+  private static boolean isMapKeyField(FieldDescriptor fd) {
+    return fd.getContainingType().getOptions().getMapEntry() && fd.getNumber() == 1;
+  }
+
   private Object toTransformedMessage(
       RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
     FieldContext fieldCtx = ctx.currentField();
@@ -2935,13 +2952,33 @@ public class ProtobufSchema implements ParsedSchema {
     } else if (message instanceof Message) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
-        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        if (isMapKeyField(fd)) {
+          // A map field arrives as a list of entry messages, so the walk reaches the
+          // entry's key as well as its value. A key is part of the map's identity rather
+          // than a value to transform - rewriting it would move the entry - and the
+          // validation walk never evaluates anything on it either.
+          continue;
+        }
+        // Resolve by number, not by name: protobuf identifies a field by its number, and
+        // renaming a field at the same number is a compatible change
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
+        if (schemaFd == null) {
+          // The schema does not declare this field, so it carries no tags and no
+          // transform applies to it. Reading options off it would throw.
+          continue;
+        }
         try (FieldContext fc = ctx.enterField(
-            message, fd.getFullName(), fd.getName(), getType(fd),
-            getInlineTags(schemaFd)) // use schema-based fd which has the tags
+            message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
+            // The producer's own field: the value below is read through it, so it is what
+            // says how the value should be presented to a rule.
+            getInlineTags(schemaFd), fd)
         ) {
-          // skip oneof fields that are not set
-          if (fd.getContainingOneof() != null && !copy.hasField(fd)) {
+          // Skip-on-null, as in the validation walk: a field with explicit presence that
+          // is unset has no value to transform, and writing one back would materialize
+          // it - an absent message would become present, carrying a transformed default.
+          // hasPresence() covers oneof members, including the synthetic oneof of a proto3
+          // optional field.
+          if (fd.hasPresence() && !copy.hasField(fd)) {
             continue;
           }
           Object value = copy.getField(fd); // we can't use the schema-based fd
@@ -3013,6 +3050,11 @@ public class ProtobufSchema implements ParsedSchema {
    * are appended to the returned list with their dotted-path location
    * (e.g. {@code addr.zip}, {@code tags[3]}). The walk continues after
    * each failure so callers see the full set rather than only the first.
+   *
+   * @throws org.apache.kafka.common.errors.SerializationException if the
+   *     message cannot be read through this schema at all, which no rule
+   *     result can express — the walk reads it through the registered
+   *     descriptor so that rules see the schema's field names.
    */
   @Override
   public List<ValidationRuleError> validateMessage(
@@ -3034,14 +3076,121 @@ public class ProtobufSchema implements ParsedSchema {
     if (desc == null) {
       return violations;
     }
-    toValidatedMessage(desc, msg, "", executor, failFast, violations);
+    // The walk is driven by the caller's message throughout: it decides which fields exist,
+    // which are absent, and what the values are. A rule that binds `this` to a message needs
+    // one more thing, though — a view of that message in the schema's terms, since a rule's
+    // CEL environment is built from the schema and `this.renamed` cannot read a field the
+    // caller's class calls something else. Protobuf pairs fields by number on the wire, so
+    // re-reading the message through the registered descriptor produces exactly that view.
+    //
+    // Whether that is needed is decided once per runtime descriptor (see needsSchemaView)
+    // rather than per record. A generated class describing the same fields as the registered
+    // schema skips it entirely, even though the two descriptors are distinct objects. A class
+    // that has fallen behind the schema does not: under use.latest.version the schema may
+    // declare a field the class has never heard of, and a rule that binds `this` can read the
+    // schema's default for it, so those producers re-read every record. That cost is the
+    // price of evaluating rules in the schema's terms, not an accident.
+    Message schemaMsg = null;
+    if (needsSchemaView(desc, msg.getDescriptorForType())) {
+      try {
+        schemaMsg = DynamicMessage.parseFrom(desc, msg.toByteString());
+      } catch (InvalidProtocolBufferException e) {
+        // The bytes the producer is about to write cannot be read through the registered
+        // schema, so a consumer reading with that schema could not read them either — a
+        // bytes field carrying non-UTF-8 data against a schema that declares a string, for
+        // instance, which is a compatible change. Fail in the channel the caller already
+        // handles rather than returning silently, and name the type so it is searchable.
+        throw new SerializationException(
+            "Could not read message " + desc.getFullName()
+                + " through the registered schema", e);
+      }
+    }
+    toValidatedMessage(desc, msg, schemaMsg, "", executor, failFast, violations);
     return violations;
   }
 
   /**
+   * Whether validating a message whose runtime descriptor is {@code runtimeDesc} has to
+   * re-read it through {@code desc} — true when the two disagree about any field a rule
+   * could observe: its name, its type, or whether it is repeated, at any depth.
+   *
+   * <p>Presence deliberately does not count. Whether an unset field is absent is decided by
+   * the producer's field on the producer's message, which the walk reads directly, so a
+   * schema that only moved a field into or out of a oneof needs no re-read.
+   *
+   * <p>A field the schema declares and the caller's class does not <em>does</em> count, which
+   * means a class running behind the registered schema — the {@code use.latest.version} case
+   * — re-reads every record. Only an exact match skips the re-read. Narrowing that to the
+   * rules that could actually observe the added field is possible but not simple: a rule
+   * binding {@code this} at any ancestor can traverse into the field, and a field-level rule
+   * on a message-valued field binds {@code this} to a type that need not declare rules of its
+   * own, so a per-descriptor test for message-level rules would be wrong in both directions.
+   *
+   * <p>Memoized per runtime descriptor: both descriptors are stable for the lifetime of a
+   * serializer, so this is one map lookup per record rather than a tree comparison.
+   */
+  private boolean needsSchemaView(Descriptor desc, Descriptor runtimeDesc) {
+    if (desc == runtimeDesc) {
+      return false;
+    }
+    return schemaViewNeeded.computeIfAbsent(runtimeDesc,
+        rd -> !presentsSameValues(desc, rd, new HashSet<>()));
+  }
+
+  /**
+   * Whether {@code desc} and {@code runtimeDesc} present every field they share — paired by
+   * number, which is how protobuf identifies a field — under the same name, type and label,
+   * recursively through message-valued fields.
+   *
+   * <p>A field the registered schema declares and the caller's does not counts as a
+   * difference: adding a field is a compatible change, and a message-level rule may reference
+   * the added field expecting the schema's default for it, which only a message read through
+   * the schema can supply. Fields only the caller declares are ignored — no rule can name
+   * them, and the walk skips them.
+   *
+   * <p>{@code visited} holds the descriptor pairs already compared, so a self-referential
+   * message type terminates.
+   */
+  private static boolean presentsSameValues(
+      Descriptor desc, Descriptor runtimeDesc, Set<String> visited) {
+    if (!visited.add(desc.getFullName() + '\0' + runtimeDesc.getFullName())) {
+      // Already compared on another path, or cycling back to it. Either way this pair
+      // contributes no new disagreement.
+      return true;
+    }
+    for (FieldDescriptor schemaFd : desc.getFields()) {
+      if (runtimeDesc.findFieldByNumber(schemaFd.getNumber()) == null) {
+        return false;
+      }
+    }
+    for (FieldDescriptor runtimeFd : runtimeDesc.getFields()) {
+      FieldDescriptor schemaFd = desc.findFieldByNumber(runtimeFd.getNumber());
+      if (schemaFd == null) {
+        continue;
+      }
+      if (!schemaFd.getName().equals(runtimeFd.getName())
+          || schemaFd.getType() != runtimeFd.getType()
+          || schemaFd.isRepeated() != runtimeFd.isRepeated()) {
+        return false;
+      }
+      if (schemaFd.getType() == Type.MESSAGE
+          && !presentsSameValues(schemaFd.getMessageType(), runtimeFd.getMessageType(),
+              visited)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Mirrors {@link #toTransformedMessage}'s value-driven dispatch shape.
-   * Each call receives a {@code (descriptor, value)} pair and dispatches
-   * on the value type:
+   * Each call receives a {@code (descriptor, value)} pair — the registered
+   * schema's descriptor and the caller's value — plus {@code schemaValue},
+   * the same value read through that descriptor, or {@code null} when the
+   * two descriptors present it identically and the caller's value already
+   * reads as the schema does. The caller's value drives the walk; the
+   * schema's view is used only where a rule binds {@code this} to a
+   * message. Dispatch is on the value type:
    * <ul>
    *   <li>{@code List} — repeated field or proto3 map (which arrives as a
    *       {@code List<MapEntry>}); recurse on each element with the same
@@ -3058,15 +3207,20 @@ public class ProtobufSchema implements ParsedSchema {
    * </ul>
    */
   private static void toValidatedMessage(
-      Descriptor desc, Object value, String path,
+      Descriptor desc, Object value, Object schemaValue, String path,
       ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
     if (desc == null) {
       return;
     }
     if (value instanceof List) {
+      List<?> schemaElements = schemaValue instanceof List ? (List<?>) schemaValue : null;
       int i = 0;
       for (Object element : (List<?>) value) {
-        toValidatedMessage(desc, element, path + "[" + i + "]", executor, failFast, out);
+        // Both lists came from the same bytes, so they line up; the guard is for safety.
+        Object schemaElement =
+            schemaElements != null && i < schemaElements.size() ? schemaElements.get(i) : null;
+        toValidatedMessage(desc, element, schemaElement, path + "[" + i + "]", executor,
+            failFast, out);
         if (failFast && !out.isEmpty()) {
           return;
         }
@@ -3078,19 +3232,27 @@ public class ProtobufSchema implements ParsedSchema {
       return;
     } else if (value instanceof Message) {
       Message msg = (Message) value;
-      // Message-level rules: this = msg, type hint = desc.
+      // The same message in the registered schema's terms, when the two descriptors present
+      // fields differently; null when they agree and `msg` already reads as the schema does.
+      Message schemaMsg = schemaValue instanceof Message ? (Message) schemaValue : null;
+      // Message-level rules: this = msg, type hint = desc. `this` is a message, so it has to
+      // read as the schema names it.
       if (desc.getOptions().hasExtension(MetaProto.messageMeta)) {
         Meta meta = desc.getOptions().getExtension(MetaProto.messageMeta);
+        Object thisValue = schemaMsg != null ? schemaMsg : msg;
         for (MetaProto.Rule rule : meta.getRulesList()) {
-          evaluateOne(rule, desc, msg, path, executor, out);
+          evaluateOne(rule, desc, thisValue, path, executor, out);
           if (failFast && !out.isEmpty()) {
             return;
           }
         }
       }
-      // Iterate fields — same shape as toTransformedMessage's field loop.
+      // Iterate the caller's own fields — same shape as toTransformedMessage's field loop —
+      // and pair each to the registered schema by number, which is how protobuf identifies a
+      // field. Fields the schema does not declare are skipped, so the walk visits the
+      // intersection, which is the set the transform walk visits too.
       for (FieldDescriptor fd : msg.getDescriptorForType().getFields()) {
-        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
         if (schemaFd == null) {
           continue;
         }
@@ -3101,21 +3263,40 @@ public class ProtobufSchema implements ParsedSchema {
         // Repeated/map fields are never null in proto3; the collection
         // itself is bound to `this` (per the design's "empty == null"
         // convention for collection IS NULL).
+        //
+        // Both halves are read from the caller's message: whether an unset field counts as
+        // absent is decided by the class that wrote it, not by the registered schema, and the
+        // two can disagree — moving a field into or out of a oneof is a compatible change.
         if (fd.hasPresence() && !msg.hasField(fd)) {
           continue;
         }
         Object fieldValue = msg.getField(fd);
-        String childPath = path.isEmpty() ? fd.getName() : path + "." + fd.getName();
-        // Field-level rules: this = fieldValue. Hint is the field's own
-        // message descriptor for nested messages, or the containing-type
-        // descriptor for primitives.
+        // The path names the field as the registered schema does, which is what a rule
+        // refers to; the value is still read through the caller's field.
+        String childPath = path.isEmpty()
+            ? schemaFd.getName()
+            : path + "." + schemaFd.getName();
+        // Where a schema view exists, every value comes from it, not just message-valued
+        // ones: the two descriptors can disagree about representation as well as naming.
+        // bytes and string are interchangeable at the same number — a compatible change —
+        // and a rule authored as `this == 'hello'` cannot match a ByteString. The same goes
+        // for a renamed enum value. Reading the field is cheap next to the re-read that
+        // already happened, so there is nothing to gain from narrowing this further.
+        Object schemaFieldValue = schemaMsg == null ? null : schemaMsg.getField(schemaFd);
+        // Field-level rules: this = the field value as the schema presents it. Hint is the
+        // field's own message descriptor for nested messages, and the field itself for
+        // everything else — the declared type is what an executor needs to present the
+        // value faithfully, and Java's boxes lose it: a uint64 and an int64 both arrive
+        // as Long. Both come from the schema's field, since that is where the value being
+        // bound comes from.
         if (schemaFd.getOptions().hasExtension(MetaProto.fieldMeta)) {
           Meta meta = schemaFd.getOptions().getExtension(MetaProto.fieldMeta);
-          Descriptor hint = (fd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+          Object hint = (schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
               ? schemaFd.getMessageType()
-              : schemaFd.getContainingType();
+              : schemaFd;
+          Object thisValue = schemaFieldValue != null ? schemaFieldValue : fieldValue;
           for (MetaProto.Rule rule : meta.getRulesList()) {
-            evaluateOne(rule, hint, fieldValue, childPath, executor, out);
+            evaluateOne(rule, hint, thisValue, childPath, executor, out);
             if (failFast && !out.isEmpty()) {
               return;
             }
@@ -3128,7 +3309,8 @@ public class ProtobufSchema implements ParsedSchema {
         Descriptor childDesc = (schemaFd.getType() == Type.MESSAGE)
             ? schemaFd.getMessageType()
             : desc;
-        toValidatedMessage(childDesc, fieldValue, childPath, executor, failFast, out);
+        toValidatedMessage(childDesc, fieldValue, schemaFieldValue, childPath, executor,
+            failFast, out);
         if (failFast && !out.isEmpty()) {
           return;
         }

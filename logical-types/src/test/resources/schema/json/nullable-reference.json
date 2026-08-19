@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AlcoholRestriction": {
+      "additionalProperties": false,
+      "properties": {
+        "f0": {
+          "connect.index": 0,
+          "description": "The minimum age required to purchase the product.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ProductRules": {
+      "additionalProperties": false,
+      "properties": {
+        "f0": {
+          "connect.index": 1,
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/definitions/AlcoholRestriction"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "properties": {
+    "f1": {
+      "connect.index": 1,
+      "oneOf": [
+        {
+          "$ref": "#/definitions/ProductRules"
+        }
+      ],
+      "type": "object"
+    },
+    "f0": {
+      "connect.index": 0,
+      "type": "string"
+    }
+  },
+  "required": [
+    "f0",
+    "f1"
+  ],
+  "title": "Product Schema",
+  "type": "object"
+}
