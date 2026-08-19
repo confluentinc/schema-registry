@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2426,5 +2427,27 @@ class LogicalTypeToJsonConverterTest {
     assertTrue(defs.has("Outer.Inner"),
         "expected `Outer.Inner` to appear as a flat $defs key, got keys: "
             + defs.keySet());
+  }
+
+  @Test
+  void testForeignBranchFieldNumberStrippedByJson() {
+    // A oneof member's protobuf.field.number lives in UnionBranch.params; JSON has no native slot
+    // for it, so it must be kept out of confluent:union just like regular field params.
+    Map<String, Object> branchParams = new LinkedHashMap<>();
+    branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, "10");
+    branchParams.put("owner", "team-a");
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("s", Schema.createString().setNullable(true), null, branchParams),
+        new UnionBranch("i", Schema.create(Schema.Type.INT).setNullable(true))))
+        .setNullable(true);
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("u", union, 0))).setNullable(false);
+
+    JsonSchema json = LogicalTypeToJsonConverter.fromLogicalType(new LogicalType(struct), "row");
+    Schema back = JsonToLogicalTypeConverter.toRootSchema(json);
+
+    UnionBranch s = back.getField("u").getSchema().getBranches().get(0);
+    assertThat(s.getFieldNumber()).isNull();
+    assertThat(s.getParams()).containsEntry("owner", "team-a");
   }
 }
