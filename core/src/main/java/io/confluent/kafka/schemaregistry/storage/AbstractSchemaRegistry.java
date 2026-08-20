@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectIsReferencedException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -132,6 +133,8 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SUBJECT_IS_REFERENCED_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SUBJECT_IS_REFERENCED_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
@@ -1642,6 +1645,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return subjects;
   }
 
+  /**
+   * Whether version 1 of the subject is a reference target of another schema, counting referrers
+   * that are soft-deleted since a soft delete can be restored.  Only version 1 is relevant to the
+   * STRONG-association restriction: such an association can only be created when the subject's sole
+   * version is 1.
+   */
+  protected boolean isFirstVersionReferenced(String subject) throws SchemaRegistryException {
+    try {
+      return !getReferencedBy(new SchemaKey(subject, MIN_VERSION), true).isEmpty();
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while checking references for subject " + subject, e);
+    }
+  }
+
   @Override
   public List<ContextId> listIdsForGuid(String guid)
           throws SchemaRegistryException {
@@ -2273,6 +2291,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           if (!assocsBySubject.isEmpty()) {
             throw new AssociationForSubjectExistsException(unqualifiedSubject);
           }
+          // A STRONG association and a schema reference are mutually exclusive: a referenced
+          // subject cannot be claimed as topic-owned. IMPORT is exempt so cluster linking can
+          // replicate a subject that legitimately carries both states on the source.
+          if (getModeInScope(qualifiedSubject) != Mode.IMPORT
+              && isFirstVersionReferenced(qualifiedSubject)) {
+            throw new SubjectIsReferencedException(unqualifiedSubject);
+          }
           break;
         case WEAK:
           if (Boolean.TRUE.equals(info.getFrozen())) {
@@ -2669,6 +2694,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         ErrorMessage errMsg = new ErrorMessage(
             STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
             String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SubjectIsReferencedException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SUBJECT_IS_REFERENCED_ERROR_CODE,
+            String.format(SUBJECT_IS_REFERENCED_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys
