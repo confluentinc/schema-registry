@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFil
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
@@ -3905,6 +3906,69 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     } finally {
       conn.disconnect();
     }
+  }
+
+  private static final String ORDER_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"Order\","
+          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
+  private static final String PAYMENT_REFERENCING_ORDER =
+      "{\"type\":\"record\",\"name\":\"Payment\","
+          + "\"fields\":[{\"name\":\"order\",\"type\":\"Order\"}]}";
+
+  private AssociationCreateOrUpdateRequest strongKeyAssociation(
+      String resourceName, String resourceNamespace, String resourceId, String schema) {
+    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
+    keyRequest.setSchema(schema);
+    return new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, keyRequest, null)));
+  }
+
+  @Test
+  public void testRegisterReferenceToStrongAssociationSubjectIsRejected() throws Exception {
+    String resourceNamespace = "default";
+    String strongSubject = ":." + resourceNamespace + ":topic-ref-1-key";
+
+    // Claim the subject with a STRONG (topic-owned) association.
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        strongKeyAssociation("topic-ref-1", resourceNamespace, "ref-strong-1", ORDER_SCHEMA));
+
+    // Referencing a strongly-associated subject is not permitted.
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", strongSubject, 1)));
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.registerSchema(referrer, "payment-1-value", false));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void testCreateStrongAssociationOnReferencedSubjectIsRejected() throws Exception {
+    String resourceNamespace = "default";
+    String strongSubject = ":." + resourceNamespace + ":topic-ref-2-key";
+
+    // Register the subject directly, then reference it from another schema.
+    RegisterSchemaRequest orderRequest = new RegisterSchemaRequest();
+    orderRequest.setSchema(ORDER_SCHEMA);
+    restApp.restClient.registerSchema(orderRequest, strongSubject, false);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", strongSubject, 1)));
+    restApp.restClient.registerSchema(referrer, "payment-2-value", false);
+
+    // The subject is now a reference target, so it cannot be claimed by a STRONG association.
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+            strongKeyAssociation("topic-ref-2", resourceNamespace, "strong-ref-2", ORDER_SCHEMA)));
+    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
   }
 
 }
