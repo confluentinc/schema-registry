@@ -1647,9 +1647,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   /**
    * Whether any version of the subject is a reference target of another schema, counting soft-
-   * deleted versions and referrers since a soft delete can be restored.  Called only after the
-   * frozen-association guard in {@link #createOrUpdateAssociation} has capped the subject at one
-   * active version, so this iterates a single version in the common case.
+   * deleted versions and referrers since a soft delete can be restored.  Despite the loop this is
+   * an O(1) check in practice, not O(N): the only caller runs it after the frozen-association
+   * guard in {@link #createOrUpdateAssociation}, which allows a STRONG association only when the
+   * subject has a single (version 1) active schema.  Only soft-deleted history can push the count
+   * past one, which is rare -- and iterating it is exactly what keeps the check correct.
    */
   protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
     try {
