@@ -3971,5 +3971,51 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
   }
 
+  @Test
+  public void testReferenceToWeaklyAssociatedSubjectIsAllowed() throws Exception {
+    // Only a STRONG association blocks referencing; a WEAK association does not.
+    RegisterSchemaRequest orderRequest = new RegisterSchemaRequest();
+    orderRequest.setSchema(ORDER_SCHEMA);
+    restApp.restClient.registerSchema(orderRequest, "weak-order-value", false);
+
+    AssociationCreateOrUpdateRequest weak = new AssociationCreateOrUpdateRequest(
+        "weak-topic", "default", "weak-1", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "weak-order-value", "value", LifecyclePolicy.WEAK, false, null, null)));
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false, weak);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", "weak-order-value", 1)));
+    // Registering the referencing schema must succeed; a throw here fails the test.
+    restApp.restClient.registerSchema(referrer, "weak-payment-value", false);
+  }
+
+  @Test
+  public void testCreateStrongAssociationOnSubjectWithSoftDeletedReferrerIsRejected()
+      throws Exception {
+    String strongSubject = ":.default:topic-ref-3-key";
+
+    RegisterSchemaRequest orderRequest = new RegisterSchemaRequest();
+    orderRequest.setSchema(ORDER_SCHEMA);
+    restApp.restClient.registerSchema(orderRequest, strongSubject, false);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", strongSubject, 1)));
+    restApp.restClient.registerSchema(referrer, "payment-3-value", false);
+
+    // Soft-delete the referrer; it still counts, since a soft delete can be restored.
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "payment-3-value", "1", false);
+
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+            strongKeyAssociation("topic-ref-3", "default", "strong-ref-3", ORDER_SCHEMA)));
+    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
+  }
+
 }
 
