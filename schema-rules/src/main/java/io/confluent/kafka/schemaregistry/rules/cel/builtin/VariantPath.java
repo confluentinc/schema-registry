@@ -59,13 +59,11 @@ import java.util.List;
  * identifiers, so this minimal model covers realistic needs without an
  * RFC 9535 escape table.
  *
- * <p><b>Non-ASCII and special keys.</b> Because the escape table is minimal,
- * this path grammar cannot express non-ASCII keys via escape sequences: a
- * would-be Unicode escape (a backslash followed by {@code u00e9}) is not
- * interpreted, and rather than silently resolving {@code $["café"]} to a wrong
- * key it throws with an "unsupported escape" message. For keys that actually
- * contain non-ASCII characters — or any character outside the two recognized
- * escapes — use {@link
+ * <p><b>Unicode escape notation.</b> This path grammar does not interpret
+ * Unicode escape sequences. A backslash followed by {@code u00e9}, for example,
+ * is rejected with an "unsupported escape" message rather than silently
+ * resolving to the wrong key. Non-ASCII characters can still be written
+ * literally in a quoted key, as in {@code $["café"]}. Alternatively, use {@link
  * io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinOverload
  * variants.field(v, "café")} directly — the key argument is a regular CEL
  * string and handles Unicode through CEL's own escape semantics.
@@ -218,9 +216,8 @@ final class VariantPath {
         // backslash, and backslash + the enclosing quote for a literal quote.
         // Any other escape — including a would-be Unicode escape like
         // backslash-u00e9 — is a parse error rather than being silently decoded
-        // to the wrong key. For keys needing characters outside this set, use
-        // variants.field(v, key) with a regular CEL string. See the class-level
-        // Javadoc.
+        // to the wrong key. Literal characters (including non-ASCII) need no
+        // escaping and pass through as-is. See the class-level Javadoc.
         if (!c.hasMore()) {
           throw new IllegalArgumentException(
               "unterminated escape at end of quoted key in variant path: " + path);
