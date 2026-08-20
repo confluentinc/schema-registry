@@ -16,11 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.type;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,6 +31,7 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -51,12 +51,16 @@ public class VariantUtils {
    * Serializer for {@link #toJsonString}. WRITE_BIGDECIMAL_AS_PLAIN renders decimals in
    * fixed-point form (never scientific), the cross-language contract for variant JSON.
    */
-  private static final ObjectMapper JSON_MAPPER = JsonMapper.builder()
-      .enable(JsonWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
-      .build();
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+      .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true);
 
   /**
    * Converts a Variant into a Jackson JsonNode.
+   *
+   * <p>Decimals are returned as a {@link com.fasterxml.jackson.databind.node.DecimalNode},
+   * so their serialized text depends on the caller's generator: a default generator may emit
+   * scientific notation for small-magnitude decimals. {@link #toJsonString} is the canonical
+   * string form and always renders decimals in fixed-point.
    *
    * @param variant the Variant to convert
    * @return a JsonNode representing the variant value
@@ -133,7 +137,9 @@ public class VariantUtils {
   }
 
   /**
-   * Converts a Variant into a JSON string.
+   * Converts a Variant into a JSON string. This is the canonical cross-language form:
+   * decimals are fixed-point (never scientific) and temporal types are ISO-8601 with the
+   * seconds field always present.
    *
    * @param variant the Variant to convert
    * @return the JSON string representation
@@ -164,14 +170,16 @@ public class VariantUtils {
 
   private static String formatLocalDateTime(long epochSecond, int nanoOfSecond) {
     LocalDateTime dt = LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, ZoneOffset.UTC);
-    return String.format("%04d-%02d-%02dT%02d:%02d:%02d%s",
+    // Locale.ROOT: %d must emit ASCII digits regardless of the JVM's default locale
+    // (a locale with non-ASCII native digits would otherwise corrupt the ISO-8601 output).
+    return String.format(Locale.ROOT, "%04d-%02d-%02dT%02d:%02d:%02d%s",
         dt.getYear(), dt.getMonthValue(), dt.getDayOfMonth(),
         dt.getHour(), dt.getMinute(), dt.getSecond(), fractionOfSecond(dt.getNano()));
   }
 
   private static String formatLocalTime(long micros) {
     LocalTime time = LocalTime.ofNanoOfDay(micros * 1000);
-    return String.format("%02d:%02d:%02d%s",
+    return String.format(Locale.ROOT, "%02d:%02d:%02d%s",
         time.getHour(), time.getMinute(), time.getSecond(), fractionOfSecond(time.getNano()));
   }
 
@@ -181,12 +189,12 @@ public class VariantUtils {
       return "";
     }
     if (nano % 1_000_000 == 0) {
-      return String.format(".%03d", nano / 1_000_000);
+      return String.format(Locale.ROOT, ".%03d", nano / 1_000_000);
     }
     if (nano % 1_000 == 0) {
-      return String.format(".%06d", nano / 1_000);
+      return String.format(Locale.ROOT, ".%06d", nano / 1_000);
     }
-    return String.format(".%09d", nano);
+    return String.format(Locale.ROOT, ".%09d", nano);
   }
 
   /**

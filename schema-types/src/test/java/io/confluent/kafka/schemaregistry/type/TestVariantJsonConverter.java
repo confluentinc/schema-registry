@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
@@ -348,6 +349,24 @@ public class TestVariantJsonConverter {
     VariantBuilder builder = new VariantBuilder();
     builder.appendDecimal(new BigDecimal("0.0000001"));
     Assert.assertEquals("0.0000001", VariantUtils.toJsonString(builder.build()));
+  }
+
+  @Test
+  public void testToJsonTemporalUsesAsciiDigitsRegardlessOfLocale() {
+    // The temporal formatters must emit ASCII digits even when the default locale uses
+    // non-ASCII native digits (here Arabic-Indic, forced via the -u-nu-arab extension).
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag("ar-EG-u-nu-arab"));
+      VariantBuilder builder = new VariantBuilder();
+      long micros =
+          LocalDateTime.of(2020, 1, 2, 3, 4, 5).toEpochSecond(ZoneOffset.UTC) * 1_000_000;
+      builder.appendTimestampNtz(micros);
+      Assert.assertEquals(
+          "2020-01-02T03:04:05", VariantUtils.toJsonNode(builder.build()).textValue());
+    } finally {
+      Locale.setDefault(previous);
+    }
   }
 
   @Test
