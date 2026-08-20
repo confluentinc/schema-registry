@@ -191,10 +191,27 @@ public class VariantPathTest {
 
   @Test
   void quotedKey_trailingBackslashAtEnd_throws() {
-    // $["foo\   — the trailing '\' consumes EOF as its escape target, then the
-    // loop exits with the key still open and throws as unterminated.
+    // $["foo\   — the trailing '\' has no following character to escape, so it
+    // is reported as a parse error (unterminated escape).
     assertThrows(IllegalArgumentException.class,
         () -> VariantPath.parse("$[\"foo\\"));
+  }
+
+  @Test
+  void quotedKey_unsupportedEscape_throws() {
+    // Only \\ and \" (the enclosing quote) are valid escapes. Any other escape
+    // is a parse error rather than being silently decoded to a wrong key.
+    // \n would previously have decoded to a literal 'n'.
+    IllegalArgumentException e1 = assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$[\"a\\nb\"]"));
+    assertTrue(e1.getMessage().contains("unsupported escape"),
+        "message was: " + e1.getMessage());
+
+    // The motivating case: a would-be Unicode escape ($["café"]) throws
+    // instead of silently resolving to the wrong key "café". Use
+    // variants.field(v, "café") for keys with non-ASCII characters.
+    assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$[\"caf\\u00e9\"]"));
   }
 
   @Test
