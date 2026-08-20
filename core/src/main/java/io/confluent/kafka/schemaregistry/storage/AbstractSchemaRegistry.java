@@ -1646,14 +1646,19 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * Whether version 1 of the subject is a reference target of another schema, counting referrers
-   * that are soft-deleted since a soft delete can be restored.  Only version 1 is relevant to the
-   * STRONG-association restriction: such an association can only be created when the subject's sole
-   * version is 1.
+   * Whether any version of the subject is a reference target of another schema, counting soft-
+   * deleted versions and referrers since a soft delete can be restored.  Called only after the
+   * frozen-association guard in {@link #createOrUpdateAssociation} has capped the subject at one
+   * active version, so this iterates a single version in the common case.
    */
-  protected boolean isFirstVersionReferenced(String subject) throws SchemaRegistryException {
+  protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
     try {
-      return !getReferencedBy(new SchemaKey(subject, MIN_VERSION), true).isEmpty();
+      for (SchemaKey key : getAllSchemaKeysDescending(subject)) {
+        if (!getReferencedBy(key, true).isEmpty()) {
+          return true;
+        }
+      }
+      return false;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error while checking references for subject " + subject, e);
@@ -2292,10 +2297,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             throw new AssociationForSubjectExistsException(unqualifiedSubject);
           }
           // A STRONG association and a schema reference are mutually exclusive: a referenced
-          // subject cannot be claimed as topic-owned. IMPORT is exempt so cluster linking can
-          // replicate a subject that legitimately carries both states on the source.
+          // subject cannot be claimed as topic-owned. This runs after the frozen guard above,
+          // which has already rejected subjects with more than one active version. IMPORT is
+          // exempt so cluster linking can replicate a subject that carries both states on the
+          // source.
           if (getModeInScope(qualifiedSubject) != Mode.IMPORT
-              && isFirstVersionReferenced(qualifiedSubject)) {
+              && isSubjectReferenced(qualifiedSubject)) {
             throw new SubjectIsReferencedException(unqualifiedSubject);
           }
           break;

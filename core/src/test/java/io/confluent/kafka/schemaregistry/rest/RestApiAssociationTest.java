@@ -3911,6 +3911,11 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   private static final String ORDER_SCHEMA =
       "{\"type\":\"record\",\"name\":\"Order\","
           + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
+  // Backward-compatible successor of ORDER_SCHEMA (adds a defaulted field), so it registers as v2.
+  private static final String ORDER_SCHEMA_V2 =
+      "{\"type\":\"record\",\"name\":\"Order\","
+          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"},"
+          + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}]}";
   private static final String PAYMENT_REFERENCING_ORDER =
       "{\"type\":\"record\",\"name\":\"Payment\","
           + "\"fields\":[{\"name\":\"order\",\"type\":\"Order\"}]}";
@@ -4014,6 +4019,39 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RestClientException e = assertThrows(RestClientException.class, () ->
         restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
             strongKeyAssociation("topic-ref-3", "default", "strong-ref-3", ORDER_SCHEMA)));
+    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void testCreateStrongAssociationRejectedWhenSoftDeletedHigherVersionIsReferenced()
+      throws Exception {
+    String strongSubject = ":.default:topic-ref-4-key";
+
+    // Two versions; a referrer targets v2 specifically.
+    RegisterSchemaRequest v1 = new RegisterSchemaRequest();
+    v1.setSchema(ORDER_SCHEMA);
+    restApp.restClient.registerSchema(v1, strongSubject, false);
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema(ORDER_SCHEMA_V2);
+    restApp.restClient.registerSchema(v2, strongSubject, false);
+
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", strongSubject, 2)));
+    restApp.restClient.registerSchema(referrer, "payment-4-value", false);
+
+    // Soft-delete the referrer, then v2 (allowed now that its only referrer is soft-deleted).
+    // v1 is the sole active version, so the frozen guard would let the association through --
+    // but v2 is still a reference target and must keep blocking it.
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "payment-4-value", "1", false);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, strongSubject, "2", false);
+
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+            strongKeyAssociation("topic-ref-4", "default", "strong-ref-4", ORDER_SCHEMA)));
     assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
   }
 
