@@ -1647,11 +1647,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   /**
    * Whether any version of the subject is a reference target of another schema, counting soft-
-   * deleted versions and referrers since a soft delete can be restored.  Despite the loop this is
-   * an O(1) check in practice, not O(N): the only caller runs it after the frozen-association
-   * guard in {@link #createOrUpdateAssociation}, which allows a STRONG association only when the
-   * subject has a single (version 1) active schema.  Only soft-deleted history can push the count
-   * past one, which is rare -- and iterating it is exactly what keeps the check correct.
+   * deleted versions and referrers since a soft delete can be restored.
    */
   protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
     try {
@@ -2299,10 +2295,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             throw new AssociationForSubjectExistsException(unqualifiedSubject);
           }
           // A STRONG association and a schema reference are mutually exclusive: a referenced
-          // subject cannot be claimed as topic-owned. This runs after the frozen guard above,
-          // which has already rejected subjects with more than one active version. IMPORT is
-          // exempt so cluster linking can replicate a subject that carries both states on the
-          // source.
+          // subject cannot be claimed as topic-owned. The frozen guard above has already rejected
+          // subjects with more than one active version, so isSubjectReferenced iterates a single
+          // version here and is O(1) in practice despite the loop. IMPORT is exempt so cluster
+          // linking can replicate a subject that carries both states on the source.
           if (getModeInScope(qualifiedSubject) != Mode.IMPORT
               && isSubjectReferenced(qualifiedSubject)) {
             throw new SubjectIsReferencedException(unqualifiedSubject);
