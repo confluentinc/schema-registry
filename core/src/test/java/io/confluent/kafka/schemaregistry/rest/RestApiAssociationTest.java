@@ -4135,5 +4135,22 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
   }
 
+  @Test
+  public void testReferenceToStrongAssociationSubjectResolvesByReferrerContext() throws Exception {
+    // Strong-associate a subject that lives in the non-default context "myctx".
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        strongKeyAssociation("topic-ref-6", "myctx", "strong-ref-6", ORDER_SCHEMA));
+
+    // A referrer in the same context references the target by its bare name. Qualification must
+    // resolve the bare name into the referrer's context, where the strong association blocks it.
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_ORDER);
+    referrer.setReferences(
+        ImmutableList.of(new SchemaReference("Order", "topic-ref-6-key", 1)));
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.registerSchema(referrer, ":.myctx:payment-6-value", false));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+  }
+
 }
 
