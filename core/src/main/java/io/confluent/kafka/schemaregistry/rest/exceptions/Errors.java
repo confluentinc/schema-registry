@@ -63,6 +63,9 @@ public class Errors {
   public static final String STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT =
       "A strong association already exists for subject '%s'";
   public static final int STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE = 40905;
+  public static final String SUBJECT_IS_REFERENCED_MESSAGE_FORMAT =
+      "Subject '%s' is referenced by one or more schemas";
+  public static final int SUBJECT_IS_REFERENCED_ERROR_CODE = 40906;
   public static final String NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT =
       "No active (non-deleted) version exists for subject '%s'";
   public static final int NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE = 40907;
@@ -254,6 +257,12 @@ public class Errors {
     return new RestConflictException(
         String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, subject),
         STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE);
+  }
+
+  public static RestException subjectIsReferencedException(String subject) {
+    return new RestConflictException(
+        String.format(SUBJECT_IS_REFERENCED_MESSAGE_FORMAT, subject),
+        SUBJECT_IS_REFERENCED_ERROR_CODE);
   }
 
   public static RestException tooManyAssociationsException(int max) {
