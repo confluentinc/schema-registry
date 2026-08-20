@@ -3919,6 +3919,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   private static final String PAYMENT_REFERENCING_ORDER =
       "{\"type\":\"record\",\"name\":\"Payment\","
           + "\"fields\":[{\"name\":\"order\",\"type\":\"Order\"}]}";
+  private static final String COMMON_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"Common\","
+          + "\"fields\":[{\"name\":\"c\",\"type\":\"string\"}]}";
+  // References Common first, Order second, so the STRONG target is not the first reference.
+  private static final String PAYMENT_REFERENCING_COMMON_AND_ORDER =
+      "{\"type\":\"record\",\"name\":\"Payment\","
+          + "\"fields\":[{\"name\":\"common\",\"type\":\"Common\"},"
+          + "{\"name\":\"order\",\"type\":\"Order\"}]}";
 
   private AssociationCreateOrUpdateRequest strongKeyAssociation(
       String resourceName, String resourceNamespace, String resourceId, String schema) {
@@ -4102,6 +4110,29 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     // Must not throw despite the subject being referenced.
     restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
         request);
+  }
+
+  @Test
+  public void testMultiReferenceRejectedWhenAnyTargetHasStrongAssociation() throws Exception {
+    String strongSubject = ":.default:topic-ref-5-key";
+
+    // An ordinary subject to reference first, and a STRONG-associated subject to reference second.
+    RegisterSchemaRequest common = new RegisterSchemaRequest();
+    common.setSchema(COMMON_SCHEMA);
+    restApp.restClient.registerSchema(common, "common-value", false);
+
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        strongKeyAssociation("topic-ref-5", "default", "strong-ref-5", ORDER_SCHEMA));
+
+    // The STRONG target is the second reference, so the check must inspect every reference.
+    RegisterSchemaRequest referrer = new RegisterSchemaRequest();
+    referrer.setSchema(PAYMENT_REFERENCING_COMMON_AND_ORDER);
+    referrer.setReferences(ImmutableList.of(
+        new SchemaReference("Common", "common-value", 1),
+        new SchemaReference("Order", strongSubject, 1)));
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.registerSchema(referrer, "payment-5-value", false));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
   }
 
 }
