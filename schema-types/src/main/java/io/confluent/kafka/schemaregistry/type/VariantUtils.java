@@ -16,7 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.type;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -42,6 +46,14 @@ public class VariantUtils {
    * @return a Variant containing the encoded metadata and value
    */
   private static final JsonNodeFactory FACTORY = JsonNodeFactory.instance;
+
+  /**
+   * Serializer for {@link #toJsonString}. WRITE_BIGDECIMAL_AS_PLAIN renders decimals in
+   * fixed-point form (never scientific), the cross-language contract for variant JSON.
+   */
+  private static final ObjectMapper JSON_MAPPER = JsonMapper.builder()
+      .enable(JsonWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
+      .build();
 
   /**
    * Converts a Variant into a Jackson JsonNode.
@@ -82,28 +94,15 @@ public class VariantUtils {
       case TIMESTAMP_TZ:
         return FACTORY.textNode(
             Instant.ofEpochSecond(0, variant.getLong() * 1000).toString());
-      case TIMESTAMP_NTZ: {
-        long micros = variant.getLong();
-        return FACTORY.textNode(
-            LocalDateTime.ofEpochSecond(
-                Math.floorDiv(micros, 1_000_000L),
-                (int) Math.floorMod(micros, 1_000_000L) * 1000,
-                ZoneOffset.UTC).toString());
-      }
+      case TIMESTAMP_NTZ:
+        return FACTORY.textNode(formatLocalDateTimeMicros(variant.getLong()));
       case TIMESTAMP_NANOS_TZ:
         return FACTORY.textNode(
             Instant.ofEpochSecond(0, variant.getLong()).toString());
-      case TIMESTAMP_NANOS_NTZ: {
-        long nanos = variant.getLong();
-        return FACTORY.textNode(
-            LocalDateTime.ofEpochSecond(
-                Math.floorDiv(nanos, 1_000_000_000L),
-                (int) Math.floorMod(nanos, 1_000_000_000L),
-                ZoneOffset.UTC).toString());
-      }
+      case TIMESTAMP_NANOS_NTZ:
+        return FACTORY.textNode(formatLocalDateTimeNanos(variant.getLong()));
       case TIME:
-        return FACTORY.textNode(
-            LocalTime.ofNanoOfDay(variant.getLong() * 1000).toString());
+        return FACTORY.textNode(formatLocalTime(variant.getLong()));
       case BINARY:
         ByteBuffer bin = variant.getBinary();
         byte[] binBytes = new byte[bin.remaining()];
@@ -140,7 +139,54 @@ public class VariantUtils {
    * @return the JSON string representation
    */
   public static String toJsonString(Variant variant) {
-    return toJsonNode(variant).toString();
+    try {
+      return JSON_MAPPER.writeValueAsString(toJsonNode(variant));
+    } catch (JsonProcessingException e) {
+      // toJsonNode only produces standard scalar/container nodes, so this is not reachable.
+      throw new IllegalStateException("Failed to serialize variant to JSON", e);
+    }
+  }
+
+  // Formats an NTZ timestamp / time to ISO-8601 with the seconds field ALWAYS present. This
+  // is the cross-language contract: it deviates from LocalDateTime/LocalTime.toString(),
+  // which omit the seconds field when both seconds and fraction are zero, so that the NTZ
+  // form stays consistent with the TZ (Instant) form. The fractional-second field uses the
+  // same 0/3/6/9-digit grouping as Instant.toString().
+  private static String formatLocalDateTimeMicros(long micros) {
+    return formatLocalDateTime(
+        Math.floorDiv(micros, 1_000_000L), (int) Math.floorMod(micros, 1_000_000L) * 1000);
+  }
+
+  private static String formatLocalDateTimeNanos(long nanos) {
+    return formatLocalDateTime(
+        Math.floorDiv(nanos, 1_000_000_000L), (int) Math.floorMod(nanos, 1_000_000_000L));
+  }
+
+  private static String formatLocalDateTime(long epochSecond, int nanoOfSecond) {
+    LocalDateTime dt = LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, ZoneOffset.UTC);
+    return String.format("%04d-%02d-%02dT%02d:%02d:%02d%s",
+        dt.getYear(), dt.getMonthValue(), dt.getDayOfMonth(),
+        dt.getHour(), dt.getMinute(), dt.getSecond(), fractionOfSecond(dt.getNano()));
+  }
+
+  private static String formatLocalTime(long micros) {
+    LocalTime time = LocalTime.ofNanoOfDay(micros * 1000);
+    return String.format("%02d:%02d:%02d%s",
+        time.getHour(), time.getMinute(), time.getSecond(), fractionOfSecond(time.getNano()));
+  }
+
+  // Fractional-second suffix using Instant.toString()'s 0/3/6/9-digit grouping (empty for 0).
+  private static String fractionOfSecond(int nano) {
+    if (nano == 0) {
+      return "";
+    }
+    if (nano % 1_000_000 == 0) {
+      return String.format(".%03d", nano / 1_000_000);
+    }
+    if (nano % 1_000 == 0) {
+      return String.format(".%06d", nano / 1_000);
+    }
+    return String.format(".%09d", nano);
   }
 
   /**
