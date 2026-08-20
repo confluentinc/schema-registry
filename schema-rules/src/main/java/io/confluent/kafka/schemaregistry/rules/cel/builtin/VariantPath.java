@@ -49,33 +49,30 @@ import java.util.List;
  * accepting the syntax with degenerate semantics is a trap for users importing
  * expectations from those dialects.
  *
- * <p><b>Quoted-key escape behavior:</b> inside a quoted key, a backslash
- * followed by any character X decodes to the literal character X. The useful
- * cases are a doubled backslash (embed a literal backslash) and backslash +
- * quote (embed the same quote character used to enclose the key). This is
- * intentionally narrower than RFC 9535 — escape sequences denoting newline,
- * tab, carriage return, or Unicode codepoints (the RFC 9535 escape table) are
- * NOT interpreted; backslash + n decodes to the literal letter n, backslash +
- * t to literal t, and so on. Variant object keys in practice are simple
+ * <p><b>Quoted-key escape behavior:</b> inside a quoted key only two escapes
+ * are recognized — a doubled backslash for a literal backslash, and backslash
+ * followed by the enclosing quote for a literal quote character. Any other
+ * escape sequence is a parse error rather than being silently decoded. This is
+ * intentionally narrower than RFC 9535: escape sequences denoting newline, tab,
+ * carriage return, or Unicode codepoints (the RFC 9535 escape table) are not
+ * interpreted and are rejected. Variant object keys in practice are simple
  * identifiers, so this minimal model covers realistic needs without an
  * RFC 9535 escape table.
  *
- * <p><b>Silent-mistranslation hazard for Unicode escapes.</b> A would-be
- * Unicode escape like a backslash followed by {@code u00e9} decodes as 5
- * literal characters: the backslash consumes the {@code u}, and {@code 00e9}
- * are appended literally one by one. So {@code $["café"]} resolves to
- * the 8-character key {@code cafu00e9}, NOT the 4-character key {@code café}.
- * Users coming from JSON or RFC 9535 JSONPath should be aware that this path
- * grammar cannot express non-ASCII keys via escape sequences. For keys that
- * actually contain non-ASCII characters, use {@link
+ * <p><b>Non-ASCII and special keys.</b> Because the escape table is minimal,
+ * this path grammar cannot express non-ASCII keys via escape sequences: a
+ * would-be Unicode escape (a backslash followed by {@code u00e9}) is not
+ * interpreted, and rather than silently resolving {@code $["café"]} to a wrong
+ * key it throws with an "unsupported escape" message. For keys that actually
+ * contain non-ASCII characters — or any character outside the two recognized
+ * escapes — use {@link
  * io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinOverload
  * variants.field(v, "café")} directly — the key argument is a regular CEL
  * string and handles Unicode through CEL's own escape semantics.
  *
- * <p>A trailing backslash at end-of-input (e.g., {@code $["foo} followed by a
- * stray backslash) is not consumed as an escape because there is no following
- * character; it is treated as a literal backslash, the key remains open, and
- * parsing throws as an unterminated quoted key.
+ * <p>A backslash at end-of-input (e.g., {@code $["foo} followed by a stray
+ * backslash) has no following character to escape and is reported as a parse
+ * error.
  */
 final class VariantPath {
 
@@ -216,13 +213,26 @@ final class VariantPath {
     StringBuilder sb = new StringBuilder();
     while (c.hasMore()) {
       char ch = c.next();
-      if (ch == '\\' && c.hasMore()) {
-        // Minimal-escape: backslash consumes exactly one following character
-        // and emits it literally. Intentionally not RFC 9535: a backslash-u
-        // sequence decodes to a literal 'u' (and the following hex digits
-        // continue as literals). See the class-level Javadoc for the Unicode
-        // silent-mistranslation hazard and the recommended workaround.
-        sb.append(c.next());
+      if (ch == '\\') {
+        // Only two escapes are recognized: a doubled backslash for a literal
+        // backslash, and backslash + the enclosing quote for a literal quote.
+        // Any other escape — including a would-be Unicode escape like
+        // backslash-u00e9 — is a parse error rather than being silently decoded
+        // to the wrong key. For keys needing characters outside this set, use
+        // variants.field(v, key) with a regular CEL string. See the class-level
+        // Javadoc.
+        if (!c.hasMore()) {
+          throw new IllegalArgumentException(
+              "unterminated escape at end of quoted key in variant path: " + path);
+        }
+        char esc = c.next();
+        if (esc == '\\' || esc == quote) {
+          sb.append(esc);
+        } else {
+          throw new IllegalArgumentException(
+              "unsupported escape '\\" + esc + "' in quoted key of variant path "
+                  + "(only '\\\\' and '\\" + quote + "' are allowed): " + path);
+        }
       } else if (ch == quote) {
         return sb.toString();
       } else {
