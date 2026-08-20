@@ -482,9 +482,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
 
       // A schema reference and a STRONG (topic-owned) association are mutually exclusive: a
-      // subject claimed by its topic cannot be a reference target. IMPORT is exempt so cluster
-      // linking can replicate a schema that legitimately references such a subject on the source.
-      if (parsedSchema != null && mode != Mode.IMPORT) {
+      // subject claimed by its topic cannot be a reference target. Enforced in every mode,
+      // including IMPORT, so cluster linking cannot replicate a schema into the forbidden state.
+      if (parsedSchema != null) {
         for (SchemaReference ref : schema.getReferences()) {
           QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
               tenant(), subject, ref.getSubject());

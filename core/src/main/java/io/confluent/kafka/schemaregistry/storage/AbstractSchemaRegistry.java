@@ -2297,10 +2297,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           // A STRONG association and a schema reference are mutually exclusive: a referenced
           // subject cannot be claimed as topic-owned. The frozen guard above has already rejected
           // subjects with more than one active version, so isSubjectReferenced iterates a single
-          // version here and is O(1) in practice despite the loop. IMPORT is exempt so cluster
-          // linking can replicate a subject that carries both states on the source.
-          if (getModeInScope(qualifiedSubject) != Mode.IMPORT
-              && isSubjectReferenced(qualifiedSubject)) {
+          // version here and is O(1) in practice despite the loop. Enforced in every mode,
+          // including IMPORT, so replication cannot introduce the forbidden state.
+          if (isSubjectReferenced(qualifiedSubject)) {
             throw new ReferenceExistsException(unqualifiedSubject);
           }
           break;

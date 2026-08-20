@@ -4064,15 +4064,15 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testReferenceToStrongAssociationSubjectAllowedInImportMode() throws Exception {
+  public void testReferenceToStrongAssociationSubjectRejectedInImportMode() throws Exception {
     String strongSubject = ":.default:topic-imp-1-key";
 
     // Claim the target with a STRONG association (normal mode).
     restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
         strongKeyAssociation("topic-imp-1", "default", "imp-strong-1", ORDER_SCHEMA));
 
-    // A referrer subject in IMPORT mode is exempt (cluster-link replication): the reference is
-    // allowed even though the target carries a strong association.
+    // The restriction is enforced in IMPORT mode too, so replication cannot pull a referencing
+    // schema into the forbidden state.
     String referrerSubject = "import-payment-value";
     restApp.restClient.setMode("IMPORT", referrerSubject);
     RegisterSchemaRequest referrer = new RegisterSchemaRequest();
@@ -4081,12 +4081,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         ImmutableList.of(new SchemaReference("Order", strongSubject, 1)));
     referrer.setId(100);
     referrer.setVersion(1);
-    // Must not throw despite the target's strong association.
-    restApp.restClient.registerSchema(referrer, referrerSubject, false);
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.registerSchema(referrer, referrerSubject, false));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
   }
 
   @Test
-  public void testCreateStrongAssociationOnReferencedSubjectAllowedInImportMode() throws Exception {
+  public void testCreateStrongAssociationOnReferencedSubjectRejectedInImportMode() throws Exception {
     String strongSubject = ":.default:topic-imp-2-key";
 
     // Register the subject and reference it (normal mode) -> the subject is a reference target.
@@ -4100,16 +4101,17 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         ImmutableList.of(new SchemaReference("Order", strongSubject, 1)));
     restApp.restClient.registerSchema(referrer, "import-payment-2-value", false);
 
-    // In IMPORT mode the subject is exempt: cluster linking replicates a strong association that
-    // was already established on the source. The association carries no schema in IMPORT mode.
+    // The restriction is enforced in IMPORT mode too, so replication cannot claim a referenced
+    // subject as topic-owned. The association carries no schema in IMPORT mode.
     restApp.restClient.setMode("IMPORT", strongSubject, true);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         "topic-imp-2", "default", "imp-strong-2", "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
             null, "key", LifecyclePolicy.STRONG, true, null, null)));
-    // Must not throw despite the subject being referenced.
-    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
-        request);
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+            request));
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
   @Test
