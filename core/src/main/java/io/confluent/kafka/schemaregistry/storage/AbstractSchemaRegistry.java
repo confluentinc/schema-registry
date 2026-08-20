@@ -63,10 +63,10 @@ import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
-import io.confluent.kafka.schemaregistry.exceptions.SubjectIsReferencedException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -130,12 +130,12 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATI
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.REFERENCE_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SUBJECT_IS_REFERENCED_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SUBJECT_IS_REFERENCED_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestReferenceExistsException.REFERENCE_EXISTS_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
@@ -2301,7 +2301,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           // linking can replicate a subject that carries both states on the source.
           if (getModeInScope(qualifiedSubject) != Mode.IMPORT
               && isSubjectReferenced(qualifiedSubject)) {
-            throw new SubjectIsReferencedException(unqualifiedSubject);
+            throw new ReferenceExistsException(unqualifiedSubject);
           }
           break;
         case WEAK:
@@ -2700,10 +2700,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
             String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
-      } catch (SubjectIsReferencedException e) {
+      } catch (ReferenceExistsException e) {
         ErrorMessage errMsg = new ErrorMessage(
-            SUBJECT_IS_REFERENCED_ERROR_CODE,
-            String.format(SUBJECT_IS_REFERENCED_MESSAGE_FORMAT, e.getMessage()));
+            REFERENCE_EXISTS_ERROR_CODE,
+            String.format(REFERENCE_EXISTS_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys

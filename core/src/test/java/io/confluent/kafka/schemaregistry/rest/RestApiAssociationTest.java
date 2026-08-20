@@ -3981,7 +3981,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RestClientException e = assertThrows(RestClientException.class, () ->
         restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
             strongKeyAssociation("topic-ref-2", resourceNamespace, "strong-ref-2", ORDER_SCHEMA)));
-    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
   @Test
@@ -4027,7 +4027,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RestClientException e = assertThrows(RestClientException.class, () ->
         restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
             strongKeyAssociation("topic-ref-3", "default", "strong-ref-3", ORDER_SCHEMA)));
-    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
   @Test
@@ -4060,7 +4060,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RestClientException e = assertThrows(RestClientException.class, () ->
         restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
             strongKeyAssociation("topic-ref-4", "default", "strong-ref-4", ORDER_SCHEMA)));
-    assertEquals(Errors.SUBJECT_IS_REFERENCED_ERROR_CODE, e.getErrorCode());
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
   @Test

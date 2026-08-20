@@ -38,7 +38,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
-import io.confluent.kafka.schemaregistry.exceptions.SubjectIsReferencedException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
@@ -278,8 +277,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
-    } catch (SubjectIsReferencedException e) {
-      throw Errors.subjectIsReferencedException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -370,8 +369,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
-    } catch (SubjectIsReferencedException e) {
-      throw Errors.subjectIsReferencedException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
