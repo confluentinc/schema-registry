@@ -713,6 +713,11 @@
                                 @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
                             <excludedGroups>IntegrationTest</excludedGroups>
+                            <systemPropertyVariables>
+                                <!-- AVRO-4189: allow test schemas to reference java-class/java-key-class
+                                     properties from any package during unit tests. -->
+                                <org.apache.avro.SERIALIZABLE_PACKAGES>*</org.apache.avro.SERIALIZABLE_PACKAGES>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                     <plugin>
