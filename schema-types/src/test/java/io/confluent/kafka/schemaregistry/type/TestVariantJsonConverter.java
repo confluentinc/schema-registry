@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
@@ -178,7 +179,8 @@ public class TestVariantJsonConverter {
     long micros = LocalTime.of(14, 30, 0).toNanoOfDay() / 1000;
     builder.appendTime(micros);
     JsonNode node = VariantUtils.toJsonNode(builder.build());
-    Assert.assertEquals("14:30", node.textValue());
+    // Seconds are always emitted (cross-language contract), unlike LocalTime.toString().
+    Assert.assertEquals("14:30:00", node.textValue());
   }
 
   // -- toJsonNode: binary and UUID --
@@ -339,6 +341,43 @@ public class TestVariantJsonConverter {
     builder.endObject();
     String json = VariantUtils.toJsonString(builder.build());
     Assert.assertEquals("{\"a\":1}", json);
+  }
+
+  @Test
+  public void testToJsonStringDecimalIsPlain() {
+    // Decimals render in fixed-point (toPlainString) form, never scientific notation.
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendDecimal(new BigDecimal("0.0000001"));
+    Assert.assertEquals("0.0000001", VariantUtils.toJsonString(builder.build()));
+  }
+
+  @Test
+  public void testToJsonTemporalUsesAsciiDigitsRegardlessOfLocale() {
+    // The temporal formatters must emit ASCII digits even when the default locale uses
+    // non-ASCII native digits (here Arabic-Indic, forced via the -u-nu-arab extension).
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag("ar-EG-u-nu-arab"));
+      VariantBuilder builder = new VariantBuilder();
+      long micros =
+          LocalDateTime.of(2020, 1, 2, 3, 4, 5).toEpochSecond(ZoneOffset.UTC) * 1_000_000;
+      builder.appendTimestampNtz(micros);
+      Assert.assertEquals(
+          "2020-01-02T03:04:05", VariantUtils.toJsonNode(builder.build()).textValue());
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  @Test
+  public void testToJsonTimestampNtzAlwaysEmitsSeconds() {
+    // Midnight NTZ still shows the :00 seconds field (cross-language contract), unlike
+    // LocalDateTime.toString() which would omit it.
+    VariantBuilder builder = new VariantBuilder();
+    long micros = LocalDateTime.of(2020, 1, 1, 0, 0, 0).toEpochSecond(ZoneOffset.UTC) * 1_000_000;
+    builder.appendTimestampNtz(micros);
+    Assert.assertEquals(
+        "2020-01-01T00:00:00", VariantUtils.toJsonNode(builder.build()).textValue());
   }
 
   // -- round-trip: JsonNode → Variant → JsonNode --
