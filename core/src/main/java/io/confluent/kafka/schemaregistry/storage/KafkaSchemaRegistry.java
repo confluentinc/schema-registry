@@ -1609,7 +1609,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return parsedSchema;
   }
 
-  // IMPORT/FORWARD skips validation, so force $ref resolution to fire the block; other parse
+  // IMPORT skips validation, so force $ref resolution to fire the block; other parse
   // failures are swallowed to preserve IMPORT's leniency for storing quirky schemas.
   private void enforceRemoteRefBlockOnImport(ParsedSchema parsedSchema)
           throws InvalidSchemaException {

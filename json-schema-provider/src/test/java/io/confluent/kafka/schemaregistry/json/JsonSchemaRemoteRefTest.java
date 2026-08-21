@@ -32,9 +32,6 @@ import org.junit.Test;
  */
 public class JsonSchemaRemoteRefTest {
 
-  private static final String DISABLED_MESSAGE =
-      "Remote schema reference fetching over HTTP(S) is disabled";
-
   private static JsonSchema schema(
       String schemaString,
       Map<String, String> resolvedReferences,
@@ -50,22 +47,17 @@ public class JsonSchemaRemoteRefTest {
   }
 
   private static void assertBlocked(Throwable t) {
-    for (Throwable c = t; c != null; c = c.getCause()) {
-      if (c.getMessage() != null && c.getMessage().contains(DISABLED_MESSAGE)) {
-        return;
-      }
+    if (!JsonSchema.isRemoteRefBlocked(t)) {
+      throw new AssertionError("Expected a 'remote fetch disabled' cause but was: " + t, t);
     }
-    throw new AssertionError("Expected a 'remote fetch disabled' cause but was: " + t, t);
   }
 
   private static void assertNotBlocked(JsonSchema schema) {
     try {
       schema.rawSchema();
     } catch (RuntimeException e) {
-      for (Throwable c = e; c != null; c = c.getCause()) {
-        if (c.getMessage() != null && c.getMessage().contains(DISABLED_MESSAGE)) {
-          throw new AssertionError("Schema must not be blocked, but it was: " + e, e);
-        }
+      if (JsonSchema.isRemoteRefBlocked(e)) {
+        throw new AssertionError("Schema must not be blocked, but it was: " + e, e);
       }
     }
   }

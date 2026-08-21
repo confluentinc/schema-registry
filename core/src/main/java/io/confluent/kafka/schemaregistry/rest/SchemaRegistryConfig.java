@@ -191,8 +191,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "Determines whether the JSON Schema provider may fetch remote schema references over "
       + "HTTP/HTTPS. If false, a newly registered JSON Schema must resolve its references from the "
       + "registered references, the classpath, or the prepopulated meta-schemas, and any attempt "
-      + "to fetch an http/https URL is rejected. The check applies only to new schema "
-      + "registrations; already-stored schemas are never affected.";
+      + "to fetch an http/https URL is rejected. The check applies to all schema parsing, "
+      + "including validation against already-stored schemas.";
   /**
    * <code>schema.cache.size</code>
    */
