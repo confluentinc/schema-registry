@@ -594,7 +594,7 @@ public class JsonSchema implements ParsedSchema {
       String scheme = url == null ? null : URI.create(url.trim()).getScheme();
       if (isHttpScheme(scheme)) {
         throw new UncheckedIOException(new IOException(
-            "Remote schema reference fetching over HTTP(S) is disabled: " + url));
+            REMOTE_REF_DISABLED_MESSAGE + ": " + url));
       }
       return delegate.get(url);
     }
@@ -613,7 +613,7 @@ public class JsonSchema implements ParsedSchema {
     public InputStream get(URI uri) {
       if (isHttpScheme(uri.getScheme())) {
         throw new UncheckedIOException(new IOException(
-            "Remote schema reference fetching over HTTP(S) is disabled: " + uri));
+            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
       }
       return delegate.get(uri);
     }
@@ -622,13 +622,13 @@ public class JsonSchema implements ParsedSchema {
     public com.github.erosb.jsonsKema.IJsonValue getParsed(URI uri) {
       if (isHttpScheme(uri.getScheme())) {
         throw new UncheckedIOException(new IOException(
-            "Remote schema reference fetching over HTTP(S) is disabled: " + uri));
+            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
       }
       return delegate.getParsed(uri);
     }
   }
 
-  static final String REMOTE_REF_DISABLED_MESSAGE =
+  public static final String REMOTE_REF_DISABLED_MESSAGE =
       "Remote schema reference fetching over HTTP(S) is disabled";
 
   static boolean isRemoteRefBlocked(Throwable t) {
