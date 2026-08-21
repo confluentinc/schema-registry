@@ -54,6 +54,8 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
@@ -121,6 +123,11 @@ public class JsonSchema implements ParsedSchema {
 
   private final RuleSet ruleSet;
 
+  // When true, remote HTTP/HTTPS schema-reference fetching is blocked while loading this schema.
+  // Set only for a new schema registration when remote fetching is disabled; carried across
+  // copy()/normalize() so it is not lost before the schema is loaded/validated.
+  private final boolean blockRemoteRefs;
+
   private transient volatile String canonicalString;
 
   private transient volatile int hashCode = NO_HASHCODE;
@@ -156,6 +163,7 @@ public class JsonSchema implements ParsedSchema {
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = null;
     this.ruleSet = null;
+    this.blockRemoteRefs = false;
   }
 
   public JsonSchema(
@@ -181,6 +189,7 @@ public class JsonSchema implements ParsedSchema {
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.version = version;
+    this.blockRemoteRefs = false;
   }
 
   public JsonSchema(
@@ -198,8 +207,31 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
       this.metadata = metadata;
       this.ruleSet = ruleSet;
+      this.blockRemoteRefs = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
+    }
+  }
+
+  public JsonSchema(
+      String schemaString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
+      Integer version,
+      boolean blockRemoteRefs
+  ) {
+    try {
+      this.jsonNode = schemaString != null ? objectMapper.readTree(schemaString) : null;
+      this.version = version;
+      this.references = Collections.unmodifiableList(references);
+      this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+      this.metadata = metadata;
+      this.ruleSet = ruleSet;
+      this.blockRemoteRefs = blockRemoteRefs;
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -216,6 +248,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.emptyMap();
       this.metadata = null;
       this.ruleSet = null;
+      this.blockRemoteRefs = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
@@ -229,7 +262,8 @@ public class JsonSchema implements ParsedSchema {
       Map<String, String> resolvedReferences,
       Metadata metadata,
       RuleSet ruleSet,
-      String canonicalString
+      String canonicalString,
+      boolean blockRemoteRefs
   ) {
     this.jsonNode = jsonNode;
     this.schemaObj = schemaObj;
@@ -239,6 +273,7 @@ public class JsonSchema implements ParsedSchema {
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.canonicalString = canonicalString;
+    this.blockRemoteRefs = blockRemoteRefs;
   }
 
   @Override
@@ -251,7 +286,8 @@ public class JsonSchema implements ParsedSchema {
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -265,7 +301,8 @@ public class JsonSchema implements ParsedSchema {
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -279,7 +316,8 @@ public class JsonSchema implements ParsedSchema {
         this.resolvedReferences,
         metadata,
         ruleSet,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -289,12 +327,16 @@ public class JsonSchema implements ParsedSchema {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode().deepCopy();
     modifySchemaTags(original, tagsToAdd, tagsToRemove);
-    return new JsonSchema(original.toString(),
+    return new JsonSchema(
+      original,
+      null,
+      schemaCopy.version(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
-      schemaCopy.version());
+      null,
+      this.blockRemoteRefs);
   }
 
   public JsonNode toJsonNode() {
@@ -330,11 +372,27 @@ public class JsonSchema implements ParsedSchema {
             }
             SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
                 .useDefaults(true).draftV7Support();
-            for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-              URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-              builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+            if (blockRemoteRefs) {
+              // Block remote HTTP(S) ref fetching; classpath and registered refs still resolve.
+              builder.schemaClient(new NoHttpSchemaClient());
             }
-            JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+            for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+              // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
+              // resolves via Everit's literal JSON Pointer fallback even when the
+              // schema author placed the body under draft-7's native `definitions`
+              // bucket. The asymmetric direction (definitions → $defs, not the
+              // reverse) makes `$defs` the canonical "forgiving" ref form across both
+              // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
+              // which bucket the body actually lives in. The original content in
+              // resolvedReferences is left untouched; only the in-memory copy passed
+              // to the loader is augmented.
+              String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
+              URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+              builder.registerSchemaByURI(child, new JSONObject(content));
+            }
+            String rootJson = mergeDefBuckets(
+                objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
+            JSONObject jsonObject = new JSONObject(rootJson);
             builder.schemaJson(jsonObject);
             SchemaLoader loader = builder.build();
             schemaObj = loader.load().build();
@@ -345,6 +403,101 @@ public class JsonSchema implements ParsedSchema {
       }
     }
     return schemaObj;
+  }
+
+  /**
+   * Copies any top-level entries under {@code fromKey} into {@code toKey}.
+   *
+   * <p>Used by both load paths to bridge {@code definitions} entries into {@code $defs} so
+   * that {@code $ref: "#/$defs/X"} resolves regardless of which bucket the body lives in.
+   * The keys are parameterized to keep the helper algorithmically symmetric and easy to test
+   * in isolation; in production both call sites pass {@code ("definitions", "$defs")}.
+   *
+   * <p>Existing {@code toKey} entries take precedence on key collision (the target keyword
+   * wins). Returns the original string when:
+   * <ul>
+   *   <li>{@code json} is null or empty,</li>
+   *   <li>{@code json} parses to a non-object (e.g. a boolean schema),</li>
+   *   <li>{@code fromKey} is absent, its value is not an object, or its value is empty,</li>
+   *   <li>{@code toKey} is present but not an object (preserved rather than overwritten),</li>
+   *   <li>parsing fails (best-effort fallback).</li>
+   * </ul>
+   *
+   * <p>Top-level only — nested {@code definitions}/{@code $defs} inside subschemas are not
+   * bridged.
+   */
+  static String mergeDefBuckets(String json, String fromKey, String toKey) {
+    if (json == null || json.isEmpty()) {
+      return json;
+    }
+    try {
+      JsonNode root = objectMapper.readTree(json);
+      if (!root.isObject()) {
+        return json;
+      }
+      JsonNode source = root.get(fromKey);
+      if (source == null || !source.isObject() || source.size() == 0) {
+        // Nothing to copy — return as-is to avoid creating a stray empty target.
+        return json;
+      }
+      // Preserve a non-object target unchanged rather than overwriting it.
+      JsonNode existingTarget = root.get(toKey);
+      if (existingTarget != null && !existingTarget.isObject()) {
+        return json;
+      }
+      ObjectNode mut = (ObjectNode) root;
+      ObjectNode target = existingTarget != null
+          ? (ObjectNode) existingTarget
+          : mut.putObject(toKey);
+      java.util.Iterator<Map.Entry<String, JsonNode>> it = source.fields();
+      while (it.hasNext()) {
+        Map.Entry<String, JsonNode> entry = it.next();
+        if (!target.has(entry.getKey())) {
+          target.set(entry.getKey(), entry.getValue());
+        }
+      }
+      return objectMapper.writeValueAsString(mut);
+    } catch (IOException e) {
+      return json;
+    }
+  }
+
+  private static boolean isHttpScheme(String scheme) {
+    return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+  }
+
+  /**
+   * An Everit {@link org.everit.json.schema.loader.SchemaClient} that refuses to fetch
+   * {@code http}/{@code https} URLs, while delegating all other (e.g. {@code classpath})
+   * lookups to the default classpath-aware client.
+   */
+  private static final class NoHttpSchemaClient
+      implements org.everit.json.schema.loader.SchemaClient {
+
+    private final org.everit.json.schema.loader.SchemaClient delegate =
+        org.everit.json.schema.loader.SchemaClient.classPathAwareClient();
+
+    @Override
+    public InputStream get(String url) {
+      String scheme = url == null ? null : URI.create(url.trim()).getScheme();
+      if (isHttpScheme(scheme)) {
+        throw new UncheckedIOException(new IOException(
+            REMOTE_REF_DISABLED_MESSAGE + ": " + url));
+      }
+      return delegate.get(url);
+    }
+  }
+
+  public static final String REMOTE_REF_DISABLED_MESSAGE =
+      "Remote schema reference fetching over HTTP(S) is disabled";
+
+  static boolean isRemoteRefBlocked(Throwable t) {
+    for (Throwable c = t; c != null; c = c.getCause()) {
+      if (c.getMessage() != null && c.getMessage().contains(REMOTE_REF_DISABLED_MESSAGE)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -438,11 +591,15 @@ public class JsonSchema implements ParsedSchema {
       JsonNode jsonNode = objectMapperWithOrderedProps.readTree(canonical);
       return new JsonSchema(
           jsonNode,
-          this.references.stream().sorted().distinct().collect(Collectors.toList()),
+          null,
+          this.version,
+          Collections.unmodifiableList(
+              this.references.stream().sorted().distinct().collect(Collectors.toList())),
           this.resolvedReferences,
           this.metadata,
           this.ruleSet,
-          this.version
+          null,
+          this.blockRemoteRefs
       );
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON", e);
@@ -520,8 +677,19 @@ public class JsonSchema implements ParsedSchema {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
-    final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+    final List<Difference> differences;
+    try {
+      differences =
+              SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+    } catch (RuntimeException e) {
+      if (isRemoteRefBlocked(e)) {
+        // mutable: the FULL compatibility check appends to the returned list
+        List<String> errors = new ArrayList<>();
+        errors.add("A previous schema version contains an unsupported external reference");
+        return errors;
+      }
+      throw e;
+    }
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
         .collect(Collectors.toList());

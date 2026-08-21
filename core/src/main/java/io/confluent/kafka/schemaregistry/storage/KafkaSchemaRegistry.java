@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
@@ -252,6 +253,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Map<String, Object> schemaProviderConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    schemaProviderConfigs.put(JsonSchemaProvider.FETCH_REMOTE_REFS,
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG));
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
@@ -1452,6 +1455,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (normalize) {
           parsedSchema = parsedSchema.normalize();
         }
+      } else {
+        enforceRemoteRefBlockOnImport(parsedSchema);
       }
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
@@ -1462,6 +1467,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
     return parsedSchema;
+  }
+
+  // IMPORT skips validation, so force $ref resolution to fire the block; other parse failures are
+  // swallowed to preserve IMPORT's leniency for storing quirky schemas.
+  private void enforceRemoteRefBlockOnImport(ParsedSchema parsedSchema)
+          throws InvalidSchemaException {
+    if (!"JSON".equals(parsedSchema.schemaType())
+        || config.getBoolean(
+            SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG)) {
+      return;
+    }
+    try {
+      parsedSchema.rawSchema();
+    } catch (RuntimeException e) {
+      if (isBlockedRemoteRef(e)) {
+        throw new InvalidSchemaException("Invalid schema of type " + parsedSchema.schemaType()
+            + ", details: " + e.getMessage(), e);
+      }
+    }
+  }
+
+  private static boolean isBlockedRemoteRef(Throwable t) {
+    for (Throwable c = t; c != null; c = c.getCause()) {
+      if (c.getMessage() != null
+          && c.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
