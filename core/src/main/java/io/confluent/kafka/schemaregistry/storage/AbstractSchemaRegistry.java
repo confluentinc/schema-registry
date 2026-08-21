@@ -67,6 +67,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -1825,7 +1826,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   private static boolean isBlockedRemoteRef(Throwable t) {
     for (Throwable c = t; c != null; c = c.getCause()) {
       if (c.getMessage() != null
-          && c.getMessage().contains("Remote schema reference fetching over HTTP(S) is disabled")) {
+          && c.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE)) {
         return true;
       }
     }
