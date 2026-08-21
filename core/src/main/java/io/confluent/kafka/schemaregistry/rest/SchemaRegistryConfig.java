@@ -191,6 +191,15 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
 
+  public static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG =
+      "schema.providers.json.fetch.remote.schemas";
+  public static final boolean SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT = true;
+  protected static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC =
+      "Determines whether the JSON Schema provider may fetch remote schema references over "
+      + "HTTP/HTTPS. If false, a newly registered JSON Schema must resolve its references from the "
+      + "registered references, the classpath, or the prepopulated meta-schemas, and any attempt "
+      + "to fetch an http/https URL is rejected. The check applies to all schema parsing, "
+      + "including validation against already-stored schemas.";
   /**
    * <code>schema.cache.size</code>
    */
@@ -651,6 +660,10 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
+    )
+    .define(SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC
     )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
