@@ -1451,11 +1451,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
+        if (normalize) {
+          parsedSchema = parsedSchema.normalize();
+        }
       } else {
         enforceRemoteRefBlockOnImport(parsedSchema);
-      }
-      if (normalize) {
-        parsedSchema = parsedSchema.normalize();
       }
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
