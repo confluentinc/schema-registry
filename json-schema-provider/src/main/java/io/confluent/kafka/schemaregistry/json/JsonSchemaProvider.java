@@ -54,8 +54,8 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
 
   /**
    * Determines whether remote HTTP(S) schema-reference fetching should be blocked while loading
-   * the given schema. Subclasses may override to apply a narrower policy (e.g. only blocking
-   * new schema registrations) than the default of blocking all fetches once disabled.
+   * the given schema. Applies uniformly to all parses (new registrations and already-stored
+   * schemas alike); subclasses may override for a different policy.
    */
   protected boolean shouldBlockRemoteRefs(Schema schema, boolean fetchRemoteRefs) {
     return !fetchRemoteRefs;
