@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
@@ -1490,7 +1491,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private static boolean isBlockedRemoteRef(Throwable t) {
     for (Throwable c = t; c != null; c = c.getCause()) {
       if (c.getMessage() != null
-          && c.getMessage().contains("Remote schema reference fetching over HTTP(S) is disabled")) {
+          && c.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE)) {
         return true;
       }
     }

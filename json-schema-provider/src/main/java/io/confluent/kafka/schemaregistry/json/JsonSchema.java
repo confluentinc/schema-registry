@@ -482,13 +482,13 @@ public class JsonSchema implements ParsedSchema {
       String scheme = url == null ? null : URI.create(url.trim()).getScheme();
       if (isHttpScheme(scheme)) {
         throw new UncheckedIOException(new IOException(
-            "Remote schema reference fetching over HTTP(S) is disabled: " + url));
+            REMOTE_REF_DISABLED_MESSAGE + ": " + url));
       }
       return delegate.get(url);
     }
   }
 
-  static final String REMOTE_REF_DISABLED_MESSAGE =
+  public static final String REMOTE_REF_DISABLED_MESSAGE =
       "Remote schema reference fetching over HTTP(S) is disabled";
 
   static boolean isRemoteRefBlocked(Throwable t) {
