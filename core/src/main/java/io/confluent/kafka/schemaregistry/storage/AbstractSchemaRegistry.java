@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -63,6 +64,7 @@ import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
@@ -130,10 +132,12 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATI
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.REFERENCE_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestReferenceExistsException.REFERENCE_EXISTS_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
@@ -1666,6 +1670,50 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return subjects;
   }
 
+  /**
+   * Whether any version of the subject is a reference target of another schema, counting soft-
+   * deleted versions and referrers since a soft delete can be restored.
+   */
+  protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
+    try {
+      for (SchemaKey key : getAllSchemaKeysDescending(subject)) {
+        if (!getReferencedBy(key, true).isEmpty()) {
+          return true;
+        }
+      }
+      return false;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while checking references for subject " + subject, e);
+    }
+  }
+
+  /**
+   * Whether any inline schema in the request declares a reference resolving to the given strong
+   * subject.  A multi-association create validates every association before any of its schemas are
+   * registered, so a referrer added in the same request is not yet visible to
+   * {@link #isSubjectReferenced}; this catches it before the associations are written.
+   */
+  private boolean requestReferencesSubject(
+      AssociationCreateOrUpdateRequest request, String strongSubject) {
+    for (AssociationCreateOrUpdateInfo other : request.getAssociations()) {
+      RegisterSchemaRequest schema = other.getSchema();
+      if (schema == null || schema.getReferences() == null || other.getSubject() == null) {
+        continue;
+      }
+      String referrer = QualifiedSubject.createFromUnqualified(tenant(), other.getSubject())
+          .toQualifiedSubject();
+      for (SchemaReference ref : schema.getReferences()) {
+        QualifiedSubject target =
+            QualifiedSubject.qualifySubjectWithParent(tenant(), referrer, ref.getSubject());
+        if (target != null && strongSubject.equals(target.toQualifiedSubject())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   @Override
   public List<ContextId> listIdsForGuid(String guid)
           throws SchemaRegistryException {
@@ -2316,6 +2364,17 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           if (!assocsBySubject.isEmpty()) {
             throw new AssociationForSubjectExistsException(unqualifiedSubject);
           }
+          // A STRONG association and a schema reference are mutually exclusive: a referenced
+          // subject cannot be claimed as topic-owned. The frozen guard above has already rejected
+          // subjects with more than one active version, so isSubjectReferenced iterates a single
+          // version here and is O(1) in practice despite the loop. requestReferencesSubject also
+          // catches a referrer added in this same request, which is not registered yet and so is
+          // invisible to isSubjectReferenced. Enforced in every mode, including IMPORT, so
+          // replication cannot introduce the forbidden state.
+          if (isSubjectReferenced(qualifiedSubject)
+              || requestReferencesSubject(request, qualifiedSubject)) {
+            throw new ReferenceExistsException(unqualifiedSubject);
+          }
           break;
         case WEAK:
           if (Boolean.TRUE.equals(info.getFrozen())) {
@@ -2712,6 +2771,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         ErrorMessage errMsg = new ErrorMessage(
             STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
             String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (ReferenceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            REFERENCE_EXISTS_ERROR_CODE,
+            String.format(REFERENCE_EXISTS_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys
