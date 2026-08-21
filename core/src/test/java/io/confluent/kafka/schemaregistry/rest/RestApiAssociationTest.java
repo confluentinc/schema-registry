@@ -4154,5 +4154,41 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
   }
 
+  @Test
+  public void testMultiAssociationCreateRejectsIntraRequestReferenceToStrongSubject()
+      throws Exception {
+    // The value subject already exists (so the key's reference to it resolves). One request then
+    // makes BOTH value and key STRONG, with the key schema referencing the value subject. The
+    // reference only materializes when the key schema is registered, after the per-subject
+    // referenced-check has already run -- so isSubjectReferenced alone would miss it and leave
+    // value both referenced and topic-owned. requestReferencesSubject inspects the request's own
+    // declared references, so the request is rejected up front.
+    String valueSubject = ":.default:multiassoc-value";
+
+    RegisterSchemaRequest existingValue = new RegisterSchemaRequest();
+    existingValue.setSchema(ORDER_SCHEMA);
+    restApp.restClient.registerSchema(existingValue, valueSubject, false);
+
+    RegisterSchemaRequest valueSchema = new RegisterSchemaRequest();
+    valueSchema.setSchema(ORDER_SCHEMA);
+
+    RegisterSchemaRequest keySchema = new RegisterSchemaRequest();
+    keySchema.setSchema(PAYMENT_REFERENCING_ORDER);
+    keySchema.setReferences(ImmutableList.of(new SchemaReference("Order", valueSubject, 1)));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "multiassoc", "default", "multiassoc-123", "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null, "value", LifecyclePolicy.STRONG, true, valueSchema, null),
+            new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, keySchema, null)));
+
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+            request));
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
+  }
+
 }
 

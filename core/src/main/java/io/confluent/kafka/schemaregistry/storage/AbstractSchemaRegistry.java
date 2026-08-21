@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -1663,6 +1664,32 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * Whether any inline schema in the request declares a reference resolving to the given strong
+   * subject.  A multi-association create validates every association before any of its schemas are
+   * registered, so a referrer added in the same request is not yet visible to
+   * {@link #isSubjectReferenced}; this catches it before the associations are written.
+   */
+  private boolean requestReferencesSubject(
+      AssociationCreateOrUpdateRequest request, String strongSubject) {
+    for (AssociationCreateOrUpdateInfo other : request.getAssociations()) {
+      RegisterSchemaRequest schema = other.getSchema();
+      if (schema == null || schema.getReferences() == null || other.getSubject() == null) {
+        continue;
+      }
+      String referrer = QualifiedSubject.createFromUnqualified(tenant(), other.getSubject())
+          .toQualifiedSubject();
+      for (SchemaReference ref : schema.getReferences()) {
+        QualifiedSubject target =
+            QualifiedSubject.qualifySubjectWithParent(tenant(), referrer, ref.getSubject());
+        if (target != null && strongSubject.equals(target.toQualifiedSubject())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   @Override
   public List<ContextId> listIdsForGuid(String guid)
           throws SchemaRegistryException {
@@ -2297,9 +2324,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           // A STRONG association and a schema reference are mutually exclusive: a referenced
           // subject cannot be claimed as topic-owned. The frozen guard above has already rejected
           // subjects with more than one active version, so isSubjectReferenced iterates a single
-          // version here and is O(1) in practice despite the loop. Enforced in every mode,
-          // including IMPORT, so replication cannot introduce the forbidden state.
-          if (isSubjectReferenced(qualifiedSubject)) {
+          // version here and is O(1) in practice despite the loop. requestReferencesSubject also
+          // catches a referrer added in this same request, which is not registered yet and so is
+          // invisible to isSubjectReferenced. Enforced in every mode, including IMPORT, so
+          // replication cannot introduce the forbidden state.
+          if (isSubjectReferenced(qualifiedSubject)
+              || requestReferencesSubject(request, qualifiedSubject)) {
             throw new ReferenceExistsException(unqualifiedSubject);
           }
           break;
