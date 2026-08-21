@@ -1,0 +1,8 @@
+{
+  "type": "record",
+  "name": "SensorKey",
+  "namespace": "io.confluent.kafka.streams.integration.avro",
+  "fields": [
+    {"name": "sensorId", "type": "string"}
+  ]
+}
