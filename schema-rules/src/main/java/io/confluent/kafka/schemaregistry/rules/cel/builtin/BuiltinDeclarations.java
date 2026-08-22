@@ -237,8 +237,8 @@ public final class BuiltinDeclarations {
         "variants.type",
         CelOverloadDecl.newGlobalOverload(
             "variants_type_variant",
-            "Variant type label as a string",
-            SimpleType.STRING, ImmutableList.of(VARIANT))));
+            "Variant type label as a string; CEL null in → CEL null out",
+            SimpleType.DYN, ImmutableList.of(VARIANT))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.isNull",
         CelOverloadDecl.newGlobalOverload(
@@ -295,8 +295,8 @@ public final class BuiltinDeclarations {
         "variants.toJson",
         CelOverloadDecl.newGlobalOverload(
             "variants_tojson_variant",
-            "Serialize a Variant to its JSON string form",
-            SimpleType.STRING, ImmutableList.of(VARIANT))));
+            "Serialize a Variant to its JSON string form; CEL null in → CEL null out",
+            SimpleType.DYN, ImmutableList.of(VARIANT))));
   }
 
   private static String overloadId(String functionName, String suffix) {
