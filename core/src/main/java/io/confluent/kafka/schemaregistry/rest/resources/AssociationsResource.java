@@ -277,6 +277,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -367,6 +369,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
