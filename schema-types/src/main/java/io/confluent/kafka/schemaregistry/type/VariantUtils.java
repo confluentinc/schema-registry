@@ -121,7 +121,7 @@ public class VariantUtils {
 
   private static JsonNode objectToJson(Variant variant) {
     ObjectNode obj = FACTORY.objectNode();
-    for (int i = 0; i < variant.numObjectElements(); i++) {
+    for (int i = 0; i < variant.numObjectFields(); i++) {
       Variant.ObjectField field = variant.getFieldAtIndex(i);
       obj.set(field.key, toJsonNode(field.value));
     }
