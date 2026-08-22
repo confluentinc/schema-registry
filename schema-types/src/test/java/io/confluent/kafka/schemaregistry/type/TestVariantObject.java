@@ -137,7 +137,7 @@ public class TestVariantObject {
     Variant value = new Variant(ByteBuffer.wrap(new byte[] {0b10, 0x00}), VariantTestUtils.EMPTY_METADATA);
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(0, v.numObjectElements());
+      Assert.assertEquals(0, v.numObjectFields());
     });
   }
 
@@ -147,7 +147,7 @@ public class TestVariantObject {
         ByteBuffer.wrap(new byte[] {0b1000010, 0x00, 0x00, 0x00, 0x00}), VariantTestUtils.EMPTY_METADATA);
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(0, v.numObjectElements());
+      Assert.assertEquals(0, v.numObjectFields());
     });
   }
 
@@ -161,7 +161,7 @@ public class TestVariantObject {
         constructMetadata(false, ImmutableList.of("c", "b", "a")));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(3, v.numObjectElements());
+      Assert.assertEquals(3, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("a"), VariantFormat.PRIMITIVE, Variant.Type.INT);
       Assert.assertEquals(1234567890, v.getFieldByKey("a").getInt());
       VariantTestUtils.checkType(v.getFieldByKey("b"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
@@ -182,7 +182,7 @@ public class TestVariantObject {
         constructMetadata(true, ImmutableList.of("a", "b", "c")));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(3, v.numObjectElements());
+      Assert.assertEquals(3, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("a"), VariantFormat.PRIMITIVE, Variant.Type.INT);
       Assert.assertEquals(1234567890, v.getFieldByKey("a").getInt());
       VariantTestUtils.checkType(v.getFieldByKey("b"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
@@ -190,7 +190,7 @@ public class TestVariantObject {
       VariantTestUtils.checkType(v.getFieldByKey("c"), VariantFormat.OBJECT, Variant.Type.OBJECT);
 
       Variant nestedV = v.getFieldByKey("c");
-      Assert.assertEquals(2, nestedV.numObjectElements());
+      Assert.assertEquals(2, nestedV.numObjectFields());
       VariantTestUtils.checkType(nestedV.getFieldByKey("a"), VariantFormat.PRIMITIVE, Variant.Type.DATE);
       Assert.assertEquals(
           LocalDate.parse("2025-04-17"),
@@ -209,7 +209,7 @@ public class TestVariantObject {
         constructMetadata(true, ImmutableList.of("a", "b", "c")));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(3, v.numObjectElements());
+      Assert.assertEquals(3, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("a"), VariantFormat.PRIMITIVE, Variant.Type.INT);
       Assert.assertEquals(1234567890, v.getFieldByKey("a").getInt());
       VariantTestUtils.checkType(v.getFieldByKey("b"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
@@ -229,7 +229,7 @@ public class TestVariantObject {
         constructMetadata(true, ImmutableList.of("a", "b", "c")));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(3, v.numObjectElements());
+      Assert.assertEquals(3, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("a"), VariantFormat.PRIMITIVE, Variant.Type.STRING);
       Assert.assertEquals(randomString, v.getFieldByKey("a").getString());
       VariantTestUtils.checkType(v.getFieldByKey("b"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
@@ -273,7 +273,7 @@ public class TestVariantObject {
         constructMetadata(true, fieldNames));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(2, v.numObjectElements());
+      Assert.assertEquals(2, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("z1"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
       Assert.assertTrue(v.getFieldByKey("z1").getBoolean());
       VariantTestUtils.checkType(v.getFieldByKey("z2"), VariantFormat.PRIMITIVE, Variant.Type.INT);
@@ -316,7 +316,7 @@ public class TestVariantObject {
         new Variant(ByteBuffer.wrap(constructObject(keys, fields, false)), constructMetadata(true, sortedKeys));
     VariantTestUtils.testVariant(value, v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(1000, v.numObjectElements());
+      Assert.assertEquals(1000, v.numObjectFields());
 
       for (int i = 0; i < 1000; i++) {
         String name = String.format("a%04d", i);
@@ -333,7 +333,7 @@ public class TestVariantObject {
     try {
       // An array header
       Variant value = new Variant(ByteBuffer.wrap(new byte[] {0b10011}), VariantTestUtils.EMPTY_METADATA);
-      value.numObjectElements();
+      value.numObjectFields();
       Assert.fail("Expected exception not thrown");
     } catch (Exception e) {
       Assert.assertEquals("Cannot read ARRAY value as OBJECT", e.getMessage());

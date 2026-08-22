@@ -190,6 +190,46 @@ public class CelValidatorVariantTest {
   }
 
   @Test
+  void variantsType_onMissingField_returnsCelNull() throws Exception {
+    // Null-passthrough: variants.type of a missing (CEL null) receiver is CEL null,
+    // not a rule error. Regression for the type/toJson Variant.class binding, which
+    // previously errored on a null receiver instead of propagating it.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type(variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsToJson_onMissingField_returnsCelNull() throws Exception {
+    // Null-passthrough for variants.toJson (same fix as variants.type above).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.toJson(variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
   void variantsIsNull_onNonNullVariant_returnsFalse() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"

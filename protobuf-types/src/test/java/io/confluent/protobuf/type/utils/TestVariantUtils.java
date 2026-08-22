@@ -16,7 +16,6 @@
 
 package io.confluent.protobuf.type.utils;
 
-import com.google.protobuf.ByteString;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
@@ -134,7 +133,7 @@ public class TestVariantUtils {
         .build();
     Variant variant = VariantUtils.toKafkaVariant(value);
     Assert.assertEquals(Variant.Type.OBJECT, variant.getType());
-    Assert.assertEquals(0, variant.numObjectElements());
+    Assert.assertEquals(0, variant.numObjectFields());
   }
 
   @Test
