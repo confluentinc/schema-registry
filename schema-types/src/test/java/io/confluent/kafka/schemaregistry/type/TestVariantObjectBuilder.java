@@ -56,6 +56,74 @@ public class TestVariantObjectBuilder {
     });
   }
 
+  /**
+   * Object field keys must be ordered by the unsigned byte order of their UTF-8 encoding, not by
+   * {@link String#compareTo} (UTF-16 code-unit order). The two orderings disagree for
+   * supplementary-plane keys: U+FFFF encodes to UTF-8 {@code EF BF BF} and U+10000 to
+   * {@code F0 90 80 80}, so U+FFFF must sort first; but in UTF-16 the leading high surrogate
+   * 0xD800 of U+10000 sorts before 0xFFFF, which would wrongly put U+10000 first. See
+   * {@link VariantFormat#compareKeys}.
+   */
+  @Test
+  public void testObjectKeysSortedByUtf8ByteOrder() {
+    String bmpKey = "￿"; // U+FFFF -> UTF-8 EF BF BF
+    String supplementaryKey = "𐀀"; // U+10000 -> UTF-8 F0 90 80 80
+
+    VariantBuilder b = new VariantBuilder();
+    VariantObjectBuilder o = b.startObject();
+    // Appended in the "wrong" order on purpose, to prove the builder sorts rather than
+    // preserving insertion order.
+    o.appendKey(supplementaryKey);
+    o.appendLong(2);
+    o.appendKey(bmpKey);
+    o.appendLong(1);
+    b.endObject();
+
+    VariantTestUtils.testVariant(b.build(), v -> {
+      VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
+      Assert.assertEquals(v.numObjectElements(), 2);
+      // UTF-8 byte order: EF BF BF < F0 90 80 80, so the BMP key comes first.
+      Assert.assertEquals(v.getFieldAtIndex(0).key, bmpKey);
+      Assert.assertEquals(v.getFieldAtIndex(1).key, supplementaryKey);
+      Assert.assertEquals(v.getFieldByKey(bmpKey).getLong(), 1);
+      Assert.assertEquals(v.getFieldByKey(supplementaryKey).getLong(), 2);
+    });
+  }
+
+  /**
+   * A large object (>= BINARY_SEARCH_THRESHOLD) that mixes ASCII keys with U+FFFF and a
+   * supplementary-plane key, exercising the reader's binary-search path in
+   * {@link Variant#getFieldByKey}. The binary search must use the same UTF-8 byte ordering as the
+   * builder's sort; with a UTF-16 comparator on the read side, the supplementary key would be
+   * mis-navigated and not found.
+   */
+  @Test
+  public void testLargeObjectBinarySearchWithSupplementaryKey() {
+    String bmpKey = "￿"; // UTF-8 EF BF BF
+    String supplementaryKey = "𐀀"; // UTF-8 F0 90 80 80
+
+    VariantBuilder b = new VariantBuilder();
+    VariantObjectBuilder o = b.startObject();
+    for (int i = 0; i < 40; i++) { // well above BINARY_SEARCH_THRESHOLD (32)
+      o.appendKey(String.format("a%03d", i));
+      o.appendLong(i);
+    }
+    o.appendKey(bmpKey);
+    o.appendLong(998);
+    o.appendKey(supplementaryKey);
+    o.appendLong(999);
+    b.endObject();
+
+    VariantTestUtils.testVariant(b.build(), v -> {
+      Assert.assertEquals(v.numObjectElements(), 42);
+      Assert.assertNotNull(v.getFieldByKey(bmpKey));
+      Assert.assertEquals(v.getFieldByKey(bmpKey).getLong(), 998);
+      Assert.assertNotNull(v.getFieldByKey(supplementaryKey));
+      Assert.assertEquals(v.getFieldByKey(supplementaryKey).getLong(), 999);
+      Assert.assertEquals(v.getFieldByKey("a037").getLong(), 37);
+    });
+  }
+
   @Test
   public void testMixedObjectBuilder() {
     VariantBuilder b = new VariantBuilder();
