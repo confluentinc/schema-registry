@@ -239,6 +239,8 @@ public final class Variant {
         }
       }
     } else {
+      // Encode the lookup key once, outside the loop, rather than on every comparison.
+      byte[] keyBytes = VariantFormat.encodeKey(key);
       int low = 0;
       int high = info.numElements - 1;
       while (low <= high) {
@@ -249,7 +251,7 @@ public final class Variant {
         int midId = VariantFormat.readUnsignedLittleEndian(
             value, idStart + info.idSize * mid, info.idSize);
         String midKey = VariantFormat.getMetadataKey(metadata, midId);
-        int cmp = VariantFormat.compareKeys(midKey, key);
+        int cmp = VariantFormat.compareKeys(VariantFormat.encodeKey(midKey), keyBytes);
         if (cmp < 0) {
           low = mid + 1;
         } else if (cmp > 0) {
