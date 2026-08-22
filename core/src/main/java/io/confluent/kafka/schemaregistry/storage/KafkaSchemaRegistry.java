@@ -25,7 +25,9 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
@@ -478,6 +480,21 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       int schemaId = schema.getId();
       boolean doValidation = schemaId < 0 && isSchemaNewSchemaValidationEnabled(config);
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
+
+      // A schema reference and a STRONG (topic-owned) association are mutually exclusive: a
+      // subject claimed by its topic cannot be a reference target. Enforced in every mode,
+      // including IMPORT, so cluster linking cannot replicate a schema into the forbidden state.
+      if (parsedSchema != null) {
+        for (SchemaReference ref : schema.getReferences()) {
+          QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+              tenant(), subject, ref.getSubject());
+          if (refSubject != null && !getAssociationsBySubject(
+              refSubject.toQualifiedSubject(), null, null, LifecyclePolicy.STRONG).isEmpty()) {
+            throw new OperationNotPermittedException("Subject '" + ref.getSubject()
+                + "' has a strong association and cannot be referenced");
+          }
+        }
+      }
 
       if (parsedSchema != null) {
         // see if the schema to be registered already exists
