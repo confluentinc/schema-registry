@@ -207,7 +207,7 @@ public final class Variant {
    * @return the number of object fields in the variant
    * @throws IllegalArgumentException if `getType()` does not return `Type.OBJECT`
    */
-  public int numObjectElements() {
+  public int numObjectFields() {
     return objectInfo().numElements;
   }
 

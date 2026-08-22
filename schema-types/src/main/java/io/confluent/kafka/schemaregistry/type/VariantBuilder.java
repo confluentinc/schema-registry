@@ -455,7 +455,7 @@ public class VariantBuilder {
 
     // copy values to a new builder
     Variant variant = new Variant(value, metadata);
-    for (int index = 0; index < variant.numObjectElements(); index += 1) {
+    for (int index = 0; index < variant.numObjectFields(); index += 1) {
       Variant.ObjectField field = variant.getFieldAtIndex(index);
       if (!suppressedKeys.contains(field.key)) {
         objectBuilder.appendKey(field.key);
