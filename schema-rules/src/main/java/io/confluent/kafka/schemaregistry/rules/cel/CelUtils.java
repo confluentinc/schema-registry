@@ -57,8 +57,11 @@ import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -68,6 +71,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -737,6 +741,15 @@ public final class CelUtils {
   }
 
   /**
+   * {@link #toCelValue(Object)} for a value whose Avro schema is known, so a timestamp
+   * logical type can be presented with the unit the schema declares. Use this wherever the
+   * schema is in hand; the schema-less overload cannot recover the unit.
+   */
+  public static Object toCelValue(Object value, Schema schema) {
+    return toCelValue(normalizeAvroTemporal(value, schema));
+  }
+
+  /**
    * JSON-flavored variant of {@link #toCelValue(Object)}: additionally converts
    * Jackson {@link JsonNode} and arbitrary POJOs to maps via the supplied
    * {@link ObjectMapper}. Used on the JSON validation/transform path where the
@@ -801,11 +814,175 @@ public final class CelUtils {
     return toCelValue(mapper.convertValue(value, new TypeReference<Map<String, Object>>() {}));
   }
 
+  /**
+   * Recursively replace every {@link CelDecimal} in a CEL evaluation result with the
+   * {@link java.math.BigDecimal} it wraps — the logical-type Java rep the result writers,
+   * Jackson and the field setters all expect. A rule may return a Decimal at top level or
+   * nested in a result map / list.
+   *
+   * <p>Returns the very same instance when nothing changed, so a decimal-free result
+   * costs one walk and no copying.
+   */
+  public static Object unwrapCelDecimals(Object value) {
+    if (value instanceof CelDecimal) {
+      return ((CelDecimal) value).value();
+    }
+    if (value instanceof Map) {
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<String, Object> out = null;
+      int index = 0;
+      for (Map.Entry<?, ?> e : in.entrySet()) {
+        Object converted = unwrapCelDecimals(e.getValue());
+        if (out == null && converted != e.getValue()) {
+          // First change: copy the entries already confirmed unchanged, in iteration order.
+          out = new LinkedHashMap<>(in.size());
+          int seen = 0;
+          for (Map.Entry<?, ?> prior : in.entrySet()) {
+            if (seen++ == index) {
+              break;
+            }
+            out.put(String.valueOf(prior.getKey()), prior.getValue());
+          }
+        }
+        if (out != null) {
+          out.put(String.valueOf(e.getKey()), converted);
+        }
+        index++;
+      }
+      return out == null ? value : out;
+    }
+    if (value instanceof List) {
+      List<?> in = (List<?>) value;
+      List<Object> out = null;
+      for (int i = 0; i < in.size(); i++) {
+        Object element = in.get(i);
+        Object converted = unwrapCelDecimals(element);
+        if (out == null && converted != element) {
+          out = new ArrayList<>(in);
+        }
+        if (out != null) {
+          out.set(i, converted);
+        }
+      }
+      return out == null ? value : out;
+    }
+    return value;
+  }
+
   private static Map<String, Object> avroRecordToMap(IndexedRecord record) {
     Map<String, Object> out = new LinkedHashMap<>();
     for (Schema.Field f : record.getSchema().getFields()) {
-      out.put(f.name(), toCelValue(record.get(f.pos())));
+      out.put(f.name(), toCelValue(record.get(f.pos()), f.schema()));
     }
     return out;
+  }
+
+  /**
+   * Present an Avro timestamp logical type as the {@code java.time} value CEL's
+   * {@code timestamp} overloads expect, taking the unit from the schema.
+   *
+   * <p>Avro's {@code use.logical.type.converters} defaults to false, so without this a
+   * {@code timestamp-millis} field reaches a rule as a bare {@code long} whose unit lives
+   * only in the schema — and CEL reads a bare int as epoch <em>seconds</em>, so
+   * {@code timestamp(this.ts)} would silently answer with a 1970 date. Converting here makes
+   * a rule read the same under either converter setting, and matches what the JS, Rust and
+   * C++ clients already do at their Avro boundary.
+   *
+   * <p>Values that already arrived as a temporal (converters on) pass through untouched, as
+   * does anything without a recognized timestamp logical type.
+   */
+  private static Object normalizeAvroTemporal(Object value, Schema schema) {
+    if (value == null || schema == null) {
+      return value;
+    }
+    switch (schema.getType()) {
+      case UNION: {
+        Schema branch = avroUnionBranch(schema);
+        return branch != null ? normalizeAvroTemporal(value, branch) : value;
+      }
+      case ARRAY: {
+        if (!(value instanceof List)) {
+          return value;
+        }
+        List<?> in = (List<?>) value;
+        List<Object> out = new ArrayList<>(in.size());
+        for (Object e : in) {
+          out.add(normalizeAvroTemporal(e, schema.getElementType()));
+        }
+        return out;
+      }
+      case MAP: {
+        if (!(value instanceof Map)) {
+          return value;
+        }
+        Map<?, ?> in = (Map<?, ?>) value;
+        Map<Object, Object> out = new LinkedHashMap<>(in.size());
+        for (Map.Entry<?, ?> e : in.entrySet()) {
+          out.put(e.getKey(), normalizeAvroTemporal(e.getValue(), schema.getValueType()));
+        }
+        return out;
+      }
+      default:
+        break;
+    }
+    // Only a numeric carrier needs the schema's unit; an Instant / LocalDateTime already
+    // carries it. Records fall through here too and are converted by avroRecordToMap.
+    if (!(value instanceof Long || value instanceof Integer)) {
+      return value;
+    }
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType == null) {
+      return value;
+    }
+    long epoch = ((Number) value).longValue();
+    switch (logicalType.getName()) {
+      case "timestamp-millis":
+        return Instant.ofEpochMilli(epoch);
+      case "timestamp-micros":
+        return instantOfEpoch(epoch, 1_000_000L, 1_000L);
+      case "timestamp-nanos":
+        return instantOfEpoch(epoch, 1_000_000_000L, 1L);
+      case "local-timestamp-millis":
+        return localDateTimeOf(Instant.ofEpochMilli(epoch));
+      case "local-timestamp-micros":
+        return localDateTimeOf(instantOfEpoch(epoch, 1_000_000L, 1_000L));
+      case "local-timestamp-nanos":
+        return localDateTimeOf(instantOfEpoch(epoch, 1_000_000_000L, 1L));
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * The branch of a union a non-null value took. Nullable {@code [null, X]} — the shape a
+   * logical-typed optional field takes — resolves to X. A multi-branch union may pick the
+   * wrong arm, which is harmless: the caller only acts on the branch when the value is a
+   * numeric carrier and the branch declares a timestamp logical type.
+   */
+  private static Schema avroUnionBranch(Schema union) {
+    for (Schema branch : union.getTypes()) {
+      if (branch.getType() != Schema.Type.NULL) {
+        return branch;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Epoch value in units of {@code perSecond} per second, each worth {@code nanosPerUnit}.
+   */
+  private static Instant instantOfEpoch(long epoch, long perSecond, long nanosPerUnit) {
+    // floorDiv/floorMod rather than / and %: a pre-epoch value is negative, and the
+    // nano-of-second adjustment must stay non-negative.
+    return Instant.ofEpochSecond(
+        Math.floorDiv(epoch, perSecond), Math.floorMod(epoch, perSecond) * nanosPerUnit);
+  }
+
+  /**
+   * A {@code local-timestamp-*} value read at UTC and stripped of the offset — what Avro's own
+   * local-timestamp conversions do, so the same wall-clock time comes out either way.
+   */
+  private static LocalDateTime localDateTimeOf(Instant instant) {
+    return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
   }
 }

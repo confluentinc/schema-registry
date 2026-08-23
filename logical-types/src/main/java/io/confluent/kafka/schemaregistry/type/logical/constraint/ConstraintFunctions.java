@@ -973,7 +973,7 @@ final class ConstraintFunctions {
 
   /**
    * EXTRACT(field FROM ts) → ts.getXxx(). The receiver is normalized via
-   * {@code timestamp.of(...)} when it's an instant-timestamp column so the
+   * {@code timestamp(...)} when it's an instant-timestamp column so the
    * runtime value (Instant / RFC-3339 string) coerces to a CEL timestamp;
    * {@code now} (CURRENT_TIMESTAMP) is left unwrapped.
    */
