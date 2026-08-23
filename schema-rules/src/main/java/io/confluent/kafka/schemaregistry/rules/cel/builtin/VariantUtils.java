@@ -16,15 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
 import dev.cel.common.values.CelByteString;
 import io.confluent.avro.type.VariantConversion;
 import io.confluent.kafka.schemaregistry.type.Variant;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -36,13 +33,6 @@ import org.apache.avro.generic.IndexedRecord;
  * format).
  */
 final class VariantUtils {
-
-  /**
-   * Reused thread-safe Jackson mapper for JSON → Variant conversion. ObjectMapper
-   * instances are documented as thread-safe after configuration, and we don't
-   * mutate this one after construction.
-   */
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
   private static final VariantConversion VARIANT_CONVERSION = new VariantConversion();
 
@@ -149,13 +139,7 @@ final class VariantUtils {
    * {@code ValidationRuleError}.
    */
   static Variant fromJson(String json) {
-    try {
-      JsonNode node = JSON_MAPPER.readTree(json);
-      return io.confluent.kafka.schemaregistry.type.VariantUtils.fromJsonNode(node);
-    } catch (IOException | IllegalStateException e) {
-      throw new IllegalArgumentException(
-          "Cannot parse JSON for variant: " + e.getMessage(), e);
-    }
+    return io.confluent.kafka.schemaregistry.type.VariantUtils.fromJson(json);
   }
 
   /**
