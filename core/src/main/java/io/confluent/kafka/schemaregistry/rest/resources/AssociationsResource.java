@@ -292,7 +292,7 @@ public class AssociationsResource {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
           + " to the leader", e);
@@ -382,7 +382,7 @@ public class AssociationsResource {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
           + " to the leader", e);
@@ -460,7 +460,7 @@ public class AssociationsResource {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
           + " to the leader", e);
@@ -532,7 +532,7 @@ public class AssociationsResource {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
           + " to the leader", e);
