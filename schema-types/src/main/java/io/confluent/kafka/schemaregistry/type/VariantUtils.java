@@ -56,7 +56,7 @@ public class VariantUtils {
    * WRITE_BIGDECIMAL_AS_PLAIN renders decimals in fixed-point form (never scientific), the
    * cross-language contract for variant JSON; WRITE_NAN_AS_STRINGS is disabled so non-finite
    * doubles/floats are written as barewords ({@code NaN}) rather than quoted strings
-   * ({@code "NaN"}) — a deliberate divergence from Spark, keeping the round-trip symmetric.
+   * ({@code "NaN"}).
    */
   private static final ObjectMapper JSON_MAPPER = JsonMapper.builder()
       .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
@@ -218,7 +218,12 @@ public class VariantUtils {
    */
   public static Variant fromJson(String json) {
     try {
-      return fromJsonNode(JSON_MAPPER.readTree(json));
+      JsonNode node = JSON_MAPPER.readTree(json);
+      if (node == null) {
+        // readTree returns null for empty or whitespace-only input.
+        throw new IllegalArgumentException("Cannot parse JSON for variant: empty input");
+      }
+      return fromJsonNode(node);
     } catch (JsonProcessingException | IllegalStateException e) {
       throw new IllegalArgumentException("Cannot parse JSON for variant: " + e.getMessage(), e);
     }

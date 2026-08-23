@@ -409,6 +409,16 @@ public class TestVariantJsonConverter {
   }
 
   @Test
+  public void testFromJsonEmptyInputThrowsIllegalArgument() {
+    // readTree returns null for empty/whitespace-only input; fromJson must surface that as
+    // IllegalArgumentException (its documented contract) rather than a NullPointerException,
+    // so the CEL soft-failure handler (variants.tryParseJson) can catch it.
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson(""));
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson("   "));
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson("\t\n"));
+  }
+
+  @Test
   public void testToJsonTemporalUsesAsciiDigitsRegardlessOfLocale() {
     // The temporal formatters must emit ASCII digits even when the default locale uses
     // non-ASCII native digits (here Arabic-Indic, forced via the -u-nu-arab extension).
