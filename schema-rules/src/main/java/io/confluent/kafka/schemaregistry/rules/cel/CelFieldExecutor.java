@@ -105,6 +105,9 @@ public class CelFieldExecutor extends FieldRuleExecutor {
             }
           }
       );
+      // Unwrap before the narrowing chain below: a CelDecimal is not a Number, so it would
+      // silently skip it.
+      result = CelUtils.unwrapCelDecimals(result);
       if (result instanceof com.google.protobuf.NullValue
           || result instanceof dev.cel.common.values.NullValue) {
         // CEL `null` literal evaluates to dev.cel.common.values.NullValue;

@@ -28,7 +28,9 @@ import java.nio.ByteBuffer;
 /**
  * Conversion helpers backing {@code decimal(...)} and the {@code decimals.*} operator
  * functions. The CEL surface treats Decimal as the canonical type
- * {@link CelTypeLabels#DECIMAL_NAME}; this client backs it with {@link BigDecimal}.
+ * {@link CelTypeLabels#DECIMAL_NAME}; this client backs it with a {@link BigDecimal} wrapped in
+ * {@link CelDecimal}. The methods here produce the unwrapped {@code BigDecimal}; the
+ * {@code decimal(...)} bindings wrap the result.
  */
 final class DecimalUtils {
 
@@ -92,6 +94,10 @@ final class DecimalUtils {
     }
     if (o instanceof BigDecimal) {
       return (BigDecimal) o;
+    }
+    if (o instanceof CelDecimal) {
+      // Re-entry: decimal(decimal(x)), or a Decimal arriving back through a dyn-typed path.
+      return ((CelDecimal) o).value();
     }
     if (o instanceof Decimal) {
       return toBigDecimal((Decimal) o);

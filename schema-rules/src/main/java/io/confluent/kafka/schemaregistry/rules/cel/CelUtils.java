@@ -57,6 +57,7 @@ import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -799,6 +800,61 @@ public final class CelUtils {
     // `this.intField <= 150` won't dispatch because CEL only registers the
     // int64 overload.
     return toCelValue(mapper.convertValue(value, new TypeReference<Map<String, Object>>() {}));
+  }
+
+  /**
+   * Recursively replace every {@link CelDecimal} in a CEL evaluation result with the
+   * {@link java.math.BigDecimal} it wraps — the logical-type Java rep the result writers,
+   * Jackson and the field setters all expect. A rule may return a Decimal at top level or
+   * nested in a result map / list.
+   *
+   * <p>Returns the very same instance when nothing changed, so a decimal-free result
+   * costs one walk and no copying.
+   */
+  public static Object unwrapCelDecimals(Object value) {
+    if (value instanceof CelDecimal) {
+      return ((CelDecimal) value).value();
+    }
+    if (value instanceof Map) {
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<String, Object> out = null;
+      int index = 0;
+      for (Map.Entry<?, ?> e : in.entrySet()) {
+        Object converted = unwrapCelDecimals(e.getValue());
+        if (out == null && converted != e.getValue()) {
+          // First change: copy the entries already confirmed unchanged, in iteration order.
+          out = new LinkedHashMap<>(in.size());
+          int seen = 0;
+          for (Map.Entry<?, ?> prior : in.entrySet()) {
+            if (seen++ == index) {
+              break;
+            }
+            out.put(String.valueOf(prior.getKey()), prior.getValue());
+          }
+        }
+        if (out != null) {
+          out.put(String.valueOf(e.getKey()), converted);
+        }
+        index++;
+      }
+      return out == null ? value : out;
+    }
+    if (value instanceof List) {
+      List<?> in = (List<?>) value;
+      List<Object> out = null;
+      for (int i = 0; i < in.size(); i++) {
+        Object element = in.get(i);
+        Object converted = unwrapCelDecimals(element);
+        if (out == null && converted != element) {
+          out = new ArrayList<>(in);
+        }
+        if (out != null) {
+          out.set(i, converted);
+        }
+      }
+      return out == null ? value : out;
+    }
+    return value;
   }
 
   private static Map<String, Object> avroRecordToMap(IndexedRecord record) {

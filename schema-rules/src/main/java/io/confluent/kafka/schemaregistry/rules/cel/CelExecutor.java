@@ -252,6 +252,9 @@ public class CelExecutor implements RuleExecutor {
     if (ctx.rule().getKind() == RuleKind.CONDITION) {
       return result;
     }
+    // Every result writer below expects a Decimal as BigDecimal, not the CelDecimal wrapper,
+    // so unwrap before AvroResultWriter or the Jackson roundtrip runs.
+    result = CelUtils.unwrapCelDecimals(result);
     if (ctx.target() instanceof AvroSchema) {
       // Avro target: walker handles every Schema.Type — records, primitives,
       // enums, bytes/fixed, logical types, unions. Sidesteps the JSON
