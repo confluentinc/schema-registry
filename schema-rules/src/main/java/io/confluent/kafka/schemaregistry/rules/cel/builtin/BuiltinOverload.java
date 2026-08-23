@@ -27,10 +27,12 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.apache.commons.validator.routines.DomainValidator;
@@ -136,7 +138,8 @@ final class BuiltinOverload {
     // String is handled by toBigDecimal(Object)'s String arm. See the comment
     // in BuiltinDeclarations.addDecimal for why we omit (string).
     out.add(CelFunctionBinding.from(
-        "dyn_to_decimal", Object.class, DecimalUtils::toBigDecimal));
+        "dyn_to_decimal", Object.class,
+        (Object o) -> CelDecimal.of(DecimalUtils.toBigDecimal(o))));
     // Bytes args arrive as CelByteString under CelOptions.DEFAULT
     // (evaluateCanonicalTypesToNativeValues=true converts proto ByteString and
     // bytes-field reads into CelByteString).
@@ -144,15 +147,15 @@ final class BuiltinOverload {
         "bytes_int_to_decimal",
         CelByteString.class, Long.class,
         (CelByteString bytes, Long scale) ->
-            DecimalUtils.toBigDecimal(bytes.toByteArray(),
-                requireIntScale(scale, "decimal(bytes, scale)"))));
+            CelDecimal.of(DecimalUtils.toBigDecimal(bytes.toByteArray(),
+                requireIntScale(scale, "decimal(bytes, scale)")))));
 
     // Comparison
-    out.add(decimalsBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
-    out.add(decimalsBinary("decimals_lt_decimal_decimal", (a, b) -> a.compareTo(b) < 0));
-    out.add(decimalsBinary("decimals_le_decimal_decimal", (a, b) -> a.compareTo(b) <= 0));
-    out.add(decimalsBinary("decimals_gt_decimal_decimal", (a, b) -> a.compareTo(b) > 0));
-    out.add(decimalsBinary("decimals_ge_decimal_decimal", (a, b) -> a.compareTo(b) >= 0));
+    out.add(decimalsCompare("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
+    out.add(decimalsCompare("decimals_lt_decimal_decimal", (a, b) -> a.compareTo(b) < 0));
+    out.add(decimalsCompare("decimals_le_decimal_decimal", (a, b) -> a.compareTo(b) <= 0));
+    out.add(decimalsCompare("decimals_gt_decimal_decimal", (a, b) -> a.compareTo(b) > 0));
+    out.add(decimalsCompare("decimals_ge_decimal_decimal", (a, b) -> a.compareTo(b) >= 0));
 
     // Arithmetic
     out.add(decimalsBinary("decimals_add_decimal_decimal", BigDecimal::add));
@@ -199,26 +202,27 @@ final class BuiltinOverload {
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
     out.add(decimalsUnary("decimals_abs_decimal", BigDecimal::abs));
     out.add(CelFunctionBinding.from(
-        "decimals_sign_decimal", BigDecimal.class,
-        (BigDecimal d) -> (long) d.signum()));
+        "decimals_sign_decimal", CelDecimal.class,
+        (CelDecimal d) -> (long) d.value().signum()));
     // string(Decimal) — extension overload on stdlib `string(...)`.
     out.add(CelFunctionBinding.from(
-        "decimal_to_string", BigDecimal.class,
-        BigDecimal::toPlainString));
+        "decimal_to_string", CelDecimal.class,
+        (CelDecimal d) -> d.value().toPlainString()));
     // double(Decimal) — extension overload on stdlib `double(...)`. Narrowing:
     // BigDecimal.doubleValue() returns the closest double (±Infinity if the
     // magnitude is out of range).
     out.add(CelFunctionBinding.from(
-        "decimal_to_double", BigDecimal.class,
-        BigDecimal::doubleValue));
+        "decimal_to_double", CelDecimal.class,
+        (CelDecimal d) -> d.value().doubleValue()));
 
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
         "decimals_round_unary", d -> d.setScale(0, RoundingMode.HALF_UP)));
     out.add(CelFunctionBinding.from(
-        "decimals_round_scale", BigDecimal.class, Long.class,
-        (BigDecimal d, Long scale) ->
-            d.setScale(requireIntScale(scale, "decimals.round"), RoundingMode.HALF_UP)));
+        "decimals_round_scale", CelDecimal.class, Long.class,
+        (CelDecimal d, Long scale) -> CelDecimal.of(
+            d.value().setScale(
+                requireIntScale(scale, "decimals.round"), RoundingMode.HALF_UP))));
     // Flink's TRUNCATE early-returns when the target scale is at-or-finer than
     // the current scale — it's a no-op there, so the result keeps the input's
     // representation. Without this guard, setScale(n>=cur, DOWN) would zero-pad
@@ -227,10 +231,11 @@ final class BuiltinOverload {
         "decimals_trunc_unary",
         d -> d.scale() <= 0 ? d : d.setScale(0, RoundingMode.DOWN)));
     out.add(CelFunctionBinding.from(
-        "decimals_trunc_scale", BigDecimal.class, Long.class,
-        (BigDecimal d, Long scale) -> {
+        "decimals_trunc_scale", CelDecimal.class, Long.class,
+        (CelDecimal d, Long scale) -> {
           int intScale = requireIntScale(scale, "decimals.trunc");
-          return intScale >= d.scale() ? d : d.setScale(intScale, RoundingMode.DOWN);
+          BigDecimal v = d.value();
+          return intScale >= v.scale() ? d : CelDecimal.of(v.setScale(intScale, RoundingMode.DOWN));
         }));
     out.add(decimalsUnary(
         "decimals_floor_decimal", d -> d.setScale(0, RoundingMode.FLOOR)));
@@ -238,24 +243,39 @@ final class BuiltinOverload {
         "decimals_ceil_decimal", d -> d.setScale(0, RoundingMode.CEILING)));
   }
 
-  private static <R> CelFunctionBinding decimalsBinary(
-      String overloadId, BiFunction<BigDecimal, BigDecimal, R> fn) {
+  private static CelFunctionBinding decimalsBinary(
+      String overloadId, BiFunction<BigDecimal, BigDecimal, BigDecimal> fn) {
     return CelFunctionBinding.from(
-        overloadId, BigDecimal.class, BigDecimal.class, fn::apply);
+        overloadId, CelDecimal.class, CelDecimal.class,
+        (CelDecimal a, CelDecimal b) -> CelDecimal.of(fn.apply(a.value(), b.value())));
+  }
+
+  /** Comparison family: the CEL bool result passes through, only Decimal results get wrapped. */
+  private static CelFunctionBinding decimalsCompare(
+      String overloadId, BiPredicate<BigDecimal, BigDecimal> fn) {
+    return CelFunctionBinding.from(
+        overloadId, CelDecimal.class, CelDecimal.class,
+        (CelDecimal a, CelDecimal b) -> fn.test(a.value(), b.value()));
   }
 
   private static CelFunctionBinding decimalsUnary(
       String overloadId, Function<BigDecimal, BigDecimal> fn) {
-    return CelFunctionBinding.from(overloadId, BigDecimal.class, fn::apply);
+    return CelFunctionBinding.from(overloadId, CelDecimal.class,
+        (CelDecimal d) -> CelDecimal.of(fn.apply(d.value())));
   }
 
   // ---- Timestamp ----
 
   private static void addTimestamp(List<CelFunctionBinding> out) {
+    // Bound to Temporal, disjoint from the String and Long that stdlib's surviving
+    // `timestamp` overloads bind: when a dyn argument makes the checker list all three
+    // overload ids, exactly one of them can handle the runtime value, so the dispatch stays
+    // unambiguous. Anything wider here (Object) would match a String or Long too and make
+    // every timestamp(dyn) call ambiguous.
     out.add(CelFunctionBinding.from(
-        "timestamp_of_dyn", Object.class, TimestampUtils::toTimestamp));
+        "timestamp_to_timestamp_temporal", Temporal.class, TimestampUtils::toInstant));
     out.add(CelFunctionBinding.from(
-        "timestamp_of_int_string", Long.class, String.class, TimestampUtils::fromEpoch));
+        "timestamp_int_int", Long.class, Long.class, TimestampUtils::fromEpochPrecision));
   }
 
   // ---- Variant ----
@@ -296,8 +316,11 @@ final class BuiltinOverload {
     // Spark-equivalent: true iff input is a Variant with type=NULL (false for
     // non-Variant inputs — matches Spark is_variant_null on SQL NULL etc.).
     out.add(CelFunctionBinding.from(
-        "variants_type_variant", Variant.class,
-        (Variant v) -> variantTypeName(v.getType())));
+        "variants_type_variant", Object.class,
+        (Object o) -> {
+          Variant v = requireVariantOrNull(o, "variants.type");
+          return v == null ? NullValue.NULL_VALUE : variantTypeName(v.getType());
+        }));
     out.add(CelFunctionBinding.from(
         "variants_isnull_dyn", Object.class,
         (Object o) -> (o instanceof Variant)
@@ -361,7 +384,11 @@ final class BuiltinOverload {
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     out.add(CelFunctionBinding.from(
-        "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
+        "variants_tojson_variant", Object.class,
+        (Object o) -> {
+          Variant v = requireVariantOrNull(o, "variants.toJson");
+          return v == null ? NullValue.NULL_VALUE : VariantUtils.toJsonString(v);
+        }));
   }
 
   /** True iff {@code o} represents "null" in the CEL sense — Java null or
@@ -479,7 +506,10 @@ final class BuiltinOverload {
       case "decimal":
         if (t == Variant.Type.DECIMAL4 || t == Variant.Type.DECIMAL8
             || t == Variant.Type.DECIMAL16) {
-          return v.getDecimal();
+          // A bare BigDecimal here would make decimals.eq(variants.as(v, 'decimal'), ...) fail
+          // with "no matching overload" at runtime; the compiler can't catch it, since both
+          // sides are the DECIMAL OpaqueType at the CEL level.
+          return CelDecimal.of(v.getDecimal());
         }
         break;
       case "timestamp":
