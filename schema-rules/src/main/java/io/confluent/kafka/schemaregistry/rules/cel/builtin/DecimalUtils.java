@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
+import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
@@ -103,6 +104,11 @@ final class DecimalUtils {
     if (o instanceof Long || o instanceof Integer
         || o instanceof Short || o instanceof Byte) {
       return BigDecimal.valueOf(((Number) o).longValue());
+    }
+    if (o instanceof UnsignedLong) {
+      // cel-java binds proto uint32/uint64 fields to Guava UnsignedLong. longValue()
+      // would wrap for values > Long.MAX_VALUE, so go through the unsigned BigInteger.
+      return new BigDecimal(((UnsignedLong) o).bigIntegerValue());
     }
     if (o instanceof BigInteger) {
       // Jackson hands out BigInteger for JSON integers exceeding Long range;

@@ -351,6 +351,63 @@ public class TestVariantJsonConverter {
     Assert.assertEquals("0.0000001", VariantUtils.toJsonString(builder.build()));
   }
 
+  // -- non-finite doubles/floats: bareword round-trip --
+
+  @Test
+  public void testFromJsonNonFiniteBarewordRoundTrip() {
+    // Non-finite values parse from and serialize back to BAREWORDS (no quotes) — a
+    // deliberate divergence from Spark, which quotes them. The round-trip is symmetric.
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(VariantUtils.fromJson("NaN")));
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("Infinity")));
+    Assert.assertEquals(
+        "-Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("-Infinity")));
+  }
+
+  @Test
+  public void testFromJsonOverflowBecomesInfinity() {
+    // A magnitude too large for double overflows to Infinity and serializes as a bareword.
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("1e400")));
+  }
+
+  @Test
+  public void testFromJsonNanIsDouble() {
+    Variant variant = VariantUtils.fromJson("NaN");
+    Assert.assertEquals(Variant.Type.DOUBLE, variant.getType());
+    Assert.assertTrue(Double.isNaN(variant.getDouble()));
+  }
+
+  @Test
+  public void testBuilderNonFiniteDoubleBareword() {
+    // The builder accepts non-finite doubles (no guard), and toJsonString emits a bareword.
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendDouble(Double.NaN);
+    Variant variant = builder.build();
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(variant));
+
+    builder = new VariantBuilder();
+    builder.appendDouble(Double.POSITIVE_INFINITY);
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendDouble(Double.NEGATIVE_INFINITY);
+    Assert.assertEquals("-Infinity", VariantUtils.toJsonString(builder.build()));
+  }
+
+  @Test
+  public void testBuilderNonFiniteFloatBareword() {
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendFloat(Float.NaN);
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendFloat(Float.POSITIVE_INFINITY);
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendFloat(Float.NEGATIVE_INFINITY);
+    Assert.assertEquals("-Infinity", VariantUtils.toJsonString(builder.build()));
+  }
+
   @Test
   public void testToJsonTemporalUsesAsciiDigitsRegardlessOfLocale() {
     // The temporal formatters must emit ASCII digits even when the default locale uses
