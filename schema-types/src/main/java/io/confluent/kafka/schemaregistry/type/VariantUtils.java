@@ -16,10 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.type;
 
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamWriteFeature;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -48,11 +51,18 @@ public class VariantUtils {
   private static final JsonNodeFactory FACTORY = JsonNodeFactory.instance;
 
   /**
-   * Serializer for {@link #toJsonString}. WRITE_BIGDECIMAL_AS_PLAIN renders decimals in
-   * fixed-point form (never scientific), the cross-language contract for variant JSON.
+   * Shared Jackson mapper for both {@link #fromJson} and {@link #toJsonString}.
+   * ALLOW_NON_NUMERIC_NUMBERS reads bareword {@code NaN}/{@code Infinity}/{@code -Infinity};
+   * WRITE_BIGDECIMAL_AS_PLAIN renders decimals in fixed-point form (never scientific), the
+   * cross-language contract for variant JSON; WRITE_NAN_AS_STRINGS is disabled so non-finite
+   * doubles/floats are written as barewords ({@code NaN}) rather than quoted strings
+   * ({@code "NaN"}) — a deliberate divergence from Spark, keeping the round-trip symmetric.
    */
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
-      .configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true);
+  private static final ObjectMapper JSON_MAPPER = JsonMapper.builder()
+      .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+      .enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
+      .disable(JsonWriteFeature.WRITE_NAN_AS_STRINGS)
+      .build();
 
   /**
    * Converts a Variant into a Jackson JsonNode.
@@ -195,6 +205,23 @@ public class VariantUtils {
       return String.format(Locale.ROOT, ".%06d", nano / 1_000);
     }
     return String.format(Locale.ROOT, ".%09d", nano);
+  }
+
+  /**
+   * Parses a JSON string into a Variant using the shared mapper. Bareword non-finite
+   * numbers ({@code NaN}, {@code Infinity}, {@code -Infinity}) are accepted, as are
+   * out-of-range magnitudes ({@code 1e400} becomes {@code Infinity}).
+   *
+   * @param json the JSON string to parse
+   * @return a Variant containing the encoded metadata and value
+   * @throws IllegalArgumentException if the JSON cannot be parsed
+   */
+  public static Variant fromJson(String json) {
+    try {
+      return fromJsonNode(JSON_MAPPER.readTree(json));
+    } catch (JsonProcessingException | IllegalStateException e) {
+      throw new IllegalArgumentException("Cannot parse JSON for variant: " + e.getMessage(), e);
+    }
   }
 
   /**

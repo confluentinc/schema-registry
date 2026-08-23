@@ -804,6 +804,28 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
   }
 
+  @Test
+  void variantsParseJsonNonFinite_isDouble() throws Exception {
+    // Bareword non-finite JSON (NaN/Infinity/-Infinity) parses to a DOUBLE variant.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type(variants.parseJson(\\\"NaN\\\")) == \\\"double\\\""
+        + "                    && variants.type(variants.parseJson(\\\"Infinity\\\")) == \\\"double\\\""
+        + "                    && variants.type(variants.parseJson(\\\"-Infinity\\\")) == \\\"double\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
   // ---- Avro variant logical type ----
 
   /**
