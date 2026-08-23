@@ -27,6 +27,7 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -266,10 +267,15 @@ final class BuiltinOverload {
   // ---- Timestamp ----
 
   private static void addTimestamp(List<CelFunctionBinding> out) {
+    // Bound to Temporal, disjoint from the String and Long that stdlib's surviving
+    // `timestamp` overloads bind: when a dyn argument makes the checker list all three
+    // overload ids, exactly one of them can handle the runtime value, so the dispatch stays
+    // unambiguous. Anything wider here (Object) would match a String or Long too and make
+    // every timestamp(dyn) call ambiguous.
     out.add(CelFunctionBinding.from(
-        "timestamp_of_dyn", Object.class, TimestampUtils::toTimestamp));
+        "timestamp_to_timestamp_temporal", Temporal.class, TimestampUtils::toInstant));
     out.add(CelFunctionBinding.from(
-        "timestamp_of_int_string", Long.class, String.class, TimestampUtils::fromEpoch));
+        "timestamp_int_int", Long.class, Long.class, TimestampUtils::fromEpochPrecision));
   }
 
   // ---- Variant ----

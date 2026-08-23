@@ -182,20 +182,30 @@ public final class BuiltinDeclarations {
   // ---- Timestamp ----
 
   private static void addTimestamp(List<CelFunctionDecl> decls) {
-    // timestamp.of — two overloads (matches the decimal(...) / variant(...)
-    // pattern: (dyn) runtime-dispatch + explicit (int, string) epoch + unit).
-    // The arity check in SignaturesOverlap short-circuits, so the overlap rule
-    // doesn't trigger.
+    // Extension overloads on the *standard* `timestamp` function, rather than a
+    // `timestamp.of` namespace of our own. cel-java isolates the standard declarations in
+    // their own scope (Env.standard) and composites the scopes by overload signature,
+    // innermost first, so these merge with the standard ones instead of replacing the
+    // declaration: `timestamp(string)` and `timestamp(int)` remain stdlib's, the latter
+    // reading a bare int as epoch seconds — the contract all seven clients share.
+    //
+    // (timestamp) -> timestamp has the same signature as stdlib's identity overload and so
+    // shadows it. That is the point: stdlib binds that overload to Instant alone, leaving
+    // every other java.time shape an Avro or Proto decoder can yield with no matching
+    // overload. TimestampUtils.toInstant accepts any Temporal — passing an Instant through,
+    // converting an OffsetDateTime / ZonedDateTime, and refusing a LocalDateTime, whose
+    // local-timestamp value carries no zone to convert from.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "timestamp.of",
+        "timestamp",
         CelOverloadDecl.newGlobalOverload(
-            "timestamp_of_dyn",
-            "Convert a value to a Timestamp (runtime dispatches on actual type)",
-            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.DYN)),
+            "timestamp_to_timestamp_temporal",
+            "Convert a java.time temporal to a Timestamp",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.TIMESTAMP)),
         CelOverloadDecl.newGlobalOverload(
-            "timestamp_of_int_string",
-            "Construct from epoch numeric + unit (millis, micros, nanos, seconds)",
-            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.INT, SimpleType.STRING))));
+            "timestamp_int_int",
+            "Construct from an epoch value at a precision: 0 seconds, 3 millis, "
+                + "6 micros, 9 nanos",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.INT, SimpleType.INT))));
   }
 
   // ---- Variant ----

@@ -546,9 +546,11 @@ public final class AvroResultWriter {
         return value instanceof java.time.LocalTime;
       case "timestamp-millis":
       case "timestamp-micros":
+      case "timestamp-nanos":
         return value instanceof java.time.Instant;
       case "local-timestamp-millis":
       case "local-timestamp-micros":
+      case "local-timestamp-nanos":
         return value instanceof java.time.LocalDateTime;
       default:
         return false;

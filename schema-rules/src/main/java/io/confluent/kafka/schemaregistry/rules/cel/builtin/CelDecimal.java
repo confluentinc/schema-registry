@@ -21,13 +21,11 @@ import java.util.Objects;
 
 /**
  * The runtime Java representation of the CEL {@code confluent.type.Decimal} type
- * ({@link CelTypeLabels#DECIMAL}): a {@link BigDecimal} whose {@code equals} is numeric, so
- * {@code decimal("2.0")} and {@code decimal("2.00")} are one value everywhere CEL asks.
+ * ({@link CelTypeLabels#DECIMAL}): a {@link BigDecimal} whose {@code equals} is numeric.
  *
  * <p><b>Must not extend {@link Number}.</b> cel-java's {@code RuntimeEquality.objectEquals}
  * short-circuits on {@code instanceof Number} into {@code ComparisonFunctions.numericEquals},
- * which understands only Double / Long / UnsignedLong and answers {@code false} for any pair of
- * {@link BigDecimal}s. Staying outside the {@code Number} hierarchy is what routes equality here.
+ * which knows only Double / Long / UnsignedLong and answers {@code false} for any BigDecimal pair.
  */
 public final class CelDecimal implements Comparable<CelDecimal> {
 
