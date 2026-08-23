@@ -355,6 +355,39 @@ public class CelValidatorTimestampTest {
   }
 
   @Test
+  void avroMultiBranchUnion_resolvesTheBranchTheValueTook() {
+    // A legal multi-branch union whose arms are a timestamp-millis long AND a plain int. An
+    // Integer belongs to the int arm, so it must NOT be read as a timestamp; picking the first
+    // non-null branch instead would convert 5 to 1970-01-01T00:00:00.005Z.
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Event\","
+        + "  \"namespace\":\"test\","
+        + "  \"confluent:rules\":["
+        + "    {\"name\":\"r\",\"expr\":\"this.either == 5\"}],"
+        + "  \"fields\":["
+        + "    {\"name\":\"either\",\"type\":["
+        + "       {\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},\"int\"]}"
+        + "  ]"
+        + "}";
+    AvroSchema schema = new AvroSchema(s);
+    GenericRecord asInt = new GenericData.Record(schema.rawSchema());
+    asInt.put("either", 5);
+    assertTrue(schema.validateMessage(new CelValidator(), asInt).isEmpty(),
+        "an int-arm value must stay an int");
+
+    // The long arm of the same union is still normalized to a timestamp.
+    String tsRule = s.replace("this.either == 5",
+        "timestamp(this.either) == timestamp(\\\"2023-11-14T22:13:20.123Z\\\")");
+    AvroSchema tsSchema = new AvroSchema(tsRule);
+    GenericRecord asLong = new GenericData.Record(tsSchema.rawSchema());
+    asLong.put("either", 1700000000123L);
+    assertTrue(tsSchema.validateMessage(new CelValidator(), asLong).isEmpty(),
+        "a long-arm value must be read at the schema's millis unit");
+  }
+
+  @Test
   void avroTimestampMicros_convertersOn_instantArrives() {
     // Same as millis but with the micros logical type. With converters on,
     // Instant arrives regardless of underlying precision.

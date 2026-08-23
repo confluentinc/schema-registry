@@ -55,6 +55,7 @@ import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
@@ -74,6 +75,7 @@ import java.util.stream.Collectors;
 import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -897,7 +899,7 @@ public final class CelUtils {
     }
     switch (schema.getType()) {
       case UNION: {
-        Schema branch = avroUnionBranch(schema);
+        Schema branch = avroUnionBranch(schema, value);
         return branch != null ? normalizeAvroTemporal(value, branch) : value;
       }
       case ARRAY: {
@@ -954,18 +956,23 @@ public final class CelUtils {
   }
 
   /**
-   * The branch of a union a non-null value took. Nullable {@code [null, X]} — the shape a
-   * logical-typed optional field takes — resolves to X. A multi-branch union may pick the
-   * wrong arm, which is harmless: the caller only acts on the branch when the value is a
-   * numeric carrier and the branch declares a timestamp logical type.
+   * The branch of a union the value actually took, via Avro's own runtime resolution — the same
+   * call the walker in {@code AvroSchema} makes. Picking the first non-null branch instead would
+   * be wrong for a legal multi-branch union: given {@code [long(timestamp-millis), int]} an
+   * Integer belongs to the {@code int} arm, and the timestamp arm would convert it to an instant.
+   *
+   * <p>Returns null — meaning "leave the value alone" — when the branch is NULL or the value is
+   * not resolvable against the union at all. The latter is the ordinary case for a value that
+   * already arrived as a temporal (logical-type converters on): there is nothing to normalize.
    */
-  private static Schema avroUnionBranch(Schema union) {
-    for (Schema branch : union.getTypes()) {
-      if (branch.getType() != Schema.Type.NULL) {
-        return branch;
-      }
+  private static Schema avroUnionBranch(Schema union, Object value) {
+    try {
+      GenericData data = AvroSchemaUtils.getData(union, value, false, false);
+      Schema branch = union.getTypes().get(data.resolveUnion(union, value));
+      return branch.getType() == Schema.Type.NULL ? null : branch;
+    } catch (RuntimeException e) {
+      return null;
     }
-    return null;
   }
 
   /**
