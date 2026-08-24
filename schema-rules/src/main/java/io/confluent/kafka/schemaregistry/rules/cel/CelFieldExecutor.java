@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.avro.Schema;
 
 public class CelFieldExecutor extends FieldRuleExecutor {
 
@@ -88,12 +89,20 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       // this executor has always done, and an existing rule comparing such a field to a plain
       // integer literal only compiles under the signed reading. Which one applies is therefore
       // declared per rule, defaulting to the historical signed one.
-      Object celFieldValue =
-          celExecutor.resolveUnsignedFieldType(ctx) == CelExecutor.UnsignedFieldType.UINT
-              && fieldCtx.getFieldDescriptor() instanceof FieldDescriptor
-              ? CelUtils.toCelValueForProtobufField(
-                  (FieldDescriptor) fieldCtx.getFieldDescriptor(), fieldValue)
-              : fieldValue;
+      // For Avro the same idea applies to a logical type: a timestamp field's unit lives in
+      // the schema, so a bare epoch long has to be presented against the field's schema or a
+      // rule reading `timestamp(value)` would take it for epoch seconds.
+      Object celFieldValue;
+      if (celExecutor.resolveUnsignedFieldType(ctx) == CelExecutor.UnsignedFieldType.UINT
+          && fieldCtx.getFieldDescriptor() instanceof FieldDescriptor) {
+        celFieldValue = CelUtils.toCelValueForProtobufField(
+            (FieldDescriptor) fieldCtx.getFieldDescriptor(), fieldValue);
+      } else if (fieldCtx.getFieldDescriptor() instanceof Schema.Field) {
+        celFieldValue = CelUtils.toCelValue(
+            fieldValue, ((Schema.Field) fieldCtx.getFieldDescriptor()).schema());
+      } else {
+        celFieldValue = fieldValue;
+      }
       Object result = celExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
             {
               put("value", celFieldValue != null ? celFieldValue : NULL_VALUE);
@@ -105,6 +114,9 @@ public class CelFieldExecutor extends FieldRuleExecutor {
             }
           }
       );
+      // Unwrap before the narrowing chain below: a CelDecimal is not a Number, so it would
+      // silently skip it.
+      result = CelUtils.unwrapCelDecimals(result);
       if (result instanceof com.google.protobuf.NullValue
           || result instanceof dev.cel.common.values.NullValue) {
         // CEL `null` literal evaluates to dev.cel.common.values.NullValue;

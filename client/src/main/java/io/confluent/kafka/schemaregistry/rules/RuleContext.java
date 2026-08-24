@@ -260,8 +260,8 @@ public class RuleContext {
 
     /**
      * The producer's own handle on the field, for formats that have one: a protobuf
-     * {@code FieldDescriptor}. Null for Avro and JSON Schema, whose walks carry no such
-     * object.
+     * {@code FieldDescriptor}, or an Avro {@code Schema.Field}. Null for JSON Schema, whose
+     * walk carries no such object.
      *
      * <p>{@link #getName()} and {@link #getFullName()} are the <em>registered schema's</em>
      * names for the field, which can differ from the producer's under a compatible rename,
