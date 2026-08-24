@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
+import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
@@ -27,7 +28,9 @@ import java.nio.ByteBuffer;
 /**
  * Conversion helpers backing {@code decimal(...)} and the {@code decimals.*} operator
  * functions. The CEL surface treats Decimal as the canonical type
- * {@link CelTypeLabels#DECIMAL_NAME}; this client backs it with {@link BigDecimal}.
+ * {@link CelTypeLabels#DECIMAL_NAME}; this client backs it with a {@link BigDecimal} wrapped in
+ * {@link CelDecimal}. The methods here produce the unwrapped {@code BigDecimal}; the
+ * {@code decimal(...)} bindings wrap the result.
  */
 final class DecimalUtils {
 
@@ -92,6 +95,10 @@ final class DecimalUtils {
     if (o instanceof BigDecimal) {
       return (BigDecimal) o;
     }
+    if (o instanceof CelDecimal) {
+      // Re-entry: decimal(decimal(x)), or a Decimal arriving back through a dyn-typed path.
+      return ((CelDecimal) o).value();
+    }
     if (o instanceof Decimal) {
       return toBigDecimal((Decimal) o);
     }
@@ -103,6 +110,11 @@ final class DecimalUtils {
     if (o instanceof Long || o instanceof Integer
         || o instanceof Short || o instanceof Byte) {
       return BigDecimal.valueOf(((Number) o).longValue());
+    }
+    if (o instanceof UnsignedLong) {
+      // cel-java binds proto uint32/uint64 fields to Guava UnsignedLong. longValue()
+      // would wrap for values > Long.MAX_VALUE, so go through the unsigned BigInteger.
+      return new BigDecimal(((UnsignedLong) o).bigIntegerValue());
     }
     if (o instanceof BigInteger) {
       // Jackson hands out BigInteger for JSON integers exceeding Long range;

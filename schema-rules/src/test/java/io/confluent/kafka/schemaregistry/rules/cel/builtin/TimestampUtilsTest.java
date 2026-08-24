@@ -17,117 +17,117 @@
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.google.protobuf.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link TimestampUtils} — {@link TimestampUtils#toTimestamp(Object)}
- * dispatch and the {@link TimestampUtils#fromEpoch(long, String)} unit-dispatch.
+ * Unit tests for {@link TimestampUtils} — the {@link TimestampUtils#toInstant} dispatch
+ * backing {@code timestamp(timestamp)} and the {@link TimestampUtils#fromEpochPrecision}
+ * precision dispatch backing {@code timestamp(int, int)}.
  */
 public class TimestampUtilsTest {
 
   @Test
-  void dispatchIdentity_passesTimestampThrough() {
-    Timestamp t = Timestamp.newBuilder().setSeconds(100).setNanos(500).build();
-    assertEquals(t, TimestampUtils.toTimestamp(t));
-  }
-
-  @Test
-  void dispatchInstant_converts() {
+  void instant_passesThroughUnchanged() {
     Instant i = Instant.ofEpochSecond(1700000000L, 123456789);
-    Timestamp t = TimestampUtils.toTimestamp(i);
-    assertEquals(1700000000L, t.getSeconds());
-    assertEquals(123456789, t.getNanos());
+    assertSame(i, TimestampUtils.toInstant(i));
   }
 
   @Test
-  void dispatchOffsetDateTime_converts() {
-    OffsetDateTime odt = OffsetDateTime.of(2026, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
-    Timestamp t = TimestampUtils.toTimestamp(odt);
-    assertEquals(odt.toInstant().getEpochSecond(), t.getSeconds());
+  void offsetDateTime_converts() {
+    OffsetDateTime odt = OffsetDateTime.of(2026, 1, 1, 5, 0, 0, 0, ZoneOffset.ofHours(5));
+    assertEquals(odt.toInstant(), TimestampUtils.toInstant(odt));
   }
 
   @Test
-  void dispatchString_parsesRfc3339() {
-    Timestamp t = TimestampUtils.toTimestamp("2026-01-01T00:00:00Z");
-    assertEquals(1767225600L, t.getSeconds());
+  void zonedDateTime_converts() {
+    ZonedDateTime zdt = ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+    assertEquals(zdt.toInstant(), TimestampUtils.toInstant(zdt));
   }
 
   @Test
-  void dispatchLocalDateTime_refusedWithHint() {
+  void localDateTime_refusedWithHint() {
     LocalDateTime ldt = LocalDateTime.of(2026, 1, 1, 12, 0);
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> TimestampUtils.toTimestamp(ldt));
+        () -> TimestampUtils.toInstant(ldt));
     assertTrue(e.getMessage().contains("LocalDateTime"));
-    assertTrue(e.getMessage().contains("timestamp.of"));
+    assertTrue(e.getMessage().contains("local-timestamp"));
   }
 
+  /** A partial temporal is not a timestamp; refused rather than guessed at. */
   @Test
-  void dispatchRawLong_throwsWithUnitHint() {
+  void localDate_refused() {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> TimestampUtils.toTimestamp(1700000000000L));
-    assertTrue(e.getMessage().contains("timestamp.of"));
+        () -> TimestampUtils.toInstant(LocalDate.of(2026, 1, 1)));
+    assertTrue(e.getMessage().contains("LocalDate"));
   }
 
   @Test
-  void dispatchNull_throws() {
-    assertThrows(IllegalArgumentException.class,
-        () -> TimestampUtils.toTimestamp(null));
+  void precisionSeconds() {
+    assertEquals(Instant.ofEpochSecond(1700000000L),
+        TimestampUtils.fromEpochPrecision(1700000000L, 0));
   }
 
   @Test
-  void fromEpochMillis_basicConversion() {
-    Timestamp t = TimestampUtils.fromEpoch(1500L, "millis");
-    assertEquals(1L, t.getSeconds());
-    assertEquals(500_000_000, t.getNanos());
+  void precisionMillis() {
+    assertEquals(Instant.ofEpochSecond(1L, 500_000_000),
+        TimestampUtils.fromEpochPrecision(1500L, 3));
   }
 
   @Test
-  void fromEpochMicros_basicConversion() {
-    Timestamp t = TimestampUtils.fromEpoch(1_500_000L, "micros");
-    assertEquals(1L, t.getSeconds());
-    assertEquals(500_000_000, t.getNanos());
+  void precisionMicros() {
+    assertEquals(Instant.ofEpochSecond(1L, 500_000_000),
+        TimestampUtils.fromEpochPrecision(1_500_000L, 6));
   }
 
   @Test
-  void fromEpochNanos_basicConversion() {
-    Timestamp t = TimestampUtils.fromEpoch(1_500_000_000L, "nanos");
-    assertEquals(1L, t.getSeconds());
-    assertEquals(500_000_000, t.getNanos());
+  void precisionNanos() {
+    assertEquals(Instant.ofEpochSecond(1L, 500_000_000),
+        TimestampUtils.fromEpochPrecision(1_500_000_000L, 9));
   }
 
+  /** Pre-epoch: floorDiv/floorMod, so the nano adjustment stays non-negative. */
   @Test
-  void fromEpochSeconds_basicConversion() {
-    Timestamp t = TimestampUtils.fromEpoch(1700000000L, "seconds");
-    assertEquals(1700000000L, t.getSeconds());
-    assertEquals(0, t.getNanos());
+  void negativeMillis_floorsCorrectly() {
+    assertEquals(Instant.ofEpochSecond(-1L, 500_000_000),
+        TimestampUtils.fromEpochPrecision(-500L, 3));
   }
 
+  /**
+   * With the unit a number rather than a name, rejecting anything outside {0, 3, 6, 9} is the
+   * only thing between a typo and a silently wrong instant.
+   */
   @Test
-  void fromEpochNegativeMillis_floorDivCorrect() {
-    Timestamp t = TimestampUtils.fromEpoch(-500L, "millis");
-    assertEquals(-1L, t.getSeconds());
-    assertEquals(500_000_000, t.getNanos());
-  }
-
-  @Test
-  void fromEpochUnknownUnit_throws() {
+  void unknownPrecision_throws() {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> TimestampUtils.fromEpoch(1L, "weeks"));
-    assertTrue(e.getMessage().contains("weeks"));
+        () -> TimestampUtils.fromEpochPrecision(1L, 7));
+    assertTrue(e.getMessage().contains("7"));
     assertTrue(e.getMessage().contains("millis"));
+
+    // Neighbours of the valid values, and a negative, are all rejected too.
+    for (long precision : new long[] {-3, 1, 2, 4, 5, 8, 10, 12}) {
+      assertThrows(IllegalArgumentException.class,
+          () -> TimestampUtils.fromEpochPrecision(1L, precision),
+          "precision " + precision + " should be rejected");
+    }
   }
 
   @Test
-  void fromEpochNullUnit_throws() {
-    assertThrows(IllegalArgumentException.class,
-        () -> TimestampUtils.fromEpoch(1L, null));
+  void outOfRange_throws() {
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> TimestampUtils.fromEpochPrecision(Long.MAX_VALUE, 0));
+    assertTrue(e.getMessage().contains("out of range"));
+    // The same value at nanos precision is only ~292 years, so it stays in range.
+    assertEquals(Instant.ofEpochSecond(9223372036L, 854775807L),
+        TimestampUtils.fromEpochPrecision(Long.MAX_VALUE, 9));
   }
 }

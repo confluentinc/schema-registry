@@ -22,12 +22,13 @@ import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.OpaqueType;
 import dev.cel.common.types.SimpleType;
+import dev.cel.common.types.StructTypeReference;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class BuiltinDeclarations {
 
-  private static final OpaqueType DECIMAL = CelTypeLabels.DECIMAL;
+  private static final StructTypeReference DECIMAL = CelTypeLabels.DECIMAL;
   private static final OpaqueType VARIANT = CelTypeLabels.VARIANT;
 
   private BuiltinDeclarations() {
@@ -182,20 +183,30 @@ public final class BuiltinDeclarations {
   // ---- Timestamp ----
 
   private static void addTimestamp(List<CelFunctionDecl> decls) {
-    // timestamp.of — two overloads (matches the decimal(...) / variant(...)
-    // pattern: (dyn) runtime-dispatch + explicit (int, string) epoch + unit).
-    // The arity check in SignaturesOverlap short-circuits, so the overlap rule
-    // doesn't trigger.
+    // Extension overloads on the *standard* `timestamp` function, rather than a
+    // `timestamp.of` namespace of our own. cel-java isolates the standard declarations in
+    // their own scope (Env.standard) and composites the scopes by overload signature,
+    // innermost first, so these merge with the standard ones instead of replacing the
+    // declaration: `timestamp(string)` and `timestamp(int)` remain stdlib's, the latter
+    // reading a bare int as epoch seconds — the contract all seven clients share.
+    //
+    // (timestamp) -> timestamp has the same signature as stdlib's identity overload and so
+    // shadows it. That is the point: stdlib binds that overload to Instant alone, leaving
+    // every other java.time shape an Avro or Proto decoder can yield with no matching
+    // overload. TimestampUtils.toInstant accepts any Temporal — passing an Instant through,
+    // converting an OffsetDateTime / ZonedDateTime, and refusing a LocalDateTime, whose
+    // local-timestamp value carries no zone to convert from.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "timestamp.of",
+        "timestamp",
         CelOverloadDecl.newGlobalOverload(
-            "timestamp_of_dyn",
-            "Convert a value to a Timestamp (runtime dispatches on actual type)",
-            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.DYN)),
+            "timestamp_to_timestamp_temporal",
+            "Convert a java.time temporal to a Timestamp",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.TIMESTAMP)),
         CelOverloadDecl.newGlobalOverload(
-            "timestamp_of_int_string",
-            "Construct from epoch numeric + unit (millis, micros, nanos, seconds)",
-            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.INT, SimpleType.STRING))));
+            "timestamp_int_int",
+            "Construct from an epoch value at a precision: 0 seconds, 3 millis, "
+                + "6 micros, 9 nanos",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.INT, SimpleType.INT))));
   }
 
   // ---- Variant ----
@@ -237,14 +248,14 @@ public final class BuiltinDeclarations {
         "variants.type",
         CelOverloadDecl.newGlobalOverload(
             "variants_type_variant",
-            "Variant type label as a string",
-            SimpleType.STRING, ImmutableList.of(VARIANT))));
+            "Variant type label as a string; CEL null in → CEL null out",
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.isNull",
         CelOverloadDecl.newGlobalOverload(
             "variants_isnull_dyn",
             "True iff input is a Variant whose top type is NULL; false for CEL null",
-            SimpleType.BOOL, ImmutableList.of(VARIANT))));
+            SimpleType.BOOL, ImmutableList.of(SimpleType.DYN))));
 
     // Navigation. Each returns sub-Variant or CEL null on miss. For typed
     // extraction, compose with variants.as / variants.tryAs:
@@ -256,21 +267,21 @@ public final class BuiltinDeclarations {
             "variants_path_dyn_string",
             "JSONPath subset navigation; missing path → CEL null;"
                 + " explicit JSON null → variant-null; malformed path throws.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.field",
         CelOverloadDecl.newGlobalOverload(
             "variants_field_dyn_string",
             "Object field by name; missing → CEL null; explicit JSON null →"
                 + " variant-null.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.index",
         CelOverloadDecl.newGlobalOverload(
             "variants_index_dyn_int",
             "Array element by index; out-of-bounds → CEL null; explicit JSON"
                 + " null at index → variant-null.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.INT))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.INT))));
 
     // Standalone typed extraction. variants.as throws on type mismatch
     // (Spark variant_get root-path analog). variants.tryAs returns CEL null on
@@ -282,21 +293,21 @@ public final class BuiltinDeclarations {
             "variants_as_dyn_string",
             "Extract a typed value from a Variant; throws on type mismatch;"
                 + " null in → null out.",
-            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.tryAs",
         CelOverloadDecl.newGlobalOverload(
             "variants_tryas_dyn_string",
             "Extract a typed value from a Variant; CEL null on type mismatch.",
-            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.toJson",
         CelOverloadDecl.newGlobalOverload(
             "variants_tojson_variant",
-            "Serialize a Variant to its JSON string form",
-            SimpleType.STRING, ImmutableList.of(VARIANT))));
+            "Serialize a Variant to its JSON string form; CEL null in → CEL null out",
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN))));
   }
 
   private static String overloadId(String functionName, String suffix) {

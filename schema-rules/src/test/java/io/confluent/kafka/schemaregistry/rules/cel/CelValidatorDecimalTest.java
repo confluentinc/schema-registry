@@ -624,6 +624,68 @@ public class CelValidatorDecimalTest {
     assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
   }
 
+  /**
+   * Cross-client parity: an Avro {@code decimal} logical type is usable as a Decimal with
+   * <b>no {@code decimal(...)} call</b>, and the wrapped form keeps working alongside it. The
+   * boundary applies the schema's scale, so the value is already a {@link
+   * io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal} — which also means
+   * {@code ==} is numeric on it, since a bare {@link BigDecimal} would take cel-java's
+   * {@code instanceof Number} short-circuit and answer false for any BigDecimal pair.
+   */
+  @Test
+  void avroDecimal_usableWithoutTheConstructor() {
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Money\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"amount\","
+        + "      \"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\","
+        + "                \"precision\":10,\"scale\":2},"
+        + "      \"confluent:rules\":[{\"name\":\"r\",\"expr\":\"%s\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    // 123.45 as the two shapes the field can arrive in: unscaled bytes (converters off,
+    // the default) and an already-scaled BigDecimal (converters on).
+    BigDecimal expected = new BigDecimal("123.45");
+    Object[] shapes = {
+        ByteBuffer.wrap(expected.unscaledValue().toByteArray()),
+        expected,
+    };
+
+    for (Object shape : shapes) {
+      String kind = shape.getClass().getSimpleName();
+      // Bare: no constructor call anywhere in the expression.
+      assertTrue(evalAvro(s, "decimals.eq(this, decimal(\\\"123.45\\\"))", shape).isEmpty(),
+          "bare decimals.eq should hold for " + kind);
+      // The wrapped form must keep working — decimal(...) re-entry on an already-Decimal value.
+      assertTrue(evalAvro(s, "decimals.eq(decimal(this), decimal(\\\"123.45\\\"))", shape)
+              .isEmpty(),
+          "wrapped decimals.eq should hold for " + kind);
+      // `==` is numeric on it: 123.45 equals 123.450 despite the differing scale.
+      assertTrue(evalAvro(s, "this == decimal(\\\"123.450\\\")", shape).isEmpty(),
+          "bare == should be numeric for " + kind);
+      // The schema's scale is applied, not guessed: read as scale 0 this would be 12345.
+      assertTrue(evalAvro(s, "decimals.lt(this, decimal(\\\"1000\\\"))", shape).isEmpty(),
+          "the schema's scale should have been applied for " + kind);
+      // Negative control: a false comparison must still fail.
+      assertEquals(1, evalAvro(s, "decimals.gt(this, decimal(\\\"1000\\\"))", shape).size(),
+          "a false comparison should fail for " + kind);
+    }
+  }
+
+  /** Evaluate {@code expr} (a %s in {@code schemaTemplate}) against an {@code amount} value. */
+  private static List<ValidationRuleError> evalAvro(
+      String schemaTemplate, String expr, Object amount) {
+    AvroSchema schema = new AvroSchema(String.format(schemaTemplate, expr));
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("amount", amount);
+    return schema.validateMessage(new CelValidator(), r);
+  }
+
   @Test
   void avroDecimal_logicalTypeSchemaResolves_atFieldLevel() {
     // Sanity: the decimal logical type from the schema doesn't confuse the
@@ -631,5 +693,164 @@ public class CelValidatorDecimalTest {
     Schema schema = new AvroSchema(AVRO_DECIMAL_SCHEMA).rawSchema();
     Schema amountSchema = schema.getField("amount").schema();
     assertEquals("decimal", LogicalTypes.fromSchemaIgnoreInvalid(amountSchema).getName());
+  }
+
+  // ---- Bare protobuf decimal: no decimal() wrapper ----
+  //
+  // A protobuf confluent.type.Decimal field is typed by cel-java as
+  // StructTypeReference("confluent.type.Decimal"), which is exactly CelTypeLabels.DECIMAL, so
+  // every decimals.* declaration accepts such a field directly. The runtime value is a proto
+  // Decimal message rather than a CelDecimal, which the bindings coerce.
+
+  /** Order schema with a message-level rule, so `this` is the record and fields are selectable. */
+  private static String bareOrderSchema(String expr) {
+    return "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message Order {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"bare\", expr: \"" + expr + "\"}]\n"
+        + "  };\n"
+        + "  confluent.type.Decimal subtotal = 1;\n"
+        + "  confluent.type.Decimal tax = 2;\n"
+        + "  confluent.type.Decimal total = 3;\n"
+        + "}\n";
+  }
+
+  private static List<ValidationRuleError> evalBareOrder(
+      String expr, String subtotal, String tax, String total) {
+    ProtobufSchema schema = new ProtobufSchema(bareOrderSchema(expr));
+    Descriptor desc = schema.toDescriptor("test.Order");
+    DynamicMessage order = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("subtotal"), decimal(desc, "subtotal", subtotal))
+        .setField(desc.findFieldByName("tax"), decimal(desc, "tax", tax))
+        .setField(desc.findFieldByName("total"), decimal(desc, "total", total))
+        .build();
+    return schema.validateMessage(new CelValidator(), order);
+  }
+
+  @Test
+  void bareProtoDecimal_fieldRule_needsNoConstructor() {
+    // The field-level shape: `this` is the Decimal message itself.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message Money {\n"
+        + "  confluent.type.Decimal amount = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"nonNegative\","
+        + "             expr: \"decimals.ge(this, decimal(\\\"0\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor moneyDesc = schema.toDescriptor("test.Money");
+    DynamicMessage ok = DynamicMessage.newBuilder(moneyDesc)
+        .setField(moneyDesc.findFieldByName("amount"), decimal(moneyDesc, "amount", "100.50"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), ok).isEmpty());
+
+    DynamicMessage bad = DynamicMessage.newBuilder(moneyDesc)
+        .setField(moneyDesc.findFieldByName("amount"), decimal(moneyDesc, "amount", "-0.01"))
+        .build();
+    List<ValidationRuleError> errors = schema.validateMessage(new CelValidator(), bad);
+    assertEquals(1, errors.size());
+    assertEquals("nonNegative", errors.get(0).getRule().getName());
+  }
+
+  @Test
+  void bareProtoDecimal_arithmeticOnSelectedFields() {
+    assertTrue(evalBareOrder(
+        "decimals.eq(decimals.add(this.subtotal, this.tax), this.total)",
+        "100.00", "8.50", "108.50").isEmpty());
+    assertEquals(1, evalBareOrder(
+        "decimals.eq(decimals.add(this.subtotal, this.tax), this.total)",
+        "100.00", "8.50", "999.00").size());
+  }
+
+  @Test
+  void bareProtoDecimal_mixesWithConstructedDecimals() {
+    // decimal("...") yields CelTypeLabels.DECIMAL and this.subtotal yields the proto field's
+    // struct type. Those are one type now, so the mixed pair type-checks.
+    assertTrue(evalBareOrder(
+        "decimals.gt(this.subtotal, decimal(\\\"1\\\"))",
+        "100.00", "8.50", "108.50").isEmpty());
+  }
+
+  @Test
+  void bareProtoDecimal_stringAndDoubleConversion() {
+    assertTrue(evalBareOrder(
+        "string(this.subtotal) == \\\"100.00\\\"", "100.00", "8.50", "108.50").isEmpty());
+    assertTrue(evalBareOrder(
+        "double(this.subtotal) == 100.0", "100.00", "8.50", "108.50").isEmpty());
+  }
+
+  @Test
+  void bareProtoDecimal_equalityIsNumericNotProtoEncoding() {
+    // The whole point of the == override: 1.50 and 1.5 are the same number in two encodings.
+    // Proto equality compares unscaled bytes and scale field-by-field and answers false.
+    assertTrue(evalBareOrder(
+        "this.subtotal == this.total", "1.50", "0", "1.5").isEmpty(),
+        "1.50 == 1.5 must be true");
+    assertTrue(evalBareOrder(
+        "this.subtotal == this.total", "1.50", "0", "1.50").isEmpty());
+    assertEquals(1, evalBareOrder(
+        "this.subtotal == this.total", "1.50", "0", "2.5").size());
+  }
+
+  @Test
+  void bareProtoDecimal_equalityAcrossRepresentations() {
+    // A proto Decimal message on one side, a CelDecimal on the other.
+    assertTrue(evalBareOrder(
+        "this.subtotal == decimal(\\\"1.5\\\")", "1.50", "0", "0").isEmpty());
+    assertTrue(evalBareOrder(
+        "decimal(\\\"1.5\\\") == this.subtotal", "1.50", "0", "0").isEmpty());
+    assertTrue(evalBareOrder(
+        "this.subtotal == decimals.add(this.tax, this.total)", "3.00", "1.0", "2.000").isEmpty());
+  }
+
+  @Test
+  void bareProtoDecimal_inequalityIsNumericToo() {
+    assertEquals(1, evalBareOrder(
+        "this.subtotal != this.total", "1.50", "0", "1.5").size(),
+        "1.50 != 1.5 must be false");
+    assertTrue(evalBareOrder(
+        "this.subtotal != this.total", "1.50", "0", "2.5").isEmpty());
+  }
+
+  @Test
+  void bareProtoDecimal_canonicalParitySet() {
+    // The cross-client parity contract, mirrored in all seven clients. `this` is a bare
+    // confluent.type.Decimal field holding 12.34 (unscaled 1234, scale 2) and no expression
+    // wraps it in decimal(...). The discriminating case is the scale-differing equality: a
+    // client comparing by protobuf encoding answers false for decimal("12.340").
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message Money {\n"
+        + "  confluent.type.Decimal amount = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"%s\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    String[][] cases = {
+        {"decimals.gt(this, decimal(\\\"10.00\\\"))", "true"},
+        {"decimals.eq(this, decimal(\\\"12.340\\\"))", "true"},
+        {"this == decimal(\\\"12.34\\\")", "true"},
+        {"this == decimal(\\\"12.340\\\")", "true"},
+        {"this != decimal(\\\"12.340\\\")", "false"},
+        {"this == decimal(\\\"99\\\")", "false"},
+        {"string(this) == \\\"12.34\\\"", "true"},
+        {"double(this) == 12.34", "true"},
+    };
+    for (String[] c : cases) {
+      ProtobufSchema schema = new ProtobufSchema(String.format(s, c[0]));
+      Descriptor desc = schema.toDescriptor("test.Money");
+      DynamicMessage msg = DynamicMessage.newBuilder(desc)
+          .setField(desc.findFieldByName("amount"), decimal(desc, "amount", "12.34"))
+          .build();
+      boolean passed = schema.validateMessage(new CelValidator(), msg).isEmpty();
+      assertEquals(Boolean.parseBoolean(c[1]), passed, c[0]);
+    }
   }
 }
