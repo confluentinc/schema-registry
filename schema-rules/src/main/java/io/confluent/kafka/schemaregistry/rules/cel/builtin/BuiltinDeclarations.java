@@ -22,12 +22,13 @@ import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.OpaqueType;
 import dev.cel.common.types.SimpleType;
+import dev.cel.common.types.StructTypeReference;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class BuiltinDeclarations {
 
-  private static final OpaqueType DECIMAL = CelTypeLabels.DECIMAL;
+  private static final StructTypeReference DECIMAL = CelTypeLabels.DECIMAL;
   private static final OpaqueType VARIANT = CelTypeLabels.VARIANT;
 
   private BuiltinDeclarations() {

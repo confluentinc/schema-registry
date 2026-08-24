@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.CelOptions;
 import dev.cel.common.values.CelByteString;
@@ -25,7 +26,6 @@ import dev.cel.common.values.NullValue;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import dev.cel.runtime.RuntimeEquality;
-import dev.cel.runtime.RuntimeHelpers;
 import dev.cel.runtime.standard.CelStandardFunction;
 import dev.cel.runtime.standard.DoubleFunction;
 import dev.cel.runtime.standard.StringFunction;
@@ -67,12 +67,12 @@ final class BuiltinOverload {
 
   /**
    * The standard functions {@link #standardOverrides} takes over. A caller must exclude these
-   * from the runtime's standard functions, or registering the regrouped bindings collides with
-   * the standard ones under the same name.
+   * from the runtime's standard functions, or registering the replacement bindings collides with
+   * the standard ones under the same overload id.
    */
   static final ImmutableSet<StandardFunction> OVERRIDDEN_STANDARD_FUNCTIONS =
       ImmutableSet.of(StandardFunction.TIMESTAMP, StandardFunction.STRING,
-          StandardFunction.DOUBLE);
+          StandardFunction.DOUBLE, StandardFunction.EQUALS, StandardFunction.NOT_EQUALS);
 
   private BuiltinOverload() {
   }
@@ -219,15 +219,15 @@ final class BuiltinOverload {
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
     out.add(decimalsUnary("decimals_abs_decimal", BigDecimal::abs));
     out.add(CelFunctionBinding.from(
-        "decimals_sign_decimal", CelDecimal.class,
-        (CelDecimal d) -> (long) d.value().signum()));
+        "decimals_sign_decimal", Object.class,
+        (Object d) -> (long) DecimalUtils.toBigDecimal(d).signum()));
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
         "decimals_round_unary", d -> d.setScale(0, RoundingMode.HALF_UP)));
     out.add(CelFunctionBinding.from(
-        "decimals_round_scale", CelDecimal.class, Long.class,
-        (CelDecimal d, Long scale) -> CelDecimal.of(
-            d.value().setScale(
+        "decimals_round_scale", Object.class, Long.class,
+        (Object d, Long scale) -> CelDecimal.of(
+            DecimalUtils.toBigDecimal(d).setScale(
                 requireIntScale(scale, "decimals.round"), RoundingMode.HALF_UP))));
     // Flink's TRUNCATE early-returns when the target scale is at-or-finer than
     // the current scale — it's a no-op there, so the result keeps the input's
@@ -237,11 +237,12 @@ final class BuiltinOverload {
         "decimals_trunc_unary",
         d -> d.scale() <= 0 ? d : d.setScale(0, RoundingMode.DOWN)));
     out.add(CelFunctionBinding.from(
-        "decimals_trunc_scale", CelDecimal.class, Long.class,
-        (CelDecimal d, Long scale) -> {
+        "decimals_trunc_scale", Object.class, Long.class,
+        (Object d, Long scale) -> {
           int intScale = requireIntScale(scale, "decimals.trunc");
-          BigDecimal v = d.value();
-          return intScale >= v.scale() ? d : CelDecimal.of(v.setScale(intScale, RoundingMode.DOWN));
+          BigDecimal v = DecimalUtils.toBigDecimal(d);
+          return intScale >= v.scale()
+              ? CelDecimal.of(v) : CelDecimal.of(v.setScale(intScale, RoundingMode.DOWN));
         }));
     out.add(decimalsUnary(
         "decimals_floor_decimal", d -> d.setScale(0, RoundingMode.FLOOR)));
@@ -249,25 +250,41 @@ final class BuiltinOverload {
         "decimals_ceil_decimal", d -> d.setScale(0, RoundingMode.CEILING)));
   }
 
+  /**
+   * Every {@code decimals.*} binding takes {@code Object} and coerces, rather than binding
+   * {@link CelDecimal} directly. A value carrying {@link CelTypeLabels#DECIMAL} is a
+   * {@code CelDecimal} when it came from an Avro boundary conversion, the {@code decimal()}
+   * constructor, or another {@code decimals.*} result — but a plain proto {@code Decimal} message
+   * when it came from protobuf field selection, which happens inside the runtime where no boundary
+   * can reach it. {@link DecimalUtils#toBigDecimal(Object)} accepts either, so binding
+   * {@code CelDecimal} would reject exactly the bare-protobuf case these declarations now admit.
+   *
+   * <p>Safe here because {@code decimals.*} are our own namespaced functions with a single binding
+   * per overload id — unlike the extensions in {@link #standardOverrides}, where an
+   * {@code Object}-bound binding sitting in a dispatch group with the standard ones would claim
+   * every call.
+   */
   private static CelFunctionBinding decimalsBinary(
       String overloadId, BiFunction<BigDecimal, BigDecimal, BigDecimal> fn) {
     return CelFunctionBinding.from(
-        overloadId, CelDecimal.class, CelDecimal.class,
-        (CelDecimal a, CelDecimal b) -> CelDecimal.of(fn.apply(a.value(), b.value())));
+        overloadId, Object.class, Object.class,
+        (Object a, Object b) -> CelDecimal.of(
+            fn.apply(DecimalUtils.toBigDecimal(a), DecimalUtils.toBigDecimal(b))));
   }
 
   /** Comparison family: the CEL bool result passes through, only Decimal results get wrapped. */
   private static CelFunctionBinding decimalsCompare(
       String overloadId, BiPredicate<BigDecimal, BigDecimal> fn) {
     return CelFunctionBinding.from(
-        overloadId, CelDecimal.class, CelDecimal.class,
-        (CelDecimal a, CelDecimal b) -> fn.test(a.value(), b.value()));
+        overloadId, Object.class, Object.class,
+        (Object a, Object b) -> fn.test(
+            DecimalUtils.toBigDecimal(a), DecimalUtils.toBigDecimal(b)));
   }
 
   private static CelFunctionBinding decimalsUnary(
       String overloadId, Function<BigDecimal, BigDecimal> fn) {
-    return CelFunctionBinding.from(overloadId, CelDecimal.class,
-        (CelDecimal d) -> CelDecimal.of(fn.apply(d.value())));
+    return CelFunctionBinding.from(overloadId, Object.class,
+        (Object d) -> CelDecimal.of(fn.apply(DecimalUtils.toBigDecimal(d))));
   }
 
   // ---- Timestamp ----
@@ -289,9 +306,8 @@ final class BuiltinOverload {
    * standard functions and register these instead — the standard behavior is preserved because
    * the standard bindings are re-registered here verbatim, not reimplemented.
    */
-  static ImmutableList<CelFunctionBinding> standardOverrides(CelOptions celOptions) {
-    RuntimeEquality runtimeEquality =
-        RuntimeEquality.create(RuntimeHelpers.create(), celOptions);
+  static ImmutableList<CelFunctionBinding> standardOverrides(
+      CelOptions celOptions, RuntimeEquality runtimeEquality) {
     List<CelFunctionBinding> out = new ArrayList<>();
 
     // timestamp: the standard string / int / identity overloads, plus a Temporal binding
@@ -303,16 +319,96 @@ final class BuiltinOverload {
         CelFunctionBinding.from(
             "timestamp_int_int", Long.class, Long.class, TimestampUtils::fromEpochPrecision)));
 
-    // string(Decimal) / double(Decimal). The double form is narrowing:
-    // BigDecimal.doubleValue() returns the closest double (±Infinity when out of range).
+    // string(Decimal) / double(Decimal). Object-bound, not CelDecimal-bound: a decimal value is
+    // a CelDecimal or a proto Decimal message depending on where it came from, and the checker
+    // resolves the single declared string(Decimal) overload to one id, so that id has to accept
+    // both. Safe despite the width because regroup appends extras last and dispatch is
+    // first-match over insertion order (FunctionBindingImpl.DynamicDispatchOverload) — every
+    // standard overload gets first refusal, and these see only what none of them handled.
+    // The double form is narrowing: BigDecimal.doubleValue() returns the closest double
+    // (±Infinity when out of range).
     out.addAll(regroup("string", StringFunction.create(), celOptions, runtimeEquality,
-        CelFunctionBinding.from("decimal_to_string", CelDecimal.class,
-            (CelDecimal d) -> d.value().toPlainString())));
+        CelFunctionBinding.from("decimal_to_string", Object.class,
+            (Object d) -> requireDecimal(d, "string").toPlainString())));
     out.addAll(regroup("double", DoubleFunction.create(), celOptions, runtimeEquality,
-        CelFunctionBinding.from("decimal_to_double", CelDecimal.class,
-            (CelDecimal d) -> d.value().doubleValue())));
+        CelFunctionBinding.from("decimal_to_double", Object.class,
+            (Object d) -> requireDecimal(d, "double").doubleValue())));
+
+    // == and != . Unlike the three above, these are replaced rather than regrouped: stdlib
+    // binds each as a single generic (Object, Object) overload whose id equals the function
+    // name (EqualsOperator: CelFunctionBinding.from("equals", Object, Object,
+    // runtimeEquality::objectEquals)), so there is no dispatch group to extend and nothing to
+    // preserve alongside. Adding a narrower (Decimal, Decimal) declaration instead does not
+    // work: stdlib's (A, A) always matches too, so the checker cannot narrow to one overload id
+    // and the name fallback lands back on the standard binding.
+    out.add(CelFunctionBinding.from("equals", Object.class, Object.class,
+        (Object x, Object y) -> decimalEquals(x, y, runtimeEquality)));
+    out.add(CelFunctionBinding.from("not_equals", Object.class, Object.class,
+        (Object x, Object y) -> !decimalEquals(x, y, runtimeEquality)));
 
     return ImmutableList.copyOf(out);
+  }
+
+  /**
+   * CEL {@code ==} with decimals made numeric. A decimal operand may be a {@link CelDecimal} or
+   * a proto {@code Decimal} message, and proto equality is the wrong answer for both: it compares
+   * unscaled bytes and scale field-by-field, so {@code 1.50} and {@code 1.5} — the same number in
+   * two encodings — come out unequal.
+   *
+   * <p>A thin pre-filter, deliberately. When neither side is a decimal this delegates to the
+   * standard implementation verbatim, so every other {@code ==} in the language keeps stdlib
+   * semantics (numeric cross-type rules, list and map recursion, proto message comparison,
+   * the {@code disableCelStandardEquality} option).
+   */
+  private static boolean decimalEquals(Object x, Object y, RuntimeEquality runtimeEquality) {
+    BigDecimal a = asDecimalOrNull(x);
+    BigDecimal b = asDecimalOrNull(y);
+    if (a != null && b != null) {
+      return a.compareTo(b) == 0;
+    }
+    if (a != null || b != null) {
+      // A decimal is never equal to a non-decimal. Returning stdlib's answer here would be
+      // false anyway, but only by accident of the shapes not matching; say it outright.
+      return false;
+    }
+    return runtimeEquality.objectEquals(x, y);
+  }
+
+  /**
+   * {@code o} as a {@link BigDecimal} if it carries {@link CelTypeLabels#DECIMAL}, else null.
+   * Narrow on purpose — unlike {@link DecimalUtils#toBigDecimal(Object)}, which coerces numbers
+   * and strings too. This runs on every {@code ==} in every rule, so it must not turn
+   * {@code 1 == "1"} into a decimal comparison, and it must stay cheap for the common case.
+   */
+  private static BigDecimal asDecimalOrNull(Object o) {
+    if (o instanceof CelDecimal) {
+      return ((CelDecimal) o).value();
+    }
+    if (o instanceof Message
+        && CelTypeLabels.DECIMAL_NAME.equals(
+            ((Message) o).getDescriptorForType().getFullName())) {
+      return DecimalUtils.toBigDecimal(o);
+    }
+    return null;
+  }
+
+  /**
+   * {@code o} as a {@link BigDecimal}, or a clear failure. Uses the narrow
+   * {@link #asDecimalOrNull} rather than {@link DecimalUtils#toBigDecimal(Object)} because this
+   * backs the last-resort binding in the {@code string} / {@code double} dispatch groups: a value
+   * that reaches it is one no standard overload could handle, and reporting that plainly beats
+   * coercing, say, a list into a number.
+   */
+  private static BigDecimal requireDecimal(Object o, String functionName) {
+    BigDecimal d = asDecimalOrNull(o);
+    if (d == null) {
+      throw new IllegalArgumentException(
+          functionName + ": expected " + CelTypeLabels.DECIMAL_NAME + ", got "
+              + (o instanceof Message
+                 ? ((Message) o).getDescriptorForType().getFullName()
+                 : o.getClass().getName()));
+    }
+    return d;
   }
 
   /**

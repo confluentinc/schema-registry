@@ -382,15 +382,17 @@ public final class CelUtils {
     // CelOptions.current() leaves false. Overriding here keeps cross-type numeric comparison
     // off, matching the compiler's options and the other clients. CelUtilsTest pins this.
     //
-    // BuiltinLibrary extends three standard function names (timestamp, string, double). On the
-    // planner runtime an overload cannot simply be added alongside the standard ones: the
-    // planner resolves a call to a single overload id at plan time and, when the checker could
-    // not narrow it that far — every call with a dyn argument, i.e. every Avro logical-typed
-    // field — falls back to a *name*-keyed dispatch entry built only from the bindings
-    // registered together under that name. So the standard functions are excluded here and
-    // re-registered by standardOverrides(), regrouped with our additions. There is exactly one
-    // setStandardFunctions call because a second one silently discards the first; the PCRE
-    // exclusion below rides along in the same set.
+    // BuiltinLibrary takes over five standard function names (timestamp, string, double, == and
+    // !=), which is why they are excluded here. On the planner runtime an overload cannot simply
+    // be added alongside the standard ones: the planner resolves a call to a single overload id
+    // at plan time and, when the checker could not narrow it that far — every call with a dyn
+    // argument, i.e. every Avro logical-typed field — falls back to a *name*-keyed dispatch entry
+    // built only from the bindings registered together under that name. The library re-registers
+    // each of the five, preserving the standard behavior (see BuiltinOverload.standardOverrides).
+    //
+    // Only the exclusion lives here, not the bindings: this is the one setStandardFunctions call,
+    // and a second one silently discards the first, so the PCRE exclusion below has to ride along
+    // in the same set.
     Set<StandardFunction> excludedStandardFunctions =
         EnumSet.copyOf(BuiltinLibrary.overriddenStandardFunctions());
     if (regexEngine == RegexEngine.PCRE) {
@@ -405,8 +407,7 @@ public final class CelUtils {
         .setStandardFunctions(
             CelStandardFunctions.newBuilder()
                 .excludeFunctions(excludedStandardFunctions)
-                .build())
-        .addFunctionBindings(BuiltinLibrary.standardOverrides(CEL_OPTIONS));
+                .build());
 
     if (regexEngine == RegexEngine.PCRE) {
       // Replace stdlib RE2-backed matches with java.util.regex. Despite what

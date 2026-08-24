@@ -42,15 +42,20 @@ import org.junit.jupiter.api.Test;
  * Sanity coverage for CEL {@code ==} / {@code !=} across the type surface, plus the PCRE
  * {@code matches} override.
  *
- * <p>Equality here is the <em>stock</em> cel-java stdlib binding. {@link CelUtils} briefly
- * replaced it to work around bare-{@link java.math.BigDecimal} decimals; that override is gone
- * now that a Decimal is a non-{@link Number}
- * {@link io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal}. This class is the
- * insurance that handing equality back to the stdlib regressed nothing.
+ * <p>{@code ==} and {@code !=} are ours, not stdlib's: {@code BuiltinOverload.standardOverrides}
+ * replaces both so that a decimal operand compares numerically instead of by its protobuf
+ * encoding. Every case below uses non-decimals, so every case exercises the delegating arm of
+ * that replacement — this class is the insurance that taking over the most-used function in the
+ * language regressed nothing.
  *
- * <p>{@code matches} is still overridden in PCRE mode — now the sole
- * {@code setStandardFunctions(...)} exclusion. Every case runs under BOTH regex engines, so that
- * override's presence can't change an equality answer.
+ * <p>{@link #protoMessageEquality()} carries extra weight. The replacement delegates to the
+ * {@code RuntimeEquality} the runtime hands {@code BuiltinLibrary} as a
+ * {@code CelInternalRuntimeLibrary}; a hand-built one would instead throw "Not implemented yet"
+ * on any message operand. That test is what fails if a cel-java upgrade changes how the instance
+ * is supplied.
+ *
+ * <p>{@code matches} is also overridden in PCRE mode. Every case runs under BOTH regex engines,
+ * so neither override's presence can change an equality answer.
  *
  * @see CelDecimalEqualityTest for the decimal side
  */
