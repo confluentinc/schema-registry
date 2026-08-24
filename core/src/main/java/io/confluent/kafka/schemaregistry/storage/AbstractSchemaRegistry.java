@@ -1676,8 +1676,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    */
   protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
     try {
-      for (SchemaKey key : getAllSchemaKeysDescending(subject)) {
-        if (!getReferencedBy(key, true).isEmpty()) {
+      // Use getAllVersions rather than getAllSchemaKeysDescending: subclasses can override the
+      // former with a store-native version lookup, whereas the latter's range scan over
+      // SchemaKeys is not implemented by every backing store. Order is irrelevant here.
+      Iterator<SchemaKey> versions = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+      while (versions.hasNext()) {
+        if (!getReferencedBy(versions.next(), true).isEmpty()) {
           return true;
         }
       }
