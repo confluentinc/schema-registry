@@ -722,9 +722,9 @@ public class SubjectVersionsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Modify tags operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
+      throw Errors.storeException("Modify tags operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding modify tags request"
