@@ -87,6 +87,46 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
+  /**
+   * Cross-client parity, Protobuf half: a {@code confluent.type.Variant} field is usable with
+   * the {@code variants.*} accessors with <b>no {@code variant(...)} call</b>. The bindings
+   * coerce through {@code VariantUtils.toVariant}, which recognizes the message by its
+   * descriptor's full name — so a {@code DynamicMessage} from a registry-parsed schema works
+   * as well as the generated type.
+   */
+  @Test
+  void protoVariant_usableWithoutTheConstructor() throws Exception {
+    String template = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"%s\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    for (String expr : new String[] {
+        // Bare: no constructor call on the field.
+        "variants.type(this) == \\\"object\\\"",
+        "variants.as(variants.field(this, \\\"name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        "variants.as(variants.path(this, \\\"$.name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        // The wrapped form must keep working (variant(...) re-entry).
+        "variants.as(variants.field(variant(this), \\\"name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        // A missing key is CEL null, not an error.
+        "variants.field(this, \\\"nope\\\") == null",
+    }) {
+      ProtobufSchema schema = new ProtobufSchema(String.format(template, expr));
+      DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+      List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+      assertTrue(errs.isEmpty(), expr + " -> " + errs + " causes: " + dumpCauses(errs));
+    }
+    // Negative control: a false comparison must fail.
+    ProtobufSchema schema = new ProtobufSchema(String.format(template,
+        "variants.as(variants.field(this, \\\"name\\\"), \\\"string\\\") == \\\"bob\\\""));
+    assertEquals(1, schema.validateMessage(
+        new CelValidator(), docWithVariantJson(schema, "{\"name\":\"alice\"}")).size());
+  }
+
   private static String dumpCauses(List<ValidationRuleError> errs) {
     StringBuilder sb = new StringBuilder();
     for (ValidationRuleError e : errs) {
@@ -182,6 +222,46 @@ public class CelValidatorVariantTest {
         + "    rules: [{name: \"r\","
         + "             expr: \"!variants.isNull("
         + "                       variants.field(variant(this), \\\"missing\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsType_onMissingField_returnsCelNull() throws Exception {
+    // Null-passthrough: variants.type of a missing (CEL null) receiver is CEL null,
+    // not a rule error. Regression for the type/toJson Variant.class binding, which
+    // previously errored on a null receiver instead of propagating it.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type(variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsToJson_onMissingField_returnsCelNull() throws Exception {
+    // Null-passthrough for variants.toJson (same fix as variants.type above).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.toJson(variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -468,13 +548,19 @@ public class CelValidatorVariantTest {
   // ---- variants.* on non-Variant input: clear IAE, not ClassCastException ----
 
   @Test
-  void variantsField_onNonVariantInput_rejectedAtCompileTime() throws Exception {
-    // The Variant-typed receiver lets the type checker reject obviously-wrong
-    // calls at rule compilation time. A rule author who passes a literal
-    // string by mistake gets a "no matching overload" / type-mismatch error
-    // before the rule ever runs, rather than only finding out at evaluation
-    // time. The error surfaces as a RuleException at validateMessage time
-    // because compilation is lazy (deferred until first evaluation).
+  void variantsField_onNonVariantInput_rejectedWithAClearMessage() throws Exception {
+    // A rule author who passes a literal string by mistake gets a clear
+    // "expected Variant, got java.lang.String" rather than a ClassCastException.
+    //
+    // This is an *evaluation*-time error, not a compile-time one: every variants.*
+    // accessor declares its subject as dyn, because a variant value reaches CEL as
+    // whatever the format decoded it to — a Map for an Avro record, a
+    // confluent.type.Variant message for Protobuf — and neither is assignable to an
+    // opaque Variant type at check time. (Before, only some of the accessors were
+    // strict, so the check was inconsistent: variants.as / tryAs / isNull already
+    // took dyn.) The binding coerces through VariantUtils.toVariant, which is what
+    // lets a variant field be used with no variant(...) call, as on every other
+    // client.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -492,13 +578,9 @@ public class CelValidatorVariantTest {
     List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
     assertEquals(1, errs.size(),
         "expected non-Variant input to be rejected; got: " + errs);
-    // cel-java's type checker reports either "no matching overload" or
-    // "found no matching overload" depending on version. Match either form.
     String causes = dumpCauses(errs);
-    assertTrue(
-        causes.contains("no matching overload")
-            || causes.contains("found no matching overload"),
-        "expected compile-time overload-mismatch error; got causes: " + causes);
+    assertTrue(causes.contains("expected Variant, got java.lang.String"),
+        "expected a clear non-Variant message; got causes: " + causes);
   }
 
   // ---- variants.tryAs — type-mismatch returns CEL null ----
@@ -764,6 +846,28 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
   }
 
+  @Test
+  void variantsParseJsonNonFinite_isDouble() throws Exception {
+    // Bareword non-finite JSON (NaN/Infinity/-Infinity) parses to a DOUBLE variant.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type(variants.parseJson(\\\"NaN\\\")) == \\\"double\\\""
+        + "                    && variants.type(variants.parseJson(\\\"Infinity\\\")) == \\\"double\\\""
+        + "                    && variants.type(variants.parseJson(\\\"-Infinity\\\")) == \\\"double\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
   // ---- Avro variant logical type ----
 
   /**
@@ -822,6 +926,52 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
+  /**
+   * Cross-client parity, Avro half: a variant field is usable with the {@code variants.*}
+   * accessors with <b>no {@code variant(...)} call</b>, and the wrapped form keeps working
+   * alongside it. The {@code variants.*} bindings take {@code Object} and coerce through
+   * {@code VariantUtils.toVariant}, which handles the Map the Avro record is converted to —
+   * the same leniency the whole variant surface is built on.
+   */
+  @Test
+  void avroVariant_usableWithoutTheConstructor() throws Exception {
+    for (String expr : new String[] {
+        // Bare: no constructor call on the field.
+        "variants.type(this) == \\\"object\\\"",
+        "variants.as(variants.field(this, \\\"name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        "variants.as(variants.path(this, \\\"$.name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        // The wrapped form must keep working (variant(...) re-entry).
+        "variants.as(variants.field(variant(this), \\\"name\\\"), \\\"string\\\") == \\\"alice\\\"",
+        // A missing key is CEL null, not an error — the null model holds on a bare field too.
+        "variants.field(this, \\\"nope\\\") == null",
+    }) {
+      List<ValidationRuleError> errs = evalAvroVariant(expr, "{\"name\":\"alice\"}");
+      assertTrue(errs.isEmpty(), expr + " -> " + errs + " causes: " + dumpCauses(errs));
+    }
+    // Negative control: a false comparison must fail.
+    assertEquals(1, evalAvroVariant(
+        "variants.as(variants.field(this, \\\"name\\\"), \\\"string\\\") == \\\"bob\\\"",
+        "{\"name\":\"alice\"}").size());
+  }
+
+  /** Evaluate a field-level rule over an Avro variant payload carrying {@code json}. */
+  private static List<ValidationRuleError> evalAvroVariant(String expr, String json)
+      throws Exception {
+    String s = AVRO_VARIANT_SCHEMA.replace(
+        "variants.as(variants.field(variant(this), \\\"name\\\"), \\\"string\\\") "
+            + "== \\\"alice\\\"", expr);
+    AvroSchema schema = new AvroSchema(s);
+    org.apache.avro.Schema docSchema = schema.rawSchema();
+    Variant v = VariantUtils.fromJsonNode(MAPPER.readTree(json));
+    GenericRecord variantRec =
+        new GenericData.Record(docSchema.getField("payload").schema());
+    variantRec.put("metadata", v.getMetadataBuffer());
+    variantRec.put("value", v.getValueBuffer());
+    GenericRecord doc = new GenericData.Record(docSchema);
+    doc.put("payload", variantRec);
+    return schema.validateMessage(new CelValidator(), doc);
+  }
+
   @Test
   void avroVariant_mismatchFails() throws Exception {
     AvroSchema schema = new AvroSchema(AVRO_VARIANT_SCHEMA);
@@ -869,5 +1019,41 @@ public class CelValidatorVariantTest {
 
     List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  /**
+   * {@code variants.isNull} must coerce its receiver like every other accessor. It is declared
+   * over dyn, so a bare variant field reaches it; a raw {@code instanceof Variant} check answered
+   * false for the shapes a variant-typed field actually decodes to, reporting "not null" for a
+   * variant that holds an explicit JSON null.
+   */
+  @Test
+  void variantIsNull_coercesBareReceiver() throws Exception {
+    String template = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"%s\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    // An explicit JSON null is a present variant whose top type is NULL.
+    ProtobufSchema nullSchema = new ProtobufSchema(
+        String.format(template, "variants.isNull(this)"));
+    assertTrue(nullSchema.validateMessage(
+            new CelValidator(), docWithVariantJson(nullSchema, "null")).isEmpty(),
+        "bare variants.isNull should hold for an explicit JSON null");
+    // The wrapped form has always worked and must keep working.
+    ProtobufSchema wrapped = new ProtobufSchema(
+        String.format(template, "variants.isNull(variant(this))"));
+    assertTrue(wrapped.validateMessage(
+            new CelValidator(), docWithVariantJson(wrapped, "null")).isEmpty());
+    // A non-null variant is not null.
+    ProtobufSchema notNull = new ProtobufSchema(
+        String.format(template, "!variants.isNull(this)"));
+    assertTrue(notNull.validateMessage(
+            new CelValidator(), docWithVariantJson(notNull, "5")).isEmpty(),
+        "a variant holding 5 is not variant-null");
   }
 }
