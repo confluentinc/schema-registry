@@ -55,21 +55,31 @@ import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -362,34 +372,59 @@ public final class CelUtils {
             CelExtensions.strings(),
             CelExtensions.math(CEL_OPTIONS))
         .addVarDeclarations(varDecls);
-    CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.standardCelRuntimeBuilder()
+    // plannerRuntimeBuilder, not standardCelRuntimeBuilder: cel-java promoted the
+    // ProgramPlanner runtime to the main factories in 0.13.0 ("will become the default in a
+    // future release") and 0.14.0 states the legacy runtime "will be deprecated in the next
+    // release. Callers are strongly urged to migrate to the Program Planner."
+    //
+    // setOptions(CEL_OPTIONS) after the factory call is load-bearing: plannerRuntimeBuilder
+    // seeds its own options with enableHeterogeneousNumericComparisons(true), which
+    // CelOptions.current() leaves false. Overriding here keeps cross-type numeric comparison
+    // off, matching the compiler's options and the other clients. CelUtilsTest pins this.
+    //
+    // BuiltinLibrary takes over five standard function names (timestamp, string, double, == and
+    // !=), which is why they are excluded here. On the planner runtime an overload cannot simply
+    // be added alongside the standard ones: the planner resolves a call to a single overload id
+    // at plan time and, when the checker could not narrow it that far — every call with a dyn
+    // argument, i.e. every Avro logical-typed field — falls back to a *name*-keyed dispatch entry
+    // built only from the bindings registered together under that name. The library re-registers
+    // each of the five, preserving the standard behavior (see BuiltinOverload.standardOverrides).
+    //
+    // Only the exclusion lives here, not the bindings: this is the one setStandardFunctions call,
+    // and a second one silently discards the first, so the PCRE exclusion below has to ride along
+    // in the same set.
+    Set<StandardFunction> excludedStandardFunctions =
+        EnumSet.copyOf(BuiltinLibrary.overriddenStandardFunctions());
+    if (regexEngine == RegexEngine.PCRE) {
+      excludedStandardFunctions.add(StandardFunction.MATCHES);
+    }
+    CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.plannerRuntimeBuilder()
         .setOptions(CEL_OPTIONS)
         .addLibraries(
             new BuiltinLibrary(),
             CelExtensions.strings(),
-            CelExtensions.math(CEL_OPTIONS));
+            CelExtensions.math(CEL_OPTIONS))
+        .setStandardFunctions(
+            CelStandardFunctions.newBuilder()
+                .excludeFunctions(excludedStandardFunctions)
+                .build());
 
     if (regexEngine == RegexEngine.PCRE) {
       // Replace stdlib RE2-backed matches with java.util.regex. Despite what
       // CelRuntimeBuilder.addFunctionBindings's javadoc says about replacing
       // duplicate overload IDs, it actually throws on duplicates unless both
       // sides are DynamicDispatchOverload (see DefaultDispatcher.Builder).
-      // Stdlib matches isn't dynamic-dispatch, so we subset the standard
-      // functions to drop MATCHES, then add our own bindings under the same
-      // overload IDs the compiler resolves to.
-      // setStandardEnvironmentEnabled(false) is required by cel-java when
-      // overriding standard function bindings (else build() throws).
-      runtimeBuilder
-          .setStandardEnvironmentEnabled(false)
-          .setStandardFunctions(
-              CelStandardFunctions.newBuilder()
-                  .excludeFunctions(StandardFunction.MATCHES)
-                  .build())
-          .addFunctionBindings(
-              CelFunctionBinding.from("matches", String.class, String.class,
-                  CelUtils::pcreMatches),
-              CelFunctionBinding.from("matches_string", String.class, String.class,
-                  CelUtils::pcreMatches));
+      // Stdlib matches isn't dynamic-dispatch, so MATCHES is dropped from the
+      // standard-function set above and our own bindings are added here under
+      // the same overload IDs the compiler resolves to.
+      // The legacy runtime additionally required setStandardEnvironmentEnabled(false) here;
+      // the planner runtime rejects that call outright ("Unsupported. Subset the environment
+      // using setStandardFunctions instead."), so the subset is the whole mechanism.
+      runtimeBuilder.addFunctionBindings(
+          CelFunctionBinding.from("matches", String.class, String.class,
+              CelUtils::pcreMatches),
+          CelFunctionBinding.from("matches_string", String.class, String.class,
+              CelUtils::pcreMatches));
     }
 
     if (type == ScriptType.PROTOBUF) {
@@ -737,6 +772,15 @@ public final class CelUtils {
   }
 
   /**
+   * {@link #toCelValue(Object)} for a value whose Avro schema is known, so a timestamp
+   * logical type can be presented with the unit the schema declares. Use this wherever the
+   * schema is in hand; the schema-less overload cannot recover the unit.
+   */
+  public static Object toCelValue(Object value, Schema schema) {
+    return toCelValue(normalizeAvroLogical(value, schema));
+  }
+
+  /**
    * JSON-flavored variant of {@link #toCelValue(Object)}: additionally converts
    * Jackson {@link JsonNode} and arbitrary POJOs to maps via the supplied
    * {@link ObjectMapper}. Used on the JSON validation/transform path where the
@@ -801,11 +845,236 @@ public final class CelUtils {
     return toCelValue(mapper.convertValue(value, new TypeReference<Map<String, Object>>() {}));
   }
 
+  /**
+   * Recursively replace every {@link CelDecimal} in a CEL evaluation result with the
+   * {@link java.math.BigDecimal} it wraps — the logical-type Java rep the result writers,
+   * Jackson and the field setters all expect. A rule may return a Decimal at top level or
+   * nested in a result map / list.
+   *
+   * <p>Returns the very same instance when nothing changed, so a decimal-free result
+   * costs one walk and no copying.
+   */
+  public static Object unwrapCelDecimals(Object value) {
+    if (value instanceof CelDecimal) {
+      return ((CelDecimal) value).value();
+    }
+    if (value instanceof Map) {
+      Map<?, ?> in = (Map<?, ?>) value;
+      // Keys are copied as they are, NOT through String.valueOf. A CEL map may be keyed by int,
+      // uint or bool, and stringifying would both change the key type and collapse distinct keys
+      // (1 and "1" into one entry, silently dropping a value) — and only when a Decimal happened
+      // to be somewhere in the map, since the no-change path below returns the original.
+      Map<Object, Object> out = null;
+      int index = 0;
+      for (Map.Entry<?, ?> e : in.entrySet()) {
+        Object converted = unwrapCelDecimals(e.getValue());
+        if (out == null && converted != e.getValue()) {
+          // First change: copy the entries already confirmed unchanged, in iteration order.
+          out = new LinkedHashMap<>(in.size());
+          int seen = 0;
+          for (Map.Entry<?, ?> prior : in.entrySet()) {
+            if (seen++ == index) {
+              break;
+            }
+            out.put(prior.getKey(), prior.getValue());
+          }
+        }
+        if (out != null) {
+          out.put(e.getKey(), converted);
+        }
+        index++;
+      }
+      return out == null ? value : out;
+    }
+    if (value instanceof List) {
+      List<?> in = (List<?>) value;
+      List<Object> out = null;
+      for (int i = 0; i < in.size(); i++) {
+        Object element = in.get(i);
+        Object converted = unwrapCelDecimals(element);
+        if (out == null && converted != element) {
+          out = new ArrayList<>(in);
+        }
+        if (out != null) {
+          out.set(i, converted);
+        }
+      }
+      return out == null ? value : out;
+    }
+    return value;
+  }
+
   private static Map<String, Object> avroRecordToMap(IndexedRecord record) {
     Map<String, Object> out = new LinkedHashMap<>();
     for (Schema.Field f : record.getSchema().getFields()) {
-      out.put(f.name(), toCelValue(record.get(f.pos())));
+      out.put(f.name(), toCelValue(record.get(f.pos()), f.schema()));
     }
     return out;
+  }
+
+  /**
+   * Present an Avro logical type as the value CEL's extension types expect, taking the unit or
+   * scale from the schema: a timestamp as the {@code java.time} value the {@code timestamp}
+   * overloads bind, a decimal as the {@link CelDecimal} the {@code decimals.*} overloads bind.
+   *
+   * <p>Avro's {@code use.logical.type.converters} defaults to false, so without this a
+   * {@code timestamp-millis} field reaches a rule as a bare {@code long} whose unit lives only
+   * in the schema — and CEL reads a bare int as epoch <em>seconds</em>, so
+   * {@code timestamp(this.ts)} would silently answer with a 1970 date — while a
+   * {@code decimal} field arrives as unscaled bytes whose scale is likewise only in the schema.
+   * Converting here makes a rule read the same under either converter setting, and matches what
+   * the JS, Rust and C++ clients already do at their Avro boundary.
+   *
+   * <p>Values that already arrived in the logical representation (converters on) are passed
+   * through — wrapped, for a decimal, since a bare {@link BigDecimal} is a {@link Number} and
+   * would take the numeric-equality short-circuit that answers false for any BigDecimal pair.
+   * Anything without a recognized logical type is returned untouched.
+   */
+  private static Object normalizeAvroLogical(Object value, Schema schema) {
+    if (value == null || schema == null) {
+      return value;
+    }
+    switch (schema.getType()) {
+      case UNION: {
+        Schema branch = avroUnionBranch(schema, value);
+        return branch != null ? normalizeAvroLogical(value, branch) : value;
+      }
+      case ARRAY: {
+        if (!(value instanceof List)) {
+          return value;
+        }
+        List<?> in = (List<?>) value;
+        List<Object> out = new ArrayList<>(in.size());
+        for (Object e : in) {
+          out.add(normalizeAvroLogical(e, schema.getElementType()));
+        }
+        return out;
+      }
+      case MAP: {
+        if (!(value instanceof Map)) {
+          return value;
+        }
+        Map<?, ?> in = (Map<?, ?>) value;
+        Map<Object, Object> out = new LinkedHashMap<>(in.size());
+        for (Map.Entry<?, ?> e : in.entrySet()) {
+          out.put(e.getKey(), normalizeAvroLogical(e.getValue(), schema.getValueType()));
+        }
+        return out;
+      }
+      default:
+        break;
+    }
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType == null) {
+      return value;
+    }
+    switch (logicalType.getName()) {
+      case "decimal":
+        return normalizeAvroDecimal(value, (LogicalTypes.Decimal) logicalType);
+      case "timestamp-millis":
+        return epochOf(value, 1_000L, 1_000_000L);
+      case "timestamp-micros":
+        return epochOf(value, 1_000_000L, 1_000L);
+      case "timestamp-nanos":
+        return epochOf(value, 1_000_000_000L, 1L);
+      case "local-timestamp-millis":
+        return localOf(value, 1_000L, 1_000_000L);
+      case "local-timestamp-micros":
+        return localOf(value, 1_000_000L, 1_000L);
+      case "local-timestamp-nanos":
+        return localOf(value, 1_000_000_000L, 1L);
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * A {@code decimal} logical type as a {@link CelDecimal}: unscaled bytes plus the schema's
+   * scale with the converters off, an already-scaled {@link BigDecimal} with them on.
+   */
+  private static Object normalizeAvroDecimal(Object value, LogicalTypes.Decimal logicalType) {
+    if (value instanceof BigDecimal) {
+      return CelDecimal.of((BigDecimal) value);
+    }
+    byte[] unscaled = unscaledBytes(value);
+    if (unscaled == null) {
+      return value;
+    }
+    return CelDecimal.ofUnscaled(unscaled, logicalType.getScale());
+  }
+
+  /** The bytes carrying a decimal, for the shapes Avro backs one with, else null. */
+  private static byte[] unscaledBytes(Object value) {
+    if (value instanceof ByteBuffer) {
+      // Defensive duplicate so the position-mutating read doesn't leak back to the reader.
+      ByteBuffer buf = ((ByteBuffer) value).duplicate();
+      byte[] bytes = new byte[buf.remaining()];
+      buf.get(bytes);
+      return bytes;
+    }
+    if (value instanceof byte[]) {
+      return (byte[]) value;
+    }
+    if (value instanceof GenericFixed) {
+      return ((GenericFixed) value).bytes();
+    }
+    return null;
+  }
+
+  /**
+   * An epoch value at the given unit as an {@link Instant}; a non-numeric carrier is passed on.
+   */
+  private static Object epochOf(Object value, long perSecond, long nanosPerUnit) {
+    if (!(value instanceof Long || value instanceof Integer)) {
+      // Already an Instant (converters on), or not a numeric carrier at all.
+      return value;
+    }
+    return instantOfEpoch(((Number) value).longValue(), perSecond, nanosPerUnit);
+  }
+
+  /**
+   * As {@link #epochOf} but for a {@code local-timestamp-*}, which carries no zone.
+   */
+  private static Object localOf(Object value, long perSecond, long nanosPerUnit) {
+    Object instant = epochOf(value, perSecond, nanosPerUnit);
+    return instant instanceof Instant ? localDateTimeOf((Instant) instant) : instant;
+  }
+
+  /**
+   * The branch of a union the value actually took, via Avro's own runtime resolution — the same
+   * call the walker in {@code AvroSchema} makes. Picking the first non-null branch instead would
+   * be wrong for a legal multi-branch union: given {@code [long(timestamp-millis), int]} an
+   * Integer belongs to the {@code int} arm, and the timestamp arm would convert it to an instant.
+   *
+   * <p>Returns null — meaning "leave the value alone" — when the branch is NULL or the value is
+   * not resolvable against the union at all. The latter is the ordinary case for a value that
+   * already arrived as a temporal (logical-type converters on): there is nothing to normalize.
+   */
+  private static Schema avroUnionBranch(Schema union, Object value) {
+    try {
+      GenericData data = AvroSchemaUtils.getData(union, value, false, false);
+      Schema branch = union.getTypes().get(data.resolveUnion(union, value));
+      return branch.getType() == Schema.Type.NULL ? null : branch;
+    } catch (RuntimeException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Epoch value in units of {@code perSecond} per second, each worth {@code nanosPerUnit}.
+   */
+  private static Instant instantOfEpoch(long epoch, long perSecond, long nanosPerUnit) {
+    // floorDiv/floorMod rather than / and %: a pre-epoch value is negative, and the
+    // nano-of-second adjustment must stay non-negative.
+    return Instant.ofEpochSecond(
+        Math.floorDiv(epoch, perSecond), Math.floorMod(epoch, perSecond) * nanosPerUnit);
+  }
+
+  /**
+   * A {@code local-timestamp-*} value read at UTC and stripped of the offset — what Avro's own
+   * local-timestamp conversions do, so the same wall-clock time comes out either way.
+   */
+  private static LocalDateTime localDateTimeOf(Instant instant) {
+    return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
   }
 }

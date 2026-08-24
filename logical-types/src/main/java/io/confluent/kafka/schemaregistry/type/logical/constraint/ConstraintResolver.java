@@ -714,7 +714,7 @@ final class ConstraintResolver {
   /**
    * True if {@code s} is an instant-bearing timestamp ({@code TIMESTAMP} or
    * {@code TIMESTAMP_LTZ}). These are the temporal types the emitter normalizes
-   * with {@code timestamp.of(...)} (DATE/TIME are partial temporals and out of
+   * with {@code timestamp(...)} (DATE/TIME are partial temporals and out of
    * scope). The runtime surfaces these as Instant/proto Timestamp/RFC-3339
    * string, none of which CEL's native timestamp ops accept un-normalized.
    */
@@ -749,7 +749,7 @@ final class ConstraintResolver {
   /**
    * True if {@code node}'s subtree contains an instant-timestamp column
    * reference or a TIMESTAMP/INTERVAL literal — i.e. the expression needs the
-   * timestamp-value emit (column leaves wrapped in {@code timestamp.of(...)},
+   * timestamp-value emit (column leaves wrapped in {@code timestamp(...)},
    * literals as {@code timestamp("…")}/{@code duration("…")}).
    *
    * <p>A generic parse-tree walk rather than a per-level cascade: over-detection
