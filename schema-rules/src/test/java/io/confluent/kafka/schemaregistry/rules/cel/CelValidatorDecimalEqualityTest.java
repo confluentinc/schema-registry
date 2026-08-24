@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.protobuf.ByteString;
@@ -258,5 +259,43 @@ public class CelValidatorDecimalEqualityTest {
         variantHolds(
             "string(variants.as(variant(this), \\\"decimal\\\")) == \\\"2.50\\\"", "2.50"),
         "string(Decimal) must still dispatch for a Variant-sourced decimal");
+  }
+
+  // ---- Decimals nested in containers ----
+
+  /**
+   * A Decimal inside a list or map compares numerically too. Making the operands' own {@code ==}
+   * numeric is not enough on its own: the standard implementation recurses into containers with
+   * its own equality, so a bare protobuf Decimal nested one level deep was compared by its
+   * encoding and {@code [a] == [b]} disagreed with {@code a == b} on the very same values.
+   */
+  @Test
+  void containerEqualityIsNumericForNestedDecimals() {
+    // `this` is 1.50; decimal("1.500") is the same number with a different scale.
+    assertTrue(holds("[this] == [decimal(\\\"1.500\\\")]", "1.50"));
+    assertTrue(holds("{\\\"k\\\": this} == {\\\"k\\\": decimal(\\\"1.500\\\")}", "1.50"));
+    assertTrue(holds("[[this]] == [[decimal(\\\"1.500\\\")]]", "1.50"));
+    // Negative controls: a different number, and a size mismatch.
+    assertFalse(holds("[this] == [decimal(\\\"9\\\")]", "1.50"));
+    assertFalse(holds("[this] == [this, this]", "1.50"));
+  }
+
+  /** {@code in} over a list follows the same equality, or it contradicts {@code ==}. */
+  @Test
+  void listMembershipIsNumericForNestedDecimals() {
+    assertTrue(holds("this in [decimal(\\\"1.500\\\")]", "1.50"));
+    assertTrue(holds("this in [decimal(\\\"9\\\"), decimal(\\\"1.500\\\")]", "1.50"));
+    assertFalse(holds("this in [decimal(\\\"9\\\")]", "1.50"));
+  }
+
+  /** Decimal-free comparisons keep standard semantics — the recursion is gated on a Decimal. */
+  @Test
+  void containerEqualityUnchangedWithoutDecimals() {
+    assertTrue(holds("[1, 2] == [1, 2]", "1.50"));
+    assertFalse(holds("[1, 2] == [2, 1]", "1.50"));
+    assertTrue(holds("{\\\"a\\\": 1} == {\\\"a\\\": 1}", "1.50"));
+    assertTrue(holds("2 in [1, 2]", "1.50"));
+    assertFalse(holds("3 in [1, 2]", "1.50"));
+    assertTrue(holds("[\\\"x\\\"] == [\\\"x\\\"]", "1.50"));
   }
 }

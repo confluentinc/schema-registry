@@ -1020,4 +1020,40 @@ public class CelValidatorVariantTest {
     List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
+
+  /**
+   * {@code variants.isNull} must coerce its receiver like every other accessor. It is declared
+   * over dyn, so a bare variant field reaches it; a raw {@code instanceof Variant} check answered
+   * false for the shapes a variant-typed field actually decodes to, reporting "not null" for a
+   * variant that holds an explicit JSON null.
+   */
+  @Test
+  void variantIsNull_coercesBareReceiver() throws Exception {
+    String template = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"%s\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    // An explicit JSON null is a present variant whose top type is NULL.
+    ProtobufSchema nullSchema = new ProtobufSchema(
+        String.format(template, "variants.isNull(this)"));
+    assertTrue(nullSchema.validateMessage(
+            new CelValidator(), docWithVariantJson(nullSchema, "null")).isEmpty(),
+        "bare variants.isNull should hold for an explicit JSON null");
+    // The wrapped form has always worked and must keep working.
+    ProtobufSchema wrapped = new ProtobufSchema(
+        String.format(template, "variants.isNull(variant(this))"));
+    assertTrue(wrapped.validateMessage(
+            new CelValidator(), docWithVariantJson(wrapped, "null")).isEmpty());
+    // A non-null variant is not null.
+    ProtobufSchema notNull = new ProtobufSchema(
+        String.format(template, "!variants.isNull(this)"));
+    assertTrue(notNull.validateMessage(
+            new CelValidator(), docWithVariantJson(notNull, "5")).isEmpty(),
+        "a variant holding 5 is not variant-null");
+  }
 }

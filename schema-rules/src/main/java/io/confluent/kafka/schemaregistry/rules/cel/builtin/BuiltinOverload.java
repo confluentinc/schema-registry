@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.CelOptions;
+import dev.cel.common.Operator;
 import dev.cel.common.values.CelByteString;
 import dev.cel.common.values.NullValue;
 import dev.cel.runtime.CelFunctionBinding;
@@ -28,6 +29,7 @@ import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import dev.cel.runtime.RuntimeEquality;
 import dev.cel.runtime.standard.CelStandardFunction;
 import dev.cel.runtime.standard.DoubleFunction;
+import dev.cel.runtime.standard.InOperator;
 import dev.cel.runtime.standard.StringFunction;
 import dev.cel.runtime.standard.TimestampFunction;
 import io.confluent.kafka.schemaregistry.type.Variant;
@@ -39,6 +41,7 @@ import java.net.URISyntaxException;
 import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -72,7 +75,8 @@ final class BuiltinOverload {
    */
   static final ImmutableSet<StandardFunction> OVERRIDDEN_STANDARD_FUNCTIONS =
       ImmutableSet.of(StandardFunction.TIMESTAMP, StandardFunction.STRING,
-          StandardFunction.DOUBLE, StandardFunction.EQUALS, StandardFunction.NOT_EQUALS);
+          StandardFunction.DOUBLE, StandardFunction.EQUALS, StandardFunction.NOT_EQUALS,
+          StandardFunction.IN);
 
   private BuiltinOverload() {
   }
@@ -346,6 +350,27 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from("not_equals", Object.class, Object.class,
         (Object x, Object y) -> !decimalEquals(x, y, runtimeEquality)));
 
+    // `in` over a list has to follow ==: RuntimeEquality.inList uses List.contains, which is
+    // Java equality on the raw elements, so `this.subtotal in [this.total]` answered false for
+    // 1.50 against 1.5 while `==` on the same operands answered true. Regrouped rather than
+    // replaced, because `in` has two overloads and only the list one is affected — a CEL map key
+    // can only be int, uint, bool or string, so a decimal can never be one.
+    out.addAll(regroup(Operator.IN.getFunction(), InOperator.create(), celOptions, runtimeEquality,
+        CelFunctionBinding.from("in_list", Object.class, List.class,
+            // Raw List, matching the standard binding's own signature so the delegation below
+            // type-checks against RuntimeEquality.inList.
+            (Object value, List list) -> {
+              if (!hasDecimal(value) && !hasDecimal(list)) {
+                return runtimeEquality.inList(list, value);
+              }
+              for (Object element : list) {
+                if (decimalEquals(value, element, runtimeEquality)) {
+                  return true;
+                }
+              }
+              return false;
+            })));
+
     return ImmutableList.copyOf(out);
   }
 
@@ -371,7 +396,67 @@ final class BuiltinOverload {
       // false anyway, but only by accident of the shapes not matching; say it outright.
       return false;
     }
+    // Containers, but only when a decimal is actually inside one of them. The standard
+    // implementation recurses with its own equality, so a Decimal nested in a list or map was
+    // compared by protobuf encoding and `[this.subtotal] == [this.total]` answered false while
+    // `this.subtotal == this.total` answered true — the same values, disagreeing on nesting
+    // alone. Gating on hasDecimal keeps every decimal-free comparison on the standard path
+    // exactly as it was, and each element pair recurses back through here, so a non-decimal
+    // element inside a decimal-bearing container still gets standard semantics.
+    if (x instanceof List && y instanceof List && (hasDecimal(x) || hasDecimal(y))) {
+      List<?> xs = (List<?>) x;
+      List<?> ys = (List<?>) y;
+      if (xs.size() != ys.size()) {
+        return false;
+      }
+      for (int i = 0; i < xs.size(); i++) {
+        if (!decimalEquals(xs.get(i), ys.get(i), runtimeEquality)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (x instanceof Map && y instanceof Map && (hasDecimal(x) || hasDecimal(y))) {
+      Map<?, ?> xm = (Map<?, ?>) x;
+      Map<?, ?> ym = (Map<?, ?>) y;
+      if (xm.size() != ym.size()) {
+        return false;
+      }
+      for (Map.Entry<?, ?> e : xm.entrySet()) {
+        if (!ym.containsKey(e.getKey())
+            || !decimalEquals(e.getValue(), ym.get(e.getKey()), runtimeEquality)) {
+          return false;
+        }
+      }
+      return true;
+    }
     return runtimeEquality.objectEquals(x, y);
+  }
+
+  /**
+   * Whether {@code o} is a decimal or holds one, at any depth. Only consulted once both operands
+   * are containers, so it never runs on the scalar comparison path.
+   */
+  private static boolean hasDecimal(Object o) {
+    if (asDecimalOrNull(o) != null) {
+      return true;
+    }
+    if (o instanceof List) {
+      for (Object element : (List<?>) o) {
+        if (hasDecimal(element)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (o instanceof Map) {
+      for (Object value : ((Map<?, ?>) o).values()) {
+        if (hasDecimal(value)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -485,8 +570,14 @@ final class BuiltinOverload {
         }));
     out.add(CelFunctionBinding.from(
         "variants_isnull_dyn", Object.class,
-        (Object o) -> (o instanceof Variant)
-            && ((Variant) o).getType() == Variant.Type.NULL));
+        // Coerces like every other accessor. A raw `o instanceof Variant` would answer false for
+        // the shapes a variant-typed *field* decodes to — a confluent.type.Variant message, or
+        // the map an Avro variant record yields — which the dyn declaration now admits: a bare
+        // variant holding an explicit JSON null reported false instead of true.
+        (Object o) -> {
+          Variant v = requireVariantOrNull(o, "variants.isNull");
+          return v != null && v.getType() == Variant.Type.NULL;
+        }));
 
     // Navigation. Each function returns sub-Variant or CEL null on miss.
     // Accessor Java null -> CEL null; explicit JSON null at path -> Variant

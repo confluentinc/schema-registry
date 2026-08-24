@@ -212,4 +212,28 @@ public class CelDecimalTransformTest {
     assertSame(cleanList, CelUtils.unwrapCelDecimals(cleanList));
     assertSame(null, CelUtils.unwrapCelDecimals(null));
   }
+
+  /**
+   * The copy that unwrapping performs must preserve keys exactly. CEL maps can be keyed by int,
+   * uint or bool as well as string, so stringifying keys would both change their type and merge
+   * distinct keys — {@code 1} and {@code "1"} into one entry, silently dropping a value — and
+   * only when a Decimal happened to be present, since a map without one is returned as-is.
+   */
+  @Test
+  public void unwrapPreservesNonStringMapKeys() {
+    CelDecimal d = CelDecimal.of(new BigDecimal("2.50"));
+    Map<Object, Object> in = new LinkedHashMap<>();
+    in.put(1L, d);
+    in.put("1", "distinct from the long key");
+    in.put(true, "bool key");
+
+    @SuppressWarnings("unchecked")
+    Map<Object, Object> out = (Map<Object, Object>) CelUtils.unwrapCelDecimals(in);
+
+    assertEquals(3, out.size(), "no entry may be merged away");
+    assertEquals(new BigDecimal("2.50"), out.get(1L));
+    assertEquals("distinct from the long key", out.get("1"));
+    assertEquals("bool key", out.get(true));
+    assertEquals(Arrays.asList(1L, "1", true), new ArrayList<>(out.keySet()));
+  }
 }

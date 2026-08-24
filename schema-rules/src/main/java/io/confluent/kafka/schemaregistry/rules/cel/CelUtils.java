@@ -860,7 +860,11 @@ public final class CelUtils {
     }
     if (value instanceof Map) {
       Map<?, ?> in = (Map<?, ?>) value;
-      Map<String, Object> out = null;
+      // Keys are copied as they are, NOT through String.valueOf. A CEL map may be keyed by int,
+      // uint or bool, and stringifying would both change the key type and collapse distinct keys
+      // (1 and "1" into one entry, silently dropping a value) — and only when a Decimal happened
+      // to be somewhere in the map, since the no-change path below returns the original.
+      Map<Object, Object> out = null;
       int index = 0;
       for (Map.Entry<?, ?> e : in.entrySet()) {
         Object converted = unwrapCelDecimals(e.getValue());
@@ -872,11 +876,11 @@ public final class CelUtils {
             if (seen++ == index) {
               break;
             }
-            out.put(String.valueOf(prior.getKey()), prior.getValue());
+            out.put(prior.getKey(), prior.getValue());
           }
         }
         if (out != null) {
-          out.put(String.valueOf(e.getKey()), converted);
+          out.put(e.getKey(), converted);
         }
         index++;
       }
