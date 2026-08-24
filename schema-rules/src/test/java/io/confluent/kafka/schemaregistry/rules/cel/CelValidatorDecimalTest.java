@@ -624,6 +624,68 @@ public class CelValidatorDecimalTest {
     assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
   }
 
+  /**
+   * Cross-client parity: an Avro {@code decimal} logical type is usable as a Decimal with
+   * <b>no {@code decimal(...)} call</b>, and the wrapped form keeps working alongside it. The
+   * boundary applies the schema's scale, so the value is already a {@link
+   * io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal} — which also means
+   * {@code ==} is numeric on it, since a bare {@link BigDecimal} would take cel-java's
+   * {@code instanceof Number} short-circuit and answer false for any BigDecimal pair.
+   */
+  @Test
+  void avroDecimal_usableWithoutTheConstructor() {
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Money\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"amount\","
+        + "      \"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\","
+        + "                \"precision\":10,\"scale\":2},"
+        + "      \"confluent:rules\":[{\"name\":\"r\",\"expr\":\"%s\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    // 123.45 as the two shapes the field can arrive in: unscaled bytes (converters off,
+    // the default) and an already-scaled BigDecimal (converters on).
+    BigDecimal expected = new BigDecimal("123.45");
+    Object[] shapes = {
+        ByteBuffer.wrap(expected.unscaledValue().toByteArray()),
+        expected,
+    };
+
+    for (Object shape : shapes) {
+      String kind = shape.getClass().getSimpleName();
+      // Bare: no constructor call anywhere in the expression.
+      assertTrue(evalAvro(s, "decimals.eq(this, decimal(\\\"123.45\\\"))", shape).isEmpty(),
+          "bare decimals.eq should hold for " + kind);
+      // The wrapped form must keep working — decimal(...) re-entry on an already-Decimal value.
+      assertTrue(evalAvro(s, "decimals.eq(decimal(this), decimal(\\\"123.45\\\"))", shape)
+              .isEmpty(),
+          "wrapped decimals.eq should hold for " + kind);
+      // `==` is numeric on it: 123.45 equals 123.450 despite the differing scale.
+      assertTrue(evalAvro(s, "this == decimal(\\\"123.450\\\")", shape).isEmpty(),
+          "bare == should be numeric for " + kind);
+      // The schema's scale is applied, not guessed: read as scale 0 this would be 12345.
+      assertTrue(evalAvro(s, "decimals.lt(this, decimal(\\\"1000\\\"))", shape).isEmpty(),
+          "the schema's scale should have been applied for " + kind);
+      // Negative control: a false comparison must still fail.
+      assertEquals(1, evalAvro(s, "decimals.gt(this, decimal(\\\"1000\\\"))", shape).size(),
+          "a false comparison should fail for " + kind);
+    }
+  }
+
+  /** Evaluate {@code expr} (a %s in {@code schemaTemplate}) against an {@code amount} value. */
+  private static List<ValidationRuleError> evalAvro(
+      String schemaTemplate, String expr, Object amount) {
+    AvroSchema schema = new AvroSchema(String.format(schemaTemplate, expr));
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("amount", amount);
+    return schema.validateMessage(new CelValidator(), r);
+  }
+
   @Test
   void avroDecimal_logicalTypeSchemaResolves_atFieldLevel() {
     // Sanity: the decimal logical type from the schema doesn't confuse the

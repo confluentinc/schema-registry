@@ -354,6 +354,59 @@ public class CelValidatorTimestampTest {
     assertTrue(schema.validateMessage(new CelValidator(), outer).isEmpty());
   }
 
+  /**
+   * Cross-client parity: an Avro timestamp logical type is usable as a timestamp with **no
+   * constructor call at all**. The boundary applies the schema's unit, so the value is already a
+   * CEL timestamp — comparable against {@code now}, and carrying the timestamp accessors. Every
+   * one of the seven clients has this test; the wrapper is only needed for a plain numeric field
+   * whose unit the schema cannot supply.
+   */
+  @Test
+  void avroTimestampMillis_usableWithoutTheConstructor() {
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Event\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"ts\","
+        + "      \"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},"
+        + "      \"confluent:rules\":[{\"name\":\"r\",\"expr\":\"%s\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    long past = Instant.now().minusSeconds(60).toEpochMilli();
+
+    // Bare comparison against `now`, with the converters off (a raw long) and on (an Instant).
+    for (Object value : new Object[] {past, Instant.ofEpochMilli(past)}) {
+      AvroSchema schema = new AvroSchema(String.format(s, "this < now"));
+      GenericRecord r = new GenericData.Record(schema.rawSchema());
+      r.put("ts", value);
+      assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty(),
+          "bare `this < now` should hold for a past " + value.getClass().getSimpleName());
+    }
+
+    // Negative control: a future value must fail, so the comparison is really happening.
+    AvroSchema future = new AvroSchema(String.format(s, "this < now"));
+    GenericRecord fr = new GenericData.Record(future.rawSchema());
+    fr.put("ts", Instant.now().plusSeconds(3600).toEpochMilli());
+    assertEquals(1, future.validateMessage(new CelValidator(), fr).size());
+
+    // The schema's millis unit is applied, not guessed: bare equality against a known instant.
+    AvroSchema exact = new AvroSchema(
+        String.format(s, "this == timestamp(\\\"2023-11-14T22:13:20.123Z\\\")"));
+    GenericRecord er = new GenericData.Record(exact.rawSchema());
+    er.put("ts", 1700000000123L);
+    assertTrue(exact.validateMessage(new CelValidator(), er).isEmpty());
+
+    // And the timestamp accessors work on it directly.
+    AvroSchema accessor = new AvroSchema(String.format(s, "this.getFullYear() == 2023"));
+    GenericRecord ar = new GenericData.Record(accessor.rawSchema());
+    ar.put("ts", 1700000000123L);
+    assertTrue(accessor.validateMessage(new CelValidator(), ar).isEmpty());
+  }
+
   @Test
   void avroMultiBranchUnion_resolvesTheBranchTheValueTook() {
     // A legal multi-branch union whose arms are a timestamp-millis long AND a plain int. An

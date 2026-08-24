@@ -248,13 +248,13 @@ public final class BuiltinDeclarations {
         CelOverloadDecl.newGlobalOverload(
             "variants_type_variant",
             "Variant type label as a string; CEL null in → CEL null out",
-            SimpleType.DYN, ImmutableList.of(VARIANT))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.isNull",
         CelOverloadDecl.newGlobalOverload(
             "variants_isnull_dyn",
             "True iff input is a Variant whose top type is NULL; false for CEL null",
-            SimpleType.BOOL, ImmutableList.of(VARIANT))));
+            SimpleType.BOOL, ImmutableList.of(SimpleType.DYN))));
 
     // Navigation. Each returns sub-Variant or CEL null on miss. For typed
     // extraction, compose with variants.as / variants.tryAs:
@@ -266,21 +266,21 @@ public final class BuiltinDeclarations {
             "variants_path_dyn_string",
             "JSONPath subset navigation; missing path → CEL null;"
                 + " explicit JSON null → variant-null; malformed path throws.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.field",
         CelOverloadDecl.newGlobalOverload(
             "variants_field_dyn_string",
             "Object field by name; missing → CEL null; explicit JSON null →"
                 + " variant-null.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.index",
         CelOverloadDecl.newGlobalOverload(
             "variants_index_dyn_int",
             "Array element by index; out-of-bounds → CEL null; explicit JSON"
                 + " null at index → variant-null.",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.INT))));
+            VARIANT, ImmutableList.of(SimpleType.DYN, SimpleType.INT))));
 
     // Standalone typed extraction. variants.as throws on type mismatch
     // (Spark variant_get root-path analog). variants.tryAs returns CEL null on
@@ -292,13 +292,13 @@ public final class BuiltinDeclarations {
             "variants_as_dyn_string",
             "Extract a typed value from a Variant; throws on type mismatch;"
                 + " null in → null out.",
-            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.tryAs",
         CelOverloadDecl.newGlobalOverload(
             "variants_tryas_dyn_string",
             "Extract a typed value from a Variant; CEL null on type mismatch.",
-            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
@@ -306,7 +306,7 @@ public final class BuiltinDeclarations {
         CelOverloadDecl.newGlobalOverload(
             "variants_tojson_variant",
             "Serialize a Variant to its JSON string form; CEL null in → CEL null out",
-            SimpleType.DYN, ImmutableList.of(VARIANT))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN))));
   }
 
   private static String overloadId(String functionName, String suffix) {

@@ -39,6 +39,14 @@ public final class CelDecimal implements Comparable<CelDecimal> {
     return new CelDecimal(Objects.requireNonNull(value, "value"));
   }
 
+  /**
+   * From unscaled two's-complement big-endian bytes plus a scale — the encoding an Avro
+   * {@code decimal} logical type and a {@code confluent.type.Decimal} message both use.
+   */
+  public static CelDecimal ofUnscaled(byte[] unscaled, int scale) {
+    return of(DecimalUtils.toBigDecimal(unscaled, scale));
+  }
+
   /** The wrapped {@link BigDecimal} — the logical-type Java rep. */
   public BigDecimal value() {
     return value;

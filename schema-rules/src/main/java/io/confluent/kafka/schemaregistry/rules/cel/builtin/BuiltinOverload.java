@@ -17,10 +17,19 @@
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.Timestamp;
+import dev.cel.common.CelOptions;
 import dev.cel.common.values.CelByteString;
 import dev.cel.common.values.NullValue;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelStandardFunctions.StandardFunction;
+import dev.cel.runtime.RuntimeEquality;
+import dev.cel.runtime.RuntimeHelpers;
+import dev.cel.runtime.standard.CelStandardFunction;
+import dev.cel.runtime.standard.DoubleFunction;
+import dev.cel.runtime.standard.StringFunction;
+import dev.cel.runtime.standard.TimestampFunction;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -56,6 +65,15 @@ final class BuiltinOverload {
    */
   private static final MathContext DIV_MC = new MathContext(38, RoundingMode.HALF_UP);
 
+  /**
+   * The standard functions {@link #standardOverrides} takes over. A caller must exclude these
+   * from the runtime's standard functions, or registering the regrouped bindings collides with
+   * the standard ones under the same name.
+   */
+  static final ImmutableSet<StandardFunction> OVERRIDDEN_STANDARD_FUNCTIONS =
+      ImmutableSet.of(StandardFunction.TIMESTAMP, StandardFunction.STRING,
+          StandardFunction.DOUBLE);
+
   private BuiltinOverload() {
   }
 
@@ -72,7 +90,6 @@ final class BuiltinOverload {
     out.add(unaryString("is_uuid", BuiltinOverload::validateUuid));
 
     addDecimal(out);
-    addTimestamp(out);
     addVariant(out);
 
     return ImmutableList.copyOf(out);
@@ -204,17 +221,6 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "decimals_sign_decimal", CelDecimal.class,
         (CelDecimal d) -> (long) d.value().signum()));
-    // string(Decimal) — extension overload on stdlib `string(...)`.
-    out.add(CelFunctionBinding.from(
-        "decimal_to_string", CelDecimal.class,
-        (CelDecimal d) -> d.value().toPlainString()));
-    // double(Decimal) — extension overload on stdlib `double(...)`. Narrowing:
-    // BigDecimal.doubleValue() returns the closest double (±Infinity if the
-    // magnitude is out of range).
-    out.add(CelFunctionBinding.from(
-        "decimal_to_double", CelDecimal.class,
-        (CelDecimal d) -> d.value().doubleValue()));
-
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
         "decimals_round_unary", d -> d.setScale(0, RoundingMode.HALF_UP)));
@@ -266,16 +272,76 @@ final class BuiltinOverload {
 
   // ---- Timestamp ----
 
-  private static void addTimestamp(List<CelFunctionBinding> out) {
-    // Bound to Temporal, disjoint from the String and Long that stdlib's surviving
-    // `timestamp` overloads bind: when a dyn argument makes the checker list all three
-    // overload ids, exactly one of them can handle the runtime value, so the dispatch stays
-    // unambiguous. Anything wider here (Object) would match a String or Long too and make
-    // every timestamp(dyn) call ambiguous.
-    out.add(CelFunctionBinding.from(
-        "timestamp_to_timestamp_temporal", Temporal.class, TimestampUtils::toInstant));
-    out.add(CelFunctionBinding.from(
-        "timestamp_int_int", Long.class, Long.class, TimestampUtils::fromEpochPrecision));
+  /**
+   * The overloads we add to <em>standard</em> function names, regrouped together with the
+   * standard library's own bindings for those names.
+   *
+   * <p>Regrouping is required, not cosmetic. The planner runtime resolves a call to a single
+   * overload id at plan time and, when the checker could not narrow it that far — which is
+   * every call whose argument is {@code dyn}, i.e. every Avro logical-typed field — falls back
+   * to a <em>name</em>-keyed lookup ({@code ProgramPlanner}, "Parsed-only function dispatch").
+   * That name-keyed entry is a dynamic-dispatch group built from the bindings registered
+   * together under the name, so an overload merely added alongside the standard ones is invisible
+   * to it: {@code timestamp(this.ts)} fails with "No matching overload ... candidates:
+   * string_to_timestamp, timestamp_to_timestamp, int64_to_timestamp".
+   *
+   * <p>Callers must therefore exclude {@link #OVERRIDDEN_STANDARD_FUNCTIONS} from the runtime's
+   * standard functions and register these instead — the standard behavior is preserved because
+   * the standard bindings are re-registered here verbatim, not reimplemented.
+   */
+  static ImmutableList<CelFunctionBinding> standardOverrides(CelOptions celOptions) {
+    RuntimeEquality runtimeEquality =
+        RuntimeEquality.create(RuntimeHelpers.create(), celOptions);
+    List<CelFunctionBinding> out = new ArrayList<>();
+
+    // timestamp: the standard string / int / identity overloads, plus a Temporal binding
+    // (stdlib's identity overload binds Instant alone, leaving every other java.time shape an
+    // Avro or Proto decoder yields with no overload) and the (int, int) precision form.
+    out.addAll(regroup("timestamp", TimestampFunction.create(), celOptions, runtimeEquality,
+        CelFunctionBinding.from(
+            "timestamp_to_timestamp_temporal", Temporal.class, TimestampUtils::toInstant),
+        CelFunctionBinding.from(
+            "timestamp_int_int", Long.class, Long.class, TimestampUtils::fromEpochPrecision)));
+
+    // string(Decimal) / double(Decimal). The double form is narrowing:
+    // BigDecimal.doubleValue() returns the closest double (±Infinity when out of range).
+    out.addAll(regroup("string", StringFunction.create(), celOptions, runtimeEquality,
+        CelFunctionBinding.from("decimal_to_string", CelDecimal.class,
+            (CelDecimal d) -> d.value().toPlainString())));
+    out.addAll(regroup("double", DoubleFunction.create(), celOptions, runtimeEquality,
+        CelFunctionBinding.from("decimal_to_double", CelDecimal.class,
+            (CelDecimal d) -> d.value().doubleValue())));
+
+    return ImmutableList.copyOf(out);
+  }
+
+  /**
+   * One standard function's bindings plus {@code extras}, grouped under {@code functionName} so
+   * the name-keyed dynamic-dispatch entry covers all of them. The standard function's own
+   * name-keyed entry is dropped from the input, since {@code fromOverloads} rebuilds it.
+   */
+  private static ImmutableSet<CelFunctionBinding> regroup(
+      String functionName,
+      CelStandardFunction standardFunction,
+      CelOptions celOptions,
+      RuntimeEquality runtimeEquality,
+      CelFunctionBinding... extras) {
+    List<CelFunctionBinding> bindings = new ArrayList<>();
+    for (CelFunctionBinding binding :
+        standardFunction.newFunctionBindings(celOptions, runtimeEquality)) {
+      if (!binding.getOverloadId().equals(functionName)) {
+        bindings.add(binding);
+      }
+    }
+    for (CelFunctionBinding extra : extras) {
+      // An extra sharing a standard overload's id replaces it; a new id is added alongside.
+      // timestamp_to_timestamp_temporal is a new id, so stdlib's Instant-bound
+      // timestamp_to_timestamp stays in the group. Harmless: the declaration side shadows it
+      // (same signature), and for an Instant both bindings do the same thing.
+      bindings.removeIf(b -> b.getOverloadId().equals(extra.getOverloadId()));
+      bindings.add(extra);
+    }
+    return CelFunctionBinding.fromOverloads(functionName, bindings);
   }
 
   // ---- Variant ----
@@ -424,11 +490,19 @@ final class BuiltinOverload {
     if (isCelNull(o)) {
       return null;
     }
-    if (!(o instanceof Variant)) {
-      throw new IllegalArgumentException(
-          functionName + ": expected Variant, got " + o.getClass().getName());
+    if (o instanceof Variant) {
+      return (Variant) o;
     }
-    return (Variant) o;
+    // Otherwise accept the shapes a variant-typed *field* decodes to — a proto
+    // confluent.type.Variant message, or the Map an Avro variant record is converted to — so
+    // such a field can be used without a variant(...) call, as on the other clients. A shape
+    // toVariant doesn't recognize still yields a clear message rather than a ClassCastException.
+    try {
+      return VariantUtils.toVariant(o);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          functionName + ": expected Variant, got " + o.getClass().getName(), e);
+    }
   }
 
   /** {@code variant(dyn)} binding body. Propagates CEL null; rejects strings
