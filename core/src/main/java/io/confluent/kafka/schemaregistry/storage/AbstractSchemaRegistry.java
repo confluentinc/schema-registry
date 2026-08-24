@@ -2605,6 +2605,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
+    metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
       try {
@@ -2713,6 +2714,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                   Collections.singletonList(deleteOp.getAssociationType()),
                   Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
               );
+              metricsContainer.getAssociationBatchMutateDelete().record();
             }
             index++;
             continue;
@@ -2729,6 +2731,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           if (log.isDebugEnabled()) {
             log.debug("Applying {} {} op(s) as one request for resource '{}'",
                 run.size(), op.getType(), req.getResourceName());
+          }
+          if (op.getType() == OpType.CREATE) {
+            if (run.size() == 1) {
+              metricsContainer.getAssociationBatchMutateCreateSingle().record();
+            } else {
+              metricsContainer.getAssociationBatchMutateCreateMulti().record();
+            }
+            metricsContainer.getAssociationBatchMutateCreateBatchSize().record(run.size());
+          } else {
+            metricsContainer.getAssociationBatchMutateUpsert().record();
           }
           AssociationResponse response = createOrUpdateAssociation(context, dryRun,
               new AssociationCreateOrUpdateRequest(req, run),
