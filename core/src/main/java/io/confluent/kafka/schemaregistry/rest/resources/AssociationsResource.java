@@ -294,8 +294,9 @@ public class AssociationsResource {
       throw Errors.storeException("Register schema operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -384,8 +385,9 @@ public class AssociationsResource {
       throw Errors.storeException("Register schema operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create or update association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -462,8 +464,9 @@ public class AssociationsResource {
       throw Errors.storeException("Register schema operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding mutate associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -534,8 +537,9 @@ public class AssociationsResource {
       throw Errors.storeException("Register schema operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding delete associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {

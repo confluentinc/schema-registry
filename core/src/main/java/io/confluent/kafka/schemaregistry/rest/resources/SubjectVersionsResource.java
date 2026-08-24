@@ -727,7 +727,7 @@ public class SubjectVersionsResource {
       throw Errors.storeException("Register schema operation failed while writing"
           + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
+      throw Errors.requestForwardingFailedException("Error while forwarding modify tags request"
           + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"
