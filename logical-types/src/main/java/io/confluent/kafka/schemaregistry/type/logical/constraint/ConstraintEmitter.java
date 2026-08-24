@@ -614,7 +614,7 @@ final class ConstraintEmitter {
         }
       }
       // Non-numeric: timestamp normalization (instant-timestamp operands wrapped
-      // in timestamp.of(...); CURRENT_TIMESTAMP stays `now`) or plain native.
+      // in timestamp(...); CURRENT_TIMESTAMP stays `now`) or plain native.
       emitCompareOperandWrapped(betweens.get(0), vctx, sb);
       sb.append(' ').append(celOp).append(' ');
       emitCompareOperandWrapped(betweens.get(1), vctx, sb);
@@ -625,7 +625,7 @@ final class ConstraintEmitter {
 
   // -------------------------------------------------------------------------
   // Timestamp normalization — wrap instant-timestamp operands in
-  // timestamp.of(...) so Avro (Instant) / JSON (RFC-3339 string) values coerce
+  // timestamp(...) so Avro (Instant) / JSON (RFC-3339 string) values coerce
   // to a CEL timestamp; proto Timestamp is identity. The comparison/BETWEEN
   // operators stay native (CEL has first-class timestamp comparison).
   // CURRENT_TIMESTAMP (→ now) is already a CEL timestamp and is left unwrapped.
@@ -634,7 +634,7 @@ final class ConstraintEmitter {
   /**
    * A comparison operand. If it involves a timestamp column or a TIMESTAMP/
    * INTERVAL literal, emit it via the timestamp-value cascade (column leaves
-   * wrapped in {@code timestamp.of(...)}, literals as {@code timestamp(...)}/
+   * wrapped in {@code timestamp(...)}, literals as {@code timestamp(...)}/
    * {@code duration(...)}, operators native); otherwise emit natively.
    */
   /**
@@ -691,7 +691,7 @@ final class ConstraintEmitter {
 
   /**
    * Emit an EXTRACT receiver. Temporal receivers go through the timestamp-value
-   * cascade (so {@code ts} → {@code timestamp.of(this.ts)}); {@code now} and
+   * cascade (so {@code ts} → {@code timestamp(this.ts)}); {@code now} and
    * non-temporal receivers emit natively. Compound receivers are parenthesized
    * so the trailing {@code .getXxx()} binds to the whole receiver.
    */
@@ -752,7 +752,7 @@ final class ConstraintEmitter {
   }
 
   // ---- timestamp-value cascade: native emit, but instant-timestamp column
-  // leaves wrapped in timestamp.of(...). Reused by comparison, BETWEEN, EXTRACT,
+  // leaves wrapped in timestamp(...). Reused by comparison, BETWEEN, EXTRACT,
   // and the Phase B constructs. ----
 
   static void emitTimestampValueIn(
@@ -823,7 +823,7 @@ final class ConstraintEmitter {
           ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
       if (ConstraintResolver.isInstantTimestamp(
           ConstraintResolver.resolveColumnRefType(cr, EMIT_VCTX.get()))) {
-        sb.append("timestamp.of(");
+        sb.append("timestamp(");
         visitColumnRef(cr, sb);
         sb.append(')');
       } else {

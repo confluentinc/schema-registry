@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import io.confluent.protobuf.type.Decimal;
 import java.math.BigDecimal;
@@ -48,6 +49,15 @@ public class DecimalUtilsTest {
   @Test
   void dispatchLong_widensExactly() {
     assertEquals(new BigDecimal("42"), DecimalUtils.toBigDecimal(42L));
+  }
+
+  @Test
+  void dispatchUnsignedLong_widensExactly() {
+    // cel-java binds proto uint32/uint64 to Guava UnsignedLong; a value above Long.MAX_VALUE
+    // must not wrap through longValue().
+    assertEquals(new BigDecimal("42"), DecimalUtils.toBigDecimal(UnsignedLong.valueOf(42L)));
+    assertEquals(new BigDecimal("18446744073709551615"),
+        DecimalUtils.toBigDecimal(UnsignedLong.valueOf("18446744073709551615")));
   }
 
   @Test
