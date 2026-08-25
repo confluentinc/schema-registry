@@ -173,6 +173,102 @@ public class TestVariantJsonConverter {
     Assert.assertTrue(node.textValue().contains("2025-04-17"));
   }
 
+  /**
+   * A microsecond timestamp beyond 2262 must not wrap. {@code Instant.ofEpochSecond(0,
+   * micros * 1000)} overflows a long past 9223372036854775 micros
+   * (2262-04-11T23:47:16.854775Z), and used to render year 3000 as a plausible-looking date in
+   * the past instead. The fix splits into whole seconds before scaling the remainder, which is
+   * what the zone-less arm always did - hence only TIMESTAMP_TZ ever had the bug.
+   */
+  @Test
+  public void testToJsonTimestampBeyond2262DoesNotWrap() {
+    long micros = 32_503_680_000_000_000L; // 3000-01-01T00:00:00Z
+    Assert.assertEquals("\"3000-01-01T00:00:00Z\"", toJsonString(b -> b.appendTimestampTz(micros)));
+    Assert.assertEquals("\"3000-01-01T00:00:00.123456Z\"",
+        toJsonString(b -> b.appendTimestampTz(micros + 123_456)));
+    Assert.assertEquals("\"3000-01-01T00:00:00\"", toJsonString(b -> b.appendTimestampNtz(micros)));
+    Assert.assertEquals("\"3000-01-01T00:00:00.123456\"",
+        toJsonString(b -> b.appendTimestampNtz(micros + 123_456)));
+  }
+
+  /**
+   * The renderable range is 0001-01-01T00:00:00 through 9999-12-31T23:59:59.999999 - RFC 3339's
+   * four-digit year. Both boundaries render; one microsecond beyond either end is refused rather
+   * than rendered with ISO-8601's expanded year ({@code +10000-01-01T00:00:00Z}), which is not
+   * RFC 3339 and would not parse back. Every other client enforces the same bound.
+   */
+  @Test
+  public void testToJsonTimestampRangeBoundaries() {
+    long min = -62135596800000000L; // 0001-01-01T00:00:00
+    long max = 253402300799999999L; // 9999-12-31T23:59:59.999999
+    Assert.assertEquals("\"0001-01-01T00:00:00Z\"", toJsonString(b -> b.appendTimestampTz(min)));
+    Assert.assertEquals("\"9999-12-31T23:59:59.999999Z\"",
+        toJsonString(b -> b.appendTimestampTz(max)));
+    Assert.assertEquals("\"0001-01-01T00:00:00\"", toJsonString(b -> b.appendTimestampNtz(min)));
+    Assert.assertEquals("\"9999-12-31T23:59:59.999999\"",
+        toJsonString(b -> b.appendTimestampNtz(max)));
+
+    for (long outOfRange : new long[] {min - 1, max + 1}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTimestampTz(outOfRange)));
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTimestampNtz(outOfRange)));
+    }
+  }
+
+  /**
+   * The nanosecond-based types need no range check: an int64 of nanoseconds spans only 1677-2262,
+   * inside the renderable range at both ends, so the extremes still render.
+   */
+  @Test
+  public void testToJsonTimestampNanosExtremesRender() {
+    Assert.assertEquals("\"2262-04-11T23:47:16.854775807Z\"",
+        toJsonString(b -> b.appendTimestampNanosTz(Long.MAX_VALUE)));
+    Assert.assertEquals("\"1677-09-21T00:12:43.145224192\"",
+        toJsonString(b -> b.appendTimestampNanosNtz(Long.MIN_VALUE)));
+  }
+
+  /**
+   * DATE renders RFC 3339 {@code full-date}, which requires {@code date-fullyear = 4DIGIT}. A
+   * variant DATE is an int32 of days (roughly +/-5.8 million years), so an expanded or negative
+   * year is reachable; it used to render as {@code +10000-01-01} / {@code -0044-01-01}, neither of
+   * which is a valid full-date, and is now refused.
+   */
+  @Test
+  public void testToJsonDateRangeBoundaries() {
+    int min = -719162; // 0001-01-01
+    int max = 2932896; // 9999-12-31
+    Assert.assertEquals("\"0001-01-01\"", toJsonString(b -> b.appendDate(min)));
+    Assert.assertEquals("\"9999-12-31\"", toJsonString(b -> b.appendDate(max)));
+    for (int outOfRange : new int[] {min - 1, max + 1, 4_000_000, -1_000_000}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendDate(outOfRange)));
+    }
+  }
+
+  /**
+   * TIME renders RFC 3339 {@code partial-time}, whose {@code time-hour = 2DIGIT} is 00-23. A
+   * variant TIME is an int64 of microseconds since midnight, so a value at or past 24 hours (or
+   * negative) is reachable and has no valid form; it is refused. This also covers the
+   * {@code micros * 1000} overflow, which wrapped for a large enough value.
+   */
+  @Test
+  public void testToJsonTimeRangeBoundaries() {
+    Assert.assertEquals("\"00:00:00\"", toJsonString(b -> b.appendTime(0L)));
+    Assert.assertEquals("\"23:59:59.999999\"", toJsonString(b -> b.appendTime(86_399_999_999L)));
+    // Exactly 24 hours is out of range: "24:00:00" is not a valid time-hour.
+    for (long outOfRange : new long[] {86_400_000_000L, -1L, Long.MAX_VALUE, Long.MIN_VALUE}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTime(outOfRange)));
+    }
+  }
+
+  private static String toJsonString(java.util.function.Consumer<VariantBuilder> append) {
+    VariantBuilder builder = new VariantBuilder();
+    append.accept(builder);
+    return VariantUtils.toJsonString(builder.build());
+  }
+
   @Test
   public void testToJsonTime() {
     VariantBuilder builder = new VariantBuilder();

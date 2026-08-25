@@ -104,10 +104,9 @@ public class VariantUtils {
       case NULL:
         return FACTORY.nullNode();
       case DATE:
-        return FACTORY.textNode(LocalDate.ofEpochDay(variant.getInt()).toString());
+        return FACTORY.textNode(LocalDate.ofEpochDay(checkDateRange(variant.getInt())).toString());
       case TIMESTAMP_TZ:
-        return FACTORY.textNode(
-            Instant.ofEpochSecond(0, variant.getLong() * 1000).toString());
+        return FACTORY.textNode(instantFromMicros(variant.getLong()).toString());
       case TIMESTAMP_NTZ:
         return FACTORY.textNode(formatLocalDateTimeMicros(variant.getLong()));
       case TIMESTAMP_NANOS_TZ:
@@ -163,12 +162,99 @@ public class VariantUtils {
     }
   }
 
+  /**
+   * The range a timestamp may occupy when rendered to JSON, in microseconds since the epoch:
+   * 0001-01-01T00:00:00 through 9999-12-31T23:59:59.999999.
+   *
+   * <p>This is the four-digit-year form every client renders. For the zone-aware types it is
+   * RFC 3339 - also {@code google.protobuf.Timestamp}'s range, and the range
+   * {@code timestamp(...)} enforces when constructing a CEL timestamp. The zone-less types carry no
+   * offset, so they are ISO-8601 local date-times rather than RFC 3339 (which has no zone-less
+   * form); they share the range so both stay readable by the same date parsers.
+   *
+   * <p>A variant TIMESTAMP_TZ / TIMESTAMP_NTZ is an arbitrary int64 of microseconds - roughly
+   * +/-292,471 years - so it can hold instants outside that form. Rendering those as ISO-8601's
+   * expanded year ({@code +10000-01-01T00:00:00Z}) would emit JSON that most parsers,
+   * {@code variants.parseJson} included, reject; so they are refused instead, as protobuf's
+   * {@code Timestamps.toString} does. It is also exactly what Python's {@code datetime} and .NET's
+   * {@code DateTime} can hold, so every client can enforce it natively.
+   *
+   * <p>The nanosecond-based types need no such check: an int64 of nanoseconds spans only
+   * 1677-2262, which is inside this range at both ends.
+   */
+  private static final long MIN_TIMESTAMP_MICROS = -62135596800000000L;
+  private static final long MAX_TIMESTAMP_MICROS = 253402300799999999L;
+
+  /**
+   * The range a DATE may occupy when rendered to JSON, in days since the epoch: 0001-01-01 through
+   * 9999-12-31. RFC 3339's {@code full-date} requires {@code date-fullyear = 4DIGIT}, so an
+   * expanded or negative year ({@code +10000-01-01}, {@code -0044-01-01}) is not a valid
+   * {@code full-date}. A variant DATE is an int32 of days - roughly +/-5.8 million years - so
+   * those are reachable, and are refused rather than rendered.
+   */
+  private static final int MIN_DATE_EPOCH_DAY = -719162;
+  private static final int MAX_DATE_EPOCH_DAY = 2932896;
+
+  private static int checkDateRange(int epochDay) {
+    if (epochDay < MIN_DATE_EPOCH_DAY || epochDay > MAX_DATE_EPOCH_DAY) {
+      throw new IllegalArgumentException(
+          "Date is not valid. Epoch day (" + epochDay + ") must be in range ["
+              + MIN_DATE_EPOCH_DAY + ", " + MAX_DATE_EPOCH_DAY + "].");
+    }
+    return epochDay;
+  }
+
+  /**
+   * The range a TIME may occupy, in microseconds since midnight: 00:00:00 through
+   * 23:59:59.999999. RFC 3339's {@code partial-time} requires {@code time-hour = 2DIGIT} in
+   * 00-23, so a value at or past 24 hours (or negative) has no valid form. A variant TIME is an
+   * int64 of microseconds, so those are reachable; checking also removes an overflow, since
+   * {@code micros * 1000} wraps for a large enough value.
+   */
+  private static final long MIN_TIME_MICROS = 0L;
+  private static final long MAX_TIME_MICROS = 86_400_000_000L - 1L;
+
+  private static long checkTimeRange(long micros) {
+    if (micros < MIN_TIME_MICROS || micros > MAX_TIME_MICROS) {
+      throw new IllegalArgumentException(
+          "Time is not valid. Microseconds of day (" + micros + ") must be in range ["
+              + MIN_TIME_MICROS + ", " + MAX_TIME_MICROS + "].");
+    }
+    return micros;
+  }
+
+  private static long checkMicrosRange(long micros) {
+    if (micros < MIN_TIMESTAMP_MICROS || micros > MAX_TIMESTAMP_MICROS) {
+      throw new IllegalArgumentException(
+          "Timestamp is not valid. Microseconds (" + micros + ") must be in range ["
+              + MIN_TIMESTAMP_MICROS + ", " + MAX_TIMESTAMP_MICROS + "].");
+    }
+    return micros;
+  }
+
+  /**
+   * Builds an {@link Instant} from microseconds since the epoch, splitting into whole seconds
+   * before scaling to nanoseconds.
+   *
+   * <p>The direct form, {@code Instant.ofEpochSecond(0, micros * 1000)}, overflows a long for any
+   * value past {@code 9223372036854775} micros - 2262-04-11T23:47:16.854775Z - and wrapped
+   * silently to a plausible-looking date well in the past (year 10000 rendered as 1816). This is
+   * the same floorDiv/floorMod split {@link #formatLocalDateTimeMicros} already used, which is why
+   * the zone-less arm never had that bug.
+   */
+  private static Instant instantFromMicros(long micros) {
+    checkMicrosRange(micros);
+    return Instant.ofEpochSecond(
+        Math.floorDiv(micros, 1_000_000L), Math.floorMod(micros, 1_000_000L) * 1000L);
+  }
+
   // Formats an NTZ timestamp / time to ISO-8601 with the seconds field ALWAYS present. This
   // is the cross-language contract: it deviates from LocalDateTime/LocalTime.toString(),
   // which omit the seconds field when both seconds and fraction are zero, so that the NTZ
   // form stays consistent with the TZ (Instant) form. The fractional-second field uses the
   // same 0/3/6/9-digit grouping as Instant.toString().
   private static String formatLocalDateTimeMicros(long micros) {
+    checkMicrosRange(micros);
     return formatLocalDateTime(
         Math.floorDiv(micros, 1_000_000L), (int) Math.floorMod(micros, 1_000_000L) * 1000);
   }
@@ -188,7 +274,7 @@ public class VariantUtils {
   }
 
   private static String formatLocalTime(long micros) {
-    LocalTime time = LocalTime.ofNanoOfDay(micros * 1000);
+    LocalTime time = LocalTime.ofNanoOfDay(checkTimeRange(micros) * 1000);
     return String.format(Locale.ROOT, "%02d:%02d:%02d%s",
         time.getHour(), time.getMinute(), time.getSecond(), fractionOfSecond(time.getNano()));
   }
