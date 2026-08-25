@@ -1708,8 +1708,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String referrer = QualifiedSubject.createFromUnqualified(tenant(), other.getSubject())
           .toQualifiedSubject();
       for (SchemaReference ref : schema.getReferences()) {
-        QualifiedSubject target =
-            QualifiedSubject.qualifySubjectWithParent(tenant(), referrer, ref.getSubject());
+        // build the tenant-qualified subject
+        QualifiedSubject target = QualifiedSubject.qualifySubjectWithParent(
+            tenant(), referrer, ref.getSubject(), true);
         if (target != null && strongSubject.equals(target.toQualifiedSubject())) {
           return true;
         }
