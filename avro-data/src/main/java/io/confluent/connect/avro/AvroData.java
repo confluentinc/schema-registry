@@ -1501,6 +1501,7 @@ public class AvroData {
           }
           Collection<Object> original = (Collection<Object>) arrayVal;
           List<Object> result = new ArrayList<>(original.size());
+          trackConvertedContainer(toConnectContext);
           for (Object elem : original) {
             result.add(toConnectData((Schema) null, elem, toConnectContext));
           }
@@ -1519,6 +1520,7 @@ public class AvroData {
           }
           Collection<IndexedRecord> original = (Collection<IndexedRecord>) mapVal;
           Map<Object, Object> result = new HashMap<>(original.size());
+          trackConvertedContainer(toConnectContext);
           for (IndexedRecord entry : original) {
             int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
             int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
@@ -1721,11 +1723,8 @@ public class AvroData {
    */
   private void trackConvertedContainer(ToConnectContext toConnectContext) {
     if (++toConnectContext.convertedObjectCount > maxToConnectDataObjects) {
-      throw new DataException(
-          "Exceeded the maximum of " + maxToConnectDataObjects + " Struct/List/Map objects "
-          + "allowed while converting a single Avro record to Connect data (see the '"
-          + AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG + "' configuration); rejecting "
-          + "this record instead of risking exhaustion of the worker's memory.");
+      throw new DataException("Record exceeds " + maxToConnectDataObjects
+          + " materialized objects (" + AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG + ")");
     }
   }
 

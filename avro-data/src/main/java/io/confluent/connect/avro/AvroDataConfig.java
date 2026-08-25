@@ -54,11 +54,8 @@ public class AvroDataConfig extends AbstractDataConfig {
   public static final String MAX_TO_CONNECT_DATA_OBJECTS_CONFIG = "max.to.connect.data.objects";
   public static final int MAX_TO_CONNECT_DATA_OBJECTS_DEFAULT = 1_000_000;
   public static final String MAX_TO_CONNECT_DATA_OBJECTS_DOC =
-      "The maximum number of Struct, List, and Map objects that may be materialized while "
-      + "converting a single Avro record to Connect data. Deeply or widely nested records can "
-      + "otherwise expand into an unbounded number of objects during conversion and exhaust "
-      + "the JVM heap. Once a record would exceed this limit, conversion fails with a "
-      + "DataException for that record instead of continuing to allocate memory.";
+      "Maximum Struct/List/Map objects a single record may materialize before conversion fails, "
+      + "bounding memory use for deeply or widely nested records.";
 
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
@@ -96,6 +93,7 @@ public class AvroDataConfig extends AbstractDataConfig {
         .define(MAX_TO_CONNECT_DATA_OBJECTS_CONFIG,
                 ConfigDef.Type.INT,
                 MAX_TO_CONNECT_DATA_OBJECTS_DEFAULT,
+                ConfigDef.Range.atLeast(1),
                 ConfigDef.Importance.LOW,
                 MAX_TO_CONNECT_DATA_OBJECTS_DOC);
   }

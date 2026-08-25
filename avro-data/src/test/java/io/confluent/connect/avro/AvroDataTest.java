@@ -3251,6 +3251,43 @@ public class AvroDataTest {
     return current;
   }
 
+  @Test(expected = DataException.class)
+  public void testSchemalessToConnectDataFailsFastOnDeeplyNestedRecordExceedingObjectLimit() {
+    // The schemaless (ANYTHING_SCHEMA) array path builds containers directly, bypassing the
+    // ARRAY/MAP/STRUCT cases in the schema-carrying switch, so it needs its own coverage.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 5)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    GenericRecord chain = buildSchemalessArrayChain(10);
+    graphAvroData.toConnectData(AvroData.ANYTHING_SCHEMA, chain);
+  }
+
+  @Test
+  public void testSchemalessToConnectDataSucceedsWhenWithinObjectLimit() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 100)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    GenericRecord chain = buildSchemalessArrayChain(10);
+    SchemaAndValue schemaAndValue = graphAvroData.toConnectData(AvroData.ANYTHING_SCHEMA, chain);
+    assertNotNull(schemaAndValue.value());
+  }
+
+  // Builds a chain of `depth` ANYTHING_SCHEMA records, each one's "array" field containing
+  // exactly the previous record.
+  private GenericRecord buildSchemalessArrayChain(int depth) {
+    GenericRecord current = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
+    for (int i = 1; i < depth; i++) {
+      current = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
+          .set("array", Arrays.asList(current))
+          .build();
+    }
+    return current;
+  }
+
   private void assertMapCycle(
       Long current, Object value, Map<Long, Map<String, Long>> expectedMap) {
 
