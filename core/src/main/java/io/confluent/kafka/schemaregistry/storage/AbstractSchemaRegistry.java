@@ -1708,14 +1708,34 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String referrer = QualifiedSubject.createFromUnqualified(tenant(), other.getSubject())
           .toQualifiedSubject();
       for (SchemaReference ref : schema.getReferences()) {
-        QualifiedSubject target =
-            QualifiedSubject.qualifySubjectWithParent(tenant(), referrer, ref.getSubject());
+        // build the tenant-qualified subject
+        QualifiedSubject target = QualifiedSubject.qualifySubjectWithParent(
+            tenant(), referrer, ref.getSubject(), true);
         if (target != null && strongSubject.equals(target.toQualifiedSubject())) {
           return true;
         }
       }
     }
     return false;
+  }
+
+  /**
+   * A schema reference and a STRONG (topic-owned) association are mutually exclusive: a subject
+   * claimed by its topic cannot be a reference target. Enforced in every mode, including IMPORT,
+   * so cluster linking cannot replicate a schema into the forbidden state. Shared here so every
+   * concrete registry's {@code register} enforces the same rule.
+   */
+  protected void validateReferencesNotStronglyAssociated(String subject, Schema schema)
+      throws SchemaRegistryException {
+    for (SchemaReference ref : schema.getReferences()) {
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), subject, ref.getSubject());
+      if (refSubject != null && !getAssociationsBySubject(
+          refSubject.toQualifiedSubject(), null, null, LifecyclePolicy.STRONG).isEmpty()) {
+        throw new OperationNotPermittedException("Subject '" + ref.getSubject()
+            + "' has a strong association and cannot be referenced");
+      }
+    }
   }
 
   @Override
