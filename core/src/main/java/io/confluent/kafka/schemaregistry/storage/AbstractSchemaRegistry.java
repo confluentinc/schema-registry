@@ -1729,8 +1729,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected void validateReferencesNotStronglyAssociated(String subject, Schema schema)
       throws SchemaRegistryException {
     for (SchemaReference ref : schema.getReferences()) {
+      // build the tenant-qualified subject
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), subject, ref.getSubject());
+          tenant(), subject, ref.getSubject(), true);
       if (refSubject != null && !getAssociationsBySubject(
           refSubject.toQualifiedSubject(), null, null, LifecyclePolicy.STRONG).isEmpty()) {
         throw new OperationNotPermittedException("Subject '" + ref.getSubject()
