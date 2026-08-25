@@ -336,6 +336,7 @@ public class AvroData {
   private boolean discardTypeDocDefault;
   private boolean allowOptionalMapKey;
   private boolean flattenSingletonUnions;
+  private int maxToConnectDataObjects;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -354,6 +355,7 @@ public class AvroData {
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
     this.allowOptionalMapKey = avroDataConfig.isAllowOptionalMapKeys();
     this.flattenSingletonUnions = avroDataConfig.isFlattenSingletonUnions();
+    this.maxToConnectDataObjects = avroDataConfig.getMaxToConnectDataObjects();
   }
 
   /**
@@ -1499,6 +1501,7 @@ public class AvroData {
           }
           Collection<Object> original = (Collection<Object>) arrayVal;
           List<Object> result = new ArrayList<>(original.size());
+          trackConvertedContainer(toConnectContext);
           for (Object elem : original) {
             result.add(toConnectData((Schema) null, elem, toConnectContext));
           }
@@ -1517,6 +1520,7 @@ public class AvroData {
           }
           Collection<IndexedRecord> original = (Collection<IndexedRecord>) mapVal;
           Map<Object, Object> result = new HashMap<>(original.size());
+          trackConvertedContainer(toConnectContext);
           for (IndexedRecord entry : original) {
             int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
             int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
@@ -1601,6 +1605,7 @@ public class AvroData {
           Schema valueSchema = schema.valueSchema();
           Collection<Object> original = (Collection<Object>) value;
           List<Object> result = new ArrayList<>(original.size());
+          trackConvertedContainer(toConnectContext);
           for (Object elem : original) {
             result.add(toConnectData(valueSchema, elem, toConnectContext));
           }
@@ -1616,6 +1621,7 @@ public class AvroData {
             // Non-optional string keys
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             Map<CharSequence, Object> result = new HashMap<>(original.size());
+            trackConvertedContainer(toConnectContext);
             for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
               result.put(entry.getKey().toString(),
                          toConnectData(valueSchema, entry.getValue(), toConnectContext));
@@ -1625,6 +1631,7 @@ public class AvroData {
             // Arbitrary keys
             Collection<IndexedRecord> original = (Collection<IndexedRecord>) value;
             Map<Object, Object> result = new HashMap<>(original.size());
+            trackConvertedContainer(toConnectContext);
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
               int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
@@ -1653,6 +1660,7 @@ public class AvroData {
               Schema fieldSchema = field.schema();
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value, index)
                   || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
+                trackConvertedContainer(toConnectContext);
                 converted = new Struct(schema).put(
                     unionMemberFieldName(fieldSchema, index),
                     toConnectData(fieldSchema, value, toConnectContext));
@@ -1667,6 +1675,7 @@ public class AvroData {
             // Default values from Avro are returned as Map
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             Struct result = new Struct(schema);
+            trackConvertedContainer(toConnectContext);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               Object convertedFieldValue = toConnectData(field.schema(),
@@ -1678,6 +1687,7 @@ public class AvroData {
           } else {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
+            trackConvertedContainer(toConnectContext);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               int avroFieldIndex = original.getSchema().getField(fieldName).pos();
@@ -1704,6 +1714,17 @@ public class AvroData {
     } catch (ClassCastException e) {
       String schemaType = schema != null ? schema.type().toString() : "null";
       throw new DataException("Invalid type for " + schemaType + ": " + value.getClass());
+    }
+  }
+
+  /**
+   * Tracks one more Struct/List/Map materialized while converting the current record, failing
+   * fast if the record has exceeded the configured limit rather than continuing to allocate.
+   */
+  private void trackConvertedContainer(ToConnectContext toConnectContext) {
+    if (++toConnectContext.convertedObjectCount > maxToConnectDataObjects) {
+      throw new DataException("Record exceeds " + maxToConnectDataObjects
+          + " materialized objects (" + AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG + ")");
     }
   }
 
@@ -2680,6 +2701,9 @@ public class AvroData {
   private static class ToConnectContext {
     private final Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences;
     private final Set<org.apache.avro.Schema> detectedCycles;
+    // Count of Struct/List/Map objects materialized so far while converting the current
+    // top-level record, used to bound memory use for deeply or widely nested records.
+    private int convertedObjectCount = 0;
 
     /**
      * cycleReferences - map that holds connect Schema references to resolve cycles
