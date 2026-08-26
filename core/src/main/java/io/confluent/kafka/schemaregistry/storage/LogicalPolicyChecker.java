@@ -24,13 +24,17 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
-import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityResult;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
-import io.confluent.kafka.schemaregistry.type.logical.policy.ValidityResult;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,12 +112,7 @@ public final class LogicalPolicyChecker {
     }
 
     // Validity: a property of the new schema itself, independent of any previous version.
-    for (Mode mode : MODES) {
-      ValidityResult validity = LogicalTypeChecker.validate(mode, newLogical);
-      if (!validity.isValid()) {
-        errors.add("Logical validity (" + mode + "): " + validity.describe());
-      }
-    }
+    errors.addAll(describeValidity(newLogical));
 
     List<ParsedSchemaHolder> toCompare = selectForComparison(previousSchemas, level);
     boolean checksBackward = checksBackward(level);
@@ -130,24 +129,97 @@ public final class LogicalPolicyChecker {
       }
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
-        addCompareErrors(errors, "backward", previousLogical, newLogical);
+        addCompareErrors(errors, previousLogical, newLogical);
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
-        addCompareErrors(errors, "forward", newLogical, previousLogical);
+        addCompareErrors(errors, newLogical, previousLogical);
       }
     }
     return errors;
   }
 
-  private static void addCompareErrors(
-      List<String> errors, String direction, LogicalType original, LogicalType update) {
+  private static List<String> describeValidity(LogicalType newLogical) {
+    Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
-      CompatibilityResult result = LogicalTypeChecker.compare(mode, original, update);
-      if (!result.isCompatible()) {
-        errors.add(
-            "Logical compatibility (" + mode + ", " + direction + "): " + result.describe());
+      for (Invalidity invalidity
+          : LogicalTypeChecker.validate(mode, newLogical).getInvalidities()) {
+        byFinding
+            .computeIfAbsent(
+                new FindingKey(invalidity.getRule().toString(), invalidity.getPath()),
+                k -> new LinkedHashMap<>())
+            .put(mode, invalidity.getMessage());
       }
+    }
+    List<String> errors = new ArrayList<>();
+    for (Map.Entry<FindingKey, Map<Mode, String>> entry : byFinding.entrySet()) {
+      errors.add(describeFinding(entry.getKey(), entry.getValue()));
+    }
+    return errors;
+  }
+
+  private static void addCompareErrors(
+      List<String> errors, LogicalType original, LogicalType update) {
+    Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
+    for (Mode mode : MODES) {
+      for (Incompatibility incompatibility
+          : LogicalTypeChecker.compare(mode, original, update).getIncompatibilities()) {
+        byFinding
+            .computeIfAbsent(
+                new FindingKey(incompatibility.getRule().toString(), incompatibility.getPath()),
+                k -> new LinkedHashMap<>())
+            .put(mode, incompatibility.getMessage());
+      }
+    }
+    for (Map.Entry<FindingKey, Map<Mode, String>> entry : byFinding.entrySet()) {
+      errors.add(describeFinding(entry.getKey(), entry.getValue()));
+    }
+  }
+
+  /**
+   * Renders one finding as {@code {errorType:"<rule>", category:["<mode>", ...],
+   * description:"<message>", additionalInfo:"<path>"}} -- mirroring the {@code {errorType,
+   * description, additionalInfo}} shape the native JSON/Protobuf checks already use (see
+   * {@code io.confluent.kafka.schemaregistry.json.diff.Difference}), with {@code category} added
+   * to carry which mode(s) flagged it.
+   *
+   * <p>{@code category} lists every mode that flagged this {@code (rule, path)} -- {@link
+   * Mode#FLINK} and {@link Mode#ICEBERG_V2} frequently flag the same underlying violation at the
+   * same path, since their checkers are independent implementations. Only one message is ever
+   * shown: when modes disagree on the wording, {@link #MODES}' order (FLINK before ICEBERG_V2)
+   * picks a single representative rather than repeating the same finding once per mode.
+   */
+  private static String describeFinding(FindingKey key, Map<Mode, String> messagesByMode) {
+    String modes = messagesByMode.keySet().stream()
+        .map(mode -> "\"" + mode + "\"")
+        .collect(Collectors.joining(", "));
+    String message = messagesByMode.values().iterator().next();
+    return "{errorType:\"" + key.rule + "\", category:[" + modes + "], description:\""
+        + message + "\", additionalInfo:\"" + key.path + "\"}";
+  }
+
+  /** Groups a validity/compatibility finding by the rule it violated and the field path. */
+  private static final class FindingKey {
+    private final String rule;
+    private final String path;
+
+    FindingKey(String rule, String path) {
+      this.rule = rule;
+      this.path = path == null ? "" : path;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof FindingKey)) {
+        return false;
+      }
+      FindingKey that = (FindingKey) o;
+      return rule.equals(that.rule) && path.equals(that.path);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(rule, path);
     }
   }
 
