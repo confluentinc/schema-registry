@@ -148,6 +148,8 @@ import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import io.confluent.protobuf.type.VariantProto;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
@@ -2949,7 +2951,7 @@ public class ProtobufSchema implements ParsedSchema {
           .collect(Collectors.toList());
     } else if (message instanceof Map) {
       return message;
-    } else if (message instanceof Message) {
+    } else if (message instanceof Message && !isCelLeafMessage(desc)) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         if (isMapKeyField(fd)) {
@@ -2993,7 +2995,7 @@ public class ProtobufSchema implements ParsedSchema {
               throw new RuntimeException(new RuleConditionException(ctx.rule()));
             }
           } else {
-            copy.setField(fd, newValue);
+            copy.setField(fd, coerceToValueType(copy, fd, newValue));
           }
         }
       }
@@ -3015,6 +3017,41 @@ public class ProtobufSchema implements ParsedSchema {
       }
       return message;
     }
+  }
+
+  /**
+   * Re-encodes a CEL_FIELD result for a value-type field: the executor hands back a
+   * {@link BigDecimal} or an {@link Instant} (the same shapes the Avro field setter takes),
+   * but the protobuf field holds a message, so rebuild it. Anything else passes through.
+   */
+  private static Object coerceToValueType(
+      Message.Builder parent, FieldDescriptor fd, Object value) {
+    if (fd.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+        || !isCelLeafMessage(fd.getMessageType())) {
+      return value;
+    }
+    Descriptor desc = fd.getMessageType();
+    if (DECIMAL_TYPE_NAME.equals(desc.getFullName()) && value instanceof BigDecimal) {
+      BigDecimal dec = (BigDecimal) value;
+      // Same mapping as DecimalUtils.fromBigDecimal: precision and scale describe the value
+      // itself, not a declared column width — the reverse conversion reads precision into a
+      // MathContext. A builder from the parent is used rather than the generated Decimal so
+      // that a message parsed dynamically from a registered schema is written back in kind.
+      Message.Builder b = parent.newBuilderForField(fd);
+      b.setField(desc.findFieldByName("value"),
+          ByteString.copyFrom(dec.unscaledValue().toByteArray()));
+      b.setField(desc.findFieldByName("precision"), dec.precision());
+      b.setField(desc.findFieldByName("scale"), dec.scale());
+      return b.build();
+    }
+    if (TIMESTAMP_TYPE_NAME.equals(desc.getFullName()) && value instanceof Instant) {
+      Instant instant = (Instant) value;
+      Message.Builder b = parent.newBuilderForField(fd);
+      b.setField(desc.findFieldByName("seconds"), instant.getEpochSecond());
+      b.setField(desc.findFieldByName("nanos"), instant.getNano());
+      return b.build();
+    }
+    return value;
   }
 
   private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,
@@ -3346,12 +3383,40 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Protobuf message types a CEL rule treats as a single value rather than a record. Avro
+   * carries the same concepts as logical types on a primitive, so the field is a leaf there
+   * and a CEL_FIELD rule reaches it; in protobuf they are messages, and without this the
+   * walk descends into their internals and transforms {@code value}/{@code scale} /
+   * {@code seconds}/{@code nanos} one at a time instead.
+   */
+  private static final String DECIMAL_TYPE_NAME = "confluent.type.Decimal";
+  private static final String TIMESTAMP_TYPE_NAME = "google.protobuf.Timestamp";
+
+  /**
+   * Whether {@code desc} is one of the message types bound to CEL as a single value.
+   */
+  private static boolean isCelLeafMessage(Descriptor desc) {
+    if (desc == null) {
+      return false;
+    }
+    String name = desc.getFullName();
+    return DECIMAL_TYPE_NAME.equals(name) || TIMESTAMP_TYPE_NAME.equals(name);
+  }
+
   private RuleContext.Type getType(FieldDescriptor field) {
     if (field.isMapField()) {
       return RuleContext.Type.MAP;
     }
     switch (field.getType()) {
       case MESSAGE:
+        // Report the same primitive type the Avro counterpart does, so that CEL_FIELD
+        // applies to the field and a rule written against one format ports to the other.
+        if (isCelLeafMessage(field.getMessageType())) {
+          return DECIMAL_TYPE_NAME.equals(field.getMessageType().getFullName())
+              ? RuleContext.Type.BYTES
+              : RuleContext.Type.LONG;
+        }
         return RuleContext.Type.RECORD;
       case ENUM:
         return RuleContext.Type.ENUM;
