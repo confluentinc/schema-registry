@@ -280,6 +280,10 @@ public class CelProtobufValueTypeTest {
 
   // ---- message-level CEL: a computed value must round-trip back into the message ----
 
+  private static final String ALL_BUT_DATA =
+      "\"amount\": message.amount, \"ts\": message.ts,"
+          + " \"label\": message.label, \"ratio\": message.ratio";
+
   private static final String ALL =
       "\"amount\": message.amount, \"ts\": message.ts, \"data\": message.data,"
           + " \"label\": message.label, \"ratio\": message.ratio";
@@ -352,6 +356,115 @@ public class CelProtobufValueTypeTest {
     Message out = assertInstanceOf(Message.class, transformMessage(
         "{" + ALL + ", \"totalAmount\": decimals.add(decimal(\"9.00\"), decimal(\"0.99\"))}"));
     assertEquals(new BigDecimal("9.99"), decimalIn(field(out, "total_amount")));
+  }
+
+  // ---- C9: timestamp and variant in containers, and a nested message ----
+
+  @SuppressWarnings("unchecked")
+  private static List<Message> repeated(Message msg, String field) {
+    return (List<Message>) msg.getField(msg.getDescriptorForType().findFieldByName(field));
+  }
+
+  @Test
+  public void messageTransformComputesRepeatedTimestamp() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"timestamps\": [message.ts + duration(\"60s\")]}"));
+    Message ts = repeated(out, "timestamps").get(0);
+    Descriptor d = ts.getDescriptorForType();
+    assertEquals(1700000060L, ts.getField(d.findFieldByName("seconds")));
+    assertEquals(123000000, ts.getField(d.findFieldByName("nanos")));
+  }
+
+  @Test
+  public void messageTransformComputesRepeatedVariant() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"variants\": [variants.parseJson(\"{\\\"name\\\":\\\"bob\\\"}\")]}"));
+    Message v = repeated(out, "variants").get(0);
+    Descriptor d = v.getDescriptorForType();
+    assertEquals("{\"name\":\"bob\"}", VariantUtils.toJsonString(new Variant(
+        ((ByteString) v.getField(d.findFieldByName("value"))).toByteArray(),
+        ((ByteString) v.getField(d.findFieldByName("metadata"))).toByteArray())));
+  }
+
+  /** The writer must recurse into a nested message to find a value type one level down. */
+  @Test
+  public void messageTransformComputesNestedDecimal() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"nested\": {\"inner\":"
+            + " decimals.add(decimal(\"4.00\"), decimal(\"0.44\"))}}"));
+    assertEquals(new BigDecimal("4.44"), decimalIn(field(field(out, "nested"), "inner")));
+  }
+
+  // ---- C8: an absent variant reads as null rather than crashing ----
+
+  /**
+   * An unset {@code confluent.type.Variant} field carries empty metadata/value bytes. The Variant
+   * constructor validates the metadata version byte, so this used to raise a bare
+   * {@code IndexOutOfBoundsException} out of every accessor — including {@code variants.isNull},
+   * the guard a rule author would reach for.
+   */
+  @Test
+  public void absentVariantReadsAsNull() throws Exception {
+    ValueTypes unset = ValueTypes.newBuilder().setLabel("hi").build();
+    ProtobufSchema schema = new ProtobufSchema(ValueTypes.getDescriptor());
+    for (String expr : new String[] {
+        "variants.type(message.data) == \"object\"",
+        "variants.isNull(message.data)",
+        "variants.field(message.data, \"name\") == null",
+        "variants.path(message.data, \"$.name\") == null"}) {
+      Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+          CelExecutor.TYPE, null, null, expr, null, null, false);
+      RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
+          "topic-value", "topic", null, null, null, false, RuleMode.WRITE, rule, 0,
+          Collections.singletonList(rule));
+      Object result = new CelExecutor().transform(ctx, unset);
+      assertInstanceOf(Boolean.class, result, expr + " must evaluate, not throw");
+    }
+  }
+
+  /**
+   * The explicit constructor has to report an absent variant as CEL null too. It does not go
+   * through the accessor coercion, so it needs its own handling — otherwise it hands a Java null
+   * to the runtime and fails with a NullPointerException that says nothing.
+   */
+  @Test
+  public void variantConstructorOnAbsentReturnsCelNull() throws Exception {
+    assertTrue(condition("variant(message.data) == null", unsetMessage()));
+    assertFalse(condition("variants.type(variant(message.data)) == \"object\"", unsetMessage()));
+  }
+
+  /** Empty metadata cannot be decoded; say so rather than raising IndexOutOfBoundsException. */
+  @Test
+  public void variantFromEmptyMetadataBytesIsRejected() {
+    Exception e = assertThrows(Exception.class,
+        () -> condition("variants.type(variant(b\"\", b\"\")) == \"object\"", unsetMessage()));
+    assertTrue(rootMessage(e).contains("metadata is empty"), rootMessage(e));
+  }
+
+  private static ValueTypes unsetMessage() {
+    return ValueTypes.newBuilder().setLabel("hi").build();
+  }
+
+  private static boolean condition(String expr, ValueTypes msg) throws Exception {
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, null, expr, null, null, false);
+    RuleContext rc = new RuleContext(Collections.emptyMap(), null, null, schema(),
+        "topic-value", "topic", null, null, null, false, RuleMode.WRITE, rule, 0,
+        Collections.singletonList(rule));
+    return Boolean.TRUE.equals(new CelExecutor().transform(rc, msg));
+  }
+
+  /**
+   * Absent must stay distinguishable from a variant that genuinely holds JSON null — the former is
+   * CEL null, the latter a Variant whose type is NULL.
+   */
+  @Test
+  public void explicitNullVariantIsNotAbsent() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL_BUT_DATA + ", \"data\": variants.parseJson(\"null\")}"));
+    Descriptor d = field(out, "data").getDescriptorForType();
+    assertFalse(((ByteString) field(out, "data").getField(d.findFieldByName("metadata"))).isEmpty(),
+        "an explicit JSON null is a real variant, so it must carry metadata bytes");
   }
 
   // ---- a result that cannot be stored is a rule error, not a raw CCE/NPE ----

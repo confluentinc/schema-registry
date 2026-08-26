@@ -50,6 +50,9 @@ final class VariantUtils {
    * Decode a {@code confluent.type.Variant} proto message.
    */
   static Variant fromProto(io.confluent.protobuf.type.Variant v) {
+    if (v.getMetadata().isEmpty()) {
+      return null;
+    }
     return new Variant(v.getValue().asReadOnlyByteBuffer(),
         v.getMetadata().asReadOnlyByteBuffer());
   }
@@ -71,6 +74,9 @@ final class VariantUtils {
     }
     ByteString value = (ByteString) msg.getField(valueField);
     ByteString metadata = (ByteString) msg.getField(metadataField);
+    if (metadata.isEmpty()) {
+      return null;
+    }
     return new Variant(value.asReadOnlyByteBuffer(), metadata.asReadOnlyByteBuffer());
   }
 
@@ -78,12 +84,23 @@ final class VariantUtils {
    * Decode an Avro {@code variant} logical-type record (raw form).
    */
   static Variant fromAvroRecord(IndexedRecord record) {
+    org.apache.avro.Schema.Field metadataField = record.getSchema().getField("metadata");
+    if (metadataField != null) {
+      Object metadata = record.get(metadataField.pos());
+      if (metadata == null || toBytes(metadata).length == 0) {
+        return null;
+      }
+    }
     return VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null);
   }
 
   /**
    * Runtime dispatch backing {@code variant(dyn)}. Accepts the shapes Proto/Avro
    * decoders typically produce.
+   *
+   * @return the decoded Variant, or {@code null} when the input carries no metadata bytes and so
+   *     holds no variant at all — an unset protobuf field, or an Avro variant record whose byte
+   *     fields are empty. Callers must map that to CEL null.
    */
   static Variant toVariant(Object o) {
     if (o == null) {
@@ -112,7 +129,8 @@ final class VariantUtils {
       Object md = map.get("metadata");
       Object val = map.get("value");
       if (md != null && val != null) {
-        return new Variant(toBytes(val), toBytes(md));
+        byte[] metadata = toBytes(md);
+        return metadata.length == 0 ? null : new Variant(toBytes(val), metadata);
       }
       if (md != null || val != null) {
         // Map has the shape of a Variant record but is missing one of the
