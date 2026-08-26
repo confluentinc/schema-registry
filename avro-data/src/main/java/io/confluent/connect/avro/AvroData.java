@@ -1500,8 +1500,8 @@ public class AvroData {
             );
           }
           Collection<Object> original = (Collection<Object>) arrayVal;
-          List<Object> result = new ArrayList<>(original.size());
           trackConvertedContainer(toConnectContext);
+          List<Object> result = new ArrayList<>(original.size());
           for (Object elem : original) {
             result.add(toConnectData((Schema) null, elem, toConnectContext));
           }
@@ -1519,8 +1519,8 @@ public class AvroData {
             );
           }
           Collection<IndexedRecord> original = (Collection<IndexedRecord>) mapVal;
-          Map<Object, Object> result = new HashMap<>(original.size());
           trackConvertedContainer(toConnectContext);
+          Map<Object, Object> result = new HashMap<>(original.size());
           for (IndexedRecord entry : original) {
             int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
             int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
@@ -1604,8 +1604,8 @@ public class AvroData {
         case ARRAY: {
           Schema valueSchema = schema.valueSchema();
           Collection<Object> original = (Collection<Object>) value;
-          List<Object> result = new ArrayList<>(original.size());
           trackConvertedContainer(toConnectContext);
+          List<Object> result = new ArrayList<>(original.size());
           for (Object elem : original) {
             result.add(toConnectData(valueSchema, elem, toConnectContext));
           }
@@ -1620,8 +1620,8 @@ public class AvroData {
               .isOptional()) {
             // Non-optional string keys
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
-            Map<CharSequence, Object> result = new HashMap<>(original.size());
             trackConvertedContainer(toConnectContext);
+            Map<CharSequence, Object> result = new HashMap<>(original.size());
             for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
               result.put(entry.getKey().toString(),
                          toConnectData(valueSchema, entry.getValue(), toConnectContext));
@@ -1630,8 +1630,8 @@ public class AvroData {
           } else {
             // Arbitrary keys
             Collection<IndexedRecord> original = (Collection<IndexedRecord>) value;
-            Map<Object, Object> result = new HashMap<>(original.size());
             trackConvertedContainer(toConnectContext);
+            Map<Object, Object> result = new HashMap<>(original.size());
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
               int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
@@ -1674,8 +1674,8 @@ public class AvroData {
           } else if (value instanceof Map) {
             // Default values from Avro are returned as Map
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
-            Struct result = new Struct(schema);
             trackConvertedContainer(toConnectContext);
+            Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               Object convertedFieldValue = toConnectData(field.schema(),
@@ -1686,8 +1686,8 @@ public class AvroData {
             return result;
           } else {
             IndexedRecord original = (IndexedRecord) value;
-            Struct result = new Struct(schema);
             trackConvertedContainer(toConnectContext);
+            Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name());
               int avroFieldIndex = original.getSchema().getField(fieldName).pos();
@@ -1718,12 +1718,25 @@ public class AvroData {
   }
 
   /**
-   * Tracks one more Struct/List/Map materialized while converting the current record, failing
-   * fast if the record has exceeded the configured limit rather than continuing to allocate.
+   * Distinguishes the object-count guard from an ordinary invalid-data DataException, so callers
+   * that otherwise swallow DataException (e.g. an invalid schema default) can still let this one
+   * propagate.
+   */
+  private static class MaxObjectsExceededException extends DataException {
+    private MaxObjectsExceededException(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Tracks one more Struct/List/Map about to be materialized while converting the current
+   * record, failing fast if that would exceed the configured limit. Must be called before
+   * constructing the container, not after, so a single oversized container's own allocation
+   * can't itself exhaust memory ahead of the check.
    */
   private void trackConvertedContainer(ToConnectContext toConnectContext) {
     if (++toConnectContext.convertedObjectCount > maxToConnectDataObjects) {
-      throw new DataException("Record exceeds " + maxToConnectDataObjects
+      throw new MaxObjectsExceededException("Record exceeds " + maxToConnectDataObjects
           + " materialized objects (" + AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG + ")");
     }
   }
@@ -2079,6 +2092,8 @@ public class AvroData {
       try {
         builder.defaultValue(
             defaultValueFromAvro(builder, schema, fieldDefaultVal, toConnectContext));
+      } catch (MaxObjectsExceededException e) {
+        throw e;
       } catch (DataException e) {
         log.warn("Ignoring invalid default for schema {}", schema.getName(), e);
       }
@@ -2224,6 +2239,7 @@ public class AvroData {
         if (!jsonValue.isArray()) {
           throw new DataException("Invalid JSON for array default value");
         }
+        trackConvertedContainer(toConnectContext);
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
           Object converted = defaultValueFromAvro(
@@ -2237,6 +2253,7 @@ public class AvroData {
         if (!jsonValue.isObject()) {
           throw new DataException("Invalid JSON for map default value");
         }
+        trackConvertedContainer(toConnectContext);
         Map<String, Object> result = new HashMap<>(jsonValue.size());
         Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.fields();
         while (fieldIt.hasNext()) {
@@ -2253,6 +2270,7 @@ public class AvroData {
           throw new DataException("Invalid JSON for record default value");
         }
 
+        trackConvertedContainer(toConnectContext);
         Struct result = new Struct(schema);
         for (org.apache.avro.Schema.Field avroField : avroSchema.getFields()) {
           Field field = schema.field(avroField.name());

@@ -3288,6 +3288,46 @@ public class AvroDataTest {
     return current;
   }
 
+  @Test(expected = DataException.class)
+  public void testToConnectSchemaFailsFastOnDeeplyNestedDefaultExceedingObjectLimit() {
+    // A field's own Avro-declared default can be deeply nested independent of any record data;
+    // defaultValueFromAvroWithoutLogical materializes containers for it too, so it needs the
+    // same object-count guard as the main record-conversion path.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 5)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema schema = buildNestedArrayDefaultSchema(10);
+    graphAvroData.toConnectSchema(schema);
+  }
+
+  @Test
+  public void testToConnectSchemaSucceedsWithDefaultWithinObjectLimit() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 100)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema schema = buildNestedArrayDefaultSchema(10);
+    Schema connectSchema = graphAvroData.toConnectSchema(schema);
+    assertNotNull(connectSchema);
+  }
+
+  // Builds a record with one field whose Avro type and default value are both nested `depth`
+  // levels of array-of-array-of-...-long, e.g. depth=2 -> type array<array<long>>, default [[1]].
+  private org.apache.avro.Schema buildNestedArrayDefaultSchema(int depth) {
+    String type = "\"long\"";
+    String defaultValue = "1";
+    for (int i = 0; i < depth; i++) {
+      type = "{\"type\":\"array\",\"items\":" + type + "}";
+      defaultValue = "[" + defaultValue + "]";
+    }
+    String schemaJson = "{\"type\":\"record\",\"name\":\"NestedDefaultWrapper\",\"fields\":["
+        + "{\"name\":\"nested\",\"type\":" + type + ",\"default\":" + defaultValue + "}]}";
+    return new org.apache.avro.Schema.Parser().parse(schemaJson);
+  }
+
   private void assertMapCycle(
       Long current, Object value, Map<Long, Map<String, Long>> expectedMap) {
 
