@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules.cel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -60,6 +61,7 @@ public final class CelValidator implements ValidationRuleExecutor {
 
   /** Used for POJO/JsonNode → Map conversion on the JSON validation path. */
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
+      .registerModule(new JavaTimeModule())
       .registerModule(new ProtobufModule());
 
   private final LoadingCache<ValidationKey, CelRuntime.Program> cache;
