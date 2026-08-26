@@ -73,7 +73,7 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(EMPTY_RECORD), List.of(), CompatibilityLevel.NONE);
     assertFalse(errors.isEmpty(), "empty struct should fail Iceberg validity even with no previous");
-    assertTrue(errors.stream().anyMatch(e -> e.contains("validity")));
+    assertTrue(errors.stream().anyMatch(e -> e.contains("EMPTY_STRUCT")), errors.toString());
   }
 
   @Test
@@ -90,8 +90,7 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
     assertFalse(errors.isEmpty());
-    assertTrue(errors.stream().anyMatch(e -> e.contains("compatibility") && e.contains("backward")),
-        errors.toString());
+    assertTrue(errors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")), errors.toString());
   }
 
   @Test
@@ -103,26 +102,33 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void backwardLabelsDirectionBackward() {
-    List<String> errors = LogicalPolicyChecker.check(
+  void backwardAndForwardCheckOppositeDirections() {
+    // BACKWARD: new(A_B) must read old(A) -- adding required field 'b' breaks that ->
+    // REQUIRED_FIELD_ADDED, but nothing is FIELD_DELETED since A_B has every field A has.
+    List<String> backwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
-    assertTrue(errors.stream().allMatch(e -> !e.contains("forward")), errors.toString());
-    assertTrue(errors.stream().anyMatch(e -> e.contains("backward")), errors.toString());
-  }
+    assertTrue(backwardErrors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")),
+        backwardErrors.toString());
+    assertFalse(backwardErrors.stream().anyMatch(e -> e.contains("FIELD_DELETED")),
+        backwardErrors.toString());
 
-  @Test
-  void forwardLabelsDirectionForward() {
-    List<String> errors = LogicalPolicyChecker.check(
+    // FORWARD: old(A) must read new(A_B) -- from A_B's perspective, 'b' is now FIELD_DELETED
+    // (ICEBERG_V2 only; FLINK has no such rule), not a required-field addition.
+    List<String> forwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.FORWARD);
-    assertTrue(errors.stream().anyMatch(e -> e.contains("forward")), errors.toString());
+    assertTrue(forwardErrors.stream().anyMatch(e -> e.contains("FIELD_DELETED")),
+        forwardErrors.toString());
+    assertFalse(forwardErrors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")),
+        forwardErrors.toString());
   }
 
   @Test
   void fullChecksBothDirections() {
+    // FULL runs both comparisons, so both directions' findings should be present together.
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.FULL);
-    assertTrue(errors.stream().anyMatch(e -> e.contains("backward")), errors.toString());
-    assertTrue(errors.stream().anyMatch(e -> e.contains("forward")), errors.toString());
+    assertTrue(errors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")), errors.toString());
+    assertTrue(errors.stream().anyMatch(e -> e.contains("FIELD_DELETED")), errors.toString());
   }
 
   // -- transitivity: which previous versions are compared ----------------------------------------
@@ -145,7 +151,7 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), previous, CompatibilityLevel.BACKWARD_TRANSITIVE);
     assertFalse(errors.isEmpty());
-    assertTrue(errors.stream().anyMatch(e -> e.contains("compatibility")), errors.toString());
+    assertTrue(errors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")), errors.toString());
   }
 
   // -- conversion failures ------------------------------------------------------------------------
@@ -158,6 +164,62 @@ class LogicalPolicyCheckerTest {
         unconvertible, List.of(), CompatibilityLevel.BACKWARD);
     assertEquals(1, errors.size());
     assertTrue(errors.get(0).contains("cannot be represented as a logical type"), errors.toString());
+  }
+
+  // -- merging findings across modes ---------------------------------------------------------
+
+  @Test
+  void mergesRequiredFieldAddedAcrossFlinkAndIcebergIntoOneLine() {
+    // Both FLINK and ICEBERG_V2 report REQUIRED_FIELD_ADDED at the same path ('b') for this
+    // change, so they should collapse into a single tagged line rather than two near-duplicates.
+    List<String> errors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
+
+    long mergedLines = errors.stream()
+        .filter(e -> e.contains("REQUIRED_FIELD_ADDED")
+            && e.contains("category:[\"FLINK\", \"ICEBERG_V2\"]"))
+        .count();
+    assertEquals(1, mergedLines, errors.toString());
+    // Only one message should appear for the merged finding, not one per mode.
+    long occurrencesOfRule = errors.stream()
+        .filter(e -> e.contains("REQUIRED_FIELD_ADDED"))
+        .count();
+    assertEquals(1, occurrencesOfRule, errors.toString());
+  }
+
+  @Test
+  void doesNotMergeFindingsUniqueToOneMode() {
+    // Dropping field 'b' is FIELD_DELETED under ICEBERG_V2 only -- FLINK has no such rule -- so
+    // that finding must stay on its own single-mode line, not be folded away.
+    List<String> errors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A), List.of(holder(RECORD_A_B)), CompatibilityLevel.BACKWARD);
+
+    assertTrue(errors.stream().anyMatch(
+        e -> e.contains("FIELD_DELETED") && e.contains("category:[\"ICEBERG_V2\"]")),
+        errors.toString());
+    assertFalse(errors.stream().anyMatch(e -> e.contains("FIELD_DELETED") && e.contains("FLINK")),
+        errors.toString());
+  }
+
+  @Test
+  void singleModeAndMultiModeFindingsShareTheSameHeaderShape() {
+    // A single-mode finding (FIELD_DELETED, ICEBERG_V2 only) and a multi-mode finding
+    // (REQUIRED_FIELD_ADDED, both modes) should both read as
+    // "{errorType:\"<rule>\", category:[\"<mode>\", ...], description:\"...\",
+    // additionalInfo:\"...\"}", not switch to a different shape depending on how many modes are
+    // involved -- with no label in front of the object, and no mention of "backward"/"forward".
+    List<String> errors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A), List.of(holder(RECORD_A_B)), CompatibilityLevel.BACKWARD);
+
+    String singleModeLine = errors.stream()
+        .filter(e -> e.contains("FIELD_DELETED"))
+        .findFirst()
+        .orElseThrow();
+    assertTrue(singleModeLine.startsWith(
+        "{errorType:\"FIELD_DELETED\", category:[\"ICEBERG_V2\"], description:\""),
+        singleModeLine);
+    assertFalse(singleModeLine.contains("backward") || singleModeLine.contains("forward"),
+        singleModeLine);
   }
 
   @Test
