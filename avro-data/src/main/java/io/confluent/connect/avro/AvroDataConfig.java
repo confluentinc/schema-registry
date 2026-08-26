@@ -51,6 +51,12 @@ public class AvroDataConfig extends AbstractDataConfig {
   public static final boolean FLATTEN_SINGLETON_UNIONS_DEFAULT = true;
   public static final String FLATTEN_SINGLETON_UNIONS_DOC = "Whether to flatten singleton unions";
 
+  public static final String MAX_TO_CONNECT_DATA_OBJECTS_CONFIG = "max.to.connect.data.objects";
+  public static final int MAX_TO_CONNECT_DATA_OBJECTS_DEFAULT = 1_000_000;
+  public static final String MAX_TO_CONNECT_DATA_OBJECTS_DOC =
+      "Maximum Struct/List/Map objects a single record may materialize before conversion fails, "
+      + "bounding memory use for deeply or widely nested records.";
+
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
   public static final boolean DISCARD_TYPE_DOC_DEFAULT_DEFAULT = false;
@@ -83,7 +89,13 @@ public class AvroDataConfig extends AbstractDataConfig {
                 ConfigDef.Type.BOOLEAN,
             FLATTEN_SINGLETON_UNIONS_DEFAULT,
                 ConfigDef.Importance.LOW,
-            FLATTEN_SINGLETON_UNIONS_DOC);
+            FLATTEN_SINGLETON_UNIONS_DOC)
+        .define(MAX_TO_CONNECT_DATA_OBJECTS_CONFIG,
+                ConfigDef.Type.INT,
+                MAX_TO_CONNECT_DATA_OBJECTS_DEFAULT,
+                ConfigDef.Range.atLeast(1),
+                ConfigDef.Importance.LOW,
+                MAX_TO_CONNECT_DATA_OBJECTS_DOC);
   }
 
   public AvroDataConfig(Map<?, ?> props) {
@@ -112,6 +124,10 @@ public class AvroDataConfig extends AbstractDataConfig {
 
   public boolean isFlattenSingletonUnions() {
     return this.getBoolean(FLATTEN_SINGLETON_UNIONS_CONFIG);
+  }
+
+  public int getMaxToConnectDataObjects() {
+    return this.getInt(MAX_TO_CONNECT_DATA_OBJECTS_CONFIG);
   }
 
   public static class Builder {
