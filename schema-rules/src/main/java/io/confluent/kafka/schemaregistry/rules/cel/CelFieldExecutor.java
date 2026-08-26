@@ -21,7 +21,6 @@ import static com.google.protobuf.NullValue.NULL_VALUE;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -43,7 +42,6 @@ public class CelFieldExecutor extends FieldRuleExecutor {
 
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new JavaTimeModule())
-      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
       .registerModule(new ProtobufModule());
 
   private CelExecutor celExecutor = new CelExecutor();

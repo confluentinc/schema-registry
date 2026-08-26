@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +39,10 @@ import java.util.Map;
  * reflect over. Left alone the first fails with "Expect message object but got: 13.34" and the
  * second throws out of {@code Variant.valueBuffer}.
  *
+ * <p>A {@code google.protobuf.Timestamp} needs the same treatment for the opposite reason: a CEL
+ * timestamp is an {@link Instant}, and Jackson renders java.time either not at all or as a numeric
+ * epoch, where protobuf JSON wants an RFC 3339 string.
+ *
  * <p>The walk is driven by the target descriptor rather than by the value's Java type, so a
  * decimal produced for a plain numeric field still renders as a number — only a field actually
  * declared as one of these message types is re-shaped. Bytes are emitted as {@code byte[]},
@@ -47,6 +52,7 @@ public final class ProtobufResultWriter {
 
   public static final String DECIMAL_TYPE_NAME = "confluent.type.Decimal";
   public static final String VARIANT_TYPE_NAME = "confluent.type.Variant";
+  public static final String TIMESTAMP_TYPE_NAME = "google.protobuf.Timestamp";
 
   private ProtobufResultWriter() {
   }
@@ -128,6 +134,14 @@ public final class ProtobufResultWriter {
         return m;
       }
       return value;
+    }
+    if (TIMESTAMP_TYPE_NAME.equals(name) && value instanceof Instant) {
+      // A CEL timestamp is an Instant, which Jackson cannot render as protobuf JSON: with
+      // java.time support it emits a numeric epoch, and protobuf requires an RFC 3339 string.
+      // Instant.toString() is exactly that form, with 0/3/6/9 fractional digits. Doing it here
+      // rather than by configuring the mapper keeps the JSON Schema paths, which share that
+      // mapper, on their existing date handling.
+      return value.toString();
     }
     if (VARIANT_TYPE_NAME.equals(name) && value instanceof Variant) {
       Variant variant = (Variant) value;

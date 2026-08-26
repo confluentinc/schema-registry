@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -126,7 +125,6 @@ public class CelExecutor implements RuleExecutor {
 
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new JavaTimeModule())
-      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
       .registerModule(new ProtobufModule());
 
   private static final int DEFAULT_CACHE_SIZE = 1000;
