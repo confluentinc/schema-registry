@@ -1286,14 +1286,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                       getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
               .collect(Collectors.toList());
     }
-    errorMessages.addAll(
-            parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
     if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
-      // Additive: the native check above still runs; LOGICAL layers the Flink/Iceberg logical-type
+      // Additive: the native check below still runs; LOGICAL layers the Flink/Iceberg logical-type
       // validity and compatibility checks on top, so it can only make registration stricter.
       errorMessages.addAll(
               LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
     }
+    errorMessages.addAll(
+            parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
     if (!errorMessages.isEmpty()) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
