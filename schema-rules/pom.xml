@@ -63,6 +63,10 @@
             <artifactId>protobuf-java</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.hubspot.jackson</groupId>
             <artifactId>jackson-datatype-protobuf</artifactId>
         </dependency>
@@ -103,6 +107,11 @@
             <artifactId>kafka-protobuf-serializer</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-provider</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
@@ -167,6 +176,7 @@
                 <configuration>
                     <java>
                         <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/CelValueTypesProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/ExpiringSpecificWidgetProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewerSpecificWidgetProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewSpecificWidgetProto.java</exclude>
