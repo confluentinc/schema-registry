@@ -146,7 +146,7 @@ public final class LogicalPolicyChecker {
           : LogicalTypeChecker.validate(mode, newLogical).getInvalidities()) {
         byFinding
             .computeIfAbsent(
-                new FindingKey(invalidity.getRule().toString(), invalidity.getPath()),
+                new FindingKey(invalidity.getRule().name(), invalidity.getPath()),
                 k -> new LinkedHashMap<>())
             .put(mode, invalidity.getMessage());
       }
@@ -166,7 +166,7 @@ public final class LogicalPolicyChecker {
           : LogicalTypeChecker.compare(mode, original, update).getIncompatibilities()) {
         byFinding
             .computeIfAbsent(
-                new FindingKey(incompatibility.getRule().toString(), incompatibility.getPath()),
+                new FindingKey(incompatibility.getRule().name(), incompatibility.getPath()),
                 k -> new LinkedHashMap<>())
             .put(mode, incompatibility.getMessage());
       }
