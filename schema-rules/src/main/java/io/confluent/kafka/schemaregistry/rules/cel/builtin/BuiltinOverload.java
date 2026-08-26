@@ -549,14 +549,14 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "bytes_bytes_to_variant", CelByteString.class, CelByteString.class,
         (CelByteString value, CelByteString metadata) -> {
-          // A variant's metadata carries the key dictionary and opens with a version byte, so
-          // empty metadata cannot be decoded. Say so here: the Variant constructor would read
-          // that byte and raise a bare IndexOutOfBoundsException.
-          if (metadata.size() == 0) {
+          Variant result = VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray());
+          if (result == null) {
+            // A variant's metadata carries the key dictionary and opens with a version byte, so
+            // empty metadata cannot be decoded.
             throw new IllegalArgumentException(
                 "variant(value, metadata): metadata is empty, so there is no variant to read");
           }
-          return VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray());
+          return result;
         }));
 
     // variants.parseJson strict / variants.tryParseJson soft (Spark

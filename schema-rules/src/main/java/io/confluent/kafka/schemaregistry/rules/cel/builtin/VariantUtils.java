@@ -41,8 +41,15 @@ final class VariantUtils {
 
   /**
    * Construct from raw {@code value} + {@code metadata} byte arrays.
+   *
+   * @return the Variant, or {@code null} when there are no metadata bytes — see
+   *     {@link #toVariant(Object)}. Guarding here keeps the {@link Variant} constructor, which
+   *     reads the metadata version byte, from ever seeing an empty buffer.
    */
   static Variant fromBytes(byte[] value, byte[] metadata) {
+    if (metadata.length == 0) {
+      return null;
+    }
     return new Variant(value, metadata);
   }
 
