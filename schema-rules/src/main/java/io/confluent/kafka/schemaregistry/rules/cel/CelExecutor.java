@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -34,6 +36,7 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelVariableResolver;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
@@ -41,6 +44,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.RegexEngine;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroResultWriter;
+import io.confluent.kafka.schemaregistry.rules.cel.protobuf.ProtobufResultWriter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -121,6 +125,8 @@ public class CelExecutor implements RuleExecutor {
   }
 
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
+      .registerModule(new JavaTimeModule())
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
       .registerModule(new ProtobufModule());
 
   private static final int DEFAULT_CACHE_SIZE = 1000;
@@ -273,7 +279,19 @@ public class CelExecutor implements RuleExecutor {
       // JSON Schema / Protobuf: Jackson roundtrip. Unwrap CEL-flavored values
       // first (NullValue → null, CelByteString → byte[]) so ProtobufModule
       // doesn't emit "zeroValue" and downstream parsers accept the JsonNode.
-      Object converted = unwrapCelValuesForJson(result);
+      Object shaped = result;
+      if (ctx.target() instanceof ProtobufSchema) {
+        // A decimal and a variant are messages in protobuf, not scalars, and Jackson has no
+        // rendering for either. Re-shape them against the descriptor first — the counterpart
+        // of what AvroResultWriter does above.
+        try {
+          shaped = ProtobufResultWriter.convert(
+              result, ((ProtobufSchema) ctx.target()).toDescriptor());
+        } catch (RuntimeException e) {
+          throw new RuleException(ctx.rule(), e);
+        }
+      }
+      Object converted = unwrapCelValuesForJson(shaped);
       try {
         JsonNode jsonNode = JSON_MAPPER.valueToTree(converted);
         return ctx.target().fromJson(jsonNode);
