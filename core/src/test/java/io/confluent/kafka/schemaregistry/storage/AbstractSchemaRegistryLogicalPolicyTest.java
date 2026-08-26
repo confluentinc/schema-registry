@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -25,6 +24,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -64,7 +64,9 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         "LOGICAL",
         new AvroSchema(RECORD_A),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
-    assertTrue(errors.stream().anyMatch(e -> e.contains("Logical")),
+    // FIELD_DELETED is a logical-checker-only Rule (native Avro treats a dropped field as
+    // backward-compatible and never reports this), so its presence isolates the LOGICAL branch.
+    assertTrue(errors.stream().anyMatch(e -> e.contains("FIELD_DELETED")),
         "expected a logical finding under LOGICAL policy: " + errors);
   }
 
@@ -74,17 +76,42 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         "STRICT",
         new AvroSchema(RECORD_A),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
-    assertTrue(errors.stream().noneMatch(e -> e.contains("Logical")),
+    assertTrue(errors.stream().noneMatch(e -> e.contains("FIELD_DELETED")),
         "logical checks must not run unless policy is LOGICAL: " + errors);
   }
 
   @Test
   void logicalPolicyPassesAValidCompatibleSchema() {
-    // Identical schema, so both native and logical see no change.
+    // Identical schema, so both native and logical see no change -- no findings at all.
     List<String> errors = check(
         "LOGICAL",
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
-    assertFalse(errors.stream().anyMatch(e -> e.contains("Logical")), errors.toString());
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void allErrorTypeFindingsStayContiguous() {
+    // new(A_B) adding required field 'b' (no default) trips both checks: native Avro reports
+    // READER_FIELD_MISSING_DEFAULT_VALUE, and the logical checker reports REQUIRED_FIELD_ADDED.
+    // The native check also appends an {oldSchema...} context entry after its own finding -- that
+    // context entry (and the trailing {validateFields...} debug entry) must not land in between
+    // the two checks' {errorType...} findings and split them apart.
+    List<String> errors = check(
+        "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A))));
+
+    List<Integer> errorTypeIndexes = new ArrayList<>();
+    for (int i = 0; i < errors.size(); i++) {
+      if (errors.get(i).contains("errorType")) {
+        errorTypeIndexes.add(i);
+      }
+    }
+    assertTrue(errorTypeIndexes.size() >= 2, "expected findings from both checks: " + errors);
+    int first = errorTypeIndexes.get(0);
+    int last = errorTypeIndexes.get(errorTypeIndexes.size() - 1);
+    assertTrue(last - first + 1 == errorTypeIndexes.size(),
+        "errorType findings are not contiguous: " + errors);
   }
 }
