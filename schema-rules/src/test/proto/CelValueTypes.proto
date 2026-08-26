@@ -19,4 +19,9 @@ message ValueTypes {
     .confluent.type.Variant data = 3 [(.confluent.field_meta).tags = "DATA"];
     string label = 4;
     double ratio = 5 [(.confluent.field_meta).tags = "RATIO"];
+    repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta).tags = "AMOUNTS"];
+    map<string, .confluent.type.Decimal> amount_map = 7;
+    // A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+    // JsonFormat accepts both "total_amount" and "totalAmount".
+    .confluent.type.Decimal total_amount = 8;
 }

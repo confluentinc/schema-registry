@@ -63,15 +63,46 @@ public final class ProtobufResultWriter {
     Map<Object, Object> out = new LinkedHashMap<>(in.size());
     for (Map.Entry<?, ?> e : in.entrySet()) {
       Object key = e.getKey();
-      FieldDescriptor fd = key == null ? null : descriptor.findFieldByName(String.valueOf(key));
+      FieldDescriptor fd = key == null ? null : findField(descriptor, String.valueOf(key));
       out.put(key, fd == null ? e.getValue() : convertField(fd, e.getValue()));
     }
     return out;
   }
 
+  /**
+   * Resolves a result-map key to a field. {@code JsonFormat} accepts a field's JSON name as well
+   * as its declared name, so a rule may legitimately return either; matching only the declared
+   * name would silently skip the re-shaping for a field like {@code total_amount}.
+   */
+  private static FieldDescriptor findField(Descriptor descriptor, String name) {
+    FieldDescriptor fd = descriptor.findFieldByName(name);
+    if (fd != null) {
+      return fd;
+    }
+    for (FieldDescriptor candidate : descriptor.getFields()) {
+      if (candidate.getJsonName().equals(name)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   private static Object convertField(FieldDescriptor fd, Object value) {
     if (value == null || fd.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
       return value;
+    }
+    if (fd.isMapField() && value instanceof Map) {
+      // A proto map is a repeated synthetic entry message, but its protobuf JSON form is an
+      // object. Convert each value against the entry's own "value" field; the keys are the
+      // user's map keys, not field names.
+      FieldDescriptor valueFd = fd.getMessageType().findFieldByName("value");
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<Object, Object> out = new LinkedHashMap<>(in.size());
+      for (Map.Entry<?, ?> entry : in.entrySet()) {
+        out.put(entry.getKey(),
+            valueFd == null ? entry.getValue() : convertField(valueFd, entry.getValue()));
+      }
+      return out;
     }
     if (fd.isRepeated() && value instanceof List) {
       List<?> in = (List<?>) value;

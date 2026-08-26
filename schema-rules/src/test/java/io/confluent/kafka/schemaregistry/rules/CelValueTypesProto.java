@@ -92,6 +92,94 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
      * @return The ratio.
      */
     double getRatio();
+
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    java.util.List<io.confluent.protobuf.type.Decimal> 
+        getAmountsList();
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    io.confluent.protobuf.type.Decimal getAmounts(int index);
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    int getAmountsCount();
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    java.util.List<? extends io.confluent.protobuf.type.DecimalOrBuilder> 
+        getAmountsOrBuilderList();
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    io.confluent.protobuf.type.DecimalOrBuilder getAmountsOrBuilder(
+        int index);
+
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    int getAmountMapCount();
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    boolean containsAmountMap(
+        java.lang.String key);
+    /**
+     * Use {@link #getAmountMapMap()} instead.
+     */
+    @java.lang.Deprecated
+    java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal>
+    getAmountMap();
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal>
+    getAmountMapMap();
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    /* nullable */
+io.confluent.protobuf.type.Decimal getAmountMapOrDefault(
+        java.lang.String key,
+        /* nullable */
+io.confluent.protobuf.type.Decimal defaultValue);
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    io.confluent.protobuf.type.Decimal getAmountMapOrThrow(
+        java.lang.String key);
+
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     * @return Whether the totalAmount field is set.
+     */
+    boolean hasTotalAmount();
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     * @return The totalAmount.
+     */
+    io.confluent.protobuf.type.Decimal getTotalAmount();
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     */
+    io.confluent.protobuf.type.DecimalOrBuilder getTotalAmountOrBuilder();
   }
   /**
    * <pre>
@@ -121,6 +209,7 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
     }
     private ValueTypes() {
       label_ = "";
+      amounts_ = java.util.Collections.emptyList();
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -133,6 +222,18 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor;
     }
 
+    @SuppressWarnings({"rawtypes"})
+    @java.lang.Override
+    protected com.google.protobuf.MapFieldReflectionAccessor internalGetMapFieldReflection(
+        int number) {
+      switch (number) {
+        case 7:
+          return internalGetAmountMap();
+        default:
+          throw new RuntimeException(
+              "Invalid map field number: " + number);
+      }
+    }
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
@@ -270,6 +371,167 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       return ratio_;
     }
 
+    public static final int AMOUNTS_FIELD_NUMBER = 6;
+    @SuppressWarnings("serial")
+    private java.util.List<io.confluent.protobuf.type.Decimal> amounts_;
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    @java.lang.Override
+    public java.util.List<io.confluent.protobuf.type.Decimal> getAmountsList() {
+      return amounts_;
+    }
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    @java.lang.Override
+    public java.util.List<? extends io.confluent.protobuf.type.DecimalOrBuilder> 
+        getAmountsOrBuilderList() {
+      return amounts_;
+    }
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    @java.lang.Override
+    public int getAmountsCount() {
+      return amounts_.size();
+    }
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.Decimal getAmounts(int index) {
+      return amounts_.get(index);
+    }
+    /**
+     * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.DecimalOrBuilder getAmountsOrBuilder(
+        int index) {
+      return amounts_.get(index);
+    }
+
+    public static final int AMOUNT_MAP_FIELD_NUMBER = 7;
+    private static final class AmountMapDefaultEntryHolder {
+      static final com.google.protobuf.MapEntry<
+          java.lang.String, io.confluent.protobuf.type.Decimal> defaultEntry =
+              com.google.protobuf.MapEntry
+              .<java.lang.String, io.confluent.protobuf.type.Decimal>newDefaultInstance(
+                  io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor, 
+                  com.google.protobuf.WireFormat.FieldType.STRING,
+                  "",
+                  com.google.protobuf.WireFormat.FieldType.MESSAGE,
+                  io.confluent.protobuf.type.Decimal.getDefaultInstance());
+    }
+    @SuppressWarnings("serial")
+    private com.google.protobuf.MapField<
+        java.lang.String, io.confluent.protobuf.type.Decimal> amountMap_;
+    private com.google.protobuf.MapField<java.lang.String, io.confluent.protobuf.type.Decimal>
+    internalGetAmountMap() {
+      if (amountMap_ == null) {
+        return com.google.protobuf.MapField.emptyMapField(
+            AmountMapDefaultEntryHolder.defaultEntry);
+      }
+      return amountMap_;
+    }
+    public int getAmountMapCount() {
+      return internalGetAmountMap().getMap().size();
+    }
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    @java.lang.Override
+    public boolean containsAmountMap(
+        java.lang.String key) {
+      if (key == null) { throw new NullPointerException("map key"); }
+      return internalGetAmountMap().getMap().containsKey(key);
+    }
+    /**
+     * Use {@link #getAmountMapMap()} instead.
+     */
+    @java.lang.Override
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> getAmountMap() {
+      return getAmountMapMap();
+    }
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    @java.lang.Override
+    public java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> getAmountMapMap() {
+      return internalGetAmountMap().getMap();
+    }
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    @java.lang.Override
+    public /* nullable */
+io.confluent.protobuf.type.Decimal getAmountMapOrDefault(
+        java.lang.String key,
+        /* nullable */
+io.confluent.protobuf.type.Decimal defaultValue) {
+      if (key == null) { throw new NullPointerException("map key"); }
+      java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> map =
+          internalGetAmountMap().getMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.Decimal getAmountMapOrThrow(
+        java.lang.String key) {
+      if (key == null) { throw new NullPointerException("map key"); }
+      java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> map =
+          internalGetAmountMap().getMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+
+    public static final int TOTAL_AMOUNT_FIELD_NUMBER = 8;
+    private io.confluent.protobuf.type.Decimal totalAmount_;
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     * @return Whether the totalAmount field is set.
+     */
+    @java.lang.Override
+    public boolean hasTotalAmount() {
+      return ((bitField0_ & 0x00000008) != 0);
+    }
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     * @return The totalAmount.
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.Decimal getTotalAmount() {
+      return totalAmount_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : totalAmount_;
+    }
+    /**
+     * <pre>
+     * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+     * JsonFormat accepts both "total_amount" and "totalAmount".
+     * </pre>
+     *
+     * <code>.confluent.type.Decimal total_amount = 8;</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.DecimalOrBuilder getTotalAmountOrBuilder() {
+      return totalAmount_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : totalAmount_;
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -299,6 +561,18 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       if (java.lang.Double.doubleToRawLongBits(ratio_) != 0) {
         output.writeDouble(5, ratio_);
       }
+      for (int i = 0; i < amounts_.size(); i++) {
+        output.writeMessage(6, amounts_.get(i));
+      }
+      com.google.protobuf.GeneratedMessage
+        .serializeStringMapTo(
+          output,
+          internalGetAmountMap(),
+          AmountMapDefaultEntryHolder.defaultEntry,
+          7);
+      if (((bitField0_ & 0x00000008) != 0)) {
+        output.writeMessage(8, getTotalAmount());
+      }
       getUnknownFields().writeTo(output);
     }
 
@@ -326,6 +600,29 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       if (java.lang.Double.doubleToRawLongBits(ratio_) != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeDoubleSize(5, ratio_);
+      }
+
+          {
+            final int count = amounts_.size();
+            for (int i = 0; i < count; i++) {
+              size += com.google.protobuf.CodedOutputStream
+                .computeMessageSizeNoTag(amounts_.get(i));
+            }
+            size += 1 * count;
+          }
+      for (java.util.Map.Entry<java.lang.String, io.confluent.protobuf.type.Decimal> entry
+           : internalGetAmountMap().getMap().entrySet()) {
+        com.google.protobuf.MapEntry<java.lang.String, io.confluent.protobuf.type.Decimal>
+        amountMap__ = AmountMapDefaultEntryHolder.defaultEntry.newBuilderForType()
+            .setKey(entry.getKey())
+            .setValue(entry.getValue())
+            .buildPartial();
+        size += com.google.protobuf.CodedOutputStream
+            .computeMessageSize(7, amountMap__);
+      }
+      if (((bitField0_ & 0x00000008) != 0)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(8, getTotalAmount());
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
@@ -362,6 +659,15 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       if (java.lang.Double.doubleToLongBits(getRatio())
           != java.lang.Double.doubleToLongBits(
               other.getRatio())) return false;
+      if (!getAmountsList()
+          .equals(other.getAmountsList())) return false;
+      if (!internalGetAmountMap().equals(
+          other.internalGetAmountMap())) return false;
+      if (hasTotalAmount() != other.hasTotalAmount()) return false;
+      if (hasTotalAmount()) {
+        if (!getTotalAmount()
+            .equals(other.getTotalAmount())) return false;
+      }
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -390,6 +696,18 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       hash = (37 * hash) + RATIO_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getRatio()));
+      if (getAmountsCount() > 0) {
+        hash = (37 * hash) + AMOUNTS_FIELD_NUMBER;
+        hash = (53 * hash) + getAmountsList().hashCode();
+      }
+      if (!internalGetAmountMap().getMap().isEmpty()) {
+        hash = (37 * hash) + AMOUNT_MAP_FIELD_NUMBER;
+        hash = (53 * hash) + internalGetAmountMap().hashCode();
+      }
+      if (hasTotalAmount()) {
+        hash = (37 * hash) + TOTAL_AMOUNT_FIELD_NUMBER;
+        hash = (53 * hash) + getTotalAmount().hashCode();
+      }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -504,6 +822,28 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
         return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor;
       }
 
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapFieldReflectionAccessor internalGetMapFieldReflection(
+          int number) {
+        switch (number) {
+          case 7:
+            return internalGetAmountMap();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapFieldReflectionAccessor internalGetMutableMapFieldReflection(
+          int number) {
+        switch (number) {
+          case 7:
+            return internalGetMutableAmountMap();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
@@ -528,6 +868,8 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
           internalGetAmountFieldBuilder();
           internalGetTsFieldBuilder();
           internalGetDataFieldBuilder();
+          internalGetAmountsFieldBuilder();
+          internalGetTotalAmountFieldBuilder();
         }
       }
       @java.lang.Override
@@ -551,6 +893,19 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
         }
         label_ = "";
         ratio_ = 0D;
+        if (amountsBuilder_ == null) {
+          amounts_ = java.util.Collections.emptyList();
+        } else {
+          amounts_ = null;
+          amountsBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000020);
+        internalGetMutableAmountMap().clear();
+        totalAmount_ = null;
+        if (totalAmountBuilder_ != null) {
+          totalAmountBuilder_.dispose();
+          totalAmountBuilder_ = null;
+        }
         return this;
       }
 
@@ -577,9 +932,22 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       @java.lang.Override
       public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes buildPartial() {
         io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes result = new io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes(this);
+        buildPartialRepeatedFields(result);
         if (bitField0_ != 0) { buildPartial0(result); }
         onBuilt();
         return result;
+      }
+
+      private void buildPartialRepeatedFields(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes result) {
+        if (amountsBuilder_ == null) {
+          if (((bitField0_ & 0x00000020) != 0)) {
+            amounts_ = java.util.Collections.unmodifiableList(amounts_);
+            bitField0_ = (bitField0_ & ~0x00000020);
+          }
+          result.amounts_ = amounts_;
+        } else {
+          result.amounts_ = amountsBuilder_.build();
+        }
       }
 
       private void buildPartial0(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes result) {
@@ -608,6 +976,15 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
         }
         if (((from_bitField0_ & 0x00000010) != 0)) {
           result.ratio_ = ratio_;
+        }
+        if (((from_bitField0_ & 0x00000040) != 0)) {
+          result.amountMap_ = internalGetAmountMap().build(AmountMapDefaultEntryHolder.defaultEntry);
+        }
+        if (((from_bitField0_ & 0x00000080) != 0)) {
+          result.totalAmount_ = totalAmountBuilder_ == null
+              ? totalAmount_
+              : totalAmountBuilder_.build();
+          to_bitField0_ |= 0x00000008;
         }
         result.bitField0_ |= to_bitField0_;
       }
@@ -640,6 +1017,38 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
         }
         if (java.lang.Double.doubleToRawLongBits(other.getRatio()) != 0) {
           setRatio(other.getRatio());
+        }
+        if (amountsBuilder_ == null) {
+          if (!other.amounts_.isEmpty()) {
+            if (amounts_.isEmpty()) {
+              amounts_ = other.amounts_;
+              bitField0_ = (bitField0_ & ~0x00000020);
+            } else {
+              ensureAmountsIsMutable();
+              amounts_.addAll(other.amounts_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.amounts_.isEmpty()) {
+            if (amountsBuilder_.isEmpty()) {
+              amountsBuilder_.dispose();
+              amountsBuilder_ = null;
+              amounts_ = other.amounts_;
+              bitField0_ = (bitField0_ & ~0x00000020);
+              amountsBuilder_ = 
+                com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                   internalGetAmountsFieldBuilder() : null;
+            } else {
+              amountsBuilder_.addAllMessages(other.amounts_);
+            }
+          }
+        }
+        internalGetMutableAmountMap().mergeFrom(
+            other.internalGetAmountMap());
+        bitField0_ |= 0x00000040;
+        if (other.hasTotalAmount()) {
+          mergeTotalAmount(other.getTotalAmount());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
@@ -698,6 +1107,35 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
                 bitField0_ |= 0x00000010;
                 break;
               } // case 41
+              case 50: {
+                io.confluent.protobuf.type.Decimal m =
+                    input.readMessage(
+                        io.confluent.protobuf.type.Decimal.parser(),
+                        extensionRegistry);
+                if (amountsBuilder_ == null) {
+                  ensureAmountsIsMutable();
+                  amounts_.add(m);
+                } else {
+                  amountsBuilder_.addMessage(m);
+                }
+                break;
+              } // case 50
+              case 58: {
+                com.google.protobuf.MapEntry<java.lang.String, io.confluent.protobuf.type.Decimal>
+                amountMap__ = input.readMessage(
+                    AmountMapDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                internalGetMutableAmountMap().ensureBuilderMap().put(
+                    amountMap__.getKey(), amountMap__.getValue());
+                bitField0_ |= 0x00000040;
+                break;
+              } // case 58
+              case 66: {
+                input.readMessage(
+                    internalGetTotalAmountFieldBuilder().getBuilder(),
+                    extensionRegistry);
+                bitField0_ |= 0x00000080;
+                break;
+              } // case 66
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -1182,6 +1620,567 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
         return this;
       }
 
+      private java.util.List<io.confluent.protobuf.type.Decimal> amounts_ =
+        java.util.Collections.emptyList();
+      private void ensureAmountsIsMutable() {
+        if (!((bitField0_ & 0x00000020) != 0)) {
+          amounts_ = new java.util.ArrayList<io.confluent.protobuf.type.Decimal>(amounts_);
+          bitField0_ |= 0x00000020;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> amountsBuilder_;
+
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public java.util.List<io.confluent.protobuf.type.Decimal> getAmountsList() {
+        if (amountsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(amounts_);
+        } else {
+          return amountsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public int getAmountsCount() {
+        if (amountsBuilder_ == null) {
+          return amounts_.size();
+        } else {
+          return amountsBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public io.confluent.protobuf.type.Decimal getAmounts(int index) {
+        if (amountsBuilder_ == null) {
+          return amounts_.get(index);
+        } else {
+          return amountsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder setAmounts(
+          int index, io.confluent.protobuf.type.Decimal value) {
+        if (amountsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureAmountsIsMutable();
+          amounts_.set(index, value);
+          onChanged();
+        } else {
+          amountsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder setAmounts(
+          int index, io.confluent.protobuf.type.Decimal.Builder builderForValue) {
+        if (amountsBuilder_ == null) {
+          ensureAmountsIsMutable();
+          amounts_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          amountsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder addAmounts(io.confluent.protobuf.type.Decimal value) {
+        if (amountsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureAmountsIsMutable();
+          amounts_.add(value);
+          onChanged();
+        } else {
+          amountsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder addAmounts(
+          int index, io.confluent.protobuf.type.Decimal value) {
+        if (amountsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureAmountsIsMutable();
+          amounts_.add(index, value);
+          onChanged();
+        } else {
+          amountsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder addAmounts(
+          io.confluent.protobuf.type.Decimal.Builder builderForValue) {
+        if (amountsBuilder_ == null) {
+          ensureAmountsIsMutable();
+          amounts_.add(builderForValue.build());
+          onChanged();
+        } else {
+          amountsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder addAmounts(
+          int index, io.confluent.protobuf.type.Decimal.Builder builderForValue) {
+        if (amountsBuilder_ == null) {
+          ensureAmountsIsMutable();
+          amounts_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          amountsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder addAllAmounts(
+          java.lang.Iterable<? extends io.confluent.protobuf.type.Decimal> values) {
+        if (amountsBuilder_ == null) {
+          ensureAmountsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, amounts_);
+          onChanged();
+        } else {
+          amountsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder clearAmounts() {
+        if (amountsBuilder_ == null) {
+          amounts_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000020);
+          onChanged();
+        } else {
+          amountsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public Builder removeAmounts(int index) {
+        if (amountsBuilder_ == null) {
+          ensureAmountsIsMutable();
+          amounts_.remove(index);
+          onChanged();
+        } else {
+          amountsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder getAmountsBuilder(
+          int index) {
+        return internalGetAmountsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public io.confluent.protobuf.type.DecimalOrBuilder getAmountsOrBuilder(
+          int index) {
+        if (amountsBuilder_ == null) {
+          return amounts_.get(index);  } else {
+          return amountsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public java.util.List<? extends io.confluent.protobuf.type.DecimalOrBuilder> 
+           getAmountsOrBuilderList() {
+        if (amountsBuilder_ != null) {
+          return amountsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(amounts_);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder addAmountsBuilder() {
+        return internalGetAmountsFieldBuilder().addBuilder(
+            io.confluent.protobuf.type.Decimal.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder addAmountsBuilder(
+          int index) {
+        return internalGetAmountsFieldBuilder().addBuilder(
+            index, io.confluent.protobuf.type.Decimal.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .confluent.type.Decimal amounts = 6 [(.confluent.field_meta) = { ... }</code>
+       */
+      public java.util.List<io.confluent.protobuf.type.Decimal.Builder> 
+           getAmountsBuilderList() {
+        return internalGetAmountsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> 
+          internalGetAmountsFieldBuilder() {
+        if (amountsBuilder_ == null) {
+          amountsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+              io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder>(
+                  amounts_,
+                  ((bitField0_ & 0x00000020) != 0),
+                  getParentForChildren(),
+                  isClean());
+          amounts_ = null;
+        }
+        return amountsBuilder_;
+      }
+
+      private static final class AmountMapConverter implements com.google.protobuf.MapFieldBuilder.Converter<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder, io.confluent.protobuf.type.Decimal> {
+        @java.lang.Override
+        public io.confluent.protobuf.type.Decimal build(io.confluent.protobuf.type.DecimalOrBuilder val) {
+          if (val instanceof io.confluent.protobuf.type.Decimal) { return (io.confluent.protobuf.type.Decimal) val; }
+          return ((io.confluent.protobuf.type.Decimal.Builder) val).build();
+        }
+
+        @java.lang.Override
+        public com.google.protobuf.MapEntry<java.lang.String, io.confluent.protobuf.type.Decimal> defaultEntry() {
+          return AmountMapDefaultEntryHolder.defaultEntry;
+        }
+      };
+      private static final AmountMapConverter amountMapConverter = new AmountMapConverter();
+
+      private com.google.protobuf.MapFieldBuilder<
+          java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder, io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder> amountMap_;
+      private com.google.protobuf.MapFieldBuilder<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder, io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder>
+          internalGetAmountMap() {
+        if (amountMap_ == null) {
+          return new com.google.protobuf.MapFieldBuilder<>(amountMapConverter);
+        }
+        return amountMap_;
+      }
+      private com.google.protobuf.MapFieldBuilder<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder, io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder>
+          internalGetMutableAmountMap() {
+        if (amountMap_ == null) {
+          amountMap_ = new com.google.protobuf.MapFieldBuilder<>(amountMapConverter);
+        }
+        bitField0_ |= 0x00000040;
+        onChanged();
+        return amountMap_;
+      }
+      public int getAmountMapCount() {
+        return internalGetAmountMap().ensureBuilderMap().size();
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      @java.lang.Override
+      public boolean containsAmountMap(
+          java.lang.String key) {
+        if (key == null) { throw new NullPointerException("map key"); }
+        return internalGetAmountMap().ensureBuilderMap().containsKey(key);
+      }
+      /**
+       * Use {@link #getAmountMapMap()} instead.
+       */
+      @java.lang.Override
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> getAmountMap() {
+        return getAmountMapMap();
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      @java.lang.Override
+      public java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> getAmountMapMap() {
+        return internalGetAmountMap().getImmutableMap();
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      @java.lang.Override
+      public /* nullable */
+io.confluent.protobuf.type.Decimal getAmountMapOrDefault(
+          java.lang.String key,
+          /* nullable */
+io.confluent.protobuf.type.Decimal defaultValue) {
+        if (key == null) { throw new NullPointerException("map key"); }
+        java.util.Map<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder> map = internalGetMutableAmountMap().ensureBuilderMap();
+        return map.containsKey(key) ? amountMapConverter.build(map.get(key)) : defaultValue;
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      @java.lang.Override
+      public io.confluent.protobuf.type.Decimal getAmountMapOrThrow(
+          java.lang.String key) {
+        if (key == null) { throw new NullPointerException("map key"); }
+        java.util.Map<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder> map = internalGetMutableAmountMap().ensureBuilderMap();
+        if (!map.containsKey(key)) {
+          throw new java.lang.IllegalArgumentException();
+        }
+        return amountMapConverter.build(map.get(key));
+      }
+      public Builder clearAmountMap() {
+        bitField0_ = (bitField0_ & ~0x00000040);
+        internalGetMutableAmountMap().clear();
+        return this;
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      public Builder removeAmountMap(
+          java.lang.String key) {
+        if (key == null) { throw new NullPointerException("map key"); }
+        internalGetMutableAmountMap().ensureBuilderMap()
+            .remove(key);
+        return this;
+      }
+      /**
+       * Use alternate mutation accessors instead.
+       */
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal>
+          getMutableAmountMap() {
+        bitField0_ |= 0x00000040;
+        return internalGetMutableAmountMap().ensureMessageMap();
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      public Builder putAmountMap(
+          java.lang.String key,
+          io.confluent.protobuf.type.Decimal value) {
+        if (key == null) { throw new NullPointerException("map key"); }
+        if (value == null) { throw new NullPointerException("map value"); }
+        internalGetMutableAmountMap().ensureBuilderMap()
+            .put(key, value);
+        bitField0_ |= 0x00000040;
+        return this;
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      public Builder putAllAmountMap(
+          java.util.Map<java.lang.String, io.confluent.protobuf.type.Decimal> values) {
+        for (java.util.Map.Entry<java.lang.String, io.confluent.protobuf.type.Decimal> e : values.entrySet()) {
+          if (e.getKey() == null || e.getValue() == null) {
+            throw new NullPointerException();
+          }
+        }
+        internalGetMutableAmountMap().ensureBuilderMap()
+            .putAll(values);
+        bitField0_ |= 0x00000040;
+        return this;
+      }
+      /**
+       * <code>map&lt;string, .confluent.type.Decimal&gt; amount_map = 7;</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder putAmountMapBuilderIfAbsent(
+          java.lang.String key) {
+        java.util.Map<java.lang.String, io.confluent.protobuf.type.DecimalOrBuilder> builderMap = internalGetMutableAmountMap().ensureBuilderMap();
+        io.confluent.protobuf.type.DecimalOrBuilder entry = builderMap.get(key);
+        if (entry == null) {
+          entry = io.confluent.protobuf.type.Decimal.newBuilder();
+          builderMap.put(key, entry);
+        }
+        if (entry instanceof io.confluent.protobuf.type.Decimal) {
+          entry = ((io.confluent.protobuf.type.Decimal) entry).toBuilder();
+          builderMap.put(key, entry);
+        }
+        return (io.confluent.protobuf.type.Decimal.Builder) entry;
+      }
+
+      private io.confluent.protobuf.type.Decimal totalAmount_;
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> totalAmountBuilder_;
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       * @return Whether the totalAmount field is set.
+       */
+      public boolean hasTotalAmount() {
+        return ((bitField0_ & 0x00000080) != 0);
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       * @return The totalAmount.
+       */
+      public io.confluent.protobuf.type.Decimal getTotalAmount() {
+        if (totalAmountBuilder_ == null) {
+          return totalAmount_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : totalAmount_;
+        } else {
+          return totalAmountBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public Builder setTotalAmount(io.confluent.protobuf.type.Decimal value) {
+        if (totalAmountBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          totalAmount_ = value;
+        } else {
+          totalAmountBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000080;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public Builder setTotalAmount(
+          io.confluent.protobuf.type.Decimal.Builder builderForValue) {
+        if (totalAmountBuilder_ == null) {
+          totalAmount_ = builderForValue.build();
+        } else {
+          totalAmountBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000080;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public Builder mergeTotalAmount(io.confluent.protobuf.type.Decimal value) {
+        if (totalAmountBuilder_ == null) {
+          if (((bitField0_ & 0x00000080) != 0) &&
+            totalAmount_ != null &&
+            totalAmount_ != io.confluent.protobuf.type.Decimal.getDefaultInstance()) {
+            getTotalAmountBuilder().mergeFrom(value);
+          } else {
+            totalAmount_ = value;
+          }
+        } else {
+          totalAmountBuilder_.mergeFrom(value);
+        }
+        if (totalAmount_ != null) {
+          bitField0_ |= 0x00000080;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public Builder clearTotalAmount() {
+        bitField0_ = (bitField0_ & ~0x00000080);
+        totalAmount_ = null;
+        if (totalAmountBuilder_ != null) {
+          totalAmountBuilder_.dispose();
+          totalAmountBuilder_ = null;
+        }
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder getTotalAmountBuilder() {
+        bitField0_ |= 0x00000080;
+        onChanged();
+        return internalGetTotalAmountFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      public io.confluent.protobuf.type.DecimalOrBuilder getTotalAmountOrBuilder() {
+        if (totalAmountBuilder_ != null) {
+          return totalAmountBuilder_.getMessageOrBuilder();
+        } else {
+          return totalAmount_ == null ?
+              io.confluent.protobuf.type.Decimal.getDefaultInstance() : totalAmount_;
+        }
+      }
+      /**
+       * <pre>
+       * A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
+       * JsonFormat accepts both "total_amount" and "totalAmount".
+       * </pre>
+       *
+       * <code>.confluent.type.Decimal total_amount = 8;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> 
+          internalGetTotalAmountFieldBuilder() {
+        if (totalAmountBuilder_ == null) {
+          totalAmountBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder>(
+                  getTotalAmount(),
+                  getParentForChildren(),
+                  isClean());
+          totalAmount_ = null;
+        }
+        return totalAmountBuilder_;
+      }
+
       // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.ValueTypes)
     }
 
@@ -1238,6 +2237,11 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1251,14 +2255,21 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
       "a.schemaregistry.rules\032\024confluent/meta.p" +
       "roto\032\034confluent/type/decimal.proto\032\034conf" +
       "luent/type/variant.proto\032\037google/protobu" +
-      "f/timestamp.proto\"\317\001\n\nValueTypes\0224\n\006amou" +
+      "f/timestamp.proto\"\331\003\n\nValueTypes\0224\n\006amou" +
       "nt\030\001 \001(\0132\027.confluent.type.DecimalB\013\202D\010\032\006" +
       "AMOUNT\022/\n\002ts\030\002 \001(\0132\032.google.protobuf.Tim" +
       "estampB\007\202D\004\032\002TS\0220\n\004data\030\003 \001(\0132\027.confluen" +
       "t.type.VariantB\t\202D\006\032\004DATA\022\r\n\005label\030\004 \001(\t" +
-      "\022\031\n\005ratio\030\005 \001(\001B\n\202D\007\032\005RATIOB?\n\'io.conflu" +
-      "ent.kafka.schemaregistry.rulesB\022CelValue" +
-      "TypesProtoP\000b\006proto3"
+      "\022\031\n\005ratio\030\005 \001(\001B\n\202D\007\032\005RATIO\0226\n\007amounts\030\006" +
+      " \003(\0132\027.confluent.type.DecimalB\014\202D\t\032\007AMOU" +
+      "NTS\022V\n\namount_map\030\007 \003(\0132B.io.confluent.k" +
+      "afka.schemaregistry.rules.ValueTypes.Amo" +
+      "untMapEntry\022-\n\014total_amount\030\010 \001(\0132\027.conf" +
+      "luent.type.Decimal\032I\n\016AmountMapEntry\022\013\n\003" +
+      "key\030\001 \001(\t\022&\n\005value\030\002 \001(\0132\027.confluent.typ" +
+      "e.Decimal:\0028\001B?\n\'io.confluent.kafka.sche" +
+      "maregistry.rulesB\022CelValueTypesProtoP\000b\006" +
+      "proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1273,7 +2284,13 @@ public final class CelValueTypesProto extends com.google.protobuf.GeneratedFile 
     internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor,
-        new java.lang.String[] { "Amount", "Ts", "Data", "Label", "Ratio", });
+        new java.lang.String[] { "Amount", "Ts", "Data", "Label", "Ratio", "Amounts", "AmountMap", "TotalAmount", });
+    internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor =
+      internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor.getNestedType(0);
+    internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor,
+        new java.lang.String[] { "Key", "Value", });
     descriptor.resolveAllFeaturesImmutable();
     io.confluent.protobuf.MetaProto.getDescriptor();
     io.confluent.protobuf.type.DecimalProto.getDescriptor();

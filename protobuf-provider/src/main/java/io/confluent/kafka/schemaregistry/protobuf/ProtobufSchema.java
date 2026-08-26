@@ -138,9 +138,9 @@ import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
-import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
@@ -2995,7 +2995,7 @@ public class ProtobufSchema implements ParsedSchema {
               throw new RuntimeException(new RuleConditionException(ctx.rule()));
             }
           } else {
-            copy.setField(fd, coerceToValueType(copy, fd, newValue));
+            setTransformedField(ctx, copy, fd, newValue);
           }
         }
       }
@@ -3020,18 +3020,62 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   /**
-   * Re-encodes a CEL_FIELD result for a value-type field: the executor hands back a
-   * {@link BigDecimal} or an {@link Instant} (the same shapes the Avro field setter takes),
-   * but the protobuf field holds a message, so rebuild it. Anything else passes through.
+   * Writes a CEL_FIELD result back into {@code fd}.
+   *
+   * <p>For a value-type field the executor hands back whatever the rule produced, and only a few
+   * of those can be stored in a message-typed field. A {@link BigDecimal} or {@link Instant} — the
+   * same shapes the Avro field setter takes — is rebuilt into the message. A message that is
+   * already of the right type passes through, which is what an identity rule ({@code value})
+   * produces, since the binding presents the field as its own message. A null clears the field:
+   * protobuf has no null to store and {@code setField} rejects it.
+   *
+   * <p>Anything else is a rule authoring error, and is reported as one. Passing it to
+   * {@code setField} raises a bare {@code ClassCastException} (or a {@code NullPointerException}
+   * for null) naming neither the rule nor the field, which is what a broad untagged masking or
+   * redaction rule reaching one of these fields would otherwise produce.
    */
-  private static Object coerceToValueType(
-      Message.Builder parent, FieldDescriptor fd, Object value) {
+  private static void setTransformedField(
+      RuleContext ctx, Message.Builder parent, FieldDescriptor fd, Object value) {
     if (fd.getJavaType() != FieldDescriptor.JavaType.MESSAGE
         || !isCelLeafMessage(fd.getMessageType())) {
-      return value;
+      parent.setField(fd, value);
+      return;
     }
     Descriptor desc = fd.getMessageType();
-    if (DECIMAL_TYPE_NAME.equals(desc.getFullName()) && value instanceof BigDecimal) {
+    if (value == null) {
+      parent.clearField(fd);
+      return;
+    }
+    if (fd.isRepeated() && value instanceof List) {
+      // The walk maps over a repeated field, so each element reached the rule on its own and
+      // comes back needing the same rebuild.
+      List<?> in = (List<?>) value;
+      List<Object> out = new ArrayList<>(in.size());
+      for (Object element : in) {
+        out.add(rebuildValueType(ctx, parent, fd, desc, element));
+      }
+      parent.setField(fd, out);
+      return;
+    }
+    parent.setField(fd, rebuildValueType(ctx, parent, fd, desc, value));
+  }
+
+  /** Turns one CEL_FIELD result into the value type's message, or reports why it cannot. */
+  private static Object rebuildValueType(RuleContext ctx, Message.Builder parent,
+      FieldDescriptor fd, Descriptor desc, Object value) {
+    if (value == null) {
+      throw valueTypeError(ctx, fd, "null", "a decimal or timestamp");
+    }
+    if (value instanceof Message
+        && desc.getFullName().equals(((Message) value).getDescriptorForType().getFullName())) {
+      // Already the right message, which is what an identity rule produces: the binding
+      // presents one of these fields as its own message.
+      return value;
+    }
+    if (DECIMAL_TYPE_NAME.equals(desc.getFullName())) {
+      if (!(value instanceof BigDecimal)) {
+        throw valueTypeError(ctx, fd, value.getClass().getName(), "a decimal");
+      }
       BigDecimal dec = (BigDecimal) value;
       // Same mapping as DecimalUtils.fromBigDecimal: precision and scale describe the value
       // itself, not a declared column width — the reverse conversion reads precision into a
@@ -3044,14 +3088,26 @@ public class ProtobufSchema implements ParsedSchema {
       b.setField(desc.findFieldByName("scale"), dec.scale());
       return b.build();
     }
-    if (TIMESTAMP_TYPE_NAME.equals(desc.getFullName()) && value instanceof Instant) {
-      Instant instant = (Instant) value;
-      Message.Builder b = parent.newBuilderForField(fd);
-      b.setField(desc.findFieldByName("seconds"), instant.getEpochSecond());
-      b.setField(desc.findFieldByName("nanos"), instant.getNano());
-      return b.build();
+    if (!(value instanceof Instant)) {
+      throw valueTypeError(ctx, fd, value.getClass().getName(), "a timestamp");
     }
-    return value;
+    Instant instant = (Instant) value;
+    Message.Builder b = parent.newBuilderForField(fd);
+    b.setField(desc.findFieldByName("seconds"), instant.getEpochSecond());
+    b.setField(desc.findFieldByName("nanos"), instant.getNano());
+    return b.build();
+  }
+
+  /**
+   * Wrapped in a RuntimeException because the transform walk cannot declare a checked exception;
+   * {@link #transformMessage} unwraps a RuleException cause and rethrows it, as the condition
+   * path already does.
+   */
+  private static RuntimeException valueTypeError(
+      RuleContext ctx, FieldDescriptor fd, String actual, String expected) {
+    return new RuntimeException(new RuleException(ctx.rule(),
+        "Rule returned " + actual + " for field '" + fd.getFullName()
+            + "', which is a " + fd.getMessageType().getFullName() + "; expected " + expected));
   }
 
   private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,

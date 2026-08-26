@@ -56,6 +56,15 @@ import org.junit.jupiter.api.Test;
  */
 public class CelProtobufValueTypeTest {
 
+  private static io.confluent.protobuf.type.Decimal decimalOf(String v) {
+    BigDecimal d = new BigDecimal(v);
+    return io.confluent.protobuf.type.Decimal.newBuilder()
+        .setValue(ByteString.copyFrom(d.unscaledValue().toByteArray()))
+        .setPrecision(8)
+        .setScale(d.scale())
+        .build();
+  }
+
   private static ValueTypes message() {
     BigDecimal amount = new BigDecimal("12.34");
     Variant variant = VariantUtils.fromJson("{\"name\":\"alice\"}");
@@ -72,6 +81,10 @@ public class CelProtobufValueTypeTest {
             .build())
         .setLabel("hi")
         .setRatio(1.5d)
+        .addAmounts(decimalOf("1.11"))
+        .addAmounts(decimalOf("2.22"))
+        .putAmountMap("a", decimalOf("3.33"))
+        .setTotalAmount(decimalOf("9.99"))
         .build();
   }
 
@@ -98,6 +111,23 @@ public class CelProtobufValueTypeTest {
   private static Object transformMessage(String expr) throws Exception {
     return new CelExecutor().transform(
         ctx(expr, CelExecutor.TYPE, RuleKind.TRANSFORM, null), message());
+  }
+
+  private static boolean hasRuleException(Throwable t) {
+    for (Throwable c = t; c != null && c.getCause() != c; c = c.getCause()) {
+      if (c instanceof io.confluent.kafka.schemaregistry.rules.RuleException) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static String rootMessage(Throwable t) {
+    Throwable root = t;
+    while (root.getCause() != null && root.getCause() != root) {
+      root = root.getCause();
+    }
+    return String.valueOf(root.getMessage());
   }
 
   private static boolean isConditionFailure(Throwable t) {
@@ -142,6 +172,38 @@ public class CelProtobufValueTypeTest {
     return VariantUtils.toJsonString(new Variant(
         ((ByteString) data.getField(d.findFieldByName("value"))).toByteArray(),
         ((ByteString) data.getField(d.findFieldByName("metadata"))).toByteArray()));
+  }
+
+  private static BigDecimal decimalIn(Message holder) {
+    Descriptor d = holder.getDescriptorForType();
+    ByteString unscaled = (ByteString) holder.getField(d.findFieldByName("value"));
+    int scale = ((Number) holder.getField(d.findFieldByName("scale"))).intValue();
+    return new BigDecimal(new BigInteger(unscaled.toByteArray()), scale);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<BigDecimal> amountsOf(Message msg) {
+    List<Message> raw = (List<Message>) msg.getField(
+        msg.getDescriptorForType().findFieldByName("amounts"));
+    List<BigDecimal> out = new ArrayList<>(raw.size());
+    for (Message m : raw) {
+      out.add(decimalIn(m));
+    }
+    return out;
+  }
+
+  /** A proto map arrives as a list of synthetic entry messages. */
+  @SuppressWarnings("unchecked")
+  private static BigDecimal amountMapValue(Message msg, String key) {
+    List<Message> entries = (List<Message>) msg.getField(
+        msg.getDescriptorForType().findFieldByName("amount_map"));
+    for (Message entry : entries) {
+      Descriptor ed = entry.getDescriptorForType();
+      if (key.equals(entry.getField(ed.findFieldByName("key")))) {
+        return decimalIn((Message) entry.getField(ed.findFieldByName("value")));
+      }
+    }
+    return null;
   }
 
   // ---- CEL_FIELD: the field is a leaf, not a record to descend into ----
@@ -252,6 +314,61 @@ public class CelProtobufValueTypeTest {
             + " \"data\": variants.parseJson(\"{\\\"name\\\":\\\"bob\\\"}\"),"
             + " \"label\": message.label, \"ratio\": message.ratio}"));
     assertEquals("{\"name\":\"bob\"}", variantOf(out));
+  }
+
+  // ---- repeated, map and JSON-name cases ----
+
+  /** Each element of a repeated Decimal field reaches the rule on its own and must be rebuilt. */
+  @Test
+  public void fieldTransformOnRepeatedDecimal() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformField(
+        "decimals.add(decimal(value), decimal(\"1.00\"))", RuleKind.TRANSFORM, "AMOUNTS"));
+    assertEquals(List.of(new BigDecimal("2.11"), new BigDecimal("3.22")), amountsOf(out));
+  }
+
+  @Test
+  public void messageTransformComputesRepeatedDecimal() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"amounts\": [decimals.add(decimal(\"1.00\"), decimal(\"0.11\"))]}"));
+    assertEquals(List.of(new BigDecimal("1.11")), amountsOf(out));
+  }
+
+  /**
+   * A proto map is a repeated synthetic entry message, but its CEL and protobuf JSON form is an
+   * object, so it needs converting per entry rather than per list element.
+   */
+  @Test
+  public void messageTransformComputesDecimalInMap() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"amount_map\": {\"a\": decimals.add(decimal(\"3.00\"),"
+            + " decimal(\"0.33\"))}}"));
+    assertEquals(new BigDecimal("3.33"), amountMapValue(out, "a"));
+  }
+
+  /** JsonFormat accepts a field's JSON name as well as its declared name; so must the writer. */
+  @Test
+  public void messageTransformComputesDecimalUnderJsonName() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformMessage(
+        "{" + ALL + ", \"totalAmount\": decimals.add(decimal(\"9.00\"), decimal(\"0.99\"))}"));
+    assertEquals(new BigDecimal("9.99"), decimalIn(field(out, "total_amount")));
+  }
+
+  // ---- a result that cannot be stored is a rule error, not a raw CCE/NPE ----
+
+  @Test
+  public void fieldTransformRejectsUnstorableResult() {
+    Exception e = assertThrows(Exception.class, () -> transformField(
+        "'REDACTED'", RuleKind.TRANSFORM, "AMOUNT"));
+    assertTrue(hasRuleException(e), "expected a RuleException, got: " + e);
+    assertTrue(rootMessage(e).contains("expected a decimal"), rootMessage(e));
+  }
+
+  @Test
+  public void fieldTransformClearsFieldOnNull() throws Exception {
+    Message out = assertInstanceOf(Message.class, transformField(
+        "null", RuleKind.TRANSFORM, "AMOUNT"));
+    assertFalse(out.hasField(out.getDescriptorForType().findFieldByName("amount")),
+        "a null result clears the field rather than raising a NullPointerException");
   }
 
   /**
