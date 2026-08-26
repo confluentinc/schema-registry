@@ -63,9 +63,9 @@ public class Difference {
         errorDescription = "";
     }
 
-    return "{errorType:'" + errorType + '\''
-             + ", description:'" + errorDescription + '\''
-             + ", additionalInfo:'" + incompatibility.getMessage() + "'}";
+    return "{errorType:\"" + errorType + '"'
+             + ", description:\"" + errorDescription + '"'
+             + ", additionalInfo:\"" + incompatibility.getMessage() + "\"}";
   }
 
   public String toString() {
