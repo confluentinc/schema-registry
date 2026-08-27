@@ -129,6 +129,15 @@ public class LogicalTypeToProtoConverter {
     }
     Schema schema = logicalType.getRootSchema();
 
+    // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits as the file's root message
+    // under its own simple name, taking precedence over the caller's rowName. The namespace lives
+    // on the file's package declaration (logicalType.getNamespace()), so only the simple name is
+    // used here — mirroring the NAMED_TYPE_REF-root resolution below.
+    if (logicalType.getName() != null
+        && (schema.getType() == Schema.Type.STRUCT || schema.getType() == Schema.Type.ENUM)) {
+      rowName = logicalType.getName();
+    }
+
     // Multi-root sugar: when the root is a UNION whose members are all
     // NAMED_TYPE_REFs to local types, the visitor's sugar inferred it from
     // multiple unreferenced top-level named-type declarations. Proto's wire
