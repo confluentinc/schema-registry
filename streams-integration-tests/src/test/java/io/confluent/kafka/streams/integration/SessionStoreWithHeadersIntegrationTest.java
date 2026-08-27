@@ -31,10 +31,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -1069,6 +1073,32 @@ public class SessionStoreWithHeadersIntegrationTest extends HeadersIQv2Integrati
         }
     }
 
+    private List<ConsumerRecord<byte[], byte[]>> consumeChangelogRecords(
+        String topic, String groupId, int expectedCount) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+
+        List<ConsumerRecord<byte[], byte[]>> results = new ArrayList<>();
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    results.add(record);
+                }
+            }
+        }
+        assertTrue(results.size() >= expectedCount,
+            "Expected at least " + expectedCount + " records from " + topic
+                + " but got " + results.size() + " within 30s");
+        return results;
+    }
+
     private GenericRecord createKey(String userId) {
         GenericRecord key = new GenericData.Record(keySchema);
         key.put("userId", userId);
@@ -1287,11 +1317,11 @@ public class SessionStoreWithHeadersIntegrationTest extends HeadersIQv2Integrati
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "session-delete-integration-test-session-delete-store-changelog";
 
-            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
-                consumeRecords(changelogTopic, "session-changelog-consumer", 6, ByteArrayDeserializer.class);
+            List<ConsumerRecord<byte[], byte[]>> changelogRecords =
+                consumeChangelogRecords(changelogTopic, "session-changelog-consumer", 6);
 
             int tombstoneCount = 0;
-            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
+            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
                 if (record.value() == null) {
                     tombstoneCount++;
                     Header keySchemaIdHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
@@ -1431,8 +1461,7 @@ public class SessionStoreWithHeadersIntegrationTest extends HeadersIQv2Integrati
                 record.key(), valueToStore, record.timestamp(), record.headers()));
         }
 
-        // Strip stale schema-id headers before the tombstone-producing put so the changelog
-        // tombstone isn't written with a stale value schema id attached.
+        // Strip the command record's own schema-id headers before writing the tombstone.
         private void handlePutNull(Record<GenericRecord, GenericRecord> record) {
             record.headers().remove(SchemaId.KEY_SCHEMA_ID_HEADER);
             record.headers().remove(SchemaId.VALUE_SCHEMA_ID_HEADER);
@@ -1458,8 +1487,7 @@ public class SessionStoreWithHeadersIntegrationTest extends HeadersIQv2Integrati
             }
         }
 
-        // Strip stale schema-id headers before the tombstone-producing remove so the changelog
-        // tombstone isn't written with a stale value schema id attached.
+        // Strip the command record's own schema-id headers before writing the tombstone.
         private void handleRemove(Record<GenericRecord, GenericRecord> record) {
             record.headers().remove(SchemaId.KEY_SCHEMA_ID_HEADER);
             record.headers().remove(SchemaId.VALUE_SCHEMA_ID_HEADER);
