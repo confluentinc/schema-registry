@@ -1524,44 +1524,32 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testSugarMultipleRootsInferredAsUnion() {
-    // Two unreferenced top-level types and no explicit trailing TYPE → sugar
-    // infers a non-nullable UNION of NAMED_TYPE_REFs at the root. Avro/JSON
-    // emit this as a tagged union; the proto writer detects the shape and
-    // treats it as a multi-message file.
+  void testSugarMultipleRootsFirstWins() {
+    // Two unreferenced top-level types and no explicit trailing TYPE → the FIRST-declared type is
+    // the root (matching Protobuf's "first message is the root"); the rest remain as peer named
+    // types. A genuine UNION-of-refs root must be written explicitly.
     LogicalTypesSchemaVisitor v = parseScript(
         "STRUCT Foo (x INT);"
         + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.UNION, root.getType());
-    assertFalse(root.isNullable(), "sugar root must be NOT NULL");
-    assertEquals(2, root.getBranches().size());
-    assertEquals("Foo", root.getBranches().get(0).getName());
-    assertEquals(Schema.Type.NAMED_TYPE_REF,
-        root.getBranches().get(0).getSchema().getType());
-    assertEquals("Foo",
-        root.getBranches().get(0).getSchema().getQualifiedName());
-    assertEquals("Bar", root.getBranches().get(1).getName());
-    assertEquals("Bar",
-        root.getBranches().get(1).getSchema().getQualifiedName());
+    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
+    assertEquals("Foo", root.getQualifiedName());
+    assertFalse(root.isNullable(), "inferred root must be NOT NULL");
+    assertTrue(v.toLogicalType().getNamedTypes().containsKey("Bar"),
+        "the non-root peer stays a named type");
   }
 
   @Test
-  void testSugarMultipleRootsInNamespace() {
-    // Multi-root with default namespace — branch names use the simple name,
-    // member NAMED_TYPE_REFs carry the qualified key.
+  void testSugarMultipleRootsFirstWinsInNamespace() {
+    // First-wins with a default namespace — the root's qualified key wins.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
         + "STRUCT Foo (x INT);"
         + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.UNION, root.getType());
-    assertEquals("Foo", root.getBranches().get(0).getName());
-    assertEquals("com.example.Foo",
-        root.getBranches().get(0).getSchema().getQualifiedName());
-    assertEquals("Bar", root.getBranches().get(1).getName());
-    assertEquals("com.example.Bar",
-        root.getBranches().get(1).getSchema().getQualifiedName());
+    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
+    assertEquals("com.example.Foo", root.getQualifiedName());
+    assertTrue(v.toLogicalType().getNamedTypes().containsKey("com.example.Bar"));
   }
 
   @Test
@@ -1586,8 +1574,8 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testExplicitRegisterOverridesAmbiguity() {
-    // Two unrelated types — would be a multi-root error under sugar.
-    // Explicit TYPE disambiguates without complaint.
+    // Two unrelated types — first-wins would pick Foo as root; the explicit TYPE overrides that
+    // and registers Bar as the root instead.
     LogicalTypesSchemaVisitor v = parseScript(
         "STRUCT Foo (x INT);"
         + "STRUCT Bar (y INT);"
