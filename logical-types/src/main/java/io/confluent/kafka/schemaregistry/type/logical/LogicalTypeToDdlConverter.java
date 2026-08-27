@@ -93,10 +93,27 @@ public final class LogicalTypeToDdlConverter {
             .append(";\n");
       }
 
-      // Named-type declarations (`STRUCT <name> (...)` / `ENUM <name> (...)`) in
-      // declaration order, LOCAL types only. Externals' bodies are also in
-      // namedTypes (lazy-promoted by the reader from resolvedReferences),
-      // but they're external by inference on read-back — must NOT be
+      // A named inline root (bare STRUCT/ENUM carrying LogicalType.name — e.g. a Protobuf message
+      // unwrapped to a struct, or a JSON root object's title) is emitted as a named declaration so
+      // its name shows in the DDL. It is emitted FIRST, before the peer declarations, because the
+      // visitor infers the root as the first-declared type not referenced by another — so ordering
+      // it first makes it the root even when independent peer types follow.
+      //
+      // The one guard is a name collision: if the root's namespace-qualified name already names a
+      // local type, emitting the declaration would duplicate it on parse, so fall back to the
+      // anonymous `TYPE STRUCT(...)` form instead. (Display only — exact-shape round-trip later.)
+      Schema root = lt.getRootSchema();
+      boolean rootIsBareNamed =
+          (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.ENUM)
+              && lt.getName() != null;
+      boolean rootIsNamedInline = rootIsBareNamed && !namedTypeKeyExistsForRoot(lt.getName());
+      if (rootIsNamedInline) {
+        printCreateType(lt.getName(), root);
+      }
+
+      // Peer named-type declarations (`STRUCT <name> (...)` / `ENUM <name> (...)`), LOCAL types
+      // only. Externals' bodies are also in namedTypes (lazy-promoted by the reader from
+      // resolvedReferences), but they're external by inference on read-back — must NOT be
       // re-emitted here.
       for (String name : orderedLocalNames()) {
         if (lt.getExternalTypes().contains(name)) {
@@ -105,10 +122,22 @@ public final class LogicalTypeToDdlConverter {
         printCreateType(name, lt.getNamedTypes().get(name));
       }
 
-      // Trailing root-registration `TYPE <typeExpr>`: omit when the visitor's
-      // auto-detect would produce the same root from the local types alone.
-      if (!sugarWouldInferRoot()) {
-        sb.append("TYPE ").append(typeExpr(lt.getRootSchema())).append(";\n");
+      // Root registration.
+      if (rootIsNamedInline) {
+        // Inference selects the inline root only when no peer references it — a referenced type is
+        // dropped from the unreferenced set, so inference would pick a peer instead. When a peer
+        // references the root, force it with an explicit trailing TYPE, preserving its nullability.
+        if (inlineRootReferencedByPeer()) {
+          sb.append("TYPE ").append(qualifiedName(lt.getName()));
+          if (!root.isNullable()) {
+            sb.append(" NOT NULL");
+          }
+          sb.append(";\n");
+        }
+      } else if (!sugarWouldInferRoot()) {
+        // Trailing `TYPE <typeExpr>` for a root not emitted as a named declaration, omitted when
+        // the visitor's auto-detect would produce the same root from the declarations alone.
+        sb.append("TYPE ").append(typeExpr(root)).append(";\n");
       }
 
       return sb.toString();
@@ -409,6 +438,44 @@ public final class LogicalTypeToDdlConverter {
      * the same {@code rootSchema} we have. When true, the trailing
      * root-registration {@code TYPE} statement is elided.
      */
+    /**
+     * True if the root's name, qualified by the document namespace, already names a local type —
+     * in which case emitting the root as a named declaration would duplicate it on parse.
+     */
+    private boolean namedTypeKeyExistsForRoot(String rootName) {
+      if (lt.getNamedTypes().containsKey(rootName)) {
+        return true;
+      }
+      String ns = lt.getNamespace();
+      return ns != null && lt.getNamedTypes().containsKey(ns + "." + rootName);
+    }
+
+    /**
+     * True if any local named type references the inline root (by its raw or namespace-qualified
+     * name). Such a reference removes the root from the visitor's unreferenced-root set, so
+     * inference would pick a peer instead and an explicit trailing TYPE is required.
+     */
+    private boolean inlineRootReferencedByPeer() {
+      Set<String> candidates = new LinkedHashSet<>();
+      candidates.add(lt.getName());
+      if (lt.getNamespace() != null) {
+        candidates.add(lt.getNamespace() + "." + lt.getName());
+      }
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (lt.getExternalTypes().contains(e.getKey())) {
+          continue; // externals are inferred from usage; they don't affect root inference
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        LogicalType.collectNamedRefs(e.getValue(), refs);
+        for (String candidate : candidates) {
+          if (refs.contains(candidate)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
     private boolean sugarWouldInferRoot() {
       if (lt.getNamedTypes().isEmpty()) {
         return false;
@@ -447,34 +514,11 @@ public final class LogicalTypeToDdlConverter {
         }
         return roots.iterator().next().equals(root.getQualifiedName());
       }
-      if (roots.isEmpty()) {
-        // Cycle in local types — visitor can't infer; explicit trailing TYPE required.
-        return false;
-      }
-      // Multi-root sugar: UNION of NAMED_TYPE_REFs (NOT NULL) to all roots,
-      // each branch named with the simple name.
-      if (root.getType() != Schema.Type.UNION || root.isNullable()) {
-        return false;
-      }
-      List<Schema.UnionBranch> branches = root.getBranches();
-      if (branches.size() != roots.size()) {
-        return false;
-      }
-      int i = 0;
-      for (String fqn : roots) {
-        Schema.UnionBranch b = branches.get(i++);
-        if (!b.getName().equals(simpleNameOf(fqn))) {
-          return false;
-        }
-        Schema bs = b.getSchema();
-        if (bs.getType() != Schema.Type.NAMED_TYPE_REF) {
-          return false;
-        }
-        if (bs.isNullable() || !fqn.equals(bs.getQualifiedName())) {
-          return false;
-        }
-      }
-      return true;
+      // Zero roots (cycle) or multiple unreferenced roots: the visitor infers a single root — the
+      // first-declared unreferenced type — which won't match a cyclic or UNION-of-refs root, so an
+      // explicit trailing TYPE is required. (A UNION-of-named-types root is no longer sugared; it
+      // must be written as an explicit `TYPE UNION(...)`.)
+      return false;
     }
 
     private static String simpleNameOf(String qualifiedName) {

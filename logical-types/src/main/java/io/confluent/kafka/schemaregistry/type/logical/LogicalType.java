@@ -44,6 +44,7 @@ import static java.util.Objects.requireNonNull;
  */
 public class LogicalType {
 
+  private final String name;
   private final String namespace;
   private final Schema rootSchema;
   private final Map<String, Schema> namedTypes;
@@ -116,6 +117,30 @@ public class LogicalType {
       final List<SchemaReference> references,
       final Map<String, String> resolvedReferences,
       final Map<List<Integer>, Object> defaultValues) {
+    this(null, namespace, rootSchema, namedTypes, externalTypes, externalImports,
+        references, resolvedReferences, defaultValues);
+  }
+
+  /**
+   * Canonical constructor. {@code name} is the root type's own name, carried only when it would
+   * otherwise be lost — i.e. when the root is an inline (bare) STRUCT/ENUM whose name is not
+   * already the key of a {@link #namedTypes} entry (a Protobuf message unwrapped to a bare struct,
+   * or a JSON root object's {@code title}). It is {@code null} for a {@code NAMED_TYPE_REF} root
+   * (the name is the {@code namedTypes} key) and for anonymous roots. Display metadata for DDL
+   * emission; see {@link #getName()}.
+   */
+  public LogicalType(
+      final String name,
+      final String namespace,
+      final Schema rootSchema,
+      final Map<String, Schema> namedTypes,
+      final Set<String> externalTypes,
+      final Map<String, String> externalImports,
+      final List<SchemaReference> references,
+      final Map<String, String> resolvedReferences,
+      final Map<List<Integer>, Object> defaultValues) {
+    // Treat empty string as no name, so callers don't have to.
+    this.name = (name == null || name.isEmpty()) ? null : name;
     // Treat empty string as no namespace, so callers don't have to.
     this.namespace = (namespace == null || namespace.isEmpty()) ? null : namespace;
     this.rootSchema = requireNonNull(rootSchema, "rootSchema");
@@ -239,6 +264,17 @@ public class LogicalType {
   /** The document-level namespace, or null if none. */
   public String getNamespace() {
     return namespace;
+  }
+
+  /**
+   * The root type's own name, or {@code null} when the root has no otherwise-lost name (a
+   * {@code NAMED_TYPE_REF} root, whose name is the {@link #getNamedTypes()} key, or an anonymous
+   * root). Set only for an inline root whose name would otherwise be discarded — a Protobuf message
+   * unwrapped to a bare struct, or a JSON root object's {@code title}. Used by the DDL writer to
+   * emit a named root declaration.
+   */
+  public String getName() {
+    return name;
   }
 
   /**
@@ -498,7 +534,8 @@ public class LogicalType {
       return false;
     }
     LogicalType that = (LogicalType) o;
-    return Objects.equals(rootSchema, that.rootSchema)
+    return Objects.equals(name, that.name)
+        && Objects.equals(rootSchema, that.rootSchema)
         && Objects.equals(namedTypes, that.namedTypes)
         && Objects.equals(externalTypes, that.externalTypes)
         && Objects.equals(externalImports, that.externalImports)
@@ -509,14 +546,15 @@ public class LogicalType {
 
   @Override
   public int hashCode() {
-    return Objects.hash(rootSchema, namedTypes, externalTypes, externalImports,
+    return Objects.hash(name, rootSchema, namedTypes, externalTypes, externalImports,
         references, namespace, defaultValues);
   }
 
   @Override
   public String toString() {
     return "LogicalType{"
-        + "rootSchema=" + rootSchema
+        + "name=" + name
+        + ", rootSchema=" + rootSchema
         + ", namedTypes=" + namedTypes
         + ", externalTypes=" + externalTypes
         + ", externalImports=" + externalImports

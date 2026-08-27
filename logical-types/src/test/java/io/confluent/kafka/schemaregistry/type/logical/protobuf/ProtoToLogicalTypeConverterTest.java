@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
@@ -614,5 +615,63 @@ class ProtoToLogicalTypeConverterTest {
 
     assertThat(out.findFieldByName("a").getNumber()).isEqualTo(5);
     assertThat(out.findFieldByName("b").getNumber()).isEqualTo(2);
+  }
+
+  @Test
+  void simpleRootMessageNameCarriedAndRenderedInDdl() throws Exception {
+    // A simple (non-recursive, non-nested) root message is unwrapped to a bare STRUCT; its name
+    // would be lost, so it is carried on LogicalType.name and the DDL renders a named declaration.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_STRING))
+        .build();
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(buildFileDescriptor(message)));
+
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+    assertThat(lt.getName()).isEqualTo("Order");
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE STRUCT");
+  }
+
+  @Test
+  void namedInlineRootShownWithUnreferencedLocalPeer() {
+    // Two independent top-level messages: root is Bar (the first message), Foo is an unreferenced
+    // local peer. The root is emitted as a named declaration FIRST, so first-wins root inference
+    // picks Bar on read-back — the name is shown, no anonymous fallback and no spurious UNION.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Bar {\n  string f2 = 1;\n}\n"
+        + "message Foo {\n  string f1 = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isEqualTo("Bar");
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).doesNotContain("TYPE STRUCT");
+    assertThat(ddl).contains("STRUCT Bar (");
+    assertThat(ddl).contains("STRUCT Foo (");
+    // The root (Bar) is declared before the peer (Foo) so first-wins picks it.
+    assertThat(ddl.indexOf("STRUCT Bar (")).isLessThan(ddl.indexOf("STRUCT Foo ("));
+  }
+
+  @Test
+  void namedInlineRootForcedWithExplicitTypeWhenPeerReferencesIt() {
+    // Root Order (first message) is referenced by peer Wrapper. First-wins inference would drop
+    // Order (it is referenced) and pick Wrapper, so the writer must force the root with an explicit
+    // trailing TYPE, preserving its NOT NULL.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Order {\n  string id = 1;\n}\n"
+        + "message Wrapper {\n  Order order = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isEqualTo("Order");
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).contains("TYPE Order NOT NULL;");
   }
 }

@@ -131,7 +131,13 @@ public class JsonToLogicalTypeConverter {
             Collections.emptyList());
     Object ns = schema.rawSchema().getUnprocessedProperties()
         .get("confluent:namespace");
+    // An inline root object/enum has no namedTypes key to carry its name, so carry the JSON
+    // `title` as the root name; a $ref root (NAMED_TYPE_REF) is already named by its key.
+    final String rootName = (logicalType.getType() == Schema.Type.STRUCT
+        || logicalType.getType() == Schema.Type.ENUM)
+        ? schema.rawSchema().getTitle() : null;
     return new LogicalType(
+        rootName,
         ns instanceof String ? (String) ns : null,
         logicalType,
         ctx.getNamedTypes(),
