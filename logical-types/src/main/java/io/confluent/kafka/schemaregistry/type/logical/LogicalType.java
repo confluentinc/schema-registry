@@ -470,6 +470,84 @@ public class LogicalType {
   }
 
   /**
+   * Outcome of {@link #unwrapLeafNamedRoot}: the (possibly rewritten) root and carried name.
+   */
+  public static final class RootUnwrap {
+    private final Schema rootSchema;
+    private final String name;
+
+    private RootUnwrap(Schema rootSchema, String name) {
+      this.rootSchema = rootSchema;
+      this.name = name;
+    }
+
+    public Schema getRootSchema() {
+      return rootSchema;
+    }
+
+    /**
+     * Simple name to carry on {@link LogicalType#getName()}, or {@code null} if root was kept.
+     */
+    public String getName() {
+      return name;
+    }
+  }
+
+  /**
+   * If {@code rootSchema} is a {@code NAMED_TYPE_REF} to a local <em>leaf</em> named type, unwrap
+   * it to the bare {@code STRUCT}/{@code ENUM} body carrying its simple name, mirroring the
+   * canonical named-root shape shared by every format reader and the DDL visitor. The body is
+   * removed from
+   * {@code namedTypes} (mutated in place); peers referencing the root still resolve by name.
+   *
+   * <p>The unwrap is gated so it stays lossless through {@code LT → format/DDL → LT}; otherwise the
+   * root keeps its {@code NAMED_TYPE_REF} form:
+   * <ul>
+   *   <li>external/unresolved, cyclic, or has nested named types — unwrapping would orphan the
+   *       {@code namedTypes} entry needed for resolution or recurse forever;</li>
+   *   <li>the root's own namespace differs from {@code namespace} — simple name + {@code namespace}
+   *       would reconstruct a different FQN, so the full FQN is kept as the {@code namedTypes} key.
+   *   </li>
+   * </ul>
+   *
+   * <p>The root's nullability is preserved onto the bare body.
+   */
+  public static RootUnwrap unwrapLeafNamedRoot(
+      Schema rootSchema, Map<String, Schema> namedTypes, String namespace) {
+    if (rootSchema == null || rootSchema.getType() != Schema.Type.NAMED_TYPE_REF) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    String fqn = rootSchema.getQualifiedName();
+    Schema body = namedTypes.get(fqn);
+    if (body == null) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    if (isCyclic(fqn, namedTypes) || hasNestedNamedTypes(fqn, namedTypes)) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    int dot = fqn.lastIndexOf('.');
+    String fqnNamespace = dot < 0 ? null : fqn.substring(0, dot);
+    if (!Objects.equals(fqnNamespace, namespace)) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    namedTypes.remove(fqn);
+    body.setNullable(rootSchema.isNullable());
+    int nameDot = fqn.lastIndexOf('.');
+    String simpleName = nameDot < 0 ? fqn : fqn.substring(nameDot + 1);
+    return new RootUnwrap(body, simpleName);
+  }
+
+  private static boolean hasNestedNamedTypes(String fqn, Map<String, Schema> namedTypes) {
+    String prefix = fqn + ".";
+    for (String key : namedTypes.keySet()) {
+      if (key.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Path-keyed map of field-default values collected during conversion.
    *
    * <p>Each key is a list of zero-based indices that walks from the root schema

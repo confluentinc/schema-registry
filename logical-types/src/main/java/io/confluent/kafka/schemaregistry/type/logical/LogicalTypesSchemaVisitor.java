@@ -66,6 +66,7 @@ import java.util.stream.Collectors;
  */
 public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
+  private String name;
   private String namespace;
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
@@ -106,7 +107,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * here is guaranteed to satisfy both invariants.
    */
   public LogicalType toLogicalType() {
-    return new LogicalType(namespace, rootSchema, namedTypes,
+    return new LogicalType(name, namespace, rootSchema, namedTypes,
         inferExternalTypes(),
         externalImports,
         java.util.Collections.emptyList(), java.util.Collections.emptyMap(),
@@ -159,8 +160,27 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     } else {
       inferAndRegisterRoot(ctx);
     }
+    maybeUnwrapNamedRoot();
     validateAliases();
     return null;
+  }
+
+  /**
+   * Unwrap a leaf named root to the bare {@code STRUCT}/{@code ENUM} body + {@link #name}, the
+   * canonical named-root shape shared with the format readers. Delegates to
+   * {@link LogicalType#unwrapLeafNamedRoot} for the gating (external/cyclic/nested roots, and
+   * foreign-namespace roots, stay {@code NAMED_TYPE_REF}). Note a bare named-root declaration is
+   * ambient (re-parses as
+   * {@code NOT NULL}), so a nullable named root's null-ness is not carried through DDL — consistent
+   * with the convention that a registered root is non-null at the wire level.
+   */
+  private void maybeUnwrapNamedRoot() {
+    LogicalType.RootUnwrap unwrap =
+        LogicalType.unwrapLeafNamedRoot(rootSchema, namedTypes, namespace);
+    rootSchema = unwrap.getRootSchema();
+    if (unwrap.getName() != null) {
+      name = unwrap.getName();
+    }
   }
 
   /**

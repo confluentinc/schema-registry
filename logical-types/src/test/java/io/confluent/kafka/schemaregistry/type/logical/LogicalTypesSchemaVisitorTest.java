@@ -489,9 +489,9 @@ class LogicalTypesSchemaVisitorTest {
   void testRowKeywordIsAliasForStructDeclaration() {
     // `ROW <name> (...)` declares the same named STRUCT as `STRUCT <name> (...)`.
     Schema viaRow = parseScript("ROW Addr (zip INT, city STRING);")
-        .getNamedTypes().get("Addr");
+        .getRootSchema();
     Schema viaStruct = parseScript("STRUCT Addr (zip INT, city STRING);")
-        .getNamedTypes().get("Addr");
+        .getRootSchema();
     assertEquals(Schema.Type.STRUCT, viaRow.getType());
     assertEquals(viaStruct.toDdl(), viaRow.toDdl());
   }
@@ -619,8 +619,8 @@ class LogicalTypesSchemaVisitorTest {
         + ");"
         + "TYPE MyOrder"
     );
-    Schema order = v.getNamedTypes().get("MyOrder");
-    assertNotNull(order);
+    Schema order = v.getRootSchema();
+    assertEquals(Schema.Type.STRUCT, order.getType());
     assertEquals(Schema.Type.NAMED_TYPE_REF,
         order.getField("amount").getSchema().getType());
     assertEquals("com.example.Money",
@@ -775,15 +775,12 @@ class LogicalTypesSchemaVisitorTest {
         "STRUCT Person (id BIGINT NOT NULL, name STRING);"
         + "TYPE Person"
     );
-    // Named type registered.
-    Schema person = v.getNamedTypes().get("Person");
+    // A leaf named root unwraps to the bare STRUCT, carrying its name on LogicalType.
+    Schema person = v.getRootSchema();
     assertNotNull(person);
     assertEquals(Schema.Type.STRUCT, person.getType());
     assertEquals(2, person.getFields().size());
-    // Root is a NAMED_TYPE_REF pointing at Person.
-    Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("Person", root.getQualifiedName());
+    assertEquals("Person", v.toLogicalType().getName());
   }
 
   @Test
@@ -792,13 +789,11 @@ class LogicalTypesSchemaVisitorTest {
         "ENUM Color ('RED', 'GREEN', 'BLUE');"
         + "TYPE Color"
     );
-    Schema color = v.getNamedTypes().get("Color");
+    Schema color = v.getRootSchema();
     assertNotNull(color);
     assertEquals(Schema.Type.ENUM, color.getType());
     assertEquals(3, color.getEnumValues().size());
-    Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("Color", root.getQualifiedName());
+    assertEquals("Color", v.toLogicalType().getName());
   }
 
   @Test
@@ -810,7 +805,7 @@ class LogicalTypesSchemaVisitorTest {
         + " WITH('owner' = 'team-x');"
         + "TYPE Person"
     );
-    Schema person = v.getNamedTypes().get("Person");
+    Schema person = v.getRootSchema();
     assertEquals("a person", person.getDoc());
     assertEquals(1, person.getTags().size());
     assertEquals("PII", person.getTags().get(0));
@@ -825,7 +820,7 @@ class LogicalTypesSchemaVisitorTest {
         + " WITH('version' = '1');"
         + "TYPE Status"
     );
-    Schema status = v.getNamedTypes().get("Status");
+    Schema status = v.getRootSchema();
     assertEquals("user status", status.getDoc());
     assertEquals("1", status.getParams().get("version"));
   }
@@ -837,9 +832,10 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Person (name STRING);"
         + "TYPE Person"
     );
-    // Name is qualified by the declared namespace.
-    assertNotNull(v.getNamedTypes().get("com.example.Person"));
-    assertEquals("com.example.Person", v.getRootSchema().getQualifiedName());
+    // A leaf named root unwraps; the namespace stays on the LT and the simple name on getName().
+    assertEquals(Schema.Type.STRUCT, v.getRootSchema().getType());
+    assertEquals("com.example", v.toLogicalType().getNamespace());
+    assertEquals("Person", v.toLogicalType().getName());
   }
 
   @Test
@@ -873,11 +869,9 @@ class LogicalTypesSchemaVisitorTest {
         + "TYPE Person NOT NULL"
     );
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("Person", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("Person", v.toLogicalType().getName());
     assertFalse(root.isNullable());
-    // Named type body is registered (with default nullability for its kind).
-    assertNotNull(v.getNamedTypes().get("Person"));
   }
 
   @Test
@@ -887,9 +881,9 @@ class LogicalTypesSchemaVisitorTest {
         + "TYPE Color NOT NULL"
     );
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
+    assertEquals(Schema.Type.ENUM, root.getType());
     assertFalse(root.isNullable());
-    assertEquals("rgb colors", v.getNamedTypes().get("Color").getDoc());
+    assertEquals("rgb colors", root.getDoc());
   }
 
   @Test
@@ -951,7 +945,9 @@ class LogicalTypesSchemaVisitorTest {
     LogicalTypesSchemaVisitor v = parseScript(script);
 
     assertEquals("com.example", v.getNamespace());
-    assertEquals(2, v.getNamedTypes().size());
+    // The root UserProfile unwraps onto the LogicalType; only the referenced peer Status
+    // remains as a named type.
+    assertEquals(1, v.getNamedTypes().size());
 
     // Named-type declarations get the namespace prefix
     Schema status = v.getNamedTypes().get("com.example.Status");
@@ -960,9 +956,10 @@ class LogicalTypesSchemaVisitorTest {
     assertEquals(3, status.getEnumValues().size());
     assertEquals("currently active", status.getEnumValues().get(0).getDoc());
 
-    Schema profile = v.getNamedTypes().get("com.example.UserProfile");
+    Schema profile = v.getRootSchema();
     assertNotNull(profile);
     assertEquals(Schema.Type.STRUCT, profile.getType());
+    assertEquals("UserProfile", v.toLogicalType().getName());
     assertEquals(7, profile.getFields().size());
 
     Schema.Field idField = profile.getField("id");
@@ -993,11 +990,12 @@ class LogicalTypesSchemaVisitorTest {
     assertEquals(Schema.Type.TIMESTAMP, createdField.getSchema().getType());
     assertEquals(3, createdField.getSchema().getPrecision());
 
-    // Root schema reference also gets the namespace prefix
+    // The root is the unwrapped UserProfile body (same object as profile above).
     Schema root = v.getRootSchema();
     assertNotNull(root);
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("com.example.UserProfile", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("UserProfile", v.toLogicalType().getName());
+    assertEquals("com.example", v.toLogicalType().getNamespace());
   }
 
   // =========================================================================
@@ -1010,7 +1008,10 @@ class LogicalTypesSchemaVisitorTest {
         "NAMESPACE a.b;"
         + "STRUCT Foo (x INT);"
         + "TYPE Foo");
-    assertNotNull(v.getNamedTypes().get("a.b.Foo"));
+    // Foo is the root; it unwraps to namespace a.b + simple name Foo (reconstructs a.b.Foo).
+    assertEquals(Schema.Type.STRUCT, v.getRootSchema().getType());
+    assertEquals("a.b", v.toLogicalType().getNamespace());
+    assertEquals("Foo", v.toLogicalType().getName());
   }
 
   @Test
@@ -1020,18 +1021,26 @@ class LogicalTypesSchemaVisitorTest {
         "NAMESPACE a.b;"
         + "STRUCT a.b.Foo (x INT);"
         + "TYPE a.b.Foo");
-    assertNotNull(v.getNamedTypes().get("a.b.Foo"));
-    assertEquals(1, v.getNamedTypes().size());
+    // a.b.Foo is not double-qualified: it unwraps to namespace a.b + simple name Foo (which
+    // reconstructs a.b.Foo, not a.b.a.b.Foo).
+    assertEquals(Schema.Type.STRUCT, v.getRootSchema().getType());
+    assertEquals("a.b", v.toLogicalType().getNamespace());
+    assertEquals("Foo", v.toLogicalType().getName());
+    assertEquals(0, v.getNamedTypes().size());
   }
 
   @Test
   void testNamespaceDoesNotOverrideQualified() {
-    // A different qualified name overrides the namespace.
+    // An explicit qualifier is not overridden by the active namespace: x.y.Foo stays x.y.Foo,
+    // not a.b.x.y.Foo. Here x.y.Foo is a referenced peer (the root is the same-namespace
+    // Holder), so it is preserved as a named type rather than unwrapped onto the root.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
         + "STRUCT x.y.Foo (n INT);"
-        + "TYPE x.y.Foo");
+        + "STRUCT Holder (foo x.y.Foo);"
+        + "TYPE Holder");
     assertNotNull(v.getNamedTypes().get("x.y.Foo"));
+    assertEquals("x.y.Foo", v.getRootSchema().getField("foo").getSchema().getQualifiedName());
   }
 
   @Test
@@ -1044,7 +1053,7 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Inner (x INT);"
         + "STRUCT Outer (inner Inner);"
         + "TYPE Outer");
-    Schema outer = v.getNamedTypes().get("a.b.Outer");
+    Schema outer = v.getRootSchema();
     Schema.Field innerField = outer.getField("inner");
     assertEquals(Schema.Type.NAMED_TYPE_REF, innerField.getSchema().getType());
     assertEquals("a.b.Inner", innerField.getSchema().getQualifiedName());
@@ -1060,7 +1069,7 @@ class LogicalTypesSchemaVisitorTest {
         "NAMESPACE a.b;"
         + "STRUCT Holder (amount Money);"
         + "TYPE Holder");
-    Schema holder = v.getNamedTypes().get("a.b.Holder");
+    Schema holder = v.getRootSchema();
     Schema.Field amount = holder.getField("amount");
     assertEquals(Schema.Type.NAMED_TYPE_REF, amount.getSchema().getType());
     assertEquals("a.b.Money", amount.getSchema().getQualifiedName());
@@ -1073,7 +1082,7 @@ class LogicalTypesSchemaVisitorTest {
         "NAMESPACE a.b;"
         + "STRUCT Holder (cur x.y.Currency);"
         + "TYPE Holder");
-    Schema holder = v.getNamedTypes().get("a.b.Holder");
+    Schema holder = v.getRootSchema();
     assertEquals("x.y.Currency",
         holder.getField("cur").getSchema().getQualifiedName());
   }
@@ -1083,9 +1092,10 @@ class LogicalTypesSchemaVisitorTest {
     LogicalTypesSchemaVisitor v = parseScript(
         "STRUCT Holder (amount Money, name STRING);"
         + "TYPE Holder");
-    assertNotNull(v.getNamedTypes().get("Holder"));
-    assertEquals("Money",
-        v.getNamedTypes().get("Holder").getField("amount").getSchema().getQualifiedName());
+    Schema holder = v.getRootSchema();
+    assertEquals(Schema.Type.STRUCT, holder.getType());
+    assertEquals("Holder", v.toLogicalType().getName());
+    assertEquals("Money", holder.getField("amount").getSchema().getQualifiedName());
     assertTrue(v.toLogicalType().isExternal("Money"));
   }
 
@@ -1112,7 +1122,7 @@ class LogicalTypesSchemaVisitorTest {
         + "  externalFoo other.Foo"
         + ");"
         + "TYPE Holder");
-    Schema holder = v.getNamedTypes().get("a.b.Holder");
+    Schema holder = v.getRootSchema();
     assertEquals("a.b.Foo",
         holder.getField("localFoo").getSchema().getQualifiedName());
     assertEquals("other.Foo",
@@ -1482,8 +1492,8 @@ class LogicalTypesSchemaVisitorTest {
         "STRUCT Foo (x INT)"
     );
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("Foo", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("Foo", v.toLogicalType().getName());
     assertFalse(root.isNullable(), "sugar root must be NOT NULL");
   }
 
@@ -1506,9 +1516,11 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT User (name STRING, addr Address)"
     );
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("User", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("User", v.toLogicalType().getName());
     assertFalse(root.isNullable());
+    // Address is referenced by the root, so it stays a peer named type.
+    assertTrue(v.getNamedTypes().containsKey("Address"));
   }
 
   @Test
@@ -1519,7 +1531,8 @@ class LogicalTypesSchemaVisitorTest {
         "STRUCT Foo (x Ext)"
     );
     Schema root = v.getRootSchema();
-    assertEquals("Foo", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("Foo", v.toLogicalType().getName());
     assertTrue(v.toLogicalType().isExternal("Ext"));
   }
 
@@ -1532,8 +1545,8 @@ class LogicalTypesSchemaVisitorTest {
         "STRUCT Foo (x INT);"
         + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("Foo", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("Foo", v.toLogicalType().getName());
     assertFalse(root.isNullable(), "inferred root must be NOT NULL");
     assertTrue(v.toLogicalType().getNamedTypes().containsKey("Bar"),
         "the non-root peer stays a named type");
@@ -1547,8 +1560,9 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Foo (x INT);"
         + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
-    assertEquals("com.example.Foo", root.getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, root.getType());
+    assertEquals("com.example", v.toLogicalType().getNamespace());
+    assertEquals("Foo", v.toLogicalType().getName());
     assertTrue(v.toLogicalType().getNamedTypes().containsKey("com.example.Bar"));
   }
 
@@ -1581,7 +1595,8 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Bar (y INT);"
         + "TYPE Bar"
     );
-    assertEquals("Bar", v.getRootSchema().getQualifiedName());
+    assertEquals(Schema.Type.STRUCT, v.getRootSchema().getType());
+    assertEquals("Bar", v.toLogicalType().getName());
   }
 
   @Test
@@ -1657,11 +1672,13 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testDottedNameWithoutMatchingPrefixIsForeignNamespace() {
     // Other.Bar — no Other defined locally → treated as namespace-qualified
-    // (top-level type in namespace Other), stored verbatim.
+    // (top-level type in namespace Other), stored verbatim. It is a referenced peer
+    // (the root is the same-namespace Holder), so it stays as a named type.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
         + "STRUCT Other.Bar (x INT);"
-        + "TYPE Other.Bar"
+        + "STRUCT Holder (bar Other.Bar);"
+        + "TYPE Holder"
     );
     assertNotNull(v.getNamedTypes().get("Other.Bar"));
     assertNull(v.getNamedTypes().get("com.example.Other.Bar"));
@@ -1734,7 +1751,7 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Holder (inner Outer.Inner);"
         + "TYPE Holder"
     );
-    Schema holder = v.getNamedTypes().get("com.example.Holder");
+    Schema holder = v.getRootSchema();
     Schema.Field innerField = holder.getField("inner");
     assertEquals(Schema.Type.NAMED_TYPE_REF, innerField.getSchema().getType());
     assertEquals("com.example.Outer.Inner",
@@ -1751,7 +1768,7 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Holder (b Other.Bar);"
         + "TYPE Holder"
     );
-    Schema holder = v.getNamedTypes().get("com.example.Holder");
+    Schema holder = v.getRootSchema();
     assertEquals("Other.Bar", holder.getField("b").getSchema().getQualifiedName());
   }
 
@@ -1764,7 +1781,7 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Holder (inner com.other.Outer.Inner);"
         + "TYPE Holder"
     );
-    Schema holder = v.getNamedTypes().get("com.example.Holder");
+    Schema holder = v.getRootSchema();
     assertEquals("com.other.Outer.Inner",
         holder.getField("inner").getSchema().getQualifiedName());
     assertTrue(v.toLogicalType().isExternal("com.other.Outer.Inner"));
@@ -1800,6 +1817,21 @@ class LogicalTypesSchemaVisitorTest {
     String script = sb.toString();
     assertThrows(ValidationException.class,
         () -> LogicalTypesParserFactory.parse(script));
+  }
+
+  @Test
+  void testRootUnwrapSkippedWhenNamespaceDiffersFromDocument() {
+    // Root FQN namespace (x.y) differs from the document namespace (a.b): unwrapping would carry
+    // only the simple name and reconstruct a.b.Foo, dropping x.y. So the root stays a
+    // NAMED_TYPE_REF preserving the full FQN, and LogicalType.name is not set.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE a.b;"
+        + "STRUCT x.y.Foo (n INT)");
+    Schema root = v.getRootSchema();
+    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
+    assertEquals("x.y.Foo", root.getQualifiedName());
+    assertNull(v.toLogicalType().getName());
+    assertTrue(v.getNamedTypes().containsKey("x.y.Foo"));
   }
 
 }

@@ -39,9 +39,18 @@ import java.util.Set;
  *   <li>Path-keyed {@code defaultValues} aren't re-emitted; field-level
  *       defaults survive via {@link Schema.Field#getDefaultValue()}.</li>
  *   <li>The single-root sugar is detected and the trailing root-registration
- *       {@code TYPE} statement is elided when it would be redundant. The
- *       multi-root UNION sugar is detected similarly.</li>
+ *       {@code TYPE} statement is elided when it would be redundant. There is
+ *       no multi-root UNION sugar: when several independent types are
+ *       unreferenced, root inference selects the first declared and the rest
+ *       remain peer named types; a UNION-of-named-types root must be written
+ *       explicitly ({@code TYPE UNION(...)}).</li>
  * </ul>
+ *
+ * <p>A named inline root — a bare {@code STRUCT}/{@code ENUM} carrying
+ * {@link LogicalType#getName()} (e.g. an unwrapped Protobuf message) — is emitted as a named
+ * declaration and round-trips: the visitor unwraps a leaf named root back to a bare body carrying
+ * {@code LogicalType.name} (see {@code LogicalTypesSchemaVisitor.maybeUnwrapNamedRoot}), so the
+ * bare-root + name shape is preserved through {@code LT → DDL → LT}.
  */
 public final class LogicalTypeToDdlConverter {
 
