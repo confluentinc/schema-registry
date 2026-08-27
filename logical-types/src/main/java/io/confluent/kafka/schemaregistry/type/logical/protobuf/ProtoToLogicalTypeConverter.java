@@ -199,18 +199,25 @@ public class ProtoToLogicalTypeConverter {
     //     preserves the historical "namedTypes = peers; root is direct"
     //     convention for the simple case.
     final Schema rootSchema;
+    final String rootName;
     if (LogicalType.isCyclic(rootFqn, ctx.getNamedTypes())
         || hasNestedNamedTypes(rootFqn, ctx.getNamedTypes())) {
       rootSchema = Schema.createNamedTypeRef(rootFqn).setNullable(false);
+      // Root kept as a NAMED_TYPE_REF: its name is the namedTypes key, so don't duplicate it.
+      rootName = null;
     } else {
       rootSchema = rootBody;
       ((java.util.Map<String, Schema>) ctx.getNamedTypes()).remove(rootFqn);
+      // Root unwrapped to a bare STRUCT: its message name would otherwise be lost, so carry it.
+      rootName = rootMessage.getName();
     }
     return new LogicalType(
+        rootName,
         emptyToNull(file.getPackage()),
         rootSchema,
         ctx.getNamedTypes(),
         ctx.getExternalTypes(),
+        Map.of(),
         schema.references(),
         schema.resolvedReferences(),
         ctx.getDefaultValues());

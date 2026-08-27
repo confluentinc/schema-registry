@@ -105,10 +105,21 @@ public final class LogicalTypeToDdlConverter {
         printCreateType(name, lt.getNamedTypes().get(name));
       }
 
-      // Trailing root-registration `TYPE <typeExpr>`: omit when the visitor's
-      // auto-detect would produce the same root from the local types alone.
-      if (!sugarWouldInferRoot()) {
-        sb.append("TYPE ").append(typeExpr(lt.getRootSchema())).append(";\n");
+      // A named inline root (bare STRUCT/ENUM carrying LogicalType.name — e.g. a Protobuf message
+      // unwrapped to a struct, or a JSON root object's title) is emitted as a named declaration so
+      // its name shows in the DDL; the visitor infers the sole/unreferenced named type as the root
+      // on read-back. (Display only — exact-shape round-trip is revisited later.)
+      Schema root = lt.getRootSchema();
+      boolean rootIsNamedInline =
+          (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.ENUM)
+              && lt.getName() != null
+              && !lt.getNamedTypes().containsKey(lt.getName());
+      if (rootIsNamedInline) {
+        printCreateType(lt.getName(), root);
+      } else if (!sugarWouldInferRoot()) {
+        // Trailing root-registration `TYPE <typeExpr>`: omit when the visitor's
+        // auto-detect would produce the same root from the local types alone.
+        sb.append("TYPE ").append(typeExpr(root)).append(";\n");
       }
 
       return sb.toString();
