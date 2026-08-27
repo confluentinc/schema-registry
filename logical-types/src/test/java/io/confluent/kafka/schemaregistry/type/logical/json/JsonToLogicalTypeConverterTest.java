@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.json;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -417,5 +418,17 @@ class JsonToLogicalTypeConverterTest {
 
   private static LogicalType convert(String jsonText) {
     return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonText));
+  }
+
+  @Test
+  void rootObjectTitleCarriedAsName() {
+    // A root object is inline (no namedTypes key), so its `title` would be lost; carry it as the
+    // LogicalType root name.
+    LogicalType lt = convert(
+        "{\"type\":\"object\",\"title\":\"Order\","
+            + "\"properties\":{\"id\":{\"type\":\"string\"}}}");
+
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+    assertThat(lt.getName()).isEqualTo("Order");
   }
 }

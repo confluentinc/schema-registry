@@ -44,6 +44,7 @@ import static java.util.Objects.requireNonNull;
  */
 public class LogicalType {
 
+  private final String name;
   private final String namespace;
   private final Schema rootSchema;
   private final Map<String, Schema> namedTypes;
@@ -116,6 +117,30 @@ public class LogicalType {
       final List<SchemaReference> references,
       final Map<String, String> resolvedReferences,
       final Map<List<Integer>, Object> defaultValues) {
+    this(null, namespace, rootSchema, namedTypes, externalTypes, externalImports,
+        references, resolvedReferences, defaultValues);
+  }
+
+  /**
+   * Canonical constructor. {@code name} is the root type's own name, carried only when it would
+   * otherwise be lost — i.e. when the root is an inline (bare) STRUCT/ENUM whose name is not
+   * already the key of a {@link #namedTypes} entry (a Protobuf message unwrapped to a bare struct,
+   * or a JSON root object's {@code title}). It is {@code null} for a {@code NAMED_TYPE_REF} root
+   * (the name is the {@code namedTypes} key) and for anonymous roots. Display metadata for DDL
+   * emission; see {@link #getName()}.
+   */
+  public LogicalType(
+      final String name,
+      final String namespace,
+      final Schema rootSchema,
+      final Map<String, Schema> namedTypes,
+      final Set<String> externalTypes,
+      final Map<String, String> externalImports,
+      final List<SchemaReference> references,
+      final Map<String, String> resolvedReferences,
+      final Map<List<Integer>, Object> defaultValues) {
+    // Treat empty string as no name, so callers don't have to.
+    this.name = (name == null || name.isEmpty()) ? null : name;
     // Treat empty string as no namespace, so callers don't have to.
     this.namespace = (namespace == null || namespace.isEmpty()) ? null : namespace;
     this.rootSchema = requireNonNull(rootSchema, "rootSchema");
@@ -239,6 +264,17 @@ public class LogicalType {
   /** The document-level namespace, or null if none. */
   public String getNamespace() {
     return namespace;
+  }
+
+  /**
+   * The root type's own name, or {@code null} when the root has no otherwise-lost name (a
+   * {@code NAMED_TYPE_REF} root, whose name is the {@link #getNamedTypes()} key, or an anonymous
+   * root). Set only for an inline root whose name would otherwise be discarded — a Protobuf message
+   * unwrapped to a bare struct, or a JSON root object's {@code title}. Used by the DDL writer to
+   * emit a named root declaration.
+   */
+  public String getName() {
+    return name;
   }
 
   /**
@@ -434,6 +470,108 @@ public class LogicalType {
   }
 
   /**
+   * Outcome of {@link #unwrapLeafNamedRoot}: the (possibly rewritten) root and carried name.
+   */
+  public static final class RootUnwrap {
+    private final Schema rootSchema;
+    private final String name;
+
+    private RootUnwrap(Schema rootSchema, String name) {
+      this.rootSchema = rootSchema;
+      this.name = name;
+    }
+
+    public Schema getRootSchema() {
+      return rootSchema;
+    }
+
+    /**
+     * Simple name to carry on {@link LogicalType#getName()}, or {@code null} if root was kept.
+     */
+    public String getName() {
+      return name;
+    }
+  }
+
+  /**
+   * If {@code rootSchema} is a {@code NAMED_TYPE_REF} to a local <em>leaf</em> named type, unwrap
+   * it to the bare {@code STRUCT}/{@code ENUM} body carrying its simple name, mirroring the
+   * canonical named-root shape shared by every format reader and the DDL visitor. The body is
+   * removed from
+   * {@code namedTypes} (mutated in place); peers referencing the root still resolve by name.
+   *
+   * <p>The unwrap is gated so it stays lossless through {@code LT → format/DDL → LT}; otherwise the
+   * root keeps its {@code NAMED_TYPE_REF} form:
+   * <ul>
+   *   <li>external/unresolved, cyclic, or has nested named types — unwrapping would orphan the
+   *       {@code namedTypes} entry needed for resolution or recurse forever;</li>
+   *   <li>the root's own namespace differs from {@code namespace} — simple name + {@code namespace}
+   *       would reconstruct a different FQN, so the full FQN is kept as the {@code namedTypes} key.
+   *   </li>
+   * </ul>
+   *
+   * <p>The root's nullability is preserved onto the bare body.
+   */
+  public static RootUnwrap unwrapLeafNamedRoot(
+      Schema rootSchema, Map<String, Schema> namedTypes, String namespace) {
+    if (rootSchema == null || rootSchema.getType() != Schema.Type.NAMED_TYPE_REF) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    String fqn = rootSchema.getQualifiedName();
+    Schema body = namedTypes.get(fqn);
+    if (body == null) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    if (isCyclic(fqn, namedTypes) || hasNestedNamedTypes(fqn, namedTypes)) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    int dot = fqn.lastIndexOf('.');
+    String fqnNamespace = dot < 0 ? null : fqn.substring(0, dot);
+    if (!Objects.equals(fqnNamespace, namespace)) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    if (isReferencedByPeer(fqn, namedTypes)) {
+      // A local peer references the root; removing its body would dangle that reference (and every
+      // format writer resolves peer refs only through namedTypes). Keep the shared root as a ref.
+      return new RootUnwrap(rootSchema, null);
+    }
+    namedTypes.remove(fqn);
+    body.setNullable(rootSchema.isNullable());
+    int nameDot = fqn.lastIndexOf('.');
+    String simpleName = nameDot < 0 ? fqn : fqn.substring(nameDot + 1);
+    return new RootUnwrap(body, simpleName);
+  }
+
+  private static boolean hasNestedNamedTypes(String fqn, Map<String, Schema> namedTypes) {
+    String prefix = fqn + ".";
+    for (String key : namedTypes.keySet()) {
+      if (key.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True iff a named type other than {@code fqn} carries a {@code NAMED_TYPE_REF} to {@code fqn}.
+   * Used to keep a peer-referenced root as a {@code NAMED_TYPE_REF} so its definition stays in
+   * {@code namedTypes} where writers resolve the peer's reference.
+   */
+  public static boolean isReferencedByPeer(String fqn, Map<String, Schema> namedTypes) {
+    for (Map.Entry<String, Schema> entry : namedTypes.entrySet()) {
+      if (entry.getKey().equals(fqn)) {
+        continue;
+      }
+      Set<String> refs = new LinkedHashSet<>();
+      collectNamedRefs(entry.getValue(), refs);
+      if (refs.contains(fqn)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Path-keyed map of field-default values collected during conversion.
    *
    * <p>Each key is a list of zero-based indices that walks from the root schema
@@ -498,7 +636,8 @@ public class LogicalType {
       return false;
     }
     LogicalType that = (LogicalType) o;
-    return Objects.equals(rootSchema, that.rootSchema)
+    return Objects.equals(name, that.name)
+        && Objects.equals(rootSchema, that.rootSchema)
         && Objects.equals(namedTypes, that.namedTypes)
         && Objects.equals(externalTypes, that.externalTypes)
         && Objects.equals(externalImports, that.externalImports)
@@ -509,14 +648,15 @@ public class LogicalType {
 
   @Override
   public int hashCode() {
-    return Objects.hash(rootSchema, namedTypes, externalTypes, externalImports,
+    return Objects.hash(name, rootSchema, namedTypes, externalTypes, externalImports,
         references, namespace, defaultValues);
   }
 
   @Override
   public String toString() {
     return "LogicalType{"
-        + "rootSchema=" + rootSchema
+        + "name=" + name
+        + ", rootSchema=" + rootSchema
         + ", namedTypes=" + namedTypes
         + ", externalTypes=" + externalTypes
         + ", externalImports=" + externalImports
