@@ -33,7 +33,7 @@ public class TestVariantObjectBuilder {
     b.endObject();
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(0, v.numObjectElements());
+      Assert.assertEquals(0, v.numObjectFields());
     });
   }
 
@@ -48,11 +48,79 @@ public class TestVariantObjectBuilder {
     b.endObject();
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(1234, v.numObjectElements());
+      Assert.assertEquals(1234, v.numObjectFields());
       for (int i = 0; i < 1234; i++) {
         VariantTestUtils.checkType(v.getFieldByKey("a" + i), VariantFormat.PRIMITIVE, Variant.Type.LONG);
         Assert.assertEquals(i, v.getFieldByKey("a" + i).getLong());
       }
+    });
+  }
+
+  /**
+   * Object field keys must be ordered by the unsigned byte order of their UTF-8 encoding, not by
+   * {@link String#compareTo} (UTF-16 code-unit order). The two orderings disagree for
+   * supplementary-plane keys: U+FFFF encodes to UTF-8 {@code EF BF BF} and U+10000 to
+   * {@code F0 90 80 80}, so U+FFFF must sort first; but in UTF-16 the leading high surrogate
+   * 0xD800 of U+10000 sorts before 0xFFFF, which would wrongly put U+10000 first. See
+   * {@link VariantFormat#compareKeys}.
+   */
+  @Test
+  public void testObjectKeysSortedByUtf8ByteOrder() {
+    String bmpKey = "￿"; // U+FFFF -> UTF-8 EF BF BF
+    String supplementaryKey = "𐀀"; // U+10000 -> UTF-8 F0 90 80 80
+
+    VariantBuilder b = new VariantBuilder();
+    VariantObjectBuilder o = b.startObject();
+    // Appended in the "wrong" order on purpose, to prove the builder sorts rather than
+    // preserving insertion order.
+    o.appendKey(supplementaryKey);
+    o.appendLong(2);
+    o.appendKey(bmpKey);
+    o.appendLong(1);
+    b.endObject();
+
+    VariantTestUtils.testVariant(b.build(), v -> {
+      VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
+      Assert.assertEquals(v.numObjectFields(), 2);
+      // UTF-8 byte order: EF BF BF < F0 90 80 80, so the BMP key comes first.
+      Assert.assertEquals(v.getFieldAtIndex(0).key, bmpKey);
+      Assert.assertEquals(v.getFieldAtIndex(1).key, supplementaryKey);
+      Assert.assertEquals(v.getFieldByKey(bmpKey).getLong(), 1);
+      Assert.assertEquals(v.getFieldByKey(supplementaryKey).getLong(), 2);
+    });
+  }
+
+  /**
+   * A large object (>= BINARY_SEARCH_THRESHOLD) that mixes ASCII keys with U+FFFF and a
+   * supplementary-plane key, exercising the reader's binary-search path in
+   * {@link Variant#getFieldByKey}. The binary search must use the same UTF-8 byte ordering as the
+   * builder's sort; with a UTF-16 comparator on the read side, the supplementary key would be
+   * mis-navigated and not found.
+   */
+  @Test
+  public void testLargeObjectBinarySearchWithSupplementaryKey() {
+    String bmpKey = "￿"; // UTF-8 EF BF BF
+    String supplementaryKey = "𐀀"; // UTF-8 F0 90 80 80
+
+    VariantBuilder b = new VariantBuilder();
+    VariantObjectBuilder o = b.startObject();
+    for (int i = 0; i < 40; i++) { // well above BINARY_SEARCH_THRESHOLD (32)
+      o.appendKey(String.format("a%03d", i));
+      o.appendLong(i);
+    }
+    o.appendKey(bmpKey);
+    o.appendLong(998);
+    o.appendKey(supplementaryKey);
+    o.appendLong(999);
+    b.endObject();
+
+    VariantTestUtils.testVariant(b.build(), v -> {
+      Assert.assertEquals(v.numObjectFields(), 42);
+      Assert.assertNotNull(v.getFieldByKey(bmpKey));
+      Assert.assertEquals(v.getFieldByKey(bmpKey).getLong(), 998);
+      Assert.assertNotNull(v.getFieldByKey(supplementaryKey));
+      Assert.assertEquals(v.getFieldByKey(supplementaryKey).getLong(), 999);
+      Assert.assertEquals(v.getFieldByKey("a037").getLong(), 37);
     });
   }
 
@@ -89,7 +157,7 @@ public class TestVariantObjectBuilder {
 
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(4, v.numObjectElements());
+      Assert.assertEquals(4, v.numObjectFields());
       VariantTestUtils.checkType(v.getFieldByKey("outer 1"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
       Assert.assertTrue(v.getFieldByKey("outer 1").getBoolean());
       VariantTestUtils.checkType(v.getFieldByKey("outer 2"), VariantFormat.PRIMITIVE, Variant.Type.LONG);
@@ -97,9 +165,9 @@ public class TestVariantObjectBuilder {
       VariantTestUtils.checkType(v.getFieldByKey("outer 3"), VariantFormat.OBJECT, Variant.Type.OBJECT);
 
       Variant nested = v.getFieldByKey("outer 3");
-      Assert.assertEquals(3, nested.numObjectElements());
+      Assert.assertEquals(3, nested.numObjectFields());
       VariantTestUtils.checkType(nested.getFieldByKey("nested 1"), VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(0, nested.getFieldByKey("nested 1").numObjectElements());
+      Assert.assertEquals(0, nested.getFieldByKey("nested 1").numObjectFields());
       VariantTestUtils.checkType(nested.getFieldByKey("nested 2"), VariantFormat.SHORT_STR, Variant.Type.STRING);
       Assert.assertEquals("variant", nested.getFieldByKey("nested 2").getString());
       VariantTestUtils.checkType(nested.getFieldByKey("nested 3"), VariantFormat.ARRAY, Variant.Type.ARRAY);
@@ -130,7 +198,7 @@ public class TestVariantObjectBuilder {
 
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(2, v.numObjectElements());
+      Assert.assertEquals(2, v.numObjectFields());
       Assert.assertEquals(
           ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
           v.getFieldByKey("as_binary").getBinary());
@@ -170,9 +238,9 @@ public class TestVariantObjectBuilder {
       for (int i = 1000; i >= 0; i--) {
         VariantTestUtils.checkType(curr, VariantFormat.OBJECT, Variant.Type.OBJECT);
         if (i == 0) {
-          Assert.assertEquals(0, curr.numObjectElements());
+          Assert.assertEquals(0, curr.numObjectFields());
         } else {
-          Assert.assertEquals(2, curr.numObjectElements());
+          Assert.assertEquals(2, curr.numObjectFields());
           VariantTestUtils.checkType(
               curr.getFieldByKey("key" + i), VariantFormat.SHORT_STR, Variant.Type.STRING);
           Assert.assertEquals("str" + i, curr.getFieldByKey("key" + i).getString());
@@ -195,7 +263,7 @@ public class TestVariantObjectBuilder {
 
     Variant v = b.build();
     VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-    Assert.assertEquals(3, v.numObjectElements());
+    Assert.assertEquals(3, v.numObjectFields());
     VariantTestUtils.checkType(v.getFieldByKey("key1"), VariantFormat.PRIMITIVE, Variant.Type.STRING);
     Assert.assertEquals(randomString, v.getFieldByKey("key1").getString());
     VariantTestUtils.checkType(v.getFieldByKey("key2"), VariantFormat.PRIMITIVE, Variant.Type.BOOLEAN);
@@ -233,7 +301,7 @@ public class TestVariantObjectBuilder {
 
     Variant v = b.build();
     VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-    Assert.assertEquals(numKeys, v.numObjectElements());
+    Assert.assertEquals(numKeys, v.numObjectFields());
     // Only check a few keys, to avoid slowing down the test
     VariantTestUtils.checkType(v.getFieldByKey("k" + 0), VariantFormat.PRIMITIVE, Variant.Type.LONG);
     Assert.assertEquals(0, v.getFieldByKey("k" + 0).getLong());
@@ -270,7 +338,7 @@ public class TestVariantObjectBuilder {
     objBuilder.appendLong(1);
     b.endObject();
     Variant v = b.build();
-    Assert.assertEquals(1, v.numObjectElements());
+    Assert.assertEquals(1, v.numObjectFields());
     VariantTestUtils.checkType(v.getFieldByKey("duplicate"), VariantFormat.PRIMITIVE, Variant.Type.LONG);
     Assert.assertEquals(1, v.getFieldByKey("duplicate").getLong());
   }
@@ -288,7 +356,7 @@ public class TestVariantObjectBuilder {
     b.endObject();
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(1, v.numObjectElements());
+      Assert.assertEquals(1, v.numObjectFields());
       Variant variant = v.getFieldByKey("duplicate");
       VariantTestUtils.checkType(variant, VariantFormat.SHORT_STR, Variant.Type.STRING);
       Assert.assertEquals("hello", variant.getString());
@@ -308,7 +376,7 @@ public class TestVariantObjectBuilder {
     b.endObject();
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(1, v.numObjectElements());
+      Assert.assertEquals(1, v.numObjectFields());
       Variant variant = v.getFieldByKey("duplicate");
       VariantTestUtils.checkType(variant, VariantFormat.PRIMITIVE, Variant.Type.INT);
       Assert.assertEquals(1, variant.getInt());
@@ -334,7 +402,7 @@ public class TestVariantObjectBuilder {
     b.endObject();
     VariantTestUtils.testVariant(b.build(), v -> {
       VariantTestUtils.checkType(v, VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(3, v.numObjectElements());
+      Assert.assertEquals(3, v.numObjectFields());
       Assert.assertEquals("a-final", v.getFieldByKey("a").getString());
       Assert.assertEquals(123456789L, v.getFieldByKey("b").getLong());
       Assert.assertEquals("c-only", v.getFieldByKey("c").getString());
@@ -355,7 +423,7 @@ public class TestVariantObjectBuilder {
     objBuilder.appendString("22");
     b.endObject();
     Variant v = b.build();
-    Assert.assertEquals(4, v.numObjectElements());
+    Assert.assertEquals(4, v.numObjectFields());
     VariantTestUtils.checkType(v.getFieldByKey("0"), VariantFormat.SHORT_STR, Variant.Type.STRING);
     Assert.assertEquals("", v.getFieldByKey("0").getString());
     VariantTestUtils.checkType(v.getFieldByKey("1"), VariantFormat.SHORT_STR, Variant.Type.STRING);

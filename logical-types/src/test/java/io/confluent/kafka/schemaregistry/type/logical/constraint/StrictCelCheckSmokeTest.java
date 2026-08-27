@@ -468,7 +468,7 @@ class StrictCelCheckSmokeTest {
   @Test void acceptsTimestampOf() {
     Schema intCol = Schema.create(Schema.Type.INT);
     CelValidator.assertValidStrictColumnLevel(
-        "timestamp.of(this, \"millis\") < now", "x", intCol);
+        "timestamp(this, 3) < now", "x", intCol);
   }
 
   @Test void acceptsVariantConstructorAndNavigation() {

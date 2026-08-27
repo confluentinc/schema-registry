@@ -480,6 +480,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
 
       if (parsedSchema != null) {
+        validateReferencesNotStronglyAssociated(subject, schema);
+      }
+
+      if (parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
         if (schemaIdAndSubjects != null

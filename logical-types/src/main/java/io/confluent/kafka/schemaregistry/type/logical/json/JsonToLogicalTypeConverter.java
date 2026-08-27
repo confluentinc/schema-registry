@@ -651,6 +651,11 @@ public class JsonToLogicalTypeConverter {
         @SuppressWarnings("unchecked")
         Map<String, Object> branchParams = hint != null
             ? (Map<String, Object>) hint.get("params") : null;
+        // Drop any stray format-native key so a foreign protobuf.field.number cannot leak in
+        // through confluent:union; JSON owns no format-native concept.
+        if (branchParams != null) {
+          branchParams = Schema.stripFormatNativeParams(branchParams);
+        }
         Schema branchType = convertWithCycleDetection(
             subSchema, true, ctx, appendToList(indexPath, index));
         branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));
@@ -811,7 +816,14 @@ public class JsonToLogicalTypeConverter {
     Object params = jsonSchema.getUnprocessedProperties().get("confluent:params");
     if (params instanceof Map) {
       Map<String, Object> userParams = (Map<String, Object>) params;
-      return userParams.isEmpty() ? null : new LinkedHashMap<>(userParams);
+      if (userParams.isEmpty()) {
+        return null;
+      }
+      // JSON owns no format-native concept and has no native slot for one, so any avro./protobuf.
+      // key here is a stray in a generic container and is dropped (see Schema#isFormatNativeParam).
+      Map<String, Object> stripped =
+          Schema.stripFormatNativeParams(new LinkedHashMap<>(userParams));
+      return stripped.isEmpty() ? null : stripped;
     }
     return null;
   }

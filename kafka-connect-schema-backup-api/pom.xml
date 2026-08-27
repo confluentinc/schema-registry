@@ -22,6 +22,13 @@
     <packaging>jar</packaging>
     <name>kafka-connect-schema-backup-api</name>
 
+    <properties>
+        <!-- Pin bytecode to Java 8 so external Kafka Connect connectors on
+             Java 8 runtimes can load BackupWrapper. Overrides the parent
+             chain (rest-utils-parent sets java.version=17). -->
+        <java.version>8</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>

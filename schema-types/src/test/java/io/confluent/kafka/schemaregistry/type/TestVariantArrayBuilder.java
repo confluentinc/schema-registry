@@ -117,7 +117,7 @@ public class TestVariantArrayBuilder {
       Assert.assertTrue(v.getElementAtIndex(0).getBoolean());
 
       VariantTestUtils.checkType(v.getElementAtIndex(1), VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(1, v.getElementAtIndex(1).numObjectElements());
+      Assert.assertEquals(1, v.getElementAtIndex(1).numObjectFields());
       VariantTestUtils.checkType(
           v.getElementAtIndex(1).getFieldByKey("key"), VariantFormat.PRIMITIVE, Variant.Type.INT);
       Assert.assertEquals(321, v.getElementAtIndex(1).getFieldByKey("key").getInt());
@@ -133,7 +133,7 @@ public class TestVariantArrayBuilder {
       VariantTestUtils.checkType(nested.getElementAtIndex(1), VariantFormat.SHORT_STR, Variant.Type.STRING);
       Assert.assertEquals("variant", nested.getElementAtIndex(1).getString());
       VariantTestUtils.checkType(nested.getElementAtIndex(2), VariantFormat.OBJECT, Variant.Type.OBJECT);
-      Assert.assertEquals(0, nested.getElementAtIndex(2).numObjectElements());
+      Assert.assertEquals(0, nested.getElementAtIndex(2).numObjectFields());
     });
   }
 
