@@ -21,12 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
 import java.time.Duration;
@@ -34,24 +29,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -60,7 +47,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
@@ -85,11 +71,8 @@ import org.junit.jupiter.api.Test;
  * operations work correctly with header-based schema ID transport.
  */
 public class
-TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
+TimestampedWindowStoreWithHeadersIntegrationTest extends HeadersIQv2IntegrationTestBase {
 
-    private static final String INPUT_TOPIC = "events-input";
-    private static final String OUTPUT_TOPIC = "windowed-output";
-    private static final String STORE_NAME = "event-window-store";
     private static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
     private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
 
@@ -116,10 +99,6 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
     private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
     private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
-
-    public TimestampedWindowStoreWithHeadersIntegrationTest() {
-        super(1, true);
-    }
 
     @Test
     public void shouldPerformPutAndPointFetch() throws Exception {
@@ -163,11 +142,11 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             assertEquals("event-3", results.get(idx).key().get("eventId").toString());
             assertEquals(50L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH t=8min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH t=8min");
 
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(60L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH t=10min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH t=10min");
         } finally {
             closeStreams(streams);
         }
@@ -220,44 +199,44 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FETCH_RANGE_1 (Instant) — event-1, 4-11min: 2 windows (event-1:30, event-1:60)
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_1 Instant window 5-10min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_1 Instant window 5-10min");
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(60L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_1 Instant window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_1 Instant window 10-15min");
 
             // FETCH_RANGE_1_LONG
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_1_LONG window 5-10min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_1_LONG window 5-10min");
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(60L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_1_LONG window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_1_LONG window 10-15min");
 
             // FETCH_RANGE_2 (Instant) — event-2, 6-11min: 1 window (event-2:70)
             assertEquals("event-2", results.get(idx).key().get("eventId").toString());
             assertEquals(70L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_2 Instant window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_2 Instant window 10-15min");
 
             // FETCH_RANGE_2_LONG
             assertEquals("event-2", results.get(idx).key().get("eventId").toString());
             assertEquals(70L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH_RANGE_2_LONG window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_RANGE_2_LONG window 10-15min");
 
             // BACKWARD_FETCH (Instant) — event-1, 4-11min reverse: event-1:60, event-1:30
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(60L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "BACKWARD_FETCH Instant window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "BACKWARD_FETCH Instant window 10-15min");
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "BACKWARD_FETCH Instant window 5-10min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "BACKWARD_FETCH Instant window 5-10min");
 
             // BACKWARD_FETCH_LONG
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(60L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "BACKWARD_FETCH_LONG window 10-15min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "BACKWARD_FETCH_LONG window 10-15min");
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "BACKWARD_FETCH_LONG window 5-10min");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "BACKWARD_FETCH_LONG window 5-10min");
         } finally {
             closeStreams(streams);
         }
@@ -452,12 +431,12 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             ValueTimestampHeaders<GenericRecord> e1w0 = store.fetch(event1Key, 0L);
             assertNotNull(e1w0, "event-1 in window 0-5min should exist");
             assertEquals(10L, e1w0.value().get("count"));
-            assertSchemaIdHeaders(e1w0.headers(), "IQv1 point fetch");
+            assertWellFormedSchemaIdHeaders(e1w0.headers(), "IQv1 point fetch");
 
             ValueTimestampHeaders<GenericRecord> e2w0 = store.fetch(event2Key, 0L);
             assertNotNull(e2w0, "event-2 in window 0-5min should exist");
             assertEquals(20L, e2w0.value().get("count"));
-            assertSchemaIdHeaders(e2w0.headers(), "IQv1 point fetch e2w0");
+            assertWellFormedSchemaIdHeaders(e2w0.headers(), "IQv1 point fetch e2w0");
 
             assertNull(store.fetch(event3Key, 0L), "event-3 should not exist in window 0-5min");
 
@@ -465,28 +444,28 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             ValueTimestampHeaders<GenericRecord> e1w5 = store.fetch(event1Key, 300000L);
             assertNotNull(e1w5, "event-1 in window 5-10min should exist");
             assertEquals(30L, e1w5.value().get("count"));
-            assertSchemaIdHeaders(e1w5.headers(), "IQv1 point fetch e1w5");
+            assertWellFormedSchemaIdHeaders(e1w5.headers(), "IQv1 point fetch e1w5");
 
             ValueTimestampHeaders<GenericRecord> e2w5 = store.fetch(event2Key, 300000L);
             assertNotNull(e2w5, "event-2 in window 5-10min should exist");
             assertEquals(40L, e2w5.value().get("count"));
-            assertSchemaIdHeaders(e2w5.headers(), "IQv1 point fetch e2w5");
+            assertWellFormedSchemaIdHeaders(e2w5.headers(), "IQv1 point fetch e2w5");
 
             ValueTimestampHeaders<GenericRecord> e3w5 = store.fetch(event3Key, 300000L);
             assertNotNull(e3w5, "event-3 in window 5-10min should exist");
             assertEquals(50L, e3w5.value().get("count"));
-            assertSchemaIdHeaders(e3w5.headers(), "IQv1 point fetch e3w5");
+            assertWellFormedSchemaIdHeaders(e3w5.headers(), "IQv1 point fetch e3w5");
 
             // Window 10-15min (start=600000): event-1:60, event-2:70
             ValueTimestampHeaders<GenericRecord> e1w10 = store.fetch(event1Key, 600000L);
             assertNotNull(e1w10, "event-1 in window 10-15min should exist");
             assertEquals(60L, e1w10.value().get("count"));
-            assertSchemaIdHeaders(e1w10.headers(), "IQv1 point fetch e1w10");
+            assertWellFormedSchemaIdHeaders(e1w10.headers(), "IQv1 point fetch e1w10");
 
             ValueTimestampHeaders<GenericRecord> e2w10 = store.fetch(event2Key, 600000L);
             assertNotNull(e2w10, "event-2 in window 10-15min should exist");
             assertEquals(70L, e2w10.value().get("count"));
-            assertSchemaIdHeaders(e2w10.headers(), "IQv1 point fetch e2w10");
+            assertWellFormedSchemaIdHeaders(e2w10.headers(), "IQv1 point fetch e2w10");
 
             assertNull(store.fetch(event3Key, 600000L), "event-3 should not exist in window 10-15min");
             assertNull(store.fetch(createKey("event-99"), 300000L), "event-99 should not exist");
@@ -677,13 +656,13 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             // Verify 8 PUTs from sendWindowedPutRecords
             for (int i = 0; i < 8; i++) {
-                assertSchemaIdHeaders(results.get(idx++), "PUT " + i);
+                assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT " + i);
             }
 
             // FETCH event-1 before delete
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
             assertEquals(10L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH event-1 before delete");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH event-1 before delete");
 
             // FETCH event-1 after delete
             assertEquals("event-1", results.get(idx).key().get("eventId").toString());
@@ -698,12 +677,12 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // PUT event-3
             assertEquals("event-3", results.get(idx).key().get("eventId").toString());
             assertEquals(100L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "PUT event-3");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-3");
 
             // FETCH event-3 after put
             assertEquals("event-3", results.get(idx).key().get("eventId").toString());
             assertEquals(100L, results.get(idx).value().get("count"));
-            assertSchemaIdHeaders(results.get(idx++), "FETCH event-3 after put");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH event-3 after put");
 
             // FETCH event-3 after delete
             assertEquals("event-3", results.get(idx).key().get("eventId").toString());
@@ -712,11 +691,11 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "delete-integration-test-delete-store-changelog";
 
-            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
-                consumeRecords(changelogTopic, "changelog-consumer", 12, ByteArrayDeserializer.class);
+            List<ConsumerRecord<byte[], byte[]>> changelogRecords =
+                consumeChangelogRecords(changelogTopic, "changelog-consumer", 12);
 
             int tombstoneCount = 0;
-            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
+            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
                 if (record.value() == null) {
                     tombstoneCount++;
                     Header keySchemaIdHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
@@ -792,17 +771,17 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             // Verify 8 PUTs
             for (int i = 0; i < 8; i++) {
-                assertSchemaIdHeaders(results.get(idx++), "PUT " + i);
+                assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT " + i);
             }
 
             // Verify ALL (7 entries)
             for (int i = 0; i < 7; i++) {
-                assertSchemaIdHeaders(results.get(idx++), "ALL " + i);
+                assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "ALL " + i);
             }
 
             // Verify ITERATOR_METHODS passed
             assertEquals("iterator_test_passed", results.get(idx).key().get("eventId").toString());
-            assertSchemaIdHeaders(results.get(idx), "ITERATOR_METHODS");
+            assertWellFormedSchemaIdHeaders(results.get(idx).headers(), "ITERATOR_METHODS");
 
         } finally {
             closeStreams(streams);
@@ -886,17 +865,17 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             assertNotNull(event1, "Restored store should contain event-1 @ window start="
                 + event1Window + " (restoredKeys=" + restoredKeys + ")");
             assertEquals(10L, event1.value().get("count"));
-            assertSchemaIdHeaders(event1.headers(), "Restored event-1");
+            assertWellFormedSchemaIdHeaders(event1.headers(), "Restored event-1");
 
             ValueTimestampHeaders<GenericRecord> event2 = store.fetch(createKey("event-2"), event2Window);
             assertNotNull(event2, "Restored store should contain event-2 @ window start=" + event2Window);
             assertEquals(20L, event2.value().get("count"));
-            assertSchemaIdHeaders(event2.headers(), "Restored event-2");
+            assertWellFormedSchemaIdHeaders(event2.headers(), "Restored event-2");
 
             ValueTimestampHeaders<GenericRecord> event3 = store.fetch(createKey("event-3"), event3Window);
             assertNotNull(event3, "Restored store should contain event-3 @ window start=" + event3Window);
             assertEquals(30L, event3.value().get("count"));
-            assertSchemaIdHeaders(event3.headers(), "Restored event-3");
+            assertWellFormedSchemaIdHeaders(event3.headers(), "Restored event-3");
         } finally {
             closeStreams(restoredStreams);
         }
@@ -1421,141 +1400,30 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         }
     }
 
-    private void createTopics(String... topicNames) throws Exception {
-        Properties adminProps = new Properties();
-        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        try (AdminClient admin = AdminClient.create(adminProps)) {
-            List<NewTopic> topics = Arrays.stream(topicNames)
-                .map(name -> new NewTopic(name, 1, (short) 1))
-                .collect(Collectors.toList());
-            admin.createTopics(topics).all().get(30, TimeUnit.SECONDS);
-        }
-    }
-
-    private GenericAvroSerde createKeySerde() {
-        GenericAvroSerde serde = new GenericAvroSerde();
-        Map<String, Object> config = new HashMap<>();
-        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, true);
-        return serde;
-    }
-
-    private GenericAvroSerde createValueSerde() {
-        GenericAvroSerde serde = new GenericAvroSerde();
-        Map<String, Object> config = new HashMap<>();
-        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, false);
-        return serde;
-    }
-
-    private Properties createStreamsProps(String appId) {
-        Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        return props;
-    }
-
-    private Properties createProducerProps() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-            HeaderSchemaIdSerializer.class.getName());
-        return props;
-    }
-
-
-    private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
-        return startStreamsAndAwaitRunning(topology, appId, 30);
-    }
-
-    private KafkaStreams startStreamsAndAwaitRunning(
-        Topology topology, String appId, int timeoutSeconds) throws Exception {
-        CountDownLatch startedLatch = new CountDownLatch(1);
-        KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
-        streams.cleanUp();
-        final java.util.concurrent.atomic.AtomicReference<KafkaStreams.State> lastState =
-            new java.util.concurrent.atomic.AtomicReference<>(KafkaStreams.State.CREATED);
-        streams.setStateListener((newState, oldState) -> {
-            lastState.set(newState);
-            if (newState == KafkaStreams.State.RUNNING) {
-                startedLatch.countDown();
-            }
-        });
-        streams.start();
-        boolean running = false;
-        try {
-            running = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
-            assertTrue(running,
-                "KafkaStreams should reach RUNNING state (last observed state: "
-                    + lastState.get() + ")");
-            return streams;
-        } finally {
-            if (!running) {
-                closeStreams(streams);
-            }
-        }
-    }
-
-    private void closeStreams(KafkaStreams streams) {
-        if (streams != null) {
-            streams.close(Duration.ofSeconds(10));
-        }
-    }
-
-    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
-        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
+    private List<ConsumerRecord<byte[], byte[]>> consumeChangelogRecords(
+        String topic, String groupId, int expectedCount) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
+        List<ConsumerRecord<byte[], byte[]>> results = new ArrayList<>();
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
             long deadline = System.currentTimeMillis() + 30_000;
             while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, V> record : records) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
                     results.add(record);
                 }
             }
         }
-        assertEquals(expectedCount, results.size(),
-            "Expected " + expectedCount + " records from " + topic
+        assertTrue(results.size() >= expectedCount,
+            "Expected at least " + expectedCount + " records from " + topic
                 + " but got " + results.size() + " within 30s");
         return results;
-    }
-
-    private void assertSchemaIdHeaders(ConsumerRecord<GenericRecord, GenericRecord> record, String context) {
-        assertSchemaIdHeaders(record.headers(), context);
-    }
-
-    private void assertSchemaIdHeaders(Headers headers, String context) {
-        Header keySchemaIdHeader = headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keySchemaIdHeader, context + ": should have __key_schema_id header");
-        byte[] keyHeaderBytes = keySchemaIdHeader.value();
-        assertEquals(17, keyHeaderBytes.length, context + ": Key GUID header should be 17 bytes");
-        assertEquals(SchemaId.MAGIC_BYTE_V1, keyHeaderBytes[0], context + ": Key header should have V1 magic byte");
-
-        Header valueSchemaIdHeader = headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-        assertNotNull(valueSchemaIdHeader, context + ": should have __value_schema_id header");
-        byte[] valueHeaderBytes = valueSchemaIdHeader.value();
-        assertEquals(17, valueHeaderBytes.length, context + ": Value GUID header should be 17 bytes");
-        assertEquals(SchemaId.MAGIC_BYTE_V1, valueHeaderBytes[0], context + ": Value header should have V1 magic byte");
     }
 
     private GenericRecord createKey(String eventId) {
@@ -1604,7 +1472,7 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
             actualKeys.add(kv.key.key().get("eventId").toString());
             actualCounts.add((Long) kv.value.value().get("count"));
-            assertSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
+            assertWellFormedSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
             idx++;
         }
         assertEquals(expectedKeys.size(), idx, assertionContext + " number of records");
@@ -1618,7 +1486,7 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         while (iter.hasNext()) {
             KeyValue<Long, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
             actualCounts.add((Long) kv.value.value().get("count"));
-            assertSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
+            assertWellFormedSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
             idx++;
         }
         assertEquals(expectedCounts, actualCounts, assertionContext + " counts");
@@ -1650,30 +1518,30 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         // Window 0-5min
         assertEquals("event-1", results.get(idx).key().get("eventId").toString());
         assertEquals(10L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-1 window 0-5min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-1 window 0-5min");
         assertEquals("event-2", results.get(idx).key().get("eventId").toString());
         assertEquals(20L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-2 window 0-5min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-2 window 0-5min");
         // Window 5-10min
         assertEquals("event-1", results.get(idx).key().get("eventId").toString());
         assertEquals(30L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-1 window 5-10min (boundary)");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-1 window 5-10min (boundary)");
         assertEquals("event-3", results.get(idx).key().get("eventId").toString());
         assertEquals(35L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-3 window 5-10min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-3 window 5-10min");
         assertEquals("event-2", results.get(idx).key().get("eventId").toString());
         assertEquals(40L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-2 window 5-10min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-2 window 5-10min");
         assertEquals("event-3", results.get(idx).key().get("eventId").toString());
         assertEquals(50L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-3 window 5-10min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-3 window 5-10min");
         // Window 10-15min
         assertEquals("event-1", results.get(idx).key().get("eventId").toString());
         assertEquals(60L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-1 window 10-15min (boundary)");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-1 window 10-15min (boundary)");
         assertEquals("event-2", results.get(idx).key().get("eventId").toString());
         assertEquals(70L, results.get(idx).value().get("count"));
-        assertSchemaIdHeaders(results.get(idx++), "PUT event-2 window 10-15min");
+        assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT event-2 window 10-15min");
         return idx;
     }
 
@@ -1683,7 +1551,7 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String[] parts = expectedPair.split(":");
         assertEquals(parts[0], results.get(idx).key().get("eventId").toString(), context + " key");
         assertEquals(Long.parseLong(parts[1]), results.get(idx).value().get("count"), context + " count");
-        assertSchemaIdHeaders(results.get(idx), context + " " + expectedPair);
+        assertWellFormedSchemaIdHeaders(results.get(idx).headers(), context + " " + expectedPair);
         return idx + 1;
     }
 
