@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class LogicalTypeToDdlConverterTest {
@@ -39,16 +40,21 @@ class LogicalTypeToDdlConverterTest {
     return visitor.toLogicalType();
   }
 
-  /** Round-trip: emit, re-parse, compare schemas/named-types. */
+  /**
+   * Round-trip: assert the DDL projection is stable across {@code emit -> parse -> emit}.
+   *
+   * <p>This is idempotence rather than {@code LogicalType} equality on purpose: a leaf named root
+   * canonicalizes on parse (a {@code NAMED_TYPE_REF} root + {@code namedTypes} entry unwraps to a
+   * bare {@code STRUCT}/{@code ENUM} root carrying {@link LogicalType#getName()}), so the parsed
+   * {@code LogicalType} may differ in shape from an original built the older way while representing
+   * the same schema. DDL-string stability still catches real losses — a dropped root name, for
+   * instance, would re-emit as an anonymous {@code TYPE STRUCT(...)} and fail here.
+   */
   private static void assertRoundTrip(LogicalType original) {
     String ddl = LogicalTypeToDdlConverter.toDdl(original);
-    LogicalType parsed = parse(ddl);
-    assertEquals(original.getNamespace(), parsed.getNamespace(),
-        "namespace should round-trip\nDDL:\n" + ddl);
-    assertEquals(original.getRootSchema(), parsed.getRootSchema(),
-        "rootSchema should round-trip\nDDL:\n" + ddl);
-    assertEquals(original.getNamedTypes(), parsed.getNamedTypes(),
-        "namedTypes should round-trip\nDDL:\n" + ddl);
+    String reemitted = LogicalTypeToDdlConverter.toDdl(parse(ddl));
+    assertEquals(ddl, reemitted,
+        "DDL should be stable across emit -> parse -> emit\nDDL:\n" + ddl);
   }
 
   // -----------------------------------------------------------------------
@@ -158,12 +164,19 @@ class LogicalTypeToDdlConverterTest {
   @Test
   void declareNamespace() {
     Schema struct = Schema.createStruct(Arrays.asList(
-        new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)));
+        new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)))
+        .setNullable(false);
+    // Canonical shape for a leaf named root: bare STRUCT root carrying name + namespace,
+    // no namedTypes entry (this is what parsing the DDL back yields).
     LogicalType lt = new LogicalType(
+        "Row",
         "com.example",
-        Schema.createNamedTypeRef("com.example.Row").setNullable(false),
-        Map.of("com.example.Row", struct),
+        struct,
+        Map.of(),
+        Set.of(),
+        Map.of(),
         List.of(),
+        Map.of(),
         Map.of());
     assertRoundTrip(lt);
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
@@ -286,18 +299,45 @@ class LogicalTypeToDdlConverterTest {
   }
 
   @Test
-  void explicitRegisterEmittedWhenSugarWouldDiffer() {
-    // Root is the local type but NULLABLE — sugar would produce NOT NULL,
-    // so we MUST emit explicit TYPE to preserve nullability.
+  void namedRootNullabilityIsPreserved() {
+    // A leaf named root canonicalizes to a bare STRUCT/ENUM carrying a name. A bare named
+    // declaration re-parses under sugar as NOT NULL (ambient), so to keep a *nullable* root
+    // lossless the converter forces an explicit trailing `TYPE <name>` (no NOT NULL). A NOT NULL
+    // named root still elides TYPE (sugar re-infers it NOT NULL). Both round-trip stably.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)));
     LogicalType lt = new LogicalType(
-        Schema.createNamedTypeRef("Row"),  // nullable
-        Map.of("Row", struct));
+        "Row",
+        null,
+        struct,  // nullable (Schema default)
+        Map.of(),
+        Set.of(),
+        Map.of(),
+        List.of(),
+        Map.of(),
+        Map.of());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("TYPE"),
-        "nullable root should emit explicit TYPE, got:\n" + ddl);
+    assertTrue(ddl.contains("TYPE `Row`;"),
+        "nullable named root should force an explicit nullable TYPE, got:\n" + ddl);
+    assertTrue(!ddl.contains("TYPE `Row` NOT NULL"),
+        "nullable named root's TYPE must not carry NOT NULL, got:\n" + ddl);
+    // Nullability survives the round-trip.
+    assertTrue(parse(ddl).getRootSchema().isNullable(),
+        "re-parsed nullable named root should stay nullable, got:\n" + ddl);
     assertRoundTrip(lt);
+
+    // A NOT NULL named root elides TYPE (sugar re-infers NOT NULL — nothing to preserve).
+    Schema notNullStruct = Schema.createStruct(Arrays.asList(
+        new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)))
+        .setNullable(false);
+    LogicalType notNull = new LogicalType(
+        "Row", null, notNullStruct, Map.of(), Set.of(), Map.of(), List.of(), Map.of(), Map.of());
+    String notNullDdl = LogicalTypeToDdlConverter.toDdl(notNull);
+    assertTrue(!notNullDdl.contains("TYPE"),
+        "NOT NULL named root should elide TYPE, got:\n" + notNullDdl);
+    assertTrue(!parse(notNullDdl).getRootSchema().isNullable(),
+        "re-parsed NOT NULL named root should stay NOT NULL, got:\n" + notNullDdl);
+    assertRoundTrip(notNull);
   }
 
   @Test
@@ -318,5 +358,26 @@ class LogicalTypeToDdlConverterTest {
     Schema.Field a = parsed.getRootSchema().getField("a");
     assertEquals(Integer.valueOf(42), a.getFieldNumber());
     assertEquals(Arrays.asList("a_old", "a_older"), a.getAliases());
+  }
+
+  @Test
+  void namedInlineRootRoundTripsThroughDdl() {
+    // A named inline root (bare STRUCT + LogicalType.name) round-trips: it emits as a named
+    // declaration and re-parses to the SAME bare-STRUCT root carrying the name (the visitor unwraps
+    // a leaf named root back to bare + name).
+    Schema root = Schema.createStruct(Arrays.asList(
+        new Schema.Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0)))
+        .setNullable(false);
+    LogicalType original = new LogicalType("Order", null, root,
+        Map.of(), Set.of(), Map.of(), List.of(), Map.of(), Map.of());
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.contains("STRUCT Order ("), ddl);
+
+    LogicalType parsed = parse(ddl);
+    assertEquals(Schema.Type.STRUCT, parsed.getRootSchema().getType());
+    assertEquals("Order", parsed.getName());
+    assertEquals(original.getRootSchema(), parsed.getRootSchema());
+    assertTrue(parsed.getNamedTypes().isEmpty(), parsed.getNamedTypes().keySet().toString());
   }
 }

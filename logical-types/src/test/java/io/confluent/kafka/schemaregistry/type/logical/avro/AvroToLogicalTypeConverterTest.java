@@ -108,16 +108,16 @@ class AvroToLogicalTypeConverterTest {
 
   @Test
   void testEnumConversion() {
-    // Unmarked Avro enum is recovered as a NAMED_TYPE_REF; the actual ENUM
-    // body lives in localNamedTypes keyed by the Avro full name.
+    // A leaf named enum root is unwrapped to a bare ENUM body carrying its name on
+    // LogicalType.name (the canonical named-root shape), not a NAMED_TYPE_REF into namedTypes.
     org.apache.avro.Schema enumSchema = SchemaBuilder.enumeration("Color")
         .symbols("RED", "GREEN", "BLUE");
     io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
         AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(enumSchema));
-    assertEquals(Schema.Type.NAMED_TYPE_REF, lt.getRootSchema().getType());
-    assertEquals("Color", lt.getRootSchema().getQualifiedName());
-    Schema named = lt.getNamedTypes().get("Color");
-    assertEquals(Schema.Type.ENUM, named.getType());
+    assertEquals(Schema.Type.ENUM, lt.getRootSchema().getType());
+    assertEquals("Color", lt.getName());
+    assertTrue(lt.getNamedTypes().isEmpty());
+    Schema named = lt.getRootSchema();
     assertEquals(3, named.getEnumValues().size());
     assertEquals("RED", named.getEnumValues().get(0).getSymbol());
     assertEquals("GREEN", named.getEnumValues().get(1).getSymbol());
@@ -233,7 +233,7 @@ class AvroToLogicalTypeConverterTest {
     org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
 
     Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
-        .getNamedTypes().get("M");
+        .getRootSchema();
 
     assertThat(struct.getField("a").getAliases())
         .containsExactlyInAnyOrder("a_old", "a_older");
@@ -249,7 +249,7 @@ class AvroToLogicalTypeConverterTest {
     org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
 
     Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
-        .getNamedTypes().get("M");
+        .getRootSchema();
 
     assertThat(struct.getField("a").getAliases()).containsExactly("a_old");
   }
