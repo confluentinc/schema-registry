@@ -657,4 +657,21 @@ class ProtoToLogicalTypeConverterTest {
     // The root (Bar) is declared before the peer (Foo) so first-wins picks it.
     assertThat(ddl.indexOf("STRUCT Bar (")).isLessThan(ddl.indexOf("STRUCT Foo ("));
   }
+
+  @Test
+  void namedInlineRootForcedWithExplicitTypeWhenPeerReferencesIt() {
+    // Root Order (first message) is referenced by peer Wrapper. First-wins inference would drop
+    // Order (it is referenced) and pick Wrapper, so the writer must force the root with an explicit
+    // trailing TYPE, preserving its NOT NULL.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Order {\n  string id = 1;\n}\n"
+        + "message Wrapper {\n  Order order = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isEqualTo("Order");
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).contains("TYPE Order NOT NULL;");
+  }
 }

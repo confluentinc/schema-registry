@@ -122,9 +122,21 @@ public final class LogicalTypeToDdlConverter {
         printCreateType(name, lt.getNamedTypes().get(name));
       }
 
-      // Trailing root-registration `TYPE <typeExpr>` for a root not emitted as a named declaration,
-      // omitted when the visitor's auto-detect would produce the same root from the declarations.
-      if (!rootIsNamedInline && !sugarWouldInferRoot()) {
+      // Root registration.
+      if (rootIsNamedInline) {
+        // Inference selects the inline root only when no peer references it — a referenced type is
+        // dropped from the unreferenced set, so inference would pick a peer instead. When a peer
+        // references the root, force it with an explicit trailing TYPE, preserving its nullability.
+        if (inlineRootReferencedByPeer()) {
+          sb.append("TYPE ").append(qualifiedName(lt.getName()));
+          if (!root.isNullable()) {
+            sb.append(" NOT NULL");
+          }
+          sb.append(";\n");
+        }
+      } else if (!sugarWouldInferRoot()) {
+        // Trailing `TYPE <typeExpr>` for a root not emitted as a named declaration, omitted when
+        // the visitor's auto-detect would produce the same root from the declarations alone.
         sb.append("TYPE ").append(typeExpr(root)).append(";\n");
       }
 
@@ -436,6 +448,32 @@ public final class LogicalTypeToDdlConverter {
       }
       String ns = lt.getNamespace();
       return ns != null && lt.getNamedTypes().containsKey(ns + "." + rootName);
+    }
+
+    /**
+     * True if any local named type references the inline root (by its raw or namespace-qualified
+     * name). Such a reference removes the root from the visitor's unreferenced-root set, so
+     * inference would pick a peer instead and an explicit trailing TYPE is required.
+     */
+    private boolean inlineRootReferencedByPeer() {
+      Set<String> candidates = new LinkedHashSet<>();
+      candidates.add(lt.getName());
+      if (lt.getNamespace() != null) {
+        candidates.add(lt.getNamespace() + "." + lt.getName());
+      }
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (lt.getExternalTypes().contains(e.getKey())) {
+          continue; // externals are inferred from usage; they don't affect root inference
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        LogicalType.collectNamedRefs(e.getValue(), refs);
+        for (String candidate : candidates) {
+          if (refs.contains(candidate)) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
     private boolean sugarWouldInferRoot() {
