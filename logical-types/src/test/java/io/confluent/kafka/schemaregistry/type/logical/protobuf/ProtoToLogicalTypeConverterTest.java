@@ -28,6 +28,7 @@ import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -518,5 +520,99 @@ class ProtoToLogicalTypeConverterTest {
     // References pass through unchanged.
     assertEquals(1, lt.getReferences().size());
     assertEquals("leaf.proto", lt.getReferences().get(0).getName());
+  }
+
+  @Test
+  void testFieldNumberPopulatedFromProto() throws Exception {
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(3).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(7).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema result = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+
+    assertThat(result.getField("a").getFieldNumber()).isEqualTo(3);
+    assertThat(result.getField("b").getFieldNumber()).isEqualTo(7);
+  }
+
+  @Test
+  void testFieldNumbersRoundTripPreservesNonSequential() throws Exception {
+    // Non-sequential, non-positional numbers: the round-trip must preserve them
+    // rather than renumbering positionally (the field-number fidelity fix).
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(3).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(7).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("c").setNumber(100).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(3);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(7);
+    assertThat(out.findFieldByName("c").getNumber()).isEqualTo(100);
+  }
+
+  @Test
+  void testOneofBranchAndRegularFieldNumbersRoundTrip() throws Exception {
+    // Numbers are out of sequence (oneof members 10/20 declared before regular field 3), so the
+    // reader records all of them — regular field and oneof branches alike — and the writer restores
+    // each via the native slot. Regulars are laid out before oneof members, so the regular field's
+    // descriptor index differs from its emission position; the all-or-nothing recording is immune
+    // to that skew.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addOneofDecl(OneofDescriptorProto.newBuilder().setName("o"))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(10).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(20).setType(Type.TYPE_INT32)
+            .setLabel(Label.LABEL_OPTIONAL).setOneofIndex(0))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("c").setNumber(3).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    assertThat(srlt.getField("c").getFieldNumber()).isEqualTo(3);
+
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+    assertThat(out.findFieldByName("c").getNumber()).isEqualTo(3);
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(10);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(20);
+  }
+
+  @Test
+  void testOutOfOrderRegularFieldNumbersRoundTrip() throws Exception {
+    // Regression for the mixed omit/record hole: with per-field omission, b (number 2 == its
+    // position + 1) was omitted while a (5) was recorded, and the writer's positional fallback then
+    // handed b the number 1. All-or-nothing recording keeps both.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("M")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("a").setNumber(5).setType(Type.TYPE_INT32))
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("b").setNumber(2).setType(Type.TYPE_INT32))
+        .build();
+
+    Schema srlt = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(srlt), "M").toDescriptor();
+
+    assertThat(out.findFieldByName("a").getNumber()).isEqualTo(5);
+    assertThat(out.findFieldByName("b").getNumber()).isEqualTo(2);
   }
 }

@@ -277,6 +277,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -289,13 +291,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Create association operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Create association operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -367,6 +370,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -379,13 +384,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Create or update association operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Create or update association operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create or update association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -457,13 +463,14 @@ public class AssociationsResource {
           context, dryRun, request, headerProperties);
       asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Mutate associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Mutate associations operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding mutate associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -529,13 +536,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Delete associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Delete associations operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding delete associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {

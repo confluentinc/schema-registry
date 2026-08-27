@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
@@ -172,13 +173,110 @@ public class TestVariantJsonConverter {
     Assert.assertTrue(node.textValue().contains("2025-04-17"));
   }
 
+  /**
+   * A microsecond timestamp beyond 2262 must not wrap. {@code Instant.ofEpochSecond(0,
+   * micros * 1000)} overflows a long past 9223372036854775 micros
+   * (2262-04-11T23:47:16.854775Z), and used to render year 3000 as a plausible-looking date in
+   * the past instead. The fix splits into whole seconds before scaling the remainder, which is
+   * what the zone-less arm always did - hence only TIMESTAMP_TZ ever had the bug.
+   */
+  @Test
+  public void testToJsonTimestampBeyond2262DoesNotWrap() {
+    long micros = 32_503_680_000_000_000L; // 3000-01-01T00:00:00Z
+    Assert.assertEquals("\"3000-01-01T00:00:00Z\"", toJsonString(b -> b.appendTimestampTz(micros)));
+    Assert.assertEquals("\"3000-01-01T00:00:00.123456Z\"",
+        toJsonString(b -> b.appendTimestampTz(micros + 123_456)));
+    Assert.assertEquals("\"3000-01-01T00:00:00\"", toJsonString(b -> b.appendTimestampNtz(micros)));
+    Assert.assertEquals("\"3000-01-01T00:00:00.123456\"",
+        toJsonString(b -> b.appendTimestampNtz(micros + 123_456)));
+  }
+
+  /**
+   * The renderable range is 0001-01-01T00:00:00 through 9999-12-31T23:59:59.999999 - RFC 3339's
+   * four-digit year. Both boundaries render; one microsecond beyond either end is refused rather
+   * than rendered with ISO-8601's expanded year ({@code +10000-01-01T00:00:00Z}), which is not
+   * RFC 3339 and would not parse back. Every other client enforces the same bound.
+   */
+  @Test
+  public void testToJsonTimestampRangeBoundaries() {
+    long min = -62135596800000000L; // 0001-01-01T00:00:00
+    long max = 253402300799999999L; // 9999-12-31T23:59:59.999999
+    Assert.assertEquals("\"0001-01-01T00:00:00Z\"", toJsonString(b -> b.appendTimestampTz(min)));
+    Assert.assertEquals("\"9999-12-31T23:59:59.999999Z\"",
+        toJsonString(b -> b.appendTimestampTz(max)));
+    Assert.assertEquals("\"0001-01-01T00:00:00\"", toJsonString(b -> b.appendTimestampNtz(min)));
+    Assert.assertEquals("\"9999-12-31T23:59:59.999999\"",
+        toJsonString(b -> b.appendTimestampNtz(max)));
+
+    for (long outOfRange : new long[] {min - 1, max + 1}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTimestampTz(outOfRange)));
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTimestampNtz(outOfRange)));
+    }
+  }
+
+  /**
+   * The nanosecond-based types need no range check: an int64 of nanoseconds spans only 1677-2262,
+   * inside the renderable range at both ends, so the extremes still render.
+   */
+  @Test
+  public void testToJsonTimestampNanosExtremesRender() {
+    Assert.assertEquals("\"2262-04-11T23:47:16.854775807Z\"",
+        toJsonString(b -> b.appendTimestampNanosTz(Long.MAX_VALUE)));
+    Assert.assertEquals("\"1677-09-21T00:12:43.145224192\"",
+        toJsonString(b -> b.appendTimestampNanosNtz(Long.MIN_VALUE)));
+  }
+
+  /**
+   * DATE renders RFC 3339 {@code full-date}, which requires {@code date-fullyear = 4DIGIT}. A
+   * variant DATE is an int32 of days (roughly +/-5.8 million years), so an expanded or negative
+   * year is reachable; it used to render as {@code +10000-01-01} / {@code -0044-01-01}, neither of
+   * which is a valid full-date, and is now refused.
+   */
+  @Test
+  public void testToJsonDateRangeBoundaries() {
+    int min = -719162; // 0001-01-01
+    int max = 2932896; // 9999-12-31
+    Assert.assertEquals("\"0001-01-01\"", toJsonString(b -> b.appendDate(min)));
+    Assert.assertEquals("\"9999-12-31\"", toJsonString(b -> b.appendDate(max)));
+    for (int outOfRange : new int[] {min - 1, max + 1, 4_000_000, -1_000_000}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendDate(outOfRange)));
+    }
+  }
+
+  /**
+   * TIME renders RFC 3339 {@code partial-time}, whose {@code time-hour = 2DIGIT} is 00-23. A
+   * variant TIME is an int64 of microseconds since midnight, so a value at or past 24 hours (or
+   * negative) is reachable and has no valid form; it is refused. This also covers the
+   * {@code micros * 1000} overflow, which wrapped for a large enough value.
+   */
+  @Test
+  public void testToJsonTimeRangeBoundaries() {
+    Assert.assertEquals("\"00:00:00\"", toJsonString(b -> b.appendTime(0L)));
+    Assert.assertEquals("\"23:59:59.999999\"", toJsonString(b -> b.appendTime(86_399_999_999L)));
+    // Exactly 24 hours is out of range: "24:00:00" is not a valid time-hour.
+    for (long outOfRange : new long[] {86_400_000_000L, -1L, Long.MAX_VALUE, Long.MIN_VALUE}) {
+      Assert.assertThrows(IllegalArgumentException.class,
+          () -> toJsonString(b -> b.appendTime(outOfRange)));
+    }
+  }
+
+  private static String toJsonString(java.util.function.Consumer<VariantBuilder> append) {
+    VariantBuilder builder = new VariantBuilder();
+    append.accept(builder);
+    return VariantUtils.toJsonString(builder.build());
+  }
+
   @Test
   public void testToJsonTime() {
     VariantBuilder builder = new VariantBuilder();
     long micros = LocalTime.of(14, 30, 0).toNanoOfDay() / 1000;
     builder.appendTime(micros);
     JsonNode node = VariantUtils.toJsonNode(builder.build());
-    Assert.assertEquals("14:30", node.textValue());
+    // Seconds are always emitted (cross-language contract), unlike LocalTime.toString().
+    Assert.assertEquals("14:30:00", node.textValue());
   }
 
   // -- toJsonNode: binary and UUID --
@@ -339,6 +437,110 @@ public class TestVariantJsonConverter {
     builder.endObject();
     String json = VariantUtils.toJsonString(builder.build());
     Assert.assertEquals("{\"a\":1}", json);
+  }
+
+  @Test
+  public void testToJsonStringDecimalIsPlain() {
+    // Decimals render in fixed-point (toPlainString) form, never scientific notation.
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendDecimal(new BigDecimal("0.0000001"));
+    Assert.assertEquals("0.0000001", VariantUtils.toJsonString(builder.build()));
+  }
+
+  // -- non-finite doubles/floats: bareword round-trip --
+
+  @Test
+  public void testFromJsonNonFiniteBarewordRoundTrip() {
+    // Non-finite values parse from and serialize back to BAREWORDS (no quotes) — a
+    // deliberate divergence from Spark, which quotes them. The round-trip is symmetric.
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(VariantUtils.fromJson("NaN")));
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("Infinity")));
+    Assert.assertEquals(
+        "-Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("-Infinity")));
+  }
+
+  @Test
+  public void testFromJsonOverflowBecomesInfinity() {
+    // A magnitude too large for double overflows to Infinity and serializes as a bareword.
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(VariantUtils.fromJson("1e400")));
+  }
+
+  @Test
+  public void testFromJsonNanIsDouble() {
+    Variant variant = VariantUtils.fromJson("NaN");
+    Assert.assertEquals(Variant.Type.DOUBLE, variant.getType());
+    Assert.assertTrue(Double.isNaN(variant.getDouble()));
+  }
+
+  @Test
+  public void testBuilderNonFiniteDoubleBareword() {
+    // The builder accepts non-finite doubles (no guard), and toJsonString emits a bareword.
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendDouble(Double.NaN);
+    Variant variant = builder.build();
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(variant));
+
+    builder = new VariantBuilder();
+    builder.appendDouble(Double.POSITIVE_INFINITY);
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendDouble(Double.NEGATIVE_INFINITY);
+    Assert.assertEquals("-Infinity", VariantUtils.toJsonString(builder.build()));
+  }
+
+  @Test
+  public void testBuilderNonFiniteFloatBareword() {
+    VariantBuilder builder = new VariantBuilder();
+    builder.appendFloat(Float.NaN);
+    Assert.assertEquals("NaN", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendFloat(Float.POSITIVE_INFINITY);
+    Assert.assertEquals("Infinity", VariantUtils.toJsonString(builder.build()));
+
+    builder = new VariantBuilder();
+    builder.appendFloat(Float.NEGATIVE_INFINITY);
+    Assert.assertEquals("-Infinity", VariantUtils.toJsonString(builder.build()));
+  }
+
+  @Test
+  public void testFromJsonEmptyInputThrowsIllegalArgument() {
+    // readTree returns null for empty/whitespace-only input; fromJson must surface that as
+    // IllegalArgumentException (its documented contract) rather than a NullPointerException,
+    // so the CEL soft-failure handler (variants.tryParseJson) can catch it.
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson(""));
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson("   "));
+    Assert.assertThrows(IllegalArgumentException.class, () -> VariantUtils.fromJson("\t\n"));
+  }
+
+  @Test
+  public void testToJsonTemporalUsesAsciiDigitsRegardlessOfLocale() {
+    // The temporal formatters must emit ASCII digits even when the default locale uses
+    // non-ASCII native digits (here Arabic-Indic, forced via the -u-nu-arab extension).
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag("ar-EG-u-nu-arab"));
+      VariantBuilder builder = new VariantBuilder();
+      long micros =
+          LocalDateTime.of(2020, 1, 2, 3, 4, 5).toEpochSecond(ZoneOffset.UTC) * 1_000_000;
+      builder.appendTimestampNtz(micros);
+      Assert.assertEquals(
+          "2020-01-02T03:04:05", VariantUtils.toJsonNode(builder.build()).textValue());
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  @Test
+  public void testToJsonTimestampNtzAlwaysEmitsSeconds() {
+    // Midnight NTZ still shows the :00 seconds field (cross-language contract), unlike
+    // LocalDateTime.toString() which would omit it.
+    VariantBuilder builder = new VariantBuilder();
+    long micros = LocalDateTime.of(2020, 1, 1, 0, 0, 0).toEpochSecond(ZoneOffset.UTC) * 1_000_000;
+    builder.appendTimestampNtz(micros);
+    Assert.assertEquals(
+        "2020-01-01T00:00:00", VariantUtils.toJsonNode(builder.build()).textValue());
   }
 
   // -- round-trip: JsonNode → Variant → JsonNode --

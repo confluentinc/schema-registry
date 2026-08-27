@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules.cel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -60,6 +61,7 @@ public final class CelValidator implements ValidationRuleExecutor {
 
   /** Used for POJO/JsonNode → Map conversion on the JSON validation path. */
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
+      .registerModule(new JavaTimeModule())
       .registerModule(new ProtobufModule());
 
   private final LoadingCache<ValidationKey, CelRuntime.Program> cache;
@@ -111,6 +113,7 @@ public final class CelValidator implements ValidationRuleExecutor {
     }
     ScriptType scriptType;
     CelType thisType;
+    Schema avroSchemaHint = null;
     if (schema instanceof Descriptor) {
       scriptType = ScriptType.PROTOBUF;
       // Walker passes the field's message-type descriptor for nested-message values and
@@ -151,7 +154,11 @@ public final class CelValidator implements ValidationRuleExecutor {
         thisType = CelUtils.findCelTypeForAvroSchema(valueSchema);
         schema = valueSchema;
       } else {
-        thisType = CelUtils.findCelTypeForAvroSchema((Schema) schema);
+        // A primitive field value: the walker's hint is the only place the field's
+        // logical type (and so a timestamp's unit) is recorded, so present the value
+        // against it. Records take the same path per field inside toCelValue.
+        avroSchemaHint = (Schema) schema;
+        thisType = CelUtils.findCelTypeForAvroSchema(avroSchemaHint);
       }
     } else if (schema instanceof Class<?>) {
       scriptType = ScriptType.JSON;
@@ -165,9 +172,13 @@ public final class CelValidator implements ValidationRuleExecutor {
     ValidationKey key = new ValidationKey(rule.getExpr(), scriptType, thisType, schema);
     Object celValue;
     try {
-      celValue = scriptType == ScriptType.JSON
-          ? CelUtils.toCelValueForJson(value, JSON_MAPPER)
-          : CelUtils.toCelValue(value);
+      if (scriptType == ScriptType.JSON) {
+        celValue = CelUtils.toCelValueForJson(value, JSON_MAPPER);
+      } else if (avroSchemaHint != null) {
+        celValue = CelUtils.toCelValue(value, avroSchemaHint);
+      } else {
+        celValue = CelUtils.toCelValue(value);
+      }
     } catch (IllegalArgumentException e) {
       throw new RuleException(
           "Could not convert value for validation rule '"

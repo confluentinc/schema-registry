@@ -20,12 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
 import java.time.Duration;
@@ -36,21 +31,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -58,7 +43,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
@@ -84,7 +68,7 @@ import org.junit.jupiter.api.Test;
  * work correctly with header-based schema ID transport.
  * All store operations are performed inside a processor.
  */
-public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
+public class SessionStoreWithHeadersIntegrationTest extends HeadersIQv2IntegrationTestBase {
 
     private static final String KEY_SCHEMA_JSON =
         "{"
@@ -110,10 +94,6 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
     private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
     private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
 
-    public SessionStoreWithHeadersIntegrationTest() {
-        super(1, true);
-    }
-
     @Test
     public void shouldPerformPutAndFetchSingleKeyOps() throws Exception {
         String inputTopic = "session-fetch-input";
@@ -121,10 +101,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String storeName = "session-fetch-store";
         String appId = "session-fetch-integration-test";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), inputTopic, outputTopic);
+        createTopics(inputTopic, outputTopic);
 
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
 
         KafkaStreams streams = null;
         try {
@@ -135,42 +115,42 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             long baseTime = System.currentTimeMillis();
 
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
 
                 produceInitialSessionPuts(producer, inputTopic, baseTime);
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE"))).get();
+                    createKey("user1"), createValue(0L, "FETCH_SESSION_SINGLE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user4"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE"))).get();
+                    createKey("user4"), createValue(0L, "FETCH_SESSION_SINGLE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE_NONEXISTENT"))).get();
+                    createKey("user99"), createValue(0L, "FETCH_SESSION_SINGLE_NONEXISTENT"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_SINGLE_KEY_FIRST_TWO"))).get();
+                    createKey("user1"), createValue(0L, "FIND_SESSIONS_SINGLE_KEY_FIRST_TWO"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_SINGLE_KEY_FIRST_THREE"))).get();
+                    createKey("user1"), createValue(0L, "FIND_SESSIONS_SINGLE_KEY_FIRST_THREE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_SINGLE_KEY_ALL"))).get();
+                    createKey("user1"), createValue(0L, "FIND_SESSIONS_SINGLE_KEY_ALL"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_SINGLE_KEY_NONE"))).get();
+                    createKey("user1"), createValue(0L, "FIND_SESSIONS_SINGLE_KEY_NONE"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SINGLE_KEY"))).get();
+                    createKey("user2"), createValue(0L, "FETCH_SINGLE_KEY"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user5"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SINGLE_KEY"))).get();
+                    createKey("user5"), createValue(0L, "FETCH_SINGLE_KEY"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SINGLE_KEY_NONEXISTENT"))).get();
+                    createKey("user99"), createValue(0L, "FETCH_SINGLE_KEY_NONEXISTENT"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FETCH_SINGLE_KEY"))).get();
+                    createKey("user1"), createValue(0L, "BACKWARD_FETCH_SINGLE_KEY"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FETCH_SINGLE_KEY_NONEXISTENT"))).get();
+                    createKey("user99"), createValue(0L, "BACKWARD_FETCH_SINGLE_KEY_NONEXISTENT"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY"))).get();
+                    createKey("user2"), createValue(0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY_NONEXISTENT"))).get();
+                    createKey("user99"), createValue(0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY_NONEXISTENT"))).get();
 
                 producer.flush();
             }
@@ -178,18 +158,18 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // 12 PUT + 2 FETCH_SESSION_SINGLE + (2+3+4) FIND_SESSIONS_SINGLE_KEY + (2+1) FETCH_SINGLE_KEY
             // + 4 BACKWARD_FETCH_SINGLE_KEY + 2 BACKWARD_FIND_SESSIONS_SINGLE_KEY = 32
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, outputTopic, "session-fetch-consumer", 32, KafkaAvroDeserializer.class);
+                consumeRecords(outputTopic, "session-fetch-consumer", 32, KafkaAvroDeserializer.class);
             assertEquals(32, results.size(), "Should have 32 output records");
 
             int idx = verifyInitialSessionPuts(results, 0);
 
             assertEquals("user1", results.get(idx).key().get("userId").toString());
             assertEquals(103L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "FETCH_SESSION_SINGLE user1");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_SESSION_SINGLE user1");
 
             assertEquals("user4", results.get(idx).key().get("userId").toString());
             assertEquals(400L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "FETCH_SESSION_SINGLE user4");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_SESSION_SINGLE user4");
 
             idx = assertRangeResults(results, idx, new String[]{"user1:100", "user1:101"},
                 "FIND_SESSIONS_SINGLE_KEY_FIRST_TWO user1");
@@ -210,7 +190,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             assertRangeResults(results, idx, new String[]{"user2:202", "user2:201"},
                 "BACKWARD_FIND_SESSIONS_SINGLE_KEY user2");
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
     }
 
@@ -221,10 +201,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String storeName = "session-range-store";
         String appId = "session-range-integration-test";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), inputTopic, outputTopic);
+        createTopics(inputTopic, outputTopic);
 
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
 
         KafkaStreams streams = null;
         try {
@@ -235,44 +215,44 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             long baseTime = System.currentTimeMillis();
 
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
 
                 produceInitialSessionPuts(producer, inputTopic, baseTime);
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_KEY_RANGE_USER2_USER4"))).get();
+                    createKey("trigger"), createValue(0L, "FETCH_KEY_RANGE_USER2_USER4"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_KEY_RANGE_USER5_USER7"))).get();
+                    createKey("trigger"), createValue(0L, "FETCH_KEY_RANGE_USER5_USER7"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_KEY_RANGE_EMPTY"))).get();
+                    createKey("trigger"), createValue(0L, "FETCH_KEY_RANGE_EMPTY"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_KEY_RANGE_USER3_USER5"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_KEY_RANGE_USER3_USER5"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_KEY_RANGE_EMPTY"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_KEY_RANGE_EMPTY"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_TIME_RANGE_ALL"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_TIME_RANGE_ALL"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_TIME_RANGE_PARTIAL"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_TIME_RANGE_PARTIAL"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_TIME_RANGE_EMPTY"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_TIME_RANGE_EMPTY"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FETCH_KEY_RANGE"))).get();
+                    createKey("trigger"), createValue(0L, "BACKWARD_FETCH_KEY_RANGE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FIND_SESSIONS_KEY_RANGE"))).get();
+                    createKey("trigger"), createValue(0L, "BACKWARD_FIND_SESSIONS_KEY_RANGE"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE_INSTANT"))).get();
+                    createKey("user1"), createValue(0L, "FETCH_SESSION_SINGLE_INSTANT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_SINGLE_KEY_INSTANT"))).get();
+                    createKey("user1"), createValue(0L, "FIND_SESSIONS_SINGLE_KEY_INSTANT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FIND_SESSIONS_KEY_RANGE_INSTANT"))).get();
+                    createKey("trigger"), createValue(0L, "FIND_SESSIONS_KEY_RANGE_INSTANT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY_INSTANT"))).get();
+                    createKey("user1"), createValue(0L, "BACKWARD_FIND_SESSIONS_SINGLE_KEY_INSTANT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "BACKWARD_FIND_SESSIONS_KEY_RANGE_INSTANT"))).get();
+                    createKey("trigger"), createValue(0L, "BACKWARD_FIND_SESSIONS_KEY_RANGE_INSTANT"))).get();
 
                 producer.flush();
             }
@@ -281,7 +261,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // + (12+3) FIND_SESSIONS_TIME_RANGE + 12 BACKWARD_FETCH_KEY_RANGE + 12 BACKWARD_FIND_SESSIONS_KEY_RANGE
             // + (1+2+3+3+6) Instant variants = 77
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, outputTopic, "session-range-consumer", 77, KafkaAvroDeserializer.class);
+                consumeRecords(outputTopic, "session-range-consumer", 77, KafkaAvroDeserializer.class);
             assertEquals(77, results.size(), "Should have 77 output records");
 
             int idx = verifyInitialSessionPuts(results, 0);
@@ -333,7 +313,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             assertEquals("user1", results.get(idx).key().get("userId").toString());
             assertEquals(100L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "FETCH_SESSION_SINGLE_INSTANT user1");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_SESSION_SINGLE_INSTANT user1");
 
             idx = assertRangeResults(results, idx, new String[]{"user1:100", "user1:101"},
                 "FIND_SESSIONS_SINGLE_KEY_INSTANT user1");
@@ -345,7 +325,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
                 new String[]{"user7:700", "user6:601", "user5:500", "user4:400", "user3:300", "user2:201"},
                 "BACKWARD_FIND_SESSIONS_KEY_RANGE_INSTANT");
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
     }
 
@@ -356,10 +336,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String storeName = "session-remove-store";
         String appId = "session-remove-integration-test";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), inputTopic, outputTopic);
+        createTopics(inputTopic, outputTopic);
 
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
 
         KafkaStreams streams = null;
         try {
@@ -370,45 +350,45 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             long baseTime = System.currentTimeMillis();
 
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
 
                 produceInitialSessionPuts(producer, inputTopic, baseTime);
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 100000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user3"), createValue(0L, "REMOVE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 250000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user6"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user6"), createValue(0L, "REMOVE"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE_NONEXISTENT"))).get();
+                    createKey("user99"), createValue(0L, "REMOVE_NONEXISTENT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 100000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE_ALREADY_REMOVED"))).get();
+                    createKey("user3"), createValue(0L, "REMOVE_ALREADY_REMOVED"))).get();
 
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "trigger"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_KEY_RANGE_AFTER_REMOVE"))).get();
+                    createKey("trigger"), createValue(0L, "FETCH_KEY_RANGE_AFTER_REMOVE"))).get();
 
                 producer.flush();
             }
 
             // 12 PUT + 2 REMOVE + 3 FETCH_KEY_RANGE_AFTER_REMOVE = 17
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, outputTopic, "session-remove-consumer", 17, KafkaAvroDeserializer.class);
+                consumeRecords(outputTopic, "session-remove-consumer", 17, KafkaAvroDeserializer.class);
             assertEquals(17, results.size(), "Should have 17 output records");
 
             int idx = verifyInitialSessionPuts(results, 0);
 
             assertEquals("user3", results.get(idx).key().get("userId").toString());
             assertEquals(300L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "REMOVE user3");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "REMOVE user3");
 
             assertEquals("user6", results.get(idx).key().get("userId").toString());
             assertEquals(601L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "REMOVE user6");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "REMOVE user6");
 
             assertRangeResults(results, idx,
                 new String[]{"user4:400", "user5:500", "user6:602"},
                 "FETCH_KEY_RANGE user3-user6 after remove");
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
     }
 
@@ -421,10 +401,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String iqv1OutputTopic = "iqv1-session-output";
         String iqv1StoreName = "iqv1-session-store";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), iqv1InputTopic, iqv1OutputTopic);
+        createTopics(iqv1InputTopic, iqv1OutputTopic);
 
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
 
         StreamsBuilder builder = new StreamsBuilder();
         builder
@@ -444,36 +424,36 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             long baseTime = System.currentTimeMillis();
 
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
 
                 // user1: 2 sessions (baseTime and baseTime+500000)
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 10L, "PUT"))).get();
+                    createKey("user1"), createValue(10L, "PUT"))).get();
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime + 500000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 20L, "PUT"))).get();
+                    createKey("user1"), createValue(20L, "PUT"))).get();
 
                 // user2: 1 session
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime + 100000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 30L, "PUT"))).get();
+                    createKey("user2"), createValue(30L, "PUT"))).get();
 
                 // user3: 1 session
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime + 200000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), StoreWithHeadersTestUtils.createValue(valueSchema, 40L, "PUT"))).get();
+                    createKey("user3"), createValue(40L, "PUT"))).get();
 
                 // user4: 1 session (will be removed)
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime + 300000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user4"), StoreWithHeadersTestUtils.createValue(valueSchema, 50L, "PUT"))).get();
+                    createKey("user4"), createValue(50L, "PUT"))).get();
 
                 // Remove user4
                 producer.send(new ProducerRecord<>(iqv1InputTopic, null, baseTime + 300000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user4"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user4"), createValue(0L, "REMOVE"))).get();
 
                 producer.flush();
             }
 
             // Consume outputs: 5 PUTs + 1 REMOVE = 6 records
             List<ConsumerRecord<GenericRecord, GenericRecord>> iqv1Results =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, iqv1OutputTopic, "iqv1-session-consumer", 6, KafkaAvroDeserializer.class);
+                consumeRecords(iqv1OutputTopic, "iqv1-session-consumer", 6, KafkaAvroDeserializer.class);
             assertEquals(6, iqv1Results.size(),
                 "Should have 6 output records before IQv1 verification");
 
@@ -486,11 +466,11 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FETCH user1 - should return 2 sessions
             int user1SessionCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.fetch(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"))) {
+                     store.fetch(createKey("user1"))) {
                 while (iter.hasNext()) {
                     KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = iter.next();
                     assertNotNull(kv.value, "IQv1 fetch user1: value should not be null");
-                    StoreWithHeadersTestUtils.assertSchemaIdHeaders(kv.value.headers(), "IQv1 fetch user1 session " + user1SessionCount);
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 fetch user1 session " + user1SessionCount);
                     user1SessionCount++;
                 }
             }
@@ -499,12 +479,12 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FETCH user2 - should return 1 session
             int user2SessionCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.fetch(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"))) {
+                     store.fetch(createKey("user2"))) {
                 while (iter.hasNext()) {
                     KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = iter.next();
                     assertNotNull(kv.value, "IQv1 fetch user2: value should not be null");
                     assertEquals(30L, kv.value.aggregation().get("count"), "IQv1: user2 count should be 30");
-                    StoreWithHeadersTestUtils.assertSchemaIdHeaders(kv.value.headers(), "IQv1 fetch user2");
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 fetch user2");
                     user2SessionCount++;
                 }
             }
@@ -513,7 +493,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FETCH user4 (removed) - should return no sessions
             int user4SessionCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.fetch(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user4"))) {
+                     store.fetch(createKey("user4"))) {
                 while (iter.hasNext()) {
                     iter.next();
                     user4SessionCount++;
@@ -524,7 +504,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FETCH non-existent user
             int user99SessionCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.fetch(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"))) {
+                     store.fetch(createKey("user99"))) {
                 while (iter.hasNext()) {
                     iter.next();
                     user99SessionCount++;
@@ -535,12 +515,12 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FIND_SESSIONS user1 with time range covering first session only
             int findSessionsCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.findSessions(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), 0, baseTime + 100000)) {
+                     store.findSessions(createKey("user1"), 0, baseTime + 100000)) {
                 while (iter.hasNext()) {
                     KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = iter.next();
                     assertNotNull(kv.value, "IQv1 findSessions: value should not be null");
                     assertEquals(10L, kv.value.aggregation().get("count"), "IQv1: first session count should be 10");
-                    StoreWithHeadersTestUtils.assertSchemaIdHeaders(kv.value.headers(), "IQv1 findSessions user1 first");
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 findSessions user1 first");
                     findSessionsCount++;
                 }
             }
@@ -549,10 +529,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // FIND_SESSIONS user1 with time range covering all sessions
             int allSessionsCount = 0;
             try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                     store.findSessions(StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), 0, Long.MAX_VALUE)) {
+                     store.findSessions(createKey("user1"), 0, Long.MAX_VALUE)) {
                 while (iter.hasNext()) {
                     KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = iter.next();
-                    StoreWithHeadersTestUtils.assertSchemaIdHeaders(kv.value.headers(), "IQv1 findSessions user1 all " + allSessionsCount);
+                    assertWellFormedSchemaIdHeaders(kv.value.headers(), "IQv1 findSessions user1 all " + allSessionsCount);
                     allSessionsCount++;
                 }
             }
@@ -560,19 +540,19 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             // FETCH_SESSION for specific session (user3)
             AggregationWithHeaders<GenericRecord> user3Session = store.fetchSession(
-                StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), baseTime + 200000, baseTime + 200000);
+                createKey("user3"), baseTime + 200000, baseTime + 200000);
             assertNotNull(user3Session, "IQv1: user3 session should exist");
             assertEquals(40L, user3Session.aggregation().get("count"), "IQv1: user3 count should be 40");
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(user3Session.headers(), "IQv1 fetchSession user3");
+            assertWellFormedSchemaIdHeaders(user3Session.headers(), "IQv1 fetchSession user3");
 
             // FETCH_SESSION for non-existent session
             AggregationWithHeaders<GenericRecord> nonExistent = store.fetchSession(
-                StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user99"), 0, 0);
+                createKey("user99"), 0, 0);
             assertTrue(nonExistent == null || nonExistent.aggregation() == null,
                 "IQv1: non-existent session should return null");
 
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
     }
 
@@ -1089,6 +1069,19 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         }
     }
 
+    private GenericRecord createKey(String userId) {
+        GenericRecord key = new GenericData.Record(keySchema);
+        key.put("userId", userId);
+        return key;
+    }
+
+    private GenericRecord createValue(long count, String operation) {
+        GenericRecord value = new GenericData.Record(valueSchema);
+        value.put("count", count);
+        value.put("operation", operation);
+        return value;
+    }
+
     private int assertRangeResults(List<ConsumerRecord<GenericRecord, GenericRecord>> results,
                                    int startIdx, String[] expectedPairs, String context) {
         for (int i = 0; i < expectedPairs.length; i++) {
@@ -1096,7 +1089,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             Long count = (Long) results.get(startIdx + i).value().get("count");
             assertEquals(expectedPairs[i], key + ":" + count,
                 context + ": record at position " + i);
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(startIdx + i), context);
+            assertWellFormedSchemaIdHeaders(results.get(startIdx + i).headers(), context);
         }
         return startIdx + expectedPairs.length;
     }
@@ -1121,8 +1114,8 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
     }
 
     private Topology buildRestoreSessionTopology(String inputTopic, String outputTopic, String storeName) {
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
         StreamsBuilder builder = new StreamsBuilder();
         builder
             .addStateStore(
@@ -1139,29 +1132,29 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
     private void produceInitialSessionPuts(KafkaProducer<GenericRecord, GenericRecord> producer,
                                            String topic, long baseTime) throws Exception {
         producer.send(new ProducerRecord<>(topic, null, baseTime,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 100L, "PUT"))).get();
+            createKey("user1"), createValue(100L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 10000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 101L, "PUT"))).get();
+            createKey("user1"), createValue(101L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 500000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 102L, "PUT"))).get();
+            createKey("user1"), createValue(102L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 1000000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 103L, "PUT"))).get();
+            createKey("user1"), createValue(103L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 50000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 201L, "PUT"))).get();
+            createKey("user2"), createValue(201L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 600000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 202L, "PUT"))).get();
+            createKey("user2"), createValue(202L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 100000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), StoreWithHeadersTestUtils.createValue(valueSchema, 300L, "PUT"))).get();
+            createKey("user3"), createValue(300L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 150000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user4"), StoreWithHeadersTestUtils.createValue(valueSchema, 400L, "PUT"))).get();
+            createKey("user4"), createValue(400L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 200000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user5"), StoreWithHeadersTestUtils.createValue(valueSchema, 500L, "PUT"))).get();
+            createKey("user5"), createValue(500L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 250000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user6"), StoreWithHeadersTestUtils.createValue(valueSchema, 601L, "PUT"))).get();
+            createKey("user6"), createValue(601L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 800000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user6"), StoreWithHeadersTestUtils.createValue(valueSchema, 602L, "PUT"))).get();
+            createKey("user6"), createValue(602L, "PUT"))).get();
         producer.send(new ProducerRecord<>(topic, null, baseTime + 300000,
-            StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user7"), StoreWithHeadersTestUtils.createValue(valueSchema, 700L, "PUT"))).get();
+            createKey("user7"), createValue(700L, "PUT"))).get();
     }
 
     private int verifyInitialSessionPuts(List<ConsumerRecord<GenericRecord, GenericRecord>> results,
@@ -1183,10 +1176,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String outputTopic = "session-delete-output";
         String storeName = "session-delete-store";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), inputTopic, outputTopic);
+        createTopics(inputTopic, outputTopic);
 
-        GenericAvroSerde keySerde = StoreWithHeadersTestUtils.createKeySerde(getRestApp().restConnect);
-        GenericAvroSerde valueSerde = StoreWithHeadersTestUtils.createValueSerde(getRestApp().restConnect);
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
 
         StreamsBuilder builder = new StreamsBuilder();
         builder
@@ -1207,50 +1200,50 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             long baseTime = System.currentTimeMillis();
 
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
 
                 // PUT user-1:10
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-1"), StoreWithHeadersTestUtils.createValue(valueSchema, 10L, "PUT"))).get();
+                    createKey("user-1"), createValue(10L, "PUT"))).get();
 
                 // PUT user-2:20
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 1000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-2"), StoreWithHeadersTestUtils.createValue(valueSchema, 20L, "PUT"))).get();
+                    createKey("user-2"), createValue(20L, "PUT"))).get();
 
                 // PUT user-3:30
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 2000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-3"), StoreWithHeadersTestUtils.createValue(valueSchema, 30L, "PUT"))).get();
+                    createKey("user-3"), createValue(30L, "PUT"))).get();
 
                 // FETCH_SESSION_SINGLE user-1 (should return 10)
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 3000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE"))).get();
+                    createKey("user-1"), createValue(0L, "FETCH_SESSION_SINGLE"))).get();
 
                 // REMOVE user-1
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 4000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user-1"), createValue(0L, "REMOVE"))).get();
 
                 // FETCH_SESSION_SINGLE user-1 after remove (should return nothing)
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 5000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-1"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "FETCH_SESSION_SINGLE"))).get();
+                    createKey("user-1"), createValue(0L, "FETCH_SESSION_SINGLE"))).get();
 
                 // REMOVE user-99 (non-existent)
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 6000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-99"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user-99"), createValue(0L, "REMOVE"))).get();
 
                 // REMOVE user-2
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 7000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-2"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "REMOVE"))).get();
+                    createKey("user-2"), createValue(0L, "REMOVE"))).get();
 
                 // PUT_NULL user-3 (put null to delete existing session)
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 2000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user-3"), StoreWithHeadersTestUtils.createValue(valueSchema, 0L, "PUT_NULL"))).get();
+                    createKey("user-3"), createValue(0L, "PUT_NULL"))).get();
 
                 producer.flush();
             }
 
             // Expected: 3 PUTs + 1 FETCH_SESSION_SINGLE (user-1) + 1 REMOVE (user-1) + 1 REMOVE (user-2) + 1 PUT_NULL (user-3) = 7
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, outputTopic, "session-delete-test-consumer", 7, KafkaAvroDeserializer.class);
+                consumeRecords(outputTopic, "session-delete-test-consumer", 7, KafkaAvroDeserializer.class);
 
             assertEquals(7, results.size());
 
@@ -1259,43 +1252,43 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // Verify PUT user-1
             assertEquals("user-1", results.get(idx).key().get("userId").toString());
             assertEquals(10L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "PUT user-1");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT user-1");
 
             // Verify PUT user-2
             assertEquals("user-2", results.get(idx).key().get("userId").toString());
             assertEquals(20L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "PUT user-2");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT user-2");
 
             // Verify PUT user-3
             assertEquals("user-3", results.get(idx).key().get("userId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "PUT user-3");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT user-3");
 
             // Verify FETCH_SESSION_SINGLE user-1
             assertEquals("user-1", results.get(idx).key().get("userId").toString());
             assertEquals(10L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "FETCH_SESSION_SINGLE user-1");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "FETCH_SESSION_SINGLE user-1");
 
             // Verify REMOVE user-1
             assertEquals("user-1", results.get(idx).key().get("userId").toString());
             assertEquals(10L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "REMOVE user-1");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "REMOVE user-1");
 
             // Verify REMOVE user-2
             assertEquals("user-2", results.get(idx).key().get("userId").toString());
             assertEquals(20L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "REMOVE user-2");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "REMOVE user-2");
 
             // Verify PUT_NULL user-3
             assertEquals("user-3", results.get(idx).key().get("userId").toString());
             assertEquals(30L, results.get(idx).value().get("count"));
-            StoreWithHeadersTestUtils.assertSchemaIdHeaders(results.get(idx++), "PUT_NULL user-3");
+            assertWellFormedSchemaIdHeaders(results.get(idx++).headers(), "PUT_NULL user-3");
 
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "session-delete-integration-test-session-delete-store-changelog";
 
             List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
-                StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, changelogTopic, "session-changelog-consumer", 6, ByteArrayDeserializer.class);
+                consumeRecords(changelogTopic, "session-changelog-consumer", 6, ByteArrayDeserializer.class);
 
             int tombstoneCount = 0;
             for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
@@ -1309,7 +1302,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             assertTrue(tombstoneCount >= 2, "Should have at least 2 tombstone records, but found " + tombstoneCount);
 
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
     }
 
@@ -1325,7 +1318,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         String storeName = "session-restore-store";
         String appId = "session-restore-integration-test";
 
-        StoreWithHeadersTestUtils.createTopics(getBrokerList(), inputTopic, outputTopic);
+        createTopics(inputTopic, outputTopic);
 
         // Wall-clock-based timestamps so the 30-min retention can't drop sessions on restore.
         long baseTime = System.currentTimeMillis();
@@ -1334,18 +1327,18 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             buildRestoreSessionTopology(inputTopic, outputTopic, storeName), appId);
         try {
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(StoreWithHeadersTestUtils.createProducerProps(getBrokerList(), getRestApp().restConnect))) {
+                     new KafkaProducer<>(createProducerProps())) {
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user1"), StoreWithHeadersTestUtils.createValue(valueSchema, 10L, "PUT"))).get();
+                    createKey("user1"), createValue(10L, "PUT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 5000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user2"), StoreWithHeadersTestUtils.createValue(valueSchema, 20L, "PUT"))).get();
+                    createKey("user2"), createValue(20L, "PUT"))).get();
                 producer.send(new ProducerRecord<>(inputTopic, null, baseTime + 10000,
-                    StoreWithHeadersTestUtils.createKey(keySchema, "userId", "user3"), StoreWithHeadersTestUtils.createValue(valueSchema, 30L, "PUT"))).get();
+                    createKey("user3"), createValue(30L, "PUT"))).get();
                 producer.flush();
             }
-            StoreWithHeadersTestUtils.consumeRecords(getBrokerList(), getRestApp().restConnect, outputTopic, "session-restore-pre-consumer", 3, KafkaAvroDeserializer.class);
+            consumeRecords(outputTopic, "session-restore-pre-consumer", 3, KafkaAvroDeserializer.class);
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(streams);
+            closeStreams(streams);
         }
 
         // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
@@ -1360,18 +1353,18 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             for (String user : new String[]{"user1", "user2", "user3"}) {
                 int count = 0;
                 try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> iter =
-                         store.fetch(StoreWithHeadersTestUtils.createKey(keySchema, "userId", user))) {
+                         store.fetch(createKey(user))) {
                     while (iter.hasNext()) {
                         KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = iter.next();
                         assertNotNull(kv.value, "Restored " + user + ": value should not be null");
-                        StoreWithHeadersTestUtils.assertSchemaIdHeaders(kv.value.headers(), "Restored " + user);
+                        assertWellFormedSchemaIdHeaders(kv.value.headers(), "Restored " + user);
                         count++;
                     }
                 }
                 assertEquals(1, count, "Restored store should contain 1 session for " + user);
             }
         } finally {
-            StoreWithHeadersTestUtils.closeStreams(restoredStreams);
+            closeStreams(restoredStreams);
         }
     }
 

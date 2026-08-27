@@ -102,7 +102,7 @@
         <alibaba.tea.sdk.version>1.3.2</alibaba.tea.sdk.version>
         <alibaba.credentials.sdk.version>1.0.4</alibaba.credentials.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
-        <cel-version>0.12.0</cel-version>
+        <cel-version>0.13.1</cel-version>
         <google.api.client.version>2.4.0</google.api.client.version>
         <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
@@ -124,8 +124,8 @@
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
-        <log4j.version>2.25.4</log4j.version>
-        <apache.httpclient5.version>5.5</apache.httpclient5.version>
+        <log4j.version>2.25.5</log4j.version>
+        <apache.httpclient5.version>5.6.4</apache.httpclient5.version>
         <spotless.maven.plugin.version>2.45.0</spotless.maven.plugin.version>
     </properties>
 
@@ -729,6 +729,11 @@
                                 @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
                             <excludedGroups>IntegrationTest</excludedGroups>
+                            <systemPropertyVariables>
+                                <!-- AVRO-4189: allow test schemas to reference java-class/java-key-class
+                                     properties from any package during unit tests. -->
+                                <org.apache.avro.SERIALIZABLE_PACKAGES>*</org.apache.avro.SERIALIZABLE_PACKAGES>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                     <plugin>
