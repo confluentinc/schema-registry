@@ -659,19 +659,31 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
-  void namedInlineRootForcedWithExplicitTypeWhenPeerReferencesIt() {
-    // Root Order (first message) is referenced by peer Wrapper. First-wins inference would drop
-    // Order (it is referenced) and pick Wrapper, so the writer must force the root with an explicit
-    // trailing TYPE, preserving its NOT NULL.
+  void peerReferencedRootStaysNamedRefAndForcesExplicitType() {
+    // Root Order (first message) is referenced by peer Wrapper. Unwrapping Order to a bare inline
+    // root would remove its body from namedTypes and dangle Wrapper.order (which every format
+    // writer resolves only through namedTypes), so the shared root stays a NAMED_TYPE_REF with
+    // Order kept as a named peer. First-wins inference would then pick Wrapper (Order is
+    // referenced), so the DDL writer forces the root with an explicit trailing TYPE, NOT NULL.
     String proto = "syntax = \"proto3\";\n"
         + "message Order {\n  string id = 1;\n}\n"
         + "message Wrapper {\n  Order order = 1;\n}\n";
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
 
-    assertThat(lt.getName()).isEqualTo("Order");
+    assertThat(lt.getName()).isNull();
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.NAMED_TYPE_REF);
+    assertThat(lt.getRootSchema().getQualifiedName()).isEqualTo("Order");
+    assertThat(lt.getNamedTypes()).containsKey("Order").containsKey("Wrapper");
 
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertThat(ddl).contains("STRUCT Order (");
     assertThat(ddl).contains("TYPE Order NOT NULL;");
+
+    // The format writer resolves Wrapper.order through namedTypes (Order kept there) instead of
+    // throwing "Unknown named type reference"; building the descriptor exercises that resolution.
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(lt, "Order").toDescriptor();
+    assertThat(out.findFieldByName("id")).isNotNull();
+    Descriptor wrapper = out.getFile().findMessageTypeByName("Wrapper");
+    assertThat(wrapper.findFieldByName("order").getMessageType()).isEqualTo(out);
   }
 }

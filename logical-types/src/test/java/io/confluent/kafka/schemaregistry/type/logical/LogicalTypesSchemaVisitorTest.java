@@ -1834,4 +1834,21 @@ class LogicalTypesSchemaVisitorTest {
     assertTrue(v.getNamedTypes().containsKey("x.y.Foo"));
   }
 
+  @Test
+  void testPeerReferencedRootStaysNamedTypeRef() {
+    // A local peer (Wrapper) references the explicit root (Order). Unwrapping Order to a bare
+    // STRUCT would remove its body from namedTypes and dangle Wrapper.order (which every format
+    // writer resolves only through namedTypes), so the shared root stays a NAMED_TYPE_REF.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "STRUCT Order (id INT);"
+        + "STRUCT Wrapper (payload Order);"
+        + "TYPE Order");
+    Schema root = v.getRootSchema();
+    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
+    assertEquals("Order", root.getQualifiedName());
+    assertNull(v.toLogicalType().getName());
+    assertTrue(v.getNamedTypes().containsKey("Order"));
+    assertTrue(v.getNamedTypes().containsKey("Wrapper"));
+  }
+
 }

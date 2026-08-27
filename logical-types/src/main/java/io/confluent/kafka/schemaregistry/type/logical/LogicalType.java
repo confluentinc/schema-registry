@@ -530,6 +530,11 @@ public class LogicalType {
     if (!Objects.equals(fqnNamespace, namespace)) {
       return new RootUnwrap(rootSchema, null);
     }
+    if (isReferencedByPeer(fqn, namedTypes)) {
+      // A local peer references the root; removing its body would dangle that reference (and every
+      // format writer resolves peer refs only through namedTypes). Keep the shared root as a ref.
+      return new RootUnwrap(rootSchema, null);
+    }
     namedTypes.remove(fqn);
     body.setNullable(rootSchema.isNullable());
     int nameDot = fqn.lastIndexOf('.');
@@ -541,6 +546,25 @@ public class LogicalType {
     String prefix = fqn + ".";
     for (String key : namedTypes.keySet()) {
       if (key.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True iff a named type other than {@code fqn} carries a {@code NAMED_TYPE_REF} to {@code fqn}.
+   * Used to keep a peer-referenced root as a {@code NAMED_TYPE_REF} so its definition stays in
+   * {@code namedTypes} where writers resolve the peer's reference.
+   */
+  public static boolean isReferencedByPeer(String fqn, Map<String, Schema> namedTypes) {
+    for (Map.Entry<String, Schema> entry : namedTypes.entrySet()) {
+      if (entry.getKey().equals(fqn)) {
+        continue;
+      }
+      Set<String> refs = new LinkedHashSet<>();
+      collectNamedRefs(entry.getValue(), refs);
+      if (refs.contains(fqn)) {
         return true;
       }
     }
