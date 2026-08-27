@@ -151,6 +151,25 @@ public class LogicalTypeToAvroConverter {
     return applyMetadata(result, metadataProps, logicalType, ctx.isV1());
   }
 
+  /**
+   * True when {@code rowName} is the name of the LogicalType's named root — i.e. the root was
+   * unwrapped to a bare inline STRUCT/ENUM carrying {@link LogicalType#getName()}, and is being
+   * emitted under that name. Such a root is a genuine named record/enum (not anonymous), so its
+   * name survives the round-trip; anonymous roots ({@code getName() == null}) and nested inline
+   * structs remain anonymous.
+   */
+  private static boolean isNamedRoot(
+      String rowName, FromLogicalContext<org.apache.avro.Schema> ctx) {
+    LogicalType lt = ctx.getLogicalType();
+    if (lt.getName() == null) {
+      return false;
+    }
+    String rootName = lt.getNamespace() != null
+        ? lt.getNamespace() + "." + lt.getName()
+        : lt.getName();
+    return rootName.equals(rowName);
+  }
+
   private static AvroSchema applyMetadata(
       org.apache.avro.Schema schema, Map<String, String> metadataProps,
       LogicalType logicalType, boolean isV1) {
@@ -302,12 +321,13 @@ public class LogicalTypeToAvroConverter {
               fieldName, fieldAvroSchema, field.getDoc(), defaultVal));
         }
         recordSchema.setFields(avroFields);
-        // Add schema-level tags and params as record props. Mark as anonymous:
-        // case STRUCT is only reached for inline LT structs (named types go
-        // through buildNamedRecord, not this case).
+        // Add schema-level tags and params as record props. Inline structs are
+        // anonymous, EXCEPT the named root: since Option A a named root is a bare
+        // inline STRUCT carrying LogicalType.name, and it must stay a named record
+        // (no logical.anonymous marker) so the reader recovers its name.
         if (!ctx.isV1()) {
           addSchemaTags(recordSchema, schema);
-          addSchemaParams(recordSchema, schema, true);
+          addSchemaParams(recordSchema, schema, !isNamedRoot(rowName, ctx));
           addSchemaRules(recordSchema, schema);
           // Add field-level and union branch metadata as field props
           for (Field field : schema.getFields()) {
@@ -338,8 +358,10 @@ public class LogicalTypeToAvroConverter {
         if (!ctx.isV1()) {
           addSchemaTags(enumSchema, schema);
           // Anonymous unless this enum was reached as a named-type reference
-          // (rowName equals the qualified name of a registered named type).
-          addSchemaParams(enumSchema, schema, !ctx.hasNamedType(rowName));
+          // (rowName equals the qualified name of a registered named type), or it
+          // is the named root (a bare inline ENUM carrying LogicalType.name).
+          addSchemaParams(enumSchema, schema,
+              !ctx.hasNamedType(rowName) && !isNamedRoot(rowName, ctx));
           addEnumValueMeta(enumSchema, schema);
         }
         return enumSchema;

@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -137,6 +138,10 @@ class AvroToLogicalTypeConverterTest {
     assertEquals("Order", lt.getName());
     AvroSchema out = LogicalTypeToAvroConverter.fromLogicalType(lt, "IGNORED");
     assertEquals("Order", out.rawSchema().getName());
+    // A named root is a genuine named record, NOT marked logical.anonymous, so its name survives
+    // a further Avro -> LT read-back (rather than being discarded as a synthetic row wrapper).
+    assertNull(out.rawSchema().getProp("logical.anonymous"));
+    assertEquals("Order", AvroToLogicalTypeConverter.toLogicalType(out).getName());
 
     // The DDL projection declares the root as a named STRUCT; a single unreferenced root needs no
     // explicit trailing TYPE (first-wins inference recovers it).

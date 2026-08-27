@@ -163,6 +163,7 @@ final class LogicalFormat {
       throw new InvalidSchemaException("Could not resolve schema references: " + e.getMessage(), e);
     }
     return new LogicalType(
+        parsed.getName(),
         parsed.getNamespace(),
         parsed.getRootSchema(),
         parsed.getNamedTypes(),
