@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
@@ -284,6 +285,77 @@ class ProtoToLogicalTypeConverterTest {
     assertEquals("Node", next.getQualifiedName());
     assertTrue(next.isNullable(),
         "proto message fields are nullable; LT preserves that");
+  }
+
+  @Test
+  void namedLeafRootNameRoundTripsThroughProto() throws Exception {
+    // Proto -> LT -> Proto: a single non-recursive message root unwraps to a bare STRUCT carrying
+    // its name on read, and the writer re-emits it under the same message name.
+    DescriptorProto order = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_INT32))
+        .build();
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(buildFileDescriptor(order)));
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    ProtobufSchema out = LogicalTypeToProtoConverter.fromLogicalType(lt, "IGNORED");
+    assertEquals("Order", out.toDescriptor().getName());
+
+    // The DDL projection declares the root as a named STRUCT; a single unreferenced root needs no
+    // explicit trailing TYPE (first-wins inference recovers it).
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE");
+  }
+
+  @Test
+  void twoIndependentMessagesRoundTripThroughProtoPreservingNames() throws Exception {
+    // Proto (2 independent top-level messages) -> LT -> Proto (2 messages). The first message is
+    // the root: it unwraps to a bare STRUCT carrying its name on LogicalType.name. The second is a
+    // peer named type (a STRUCT in namedTypes). Both message names survive the round-trip.
+    DescriptorProto order = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_INT32))
+        .build();
+    DescriptorProto customer = DescriptorProto.newBuilder()
+        .setName("Customer")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("name").setNumber(1).setType(Type.TYPE_STRING))
+        .build();
+    FileDescriptorProto fileProto = FileDescriptorProto.newBuilder()
+        .addMessageType(order)
+        .addMessageType(customer)
+        .setSyntax("proto3")
+        .build();
+    FileDescriptor fd = FileDescriptor.buildFrom(fileProto, new FileDescriptor[0]);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(fd));
+    // Root: bare STRUCT carrying its name.
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    // Peer: a named STRUCT held in namedTypes (only the root goes bare + name).
+    Schema customerType = lt.getNamedTypes().get("Customer");
+    assertNotNull(customerType);
+    assertEquals(Schema.Type.STRUCT, customerType.getType());
+
+    // Back to Proto: both messages re-emitted under their original names, fields intact.
+    ProtobufSchema out = LogicalTypeToProtoConverter.fromLogicalType(lt, "IGNORED");
+    Descriptor rootOut = out.toDescriptor();
+    assertEquals("Order", rootOut.getName());
+    assertNotNull(rootOut.findFieldByName("id"));
+    Descriptor customerOut = rootOut.getFile().findMessageTypeByName("Customer");
+    assertNotNull(customerOut);
+    assertNotNull(customerOut.findFieldByName("name"));
+
+    // The DDL projection declares BOTH as named STRUCTs. No explicit trailing TYPE is needed:
+    // first-wins inference makes the first-declared unreferenced type (Order) the root.
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).contains("STRUCT Customer (");
+    assertThat(ddl).doesNotContain("TYPE Order");
   }
 
   @Test
@@ -614,5 +686,75 @@ class ProtoToLogicalTypeConverterTest {
 
     assertThat(out.findFieldByName("a").getNumber()).isEqualTo(5);
     assertThat(out.findFieldByName("b").getNumber()).isEqualTo(2);
+  }
+
+  @Test
+  void simpleRootMessageNameCarriedAndRenderedInDdl() throws Exception {
+    // A simple (non-recursive, non-nested) root message is unwrapped to a bare STRUCT; its name
+    // would be lost, so it is carried on LogicalType.name and the DDL renders a named declaration.
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_STRING))
+        .build();
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(buildFileDescriptor(message)));
+
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+    assertThat(lt.getName()).isEqualTo("Order");
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE STRUCT");
+  }
+
+  @Test
+  void namedInlineRootShownWithUnreferencedLocalPeer() {
+    // Two independent top-level messages: root is Bar (the first message), Foo is an unreferenced
+    // local peer. The root is emitted as a named declaration FIRST, so first-wins root inference
+    // picks Bar on read-back — the name is shown, no anonymous fallback and no spurious UNION.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Bar {\n  string f2 = 1;\n}\n"
+        + "message Foo {\n  string f1 = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isEqualTo("Bar");
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).doesNotContain("TYPE STRUCT");
+    assertThat(ddl).contains("STRUCT Bar (");
+    assertThat(ddl).contains("STRUCT Foo (");
+    // The root (Bar) is declared before the peer (Foo) so first-wins picks it.
+    assertThat(ddl.indexOf("STRUCT Bar (")).isLessThan(ddl.indexOf("STRUCT Foo ("));
+  }
+
+  @Test
+  void peerReferencedRootStaysNamedRefAndForcesExplicitType() {
+    // Root Order (first message) is referenced by peer Wrapper. Unwrapping Order to a bare inline
+    // root would remove its body from namedTypes and dangle Wrapper.order (which every format
+    // writer resolves only through namedTypes), so the shared root stays a NAMED_TYPE_REF with
+    // Order kept as a named peer. First-wins inference would then pick Wrapper (Order is
+    // referenced), so the DDL writer forces the root with an explicit trailing TYPE, NOT NULL.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Order {\n  string id = 1;\n}\n"
+        + "message Wrapper {\n  Order order = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isNull();
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.NAMED_TYPE_REF);
+    assertThat(lt.getRootSchema().getQualifiedName()).isEqualTo("Order");
+    assertThat(lt.getNamedTypes()).containsKey("Order").containsKey("Wrapper");
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).contains("TYPE Order NOT NULL;");
+
+    // The format writer resolves Wrapper.order through namedTypes (Order kept there) instead of
+    // throwing "Unknown named type reference"; building the descriptor exercises that resolution.
+    Descriptor out = LogicalTypeToProtoConverter.fromLogicalType(lt, "Order").toDescriptor();
+    assertThat(out.findFieldByName("id")).isNotNull();
+    Descriptor wrapper = out.getFile().findMessageTypeByName("Wrapper");
+    assertThat(wrapper.findFieldByName("order").getMessageType()).isEqualTo(out);
   }
 }

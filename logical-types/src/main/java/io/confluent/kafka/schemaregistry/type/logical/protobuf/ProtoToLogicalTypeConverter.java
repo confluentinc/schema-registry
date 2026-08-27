@@ -188,29 +188,33 @@ public class ProtoToLogicalTypeConverter {
     for (Descriptor topLevel : messageTypes) {
       buildNestedBodies(topLevel, ctx);
     }
-    // Decide the rootSchema shape:
-    //   - Recursive (self or mutual cycle): keep as NAMED_TYPE_REF, body in
-    //     namedTypes — necessary for cyclic field references to resolve.
-    //   - Has nested types in namedTypes (auto-promoted via cycle detection
-    //     or user-marked): keep as NAMED_TYPE_REF — the nested types use
-    //     parentOf() to find their parent, which requires the root to be in
-    //     namedTypes.
-    //   - Otherwise: unwrap to STRUCT and remove root from namedTypes —
-    //     preserves the historical "namedTypes = peers; root is direct"
-    //     convention for the simple case.
+    // Decide the rootSchema shape. Keep the root as a NAMED_TYPE_REF (body in namedTypes) when:
+    //   - recursive (self/mutual cycle) — cyclic field references need the body present;
+    //   - it has nested types in namedTypes — they use parentOf(), which needs the root present;
+    //   - a peer references it — unwrapping would remove the body and dangle that reference.
+    // Otherwise unwrap to a bare STRUCT and remove the root from namedTypes, preserving the
+    // historical "namedTypes = peers; root is direct" convention for the simple case.
     final Schema rootSchema;
+    final String rootName;
     if (LogicalType.isCyclic(rootFqn, ctx.getNamedTypes())
-        || hasNestedNamedTypes(rootFqn, ctx.getNamedTypes())) {
+        || hasNestedNamedTypes(rootFqn, ctx.getNamedTypes())
+        || LogicalType.isReferencedByPeer(rootFqn, ctx.getNamedTypes())) {
       rootSchema = Schema.createNamedTypeRef(rootFqn).setNullable(false);
+      // Root kept as a NAMED_TYPE_REF: its name is the namedTypes key, so don't duplicate it.
+      rootName = null;
     } else {
       rootSchema = rootBody;
       ((java.util.Map<String, Schema>) ctx.getNamedTypes()).remove(rootFqn);
+      // Root unwrapped to a bare STRUCT: its message name would otherwise be lost, so carry it.
+      rootName = rootMessage.getName();
     }
     return new LogicalType(
+        rootName,
         emptyToNull(file.getPackage()),
         rootSchema,
         ctx.getNamedTypes(),
         ctx.getExternalTypes(),
+        Map.of(),
         schema.references(),
         schema.resolvedReferences(),
         ctx.getDefaultValues());
