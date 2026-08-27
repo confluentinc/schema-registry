@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -42,6 +43,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsonToLogicalTypeConverterTest {
+
+  @Test
+  void namedLeafRootTitleRoundTripsThroughJson() {
+    // JSON -> LT -> JSON: a root object with a title unwraps to a bare STRUCT carrying its name on
+    // read, and the writer re-emits that name as the root object's title.
+    String jsonSchema = "{\"type\":\"object\",\"title\":\"Order\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\",\"connect.type\":\"int32\"}}}";
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonSchema));
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    JsonSchema out = LogicalTypeToJsonConverter.fromLogicalType(lt, "IGNORED");
+    assertEquals("Order", out.rawSchema().getTitle());
+
+    // The DDL projection declares the root as a named STRUCT.
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+  }
 
   @Test
   void testBooleanType() {

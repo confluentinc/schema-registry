@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.apache.avro.SchemaBuilder;
@@ -122,6 +123,26 @@ class AvroToLogicalTypeConverterTest {
     assertEquals("RED", named.getEnumValues().get(0).getSymbol());
     assertEquals("GREEN", named.getEnumValues().get(1).getSymbol());
     assertEquals("BLUE", named.getEnumValues().get(2).getSymbol());
+  }
+
+  @Test
+  void namedLeafRootNameRoundTripsThroughAvro() {
+    // Avro -> LT -> Avro: a non-recursive named record root unwraps to a bare STRUCT carrying its
+    // name on read, and the writer re-emits it under the same record name (identity preserved).
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}";
+    io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    AvroSchema out = LogicalTypeToAvroConverter.fromLogicalType(lt, "IGNORED");
+    assertEquals("Order", out.rawSchema().getName());
+
+    // The DDL projection declares the root as a named STRUCT; a single unreferenced root needs no
+    // explicit trailing TYPE (first-wins inference recovers it).
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE");
   }
 
   @Test

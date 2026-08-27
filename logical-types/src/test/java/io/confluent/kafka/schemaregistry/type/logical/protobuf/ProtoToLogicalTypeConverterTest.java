@@ -288,6 +288,77 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void namedLeafRootNameRoundTripsThroughProto() throws Exception {
+    // Proto -> LT -> Proto: a single non-recursive message root unwraps to a bare STRUCT carrying
+    // its name on read, and the writer re-emits it under the same message name.
+    DescriptorProto order = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_INT32))
+        .build();
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(buildFileDescriptor(order)));
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    ProtobufSchema out = LogicalTypeToProtoConverter.fromLogicalType(lt, "IGNORED");
+    assertEquals("Order", out.toDescriptor().getName());
+
+    // The DDL projection declares the root as a named STRUCT; a single unreferenced root needs no
+    // explicit trailing TYPE (first-wins inference recovers it).
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE");
+  }
+
+  @Test
+  void twoIndependentMessagesRoundTripThroughProtoPreservingNames() throws Exception {
+    // Proto (2 independent top-level messages) -> LT -> Proto (2 messages). The first message is
+    // the root: it unwraps to a bare STRUCT carrying its name on LogicalType.name. The second is a
+    // peer named type (a STRUCT in namedTypes). Both message names survive the round-trip.
+    DescriptorProto order = DescriptorProto.newBuilder()
+        .setName("Order")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("id").setNumber(1).setType(Type.TYPE_INT32))
+        .build();
+    DescriptorProto customer = DescriptorProto.newBuilder()
+        .setName("Customer")
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("name").setNumber(1).setType(Type.TYPE_STRING))
+        .build();
+    FileDescriptorProto fileProto = FileDescriptorProto.newBuilder()
+        .addMessageType(order)
+        .addMessageType(customer)
+        .setSyntax("proto3")
+        .build();
+    FileDescriptor fd = FileDescriptor.buildFrom(fileProto, new FileDescriptor[0]);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(fd));
+    // Root: bare STRUCT carrying its name.
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    // Peer: a named STRUCT held in namedTypes (only the root goes bare + name).
+    Schema customerType = lt.getNamedTypes().get("Customer");
+    assertNotNull(customerType);
+    assertEquals(Schema.Type.STRUCT, customerType.getType());
+
+    // Back to Proto: both messages re-emitted under their original names, fields intact.
+    ProtobufSchema out = LogicalTypeToProtoConverter.fromLogicalType(lt, "IGNORED");
+    Descriptor rootOut = out.toDescriptor();
+    assertEquals("Order", rootOut.getName());
+    assertNotNull(rootOut.findFieldByName("id"));
+    Descriptor customerOut = rootOut.getFile().findMessageTypeByName("Customer");
+    assertNotNull(customerOut);
+    assertNotNull(customerOut.findFieldByName("name"));
+
+    // The DDL projection declares BOTH as named STRUCTs. No explicit trailing TYPE is needed:
+    // first-wins inference makes the first-declared unreferenced type (Order) the root.
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).contains("STRUCT Customer (");
+    assertThat(ddl).doesNotContain("TYPE Order");
+  }
+
+  @Test
   void testTypeMappings() {
     // Matrix-driven coverage. Each TypeMapping in CommonMappings goes
     // LT -> Proto -> LT and the result must equal the original. Adding a new
