@@ -135,8 +135,17 @@ public class LogicalTypeToAvroConverter {
 
       return applyMetadata(avroSchema, metadataProps, logicalType, ctx.isV1());
     }
+    // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits under its own name, taking
+    // precedence over the caller's rowName. The reader unwraps only when the root's namespace
+    // matches, so namespace + name reconstructs the original Avro full name.
+    String rootName = rowName;
+    if (logicalType.getName() != null) {
+      rootName = logicalType.getNamespace() != null
+          ? logicalType.getNamespace() + "." + logicalType.getName()
+          : logicalType.getName();
+    }
     org.apache.avro.Schema notNullSchema =
-        fromLogicalTypeIgnoreNullable(schema, rowName, ctx);
+        fromLogicalTypeIgnoreNullable(schema, rootName, ctx);
     org.apache.avro.Schema result = schema.isNullable()
         ? nullableSchema(notNullSchema) : notNullSchema;
     return applyMetadata(result, metadataProps, logicalType, ctx.isV1());
