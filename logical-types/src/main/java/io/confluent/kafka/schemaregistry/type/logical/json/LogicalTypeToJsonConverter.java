@@ -106,6 +106,13 @@ public class LogicalTypeToJsonConverter {
 
     org.everit.json.schema.Schema.Builder<?> rootBuilder =
         fromLogicalTypeBuilder(schema, rootName, ctx);
+    // A nullable named STRUCT/ENUM root is wrapped in an outer combined schema whose title (the
+    // name) lands only on the inner branch. The reader recovers the root name from the OUTER
+    // title, so re-apply the name to the outer builder or it is lost on read-back.
+    if (logicalType.getName() != null && schema.isNullable()
+        && (schema.getType() == Schema.Type.STRUCT || schema.getType() == Schema.Type.ENUM)) {
+      rootBuilder.title(logicalType.getName());
+    }
 
     // Some everit primitive builders initialize unprocessedProperties as an
     // immutable singleton map (e.g., {connect.type=int32}). Build a fresh

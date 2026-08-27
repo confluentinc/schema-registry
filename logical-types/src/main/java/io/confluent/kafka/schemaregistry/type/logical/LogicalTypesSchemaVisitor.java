@@ -169,10 +169,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * Unwrap a leaf named root to the bare {@code STRUCT}/{@code ENUM} body + {@link #name}, the
    * canonical named-root shape shared with the format readers. Delegates to
    * {@link LogicalType#unwrapLeafNamedRoot} for the gating (external/cyclic/nested roots, and
-   * foreign-namespace roots, stay {@code NAMED_TYPE_REF}). Note a bare named-root declaration is
-   * ambient (re-parses as
-   * {@code NOT NULL}), so a nullable named root's null-ness is not carried through DDL — consistent
-   * with the convention that a registered root is non-null at the wire level.
+   * foreign-namespace roots, stay {@code NAMED_TYPE_REF}). A bare named-root declaration alone is
+   * ambient and re-parses as {@code NOT NULL}; the DDL writer therefore emits an explicit trailing
+   * {@code TYPE} for nullable named roots so their nullability is preserved.
    */
   private void maybeUnwrapNamedRoot() {
     // The visitor never places external bodies in namedTypes (externals are inferred from usage and
