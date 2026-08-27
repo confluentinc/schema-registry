@@ -636,4 +636,25 @@ class ProtoToLogicalTypeConverterTest {
     assertThat(ddl).contains("STRUCT Order (");
     assertThat(ddl).doesNotContain("TYPE STRUCT");
   }
+
+  @Test
+  void namedInlineRootShownWithUnreferencedLocalPeer() {
+    // Two independent top-level messages: root is Bar (the first message), Foo is an unreferenced
+    // local peer. The root is emitted as a named declaration FIRST, so first-wins root inference
+    // picks Bar on read-back — the name is shown, no anonymous fallback and no spurious UNION.
+    String proto = "syntax = \"proto3\";\n"
+        + "message Bar {\n  string f2 = 1;\n}\n"
+        + "message Foo {\n  string f1 = 1;\n}\n";
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+
+    assertThat(lt.getName()).isEqualTo("Bar");
+    assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).doesNotContain("TYPE STRUCT");
+    assertThat(ddl).contains("STRUCT Bar (");
+    assertThat(ddl).contains("STRUCT Foo (");
+    // The root (Bar) is declared before the peer (Foo) so first-wins picks it.
+    assertThat(ddl.indexOf("STRUCT Bar (")).isLessThan(ddl.indexOf("STRUCT Foo ("));
+  }
 }
