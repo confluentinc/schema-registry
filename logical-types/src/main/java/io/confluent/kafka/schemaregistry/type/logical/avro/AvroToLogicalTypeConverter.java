@@ -89,11 +89,18 @@ public class AvroToLogicalTypeConverter {
     }
     final Schema schema =
         convertWithCycleDetection(avroSchema.rawSchema(), false, ctx, new ArrayList<>());
+    final String namespace = extractNamespace(avroSchema);
+    // Unwrap a leaf named root record/enum to a bare STRUCT/ENUM + LogicalType.name, the canonical
+    // named-root shape shared with the DDL visitor and the other format readers.
+    final LogicalType.RootUnwrap unwrap =
+        LogicalType.unwrapLeafNamedRoot(schema, ctx.getNamedTypes(), namespace);
     return new LogicalType(
-        extractNamespace(avroSchema),
-        schema,
+        unwrap.getName(),
+        namespace,
+        unwrap.getRootSchema(),
         ctx.getNamedTypes(),
         ctx.getExternalTypes(),
+        Map.of(),
         avroSchema.references(),
         avroSchema.resolvedReferences(),
         ctx.getDefaultValues());

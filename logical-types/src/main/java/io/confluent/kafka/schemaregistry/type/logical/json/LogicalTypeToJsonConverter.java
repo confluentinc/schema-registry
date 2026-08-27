@@ -91,6 +91,11 @@ public class LogicalTypeToJsonConverter {
     FromLogicalContext<String> ctx =
         new FromLogicalContext<>(logicalType, version);
 
+    // A named root (bare object/enum carrying LogicalType.name) emits its name as the root schema's
+    // `title`, taking precedence over the caller's rowName (mirrors the JSON reader, which recovers
+    // the name from the root `title`).
+    String rootName = logicalType.getName() != null ? logicalType.getName() : rowName;
+
     // Register each external type name → source doc URI. The NAMED_TYPE_REF
     // case uses this mapping to emit `<doc>#/$defs/<name>` refs. Throws on
     // duplicate-name collisions across resolvedReferences.
@@ -100,7 +105,7 @@ public class LogicalTypeToJsonConverter {
     }
 
     org.everit.json.schema.Schema.Builder<?> rootBuilder =
-        fromLogicalTypeBuilder(schema, rowName, ctx);
+        fromLogicalTypeBuilder(schema, rootName, ctx);
 
     // Some everit primitive builders initialize unprocessedProperties as an
     // immutable singleton map (e.g., {connect.type=int32}). Build a fresh
