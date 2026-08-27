@@ -133,10 +133,13 @@ public final class LogicalTypeToDdlConverter {
 
       // Root registration.
       if (rootIsNamedInline) {
-        // Inference selects the inline root only when no peer references it — a referenced type is
-        // dropped from the unreferenced set, so inference would pick a peer instead. When a peer
-        // references the root, force it with an explicit trailing TYPE, preserving its nullability.
-        if (inlineRootReferencedByPeer()) {
+        // Force the root with an explicit trailing TYPE in two cases:
+        //   - a peer references it: inference drops referenced types from the unreferenced set, so
+        //     sugar would pick a peer instead;
+        //   - the root is nullable: a bare named declaration re-parses under sugar as NOT NULL
+        //     (ambient), so without the explicit TYPE the root's nullability would be lost.
+        // The trailing TYPE carries the nullability marker the bare declaration cannot.
+        if (inlineRootReferencedByPeer() || root.isNullable()) {
           sb.append("TYPE ").append(qualifiedName(lt.getName()));
           if (!root.isNullable()) {
             sb.append(" NOT NULL");

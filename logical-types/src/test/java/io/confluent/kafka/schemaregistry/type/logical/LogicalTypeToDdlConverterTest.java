@@ -299,18 +299,17 @@ class LogicalTypeToDdlConverterTest {
   }
 
   @Test
-  void namedRootNullabilityIsAmbient() {
-    // Under Option A a leaf named root canonicalizes to a bare STRUCT/ENUM carrying a name;
-    // the root's own nullability is ambient (a named root carries its name, not its
-    // null-ness). So the converter elides TYPE for a named root regardless of nullability,
-    // and it round-trips stably — there is no longer an "explicit TYPE to preserve root
-    // nullability" case for named roots.
+  void namedRootNullabilityIsPreserved() {
+    // A leaf named root canonicalizes to a bare STRUCT/ENUM carrying a name. A bare named
+    // declaration re-parses under sugar as NOT NULL (ambient), so to keep a *nullable* root
+    // lossless the converter forces an explicit trailing `TYPE <name>` (no NOT NULL). A NOT NULL
+    // named root still elides TYPE (sugar re-infers it NOT NULL). Both round-trip stably.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)));
     LogicalType lt = new LogicalType(
         "Row",
         null,
-        struct,  // nullable (ambient for a named root)
+        struct,  // nullable (Schema default)
         Map.of(),
         Set.of(),
         Map.of(),
@@ -318,9 +317,27 @@ class LogicalTypeToDdlConverterTest {
         Map.of(),
         Map.of());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(!ddl.contains("TYPE"),
-        "named root should elide TYPE (nullability is ambient), got:\n" + ddl);
+    assertTrue(ddl.contains("TYPE `Row`;"),
+        "nullable named root should force an explicit nullable TYPE, got:\n" + ddl);
+    assertTrue(!ddl.contains("TYPE `Row` NOT NULL"),
+        "nullable named root's TYPE must not carry NOT NULL, got:\n" + ddl);
+    // Nullability survives the round-trip.
+    assertTrue(parse(ddl).getRootSchema().isNullable(),
+        "re-parsed nullable named root should stay nullable, got:\n" + ddl);
     assertRoundTrip(lt);
+
+    // A NOT NULL named root elides TYPE (sugar re-infers NOT NULL — nothing to preserve).
+    Schema notNullStruct = Schema.createStruct(Arrays.asList(
+        new Schema.Field("x", Schema.create(Schema.Type.INT).setNullable(false), 0)))
+        .setNullable(false);
+    LogicalType notNull = new LogicalType(
+        "Row", null, notNullStruct, Map.of(), Set.of(), Map.of(), List.of(), Map.of(), Map.of());
+    String notNullDdl = LogicalTypeToDdlConverter.toDdl(notNull);
+    assertTrue(!notNullDdl.contains("TYPE"),
+        "NOT NULL named root should elide TYPE, got:\n" + notNullDdl);
+    assertTrue(!parse(notNullDdl).getRootSchema().isNullable(),
+        "re-parsed NOT NULL named root should stay NOT NULL, got:\n" + notNullDdl);
+    assertRoundTrip(notNull);
   }
 
   @Test

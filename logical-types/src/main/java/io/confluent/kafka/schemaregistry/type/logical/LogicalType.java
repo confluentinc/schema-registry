@@ -503,8 +503,12 @@ public class LogicalType {
    * <p>The unwrap is gated so it stays lossless through {@code LT → format/DDL → LT}; otherwise the
    * root keeps its {@code NAMED_TYPE_REF} form:
    * <ul>
-   *   <li>external/unresolved, cyclic, or has nested named types — unwrapping would orphan the
-   *       {@code namedTypes} entry needed for resolution or recurse forever;</li>
+   *   <li>unresolved (no body in {@code namedTypes}), cyclic, or has nested named types —
+   *       unwrapping would orphan the {@code namedTypes} entry needed for resolution or recurse
+   *       forever;</li>
+   *   <li>external (in {@code externalTypes}) — the body was promoted from a referenced schema;
+   *       emitting it locally would misrepresent it as locally-defined;</li>
+   *   <li>referenced by a local peer — removing the body would dangle the peer's reference;</li>
    *   <li>the root's own namespace differs from {@code namespace} — simple name + {@code namespace}
    *       would reconstruct a different FQN, so the full FQN is kept as the {@code namedTypes} key.
    *   </li>
@@ -513,13 +517,20 @@ public class LogicalType {
    * <p>The root's nullability is preserved onto the bare body.
    */
   public static RootUnwrap unwrapLeafNamedRoot(
-      Schema rootSchema, Map<String, Schema> namedTypes, String namespace) {
+      Schema rootSchema, Map<String, Schema> namedTypes, Set<String> externalTypes,
+      String namespace) {
     if (rootSchema == null || rootSchema.getType() != Schema.Type.NAMED_TYPE_REF) {
       return new RootUnwrap(rootSchema, null);
     }
     String fqn = rootSchema.getQualifiedName();
     Schema body = namedTypes.get(fqn);
     if (body == null) {
+      return new RootUnwrap(rootSchema, null);
+    }
+    if (externalTypes != null && externalTypes.contains(fqn)) {
+      // The root's body was promoted from a referenced schema (e.g. Avro pre-walks external
+      // record/enum bodies into namedTypes but marks them external). Emitting it as a local bare
+      // root would misrepresent it as locally-defined and orphan the externalTypes marker.
       return new RootUnwrap(rootSchema, null);
     }
     if (isCyclic(fqn, namedTypes) || hasNestedNamedTypes(fqn, namedTypes)) {

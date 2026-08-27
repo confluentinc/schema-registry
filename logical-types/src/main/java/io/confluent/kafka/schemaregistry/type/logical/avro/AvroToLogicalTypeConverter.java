@@ -92,8 +92,8 @@ public class AvroToLogicalTypeConverter {
     final String namespace = extractNamespace(avroSchema);
     // Unwrap a leaf named root record/enum to a bare STRUCT/ENUM + LogicalType.name, the canonical
     // named-root shape shared with the DDL visitor and the other format readers.
-    final LogicalType.RootUnwrap unwrap =
-        LogicalType.unwrapLeafNamedRoot(schema, ctx.getNamedTypes(), namespace);
+    final LogicalType.RootUnwrap unwrap = LogicalType.unwrapLeafNamedRoot(
+        schema, ctx.getNamedTypes(), ctx.getExternalTypes(), namespace);
     return new LogicalType(
         unwrap.getName(),
         namespace,

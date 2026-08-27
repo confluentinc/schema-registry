@@ -175,8 +175,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * with the convention that a registered root is non-null at the wire level.
    */
   private void maybeUnwrapNamedRoot() {
+    // The visitor never places external bodies in namedTypes (externals are inferred from usage and
+    // held via externalImports), so there is no external root to guard against here — pass empty.
     LogicalType.RootUnwrap unwrap =
-        LogicalType.unwrapLeafNamedRoot(rootSchema, namedTypes, namespace);
+        LogicalType.unwrapLeafNamedRoot(rootSchema, namedTypes, Set.of(), namespace);
     rootSchema = unwrap.getRootSchema();
     if (unwrap.getName() != null) {
       name = unwrap.getName();
