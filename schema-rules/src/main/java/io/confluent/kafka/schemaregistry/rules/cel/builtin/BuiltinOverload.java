@@ -548,8 +548,16 @@ final class BuiltinOverload {
         "dyn_to_variant", Object.class, BuiltinOverload::variantConstructor));
     out.add(CelFunctionBinding.from(
         "bytes_bytes_to_variant", CelByteString.class, CelByteString.class,
-        (CelByteString value, CelByteString metadata) ->
-            VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray())));
+        (CelByteString value, CelByteString metadata) -> {
+          Variant result = VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray());
+          if (result == null) {
+            // A variant's metadata carries the key dictionary and opens with a version byte, so
+            // empty metadata cannot be decoded.
+            throw new IllegalArgumentException(
+                "variant(value, metadata): metadata is empty, so there is no variant to read");
+          }
+          return result;
+        }));
 
     // variants.parseJson strict / variants.tryParseJson soft (Spark
     // parse_json / try_parse_json analogs).
@@ -689,6 +697,11 @@ final class BuiltinOverload {
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(
           functionName + ": expected Variant, got " + o.getClass().getName(), e);
+    } catch (RuntimeException e) {
+      // A malformed value — the Variant constructor rejects an unreadable metadata version — is
+      // reported against the function that read it rather than surfacing bare.
+      throw new IllegalArgumentException(
+          functionName + ": malformed Variant: " + e.getMessage(), e);
     }
   }
 
@@ -706,7 +719,11 @@ final class BuiltinOverload {
               + " strict JSON parsing or variants.tryParseJson(s) for soft mode"
               + " that returns null on parse failure");
     }
-    return VariantUtils.toVariant(o);
+    // toVariant returns null for an absent variant — an unset proto field, or an Avro variant
+    // record with empty byte fields. Report that as CEL null, the same as a null input above,
+    // rather than handing a Java null back to the runtime.
+    Variant v = VariantUtils.toVariant(o);
+    return v == null ? NullValue.NULL_VALUE : v;
   }
 
   /** {@code variants.tryParseJson(s)} binding body — returns CEL null on
