@@ -80,14 +80,15 @@ class ExternalRefsRoundTripTest {
 
     AvroSchema legacy = new AvroSchema(mainAvro, refs, resolved, null);
 
-    // Forward: legacy Avro -> LT. The Avro reader body-promotes every named
-    // record into namedTypes, so the root is a NAMED_TYPE_REF to acme.Person.
+    // Forward: legacy Avro -> LT. The namespaced root record acme.Person unwraps to a bare STRUCT
+    // carrying its name, and its own namespace (acme) becomes the document namespace; the externals
+    // it references are body-promoted into namedTypes and flagged external.
     LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(legacy);
 
-    assertEquals(Schema.Type.NAMED_TYPE_REF, lt.getRootSchema().getType());
-    assertEquals("acme.Person", lt.getRootSchema().getQualifiedName());
-    Schema personBody = lt.getNamedTypes().get("acme.Person");
-    assertNotNull(personBody, "Person body should live in namedTypes");
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Person", lt.getName());
+    assertEquals("acme", lt.getNamespace());
+    Schema personBody = lt.getRootSchema();
 
     Schema home = personBody.getField("home").getSchema();
     Schema thing = personBody.getField("thing").getSchema();
@@ -100,11 +101,12 @@ class ExternalRefsRoundTripTest {
     assertTrue(lt.isExternal("com.example.Stuff"),
         "Stuff should be flagged as external");
 
-    // Pin the DDL projection of the resulting LT — bare externals have no
-    // syntactic marker (re-inferred from usage on read-back) and Person
-    // becomes the registered root.
+    // Pin the DDL projection: the root's namespace becomes a NAMESPACE header and its own name is
+    // simplified (acme.Person -> Person); the foreign-namespace externals stay fully qualified and
+    // carry no syntactic marker (re-inferred from usage on read-back).
     assertEquals(
-        "STRUCT acme.Person (home com.example.Outer NOT NULL,"
+        "NAMESPACE acme;\n"
+            + "STRUCT Person (home com.example.Outer NOT NULL,"
             + " thing com.example.Stuff NOT NULL);\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
@@ -119,8 +121,9 @@ class ExternalRefsRoundTripTest {
     // Re-read the rebuilt schema as a final validity check: the field types
     // must still resolve as NAMED_TYPE_REFs to the same FQNs.
     LogicalType rt = AvroToLogicalTypeConverter.toLogicalType(rebuilt);
-    Schema personBody2 = rt.getNamedTypes().get("acme.Person");
-    assertNotNull(personBody2, "Person body should survive the round trip");
+    Schema personBody2 = rt.getRootSchema();
+    assertEquals(Schema.Type.STRUCT, personBody2.getType(),
+        "Person body should survive the round trip as the bare named root");
     Schema home2 = personBody2.getField("home").getSchema();
     Schema thing2 = personBody2.getField("thing").getSchema();
     assertEquals(Schema.Type.NAMED_TYPE_REF, home2.getType());
