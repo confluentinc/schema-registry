@@ -493,7 +493,11 @@ public class SubjectVersionsResource {
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
-      if (LogicalFormat.isLogical(format)) {
+      // Input format is auto-detected from the body (native-first: only a body that fails to parse
+      // as its declared native schemaType and then parses as logical DDL is treated as logical).
+      // A logical body is converted to the requested native schemaType before registration. The
+      // `format` query param is not consulted for input; it only renders the response (below).
+      if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subjectName, request))) {
         LogicalFormat.convertToNative(schemaRegistry, subjectName, request);
       }
       if (!normalize) {
@@ -501,13 +505,19 @@ public class SubjectVersionsResource {
       }
       Schema result = schemaRegistry.registerOrForward(
           subjectName, request, normalize, force, headerProperties);
-      // format=logical governs how the request body is interpreted, not how the response is
-      // rendered -- the response always reflects the stored native schema.
-      if (result.getSchema() != null && format != null && !format.trim().isEmpty()
-          && !LogicalFormat.isLogical(format)) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+      // `format` renders the response: `logical` emits the stored native schema as logical-types
+      // DDL, any other value applies the native formatter.
+      if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real (native) guid up front and restore it after
+        // rendering, whether the body is logical DDL or a native-formatter output.
         String originalGuid = result.getGuid();
-        result.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          result.setSchema(LogicalFormat.convertToLogical(schemaRegistry, result));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+          result.setSchema(parsedSchema.formattedString(format));
+        }
         result.setGuid(originalGuid);
       }
       registerSchemaResponse = new RegisterSchemaResponse(result);
