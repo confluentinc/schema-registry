@@ -162,11 +162,11 @@ public final class LogicalTypeToDdlConverter {
     private void printCreateType(String name, Schema body) {
       switch (body.getType()) {
         case STRUCT:
-          sb.append("STRUCT ").append(qualifiedName(name)).append(" ");
+          sb.append("STRUCT ").append(qualifiedName(displayName(name))).append(" ");
           appendStructBody(body, /*indent=*/"");
           break;
         case ENUM:
-          sb.append("ENUM ").append(qualifiedName(name)).append(" ");
+          sb.append("ENUM ").append(qualifiedName(displayName(name))).append(" ");
           appendEnumBody(body);
           break;
         default:
@@ -357,7 +357,7 @@ public final class LogicalTypeToDdlConverter {
           // Schema.toDdl returns the bare qualified name without identifier
           // quoting — collides with reserved words (e.g., a type literally
           // named "Row" would lex as the ROW keyword). Quote per-segment.
-          return wrapNullable(qualifiedName(schema.getQualifiedName()), schema);
+          return wrapNullable(qualifiedName(displayName(schema.getQualifiedName())), schema);
         default:
           // Primitive / decimal / parametric / ENUM — Schema.toDdl already
           // emits the right syntax including the " NOT NULL" suffix when
@@ -571,6 +571,52 @@ public final class LogicalTypeToDdlConverter {
     // ---------------------------------------------------------------------
     // Names and literals
     // ---------------------------------------------------------------------
+
+    /**
+     * Strip the document namespace prefix from a fully-qualified name so names under the active
+     * {@code NAMESPACE} render simplified (e.g. {@code com.example.demo.Address} → {@code Address}
+     * when the namespace is {@code com.example.demo}). Only simplifies when the visitor can reverse
+     * it on read-back:
+     * <ul>
+     *   <li>a bare (dot-free) remainder is always re-qualified with the namespace;</li>
+     *   <li>a dotted remainder is re-qualified only when a prefix of it names a locally-declared
+     *       parent type — i.e. it denotes nesting ({@code Outer.Inner}).</li>
+     * </ul>
+     * Otherwise the name is left fully qualified: foreign-namespace names, and a type in a
+     * sub-namespace of the document namespace with no local parent (e.g.
+     * {@code com.example.sub.Address}), would be read back as an unrelated FQN if simplified.
+     */
+    private String displayName(String fqn) {
+      String ns = lt.getNamespace();
+      if (ns == null || ns.isEmpty() || fqn == null || !fqn.startsWith(ns + ".")) {
+        return fqn;
+      }
+      String relative = fqn.substring(ns.length() + 1);
+      if (!relative.contains(".") || hasLocalParentPrefix(relative, ns)) {
+        return relative;
+      }
+      return fqn;
+    }
+
+    /**
+     * Mirror of {@code LogicalTypesSchemaVisitor#hasLocalParentPrefix} over the local named types:
+     * true iff a dotted prefix of {@code name} (as written, or namespace-prepended) names a
+     * locally-declared type — which is exactly when the visitor treats the dots as nesting and
+     * re-applies the namespace on read-back.
+     */
+    private boolean hasLocalParentPrefix(String name, String ns) {
+      Set<String> declared = lt.getLocalNamedTypes().keySet();
+      int dot = name.lastIndexOf('.');
+      while (dot > 0) {
+        String prefix = name.substring(0, dot);
+        if (declared.contains(prefix)
+            || (ns != null && !ns.isEmpty() && declared.contains(ns + "." + prefix))) {
+          return true;
+        }
+        dot = name.lastIndexOf('.', dot - 1);
+      }
+      return false;
+    }
 
     private static String qualifiedName(String dotted) {
       String[] parts = dotted.split("\\.");

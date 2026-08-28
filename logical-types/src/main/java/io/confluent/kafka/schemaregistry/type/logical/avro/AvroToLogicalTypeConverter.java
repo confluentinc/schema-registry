@@ -115,6 +115,9 @@ public class AvroToLogicalTypeConverter {
    * stripped), yet must still map to VARIANT.
    */
   private static boolean isVariantRecord(org.apache.avro.Schema avroSchema) {
+    if (avroSchema.getType() != org.apache.avro.Schema.Type.RECORD) {
+      return false;
+    }
     org.apache.avro.LogicalType logicalType = avroSchema.getLogicalType();
     if (logicalType != null && VariantLogicalType.NAME.equals(logicalType.getName())) {
       return true;
@@ -133,10 +136,68 @@ public class AvroToLogicalTypeConverter {
 
   private static String extractNamespace(AvroSchema avroSchema) {
     Metadata metadata = avroSchema.metadata();
-    if (metadata == null || metadata.getProperties() == null) {
+    if (metadata != null && metadata.getProperties() != null) {
+      String ns = metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+      if (ns != null) {
+        return ns;
+      }
+    }
+    // Natural Avro carries no confluent:namespace metadata; the namespace lives on each named
+    // type's full name instead. Fall back to the root named type's own namespace so the recovered
+    // LogicalType has a document namespace (a NAMESPACE declaration + simplified names in DDL),
+    // matching what the Proto (file package) and JSON (confluent:namespace) readers produce.
+    // Only infer a namespace from a root whose IDENTITY survives conversion — i.e. a RECORD → named
+    // STRUCT or ENUM → named ENUM. Exclude roots whose name is synthetic or encoding-only, since
+    // their (possibly qualified) name would leak a spurious NAMESPACE on read-back:
+    //   - anonymous roots (logical.anonymous=true, named after the caller's rowName);
+    //   - FIXED, which converts to unnamed BINARY;
+    //   - the canonical confluent.type.Variant record, which converts to unnamed VARIANT.
+    org.apache.avro.Schema root = rootNamedType(avroSchema.rawSchema());
+    if (root != null
+        && root.getType() != org.apache.avro.Schema.Type.FIXED
+        && !isAnonymous(root)
+        && !isVariantRecord(root)) {
+      String ns = root.getNamespace();
+      return ns == null || ns.isEmpty() ? null : ns;
+    }
+    return null;
+  }
+
+  /**
+   * The effective named root type: the schema itself if it is a RECORD/ENUM/FIXED, or the single
+   * non-null branch of a nullable {@code ["null", T]} union when {@code T} is a named type (which
+   * the converter unwraps to a nullable STRUCT/ENUM root). Returns {@code null} for anything else
+   * (primitives, arrays/maps, or a genuine multi-branch union with no single named type).
+   */
+  private static org.apache.avro.Schema rootNamedType(org.apache.avro.Schema raw) {
+    if (raw == null) {
       return null;
     }
-    return metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+    if (isNamedAvroType(raw.getType())) {
+      return raw;
+    }
+    if (raw.getType() == org.apache.avro.Schema.Type.UNION) {
+      org.apache.avro.Schema named = null;
+      for (org.apache.avro.Schema member : raw.getTypes()) {
+        if (member.getType() == org.apache.avro.Schema.Type.NULL) {
+          continue;
+        }
+        if (named != null) {
+          return null; // more than one non-null branch — not a simple nullable named root
+        }
+        named = member;
+      }
+      if (named != null && isNamedAvroType(named.getType())) {
+        return named;
+      }
+    }
+    return null;
+  }
+
+  private static boolean isNamedAvroType(org.apache.avro.Schema.Type type) {
+    return type == org.apache.avro.Schema.Type.RECORD
+        || type == org.apache.avro.Schema.Type.ENUM
+        || type == org.apache.avro.Schema.Type.FIXED;
   }
 
   private static Map<String, Object> extractUnionMetadata(AvroSchema avroSchema) {
