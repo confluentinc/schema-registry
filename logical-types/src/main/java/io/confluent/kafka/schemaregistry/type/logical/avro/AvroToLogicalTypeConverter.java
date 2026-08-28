@@ -133,10 +133,28 @@ public class AvroToLogicalTypeConverter {
 
   private static String extractNamespace(AvroSchema avroSchema) {
     Metadata metadata = avroSchema.metadata();
-    if (metadata == null || metadata.getProperties() == null) {
-      return null;
+    if (metadata != null && metadata.getProperties() != null) {
+      String ns = metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+      if (ns != null) {
+        return ns;
+      }
     }
-    return metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+    // Natural Avro carries no confluent:namespace metadata; the namespace lives on each named
+    // type's full name instead. Fall back to the root named type's own namespace so the recovered
+    // LogicalType has a document namespace (a NAMESPACE declaration + simplified names in DDL),
+    // matching what the Proto (file package) and JSON (confluent:namespace) readers produce.
+    org.apache.avro.Schema raw = avroSchema.rawSchema();
+    if (raw != null && isNamedAvroType(raw.getType())) {
+      String ns = raw.getNamespace();
+      return ns == null || ns.isEmpty() ? null : ns;
+    }
+    return null;
+  }
+
+  private static boolean isNamedAvroType(org.apache.avro.Schema.Type type) {
+    return type == org.apache.avro.Schema.Type.RECORD
+        || type == org.apache.avro.Schema.Type.ENUM
+        || type == org.apache.avro.Schema.Type.FIXED;
   }
 
   private static Map<String, Object> extractUnionMetadata(AvroSchema avroSchema) {
