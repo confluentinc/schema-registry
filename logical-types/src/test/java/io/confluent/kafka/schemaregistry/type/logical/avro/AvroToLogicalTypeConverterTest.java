@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.apache.avro.SchemaBuilder;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,20 +110,44 @@ class AvroToLogicalTypeConverterTest {
 
   @Test
   void testEnumConversion() {
-    // Unmarked Avro enum is recovered as a NAMED_TYPE_REF; the actual ENUM
-    // body lives in localNamedTypes keyed by the Avro full name.
+    // A leaf named enum root is unwrapped to a bare ENUM body carrying its name on
+    // LogicalType.name (the canonical named-root shape), not a NAMED_TYPE_REF into namedTypes.
     org.apache.avro.Schema enumSchema = SchemaBuilder.enumeration("Color")
         .symbols("RED", "GREEN", "BLUE");
     io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
         AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(enumSchema));
-    assertEquals(Schema.Type.NAMED_TYPE_REF, lt.getRootSchema().getType());
-    assertEquals("Color", lt.getRootSchema().getQualifiedName());
-    Schema named = lt.getNamedTypes().get("Color");
-    assertEquals(Schema.Type.ENUM, named.getType());
+    assertEquals(Schema.Type.ENUM, lt.getRootSchema().getType());
+    assertEquals("Color", lt.getName());
+    assertTrue(lt.getNamedTypes().isEmpty());
+    Schema named = lt.getRootSchema();
     assertEquals(3, named.getEnumValues().size());
     assertEquals("RED", named.getEnumValues().get(0).getSymbol());
     assertEquals("GREEN", named.getEnumValues().get(1).getSymbol());
     assertEquals("BLUE", named.getEnumValues().get(2).getSymbol());
+  }
+
+  @Test
+  void namedLeafRootNameRoundTripsThroughAvro() {
+    // Avro -> LT -> Avro: a non-recursive named record root unwraps to a bare STRUCT carrying its
+    // name on read, and the writer re-emits it under the same record name (identity preserved).
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}";
+    io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    AvroSchema out = LogicalTypeToAvroConverter.fromLogicalType(lt, "IGNORED");
+    assertEquals("Order", out.rawSchema().getName());
+    // A named root is a genuine named record, NOT marked logical.anonymous, so its name survives
+    // a further Avro -> LT read-back (rather than being discarded as a synthetic row wrapper).
+    assertNull(out.rawSchema().getProp("logical.anonymous"));
+    assertEquals("Order", AvroToLogicalTypeConverter.toLogicalType(out).getName());
+
+    // The DDL projection declares the root as a named STRUCT; a single unreferenced root needs no
+    // explicit trailing TYPE (first-wins inference recovers it).
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertThat(ddl).contains("STRUCT Order (");
+    assertThat(ddl).doesNotContain("TYPE");
   }
 
   @Test
@@ -233,7 +259,7 @@ class AvroToLogicalTypeConverterTest {
     org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
 
     Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
-        .getNamedTypes().get("M");
+        .getRootSchema();
 
     assertThat(struct.getField("a").getAliases())
         .containsExactlyInAnyOrder("a_old", "a_older");
@@ -249,7 +275,7 @@ class AvroToLogicalTypeConverterTest {
     org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
 
     Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
-        .getNamedTypes().get("M");
+        .getRootSchema();
 
     assertThat(struct.getField("a").getAliases()).containsExactly("a_old");
   }

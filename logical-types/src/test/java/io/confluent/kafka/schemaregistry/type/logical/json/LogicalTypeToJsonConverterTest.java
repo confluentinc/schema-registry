@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -130,6 +131,24 @@ class LogicalTypeToJsonConverterTest {
     assertEquals("a person record", roundTripped.getDoc());
     assertEquals(Arrays.asList("PII", "SENSITIVE"), roundTripped.getTags());
     assertEquals("2", roundTripped.getParams().get("version"));
+  }
+
+  @Test
+  void nullableNamedRootPreservesNameThroughJson() {
+    // A nullable named STRUCT root is wrapped in an outer combined schema on emit; the reader reads
+    // the OUTER title for the root name, so the name must be re-applied to the outer schema or it
+    // is lost. NOT NULL named roots put the title directly on the object; this pins the nullable
+    // case, which arises e.g. from an explicit DDL `TYPE Order` (nullable) round-tripped via JSON.
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("id", Schema.create(Schema.Type.INT).setNullable(false), 0)));  // nullable default
+    LogicalType lt = new LogicalType(
+        "Order", null, struct, Map.of(), Set.of(), Map.of(), List.of(), Map.of(), Map.of());
+
+    JsonSchema json = LogicalTypeToJsonConverter.fromLogicalType(lt, "row");
+    LogicalType roundTripped = JsonToLogicalTypeConverter.toLogicalType(json);
+
+    assertEquals("Order", roundTripped.getName());
+    assertTrue(roundTripped.getRootSchema().isNullable());
   }
 
   @Test
