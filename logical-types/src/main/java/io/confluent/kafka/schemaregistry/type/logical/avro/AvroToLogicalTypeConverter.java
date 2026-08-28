@@ -143,12 +143,17 @@ public class AvroToLogicalTypeConverter {
     // type's full name instead. Fall back to the root named type's own namespace so the recovered
     // LogicalType has a document namespace (a NAMESPACE declaration + simplified names in DDL),
     // matching what the Proto (file package) and JSON (confluent:namespace) readers produce.
-    // Skip an anonymous root: the V2 writer marks a synthetic STRUCT/ENUM root with
-    // logical.anonymous=true and names it after the caller's rowName. If that rowName was qualified
-    // (e.g. acme.Row), its namespace is synthetic — not a document namespace — so it must not be
-    // inferred (that would add a spurious NAMESPACE on read-back).
+    // Only infer a namespace from a root whose IDENTITY survives conversion — i.e. a RECORD → named
+    // STRUCT or ENUM → named ENUM. Exclude roots whose name is synthetic or encoding-only, since
+    // their (possibly qualified) name would leak a spurious NAMESPACE on read-back:
+    //   - anonymous roots (logical.anonymous=true, named after the caller's rowName);
+    //   - FIXED, which converts to unnamed BINARY;
+    //   - the canonical confluent.type.Variant record, which converts to unnamed VARIANT.
     org.apache.avro.Schema root = rootNamedType(avroSchema.rawSchema());
-    if (root != null && !isAnonymous(root)) {
+    if (root != null
+        && root.getType() != org.apache.avro.Schema.Type.FIXED
+        && !isAnonymous(root)
+        && !isVariantRecord(root)) {
       String ns = root.getNamespace();
       return ns == null || ns.isEmpty() ? null : ns;
     }

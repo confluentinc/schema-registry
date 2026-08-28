@@ -181,6 +181,29 @@ class AvroToLogicalTypeConverterTest {
   }
 
   @Test
+  void fixedRootDoesNotInferNamespace() {
+    // A FIXED root converts to unnamed BINARY, so its (qualified) name must not seed a namespace.
+    String json = "{\"type\":\"fixed\",\"name\":\"Hash\",\"namespace\":\"acme\",\"size\":16}";
+    io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    assertNull(lt.getNamespace());
+    assertNull(lt.getName());
+    assertEquals(Schema.Type.BINARY, lt.getRootSchema().getType());
+  }
+
+  @Test
+  void variantRootDoesNotInferNamespace() {
+    // A confluent.type.Variant record converts to unnamed VARIANT, so its namespace must not leak.
+    String json = "{\"type\":\"record\",\"name\":\"Variant\",\"namespace\":\"confluent.type\","
+        + "\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "{\"name\":\"value\",\"type\":\"bytes\"}]}";
+    io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    assertNull(lt.getNamespace());
+    assertEquals(Schema.Type.VARIANT, lt.getRootSchema().getType());
+  }
+
+  @Test
   void testProperUnionConversion() {
     org.apache.avro.Schema unionSchema = org.apache.avro.Schema.createUnion(
         SchemaBuilder.builder().intType(),
