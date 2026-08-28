@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
@@ -52,14 +53,18 @@ final class LogicalFormat {
   }
 
   /**
-   * Auto-detects whether a request-body schema is a logical-types DDL rather than a native
-   * Avro/JSON/Protobuf schema, so callers don't need to pass {@code format=logical} on input.
+   * Auto-detects whether {@code request}'s body is a logical-types DDL rather than a native
+   * Avro/JSON/Protobuf schema and, if it is, converts it to the requested native
+   * {@code schemaType} in place -- so callers don't need to pass {@code format=logical} on input.
+   *
+   * <p>Detection and conversion are one method because they share the DDL parse: splitting them
+   * would parse a logical body twice, once to classify it and once to convert it.
    *
    * <p>Native-first: the body is parsed as its declared {@code schemaType}, and only if that fails
    * is the logical DDL parse attempted. So a native schema always wins, and a body is logical only
    * once it has been ruled out as native. {@code parseSchema} resolves references, so a referenced
    * native schema still classifies correctly, and unparseable garbage stays native so its native
-   * error is what surfaces.
+   * error is what surfaces rather than a misleading DDL one.
    *
    * <p>The native parse is not extra work in the common case: it goes through the registry's
    * {@code oldSchemaCache} under the same key that the {@code lookUpSchemaUnderSubject} performed
@@ -70,42 +75,50 @@ final class LogicalFormat {
    * <p>Only {@code InvalidSchemaException} means "not native" -- the registry funnels every parse
    * failure into it. Catching it alone keeps unrelated runtime failures from being misclassified
    * as logical input.
+   *
+   * @return whether the body was logical and has been replaced by its native equivalent
    */
-  static boolean looksLogical(SchemaRegistry schemaRegistry, Schema schema) {
-    if (schema == null || schema.getSchema() == null || schema.getSchema().isBlank()) {
+  static boolean tryConvertToNative(
+      final SchemaRegistry schemaRegistry,
+      final String subject,
+      final RegisterSchemaRequest request)
+      throws SchemaRegistryException {
+    if (request == null || request.getSchema() == null || request.getSchema().isBlank()) {
       return false;
     }
     try {
-      schemaRegistry.parseSchema(schema, false, false);
+      schemaRegistry.parseSchema(new Schema(subject, request), false, false);
       return false; // parses as its declared native schemaType
     } catch (InvalidSchemaException e) {
-      return parsesAsLogical(schema.getSchema()); // not native -- logical iff it parses as DDL
+      // Not native. Fall through: logical iff it parses as DDL.
     }
-  }
 
-  static boolean parsesAsLogical(String schema) {
-    if (schema == null || schema.isBlank()) {
-      return false;
-    }
+    // Syntax decides logical-vs-native; semantics decides valid-vs-invalid. A body that does not
+    // even parse as DDL is native, but one that parses and then fails the visitor is a bad logical
+    // schema and must say so, rather than falling through to a confusing native error.
+    LogicalTypesParser.ScriptContext script;
     try {
-      new LogicalTypesSchemaVisitor().visit(LogicalTypesParserFactory.parse(schema));
-      return true;
+      script = LogicalTypesParserFactory.parse(request.getSchema());
     } catch (RuntimeException e) {
-      return false;
+      return false; // neither native nor DDL -- leave it native so its native error surfaces
     }
+
+    convertToNative(schemaRegistry, subject, request, script);
+    return true;
   }
 
   /**
-   * Converts the Logical Type in {@code request}'s schema field into {@code request}'s declared
-   * {@code schemaType}, replacing it in place.
+   * Converts an already-parsed logical type into {@code request}'s declared {@code schemaType},
+   * replacing the request's schema in place.
    *
    * <p>{@code schemaType} is required here. Unlike a native registration, a logical DDL body never
    * implies a target format, so there is no default to fall back to.
    */
-  static void convertToNative(
+  private static void convertToNative(
       final SchemaRegistry schemaRegistry,
       final String subject,
-      final RegisterSchemaRequest request)
+      final RegisterSchemaRequest request,
+      final LogicalTypesParser.ScriptContext script)
       throws SchemaRegistryException {
     String schemaType = request.getSchemaType();
     if (schemaType == null || schemaType.trim().isEmpty()) {
@@ -115,12 +128,9 @@ final class LogicalFormat {
     }
 
     LogicalType parsed;
-    if (request.getSchema() == null || request.getSchema().trim().isEmpty()) {
-      throw new InvalidSchemaException("Schema is required for a logical type schema");
-    }
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
-      visitor.visit(LogicalTypesParserFactory.parse(request.getSchema()));
+      visitor.visit(script);
       parsed = visitor.toLogicalType();
     } catch (RuntimeException e) {
       throw new InvalidSchemaException("Invalid logical type schema: " + e.getMessage(), e);

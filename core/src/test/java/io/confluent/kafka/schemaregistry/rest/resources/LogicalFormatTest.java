@@ -62,61 +62,64 @@ class LogicalFormatTest {
     assertEquals(false, LogicalFormat.isLogical(null));
   }
 
-  // -- parsesAsLogical: the pure DDL-vs-not classifier -------------------------------------------
+  // -- tryConvertToNative: native-first input auto-detection --------------------------------------
 
   @Test
-  void parsesAsLogicalDetectsDdl() {
-    assertTrue(LogicalFormat.parsesAsLogical(
-        "STRUCT Widget (id INT NOT NULL, name VARCHAR NOT NULL)"));
-    assertTrue(LogicalFormat.parsesAsLogical("NAMESPACE com.example;\nSTRUCT W (id INT NOT NULL)"));
-    // ENUM is also a Protobuf keyword, so this exercises the parse itself, not a keyword sniff.
-    assertTrue(LogicalFormat.parsesAsLogical("ENUM Color ('RED', 'GREEN', 'BLUE')"));
-  }
-
-  @Test
-  void parsesAsLogicalRejectsNativeSchemas() {
-    assertEquals(false, LogicalFormat.parsesAsLogical(
-        "{\"type\":\"record\",\"name\":\"W\",\"fields\":[]}"));       // Avro
-    assertEquals(false, LogicalFormat.parsesAsLogical(
-        "{\"type\":\"object\",\"properties\":{}}"));                   // JSON Schema
-    assertEquals(false, LogicalFormat.parsesAsLogical(
-        "syntax = \"proto3\"; message W { string id = 1; }"));        // Protobuf
-    assertEquals(false, LogicalFormat.parsesAsLogical("enum E { A = 0; }")); // Proto enum, not DDL
-    assertEquals(false, LogicalFormat.parsesAsLogical(""));
-    assertEquals(false, LogicalFormat.parsesAsLogical("   "));
-    assertEquals(false, LogicalFormat.parsesAsLogical(null));
-  }
-
-  // -- looksLogical: native-first input auto-detection -------------------------------------------
-
-  @Test
-  void looksLogicalTreatsNativeParseSuccessAsNotLogical() throws Exception {
+  void tryConvertToNativeLeavesABodyThatParsesAsNativeAlone() throws Exception {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     // Body parses as its declared native schemaType -> not logical, whatever the body text is.
     when(schemaRegistry.parseSchema(any(Schema.class), anyBoolean(), anyBoolean()))
         .thenReturn(mock(ParsedSchema.class));
-    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry,
-        schemaEntityFor("AVRO", "STRUCT Widget (id INT NOT NULL)")));
+    RegisterSchemaRequest request = requestFor("AVRO", STRUCT_DDL);
+
+    assertEquals(false, LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
+    assertEquals(STRUCT_DDL, request.getSchema(), "a native body must not be rewritten");
   }
 
   @Test
-  void looksLogicalFallsBackToDdlWhenNativeParseFails() throws Exception {
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
-    // Native parse fails -> logical iff the body parses as DDL.
-    when(schemaRegistry.parseSchema(any(Schema.class), anyBoolean(), anyBoolean()))
-        .thenThrow(new InvalidSchemaException("not native"));
-    assertTrue(LogicalFormat.looksLogical(schemaRegistry,
-        schemaEntityFor("AVRO", "STRUCT Widget (id INT NOT NULL)")));
-    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry,
-        schemaEntityFor("AVRO", "not a schema at all {{{")));
+  void tryConvertToNativeConvertsDdlOnceNativeParseFails() throws Exception {
+    RegisterSchemaRequest request = requestFor("AVRO", STRUCT_DDL);
+
+    assertTrue(LogicalFormat.tryConvertToNative(
+        registryRejectingNative(), "widgets-value", request));
+    assertEquals(AvroSchema.TYPE, request.getSchemaType());
   }
 
   @Test
-  void looksLogicalRejectsBlankAndNull() throws Exception {
+  void tryConvertToNativeLeavesBodyThatIsNeitherNativeNorDdl() throws Exception {
+    // Parses as neither, so it stays native and the native error surfaces downstream.
+    RegisterSchemaRequest request = requestFor("AVRO", "not a schema at all {{{");
+
+    assertEquals(false, LogicalFormat.tryConvertToNative(
+        registryRejectingNative(), "widgets-value", request));
+    assertEquals("not a schema at all {{{", request.getSchema());
+  }
+
+  @Test
+  void tryConvertToNativeRejectsNativeSchemaTextAsLogical() throws Exception {
+    // Even with the native parse failing, real native schema text is not valid DDL, so it is
+    // never misread as logical input.
+    for (String nativeText : List.of(
+        "{\"type\":\"record\",\"name\":\"W\",\"fields\":[]}",     // Avro
+        "{\"type\":\"object\",\"properties\":{}}",                 // JSON Schema
+        "syntax = \"proto3\"; message W { string id = 1; }",      // Protobuf
+        "enum E { A = 0; }")) {                                   // Protobuf enum, not DDL
+      RegisterSchemaRequest request = requestFor("AVRO", nativeText);
+      assertEquals(false,
+          LogicalFormat.tryConvertToNative(registryRejectingNative(), "widgets-value", request),
+          "should not be treated as logical: " + nativeText);
+      assertEquals(nativeText, request.getSchema());
+    }
+  }
+
+  @Test
+  void tryConvertToNativeRejectsBlankAndNull() throws Exception {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
-    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, null));
-    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, schemaEntityFor("AVRO", "")));
-    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, schemaEntityFor("AVRO", "   ")));
+    assertEquals(false, LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", null));
+    assertEquals(false, LogicalFormat.tryConvertToNative(
+        schemaRegistry, "widgets-value", requestFor("AVRO", "")));
+    assertEquals(false, LogicalFormat.tryConvertToNative(
+        schemaRegistry, "widgets-value", requestFor("AVRO", "   ")));
   }
 
   // -- convertToNative: happy path, one per schemaType -------------------------------------------
@@ -124,9 +127,9 @@ class LogicalFormatTest {
   @Test
   void convertToNativeProducesAvro() throws Exception {
     RegisterSchemaRequest request = requestFor("AVRO", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
+    LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request);
 
     AvroSchema avroSchema = new AvroSchema(request.getSchema());
     assertNotNull(avroSchema.rawSchema().getField("id"));
@@ -137,9 +140,9 @@ class LogicalFormatTest {
   @Test
   void convertToNativeProducesJson() throws Exception {
     RegisterSchemaRequest request = requestFor("JSON", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
+    LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request);
 
     JsonSchema jsonSchema = new JsonSchema(request.getSchema());
     assertNotNull(jsonSchema.rawSchema());
@@ -150,9 +153,9 @@ class LogicalFormatTest {
   @Test
   void convertToNativeProducesProtobuf() throws Exception {
     RegisterSchemaRequest request = requestFor("PROTOBUF", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
+    LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request);
 
     ProtobufSchema protobufSchema = new ProtobufSchema(request.getSchema());
     assertNotNull(protobufSchema.toDescriptor().findFieldByName("id"));
@@ -162,9 +165,9 @@ class LogicalFormatTest {
   @Test
   void convertToNativeIsCaseInsensitiveOnSchemaType() throws Exception {
     RegisterSchemaRequest request = requestFor("avro", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
+    LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request);
 
     assertEquals(2, new AvroSchema(request.getSchema()).rawSchema().getFields().size());
   }
@@ -174,30 +177,30 @@ class LogicalFormatTest {
   @Test
   void convertToNativeRequiresSchemaType() {
     RegisterSchemaRequest request = requestFor(null, STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("schemaType is required"));
   }
 
   @Test
   void convertToNativeRejectsBlankSchemaType() {
     RegisterSchemaRequest request = requestFor("   ", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("schemaType is required"));
   }
 
   @Test
   void convertToNativeRejectsUnsupportedSchemaType() {
     RegisterSchemaRequest request = requestFor("XML", STRUCT_DDL);
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Unsupported schemaType"));
   }
 
@@ -208,21 +211,23 @@ class LogicalFormatTest {
     // error instead.
     RegisterSchemaRequest request = requestFor(
         "AVRO", "STRUCT Widget (id INT NOT NULL, id VARCHAR NOT NULL)");
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Invalid logical type schema"));
   }
 
   @Test
-  void convertToNativeRejectsUnparsableDdl() {
+  void convertToNativeIgnoresUnparsableDdl() throws Exception {
+    // A DDL *syntax* error means "not logical", not "bad logical": the body is left alone so the
+    // native path reports it in its own terms. Contrast convertToNativeRejectsMalformedDdl, where
+    // the body parses and so is held to logical-schema rules.
     RegisterSchemaRequest request = requestFor("AVRO", "not valid ddl at all {{{");
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
-    InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
-    assertTrue(e.getMessage().contains("Invalid logical type schema"));
+    assertEquals(false, LogicalFormat.tryConvertToNative(
+        registryRejectingNative(), "widgets-value", request));
+    assertEquals("not valid ddl at all {{{", request.getSchema());
   }
 
   @Test
@@ -232,10 +237,10 @@ class LogicalFormatTest {
     // input, so it must surface as InvalidSchemaException (422) via the conversion catch, not as an
     // uncaught RuntimeException (500).
     RegisterSchemaRequest request = requestFor("AVRO", "STRUCT `bad name` (id INT NOT NULL)");
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("cannot be represented as AVRO"),
         "expected the conversion-failure message, got: " + e.getMessage());
   }
@@ -252,7 +257,7 @@ class LogicalFormatTest {
     request.setReferences(List.of(
         new SchemaReference("com.example.Address", "address-value", 1)));
 
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
     when(schemaRegistry.tenant()).thenReturn(QualifiedSubject.DEFAULT_TENANT);
     String addressSchema =
         "{\"type\":\"record\",\"name\":\"Address\",\"namespace\":\"com.example\","
@@ -264,7 +269,7 @@ class LogicalFormatTest {
     when(schemaRegistry.getByVersion("address-value", 1, true))
         .thenReturn(schemaEntityFor("AVRO", addressSchema));
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
+    LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request);
 
     // The emitted schema legitimately leaves "addr" as a cross-schema pointer to
     // com.example.Address rather than inlining it -- matching how Avro schema references work in
@@ -285,12 +290,12 @@ class LogicalFormatTest {
     request.setReferences(List.of(
         new SchemaReference("com.example.Address", "address-value", 1)));
 
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    SchemaRegistry schemaRegistry = registryRejectingNative();
     when(schemaRegistry.tenant()).thenReturn(QualifiedSubject.DEFAULT_TENANT);
     when(schemaRegistry.getByVersion("address-value", 1, true)).thenReturn(null);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+        LogicalFormat.tryConvertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Could not resolve schema references"));
   }
 
@@ -362,6 +367,22 @@ class LogicalFormatTest {
   }
 
   // -- helpers ------------------------------------------------------------------------------
+
+  /**
+   * A registry whose native parse always fails, which is what a real one does for a DDL body.
+   * {@code tryConvertToNative} is native-first, so a bare mock -- whose {@code parseSchema} returns
+   * null rather than throwing -- would classify every body as native and convert nothing.
+   */
+  private static SchemaRegistry registryRejectingNative() {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    try {
+      when(schemaRegistry.parseSchema(any(Schema.class), anyBoolean(), anyBoolean()))
+          .thenThrow(new InvalidSchemaException("not a native schema"));
+    } catch (InvalidSchemaException e) {
+      throw new AssertionError(e); // unreachable: stubbing, not invoking
+    }
+    return schemaRegistry;
+  }
 
   private static RegisterSchemaRequest requestFor(String schemaType, String ddl) {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
