@@ -794,8 +794,15 @@ public abstract class AbstractDekRegistry implements Closeable {
         ? request.getAlgorithm()
         : DekFormat.AES256_GCM;
     int version = request.getVersion() != null ? request.getVersion() : MIN_VERSION;
+    // Treat empty/blank caller-supplied key material as absent, so that a shared KEK generates a
+    // new DEK instead of trying to unwrap empty ciphertext (which the KMS rejects). Some older
+    // clients send an empty string rather than omitting the field when no key material is provided.
+    String encryptedKeyMaterial = request.getEncryptedKeyMaterial();
+    if (encryptedKeyMaterial != null && encryptedKeyMaterial.trim().isEmpty()) {
+      encryptedKeyMaterial = null;
+    }
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
-        algorithm, version, request.getEncryptedKeyMaterial(), request.isDeleted());
+        algorithm, version, encryptedKeyMaterial, request.isDeleted());
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
         tenant, kekName, request.getSubject(), algorithm, version);
@@ -805,7 +812,8 @@ public abstract class AbstractDekRegistry implements Closeable {
         && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
       throw new AlreadyExistsException(request.getSubject());
     }
-    if (key.getEncryptedKeyMaterial() != null) {
+    boolean callerSuppliedKeyMaterial = key.getEncryptedKeyMaterial() != null;
+    if (callerSuppliedKeyMaterial) {
       if (kek.isShared() && oldKey != null) {
         throw new AlreadyExistsException(request.getSubject());
       }
@@ -821,7 +829,19 @@ public abstract class AbstractDekRegistry implements Closeable {
     // Verify the DEK round-trip before persisting
     String rawKeyMaterial = null;
     if (kek.isShared() && schemaRegistry.getModeInScope(request.getSubject()) != Mode.IMPORT) {
-      rawKeyMaterial = generateRawDek(kek, key).getKeyMaterial();
+      try {
+        rawKeyMaterial = generateRawDek(kek, key).getKeyMaterial();
+      } catch (DekGenerationException e) {
+        // If the caller supplied the encrypted key material, a failed round-trip means the
+        // supplied ciphertext is unusable (e.g. the KMS rejected it as malformed) -- a client
+        // error, so surface it as an invalid-key (422) rather than a server error (500). An
+        // access-denied failure stays a DekGenerationException so it still maps to 403, and a
+        // failure on freshly generated material is a genuine server-side problem.
+        if (callerSuppliedKeyMaterial && !e.isAccessDenied()) {
+          throw new InvalidKeyException("encryptedKeyMaterial", e);
+        }
+        throw e;
+      }
     }
     putKey(keyId, key);
     // Retrieve key with ts set
