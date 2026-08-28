@@ -218,16 +218,10 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      if (LogicalFormat.isLogical(format)) {
-        // Storage renders native formats only; fetch natively and convert to logical DDL here.
-        schema = schemaRegistry.get(id, subject, "", fetchMaxId);
-        if (schema != null) {
-          schema.setSchemaString(LogicalFormat.convertToLogical(
-              schemaRegistry, new Schema(subject, null, id, schema)));
-        }
-      } else {
-        schema = schemaRegistry.get(id, subject, format, fetchMaxId);
-      }
+      // Storage renders native formats only; for logical DDL, fetch natively and convert further
+      // below -- after extractSchemaTags, which reparses the schema string as its native type.
+      schema = schemaRegistry.get(
+          id, subject, LogicalFormat.isLogical(format) ? "" : format, fetchMaxId);
       if (schema == null) {
         throw Errors.schemaNotFoundException(id);
       }
@@ -235,6 +229,11 @@ public class SchemasResource {
         Schema s = new Schema(schema.getSubject(), schema.getVersion(), id, schema);
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
+      }
+      if (LogicalFormat.isLogical(format)) {
+        // Convert with the stored subject so unqualified references resolve in their own context.
+        schema.setSchemaString(LogicalFormat.convertToLogical(schemaRegistry,
+            new Schema(schema.getSubject(), schema.getVersion(), id, schema)));
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
@@ -411,7 +410,9 @@ public class SchemasResource {
     try {
       if (LogicalFormat.isLogical(format)) {
         SchemaString ss = schemaRegistry.get(id, subject, "", false);
-        schema = LogicalFormat.convertToLogical(schemaRegistry, new Schema(subject, null, id, ss));
+        // A missing id yields null; let the not-found check below handle it rather than NPE.
+        schema = ss == null ? null : LogicalFormat.convertToLogical(
+            schemaRegistry, new Schema(ss.getSubject(), null, id, ss));
       } else {
         schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
       }
@@ -461,8 +462,11 @@ public class SchemasResource {
       if (LogicalFormat.isLogical(format)) {
         schema = schemaRegistry.getByGuid(guid, "");
         if (schema != null) {
+          // getByGuid strips subject/version, but unqualified reference subjects resolve against
+          // their parent's context -- so recover the guid's own context as the conversion parent.
+          // Only needed when the schema actually has references.
           schema.setSchemaString(LogicalFormat.convertToLogical(
-              schemaRegistry, new Schema(null, null, null, schema)));
+              schemaRegistry, new Schema(contextForGuid(guid, schema), null, null, schema)));
         }
       } else {
         schema = schemaRegistry.getByGuid(guid, format);
@@ -479,6 +483,27 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     return schema;
+  }
+
+  /**
+   * Returns a qualified-context subject standing in for the context the given guid lives in, to be
+   * used as the parent when resolving the schema's references. A schema fetched by guid has had its
+   * subject stripped, but unqualified reference subjects are qualified against their parent's
+   * context, so without this a referenced schema in a non-default context would not be found.
+   * Returns {@code null} when the schema has no references, since the parent is then unused.
+   */
+  private String contextForGuid(String guid, SchemaString schema)
+      throws SchemaRegistryException {
+    List<SchemaReference> refs = schema.getReferences();
+    if (refs == null || refs.isEmpty()) {
+      return null;
+    }
+    List<ContextId> ids = schemaRegistry.listIdsForGuid(guid);
+    if (ids.isEmpty()) {
+      return null;
+    }
+    return new QualifiedSubject(schemaRegistry.tenant(), ids.get(0).getContext(), null)
+        .toQualifiedContext();
   }
 
   @GET

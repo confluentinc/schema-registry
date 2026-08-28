@@ -150,14 +150,17 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
+        String originalGuid = matchingSchema.getGuid();
         if (LogicalFormat.isLogical(format)) {
           matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
         } else {
           ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
-          String originalGuid = matchingSchema.getGuid();
           matchingSchema.setSchema(parsedSchema.formattedString(format));
-          matchingSchema.setGuid(originalGuid);
         }
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -215,14 +218,17 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
+        String originalGuid = matchingSchema.getGuid();
         if (LogicalFormat.isLogical(format)) {
           matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
         } else {
           ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
-          String originalGuid = matchingSchema.getGuid();
           matchingSchema.setSchema(parsedSchema.formattedString(format));
-          matchingSchema.setGuid(originalGuid);
         }
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);

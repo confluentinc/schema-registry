@@ -508,14 +508,17 @@ public class SubjectVersionsResource {
       // `format` renders the response: `logical` emits the stored native schema as logical-types
       // DDL, any other value applies the native formatter.
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real (native) guid up front and restore it after
+        // rendering, whether the body is logical DDL or a native-formatter output.
+        String originalGuid = result.getGuid();
         if (LogicalFormat.isLogical(format)) {
           result.setSchema(LogicalFormat.convertToLogical(schemaRegistry, result));
         } else {
           ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
-          String originalGuid = result.getGuid();
           result.setSchema(parsedSchema.formattedString(format));
-          result.setGuid(originalGuid);
         }
+        result.setGuid(originalGuid);
       }
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
