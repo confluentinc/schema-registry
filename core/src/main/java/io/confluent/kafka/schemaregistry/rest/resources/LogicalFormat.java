@@ -52,27 +52,79 @@ final class LogicalFormat {
   }
 
   /**
+   * Auto-detects whether a request-body schema is a logical-types DDL rather than a native
+   * Avro/JSON/Protobuf schema, so callers don't need to pass {@code format=logical} on input.
+   *
+   * <p>Native-first: the body is parsed as its declared {@code schemaType}, and only if that fails
+   * is the logical DDL parse attempted. So a native schema always wins, and a body is logical only
+   * once it has been ruled out as native. {@code parseSchema} resolves references, so a referenced
+   * native schema still classifies correctly, and unparseable garbage stays native so its native
+   * error is what surfaces.
+   *
+   * <p>The native parse is not extra work in the common case: it goes through the registry's
+   * {@code oldSchemaCache} under the same key that the {@code lookUpSchemaUnderSubject} performed
+   * moments later on the register/lookup path uses, so that call is served from the cache. (The
+   * key includes {@code normalize}, so a {@code normalize=true} request does pay for one extra
+   * parse.)
+   *
+   * <p>Only {@code InvalidSchemaException} means "not native" -- the registry funnels every parse
+   * failure into it. Catching it alone keeps unrelated runtime failures from being misclassified
+   * as logical input.
+   */
+  static boolean looksLogical(SchemaRegistry schemaRegistry, Schema schema) {
+    if (schema == null || schema.getSchema() == null || schema.getSchema().isBlank()) {
+      return false;
+    }
+    try {
+      schemaRegistry.parseSchema(schema, false, false);
+      return false; // parses as its declared native schemaType
+    } catch (InvalidSchemaException e) {
+      return parsesAsLogical(schema.getSchema()); // not native -- logical iff it parses as DDL
+    }
+  }
+
+  static boolean parsesAsLogical(String schema) {
+    if (schema == null || schema.isBlank()) {
+      return false;
+    }
+    try {
+      new LogicalTypesSchemaVisitor().visit(LogicalTypesParserFactory.parse(schema));
+      return true;
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  /**
    * Converts the Logical Type in {@code request}'s schema field into {@code request}'s declared
    * {@code schemaType}, replacing it in place.
    *
-   * <p>{@code schemaType} is required here. Unlike a native registration, the request body under
-   * {@code format=logical} never implies a target format, so there is no default to fall back to.
+   * <p>{@code schemaType} is required here. Unlike a native registration, a logical DDL body never
+   * implies a target format, so there is no default to fall back to.
+   *
+   * @param validateAsNew whether the body is a candidate new schema, as on register and
+   *                      compatibility checks, or an existing one being looked up. It governs
+   *                      whether references to soft-deleted versions resolve, and must match what
+   *                      the caller's native path does so a logical body and its native equivalent
+   *                      behave identically -- lookup canonicalizes with {@code false}, while
+   *                      register and the compatibility checks treat the body as new.
    */
   static void convertToNative(
       final SchemaRegistry schemaRegistry,
       final String subject,
-      final RegisterSchemaRequest request)
+      final RegisterSchemaRequest request,
+      final boolean validateAsNew)
       throws SchemaRegistryException {
     String schemaType = request.getSchemaType();
     if (schemaType == null || schemaType.trim().isEmpty()) {
       throw new InvalidSchemaException(
-          "schemaType is required when format=logical, and must be one of "
+          "schemaType is required for a logical type schema, and must be one of "
               + "AVRO, JSON, PROTOBUF");
     }
 
     LogicalType parsed;
     if (request.getSchema() == null || request.getSchema().trim().isEmpty()) {
-      throw new InvalidSchemaException("Schema is required when format=logical");
+      throw new InvalidSchemaException("Schema is required for a logical type schema");
     }
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
@@ -82,8 +134,8 @@ final class LogicalFormat {
       throw new InvalidSchemaException("Invalid logical type schema: " + e.getMessage(), e);
     }
 
-    LogicalType logicalType =
-        attachReferences(schemaRegistry, subject, parsed, request.getReferences());
+    LogicalType logicalType = attachReferences(
+        schemaRegistry, subject, parsed, request.getReferences(), validateAsNew);
     String rowName = rowNameFor(subject);
 
     ParsedSchema nativeSchema;
@@ -100,7 +152,7 @@ final class LogicalFormat {
           break;
         default:
           throw new InvalidSchemaException(
-              "Unsupported schemaType '" + schemaType + "' for format=logical; "
+              "Unsupported schemaType '" + schemaType + "' for a logical type schema; "
                   + "must be one of AVRO, JSON, PROTOBUF");
       }
     } catch (RuntimeException e) {
@@ -143,19 +195,21 @@ final class LogicalFormat {
       final SchemaRegistry schemaRegistry,
       final String subject,
       final LogicalType parsed,
-      final List<SchemaReference> references)
+      final List<SchemaReference> references,
+      final boolean validateAsNew)
       throws SchemaRegistryException {
     if (references == null || references.isEmpty()) {
       return parsed;
     }
-    // validateAsNew=true: this is a new registration, so references to deleted versions must not
-    // resolve, matching what the native register path does via canonicalizeSchema.
-    // referenceVersionsStrict defaults to false: it is a per-provider setting configured on the
-    // native SchemaProvider instances, which the logical registration path does not reach.
+    // validateAsNew is the caller's: it decides whether references to soft-deleted versions
+    // resolve, and mirrors the validateAsNew the caller's native path passes to canonicalizeSchema.
+    // referenceVersionsStrict is false here because it is a per-provider setting this path cannot
+    // reach; it is still enforced, since the converted native schema is re-parsed downstream by the
+    // provider, which resolves the same references with its configured value.
     Map<String, String> resolvedReferences;
     try {
       resolvedReferences = AbstractSchemaProvider.resolveReferences(
-          schemaRegistry, subject, references, true, false);
+          schemaRegistry, subject, references, validateAsNew, false);
     } catch (IllegalArgumentException | IllegalStateException e) {
       // resolveReferences throws IllegalArgument/IllegalState on a missing or conflicting
       // reference; surface it as a clean InvalidSchemaException (422), the same way the native

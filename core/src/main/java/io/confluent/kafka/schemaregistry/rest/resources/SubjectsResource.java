@@ -128,10 +128,17 @@ public class SubjectsResource {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
-    // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
+      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
+      // schemaType before lookup, mirroring register (the `format` param is not read for input).
+      // validateAsNew=false: this looks up an existing schema, so references to soft-deleted
+      // versions must still resolve, as they do for an equivalent native lookup.
+      if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subject, request))) {
+        LogicalFormat.convertToNative(schemaRegistry, subject, request, false);
+      }
+      // returns version if the schema exists. Otherwise returns 404
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
@@ -145,9 +152,16 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
         String originalGuid = matchingSchema.getGuid();
-        matchingSchema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+          matchingSchema.setSchema(parsedSchema.formattedString(format));
+        }
         matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
@@ -206,9 +220,16 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
         String originalGuid = matchingSchema.getGuid();
-        matchingSchema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+          matchingSchema.setSchema(parsedSchema.formattedString(format));
+        }
         matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
