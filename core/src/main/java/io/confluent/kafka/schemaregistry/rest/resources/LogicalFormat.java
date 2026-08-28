@@ -78,7 +78,7 @@ final class LogicalFormat {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
       visitor.visit(LogicalTypesParserFactory.parse(request.getSchema()));
       parsed = visitor.toLogicalType();
-    } catch (ValidationException e) {
+    } catch (RuntimeException e) {
       throw new InvalidSchemaException("Invalid logical type schema: " + e.getMessage(), e);
     }
 
@@ -103,7 +103,7 @@ final class LogicalFormat {
               "Unsupported schemaType '" + schemaType + "' for format=logical; "
                   + "must be one of AVRO, JSON, PROTOBUF");
       }
-    } catch (ValidationException e) {
+    } catch (RuntimeException e) {
       throw new InvalidSchemaException(
           "Logical type schema cannot be represented as " + schemaType + ": "
               + e.getMessage(), e);
