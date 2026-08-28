@@ -101,11 +101,19 @@ final class LogicalFormat {
    *
    * <p>{@code schemaType} is required here. Unlike a native registration, a logical DDL body never
    * implies a target format, so there is no default to fall back to.
+   *
+   * @param validateAsNew whether the body is a candidate new schema, as on register and
+   *                      compatibility checks, or an existing one being looked up. It governs
+   *                      whether references to soft-deleted versions resolve, and must match what
+   *                      the caller's native path does so a logical body and its native equivalent
+   *                      behave identically -- lookup canonicalizes with {@code false}, while
+   *                      register and the compatibility checks treat the body as new.
    */
   static void convertToNative(
       final SchemaRegistry schemaRegistry,
       final String subject,
-      final RegisterSchemaRequest request)
+      final RegisterSchemaRequest request,
+      final boolean validateAsNew)
       throws SchemaRegistryException {
     String schemaType = request.getSchemaType();
     if (schemaType == null || schemaType.trim().isEmpty()) {
@@ -126,8 +134,8 @@ final class LogicalFormat {
       throw new InvalidSchemaException("Invalid logical type schema: " + e.getMessage(), e);
     }
 
-    LogicalType logicalType =
-        attachReferences(schemaRegistry, subject, parsed, request.getReferences());
+    LogicalType logicalType = attachReferences(
+        schemaRegistry, subject, parsed, request.getReferences(), validateAsNew);
     String rowName = rowNameFor(subject);
 
     ParsedSchema nativeSchema;
@@ -187,19 +195,21 @@ final class LogicalFormat {
       final SchemaRegistry schemaRegistry,
       final String subject,
       final LogicalType parsed,
-      final List<SchemaReference> references)
+      final List<SchemaReference> references,
+      final boolean validateAsNew)
       throws SchemaRegistryException {
     if (references == null || references.isEmpty()) {
       return parsed;
     }
-    // validateAsNew=true: this is a new registration, so references to deleted versions must not
-    // resolve, matching what the native register path does via canonicalizeSchema.
-    // referenceVersionsStrict defaults to false: it is a per-provider setting configured on the
-    // native SchemaProvider instances, which the logical registration path does not reach.
+    // validateAsNew is the caller's: it decides whether references to soft-deleted versions
+    // resolve, and mirrors the validateAsNew the caller's native path passes to canonicalizeSchema.
+    // referenceVersionsStrict is false here because it is a per-provider setting this path cannot
+    // reach; it is still enforced, since the converted native schema is re-parsed downstream by the
+    // provider, which resolves the same references with its configured value.
     Map<String, String> resolvedReferences;
     try {
       resolvedReferences = AbstractSchemaProvider.resolveReferences(
-          schemaRegistry, subject, references, true, false);
+          schemaRegistry, subject, references, validateAsNew, false);
     } catch (IllegalArgumentException | IllegalStateException e) {
       // resolveReferences throws IllegalArgument/IllegalState on a missing or conflicting
       // reference; surface it as a clean InvalidSchemaException (422), the same way the native

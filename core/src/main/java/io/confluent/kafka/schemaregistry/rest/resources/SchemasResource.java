@@ -501,7 +501,9 @@ public class SchemasResource {
     if (!hasReferences(schema)) {
       return null;
     }
-    Set<String> subjects = schemaRegistry.listSubjectsForId(id, subject);
+    // returnDeleted=true: fetching by id does not filter soft-deleted schemas, so the id's only
+    // subject versions may be deleted ones -- excluding them would lose the context entirely.
+    Set<String> subjects = schemaRegistry.listSubjectsForId(id, subject, true);
     return subjects == null || subjects.isEmpty() ? null : subjects.iterator().next();
   }
 

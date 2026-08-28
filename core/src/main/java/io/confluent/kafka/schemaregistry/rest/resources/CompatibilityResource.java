@@ -146,8 +146,13 @@ public class CompatibilityResource {
     if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
       throw Errors.versionNotFoundException(versionId.getVersionId());
     }
-    Schema schema = new Schema(subject, request);
     try {
+      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
+      // schemaType before the check, mirroring register and lookUpSchemaUnderSubject.
+      if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subject, request))) {
+        LogicalFormat.convertToNative(schemaRegistry, subject, request, true);
+      }
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
@@ -234,8 +239,13 @@ public class CompatibilityResource {
       throw Errors.storeException("Error while retrieving schema for subject "
           + subject, e);
     }
-    Schema schema = new Schema(subject, request);
     try {
+      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
+      // schemaType before the check, mirroring register and lookUpSchemaUnderSubject.
+      if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subject, request))) {
+        LogicalFormat.convertToNative(schemaRegistry, subject, request, true);
+      }
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
