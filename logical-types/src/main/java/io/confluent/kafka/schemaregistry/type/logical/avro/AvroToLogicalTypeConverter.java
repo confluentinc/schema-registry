@@ -115,6 +115,9 @@ public class AvroToLogicalTypeConverter {
    * stripped), yet must still map to VARIANT.
    */
   private static boolean isVariantRecord(org.apache.avro.Schema avroSchema) {
+    if (avroSchema.getType() != org.apache.avro.Schema.Type.RECORD) {
+      return false;
+    }
     org.apache.avro.LogicalType logicalType = avroSchema.getLogicalType();
     if (logicalType != null && VariantLogicalType.NAME.equals(logicalType.getName())) {
       return true;
