@@ -167,6 +167,21 @@ class LogicalFormatTest {
     assertTrue(e.getMessage().contains("Invalid logical type schema"));
   }
 
+  @Test
+  void convertToNativeMapsIllegalTargetNameToInvalidSchema() {
+    // A root name that is legal DDL (backtick-quoted) but illegal for the target format: Avro's
+    // Schema.createRecord rejects the space, throwing SchemaParseException. That is invalid client
+    // input, so it must surface as InvalidSchemaException (422) via the conversion catch, not as an
+    // uncaught RuntimeException (500).
+    RegisterSchemaRequest request = requestFor("AVRO", "STRUCT `bad name` (id INT NOT NULL)");
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+
+    InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
+    assertTrue(e.getMessage().contains("cannot be represented as AVRO"),
+        "expected the conversion-failure message, got: " + e.getMessage());
+  }
+
   // -- convertToNative: external references --------------------------------------------------
 
   @Test
