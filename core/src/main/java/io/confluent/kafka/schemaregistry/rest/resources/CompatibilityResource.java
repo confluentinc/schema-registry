@@ -150,7 +150,7 @@ public class CompatibilityResource {
       // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
       // schemaType before the check, mirroring register and lookUpSchemaUnderSubject.
       if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subject, request))) {
-        LogicalFormat.convertToNative(schemaRegistry, subject, request, true);
+        LogicalFormat.convertToNative(schemaRegistry, subject, request);
       }
       Schema schema = new Schema(subject, request);
       if (!normalize) {
@@ -243,7 +243,7 @@ public class CompatibilityResource {
       // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
       // schemaType before the check, mirroring register and lookUpSchemaUnderSubject.
       if (LogicalFormat.looksLogical(schemaRegistry, new Schema(subject, request))) {
-        LogicalFormat.convertToNative(schemaRegistry, subject, request, true);
+        LogicalFormat.convertToNative(schemaRegistry, subject, request);
       }
       Schema schema = new Schema(subject, request);
       if (!normalize) {

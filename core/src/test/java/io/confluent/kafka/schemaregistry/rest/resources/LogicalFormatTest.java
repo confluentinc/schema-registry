@@ -126,7 +126,7 @@ class LogicalFormatTest {
     RegisterSchemaRequest request = requestFor("AVRO", STRUCT_DDL);
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true);
+    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
 
     AvroSchema avroSchema = new AvroSchema(request.getSchema());
     assertNotNull(avroSchema.rawSchema().getField("id"));
@@ -139,7 +139,7 @@ class LogicalFormatTest {
     RegisterSchemaRequest request = requestFor("JSON", STRUCT_DDL);
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true);
+    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
 
     JsonSchema jsonSchema = new JsonSchema(request.getSchema());
     assertNotNull(jsonSchema.rawSchema());
@@ -152,7 +152,7 @@ class LogicalFormatTest {
     RegisterSchemaRequest request = requestFor("PROTOBUF", STRUCT_DDL);
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true);
+    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
 
     ProtobufSchema protobufSchema = new ProtobufSchema(request.getSchema());
     assertNotNull(protobufSchema.toDescriptor().findFieldByName("id"));
@@ -164,7 +164,7 @@ class LogicalFormatTest {
     RegisterSchemaRequest request = requestFor("avro", STRUCT_DDL);
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true);
+    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
 
     assertEquals(2, new AvroSchema(request.getSchema()).rawSchema().getFields().size());
   }
@@ -177,7 +177,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("schemaType is required"));
   }
 
@@ -187,7 +187,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("schemaType is required"));
   }
 
@@ -197,7 +197,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Unsupported schemaType"));
   }
 
@@ -211,7 +211,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Invalid logical type schema"));
   }
 
@@ -221,7 +221,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Invalid logical type schema"));
   }
 
@@ -235,7 +235,7 @@ class LogicalFormatTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("cannot be represented as AVRO"),
         "expected the conversion-failure message, got: " + e.getMessage());
   }
@@ -257,13 +257,14 @@ class LogicalFormatTest {
     String addressSchema =
         "{\"type\":\"record\",\"name\":\"Address\",\"namespace\":\"com.example\","
             + "\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}";
-    // Reference resolution now routes through AbstractSchemaProvider.resolveReferences, which
+    // Reference resolution routes through AbstractSchemaProvider.resolveReferences, which
     // qualifies the subject against the parent context and fetches via getByVersion with
-    // lookupDeletedSchema=false (validateAsNew=true for a new registration).
-    when(schemaRegistry.getByVersion("address-value", 1, false))
+    // lookupDeletedSchema=true: conversion resolves permissively and leaves enforcement of the
+    // caller's configured validation mode to the native path that re-resolves downstream.
+    when(schemaRegistry.getByVersion("address-value", 1, true))
         .thenReturn(schemaEntityFor("AVRO", addressSchema));
 
-    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true);
+    LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request);
 
     // The emitted schema legitimately leaves "addr" as a cross-schema pointer to
     // com.example.Address rather than inlining it -- matching how Avro schema references work in
@@ -286,10 +287,10 @@ class LogicalFormatTest {
 
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     when(schemaRegistry.tenant()).thenReturn(QualifiedSubject.DEFAULT_TENANT);
-    when(schemaRegistry.getByVersion("address-value", 1, false)).thenReturn(null);
+    when(schemaRegistry.getByVersion("address-value", 1, true)).thenReturn(null);
 
     InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
-        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request, true));
+        LogicalFormat.convertToNative(schemaRegistry, "widgets-value", request));
     assertTrue(e.getMessage().contains("Could not resolve schema references"));
   }
 
