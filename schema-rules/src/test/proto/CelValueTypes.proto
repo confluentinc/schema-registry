@@ -24,4 +24,13 @@ message ValueTypes {
     // A snake_case name, so the JSON-name fallback in ProtobufResultWriter is exercised:
     // JsonFormat accepts both "total_amount" and "totalAmount".
     .confluent.type.Decimal total_amount = 8;
+    repeated google.protobuf.Timestamp timestamps = 9;
+    repeated .confluent.type.Variant variants = 10;
+    Nested nested = 11;
+}
+
+// A value type one level down, so the writer's recursion into nested messages is covered.
+message Nested {
+    .confluent.type.Decimal inner = 1;
+    google.protobuf.Timestamp inner_ts = 2;
 }

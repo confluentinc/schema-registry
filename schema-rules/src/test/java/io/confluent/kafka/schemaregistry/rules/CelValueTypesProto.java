@@ -180,6 +180,69 @@ io.confluent.protobuf.type.Decimal defaultValue);
      * <code>.confluent.type.Decimal total_amount = 8;</code>
      */
     io.confluent.protobuf.type.DecimalOrBuilder getTotalAmountOrBuilder();
+
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    java.util.List<com.google.protobuf.Timestamp> 
+        getTimestampsList();
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    com.google.protobuf.Timestamp getTimestamps(int index);
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    int getTimestampsCount();
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    java.util.List<? extends com.google.protobuf.TimestampOrBuilder> 
+        getTimestampsOrBuilderList();
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    com.google.protobuf.TimestampOrBuilder getTimestampsOrBuilder(
+        int index);
+
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    java.util.List<io.confluent.protobuf.type.Variant> 
+        getVariantsList();
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    io.confluent.protobuf.type.Variant getVariants(int index);
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    int getVariantsCount();
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    java.util.List<? extends io.confluent.protobuf.type.VariantOrBuilder> 
+        getVariantsOrBuilderList();
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    io.confluent.protobuf.type.VariantOrBuilder getVariantsOrBuilder(
+        int index);
+
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     * @return Whether the nested field is set.
+     */
+    boolean hasNested();
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     * @return The nested.
+     */
+    io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getNested();
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     */
+    io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder getNestedOrBuilder();
   }
   /**
    * <pre>
@@ -210,6 +273,8 @@ io.confluent.protobuf.type.Decimal defaultValue);
     private ValueTypes() {
       label_ = "";
       amounts_ = java.util.Collections.emptyList();
+      timestamps_ = java.util.Collections.emptyList();
+      variants_ = java.util.Collections.emptyList();
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -532,6 +597,114 @@ io.confluent.protobuf.type.Decimal defaultValue) {
       return totalAmount_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : totalAmount_;
     }
 
+    public static final int TIMESTAMPS_FIELD_NUMBER = 9;
+    @SuppressWarnings("serial")
+    private java.util.List<com.google.protobuf.Timestamp> timestamps_;
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    @java.lang.Override
+    public java.util.List<com.google.protobuf.Timestamp> getTimestampsList() {
+      return timestamps_;
+    }
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    @java.lang.Override
+    public java.util.List<? extends com.google.protobuf.TimestampOrBuilder> 
+        getTimestampsOrBuilderList() {
+      return timestamps_;
+    }
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    @java.lang.Override
+    public int getTimestampsCount() {
+      return timestamps_.size();
+    }
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getTimestamps(int index) {
+      return timestamps_.get(index);
+    }
+    /**
+     * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.TimestampOrBuilder getTimestampsOrBuilder(
+        int index) {
+      return timestamps_.get(index);
+    }
+
+    public static final int VARIANTS_FIELD_NUMBER = 10;
+    @SuppressWarnings("serial")
+    private java.util.List<io.confluent.protobuf.type.Variant> variants_;
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    @java.lang.Override
+    public java.util.List<io.confluent.protobuf.type.Variant> getVariantsList() {
+      return variants_;
+    }
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    @java.lang.Override
+    public java.util.List<? extends io.confluent.protobuf.type.VariantOrBuilder> 
+        getVariantsOrBuilderList() {
+      return variants_;
+    }
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    @java.lang.Override
+    public int getVariantsCount() {
+      return variants_.size();
+    }
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.Variant getVariants(int index) {
+      return variants_.get(index);
+    }
+    /**
+     * <code>repeated .confluent.type.Variant variants = 10;</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.VariantOrBuilder getVariantsOrBuilder(
+        int index) {
+      return variants_.get(index);
+    }
+
+    public static final int NESTED_FIELD_NUMBER = 11;
+    private io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested nested_;
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     * @return Whether the nested field is set.
+     */
+    @java.lang.Override
+    public boolean hasNested() {
+      return ((bitField0_ & 0x00000010) != 0);
+    }
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     * @return The nested.
+     */
+    @java.lang.Override
+    public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getNested() {
+      return nested_ == null ? io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance() : nested_;
+    }
+    /**
+     * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+     */
+    @java.lang.Override
+    public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder getNestedOrBuilder() {
+      return nested_ == null ? io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance() : nested_;
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -572,6 +745,15 @@ io.confluent.protobuf.type.Decimal defaultValue) {
           7);
       if (((bitField0_ & 0x00000008) != 0)) {
         output.writeMessage(8, getTotalAmount());
+      }
+      for (int i = 0; i < timestamps_.size(); i++) {
+        output.writeMessage(9, timestamps_.get(i));
+      }
+      for (int i = 0; i < variants_.size(); i++) {
+        output.writeMessage(10, variants_.get(i));
+      }
+      if (((bitField0_ & 0x00000010) != 0)) {
+        output.writeMessage(11, getNested());
       }
       getUnknownFields().writeTo(output);
     }
@@ -624,6 +806,28 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(8, getTotalAmount());
       }
+
+          {
+            final int count = timestamps_.size();
+            for (int i = 0; i < count; i++) {
+              size += com.google.protobuf.CodedOutputStream
+                .computeMessageSizeNoTag(timestamps_.get(i));
+            }
+            size += 1 * count;
+          }
+
+          {
+            final int count = variants_.size();
+            for (int i = 0; i < count; i++) {
+              size += com.google.protobuf.CodedOutputStream
+                .computeMessageSizeNoTag(variants_.get(i));
+            }
+            size += 1 * count;
+          }
+      if (((bitField0_ & 0x00000010) != 0)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(11, getNested());
+      }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
@@ -668,6 +872,15 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         if (!getTotalAmount()
             .equals(other.getTotalAmount())) return false;
       }
+      if (!getTimestampsList()
+          .equals(other.getTimestampsList())) return false;
+      if (!getVariantsList()
+          .equals(other.getVariantsList())) return false;
+      if (hasNested() != other.hasNested()) return false;
+      if (hasNested()) {
+        if (!getNested()
+            .equals(other.getNested())) return false;
+      }
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -707,6 +920,18 @@ io.confluent.protobuf.type.Decimal defaultValue) {
       if (hasTotalAmount()) {
         hash = (37 * hash) + TOTAL_AMOUNT_FIELD_NUMBER;
         hash = (53 * hash) + getTotalAmount().hashCode();
+      }
+      if (getTimestampsCount() > 0) {
+        hash = (37 * hash) + TIMESTAMPS_FIELD_NUMBER;
+        hash = (53 * hash) + getTimestampsList().hashCode();
+      }
+      if (getVariantsCount() > 0) {
+        hash = (37 * hash) + VARIANTS_FIELD_NUMBER;
+        hash = (53 * hash) + getVariantsList().hashCode();
+      }
+      if (hasNested()) {
+        hash = (37 * hash) + NESTED_FIELD_NUMBER;
+        hash = (53 * hash) + getNested().hashCode();
       }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
@@ -870,6 +1095,9 @@ io.confluent.protobuf.type.Decimal defaultValue) {
           internalGetDataFieldBuilder();
           internalGetAmountsFieldBuilder();
           internalGetTotalAmountFieldBuilder();
+          internalGetTimestampsFieldBuilder();
+          internalGetVariantsFieldBuilder();
+          internalGetNestedFieldBuilder();
         }
       }
       @java.lang.Override
@@ -905,6 +1133,25 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         if (totalAmountBuilder_ != null) {
           totalAmountBuilder_.dispose();
           totalAmountBuilder_ = null;
+        }
+        if (timestampsBuilder_ == null) {
+          timestamps_ = java.util.Collections.emptyList();
+        } else {
+          timestamps_ = null;
+          timestampsBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000100);
+        if (variantsBuilder_ == null) {
+          variants_ = java.util.Collections.emptyList();
+        } else {
+          variants_ = null;
+          variantsBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000200);
+        nested_ = null;
+        if (nestedBuilder_ != null) {
+          nestedBuilder_.dispose();
+          nestedBuilder_ = null;
         }
         return this;
       }
@@ -948,6 +1195,24 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         } else {
           result.amounts_ = amountsBuilder_.build();
         }
+        if (timestampsBuilder_ == null) {
+          if (((bitField0_ & 0x00000100) != 0)) {
+            timestamps_ = java.util.Collections.unmodifiableList(timestamps_);
+            bitField0_ = (bitField0_ & ~0x00000100);
+          }
+          result.timestamps_ = timestamps_;
+        } else {
+          result.timestamps_ = timestampsBuilder_.build();
+        }
+        if (variantsBuilder_ == null) {
+          if (((bitField0_ & 0x00000200) != 0)) {
+            variants_ = java.util.Collections.unmodifiableList(variants_);
+            bitField0_ = (bitField0_ & ~0x00000200);
+          }
+          result.variants_ = variants_;
+        } else {
+          result.variants_ = variantsBuilder_.build();
+        }
       }
 
       private void buildPartial0(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.ValueTypes result) {
@@ -985,6 +1250,12 @@ io.confluent.protobuf.type.Decimal defaultValue) {
               ? totalAmount_
               : totalAmountBuilder_.build();
           to_bitField0_ |= 0x00000008;
+        }
+        if (((from_bitField0_ & 0x00000400) != 0)) {
+          result.nested_ = nestedBuilder_ == null
+              ? nested_
+              : nestedBuilder_.build();
+          to_bitField0_ |= 0x00000010;
         }
         result.bitField0_ |= to_bitField0_;
       }
@@ -1049,6 +1320,61 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         bitField0_ |= 0x00000040;
         if (other.hasTotalAmount()) {
           mergeTotalAmount(other.getTotalAmount());
+        }
+        if (timestampsBuilder_ == null) {
+          if (!other.timestamps_.isEmpty()) {
+            if (timestamps_.isEmpty()) {
+              timestamps_ = other.timestamps_;
+              bitField0_ = (bitField0_ & ~0x00000100);
+            } else {
+              ensureTimestampsIsMutable();
+              timestamps_.addAll(other.timestamps_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.timestamps_.isEmpty()) {
+            if (timestampsBuilder_.isEmpty()) {
+              timestampsBuilder_.dispose();
+              timestampsBuilder_ = null;
+              timestamps_ = other.timestamps_;
+              bitField0_ = (bitField0_ & ~0x00000100);
+              timestampsBuilder_ = 
+                com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                   internalGetTimestampsFieldBuilder() : null;
+            } else {
+              timestampsBuilder_.addAllMessages(other.timestamps_);
+            }
+          }
+        }
+        if (variantsBuilder_ == null) {
+          if (!other.variants_.isEmpty()) {
+            if (variants_.isEmpty()) {
+              variants_ = other.variants_;
+              bitField0_ = (bitField0_ & ~0x00000200);
+            } else {
+              ensureVariantsIsMutable();
+              variants_.addAll(other.variants_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.variants_.isEmpty()) {
+            if (variantsBuilder_.isEmpty()) {
+              variantsBuilder_.dispose();
+              variantsBuilder_ = null;
+              variants_ = other.variants_;
+              bitField0_ = (bitField0_ & ~0x00000200);
+              variantsBuilder_ = 
+                com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                   internalGetVariantsFieldBuilder() : null;
+            } else {
+              variantsBuilder_.addAllMessages(other.variants_);
+            }
+          }
+        }
+        if (other.hasNested()) {
+          mergeNested(other.getNested());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
@@ -1136,6 +1462,39 @@ io.confluent.protobuf.type.Decimal defaultValue) {
                 bitField0_ |= 0x00000080;
                 break;
               } // case 66
+              case 74: {
+                com.google.protobuf.Timestamp m =
+                    input.readMessage(
+                        com.google.protobuf.Timestamp.parser(),
+                        extensionRegistry);
+                if (timestampsBuilder_ == null) {
+                  ensureTimestampsIsMutable();
+                  timestamps_.add(m);
+                } else {
+                  timestampsBuilder_.addMessage(m);
+                }
+                break;
+              } // case 74
+              case 82: {
+                io.confluent.protobuf.type.Variant m =
+                    input.readMessage(
+                        io.confluent.protobuf.type.Variant.parser(),
+                        extensionRegistry);
+                if (variantsBuilder_ == null) {
+                  ensureVariantsIsMutable();
+                  variants_.add(m);
+                } else {
+                  variantsBuilder_.addMessage(m);
+                }
+                break;
+              } // case 82
+              case 90: {
+                input.readMessage(
+                    internalGetNestedFieldBuilder().getBuilder(),
+                    extensionRegistry);
+                bitField0_ |= 0x00000400;
+                break;
+              } // case 90
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -2181,6 +2540,607 @@ io.confluent.protobuf.type.Decimal defaultValue) {
         return totalAmountBuilder_;
       }
 
+      private java.util.List<com.google.protobuf.Timestamp> timestamps_ =
+        java.util.Collections.emptyList();
+      private void ensureTimestampsIsMutable() {
+        if (!((bitField0_ & 0x00000100) != 0)) {
+          timestamps_ = new java.util.ArrayList<com.google.protobuf.Timestamp>(timestamps_);
+          bitField0_ |= 0x00000100;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilder<
+          com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> timestampsBuilder_;
+
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public java.util.List<com.google.protobuf.Timestamp> getTimestampsList() {
+        if (timestampsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(timestamps_);
+        } else {
+          return timestampsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public int getTimestampsCount() {
+        if (timestampsBuilder_ == null) {
+          return timestamps_.size();
+        } else {
+          return timestampsBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public com.google.protobuf.Timestamp getTimestamps(int index) {
+        if (timestampsBuilder_ == null) {
+          return timestamps_.get(index);
+        } else {
+          return timestampsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder setTimestamps(
+          int index, com.google.protobuf.Timestamp value) {
+        if (timestampsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureTimestampsIsMutable();
+          timestamps_.set(index, value);
+          onChanged();
+        } else {
+          timestampsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder setTimestamps(
+          int index, com.google.protobuf.Timestamp.Builder builderForValue) {
+        if (timestampsBuilder_ == null) {
+          ensureTimestampsIsMutable();
+          timestamps_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          timestampsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder addTimestamps(com.google.protobuf.Timestamp value) {
+        if (timestampsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureTimestampsIsMutable();
+          timestamps_.add(value);
+          onChanged();
+        } else {
+          timestampsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder addTimestamps(
+          int index, com.google.protobuf.Timestamp value) {
+        if (timestampsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureTimestampsIsMutable();
+          timestamps_.add(index, value);
+          onChanged();
+        } else {
+          timestampsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder addTimestamps(
+          com.google.protobuf.Timestamp.Builder builderForValue) {
+        if (timestampsBuilder_ == null) {
+          ensureTimestampsIsMutable();
+          timestamps_.add(builderForValue.build());
+          onChanged();
+        } else {
+          timestampsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder addTimestamps(
+          int index, com.google.protobuf.Timestamp.Builder builderForValue) {
+        if (timestampsBuilder_ == null) {
+          ensureTimestampsIsMutable();
+          timestamps_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          timestampsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder addAllTimestamps(
+          java.lang.Iterable<? extends com.google.protobuf.Timestamp> values) {
+        if (timestampsBuilder_ == null) {
+          ensureTimestampsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, timestamps_);
+          onChanged();
+        } else {
+          timestampsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder clearTimestamps() {
+        if (timestampsBuilder_ == null) {
+          timestamps_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000100);
+          onChanged();
+        } else {
+          timestampsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public Builder removeTimestamps(int index) {
+        if (timestampsBuilder_ == null) {
+          ensureTimestampsIsMutable();
+          timestamps_.remove(index);
+          onChanged();
+        } else {
+          timestampsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public com.google.protobuf.Timestamp.Builder getTimestampsBuilder(
+          int index) {
+        return internalGetTimestampsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public com.google.protobuf.TimestampOrBuilder getTimestampsOrBuilder(
+          int index) {
+        if (timestampsBuilder_ == null) {
+          return timestamps_.get(index);  } else {
+          return timestampsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public java.util.List<? extends com.google.protobuf.TimestampOrBuilder> 
+           getTimestampsOrBuilderList() {
+        if (timestampsBuilder_ != null) {
+          return timestampsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(timestamps_);
+        }
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public com.google.protobuf.Timestamp.Builder addTimestampsBuilder() {
+        return internalGetTimestampsFieldBuilder().addBuilder(
+            com.google.protobuf.Timestamp.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public com.google.protobuf.Timestamp.Builder addTimestampsBuilder(
+          int index) {
+        return internalGetTimestampsFieldBuilder().addBuilder(
+            index, com.google.protobuf.Timestamp.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .google.protobuf.Timestamp timestamps = 9;</code>
+       */
+      public java.util.List<com.google.protobuf.Timestamp.Builder> 
+           getTimestampsBuilderList() {
+        return internalGetTimestampsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilder<
+          com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> 
+          internalGetTimestampsFieldBuilder() {
+        if (timestampsBuilder_ == null) {
+          timestampsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+              com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder>(
+                  timestamps_,
+                  ((bitField0_ & 0x00000100) != 0),
+                  getParentForChildren(),
+                  isClean());
+          timestamps_ = null;
+        }
+        return timestampsBuilder_;
+      }
+
+      private java.util.List<io.confluent.protobuf.type.Variant> variants_ =
+        java.util.Collections.emptyList();
+      private void ensureVariantsIsMutable() {
+        if (!((bitField0_ & 0x00000200) != 0)) {
+          variants_ = new java.util.ArrayList<io.confluent.protobuf.type.Variant>(variants_);
+          bitField0_ |= 0x00000200;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.confluent.protobuf.type.Variant, io.confluent.protobuf.type.Variant.Builder, io.confluent.protobuf.type.VariantOrBuilder> variantsBuilder_;
+
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public java.util.List<io.confluent.protobuf.type.Variant> getVariantsList() {
+        if (variantsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(variants_);
+        } else {
+          return variantsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public int getVariantsCount() {
+        if (variantsBuilder_ == null) {
+          return variants_.size();
+        } else {
+          return variantsBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public io.confluent.protobuf.type.Variant getVariants(int index) {
+        if (variantsBuilder_ == null) {
+          return variants_.get(index);
+        } else {
+          return variantsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder setVariants(
+          int index, io.confluent.protobuf.type.Variant value) {
+        if (variantsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureVariantsIsMutable();
+          variants_.set(index, value);
+          onChanged();
+        } else {
+          variantsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder setVariants(
+          int index, io.confluent.protobuf.type.Variant.Builder builderForValue) {
+        if (variantsBuilder_ == null) {
+          ensureVariantsIsMutable();
+          variants_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          variantsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder addVariants(io.confluent.protobuf.type.Variant value) {
+        if (variantsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureVariantsIsMutable();
+          variants_.add(value);
+          onChanged();
+        } else {
+          variantsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder addVariants(
+          int index, io.confluent.protobuf.type.Variant value) {
+        if (variantsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureVariantsIsMutable();
+          variants_.add(index, value);
+          onChanged();
+        } else {
+          variantsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder addVariants(
+          io.confluent.protobuf.type.Variant.Builder builderForValue) {
+        if (variantsBuilder_ == null) {
+          ensureVariantsIsMutable();
+          variants_.add(builderForValue.build());
+          onChanged();
+        } else {
+          variantsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder addVariants(
+          int index, io.confluent.protobuf.type.Variant.Builder builderForValue) {
+        if (variantsBuilder_ == null) {
+          ensureVariantsIsMutable();
+          variants_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          variantsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder addAllVariants(
+          java.lang.Iterable<? extends io.confluent.protobuf.type.Variant> values) {
+        if (variantsBuilder_ == null) {
+          ensureVariantsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, variants_);
+          onChanged();
+        } else {
+          variantsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder clearVariants() {
+        if (variantsBuilder_ == null) {
+          variants_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000200);
+          onChanged();
+        } else {
+          variantsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public Builder removeVariants(int index) {
+        if (variantsBuilder_ == null) {
+          ensureVariantsIsMutable();
+          variants_.remove(index);
+          onChanged();
+        } else {
+          variantsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public io.confluent.protobuf.type.Variant.Builder getVariantsBuilder(
+          int index) {
+        return internalGetVariantsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public io.confluent.protobuf.type.VariantOrBuilder getVariantsOrBuilder(
+          int index) {
+        if (variantsBuilder_ == null) {
+          return variants_.get(index);  } else {
+          return variantsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public java.util.List<? extends io.confluent.protobuf.type.VariantOrBuilder> 
+           getVariantsOrBuilderList() {
+        if (variantsBuilder_ != null) {
+          return variantsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(variants_);
+        }
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public io.confluent.protobuf.type.Variant.Builder addVariantsBuilder() {
+        return internalGetVariantsFieldBuilder().addBuilder(
+            io.confluent.protobuf.type.Variant.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public io.confluent.protobuf.type.Variant.Builder addVariantsBuilder(
+          int index) {
+        return internalGetVariantsFieldBuilder().addBuilder(
+            index, io.confluent.protobuf.type.Variant.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .confluent.type.Variant variants = 10;</code>
+       */
+      public java.util.List<io.confluent.protobuf.type.Variant.Builder> 
+           getVariantsBuilderList() {
+        return internalGetVariantsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.confluent.protobuf.type.Variant, io.confluent.protobuf.type.Variant.Builder, io.confluent.protobuf.type.VariantOrBuilder> 
+          internalGetVariantsFieldBuilder() {
+        if (variantsBuilder_ == null) {
+          variantsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+              io.confluent.protobuf.type.Variant, io.confluent.protobuf.type.Variant.Builder, io.confluent.protobuf.type.VariantOrBuilder>(
+                  variants_,
+                  ((bitField0_ & 0x00000200) != 0),
+                  getParentForChildren(),
+                  isClean());
+          variants_ = null;
+        }
+        return variantsBuilder_;
+      }
+
+      private io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested nested_;
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder> nestedBuilder_;
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       * @return Whether the nested field is set.
+       */
+      public boolean hasNested() {
+        return ((bitField0_ & 0x00000400) != 0);
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       * @return The nested.
+       */
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getNested() {
+        if (nestedBuilder_ == null) {
+          return nested_ == null ? io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance() : nested_;
+        } else {
+          return nestedBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public Builder setNested(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested value) {
+        if (nestedBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          nested_ = value;
+        } else {
+          nestedBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000400;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public Builder setNested(
+          io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder builderForValue) {
+        if (nestedBuilder_ == null) {
+          nested_ = builderForValue.build();
+        } else {
+          nestedBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000400;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public Builder mergeNested(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested value) {
+        if (nestedBuilder_ == null) {
+          if (((bitField0_ & 0x00000400) != 0) &&
+            nested_ != null &&
+            nested_ != io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance()) {
+            getNestedBuilder().mergeFrom(value);
+          } else {
+            nested_ = value;
+          }
+        } else {
+          nestedBuilder_.mergeFrom(value);
+        }
+        if (nested_ != null) {
+          bitField0_ |= 0x00000400;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public Builder clearNested() {
+        bitField0_ = (bitField0_ & ~0x00000400);
+        nested_ = null;
+        if (nestedBuilder_ != null) {
+          nestedBuilder_.dispose();
+          nestedBuilder_ = null;
+        }
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder getNestedBuilder() {
+        bitField0_ |= 0x00000400;
+        onChanged();
+        return internalGetNestedFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder getNestedOrBuilder() {
+        if (nestedBuilder_ != null) {
+          return nestedBuilder_.getMessageOrBuilder();
+        } else {
+          return nested_ == null ?
+              io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance() : nested_;
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.schemaregistry.rules.Nested nested = 11;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder> 
+          internalGetNestedFieldBuilder() {
+        if (nestedBuilder_ == null) {
+          nestedBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder>(
+                  getNested(),
+                  getParentForChildren(),
+                  isClean());
+          nested_ = null;
+        }
+        return nestedBuilder_;
+      }
+
       // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.ValueTypes)
     }
 
@@ -2232,6 +3192,789 @@ io.confluent.protobuf.type.Decimal defaultValue) {
 
   }
 
+  public interface NestedOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.schemaregistry.rules.Nested)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     * @return Whether the inner field is set.
+     */
+    boolean hasInner();
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     * @return The inner.
+     */
+    io.confluent.protobuf.type.Decimal getInner();
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     */
+    io.confluent.protobuf.type.DecimalOrBuilder getInnerOrBuilder();
+
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     * @return Whether the innerTs field is set.
+     */
+    boolean hasInnerTs();
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     * @return The innerTs.
+     */
+    com.google.protobuf.Timestamp getInnerTs();
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     */
+    com.google.protobuf.TimestampOrBuilder getInnerTsOrBuilder();
+  }
+  /**
+   * <pre>
+   * A value type one level down, so the writer's recursion into nested messages is covered.
+   * </pre>
+   *
+   * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.Nested}
+   */
+  public static final class Nested extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.schemaregistry.rules.Nested)
+      NestedOrBuilder {
+  private static final long serialVersionUID = 0L;
+    static {
+      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+        /* major= */ 4,
+        /* minor= */ 34,
+        /* patch= */ 0,
+        /* suffix= */ "",
+        "Nested");
+    }
+    // Use Nested.newBuilder() to construct.
+    private Nested(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private Nested() {
+    }
+
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
+      return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.class, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int INNER_FIELD_NUMBER = 1;
+    private io.confluent.protobuf.type.Decimal inner_;
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     * @return Whether the inner field is set.
+     */
+    @java.lang.Override
+    public boolean hasInner() {
+      return ((bitField0_ & 0x00000001) != 0);
+    }
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     * @return The inner.
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.Decimal getInner() {
+      return inner_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : inner_;
+    }
+    /**
+     * <code>.confluent.type.Decimal inner = 1;</code>
+     */
+    @java.lang.Override
+    public io.confluent.protobuf.type.DecimalOrBuilder getInnerOrBuilder() {
+      return inner_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : inner_;
+    }
+
+    public static final int INNER_TS_FIELD_NUMBER = 2;
+    private com.google.protobuf.Timestamp innerTs_;
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     * @return Whether the innerTs field is set.
+     */
+    @java.lang.Override
+    public boolean hasInnerTs() {
+      return ((bitField0_ & 0x00000002) != 0);
+    }
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     * @return The innerTs.
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getInnerTs() {
+      return innerTs_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : innerTs_;
+    }
+    /**
+     * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.TimestampOrBuilder getInnerTsOrBuilder() {
+      return innerTs_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : innerTs_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (((bitField0_ & 0x00000001) != 0)) {
+        output.writeMessage(1, getInner());
+      }
+      if (((bitField0_ & 0x00000002) != 0)) {
+        output.writeMessage(2, getInnerTs());
+      }
+      getUnknownFields().writeTo(output);
+    }
+
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (((bitField0_ & 0x00000001) != 0)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(1, getInner());
+      }
+      if (((bitField0_ & 0x00000002) != 0)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(2, getInnerTs());
+      }
+      size += getUnknownFields().getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested)) {
+        return super.equals(obj);
+      }
+      io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested other = (io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested) obj;
+
+      if (hasInner() != other.hasInner()) return false;
+      if (hasInner()) {
+        if (!getInner()
+            .equals(other.getInner())) return false;
+      }
+      if (hasInnerTs() != other.hasInnerTs()) return false;
+      if (hasInnerTs()) {
+        if (!getInnerTs()
+            .equals(other.getInnerTs())) return false;
+      }
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (hasInner()) {
+        hash = (37 * hash) + INNER_FIELD_NUMBER;
+        hash = (53 * hash) + getInner().hashCode();
+      }
+      if (hasInnerTs()) {
+        hash = (37 * hash) + INNER_TS_FIELD_NUMBER;
+        hash = (53 * hash) + getInnerTs().hashCode();
+      }
+      hash = (29 * hash) + getUnknownFields().hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * A value type one level down, so the writer's recursion into nested messages is covered.
+     * </pre>
+     *
+     * Protobuf type {@code io.confluent.kafka.schemaregistry.rules.Nested}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.schemaregistry.rules.Nested)
+        io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.NestedOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.class, io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.Builder.class);
+      }
+
+      // Construct using io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessage
+                .alwaysUseFieldBuilders) {
+          internalGetInnerFieldBuilder();
+          internalGetInnerTsFieldBuilder();
+        }
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        bitField0_ = 0;
+        inner_ = null;
+        if (innerBuilder_ != null) {
+          innerBuilder_.dispose();
+          innerBuilder_ = null;
+        }
+        innerTs_ = null;
+        if (innerTsBuilder_ != null) {
+          innerTsBuilder_.dispose();
+          innerTsBuilder_ = null;
+        }
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor;
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getDefaultInstanceForType() {
+        return io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested build() {
+        io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested buildPartial() {
+        io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested result = new io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested(this);
+        if (bitField0_ != 0) { buildPartial0(result); }
+        onBuilt();
+        return result;
+      }
+
+      private void buildPartial0(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested result) {
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.inner_ = innerBuilder_ == null
+              ? inner_
+              : innerBuilder_.build();
+          to_bitField0_ |= 0x00000001;
+        }
+        if (((from_bitField0_ & 0x00000002) != 0)) {
+          result.innerTs_ = innerTsBuilder_ == null
+              ? innerTs_
+              : innerTsBuilder_.build();
+          to_bitField0_ |= 0x00000002;
+        }
+        result.bitField0_ |= to_bitField0_;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested) {
+          return mergeFrom((io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested other) {
+        if (other == io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested.getDefaultInstance()) return this;
+        if (other.hasInner()) {
+          mergeInner(other.getInner());
+        }
+        if (other.hasInnerTs()) {
+          mergeInnerTs(other.getInnerTs());
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
+        try {
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                input.readMessage(
+                    internalGetInnerFieldBuilder().getBuilder(),
+                    extensionRegistry);
+                bitField0_ |= 0x00000001;
+                break;
+              } // case 10
+              case 18: {
+                input.readMessage(
+                    internalGetInnerTsFieldBuilder().getBuilder(),
+                    extensionRegistry);
+                bitField0_ |= 0x00000002;
+                break;
+              } // case 18
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.unwrapIOException();
+        } finally {
+          onChanged();
+        } // finally
+        return this;
+      }
+      private int bitField0_;
+
+      private io.confluent.protobuf.type.Decimal inner_;
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> innerBuilder_;
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       * @return Whether the inner field is set.
+       */
+      public boolean hasInner() {
+        return ((bitField0_ & 0x00000001) != 0);
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       * @return The inner.
+       */
+      public io.confluent.protobuf.type.Decimal getInner() {
+        if (innerBuilder_ == null) {
+          return inner_ == null ? io.confluent.protobuf.type.Decimal.getDefaultInstance() : inner_;
+        } else {
+          return innerBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public Builder setInner(io.confluent.protobuf.type.Decimal value) {
+        if (innerBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          inner_ = value;
+        } else {
+          innerBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public Builder setInner(
+          io.confluent.protobuf.type.Decimal.Builder builderForValue) {
+        if (innerBuilder_ == null) {
+          inner_ = builderForValue.build();
+        } else {
+          innerBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public Builder mergeInner(io.confluent.protobuf.type.Decimal value) {
+        if (innerBuilder_ == null) {
+          if (((bitField0_ & 0x00000001) != 0) &&
+            inner_ != null &&
+            inner_ != io.confluent.protobuf.type.Decimal.getDefaultInstance()) {
+            getInnerBuilder().mergeFrom(value);
+          } else {
+            inner_ = value;
+          }
+        } else {
+          innerBuilder_.mergeFrom(value);
+        }
+        if (inner_ != null) {
+          bitField0_ |= 0x00000001;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public Builder clearInner() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        inner_ = null;
+        if (innerBuilder_ != null) {
+          innerBuilder_.dispose();
+          innerBuilder_ = null;
+        }
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public io.confluent.protobuf.type.Decimal.Builder getInnerBuilder() {
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return internalGetInnerFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      public io.confluent.protobuf.type.DecimalOrBuilder getInnerOrBuilder() {
+        if (innerBuilder_ != null) {
+          return innerBuilder_.getMessageOrBuilder();
+        } else {
+          return inner_ == null ?
+              io.confluent.protobuf.type.Decimal.getDefaultInstance() : inner_;
+        }
+      }
+      /**
+       * <code>.confluent.type.Decimal inner = 1;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder> 
+          internalGetInnerFieldBuilder() {
+        if (innerBuilder_ == null) {
+          innerBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              io.confluent.protobuf.type.Decimal, io.confluent.protobuf.type.Decimal.Builder, io.confluent.protobuf.type.DecimalOrBuilder>(
+                  getInner(),
+                  getParentForChildren(),
+                  isClean());
+          inner_ = null;
+        }
+        return innerBuilder_;
+      }
+
+      private com.google.protobuf.Timestamp innerTs_;
+      private com.google.protobuf.SingleFieldBuilder<
+          com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> innerTsBuilder_;
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       * @return Whether the innerTs field is set.
+       */
+      public boolean hasInnerTs() {
+        return ((bitField0_ & 0x00000002) != 0);
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       * @return The innerTs.
+       */
+      public com.google.protobuf.Timestamp getInnerTs() {
+        if (innerTsBuilder_ == null) {
+          return innerTs_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : innerTs_;
+        } else {
+          return innerTsBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public Builder setInnerTs(com.google.protobuf.Timestamp value) {
+        if (innerTsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          innerTs_ = value;
+        } else {
+          innerTsBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public Builder setInnerTs(
+          com.google.protobuf.Timestamp.Builder builderForValue) {
+        if (innerTsBuilder_ == null) {
+          innerTs_ = builderForValue.build();
+        } else {
+          innerTsBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public Builder mergeInnerTs(com.google.protobuf.Timestamp value) {
+        if (innerTsBuilder_ == null) {
+          if (((bitField0_ & 0x00000002) != 0) &&
+            innerTs_ != null &&
+            innerTs_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+            getInnerTsBuilder().mergeFrom(value);
+          } else {
+            innerTs_ = value;
+          }
+        } else {
+          innerTsBuilder_.mergeFrom(value);
+        }
+        if (innerTs_ != null) {
+          bitField0_ |= 0x00000002;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public Builder clearInnerTs() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        innerTs_ = null;
+        if (innerTsBuilder_ != null) {
+          innerTsBuilder_.dispose();
+          innerTsBuilder_ = null;
+        }
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public com.google.protobuf.Timestamp.Builder getInnerTsBuilder() {
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return internalGetInnerTsFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      public com.google.protobuf.TimestampOrBuilder getInnerTsOrBuilder() {
+        if (innerTsBuilder_ != null) {
+          return innerTsBuilder_.getMessageOrBuilder();
+        } else {
+          return innerTs_ == null ?
+              com.google.protobuf.Timestamp.getDefaultInstance() : innerTs_;
+        }
+      }
+      /**
+       * <code>.google.protobuf.Timestamp inner_ts = 2;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> 
+          internalGetInnerTsFieldBuilder() {
+        if (innerTsBuilder_ == null) {
+          innerTsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder>(
+                  getInnerTs(),
+                  getParentForChildren(),
+                  isClean());
+          innerTs_ = null;
+        }
+        return innerTsBuilder_;
+      }
+
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.schemaregistry.rules.Nested)
+    }
+
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.schemaregistry.rules.Nested)
+    private static final io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested();
+    }
+
+    public static io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<Nested>
+        PARSER = new com.google.protobuf.AbstractParser<Nested>() {
+      @java.lang.Override
+      public Nested parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
+      }
+    };
+
+    public static com.google.protobuf.Parser<Nested> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<Nested> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public io.confluent.kafka.schemaregistry.rules.CelValueTypesProto.Nested getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor;
   private static final 
@@ -2242,6 +3985,11 @@ io.confluent.protobuf.type.Decimal defaultValue) {
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_io_confluent_kafka_schemaregistry_rules_Nested_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -2255,7 +4003,7 @@ io.confluent.protobuf.type.Decimal defaultValue) {
       "a.schemaregistry.rules\032\024confluent/meta.p" +
       "roto\032\034confluent/type/decimal.proto\032\034conf" +
       "luent/type/variant.proto\032\037google/protobu" +
-      "f/timestamp.proto\"\331\003\n\nValueTypes\0224\n\006amou" +
+      "f/timestamp.proto\"\365\004\n\nValueTypes\0224\n\006amou" +
       "nt\030\001 \001(\0132\027.confluent.type.DecimalB\013\202D\010\032\006" +
       "AMOUNT\022/\n\002ts\030\002 \001(\0132\032.google.protobuf.Tim" +
       "estampB\007\202D\004\032\002TS\0220\n\004data\030\003 \001(\0132\027.confluen" +
@@ -2265,11 +4013,17 @@ io.confluent.protobuf.type.Decimal defaultValue) {
       "NTS\022V\n\namount_map\030\007 \003(\0132B.io.confluent.k" +
       "afka.schemaregistry.rules.ValueTypes.Amo" +
       "untMapEntry\022-\n\014total_amount\030\010 \001(\0132\027.conf" +
-      "luent.type.Decimal\032I\n\016AmountMapEntry\022\013\n\003" +
-      "key\030\001 \001(\t\022&\n\005value\030\002 \001(\0132\027.confluent.typ" +
-      "e.Decimal:\0028\001B?\n\'io.confluent.kafka.sche" +
-      "maregistry.rulesB\022CelValueTypesProtoP\000b\006" +
-      "proto3"
+      "luent.type.Decimal\022.\n\ntimestamps\030\t \003(\0132\032" +
+      ".google.protobuf.Timestamp\022)\n\010variants\030\n" +
+      " \003(\0132\027.confluent.type.Variant\022?\n\006nested\030" +
+      "\013 \001(\0132/.io.confluent.kafka.schemaregistr" +
+      "y.rules.Nested\032I\n\016AmountMapEntry\022\013\n\003key\030" +
+      "\001 \001(\t\022&\n\005value\030\002 \001(\0132\027.confluent.type.De" +
+      "cimal:\0028\001\"^\n\006Nested\022&\n\005inner\030\001 \001(\0132\027.con" +
+      "fluent.type.Decimal\022,\n\010inner_ts\030\002 \001(\0132\032." +
+      "google.protobuf.TimestampB?\n\'io.confluen" +
+      "t.kafka.schemaregistry.rulesB\022CelValueTy" +
+      "pesProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -2284,13 +4038,19 @@ io.confluent.protobuf.type.Decimal defaultValue) {
     internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor,
-        new java.lang.String[] { "Amount", "Ts", "Data", "Label", "Ratio", "Amounts", "AmountMap", "TotalAmount", });
+        new java.lang.String[] { "Amount", "Ts", "Data", "Label", "Ratio", "Amounts", "AmountMap", "TotalAmount", "Timestamps", "Variants", "Nested", });
     internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor =
       internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_descriptor.getNestedType(0);
     internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_io_confluent_kafka_schemaregistry_rules_ValueTypes_AmountMapEntry_descriptor,
         new java.lang.String[] { "Key", "Value", });
+    internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor =
+      getDescriptor().getMessageType(1);
+    internal_static_io_confluent_kafka_schemaregistry_rules_Nested_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_io_confluent_kafka_schemaregistry_rules_Nested_descriptor,
+        new java.lang.String[] { "Inner", "InnerTs", });
     descriptor.resolveAllFeaturesImmutable();
     io.confluent.protobuf.MetaProto.getDescriptor();
     io.confluent.protobuf.type.DecimalProto.getDescriptor();
