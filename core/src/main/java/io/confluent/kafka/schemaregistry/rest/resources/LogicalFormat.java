@@ -52,6 +52,41 @@ final class LogicalFormat {
   }
 
   /**
+   * Auto-detects whether a request-body schema is a logical-types DDL rather than a native
+   * Avro/JSON/Protobuf schema, so callers don't need to pass {@code format=logical} on input.
+   *
+   * <p>Native-first: the body is parsed as its declared {@code schemaType}; if that succeeds it is
+   * a native schema. Only when the native parse fails is the logical DDL parse attempted, so common
+   * native traffic never pays for a DDL parse, a native schema (which is never valid DDL) is never
+   * misread as logical, and unparseable garbage stays native so its native error is what surfaces.
+   * {@code parseSchema} resolves references, so a referenced native schema still classifies
+   * correctly.
+   */
+  static boolean looksLogical(SchemaRegistry schemaRegistry, Schema schema) {
+    if (schema == null || schema.getSchema() == null || schema.getSchema().isBlank()) {
+      return false;
+    }
+    try {
+      schemaRegistry.parseSchema(schema, false, false);
+      return false; // parses as its declared native schemaType
+    } catch (RuntimeException | SchemaRegistryException e) {
+      return parsesAsLogical(schema.getSchema()); // not native — logical iff it parses as DDL
+    }
+  }
+
+  static boolean parsesAsLogical(String schema) {
+    if (schema == null || schema.isBlank()) {
+      return false;
+    }
+    try {
+      new LogicalTypesSchemaVisitor().visit(LogicalTypesParserFactory.parse(schema));
+      return true;
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  /**
    * Converts the Logical Type in {@code request}'s schema field into {@code request}'s declared
    * {@code schemaType}, replacing it in place.
    *

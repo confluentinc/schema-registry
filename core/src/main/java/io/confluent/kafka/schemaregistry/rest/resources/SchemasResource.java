@@ -218,7 +218,16 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      if (LogicalFormat.isLogical(format)) {
+        // Storage renders native formats only; fetch natively and convert to logical DDL here.
+        schema = schemaRegistry.get(id, subject, "", fetchMaxId);
+        if (schema != null) {
+          schema.setSchemaString(LogicalFormat.convertToLogical(
+              schemaRegistry, new Schema(subject, null, id, schema)));
+        }
+      } else {
+        schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      }
       if (schema == null) {
         throw Errors.schemaNotFoundException(id);
       }
@@ -400,7 +409,12 @@ public class SchemasResource {
             + "schema with id " + id + " from the schema registry";
     String schema ;
     try {
-      schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+      if (LogicalFormat.isLogical(format)) {
+        SchemaString ss = schemaRegistry.get(id, subject, "", false);
+        schema = LogicalFormat.convertToLogical(schemaRegistry, new Schema(subject, null, id, ss));
+      } else {
+        schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+      }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -444,7 +458,15 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
         + "registry";
     try {
-      schema = schemaRegistry.getByGuid(guid, format);
+      if (LogicalFormat.isLogical(format)) {
+        schema = schemaRegistry.getByGuid(guid, "");
+        if (schema != null) {
+          schema.setSchemaString(LogicalFormat.convertToLogical(
+              schemaRegistry, new Schema(null, null, null, schema)));
+        }
+      } else {
+        schema = schemaRegistry.getByGuid(guid, format);
+      }
       if (schema == null) {
         throw Errors.schemaNotFoundException(guid);
       }

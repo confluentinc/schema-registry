@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -59,6 +60,63 @@ class LogicalFormatTest {
     assertEquals(false, LogicalFormat.isLogical("resolved"));
     assertEquals(false, LogicalFormat.isLogical(""));
     assertEquals(false, LogicalFormat.isLogical(null));
+  }
+
+  // -- parsesAsLogical: the pure DDL-vs-not classifier -------------------------------------------
+
+  @Test
+  void parsesAsLogicalDetectsDdl() {
+    assertTrue(LogicalFormat.parsesAsLogical(
+        "STRUCT Widget (id INT NOT NULL, name VARCHAR NOT NULL)"));
+    assertTrue(LogicalFormat.parsesAsLogical("NAMESPACE com.example;\nSTRUCT W (id INT NOT NULL)"));
+    // ENUM is also a Protobuf keyword, so this exercises the parse itself, not a keyword sniff.
+    assertTrue(LogicalFormat.parsesAsLogical("ENUM Color ('RED', 'GREEN', 'BLUE')"));
+  }
+
+  @Test
+  void parsesAsLogicalRejectsNativeSchemas() {
+    assertEquals(false, LogicalFormat.parsesAsLogical(
+        "{\"type\":\"record\",\"name\":\"W\",\"fields\":[]}"));       // Avro
+    assertEquals(false, LogicalFormat.parsesAsLogical(
+        "{\"type\":\"object\",\"properties\":{}}"));                   // JSON Schema
+    assertEquals(false, LogicalFormat.parsesAsLogical(
+        "syntax = \"proto3\"; message W { string id = 1; }"));        // Protobuf
+    assertEquals(false, LogicalFormat.parsesAsLogical("enum E { A = 0; }")); // Proto enum, not DDL
+    assertEquals(false, LogicalFormat.parsesAsLogical(""));
+    assertEquals(false, LogicalFormat.parsesAsLogical("   "));
+    assertEquals(false, LogicalFormat.parsesAsLogical(null));
+  }
+
+  // -- looksLogical: native-first input auto-detection -------------------------------------------
+
+  @Test
+  void looksLogicalTreatsNativeParseSuccessAsNotLogical() throws Exception {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    // Body parses as its declared native schemaType -> not logical, whatever the body text is.
+    when(schemaRegistry.parseSchema(any(Schema.class), anyBoolean(), anyBoolean()))
+        .thenReturn(mock(ParsedSchema.class));
+    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry,
+        schemaEntityFor("AVRO", "STRUCT Widget (id INT NOT NULL)")));
+  }
+
+  @Test
+  void looksLogicalFallsBackToDdlWhenNativeParseFails() throws Exception {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    // Native parse fails -> logical iff the body parses as DDL.
+    when(schemaRegistry.parseSchema(any(Schema.class), anyBoolean(), anyBoolean()))
+        .thenThrow(new InvalidSchemaException("not native"));
+    assertTrue(LogicalFormat.looksLogical(schemaRegistry,
+        schemaEntityFor("AVRO", "STRUCT Widget (id INT NOT NULL)")));
+    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry,
+        schemaEntityFor("AVRO", "not a schema at all {{{")));
+  }
+
+  @Test
+  void looksLogicalRejectsBlankAndNull() throws Exception {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, null));
+    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, schemaEntityFor("AVRO", "")));
+    assertEquals(false, LogicalFormat.looksLogical(schemaRegistry, schemaEntityFor("AVRO", "   ")));
   }
 
   // -- convertToNative: happy path, one per schemaType -------------------------------------------
