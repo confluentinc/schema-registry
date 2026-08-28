@@ -162,11 +162,11 @@ public final class LogicalTypeToDdlConverter {
     private void printCreateType(String name, Schema body) {
       switch (body.getType()) {
         case STRUCT:
-          sb.append("STRUCT ").append(qualifiedName(name)).append(" ");
+          sb.append("STRUCT ").append(qualifiedName(displayName(name))).append(" ");
           appendStructBody(body, /*indent=*/"");
           break;
         case ENUM:
-          sb.append("ENUM ").append(qualifiedName(name)).append(" ");
+          sb.append("ENUM ").append(qualifiedName(displayName(name))).append(" ");
           appendEnumBody(body);
           break;
         default:
@@ -357,7 +357,7 @@ public final class LogicalTypeToDdlConverter {
           // Schema.toDdl returns the bare qualified name without identifier
           // quoting — collides with reserved words (e.g., a type literally
           // named "Row" would lex as the ROW keyword). Quote per-segment.
-          return wrapNullable(qualifiedName(schema.getQualifiedName()), schema);
+          return wrapNullable(qualifiedName(displayName(schema.getQualifiedName())), schema);
         default:
           // Primitive / decimal / parametric / ENUM — Schema.toDdl already
           // emits the right syntax including the " NOT NULL" suffix when
@@ -571,6 +571,22 @@ public final class LogicalTypeToDdlConverter {
     // ---------------------------------------------------------------------
     // Names and literals
     // ---------------------------------------------------------------------
+
+    /**
+     * Strip the document namespace prefix from a fully-qualified name so names under the active
+     * {@code NAMESPACE} render simplified (e.g. {@code com.example.demo.Address} → {@code Address}
+     * when the namespace is {@code com.example.demo}). Foreign-namespace names pass through
+     * unchanged, and a nested type's nesting portion is preserved
+     * ({@code com.example.demo.Outer.Inner} → {@code Outer.Inner}) — the visitor re-qualifies it on
+     * read-back via its local-parent-prefix rule.
+     */
+    private String displayName(String fqn) {
+      String ns = lt.getNamespace();
+      if (ns != null && !ns.isEmpty() && fqn != null && fqn.startsWith(ns + ".")) {
+        return fqn.substring(ns.length() + 1);
+      }
+      return fqn;
+    }
 
     private static String qualifiedName(String dotted) {
       String[] parts = dotted.split("\\.");

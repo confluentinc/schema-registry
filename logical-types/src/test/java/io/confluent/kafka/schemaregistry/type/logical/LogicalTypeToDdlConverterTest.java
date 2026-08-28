@@ -62,6 +62,31 @@ class LogicalTypeToDdlConverterTest {
   // -----------------------------------------------------------------------
 
   @Test
+  void namespacedNamesSimplifyInDdlIncludingNestedTypes() {
+    // Names under the document NAMESPACE render simplified (the com.example.demo prefix is
+    // stripped), including nested types whose nesting portion (Outer.Inner) is preserved.
+    // A foreign-namespace reference stays fully qualified.
+    LogicalType lt = parse(
+        "NAMESPACE com.example.demo;\n"
+        + "STRUCT Outer (inner Outer.Inner NOT NULL, addr Address, ext other.ns.Thing);\n"
+        + "STRUCT Outer.Inner (x INT NOT NULL);\n"
+        + "STRUCT Address (city STRING NOT NULL);\n");
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertTrue(ddl.contains("NAMESPACE com.example.demo;"), ddl);
+    assertTrue(ddl.contains("STRUCT Outer ("), ddl);
+    assertTrue(ddl.contains("STRUCT Outer.Inner ("), ddl);
+    assertTrue(ddl.contains("STRUCT Address ("), ddl);
+    assertTrue(ddl.contains("inner Outer.Inner NOT NULL"), ddl);
+    assertTrue(ddl.contains("addr Address"), ddl);
+    // Foreign-namespace reference is not stripped.
+    assertTrue(ddl.contains("ext other.ns.Thing"), ddl);
+    // The document namespace prefix never appears on a local name.
+    assertTrue(!ddl.contains("com.example.demo.Outer")
+        && !ddl.contains("com.example.demo.Address"), ddl);
+    assertRoundTrip(lt);
+  }
+
+  @Test
   void primitives() {
     // Named-type (STRUCT/ENUM) bodies are parsed as nullable (the body's own nullability
     // is "ambient"; the use site sets nullability via the NAMED_TYPE_REF
