@@ -151,6 +151,21 @@ class AvroToLogicalTypeConverterTest {
   }
 
   @Test
+  void nullableNamespacedRootInfersNamespace() {
+    // A natural nullable Avro root is a top-level ["null", record] union; the namespace fallback
+    // must still infer the record's namespace (matching the NOT NULL case and the Proto/JSON
+    // readers) rather than seeing UNION and giving up.
+    String json = "[\"null\",{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"acme\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}]";
+    io.confluent.kafka.schemaregistry.type.logical.LogicalType lt =
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    assertEquals("acme", lt.getNamespace());
+    assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
+    assertEquals("Order", lt.getName());
+    assertTrue(lt.getRootSchema().isNullable());
+  }
+
+  @Test
   void testProperUnionConversion() {
     org.apache.avro.Schema unionSchema = org.apache.avro.Schema.createUnion(
         SchemaBuilder.builder().intType(),

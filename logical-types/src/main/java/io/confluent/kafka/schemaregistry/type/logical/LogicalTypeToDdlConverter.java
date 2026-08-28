@@ -575,17 +575,47 @@ public final class LogicalTypeToDdlConverter {
     /**
      * Strip the document namespace prefix from a fully-qualified name so names under the active
      * {@code NAMESPACE} render simplified (e.g. {@code com.example.demo.Address} → {@code Address}
-     * when the namespace is {@code com.example.demo}). Foreign-namespace names pass through
-     * unchanged, and a nested type's nesting portion is preserved
-     * ({@code com.example.demo.Outer.Inner} → {@code Outer.Inner}) — the visitor re-qualifies it on
-     * read-back via its local-parent-prefix rule.
+     * when the namespace is {@code com.example.demo}). Only simplifies when the visitor can reverse
+     * it on read-back:
+     * <ul>
+     *   <li>a bare (dot-free) remainder is always re-qualified with the namespace;</li>
+     *   <li>a dotted remainder is re-qualified only when a prefix of it names a locally-declared
+     *       parent type — i.e. it denotes nesting ({@code Outer.Inner}).</li>
+     * </ul>
+     * Otherwise the name is left fully qualified: foreign-namespace names, and a type in a
+     * sub-namespace of the document namespace with no local parent (e.g.
+     * {@code com.example.sub.Address}), would be read back as an unrelated FQN if simplified.
      */
     private String displayName(String fqn) {
       String ns = lt.getNamespace();
-      if (ns != null && !ns.isEmpty() && fqn != null && fqn.startsWith(ns + ".")) {
-        return fqn.substring(ns.length() + 1);
+      if (ns == null || ns.isEmpty() || fqn == null || !fqn.startsWith(ns + ".")) {
+        return fqn;
+      }
+      String relative = fqn.substring(ns.length() + 1);
+      if (!relative.contains(".") || hasLocalParentPrefix(relative, ns)) {
+        return relative;
       }
       return fqn;
+    }
+
+    /**
+     * Mirror of {@code LogicalTypesSchemaVisitor#hasLocalParentPrefix} over the local named types:
+     * true iff a dotted prefix of {@code name} (as written, or namespace-prepended) names a
+     * locally-declared type — which is exactly when the visitor treats the dots as nesting and
+     * re-applies the namespace on read-back.
+     */
+    private boolean hasLocalParentPrefix(String name, String ns) {
+      Set<String> declared = lt.getLocalNamedTypes().keySet();
+      int dot = name.lastIndexOf('.');
+      while (dot > 0) {
+        String prefix = name.substring(0, dot);
+        if (declared.contains(prefix)
+            || (ns != null && !ns.isEmpty() && declared.contains(ns + "." + prefix))) {
+          return true;
+        }
+        dot = name.lastIndexOf('.', dot - 1);
+      }
+      return false;
     }
 
     private static String qualifiedName(String dotted) {

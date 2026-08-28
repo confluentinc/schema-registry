@@ -87,6 +87,23 @@ class LogicalTypeToDdlConverterTest {
   }
 
   @Test
+  void subNamespaceNamesAreNotOverSimplified() {
+    // A type in a sub-namespace of the document namespace with NO local parent must stay fully
+    // qualified: stripping com.example.sub.Address -> sub.Address would re-read as an unrelated
+    // FQN, since the visitor only re-qualifies a dotted name when a prefix names a local parent.
+    LogicalType lt = parse(
+        "NAMESPACE com.example;\n"
+        + "STRUCT Order (addr com.example.sub.Address NOT NULL);\n"
+        + "STRUCT com.example.sub.Address (city STRING NOT NULL);\n");
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertTrue(ddl.contains("STRUCT com.example.sub.Address ("), ddl);
+    assertTrue(ddl.contains("addr com.example.sub.Address NOT NULL"), ddl);
+    // Type identity must survive the projection. String idempotence alone would NOT catch
+    // over-stripping (sub.Address re-emits as sub.Address), so assert the FQN key round-trips.
+    assertTrue(parse(ddl).getNamedTypes().containsKey("com.example.sub.Address"), ddl);
+  }
+
+  @Test
   void primitives() {
     // Named-type (STRUCT/ENUM) bodies are parsed as nullable (the body's own nullability
     // is "ambient"; the use site sets nullability via the NAMED_TYPE_REF
