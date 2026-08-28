@@ -55,29 +55,31 @@ final class LogicalFormat {
    * Auto-detects whether a request-body schema is a logical-types DDL rather than a native
    * Avro/JSON/Protobuf schema, so callers don't need to pass {@code format=logical} on input.
    *
-   * <p>The cheap, registry-free DDL parse is the gate: a body that does not even parse as logical
-   * DDL is native, and the overwhelmingly common native traffic stops here having paid only for a
-   * fast failed DDL parse -- it is not parsed against the registry at all, so it is parsed exactly
-   * once, downstream, on the register/lookup path itself.
+   * <p>Native-first: the body is parsed as its declared {@code schemaType}, and only if that fails
+   * is the logical DDL parse attempted. So a native schema always wins, and a body is logical only
+   * once it has been ruled out as native. {@code parseSchema} resolves references, so a referenced
+   * native schema still classifies correctly, and unparseable garbage stays native so its native
+   * error is what surfaces.
    *
-   * <p>Native-first only where it matters: a body that <em>does</em> parse as DDL could still be a
-   * native schema that happens to be valid DDL, so it is disambiguated by a native parse and native
-   * wins if that succeeds. {@code parseSchema} resolves references, so a referenced native schema
-   * still classifies correctly. Only a genuine logical body reaches -- and pays for -- this parse.
+   * <p>The native parse is not extra work in the common case: it goes through the registry's
+   * {@code oldSchemaCache} under the same key that the {@code lookUpSchemaUnderSubject} performed
+   * moments later on the register/lookup path uses, so that call is served from the cache. (The
+   * key includes {@code normalize}, so a {@code normalize=true} request does pay for one extra
+   * parse.)
+   *
+   * <p>Only {@code InvalidSchemaException} means "not native" -- the registry funnels every parse
+   * failure into it. Catching it alone keeps unrelated runtime failures from being misclassified
+   * as logical input.
    */
   static boolean looksLogical(SchemaRegistry schemaRegistry, Schema schema) {
     if (schema == null || schema.getSchema() == null || schema.getSchema().isBlank()) {
       return false;
     }
-    if (!parsesAsLogical(schema.getSchema())) {
-      return false; // not DDL at all -> native; no registry parse spent on the common case
-    }
-    // Parses as DDL, but might be a native schema that is also valid DDL: native wins if it parses.
     try {
       schemaRegistry.parseSchema(schema, false, false);
-      return false;
-    } catch (RuntimeException | SchemaRegistryException e) {
-      return true;
+      return false; // parses as its declared native schemaType
+    } catch (InvalidSchemaException e) {
+      return parsesAsLogical(schema.getSchema()); // not native -- logical iff it parses as DDL
     }
   }
 
@@ -97,8 +99,8 @@ final class LogicalFormat {
    * Converts the Logical Type in {@code request}'s schema field into {@code request}'s declared
    * {@code schemaType}, replacing it in place.
    *
-   * <p>{@code schemaType} is required here. Unlike a native registration, the request body under
-   * {@code format=logical} never implies a target format, so there is no default to fall back to.
+   * <p>{@code schemaType} is required here. Unlike a native registration, a logical DDL body never
+   * implies a target format, so there is no default to fall back to.
    */
   static void convertToNative(
       final SchemaRegistry schemaRegistry,
@@ -108,13 +110,13 @@ final class LogicalFormat {
     String schemaType = request.getSchemaType();
     if (schemaType == null || schemaType.trim().isEmpty()) {
       throw new InvalidSchemaException(
-          "schemaType is required when format=logical, and must be one of "
+          "schemaType is required for a logical type schema, and must be one of "
               + "AVRO, JSON, PROTOBUF");
     }
 
     LogicalType parsed;
     if (request.getSchema() == null || request.getSchema().trim().isEmpty()) {
-      throw new InvalidSchemaException("Schema is required when format=logical");
+      throw new InvalidSchemaException("Schema is required for a logical type schema");
     }
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
@@ -142,7 +144,7 @@ final class LogicalFormat {
           break;
         default:
           throw new InvalidSchemaException(
-              "Unsupported schemaType '" + schemaType + "' for format=logical; "
+              "Unsupported schemaType '" + schemaType + "' for a logical type schema; "
                   + "must be one of AVRO, JSON, PROTOBUF");
       }
     } catch (RuntimeException e) {

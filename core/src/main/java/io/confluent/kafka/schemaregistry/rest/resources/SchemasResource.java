@@ -233,7 +233,7 @@ public class SchemasResource {
       if (LogicalFormat.isLogical(format)) {
         // Convert with the stored subject so unqualified references resolve in their own context.
         schema.setSchemaString(LogicalFormat.convertToLogical(schemaRegistry,
-            new Schema(schema.getSubject(), schema.getVersion(), id, schema)));
+            new Schema(refParentForId(id, subject, schema), schema.getVersion(), id, schema)));
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
@@ -412,7 +412,7 @@ public class SchemasResource {
         SchemaString ss = schemaRegistry.get(id, subject, "", false);
         // A missing id yields null; let the not-found check below handle it rather than NPE.
         schema = ss == null ? null : LogicalFormat.convertToLogical(
-            schemaRegistry, new Schema(ss.getSubject(), null, id, ss));
+            schemaRegistry, new Schema(refParentForId(id, subject, ss), null, id, ss));
       } else {
         schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
       }
@@ -486,6 +486,31 @@ public class SchemasResource {
   }
 
   /**
+   * Returns the subject to use as the parent when resolving the references of a schema fetched by
+   * id. When the caller omits {@code subject}, storage deliberately returns a {@link SchemaString}
+   * with a null subject, but unqualified reference subjects are qualified against their parent's
+   * context -- so an id selected from a non-default context would otherwise resolve its references
+   * in the default context. Recovers a stored subject for the id in that case. Returns
+   * {@code null} when the schema has no references, since the parent is then unused.
+   */
+  private String refParentForId(int id, String subject, SchemaString schema)
+      throws SchemaRegistryException {
+    if (schema.getSubject() != null) {
+      return schema.getSubject();
+    }
+    if (!hasReferences(schema)) {
+      return null;
+    }
+    Set<String> subjects = schemaRegistry.listSubjectsForId(id, subject);
+    return subjects == null || subjects.isEmpty() ? null : subjects.iterator().next();
+  }
+
+  private static boolean hasReferences(SchemaString schema) {
+    List<SchemaReference> refs = schema.getReferences();
+    return refs != null && !refs.isEmpty();
+  }
+
+  /**
    * Returns a qualified-context subject standing in for the context the given guid lives in, to be
    * used as the parent when resolving the schema's references. A schema fetched by guid has had its
    * subject stripped, but unqualified reference subjects are qualified against their parent's
@@ -494,8 +519,7 @@ public class SchemasResource {
    */
   private String contextForGuid(String guid, SchemaString schema)
       throws SchemaRegistryException {
-    List<SchemaReference> refs = schema.getReferences();
-    if (refs == null || refs.isEmpty()) {
+    if (!hasReferences(schema)) {
       return null;
     }
     List<ContextId> ids = schemaRegistry.listIdsForGuid(guid);
