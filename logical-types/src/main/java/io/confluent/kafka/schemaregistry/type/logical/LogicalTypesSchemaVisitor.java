@@ -66,6 +66,7 @@ import java.util.stream.Collectors;
  */
 public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
+  private String name;
   private String namespace;
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
@@ -106,7 +107,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * here is guaranteed to satisfy both invariants.
    */
   public LogicalType toLogicalType() {
-    return new LogicalType(namespace, rootSchema, namedTypes,
+    return new LogicalType(name, namespace, rootSchema, namedTypes,
         inferExternalTypes(),
         externalImports,
         java.util.Collections.emptyList(), java.util.Collections.emptyMap(),
@@ -159,8 +160,28 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     } else {
       inferAndRegisterRoot(ctx);
     }
+    maybeUnwrapNamedRoot();
     validateAliases();
     return null;
+  }
+
+  /**
+   * Unwrap a leaf named root to the bare {@code STRUCT}/{@code ENUM} body + {@link #name}, the
+   * canonical named-root shape shared with the format readers. Delegates to
+   * {@link LogicalType#unwrapLeafNamedRoot} for the gating (external/cyclic/nested roots, and
+   * foreign-namespace roots, stay {@code NAMED_TYPE_REF}). A bare named-root declaration alone is
+   * ambient and re-parses as {@code NOT NULL}; the DDL writer therefore emits an explicit trailing
+   * {@code TYPE} for nullable named roots so their nullability is preserved.
+   */
+  private void maybeUnwrapNamedRoot() {
+    // The visitor never places external bodies in namedTypes (externals are inferred from usage and
+    // held via externalImports), so there is no external root to guard against here — pass empty.
+    LogicalType.RootUnwrap unwrap =
+        LogicalType.unwrapLeafNamedRoot(rootSchema, namedTypes, Set.of(), namespace);
+    rootSchema = unwrap.getRootSchema();
+    if (unwrap.getName() != null) {
+      name = unwrap.getName();
+    }
   }
 
   /**
@@ -244,13 +265,12 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * root nullability by design. Callers wanting a nullable root must write
    * the trailing {@code TYPE Foo} (or {@code ... NULL}) explicitly.
    *
-   * <p>Multi-root: when more than one defined type is unreferenced (e.g.,
-   * a script with several peer messages and no explicit trailing
-   * registration), the inferred root is a {@code UNION} of
-   * {@code NAMED_TYPE_REF}s to all of them. Avro/JSON writers emit this as a
-   * tagged union / {@code oneOf}; the proto writer detects the shape and
-   * treats it as a multi-message file (first member becomes the primary root,
-   * rest emit as peer messages).
+   * <p>Multiple unreferenced types (e.g. a script with several independent peer
+   * messages and no explicit trailing registration): the FIRST-declared one is
+   * the root; the rest remain as peer named types. This matches Protobuf's
+   * "first message is the root" convention and the writer, which emits the root
+   * declaration first. A genuine multi-root {@code UNION} at the root is no
+   * longer inferred — write it explicitly as {@code TYPE UNION(a A, b B) NOT NULL}.
    *
    * <p>Errors:
    * <ul>
@@ -291,14 +311,6 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     // pollute the "no unique root" / "multiple roots" diagnostics.
     roots.removeIf(name -> LogicalType.parentOf(name, defined) != null);
 
-    if (roots.size() == 1) {
-      String name = roots.iterator().next();
-      Schema ref = Schema.createNamedTypeRef(name);
-      ref.setNullable(false);
-      rootSchema = ref;
-      return;
-    }
-
     if (roots.isEmpty()) {
       List<String> cycle = findCycle(uses);
       throw error(ctx,
@@ -307,30 +319,15 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
               + ". Add an explicit trailing 'TYPE <name>' statement.");
     }
 
-    // Multiple unreferenced top-level types → wrap them in a UNION at the root.
-    // Avro/JSON emit this as a tagged union / oneOf, which is the natural
-    // multi-message representation. The proto writer detects this shape (UNION
-    // whose members are all NAMED_TYPE_REFs to local types at the root) and
-    // treats it as a multi-message file: the first member becomes the primary
-    // root, the rest emit as peer messages via the existing namedTypes path.
-    List<Schema.UnionBranch> branches = new ArrayList<>(roots.size());
-    for (String name : roots) {
-      branches.add(new Schema.UnionBranch(
-          simpleNameOf(name),
-          Schema.createNamedTypeRef(name).setNullable(false),
-          null, null));
-    }
-    rootSchema = Schema.createUnion(branches).setNullable(false);
-  }
-
-  /**
-   * Simple-name slice of a qualified name: everything after the last dot, or
-   * the full name if it's unqualified. Used as the union branch name in
-   * multi-root sugar.
-   */
-  private static String simpleNameOf(String qualifiedName) {
-    int dot = qualifiedName.lastIndexOf('.');
-    return dot < 0 ? qualifiedName : qualifiedName.substring(dot + 1);
+    // The root is the first-declared type not referenced by another. When several are unreferenced
+    // (e.g. independent peer messages), the first wins and the rest remain as peer named types;
+    // this matches the writer (which emits the root declaration first) and Protobuf's "first
+    // message is the root" convention. A genuine multi-root UNION must be written explicitly, e.g.
+    // `TYPE UNION(a A, b B) NOT NULL`.
+    String name = roots.iterator().next();
+    Schema ref = Schema.createNamedTypeRef(name);
+    ref.setNullable(false);
+    rootSchema = ref;
   }
 
   /**

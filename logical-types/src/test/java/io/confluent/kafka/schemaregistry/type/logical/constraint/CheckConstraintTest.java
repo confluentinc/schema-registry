@@ -77,7 +77,7 @@ class CheckConstraintTest {
         + "data VARIANT,"
         + "CHECK (" + checkExpr + ")"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     // Gate every emitted CEL through the strict cel-java checker. `this`
     // is a typed object resolved via ConstraintTypeProvider, so
@@ -106,7 +106,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + columnDecl + " CHECK (" + checkExpr + ")"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     // The CEL is on the column's rules list (not the struct's).
     return schema.getFields().get(0).getRules().get(0).getExpr();
   }
@@ -325,7 +325,7 @@ class CheckConstraintTest {
         + "binData BYTES,"
         + "CHECK (binData || x'00' = x'01')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.binData + b\"\\x00\" == b\"\\x01\"",
         schema.getRules().get(0).getExpr());
   }
@@ -338,7 +338,7 @@ class CheckConstraintTest {
         + "binData BYTES,"
         + "CHECK (binData = x'deadbeef')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.binData == b\"\\xDE\\xAD\\xBE\\xEF\"",
         schema.getRules().get(0).getExpr());
   }
@@ -470,7 +470,7 @@ class CheckConstraintTest {
         + "x INT,"
         + "CHECK (`x` > 0)"  // backticked column ref to existing field `x`
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.x > 0", r.getExpr());
   }
@@ -483,7 +483,7 @@ class CheckConstraintTest {
         + "type STRING,"
         + "CHECK (`type` = 'A')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.type == 'A'", r.getExpr());
   }
@@ -547,7 +547,7 @@ class CheckConstraintTest {
         + "x INT,"
         + "CHECK (x > 0)"  // table-level so it can reference x
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.x > 0", r.getExpr());
   }
@@ -559,7 +559,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.addr.zip > 0", r.getExpr());
   }
@@ -571,7 +571,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (tags[1] = 'first')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.tags[(1) - 1] == 'first'", r.getExpr());
   }
@@ -585,7 +585,7 @@ class CheckConstraintTest {
         + "props MAP<STRING, STRING>,"
         + "CHECK (props['name'] = 'alice')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.props['name'] == 'alice'", r.getExpr());
   }
@@ -597,7 +597,7 @@ class CheckConstraintTest {
         + "scores MAP<INT, INT>,"
         + "CHECK (scores[42] > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.scores[42] > 0", r.getExpr());
   }
@@ -612,7 +612,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK ((tags)[1] = 'first')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("(this.tags)[(1) - 1] == 'first'", r.getExpr());
   }
@@ -749,7 +749,7 @@ class CheckConstraintTest {
         + "ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, n > 0))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.ages.all(n, n > 0)", schema.getRules().get(0).getExpr());
   }
 
@@ -776,7 +776,7 @@ class CheckConstraintTest {
         + "name STRING ARRAY,"
         + "CHECK (EVERY(name, name, LENGTH(name) > 0))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     // Outer `name` (the collection) → this.name; iter-var `name` (binding)
     // and the body ref → bare.
@@ -794,7 +794,7 @@ class CheckConstraintTest {
         + "meta MAP<STRING, STRING> ARRAY,"
         + "CHECK (EVERY(meta, meta, meta['k'] = 'v'))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("this.meta.all(meta, meta['k'] == 'v')", r.getExpr());
   }
@@ -863,7 +863,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CHECK (x > 0) CHECK (x < 100)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     List<Rule> rules = schema.getField("x").getRules();
     assertEquals(2, rules.size());
     assertEquals("this > 0", rules.get(0).getExpr());
@@ -875,7 +875,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("positive_x", r.getName());
     assertNull(r.getDoc());
@@ -887,7 +887,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CHECK (x > 0) MESSAGE 'must be positive'"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     assertNull(r.getName());
     assertEquals("must be positive", r.getDoc());
@@ -898,7 +898,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("positive_x", r.getName());
     assertEquals("must be positive", r.getDoc());
@@ -916,7 +916,7 @@ class CheckConstraintTest {
         + "hi INT,"
         + "CONSTRAINT bounds CHECK (lo < hi) MESSAGE 'lo must be < hi'"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertTrue(schema.getField("lo").getRules().isEmpty());
     assertTrue(schema.getField("hi").getRules().isEmpty());
     List<Rule> tableRules = schema.getRules();
@@ -934,7 +934,7 @@ class CheckConstraintTest {
         + "hi INT CHECK (hi <= 100),"
         + "CHECK (lo <= hi)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals(1, schema.getField("lo").getRules().size());
     assertEquals(1, schema.getField("hi").getRules().size());
     assertEquals(1, schema.getRules().size());
@@ -950,7 +950,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CHECK (x > 0 AND x < 100)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     // The visitor pulls the source slice from the input stream so the
     // user's original whitespace, casing, and operator spacing all survive.
@@ -963,7 +963,7 @@ class CheckConstraintTest {
     // Tabs, multiple spaces, and a newline inside the expression all
     // survive verbatim in Rule.sql.
     String script = "STRUCT T (x INT CHECK (x  >\t0\nAND  x<100));";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("x  >\t0\nAND  x<100", r.getSql());
   }
@@ -973,7 +973,7 @@ class CheckConstraintTest {
     // SQL keywords are case-insensitive; we should preserve whatever the
     // user wrote (lower-case `and` here) rather than normalize.
     String script = "STRUCT T (x INT CHECK (x > 0 and x < 100));";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("x > 0 and x < 100", r.getSql());
   }
@@ -981,7 +981,7 @@ class CheckConstraintTest {
   @Test
   void rulesAreNonNullEvenWhenAbsent() {
     String script = "STRUCT T (x INT);";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertNotNull(schema.getField("x").getRules());
     assertTrue(schema.getField("x").getRules().isEmpty());
     assertNotNull(schema.getRules());
@@ -1014,7 +1014,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip IS NOT NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("(has(this.addr.zip) && dyn(this.addr.zip) != null)", r.getExpr());
   }
@@ -1057,7 +1057,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (value IN tags)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.value in this.tags", schema.getRules().get(0).getExpr());
   }
 
@@ -1068,7 +1068,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (value NOT IN tags)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("!(this.value in this.tags)", schema.getRules().get(0).getExpr());
   }
 
@@ -2131,7 +2131,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t, LENGTH(t) > 0))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.tags.all(t, size(t) > 0)", schema.getRules().get(0).getExpr());
   }
 
@@ -2141,7 +2141,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (ANY(tags, t, t = 'admin'))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.tags.exists(t, t == 'admin')", schema.getRules().get(0).getExpr());
   }
 
@@ -2151,7 +2151,7 @@ class CheckConstraintTest {
         + "addresses STRING ARRAY,"
         + "CHECK (ONE(addresses, a, STARTS_WITH(a, 'primary:')))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.addresses.exists_one(a, a.startsWith('primary:'))",
         schema.getRules().get(0).getExpr());
   }
@@ -2162,7 +2162,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (every(tags, t, LENGTH(t) > 0))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.tags.all(t, size(t) > 0)", schema.getRules().get(0).getExpr());
   }
 
@@ -2173,7 +2173,7 @@ class CheckConstraintTest {
         + "matrix INT ARRAY ARRAY,"
         + "CHECK (EVERY(matrix, r, EVERY(r, cell, cell > 0)))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.matrix.all(r, r.all(cell, cell > 0))",
         schema.getRules().get(0).getExpr());
   }
@@ -2184,7 +2184,7 @@ class CheckConstraintTest {
         + "ages INT ARRAY,"
         + "CHECK (ANY(ages, a, a BETWEEN 18 AND 65))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.ages.exists(a, 18 <= a && a <= 65)",
         schema.getRules().get(0).getExpr());
   }
@@ -2195,7 +2195,7 @@ class CheckConstraintTest {
         + "emails STRING ARRAY,"
         + "CHECK (EVERY(emails, e, IS_EMAIL(e)))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.emails.all(e, e.isEmail())",
         schema.getRules().get(0).getExpr());
   }
@@ -2273,7 +2273,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "addr STRUCT(zip INT) NOT NULL CHECK (addr.zip > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.zip > 0",
         schema.getField("addr").getRules().get(0).getExpr());
   }
@@ -2314,7 +2314,7 @@ class CheckConstraintTest {
         + "a INT, b INT,"
         + "CHECK (a < b)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.a < this.b", schema.getRules().get(0).getExpr());
   }
 
@@ -2339,14 +2339,14 @@ class CheckConstraintTest {
   @Test
   void acceptsBooleanColumnRef() {
     String script = "STRUCT T (active BOOLEAN, CHECK (active));";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.active", schema.getRules().get(0).getExpr());
   }
 
   @Test
   void acceptsBooleanLiteralRoot() {
     String script = "STRUCT T (x INT, CHECK (TRUE));";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("true", schema.getRules().get(0).getExpr());
   }
 
@@ -2958,7 +2958,7 @@ class CheckConstraintTest {
         + "ts TIMESTAMP_LTZ,"
         + "CHECK (ts <= CURRENT_TIMESTAMP)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     assertEquals("timestamp(this.ts) <= now", schema.getRules().get(0).getExpr());
   }
 
@@ -3021,7 +3021,7 @@ class CheckConstraintTest {
   void ddlRoundTripPreservesColumnCheck() {
     String script = "STRUCT T (x INT CHECK (x > 0)); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
-    Schema struct = after.getNamedTypes().get("T");
+    Schema struct = after.getRootSchema();
     List<Rule> rules = struct.getField("x").getRules();
     assertEquals(1, rules.size());
     assertEquals("this > 0", rules.get(0).getExpr());
@@ -3033,7 +3033,7 @@ class CheckConstraintTest {
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
-    Schema struct = after.getNamedTypes().get("T");
+    Schema struct = after.getRootSchema();
     Rule r = struct.getField("x").getRules().get(0);
     assertEquals("positive_x", r.getName());
     assertEquals("must be positive", r.getDoc());
@@ -3062,7 +3062,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT CHECK (zip > 0)) NOT NULL"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
-    Schema addr = after.getNamedTypes().get("T").getField("addr").getSchema();
+    Schema addr = after.getRootSchema().getField("addr").getSchema();
     Schema.Field zip = addr.getField("zip");
     List<Rule> rules = zip.getRules();
     assertEquals(1, rules.size(), "inline STRUCT field rule should round-trip");
@@ -3076,7 +3076,7 @@ class CheckConstraintTest {
         + "CHECK (lo < hi)"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
-    Schema struct = after.getNamedTypes().get("T");
+    Schema struct = after.getRootSchema();
     assertEquals(1, struct.getRules().size());
     assertEquals("this.lo < this.hi", struct.getRules().get(0).getExpr());
   }
@@ -3089,7 +3089,7 @@ class CheckConstraintTest {
         + "CONSTRAINT cross CHECK (x + y > 0) MESSAGE 'sum must be positive'"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
-    Schema struct = after.getNamedTypes().get("T");
+    Schema struct = after.getRootSchema();
     assertEquals(2, struct.getField("x").getRules().size());
     assertEquals(1, struct.getRules().size());
     assertEquals("cross", struct.getRules().get(0).getName());
@@ -3582,7 +3582,7 @@ class CheckConstraintTest {
         new io.confluent.kafka.schemaregistry.avro.AvroSchema(avroSchema);
     LogicalType lt = io.confluent.kafka.schemaregistry.type.logical.avro
         .AvroToLogicalTypeConverter.toLogicalType(s);
-    Schema rec = lt.getNamedTypes().get(lt.getRootSchema().getQualifiedName());
+    Schema rec = lt.getRootSchema();
     assertEquals("in", rec.getFields().get(0).getName());
   }
 
@@ -3610,7 +3610,7 @@ class CheckConstraintTest {
         + "TYPE Person";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
-    String cel = v.getNamedTypes().get("Person").getRules().get(0).getExpr();
+    String cel = v.getRootSchema().getRules().get(0).getExpr();
     assertEquals("this.a.zip > 0", cel);
   }
 
@@ -3748,7 +3748,7 @@ class CheckConstraintTest {
     String script = "STRUCT T (`null` INT, x INT); TYPE T";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
-    assertEquals("null", v.getNamedTypes().get("T").getFields().get(0).getName());
+    assertEquals("null", v.getRootSchema().getFields().get(0).getName());
   }
 
   @Test
@@ -3868,7 +3868,7 @@ class CheckConstraintTest {
         + "m MAP<STRING, STRING>,"
         + "CHECK ((m)['k'] = 'v')"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String r = schema.getRules().get(0).getExpr();
     assertTrue(r.contains("['k']") && !r.contains("- 1]"),
         "expected map-style indexing (no - 1 offset), got: " + r);
@@ -3975,7 +3975,7 @@ class CheckConstraintTest {
         + "  addr Address NOT NULL,"
         + "  CHECK (addr.zip > 0)"
         + ");";
-    Schema person = parseScript(script).getNamedTypes().get("Person");
+    Schema person = parseScript(script).getRootSchema();
     assertEquals("this.addr.zip > 0", person.getRules().get(0).getExpr());
   }
 
@@ -3987,7 +3987,7 @@ class CheckConstraintTest {
         + "STRUCT Person ("
         + "  addr Address NOT NULL CHECK (addr.zip > 0)"
         + ");";
-    Schema person = parseScript(script).getNamedTypes().get("Person");
+    Schema person = parseScript(script).getRootSchema();
     String cel = person.getField("addr").getRules().get(0).getExpr();
     assertEquals("this.zip > 0", cel);
   }
@@ -4002,7 +4002,7 @@ class CheckConstraintTest {
         + "  addr Address NOT NULL,"
         + "  CHECK (addr.zip > 0)"
         + ");";
-    Schema person = parseScript(script).getNamedTypes().get("Person");
+    Schema person = parseScript(script).getRootSchema();
     assertEquals("this.addr.zip > 0", person.getRules().get(0).getExpr());
   }
 
@@ -4131,7 +4131,7 @@ class CheckConstraintTest {
         + "zip INT,"
         + "CHECK (zip IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     assertTrue(cel.contains("== null"), "got: " + cel);
   }
@@ -4160,7 +4160,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     assertTrue(cel.contains("== null"), "got: " + cel);
   }
@@ -4173,7 +4173,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT NOT NULL),"
         + "CHECK (addr.zip IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     assertTrue(cel.contains("== null"), "got: " + cel);
   }
@@ -4186,7 +4186,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY,"
         + "CHECK (tags[1] IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     assertTrue(cel.contains("== null"), "got: " + cel);
   }
@@ -4234,7 +4234,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "addr STRUCT(zip INT) CHECK (addr.zip IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("addr").getRules().get(0).getExpr();
     assertTrue(cel.contains("== null"), "got: " + cel);
   }
@@ -4261,7 +4261,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "addr STRUCT(zip INT) CHECK (COALESCE(addr.zip, 0) > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("addr").getRules().get(0).getExpr();
     assertTrue(cel.contains("zip"), "got: " + cel);
   }
@@ -4273,7 +4273,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "x INT CHECK (NULLIF(x, 0) > 0)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("x").getRules().get(0).getExpr();
     assertTrue(cel.contains("?") && cel.contains("dyn(null)"),
         "got: " + cel);
@@ -4287,7 +4287,7 @@ class CheckConstraintTest {
         + "x INT,"
         + "CHECK (x IS NULL)"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     assertTrue(cel.contains("has(this.x)"), "got: " + cel);
   }
@@ -4301,7 +4301,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "tags STRING ARRAY CHECK (EVERY(tags, t, t IS NULL))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("tags").getRules().get(0).getExpr();
     assertTrue(cel.contains("dyn(t) == null"), "got: " + cel);
   }
@@ -4311,7 +4311,7 @@ class CheckConstraintTest {
     String script = "STRUCT T ("
         + "tags STRING ARRAY CHECK (EVERY(tags, t, t IS NOT NULL))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("tags").getRules().get(0).getExpr();
     assertTrue(cel.contains("dyn(t) != null"), "got: " + cel);
   }
@@ -4324,7 +4324,7 @@ class CheckConstraintTest {
         + "tags STRING ARRAY CHECK ("
         + "EVERY(tags, t, COALESCE(t, 'x') = 'x'))"
         + ");";
-    Schema schema = parseScript(script).getNamedTypes().get("T");
+    Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getField("tags").getRules().get(0).getExpr();
     assertTrue(cel.contains("(t)"), "got: " + cel);
   }
@@ -4476,7 +4476,7 @@ class CheckConstraintTest {
         + "TYPE Person";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
-    String cel = v.getNamedTypes().get("Person").getRules().get(0).getExpr();
+    String cel = v.getRootSchema().getRules().get(0).getExpr();
     assertEquals("this.addr.tags['home'] == 'x'", cel);
   }
 

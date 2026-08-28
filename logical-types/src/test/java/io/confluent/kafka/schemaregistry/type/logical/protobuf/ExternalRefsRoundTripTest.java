@@ -92,10 +92,11 @@ class ExternalRefsRoundTripTest {
 
     // Pin the DDL projection of the resulting LT — bare externals have no
     // syntactic marker (re-inferred from usage on read-back) and the file's
-    // package becomes a namespace.
+    // package becomes a namespace. The root message name ("Order") is carried
+    // on the LogicalType, so the root renders as a named STRUCT declaration.
     assertEquals(
         "NAMESPACE acme;\n"
-            + "TYPE STRUCT(a com.example.M1, b com.example.M2) NOT NULL;\n",
+            + "STRUCT Order (a com.example.M1, b com.example.M2);\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
     // Reverse: LT -> Proto. The result must be a valid (parseable) proto
