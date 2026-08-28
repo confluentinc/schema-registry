@@ -133,10 +133,63 @@ public class AvroToLogicalTypeConverter {
 
   private static String extractNamespace(AvroSchema avroSchema) {
     Metadata metadata = avroSchema.metadata();
-    if (metadata == null || metadata.getProperties() == null) {
+    if (metadata != null && metadata.getProperties() != null) {
+      String ns = metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+      if (ns != null) {
+        return ns;
+      }
+    }
+    // Natural Avro carries no confluent:namespace metadata; the namespace lives on each named
+    // type's full name instead. Fall back to the root named type's own namespace so the recovered
+    // LogicalType has a document namespace (a NAMESPACE declaration + simplified names in DDL),
+    // matching what the Proto (file package) and JSON (confluent:namespace) readers produce.
+    // Skip an anonymous root: the V2 writer marks a synthetic STRUCT/ENUM root with
+    // logical.anonymous=true and names it after the caller's rowName. If that rowName was qualified
+    // (e.g. acme.Row), its namespace is synthetic — not a document namespace — so it must not be
+    // inferred (that would add a spurious NAMESPACE on read-back).
+    org.apache.avro.Schema root = rootNamedType(avroSchema.rawSchema());
+    if (root != null && !isAnonymous(root)) {
+      String ns = root.getNamespace();
+      return ns == null || ns.isEmpty() ? null : ns;
+    }
+    return null;
+  }
+
+  /**
+   * The effective named root type: the schema itself if it is a RECORD/ENUM/FIXED, or the single
+   * non-null branch of a nullable {@code ["null", T]} union when {@code T} is a named type (which
+   * the converter unwraps to a nullable STRUCT/ENUM root). Returns {@code null} for anything else
+   * (primitives, arrays/maps, or a genuine multi-branch union with no single named type).
+   */
+  private static org.apache.avro.Schema rootNamedType(org.apache.avro.Schema raw) {
+    if (raw == null) {
       return null;
     }
-    return metadata.getProperties().get(CONFLUENT_NAMESPACE_PROP);
+    if (isNamedAvroType(raw.getType())) {
+      return raw;
+    }
+    if (raw.getType() == org.apache.avro.Schema.Type.UNION) {
+      org.apache.avro.Schema named = null;
+      for (org.apache.avro.Schema member : raw.getTypes()) {
+        if (member.getType() == org.apache.avro.Schema.Type.NULL) {
+          continue;
+        }
+        if (named != null) {
+          return null; // more than one non-null branch — not a simple nullable named root
+        }
+        named = member;
+      }
+      if (named != null && isNamedAvroType(named.getType())) {
+        return named;
+      }
+    }
+    return null;
+  }
+
+  private static boolean isNamedAvroType(org.apache.avro.Schema.Type type) {
+    return type == org.apache.avro.Schema.Type.RECORD
+        || type == org.apache.avro.Schema.Type.ENUM
+        || type == org.apache.avro.Schema.Type.FIXED;
   }
 
   private static Map<String, Object> extractUnionMetadata(AvroSchema avroSchema) {
