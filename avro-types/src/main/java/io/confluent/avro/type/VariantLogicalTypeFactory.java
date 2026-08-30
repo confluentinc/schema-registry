@@ -23,15 +23,6 @@ import org.apache.avro.Schema;
 /**
  * Registers {@link VariantLogicalType} with Avro's global logical type registry.
  *
- * <p>Avro's parser silently ignores a {@code logicalType} property it does not recognize, leaving
- * {@link Schema#getLogicalType()} null -- and since a conversion is looked up by its
- * {@code LogicalType}, an unregistered variant also gets no conversion applied. Registration is
- * therefore a precondition for reading or writing variants, not just a convenience.
- *
- * <p>This exists as a named public class with a public no-arg constructor so it can be used
- * wherever Avro accepts a factory by class name rather than instance -- notably
- * avro-maven-plugin's {@code customLogicalTypeFactories}, which runs codegen in its own JVM where
- * no Confluent registration code has executed.
  */
 public class VariantLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
 

@@ -22,9 +22,6 @@ import org.apache.avro.Schema;
 
 /**
  * Registers {@link LogicalMap} with Avro's global logical type registry.
- *
- * <p>See {@link VariantLogicalTypeFactory} for why registration is a precondition for the
- * conversion to be applied at all, and why this is a named public class rather than a lambda.
  */
 public class LogicalMapFactory implements LogicalTypes.LogicalTypeFactory {
 
