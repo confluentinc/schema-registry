@@ -445,7 +445,17 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     // Keyed namespace-qualified, unlike an alias: this name survives into the LogicalType, and
     // every consumer -- the dangling check, and the JSON writer's $defs synthesis and $ref
     // emission -- looks it up by the qualified name a body reference resolves to.
-    externalImports.put(qualifyWithNamespace(name), uri);
+    //
+    // Re-check for duplicates on the qualified key. declareAliasName only saw the name as written,
+    // and two spellings can collide here: under NAMESPACE n, both `Foo` and `n.Foo` qualify to
+    // n.Foo, and a plain put would let the second silently replace the first.
+    String qualified = qualifyWithNamespace(name);
+    if (externalImports.putIfAbsent(qualified, uri) != null) {
+      throw error(ctx.qualifiedName(),
+          "Duplicate USING TYPE: " + name + " resolves to " + qualified
+              + ", which is already bound (each name may be declared at most once, however "
+              + "it is spelled)");
+    }
     return null;
   }
 

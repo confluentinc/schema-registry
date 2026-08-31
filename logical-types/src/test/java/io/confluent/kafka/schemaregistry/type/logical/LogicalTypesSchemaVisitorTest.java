@@ -804,6 +804,20 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testRefBindingsThatQualifyToTheSameNameRejected() {
+    // Distinct spellings, one key: under NAMESPACE n both qualify to n.Foo. The as-written
+    // duplicate check can't see this, so without a second check on the qualified key the later
+    // binding would silently replace the earlier one.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "NAMESPACE n;"
+        + "USING TYPE Foo FOR REF 'a';"
+        + "USING TYPE n.Foo FOR REF 'b';"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
   void testNestedRefBindingUnderNamespaceIsKeyedQualified() {
     // A dotted name is only qualified when a prefix names a local type, so the REF key can only be
     // computed once the local declarations are known. Visiting USING TYPE before the pre-pass
