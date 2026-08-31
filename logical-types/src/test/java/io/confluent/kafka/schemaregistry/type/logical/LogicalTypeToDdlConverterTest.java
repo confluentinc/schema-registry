@@ -256,7 +256,7 @@ class LogicalTypeToDdlConverterTest {
   @Test
   void aliasCarriesUriBinding() {
     // External Ref1 carries a synthetic-wrapper URI binding via externalImports.
-    // Emitter writes `USING TYPE Ref1 FOR '<uri>';` so the binding round-trips
+    // Emitter writes `USING TYPE Ref1 FOR REF '<uri>';` so the binding round-trips
     // through DDL → LT → DDL.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("a",
@@ -273,7 +273,7 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("USING TYPE Ref1 FOR 'ext.Outer';"),
+    assertTrue(ddl.contains("USING TYPE Ref1 FOR REF 'ext.Outer';"),
         "expected USING TYPE with URI binding, got:\n" + ddl);
     assertRoundTrip(lt);
   }
@@ -297,9 +297,27 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("USING TYPE Ref1 FOR 'ext.O''Hare';"),
+    assertTrue(ddl.contains("USING TYPE Ref1 FOR REF 'ext.O''Hare';"),
         "expected escaped single-quote in USING TYPE URI, got:\n" + ddl);
     assertRoundTrip(lt);
+  }
+
+  @Test
+  void localAliasDoesNotSurviveRoundTrip() {
+    // A local alias is substituted at parse time and leaves nothing in the LT, so there is no
+    // binding to re-emit: the writer prints the resolved FQN inline. Contrast the REF form above,
+    // which does round-trip.
+    LogicalType lt = parse(
+        "NAMESPACE com.example;"
+            + "USING TYPE Addr FOR TYPE com.example.Address;"
+            + "STRUCT Address (street VARCHAR NOT NULL);"
+            + "STRUCT Employee (id BIGINT NOT NULL, home Addr NOT NULL);"
+            + "TYPE Employee");
+
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt);
+    assertFalse(ddl.contains("USING TYPE"), ddl);
+    assertEquals(lt.getRootSchema().getFields().get(1).getSchema().getQualifiedName(),
+        parse(ddl).getRootSchema().getFields().get(1).getSchema().getQualifiedName());
   }
 
   // -----------------------------------------------------------------------
