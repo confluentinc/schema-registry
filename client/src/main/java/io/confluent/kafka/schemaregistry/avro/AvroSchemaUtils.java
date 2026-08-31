@@ -26,10 +26,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import io.confluent.avro.type.LogicalMap;
 import io.confluent.avro.type.LogicalMapConversion;
+import io.confluent.avro.type.LogicalMapFactory;
 import io.confluent.avro.type.VariantConversion;
-import io.confluent.avro.type.VariantLogicalType;
+import io.confluent.avro.type.VariantLogicalTypeFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -98,8 +98,8 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
-    registerLogicalTypeIfAbsent(LogicalMap.NAME, schema -> LogicalMap.get());
-    registerLogicalTypeIfAbsent(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
+    registerLogicalTypeIfAbsent(new LogicalMapFactory());
+    registerLogicalTypeIfAbsent(new VariantLogicalTypeFactory());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
@@ -111,10 +111,9 @@ public class AvroSchemaUtils {
   // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
   // unconditional, so leaving ours conditional lets whichever library claimed the name first
   // keep owning it, while still registering when no other library has.
-  private static void registerLogicalTypeIfAbsent(
-      String name, LogicalTypes.LogicalTypeFactory factory) {
-    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(name)) {
-      LogicalTypes.register(name, factory);
+  private static void registerLogicalTypeIfAbsent(LogicalTypes.LogicalTypeFactory factory) {
+    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(factory.getTypeName())) {
+      LogicalTypes.register(factory);
     }
   }
 
