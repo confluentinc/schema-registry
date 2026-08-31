@@ -98,7 +98,7 @@ public final class LogicalTypeToDdlConverter {
           continue;
         }
         sb.append("USING TYPE ").append(qualifiedName(e.getKey()))
-            .append(" FOR ").append(stringLiteral(e.getValue()))
+            .append(" FOR REF ").append(stringLiteral(e.getValue()))
             .append(";\n");
       }
 
