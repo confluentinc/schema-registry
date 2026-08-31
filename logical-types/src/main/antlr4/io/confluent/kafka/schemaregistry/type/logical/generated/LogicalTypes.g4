@@ -16,34 +16,37 @@ declareNamespaceStmt
     : NAMESPACE qualifiedName
     ;
 
-// ─── external aliases ────────────────────────────────────────────────────────
+// ─── USING TYPE ──────────────────────────────────────────────────────────────
 //
 // External-ness of a type is *inferred* by the visitor: any NAMED_TYPE_REF FQN
 // reachable from the root or from a local body that isn't itself declared
 // locally is treated as external. There is no syntactic marker for it.
 //
-// `USING TYPE <qualifiedName> FOR <stringLiteral>` optionally attaches a
-// synthetic-wrapper URI to a named external — used when the source isn't
-// addressable by FQN alone (whole-doc JSON refs, arbitrary JSON-Pointer refs,
-// etc.). Visitor records (qualifiedName -> URI) in the LT's externalImports;
-// writers emit the URI as the reference target. Without a USING TYPE, the external
-// is canonical and the writer discovers its source by walking
-// resolvedReferences.
+// Both forms are marker-led — the token after FOR decides which — so neither
+// depends on lookahead, and a further kind could be added the same way.
 //
-// `USING TYPE` controls only the WIRE-FORMAT shape of the reference (the $ref URI
-// in JSON, the import string in Proto). It deliberately does NOT carry SR
-// coordinates (subject + version) — those are deployment metadata that vary
-// across environments and aren't expressible in DDL. To produce an
-// SR-publishable LT from DDL, the caller attaches a SchemaReference list
-// (with matching resolvedReferences content) to the LogicalType separately
-// after the visitor runs.
+// `USING TYPE <name> FOR TYPE <qualifiedName>` is a local alias: source-text
+// sugar substituted during reference resolution, so nothing survives into the
+// LogicalType. That is why it works for every target format, and why aliases do
+// not round-trip — the DDL writer emits the resolved FQN inline. The target is
+// taken verbatim (never namespace-qualified), may be a local type, and must not
+// itself be an alias; chains are rejected.
 //
-// Validation: each USING TYPE's FQN must (a) actually be referenced by some local
-// body or by the root (no dangling aliases) and (b) not collide with a local
-// STRUCT/ENUM declaration of the same name (no shadowing).
+// `USING TYPE <name> FOR REF <stringLiteral>` attaches a synthetic-wrapper URI
+// to a named external, for sources an FQN can't address (whole-doc JSON refs,
+// JSON-Pointer refs). Visitor records (name -> URI) in externalImports; writers
+// emit the URI as the reference target. It shapes only the wire-format
+// reference (the $ref URI in JSON), so it is JSON-only — Avro and Proto reject
+// a LogicalType carrying externalImports. It deliberately does NOT carry SR
+// coordinates (subject + version); the caller attaches a SchemaReference list
+// separately after the visitor runs.
+//
+// Validation, both forms: the declared name must be referenced by some local
+// body or by the root, and must not collide with a local STRUCT/ENUM.
 
 aliasStmt
-    : USING TYPE qualifiedName FOR stringLiteral
+    : USING TYPE qualifiedName FOR TYPE qualifiedName   # typeAliasStmt
+    | USING TYPE qualifiedName FOR REF stringLiteral    # typeRefStmt
     ;
 
 // ─── named type declarations ──────────────────────────────────────────────────
@@ -458,6 +461,7 @@ nonReservedKeyword
     | INTERVAL
     | MAP
     | NAMESPACE
+    | REF
     | TAGS
     | TYPE
     | VARIANT
@@ -517,6 +521,7 @@ OR              : O R ;
 POSITION        : P O S I T I O N ;
 PRECISION       : P R E C I S I O N ;
 REAL            : R E A L ;
+REF             : R E F ;
 RETURNING       : R E T U R N I N G ;
 ROW             : R O W ;
 STRUCT          : S T R U C T ;

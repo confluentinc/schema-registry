@@ -69,6 +69,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private String name;
   private String namespace;
   private final Map<String, String> externalImports = new LinkedHashMap<>();
+  private final Map<String, String> typeAliases = new LinkedHashMap<>();
+  private final Set<String> declaredUsingNames = new LinkedHashSet<>();
+  private final Set<String> usedAliases = new LinkedHashSet<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   private Schema rootSchema;
 
@@ -192,25 +195,46 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * parse time rather than allowed to silently no-op.
    */
   private void validateAliases() {
-    if (externalImports.isEmpty()) {
+    if (externalImports.isEmpty() && typeAliases.isEmpty()) {
       return;
     }
-    Set<String> shadowed = new LinkedHashSet<>(externalImports.keySet());
-    shadowed.retainAll(namedTypes.keySet());
+    // Compare against the namespace-qualified form: a USING TYPE name is written bare, while a
+    // local declaration is keyed qualified, so the raw sets never intersect under a NAMESPACE even
+    // when both claim the same token.
+    Set<String> shadowed = declaredUsingNames.stream()
+        .map(this::qualifyWithNamespace)
+        .filter(namedTypes::containsKey)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     if (!shadowed.isEmpty()) {
       throw new ValidationException(
           "USING TYPE declared for name(s) that are also locally declared as "
-              + "STRUCT/ENUM — a USING TYPE attaches a URI to an external reference, "
+              + "STRUCT/ENUM — a USING TYPE names something resolved elsewhere, "
               + "so it must not collide with a local declaration: " + shadowed);
     }
-    Set<String> externals = inferExternalTypes();
+
+    // An alias target may be a local type, but must not be another alias: chains are rejected,
+    // which also rules out cycles.
+    Set<String> chained = new LinkedHashSet<>(typeAliases.values());
+    chained.retainAll(typeAliases.keySet());
+    if (!chained.isEmpty()) {
+      throw new ValidationException(
+          "USING TYPE alias targets that are themselves aliases — chains are not "
+              + "resolved, so each alias must name its type directly: " + chained);
+    }
+
+    // REF bindings are found by walking the built bodies, since the name they declare survives
+    // into them. Aliases can't be: substitution replaced them, so usage is recorded as it happens.
     Set<String> dangling = new LinkedHashSet<>(externalImports.keySet());
-    dangling.removeAll(externals);
+    dangling.removeAll(inferExternalTypes());
+    for (String alias : typeAliases.keySet()) {
+      if (!usedAliases.contains(alias)) {
+        dangling.add(alias);
+      }
+    }
     if (!dangling.isEmpty()) {
       throw new ValidationException(
           "USING TYPE declared for name(s) that aren't referenced by any local "
-              + "type or by the root — externals are inferred from usage, so "
-              + "an unused USING TYPE has no effect: " + dangling);
+              + "type or by the root — an unused USING TYPE has no effect: " + dangling);
     }
   }
 
@@ -392,20 +416,49 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   @Override
-  public Object visitAliasStmt(LogicalTypesParser.AliasStmtContext ctx) {
-    String name = buildQualifiedName(ctx.qualifiedName());
-    if (externalImports.containsKey(name)) {
-      throw error(ctx.qualifiedName(),
-          "Duplicate USING TYPE: " + name
-              + " (each alias FQN may be declared at most once)");
+  public Object visitTypeAliasStmt(LogicalTypesParser.TypeAliasStmtContext ctx) {
+    // Keyed by the source token, unqualified: substitution happens in qualifyTypeRef before the
+    // namespace is applied, so this must match what the author actually writes at the use site.
+    String name = declareAliasName(ctx.qualifiedName(0));
+    // Target is verbatim: never namespace-qualified, so a single-segment target
+    // names a top-level type.
+    String target = buildQualifiedName(ctx.qualifiedName(1));
+    if (name.equals(target)) {
+      throw error(ctx.qualifiedName(1),
+          "USING TYPE " + name + " FOR TYPE " + target + " aliases a name to itself");
     }
+    typeAliases.put(name, target);
+    return null;
+  }
+
+  @Override
+  public Object visitTypeRefStmt(LogicalTypesParser.TypeRefStmtContext ctx) {
+    String name = declareAliasName(ctx.qualifiedName());
     String uri = stripStringLiteral(ctx.stringLiteral().getText());
     if (uri.trim().isEmpty()) {
       throw error(ctx.stringLiteral(),
-          "USING TYPE " + name + " FOR clause must be a non-empty URI");
+          "USING TYPE " + name + " FOR REF clause must be a non-empty URI");
     }
-    externalImports.put(name, uri);
+    // Keyed namespace-qualified, unlike an alias: this name survives into the LogicalType, and
+    // every consumer -- the dangling check, and the JSON writer's $defs synthesis and $ref
+    // emission -- looks it up by the qualified name a body reference resolves to.
+    externalImports.put(qualifyWithNamespace(name), uri);
     return null;
+  }
+
+  /**
+   * Duplicate-checks the name a {@code USING TYPE} declares. The two forms share one namespace of
+   * declared names, so aliasing and REF-binding the same name is a duplicate -- tracked on the
+   * name as written, since the two forms key their maps differently.
+   */
+  private String declareAliasName(LogicalTypesParser.QualifiedNameContext ctx) {
+    String name = buildQualifiedName(ctx);
+    if (!declaredUsingNames.add(name)) {
+      throw error(ctx,
+          "Duplicate USING TYPE: " + name
+              + " (each alias FQN may be declared at most once)");
+    }
+    return name;
   }
 
   @Override
@@ -907,6 +960,14 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * reference and inherits the active namespace.
    */
   private String qualifyTypeRef(String name) {
+    // An alias resolves to its target verbatim, bypassing namespace qualification: the target is
+    // already the FQN the author meant, and substituting here is what keeps aliases out of the
+    // LogicalType entirely.
+    String target = typeAliases.get(name);
+    if (target != null) {
+      usedAliases.add(name);
+      return target;
+    }
     if (namespace == null || namespace.isEmpty()) {
       return name;
     }
