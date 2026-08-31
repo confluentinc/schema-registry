@@ -890,4 +890,33 @@ class CrossFormatRoundTripTest {
         ? java.util.Collections.emptyList()
         : (java.util.List<io.confluent.kafka.schemaregistry.type.logical.Rule>) out;
   }
+
+  @Test
+  void localAliasDocumentEmitsToEveryFormat() {
+    // A local alias is substituted during reference resolution and leaves nothing in the LT, so
+    // no writer has anything to reject. That is the whole reason the alias form works for every
+    // target format, unlike the `FOR REF` URI binding. One NAMESPACE throughout, since Proto
+    // requires all named types to share the file package.
+    LogicalType lt = parseDdl(
+        "NAMESPACE com.example;"
+            + "USING TYPE Addr FOR com.example.Address;"
+            + "STRUCT Address (street VARCHAR NOT NULL);"
+            + "STRUCT Employee (id BIGINT NOT NULL, home Addr NOT NULL);"
+            + "TYPE Employee");
+
+    assertTrue(lt.getExternalImports().isEmpty(), "an alias must not become an external import");
+
+    assertTrue(LogicalTypeToAvroConverter.fromLogicalType(lt, "Employee")
+        .canonicalString().contains("Address"));
+    assertTrue(LogicalTypeToProtoConverter.fromLogicalType(lt, "Employee")
+        .canonicalString().contains("Address"));
+    assertTrue(LogicalTypeToJsonConverter.fromLogicalType(lt, "Employee")
+        .canonicalString().contains("Address"));
+  }
+
+  private static LogicalType parseDdl(String ddl) {
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    return visitor.toLogicalType();
+  }
 }
