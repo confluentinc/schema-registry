@@ -103,7 +103,7 @@ class ExternalRefsRoundTripTest {
     // Inner extracted from the canonical /$defs/Inner ref needs no USING TYPE
     // (its source is discoverable via resolvedReferences).
     assertEquals(
-        "USING TYPE Ref1 FOR 'ext.Outer';\n"
+        "USING TYPE Ref1 FOR REF 'ext.Outer';\n"
             + "TYPE STRUCT(inner Inner, outer Ref1) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
@@ -223,11 +223,11 @@ class ExternalRefsRoundTripTest {
     // statements carrying their URI bindings.
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertTrue(
-        ddl.contains("USING TYPE " + wholeName + " FOR 'ext.Doc';"),
+        ddl.contains("USING TYPE " + wholeName + " FOR REF 'ext.Doc';"),
         ddl);
     assertTrue(
         ddl.contains("USING TYPE " + subName
-            + " FOR 'ext.Doc#/properties/foo/items';"),
+            + " FOR REF 'ext.Doc#/properties/foo/items';"),
         ddl);
     assertTrue(ddl.contains("STRUCT `Local` ("), ddl);
 
