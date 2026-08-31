@@ -143,9 +143,6 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     if (ctx.declareNamespaceStmt() != null) {
       visit(ctx.declareNamespaceStmt());
     }
-    for (LogicalTypesParser.AliasStmtContext stmt : ctx.aliasStmt()) {
-      visit(stmt);
-    }
     // Pre-pass: register every named-type declaration's qualified name (with
     // an empty placeholder) before building any body. This lets a parent's
     // body reference its own nested children by name (e.g., `STRUCT Outer
@@ -154,6 +151,12 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     // registered by previously-visited declarations in this same pre-pass.
     for (LogicalTypesParser.CreateTypeStmtContext stmt : ctx.createTypeStmt()) {
       preRegisterCreateTypeName(stmt);
+    }
+    // After the pre-pass, so a REF binding's key is qualified the same way the body reference to
+    // it will be: qualifyWithNamespace consults locally-declared names to decide whether a dotted
+    // name is nested under a local parent, and before the pre-pass it would see none.
+    for (LogicalTypesParser.AliasStmtContext stmt : ctx.aliasStmt()) {
+      visit(stmt);
     }
     for (LogicalTypesParser.CreateTypeStmtContext stmt : ctx.createTypeStmt()) {
       visit(stmt);
@@ -425,7 +428,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     String target = buildQualifiedName(ctx.qualifiedName(1));
     if (name.equals(target)) {
       throw error(ctx.qualifiedName(1),
-          "USING TYPE " + name + " FOR  " + target + " aliases a name to itself");
+          "USING TYPE " + name + " FOR " + target + " aliases a name to itself");
     }
     typeAliases.put(name, target);
     return null;

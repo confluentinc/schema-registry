@@ -804,6 +804,25 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testNestedRefBindingUnderNamespaceIsKeyedQualified() {
+    // A dotted name is only qualified when a prefix names a local type, so the REF key can only be
+    // computed once the local declarations are known. Visiting USING TYPE before the pre-pass
+    // would key this "Outer.Child" while the body reference resolves to "n.Outer.Child",
+    // reporting a valid binding as dangling.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE n;"
+        + "USING TYPE Outer.Child FOR REF 'ext.Doc#/properties/foo/items';"
+        + "STRUCT Outer (x INT);"
+        + "STRUCT H (c Outer.Child);"
+        + "TYPE H"
+    );
+    LogicalType lt = v.toLogicalType();
+    assertEquals("ext.Doc#/properties/foo/items",
+        lt.getExternalImports().get("n.Outer.Child"));
+    assertTrue(lt.isExternal("n.Outer.Child"));
+  }
+
+  @Test
   void testShadowedLocalAliasRejectedUnderNamespace() {
     // The alias name is stored verbatim while the local declaration is keyed namespace-qualified,
     // so a naive set intersection misses this. Without the qualified comparison the alias would
