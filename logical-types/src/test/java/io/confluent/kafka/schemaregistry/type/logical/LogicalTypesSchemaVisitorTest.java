@@ -706,7 +706,7 @@ class LogicalTypesSchemaVisitorTest {
   void testLocalAliasResolvesToTargetAndLeavesNoTrace() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example.hr;"
-        + "USING TYPE Person FOR TYPE com.example.common.Person;"
+        + "USING TYPE Person FOR com.example.common.Person;"
         + "STRUCT Employee (id BIGINT NOT NULL, person Person);"
         + "TYPE Employee"
     );
@@ -726,7 +726,7 @@ class LogicalTypesSchemaVisitorTest {
   void testLocalAliasTargetIsVerbatimNotNamespaceQualified() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example.hr;"
-        + "USING TYPE P FOR TYPE Person;"
+        + "USING TYPE P FOR Person;"
         + "STRUCT Employee (person P);"
         + "TYPE Employee"
     );
@@ -737,7 +737,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testLocalAliasMayTargetALocalType() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "USING TYPE Inner FOR TYPE Outer.Inner;"
+        "USING TYPE Inner FOR Outer.Inner;"
         + "STRUCT Outer.Inner (x INT);"
         + "STRUCT Holder (i Inner);"
         + "TYPE Holder"
@@ -749,8 +749,8 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testAliasChainRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE A FOR TYPE B;"
-        + "USING TYPE B FOR TYPE com.x.C;"
+        "USING TYPE A FOR B;"
+        + "USING TYPE B FOR com.x.C;"
         + "STRUCT H (a A, b B);"
         + "TYPE H"
     ));
@@ -759,7 +759,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testSelfAliasRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR TYPE Foo;"
+        "USING TYPE Foo FOR Foo;"
         + "STRUCT H (f Foo);"
         + "TYPE H"
     ));
@@ -770,7 +770,7 @@ class LogicalTypesSchemaVisitorTest {
     // Substitution removes the alias name, so usage is tracked as it happens rather than
     // inferred from the built bodies.
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR TYPE com.x.Foo;"
+        "USING TYPE Foo FOR com.x.Foo;"
         + "STRUCT H (x INT);"
         + "TYPE H"
     ));
@@ -779,7 +779,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testAliasAndRefForSameNameRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR TYPE com.x.Foo;"
+        "USING TYPE Foo FOR com.x.Foo;"
         + "USING TYPE Foo FOR REF 'a';"
         + "STRUCT H (f Foo);"
         + "TYPE H"
@@ -810,7 +810,7 @@ class LogicalTypesSchemaVisitorTest {
     // silently win over the local STRUCT, since substitution happens before qualification.
     assertThrows(ValidationException.class, () -> parseScript(
         "NAMESPACE n;"
-        + "USING TYPE Foo FOR TYPE ext.Foo;"
+        + "USING TYPE Foo FOR ext.Foo;"
         + "STRUCT Foo (x INT);"
         + "STRUCT H (f Foo);"
         + "TYPE H"

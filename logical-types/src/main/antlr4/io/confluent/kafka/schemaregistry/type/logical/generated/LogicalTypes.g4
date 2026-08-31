@@ -22,10 +22,7 @@ declareNamespaceStmt
 // reachable from the root or from a local body that isn't itself declared
 // locally is treated as external. There is no syntactic marker for it.
 //
-// Both forms are marker-led — the token after FOR decides which — so neither
-// depends on lookahead, and a further kind could be added the same way.
-//
-// `USING TYPE <name> FOR TYPE <qualifiedName>` is a local alias: source-text
+// `USING TYPE <name> FOR <qualifiedName>` is a local alias: source-text
 // sugar substituted during reference resolution, so nothing survives into the
 // LogicalType. That is why it works for every target format, and why aliases do
 // not round-trip — the DDL writer emits the resolved FQN inline. The target is
@@ -45,7 +42,7 @@ declareNamespaceStmt
 // body or by the root, and must not collide with a local STRUCT/ENUM.
 
 aliasStmt
-    : USING TYPE qualifiedName FOR TYPE qualifiedName   # typeAliasStmt
+    : USING TYPE qualifiedName FOR qualifiedName        # typeAliasStmt
     | USING TYPE qualifiedName FOR REF stringLiteral    # typeRefStmt
     ;
 

@@ -425,7 +425,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     String target = buildQualifiedName(ctx.qualifiedName(1));
     if (name.equals(target)) {
       throw error(ctx.qualifiedName(1),
-          "USING TYPE " + name + " FOR TYPE " + target + " aliases a name to itself");
+          "USING TYPE " + name + " FOR  " + target + " aliases a name to itself");
     }
     typeAliases.put(name, target);
     return null;
