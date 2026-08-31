@@ -637,8 +637,8 @@ class LogicalTypesSchemaVisitorTest {
   void testAlias() {
     // USING TYPE attaches a URI binding to a (necessarily external) FQN.
     LogicalTypesSchemaVisitor v = parseScript(
-        "USING TYPE Ref1 FOR 'ext.Outer';"
-        + "USING TYPE Ref2 FOR 'https://example.com/foo#/properties/bar';"
+        "USING TYPE Ref1 FOR REF 'ext.Outer';"
+        + "USING TYPE Ref2 FOR REF 'https://example.com/foo#/properties/bar';"
         + "STRUCT Holder ("
         + "  i Inner,"
         + "  one Ref1,"
@@ -663,7 +663,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testAliasEmptyStringRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Ref1 FOR '';"
+        "USING TYPE Ref1 FOR REF '';"
         + "STRUCT H (one Ref1);"
         + "TYPE H"
     ));
@@ -674,8 +674,8 @@ class LogicalTypesSchemaVisitorTest {
     // Two USING TYPE declarations for the same name. Last-write-wins would hide
     // the user's mistake — reject explicitly.
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR 'a';"
-        + "USING TYPE Foo FOR 'b';"
+        "USING TYPE Foo FOR REF 'a';"
+        + "USING TYPE Foo FOR REF 'b';"
         + "STRUCT H (f Foo);"
         + "TYPE H"
     ));
@@ -686,7 +686,7 @@ class LogicalTypesSchemaVisitorTest {
     // USING TYPE whose FQN isn't referenced anywhere — visitor rejects since
     // externals are inferred from usage and an unused alias has no effect.
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR 'a';"
+        "USING TYPE Foo FOR REF 'a';"
         + "TYPE INT"
     ));
   }
@@ -696,10 +696,135 @@ class LogicalTypesSchemaVisitorTest {
     // USING TYPE for a name that's also a local STRUCT declaration. The USING TYPE's URI
     // binding can't apply to a local type; reject the collision.
     assertThrows(ValidationException.class, () -> parseScript(
-        "USING TYPE Foo FOR 'a';"
+        "USING TYPE Foo FOR REF 'a';"
         + "STRUCT Foo (x INT);"
         + "TYPE Foo"
     ));
+  }
+
+  @Test
+  void testLocalAliasResolvesToTargetAndLeavesNoTrace() {
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR com.example.common.Person;"
+        + "STRUCT Employee (id BIGINT NOT NULL, person Person);"
+        + "TYPE Employee"
+    );
+    LogicalType lt = v.toLogicalType();
+
+    // The alias is sugar: the field resolves to the target FQN, and nothing about the alias
+    // survives -- which is what lets Avro and Proto emit an LT that used one.
+    assertEquals("com.example.common.Person",
+        lt.getRootSchema().getFields().get(1).getSchema().getQualifiedName());
+    assertTrue(lt.getExternalImports().isEmpty());
+    assertTrue(lt.isExternal("com.example.common.Person"));
+    assertFalse(lt.isExternal("com.example.hr.Person"),
+        "the alias name itself must not become a type");
+  }
+
+  @Test
+  void testLocalAliasTargetIsVerbatimNotNamespaceQualified() {
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE P FOR Person;"
+        + "STRUCT Employee (person P);"
+        + "TYPE Employee"
+    );
+    assertEquals("Person",
+        v.toLogicalType().getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+  }
+
+  @Test
+  void testLocalAliasMayTargetALocalType() {
+    LogicalTypesSchemaVisitor v = parseScript(
+        "USING TYPE Inner FOR Outer.Inner;"
+        + "STRUCT Outer.Inner (x INT);"
+        + "STRUCT Holder (i Inner);"
+        + "TYPE Holder"
+    );
+    assertEquals("Outer.Inner",
+        v.toLogicalType().getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+  }
+
+  @Test
+  void testAliasChainRejected() {
+    assertThrows(ValidationException.class, () -> parseScript(
+        "USING TYPE A FOR B;"
+        + "USING TYPE B FOR com.x.C;"
+        + "STRUCT H (a A, b B);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testSelfAliasRejected() {
+    assertThrows(ValidationException.class, () -> parseScript(
+        "USING TYPE Foo FOR Foo;"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testDanglingLocalAliasRejected() {
+    // Substitution removes the alias name, so usage is tracked as it happens rather than
+    // inferred from the built bodies.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "USING TYPE Foo FOR com.x.Foo;"
+        + "STRUCT H (x INT);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testAliasAndRefForSameNameRejected() {
+    assertThrows(ValidationException.class, () -> parseScript(
+        "USING TYPE Foo FOR com.x.Foo;"
+        + "USING TYPE Foo FOR REF 'a';"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testRefBindingUnderNamespaceIsKeyedQualified() {
+    // The REF key must match the qualified name a body reference resolves to, or the binding is
+    // both reported dangling here and silently ignored by the JSON writer, which looks it up by
+    // that qualified name.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE n;"
+        + "USING TYPE Foo FOR REF 'ext.Doc#/properties/foo/items';"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    );
+    LogicalType lt = v.toLogicalType();
+    assertEquals("ext.Doc#/properties/foo/items", lt.getExternalImports().get("n.Foo"));
+    assertEquals("n.Foo", lt.getRootSchema().getField("f").getSchema().getQualifiedName());
+    assertTrue(lt.isExternal("n.Foo"));
+  }
+
+  @Test
+  void testShadowedLocalAliasRejectedUnderNamespace() {
+    // The alias name is stored verbatim while the local declaration is keyed namespace-qualified,
+    // so a naive set intersection misses this. Without the qualified comparison the alias would
+    // silently win over the local STRUCT, since substitution happens before qualification.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "NAMESPACE n;"
+        + "USING TYPE Foo FOR ext.Foo;"
+        + "STRUCT Foo (x INT);"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testRefIsUsableAsAnOrdinaryName() {
+    // REF is non-reserved: it marks the URI form of USING TYPE and nothing else.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "STRUCT H (ref INT NOT NULL);"
+        + "TYPE H"
+    );
+    assertNotNull(v.toLogicalType().getRootSchema().getField("ref"));
   }
 
   @Test

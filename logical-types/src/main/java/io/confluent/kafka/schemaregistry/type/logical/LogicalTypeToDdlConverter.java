@@ -97,8 +97,10 @@ public final class LogicalTypeToDdlConverter {
         if (!externalRefs.contains(e.getKey())) {
           continue;
         }
-        sb.append("USING TYPE ").append(qualifiedName(e.getKey()))
-            .append(" FOR ").append(stringLiteral(e.getValue()))
+        // displayName so the key re-emits the way a type reference does: the visitor stores it
+        // namespace-qualified, and re-parsing applies the namespace again.
+        sb.append("USING TYPE ").append(qualifiedName(displayName(e.getKey())))
+            .append(" FOR REF ").append(stringLiteral(e.getValue()))
             .append(";\n");
       }
 

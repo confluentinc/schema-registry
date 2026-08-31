@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -199,5 +201,29 @@ class ExternalRefsRoundTripTest {
     // No synthetic-wrapper externals (Avro doesn't have that mechanism).
     assertTrue(roundTripped.getExternalImports().isEmpty(),
         "Avro round-trip should not produce externalImports");
+  }
+
+  @Test
+  void externalImportsRejectedByAvro() {
+    // A `USING TYPE x FOR REF '<uri>'` binding shapes a JSON $ref; Avro references types by name only -- there is no location for a URI to become.
+    // Reject rather than silently emit something meaningless.
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("home",
+            Schema.createNamedTypeRef("Ref1").setNullable(false), 0)))
+        .setNullable(false);
+    Map<String, String> imports = new LinkedHashMap<>();
+    imports.put("Ref1", "https://example.com/common.json#/$defs/Address");
+    LogicalType lt = new LogicalType(
+        null,
+        rootSchema,
+        java.util.Collections.emptyMap(),
+        java.util.Set.of("Ref1"),
+        imports,
+        java.util.Collections.emptyList(),
+        java.util.Collections.emptyMap(),
+        java.util.Collections.emptyMap());
+
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToAvroConverter.fromLogicalType(lt, "Person"));
   }
 }
