@@ -205,7 +205,8 @@ class ExternalRefsRoundTripTest {
 
   @Test
   void externalImportsRejectedByAvro() {
-    // A `USING TYPE x FOR REF '<uri>'` binding shapes a JSON $ref; Avro references types by name only -- there is no location for a URI to become.
+    // A `USING TYPE x FOR REF '<uri>'` binding shapes a JSON $ref; Avro references
+    // types by name only, so there is no location for a URI to become.
     // Reject rather than silently emit something meaningless.
     Schema rootSchema = Schema.createStruct(Arrays.asList(
         new Field("home",

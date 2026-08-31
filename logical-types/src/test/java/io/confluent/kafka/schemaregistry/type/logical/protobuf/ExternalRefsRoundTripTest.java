@@ -193,7 +193,8 @@ class ExternalRefsRoundTripTest {
 
   @Test
   void externalImportsRejectedByProto() {
-    // A `USING TYPE x FOR REF '<uri>'` binding shapes a JSON $ref; Proto has no $ref mechanism, so the synthetic-wrapper URI has nothing to emit into.
+    // A `USING TYPE x FOR REF '<uri>'` binding shapes a JSON $ref; Proto has no
+    // $ref mechanism, so the synthetic-wrapper URI has nothing to emit into.
     // Reject rather than silently emit something meaningless.
     Schema rootSchema = Schema.createStruct(Arrays.asList(
         new Field("home",
