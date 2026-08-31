@@ -787,6 +787,23 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testRefBindingUnderNamespaceIsKeyedQualified() {
+    // The REF key must match the qualified name a body reference resolves to, or the binding is
+    // both reported dangling here and silently ignored by the JSON writer, which looks it up by
+    // that qualified name.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "NAMESPACE n;"
+        + "USING TYPE Foo FOR REF 'ext.Doc#/properties/foo/items';"
+        + "STRUCT H (f Foo);"
+        + "TYPE H"
+    );
+    LogicalType lt = v.toLogicalType();
+    assertEquals("ext.Doc#/properties/foo/items", lt.getExternalImports().get("n.Foo"));
+    assertEquals("n.Foo", lt.getRootSchema().getField("f").getSchema().getQualifiedName());
+    assertTrue(lt.isExternal("n.Foo"));
+  }
+
+  @Test
   void testShadowedLocalAliasRejectedUnderNamespace() {
     // The alias name is stored verbatim while the local declaration is keyed namespace-qualified,
     // so a naive set intersection misses this. Without the qualified comparison the alias would
