@@ -200,8 +200,13 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     Set<String> declared = new LinkedHashSet<>(externalImports.keySet());
     declared.addAll(typeAliases.keySet());
 
-    Set<String> shadowed = new LinkedHashSet<>(declared);
-    shadowed.retainAll(namedTypes.keySet());
+    // Compare against the namespace-qualified form: a USING TYPE name is written bare and stored
+    // verbatim, while a local declaration is keyed qualified, so the raw sets never intersect
+    // under a NAMESPACE even when both claim the same token.
+    Set<String> shadowed = declared.stream()
+        .map(this::qualifyWithNamespace)
+        .filter(namedTypes::containsKey)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     if (!shadowed.isEmpty()) {
       throw new ValidationException(
           "USING TYPE declared for name(s) that are also locally declared as "

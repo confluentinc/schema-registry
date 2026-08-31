@@ -309,7 +309,7 @@ class LogicalTypeToDdlConverterTest {
     // which does round-trip.
     LogicalType lt = parse(
         "NAMESPACE com.example;"
-            + "USING TYPE Addr FOR com.example.Address;"
+            + "USING TYPE Addr FOR TYPE com.example.Address;"
             + "STRUCT Address (street VARCHAR NOT NULL);"
             + "STRUCT Employee (id BIGINT NOT NULL, home Addr NOT NULL);"
             + "TYPE Employee");

@@ -899,7 +899,7 @@ class CrossFormatRoundTripTest {
     // requires all named types to share the file package.
     LogicalType lt = parseDdl(
         "NAMESPACE com.example;"
-            + "USING TYPE Addr FOR com.example.Address;"
+            + "USING TYPE Addr FOR TYPE com.example.Address;"
             + "STRUCT Address (street VARCHAR NOT NULL);"
             + "STRUCT Employee (id BIGINT NOT NULL, home Addr NOT NULL);"
             + "TYPE Employee");
