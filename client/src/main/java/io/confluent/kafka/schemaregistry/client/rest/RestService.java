@@ -417,6 +417,19 @@ public class RestService implements Closeable, Configurable {
   }
 
   /**
+   * Installs a retry policy for requests issued by this service. Each request (including a failed
+   * connection attempt, e.g. connect timed out or connection refused) is retried up to
+   * {@code maxRetries} times with exponential backoff and jitter between {@code retriesWaitMs} and
+   * {@code retriesMaxWaitMs}. Set {@code maxRetries} to 0 to disable retries.
+   *
+   * <p>Used for the leader-forwarding client so that a transient connection failure to the leader
+   * (such as during a rolling restart) is retried rather than immediately failing the request.
+   */
+  public void setRetries(int maxRetries, int retriesWaitMs, int retriesMaxWaitMs) {
+    this.retryExecutor = new RetryExecutor(maxRetries, retriesWaitMs, retriesMaxWaitMs);
+  }
+
+  /**
    * @param requestUrl        HTTP connection will be established with this url.
    * @param method            HTTP method ("GET", "POST", "PUT", etc.)
    * @param requestBodyData   Bytes to be sent in the request body.
