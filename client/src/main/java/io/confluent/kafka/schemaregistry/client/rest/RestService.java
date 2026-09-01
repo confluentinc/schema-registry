@@ -94,6 +94,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 
 import javax.net.ssl.HostnameVerifier;
@@ -414,6 +415,24 @@ public class RestService implements Closeable, Configurable {
   public void setHttpReadTimeoutMs(int httpReadTimeoutMs) {
     this.httpReadTimeoutMs = httpReadTimeoutMs;
     closeHttpClient();
+  }
+
+  /**
+   * Installs a retry policy for requests issued by this service. Only connection-level failures
+   * (an {@link IOException} such as connect timed out or connection refused) are retried, up to
+   * {@code maxRetries} times with exponential backoff and jitter between {@code retriesWaitMs} and
+   * {@code retriesMaxWaitMs}. HTTP error responses ({@link RestClientException}, e.g. 5xx) are
+   * never retried. Set {@code maxRetries} to 0 to disable retries.
+   *
+   * <p>Used for the leader-forwarding client so that a transient connection failure to the leader
+   * (such as during a rolling restart) is retried rather than immediately failing the request,
+   * while a request that reached the leader and returned an error is surfaced without replay.
+   */
+  public void setRetries(int maxRetries, int retriesWaitMs, int retriesMaxWaitMs) {
+    // Predicate is always false so RestClientException (any status) is not retried; IOExceptions
+    // are retried independently of the predicate by RetryExecutor.
+    this.retryExecutor = new RetryExecutor(
+        maxRetries, retriesWaitMs, retriesMaxWaitMs, new Random(), e -> false);
   }
 
   /**
