@@ -190,16 +190,6 @@
                 <version>1.17.13</version>
             </dependency>
             <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
-                <version>${protobuf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java-util</artifactId>
-                <version>${protobuf.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.google.api.grpc</groupId>
                 <artifactId>proto-google-common-protos</artifactId>
                 <version>${proto-google-common-protos.version}</version>
@@ -591,7 +581,7 @@
                     <version>${protobuf.maven.plugin.version}</version>
 
                     <configuration>
-                        <protocVersion>${protobuf.version}</protocVersion>
+                        <protocVersion>4.34.0</protocVersion>
                         <outputDirectory>src/test/java</outputDirectory>
                         <sourceDirectories>
                             <include>src/test/proto</include>
