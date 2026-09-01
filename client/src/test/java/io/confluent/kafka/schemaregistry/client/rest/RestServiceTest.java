@@ -116,6 +116,64 @@ public class RestServiceTest {
   }
 
   /*
+   * A transient connection failure (e.g. connect timed out during a rolling restart) is retried
+   * when a retry policy is configured, so the request ultimately succeeds.
+   */
+  @Test
+  public void testRetriesTransientConnectFailure() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    restService.setRetries(1, 0, 0); // one retry, no backoff
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    // First attempt fails at connect; the retry succeeds.
+    when(httpURLConnection.getResponseCode())
+        .thenThrow(new SocketTimeoutException("Connect timed out"))
+        .thenReturn(HttpURLConnection.HTTP_OK);
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
+
+    assertEquals(Arrays.asList("abc"), restServiceSpy.getAllSubjects());
+    // Connect was attempted twice: the initial failure plus one retry.
+    verify(httpURLConnection, Mockito.times(2)).getResponseCode();
+  }
+
+  /*
+   * Without a retry policy (the default for the forwarding constructor), a transient connect
+   * failure is not retried and propagates immediately.
+   */
+  @Test
+  public void testNoRetriesFailsOnTransientConnectFailure() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode())
+        .thenThrow(new SocketTimeoutException("Connect timed out"));
+
+    try {
+      restServiceSpy.getAllSubjects();
+      fail("Expected the request to fail without retries");
+    } catch (java.io.IOException expected) {
+      // expected
+    }
+    // Connect was attempted exactly once, i.e. no retry.
+    verify(httpURLConnection, Mockito.times(1)).getResponseCode();
+  }
+
+  /*
    * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
   @Test
