@@ -155,6 +155,21 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>leader.connect.retries</code>*
+   */
+  public static final String LEADER_CONNECT_RETRIES = "leader.connect.retries";
+  public static final int DEFAULT_LEADER_CONNECT_RETRIES = 0;
+  /**
+   * <code>leader.retries.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_WAIT_MS = "leader.retries.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_WAIT_MS = 100;
+  /**
+   * <code>leader.retries.max.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_MAX_WAIT_MS = "leader.retries.max.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_MAX_WAIT_MS = 1000;
+  /**
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
@@ -507,6 +522,17 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String LEADER_CONNECT_RETRIES_DOC =
+      "The maximum number of times a request forwarded to the leader is retried on a transient "
+      + "connection failure (e.g. connection refused or connect timed out), such as during a "
+      + "rolling restart when the leader is briefly unreachable. Defaults to 0 (disabled); set to "
+      + "a positive value to enable retries.";
+  protected static final String LEADER_RETRIES_WAIT_MS_DOC =
+      "The initial wait, in milliseconds, before retrying a request forwarded to the leader. "
+      + "Subsequent retries back off exponentially with jitter up to " + LEADER_RETRIES_MAX_WAIT_MS
+      + ".";
+  protected static final String LEADER_RETRIES_MAX_WAIT_MS_DOC =
+      "The maximum wait, in milliseconds, between retries of a request forwarded to the leader.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
@@ -807,6 +833,15 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
+    )
+    .define(LEADER_CONNECT_RETRIES, ConfigDef.Type.INT, DEFAULT_LEADER_CONNECT_RETRIES,
+        ConfigDef.Importance.LOW, LEADER_CONNECT_RETRIES_DOC
+    )
+    .define(LEADER_RETRIES_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_WAIT_MS_DOC
+    )
+    .define(LEADER_RETRIES_MAX_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_MAX_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_MAX_WAIT_MS_DOC
     )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
