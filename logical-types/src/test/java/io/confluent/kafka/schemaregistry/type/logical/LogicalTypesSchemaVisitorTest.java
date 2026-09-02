@@ -804,6 +804,39 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testExplicitForTypeMarkerIsEquivalentToOmittingIt() {
+    // FOR TYPE X and FOR X are the same statement; TYPE is the default marker.
+    String withMarker = "USING TYPE P FOR TYPE com.example.common.Person;"
+        + "STRUCT H (p P);"
+        + "TYPE H";
+    String withoutMarker = "USING TYPE P FOR com.example.common.Person;"
+        + "STRUCT H (p P);"
+        + "TYPE H";
+
+    assertEquals(
+        parseScript(withoutMarker).toLogicalType().getRootSchema()
+            .getField("p").getSchema().getQualifiedName(),
+        parseScript(withMarker).toLogicalType().getRootSchema()
+            .getField("p").getSchema().getQualifiedName());
+    assertEquals("com.example.common.Person",
+        parseScript(withMarker).toLogicalType().getRootSchema()
+            .getField("p").getSchema().getQualifiedName());
+  }
+
+  @Test
+  void testTypeIsStillUsableAsAnAliasTarget() {
+    // TYPE is non-reserved, so a target literally named TYPE must still parse: the marker
+    // reading is distinguished by whether another name follows.
+    LogicalTypesSchemaVisitor v = parseScript(
+        "USING TYPE P FOR TYPE;"
+        + "STRUCT H (p P);"
+        + "TYPE H"
+    );
+    assertEquals("TYPE",
+        v.toLogicalType().getRootSchema().getField("p").getSchema().getQualifiedName());
+  }
+
+  @Test
   void testRefBindingsThatQualifyToTheSameNameRejected() {
     // Distinct spellings, one key: under NAMESPACE n both qualify to n.Foo. The as-written
     // duplicate check can't see this, so without a second check on the qualified key the later
