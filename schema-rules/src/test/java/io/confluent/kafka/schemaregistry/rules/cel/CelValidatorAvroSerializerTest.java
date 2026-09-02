@@ -173,16 +173,8 @@ public class CelValidatorAvroSerializerTest {
     rec.put("id", "ord-1");
     rec.put("product", product);
 
-    Map<String, Object> props = new HashMap<>();
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
-    props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
-    props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
-    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_SIZE, "0");
-    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
-    props.put("validation.rules.execution", "AFTER_DOMAIN_RULES");
-
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> new KafkaAvroSerializer(client, props).serialize("order", rec));
+        () -> serializer("AFTER_DOMAIN_RULES").serialize("order", rec));
     String msg = causeMessage(ex);
     assertTrue(msg.contains("skuNotEmpty"),
         "Expected the referenced schema's inline rule to fire, got: " + msg);

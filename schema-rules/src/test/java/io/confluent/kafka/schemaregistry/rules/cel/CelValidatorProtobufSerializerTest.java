@@ -141,7 +141,7 @@ public class CelValidatorProtobufSerializerTest {
         orderStr, ImmutableList.of(ref), ImmutableMap.of(ref.getName(), productStr), null, null);
     client.register("order-value", orderSchema);
 
-    Descriptor orderDesc = orderSchema.toDescriptor("Order");
+    Descriptor orderDesc = orderSchema.toDescriptor(pkg + ".Order");
     Descriptor productDesc = orderDesc.findFieldByName("product").getMessageType();
     DynamicMessage product = DynamicMessage.newBuilder(productDesc)
         .setField(productDesc.findFieldByName("sku"), "")
