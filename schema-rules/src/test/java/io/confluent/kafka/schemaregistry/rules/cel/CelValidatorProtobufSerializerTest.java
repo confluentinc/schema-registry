@@ -21,8 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.ValidationWidgetProto.ValidationPerson;
@@ -105,6 +109,62 @@ public class CelValidatorProtobufSerializerTest {
         "Expected nameNotEmpty in message, got: " + msg);
     assertTrue(msg.contains("2 violations"),
         "Expected violation count in message, got: " + msg);
+  }
+
+  /**
+   * Inline rules travel with a referenced schema. An imported .proto's
+   * {@code confluent.field_meta} rules are reached by the validation walk when it recurses into
+   * the nested message, unlike an external rule set, which applies only to the root schema.
+   */
+  @Test
+  void serializationFails_whenInlineRuleOnReferencedSchemaFails() throws Exception {
+    String pkg = "io.confluent.kafka.schemaregistry.rules.cel";
+    String productStr = "syntax = \"proto3\";\n"
+        + "package " + pkg + ";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Product {\n"
+        + "  string sku = 1 [(confluent.field_meta) = {\n"
+        + "    rules: { name: \"skuNotEmpty\" expr: \"size(this) > 0\" }\n"
+        + "  }];\n"
+        + "}\n";
+    String orderStr = "syntax = \"proto3\";\n"
+        + "package " + pkg + ";\n"
+        + "import \"product.proto\";\n"
+        + "message Order {\n"
+        + "  string id = 1;\n"
+        + "  Product product = 2;\n"
+        + "}\n";
+
+    client.register("product.proto", new ProtobufSchema(productStr));
+    SchemaReference ref = new SchemaReference("product.proto", "product.proto", 1);
+    ProtobufSchema orderSchema = new ProtobufSchema(
+        orderStr, ImmutableList.of(ref), ImmutableMap.of(ref.getName(), productStr), null, null);
+    client.register("order-value", orderSchema);
+
+    Descriptor orderDesc = orderSchema.toDescriptor("Order");
+    Descriptor productDesc = orderDesc.findFieldByName("product").getMessageType();
+    DynamicMessage product = DynamicMessage.newBuilder(productDesc)
+        .setField(productDesc.findFieldByName("sku"), "")
+        .build();
+    DynamicMessage order = DynamicMessage.newBuilder(orderDesc)
+        .setField(orderDesc.findFieldByName("id"), "ord-1")
+        .setField(orderDesc.findFieldByName("product"), product)
+        .build();
+
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_SIZE, "0");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    props.put("validation.rules.execution", "AFTER_DOMAIN_RULES");
+
+    SerializationException ex = assertThrows(SerializationException.class,
+        () -> new KafkaProtobufSerializer<DynamicMessage>(client, props)
+            .serialize("order", order));
+    String msg = causeMessage(ex);
+    assertTrue(msg.contains("skuNotEmpty"),
+        "Expected the referenced schema's inline rule to fire, got: " + msg);
   }
 
   /** The serializer wraps our SerializationException(violations) as the cause. */
