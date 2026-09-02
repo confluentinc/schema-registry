@@ -21,10 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.util.HashMap;
@@ -127,6 +129,63 @@ public class CelValidatorAvroSerializerTest {
         "Expected nameNotEmpty in message, got: " + msg);
     assertTrue(msg.contains("2 violations"),
         "Expected violation count in message, got: " + msg);
+  }
+
+  /**
+   * Inline rules travel with a referenced schema. References are resolved at parse time, so the
+   * referenced record's {@code confluent:rules} become part of the parsed referencing schema and
+   * the validation walk reaches them exactly as it would a locally-declared nested record. This is
+   * the property that distinguishes inline rules from an external rule set, which applies only to
+   * the root schema.
+   */
+  @Test
+  void serializationFails_whenInlineRuleOnReferencedSchemaFails() throws Exception {
+    String ns = "io.confluent.kafka.schemaregistry.rules.cel";
+    String productStr =
+        "{"
+        + "\"type\":\"record\",\"name\":\"Product\",\"namespace\":\"" + ns + "\","
+        + "\"fields\":["
+        + "  {\"name\":\"sku\",\"type\":\"string\","
+        + "   \"confluent:rules\":[{\"name\":\"skuNotEmpty\",\"expr\":\"size(this) > 0\"}]}"
+        + "]"
+        + "}";
+    String orderStr =
+        "{"
+        + "\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"" + ns + "\","
+        + "\"fields\":["
+        + "  {\"name\":\"id\",\"type\":\"string\"},"
+        + "  {\"name\":\"product\",\"type\":\"" + ns + ".Product\"}"
+        + "]"
+        + "}";
+
+    client.register("product-value", new AvroSchema(productStr));
+    AvroSchema order = new AvroSchema(
+        orderStr,
+        ImmutableList.of(new SchemaReference(ns + ".Product", "product-value", 1)),
+        ImmutableMap.of(ns + ".Product", productStr),
+        null);
+    client.register("order-value", order);
+
+    Schema orderSchema = order.rawSchema();
+    GenericRecord product = new GenericData.Record(orderSchema.getField("product").schema());
+    product.put("sku", "");
+    GenericRecord rec = new GenericData.Record(orderSchema);
+    rec.put("id", "ord-1");
+    rec.put("product", product);
+
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_SIZE, "0");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    props.put("validation.rules.execution", "AFTER_DOMAIN_RULES");
+
+    SerializationException ex = assertThrows(SerializationException.class,
+        () -> new KafkaAvroSerializer(client, props).serialize("order", rec));
+    String msg = causeMessage(ex);
+    assertTrue(msg.contains("skuNotEmpty"),
+        "Expected the referenced schema's inline rule to fire, got: " + msg);
   }
 
   /** The serializer wraps our SerializationException(violations) as the cause. */
