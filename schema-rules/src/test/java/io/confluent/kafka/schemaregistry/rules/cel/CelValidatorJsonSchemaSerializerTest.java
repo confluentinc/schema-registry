@@ -21,8 +21,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -151,6 +153,103 @@ public class CelValidatorJsonSchemaSerializerTest {
         "Expected nameNotEmpty in message, got: " + msg);
     assertTrue(msg.contains("2 violations"),
         "Expected violation count in message, got: " + msg);
+  }
+
+  /**
+   * Inline rules travel with a referenced schema. Unlike an external rule set, which applies only
+   * to the root schema, a referenced schema's {@code confluent:rules} are reached by the
+   * validation walk once the {@code $ref} is resolved.
+   */
+  @Test
+  void serializationFails_whenInlineRuleOnReferencedSchemaFails() throws Exception {
+    String productStr =
+        "{"
+        + "\"type\":\"object\",\"title\":\"Product\","
+        + "\"properties\":{"
+        + "  \"sku\":{\"type\":\"string\","
+        + "   \"confluent:rules\":[{\"name\":\"skuNotEmpty\",\"expr\":\"size(this) > 0\"}]}"
+        + "},"
+        + "\"required\":[\"sku\"]"
+        + "}";
+    String orderStr =
+        "{"
+        + "\"type\":\"object\",\"title\":\"Order\","
+        + "\"properties\":{"
+        + "  \"id\":{\"type\":\"string\"},"
+        + "  \"product\":{\"$ref\":\"product.json\"}"
+        + "},"
+        + "\"required\":[\"id\",\"product\"]"
+        + "}";
+
+    client.register("product-value", new JsonSchema(productStr));
+    client.register("order-value", new JsonSchema(
+        orderStr,
+        ImmutableList.of(new SchemaReference("product.json", "product-value", 1)),
+        ImmutableMap.of("product.json", productStr),
+        null));
+
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_SIZE, "0");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    props.put("validation.rules.execution", "AFTER_DOMAIN_RULES");
+
+    Order order = new Order("ord-1", new Product(""));
+    SerializationException ex = assertThrows(SerializationException.class,
+        () -> new KafkaJsonSchemaSerializer<Order>(client, props).serialize("order", order));
+    String msg = causeMessage(ex);
+    assertTrue(msg.contains("skuNotEmpty"),
+        "Expected the referenced schema's inline rule to fire, got: " + msg);
+  }
+
+  /** POJO bean for the referenced-schema test. */
+  public static class Product {
+    private String sku;
+
+    public Product() {}
+
+    public Product(String sku) {
+      this.sku = sku;
+    }
+
+    public String getSku() {
+      return sku;
+    }
+
+    public void setSku(String sku) {
+      this.sku = sku;
+    }
+  }
+
+  /** POJO bean holding a {@link Product}, whose schema is a reference. */
+  public static class Order {
+    private String id;
+    private Product product;
+
+    public Order() {}
+
+    public Order(String id, Product product) {
+      this.id = id;
+      this.product = product;
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
+    public Product getProduct() {
+      return product;
+    }
+
+    public void setProduct(Product product) {
+      this.product = product;
+    }
   }
 
   /** The serializer wraps our SerializationException(violations) as the cause. */
