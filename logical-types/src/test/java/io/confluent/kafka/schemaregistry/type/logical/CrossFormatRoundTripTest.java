@@ -31,10 +31,12 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -912,6 +914,51 @@ class CrossFormatRoundTripTest {
         .canonicalString().contains("Address"));
     assertTrue(LogicalTypeToJsonConverter.fromLogicalType(lt, "Employee")
         .canonicalString().contains("Address"));
+  }
+
+  @Test
+  void protobufEnumNumbersDoNotLeakIntoOtherFormats() {
+    // A sparsely numbered Protobuf enum records protobuf.enum.number on every value. That param is
+    // format-native: it rides Protobuf's own EnumValueDescriptorProto.number slot and must never
+    // surface in Avro's or JSON's generic confluent:enum metadata.
+    ProtobufSchema proto = new ProtobufSchema(
+        "syntax = \"proto3\";\n"
+            + "message Order {\n"
+            + "  enum Status { UNKNOWN = 0; SHIPPED = 5; }\n"
+            + "  Status status = 1;\n"
+            + "}\n");
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
+
+    // Guard: the param really is on the LT, so the assertions below can't pass vacuously.
+    List<EnumValue> values =
+        lt.getRootSchema().getField("status").getSchema().getEnumValues();
+    assertEquals(5, values.get(1).getEnumNumber());
+
+    assertFalse(LogicalTypeToAvroConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
+    assertFalse(LogicalTypeToJsonConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
+  }
+
+  @Test
+  void protobufEnumNumbersSmuggledIntoAvroDoNotReachProtobuf() {
+    // confluent:enum is a generic param container; Avro has no enum-value-level native slot. A
+    // protobuf.enum.number arriving through it — hand-authored, or left in a schema written before
+    // the emission fix — must not steer Protobuf numbering on the way back out.
+    AvroSchema avro = new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Order\",\"fields\":[{\"name\":\"status\",\"type\":"
+            + "{\"type\":\"enum\",\"name\":\"Status\",\"symbols\":[\"UNKNOWN\",\"SHIPPED\"],"
+            + "\"confluent:enum\":[{\"name\":\"UNKNOWN\"},"
+            + "{\"name\":\"SHIPPED\",\"params\":{\"protobuf.enum.number\":\"5\"}}]}}]}");
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(avro);
+
+    // A named Avro enum is promoted to a named type rather than staying inline on the field.
+    List<EnumValue> values = lt.getNamedTypes().get("Status").getEnumValues();
+    assertNull(values.get(1).getEnumNumber(), "smuggled enum number must not survive into LT");
+
+    // The enum therefore numbers positionally rather than inheriting the smuggled 5.
+    assertTrue(LogicalTypeToProtoConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains("SHIPPED = 1"));
   }
 
   private static LogicalType parseDdl(String ddl) {
