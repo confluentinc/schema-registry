@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
@@ -162,12 +163,24 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
-  void enumNotStartingAtZeroIsDeclined() throws Exception {
-    // proto2 may start at 1; proto3 cannot express that, so recording is declined rather than
-    // producing a set the writer could not emit.
-    for (Schema.EnumValue ev : enumSchemaWithNumbers(1, 2, 3).getEnumValues()) {
-      assertNull(ev.getEnumNumber(), "expected no number recorded for " + ev.getSymbol());
-    }
+  void enumNotStartingAtZeroIsRecorded() throws Exception {
+    // proto2 may start at 1. The reader records it faithfully even though the proto3 writer can't
+    // emit it — dropping the numbers here would let the writer silently renumber from 0.
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(1, 2, 3).getEnumValues();
+    assertEquals(1, values.get(0).getEnumNumber());
+    assertEquals(2, values.get(1).getEnumNumber());
+    assertEquals(3, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void enumNotStartingAtZeroFailsOnTheWayBackToProto() throws Exception {
+    // The other half of the contract above: the numbering survives into LT and is then rejected
+    // loudly by the proto3 writer, rather than coming back as 0,1,2.
+    Schema enumSchema = enumSchemaWithNumbers(1, 2, 3);
+    Schema struct = Schema.createStruct(
+        List.of(new Schema.Field("color", enumSchema, 0))).setNullable(false);
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(struct), "TestMessage"));
   }
 
   @Test

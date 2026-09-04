@@ -243,13 +243,14 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * Record numbers only when they are not 0..N-1 in declaration order. A non-zero first value is
-   * declined too: proto3 cannot express it, so recording would yield a set the writer can't emit.
+   * Record numbers only when they are not 0..N-1 in declaration order. Numbering proto3 cannot
+   * express — a proto2 enum whose first value is non-zero — is still recorded: the writer rejects
+   * it explicitly, which beats dropping the numbers and silently renumbering from 0.
    */
   private static boolean shouldRecordEnumNumbers(
       com.google.protobuf.Descriptors.EnumDescriptor enm) {
     List<EnumValueDescriptor> values = enm.getValues();
-    if (values.isEmpty() || values.get(0).getNumber() != 0) {
+    if (values.isEmpty()) {
       return false;
     }
     int expected = 0;

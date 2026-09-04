@@ -790,9 +790,8 @@ public abstract class Schema {
 
     /**
      * The symbol's explicit Protobuf number, or {@code null} when unnumbered. The reader records
-     * all-or-nothing per enum and declines one whose first value is non-zero (proto3 cannot express
-     * it), so a set it recorded always starts at 0 and a {@code null} from it means "trivially
-     * sequential" rather than "unknown". A hand-authored schema may number only some values; the
+     * all-or-nothing per enum, so a {@code null} from it means "trivially sequential from 0"
+     * rather than "unknown". A hand-authored schema may instead number only some values; the
      * writer then gives each unnumbered one the next number no other value claims.
      */
     public Integer getEnumNumber() {

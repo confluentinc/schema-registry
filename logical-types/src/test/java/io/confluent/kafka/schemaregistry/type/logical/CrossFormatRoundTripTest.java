@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -912,6 +913,30 @@ class CrossFormatRoundTripTest {
         .canonicalString().contains("Address"));
     assertTrue(LogicalTypeToJsonConverter.fromLogicalType(lt, "Employee")
         .canonicalString().contains("Address"));
+  }
+
+  @Test
+  void protobufEnumNumbersDoNotLeakIntoOtherFormats() {
+    // A sparsely numbered Protobuf enum records protobuf.enum.number on every value. That param is
+    // format-native: it rides Protobuf's own EnumValueDescriptorProto.number slot and must never
+    // surface in Avro's or JSON's generic confluent:enum metadata.
+    ProtobufSchema proto = new ProtobufSchema(
+        "syntax = \"proto3\";\n"
+            + "message Order {\n"
+            + "  enum Status { UNKNOWN = 0; SHIPPED = 5; }\n"
+            + "  Status status = 1;\n"
+            + "}\n");
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
+
+    // Guard: the param really is on the LT, so the assertions below can't pass vacuously.
+    List<EnumValue> values =
+        lt.getRootSchema().getField("status").getSchema().getEnumValues();
+    assertEquals(5, values.get(1).getEnumNumber());
+
+    assertFalse(LogicalTypeToAvroConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
+    assertFalse(LogicalTypeToJsonConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
   }
 
   private static LogicalType parseDdl(String ddl) {
