@@ -242,8 +242,29 @@ public class ProtoToLogicalTypeConverter {
     return s == null || s.isEmpty() ? null : s;
   }
 
-  private static Schema convertEnumDescriptor(
+  /**
+   * Record numbers only when they are not 0..N-1 in declaration order. A non-zero first value is
+   * declined too: proto3 cannot express it, so recording would yield a set the writer can't emit.
+   */
+  private static boolean shouldRecordEnumNumbers(
       com.google.protobuf.Descriptors.EnumDescriptor enm) {
+    List<EnumValueDescriptor> values = enm.getValues();
+    if (values.isEmpty() || values.get(0).getNumber() != 0) {
+      return false;
+    }
+    int expected = 0;
+    for (EnumValueDescriptor evd : values) {
+      if (evd.getNumber() != expected++) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Enum values with doc, user params, and — all-or-nothing — their Protobuf numbers. */
+  private static List<EnumValue> convertEnumValues(
+      com.google.protobuf.Descriptors.EnumDescriptor enm) {
+    boolean recordNumbers = shouldRecordEnumNumbers(enm);
     List<EnumValue> enumValues = new ArrayList<>();
     for (EnumValueDescriptor evd : enm.getValues()) {
       String evDoc = null;
@@ -254,12 +275,22 @@ public class ProtoToLogicalTypeConverter {
         evDoc = (doc != null && !doc.trim().isEmpty()) ? doc : null;
         Map<String, String> params = evMeta.getParamsMap();
         if (!params.isEmpty()) {
-          evParams = new LinkedHashMap<>(params);
+          // Native params travel their own slot; ignore any smuggled in through the meta map.
+          evParams = Schema.stripFormatNativeParams(new LinkedHashMap<>(params));
         }
+      }
+      if (recordNumbers) {
+        evParams = evParams != null ? new LinkedHashMap<>(evParams) : new LinkedHashMap<>();
+        evParams.put(Schema.PROTOBUF_ENUM_NUMBER, String.valueOf(evd.getNumber()));
       }
       enumValues.add(new EnumValue(evd.getName(), evDoc, evParams));
     }
-    Schema enumSchema = Schema.createEnum(enumValues).setNullable(false);
+    return enumValues;
+  }
+
+  private static Schema convertEnumDescriptor(
+      com.google.protobuf.Descriptors.EnumDescriptor enm) {
+    Schema enumSchema = Schema.createEnum(convertEnumValues(enm)).setNullable(false);
     if (enm.getOptions().hasExtension(MetaProto.enumMeta)) {
       Meta meta = enm.getOptions().getExtension(MetaProto.enumMeta);
       readMeta(meta, enumSchema);
@@ -855,22 +886,8 @@ public class ProtoToLogicalTypeConverter {
         if (ctx.hasNamedType(enumFullName)) {
           return Schema.createNamedTypeRef(enumFullName).setNullable(isNullable);
         }
-        List<EnumValue> enumValues = new ArrayList<>();
-        for (EnumValueDescriptor evd : schema.getEnumType().getValues()) {
-          String evDoc = null;
-          Map<String, Object> evParams = null;
-          if (evd.getOptions().hasExtension(MetaProto.enumValueMeta)) {
-            Meta evMeta = evd.getOptions().getExtension(MetaProto.enumValueMeta);
-            String doc = evMeta.getDoc();
-            evDoc = (doc != null && !doc.trim().isEmpty()) ? doc : null;
-            Map<String, String> params = evMeta.getParamsMap();
-            if (!params.isEmpty()) {
-              evParams = new LinkedHashMap<>(params);
-            }
-          }
-          enumValues.add(new EnumValue(evd.getName(), evDoc, evParams));
-        }
-        Schema enumSchema = Schema.createEnum(enumValues).setNullable(isNullable);
+        Schema enumSchema = Schema.createEnum(convertEnumValues(schema.getEnumType()))
+            .setNullable(isNullable);
         // Read enum-level doc/tags/params from EnumOptions
         if (schema.getEnumType().getOptions().hasExtension(MetaProto.enumMeta)) {
           Meta meta = schema.getEnumType().getOptions().getExtension(MetaProto.enumMeta);

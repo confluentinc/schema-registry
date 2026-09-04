@@ -41,6 +41,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -115,6 +116,58 @@ class ProtoToLogicalTypeConverterTest {
     Schema result = ProtoToLogicalTypeConverter.toRootSchema(new ProtobufSchema(fd));
 
     assertTrue(result.getField("opt_field").getSchema().isNullable());
+  }
+
+  /** Build a message carrying one enum field, with the enum's values numbered as given. */
+  private Schema enumSchemaWithNumbers(int... numbers) throws Exception {
+    EnumDescriptorProto.Builder enumProto = EnumDescriptorProto.newBuilder().setName("Color");
+    String[] names = {"RED", "GREEN", "BLUE"};
+    for (int i = 0; i < numbers.length; i++) {
+      enumProto.addValue(
+          EnumValueDescriptorProto.newBuilder().setName(names[i]).setNumber(numbers[i]));
+    }
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("TestMessage")
+        .addEnumType(enumProto.build())
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("color").setNumber(1).setType(Type.TYPE_ENUM).setTypeName("Color"))
+        .build();
+    Schema result = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    return result.getField("color").getSchema();
+  }
+
+  @Test
+  void sequentialEnumNumbersAreNotRecorded() throws Exception {
+    // 0,1,2 is what the writer reproduces positionally, so nothing needs storing.
+    for (Schema.EnumValue ev : enumSchemaWithNumbers(0, 1, 2).getEnumValues()) {
+      assertNull(ev.getEnumNumber(), "expected no number recorded for " + ev.getSymbol());
+    }
+  }
+
+  @Test
+  void nonSequentialEnumNumbersAreRecordedForEveryValue() throws Exception {
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(0, 5, 9).getEnumValues();
+    assertEquals(0, values.get(0).getEnumNumber());
+    assertEquals(5, values.get(1).getEnumNumber());
+    assertEquals(9, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void aliasedEnumNumbersAreRecorded() throws Exception {
+    // Two symbols sharing a number is never sequential, so the whole set is recorded.
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(0, 1, 1).getEnumValues();
+    assertEquals(1, values.get(1).getEnumNumber());
+    assertEquals(1, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void enumNotStartingAtZeroIsDeclined() throws Exception {
+    // proto2 may start at 1; proto3 cannot express that, so recording is declined rather than
+    // producing a set the writer could not emit.
+    for (Schema.EnumValue ev : enumSchemaWithNumbers(1, 2, 3).getEnumValues()) {
+      assertNull(ev.getEnumNumber(), "expected no number recorded for " + ev.getSymbol());
+    }
   }
 
   @Test
