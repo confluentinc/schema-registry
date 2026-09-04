@@ -28,6 +28,7 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Label;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumOptions;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -35,9 +36,11 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -123,9 +126,18 @@ class ProtoToLogicalTypeConverterTest {
   private Schema enumSchemaWithNumbers(int... numbers) throws Exception {
     EnumDescriptorProto.Builder enumProto = EnumDescriptorProto.newBuilder().setName("Color");
     String[] names = {"RED", "GREEN", "BLUE"};
+    Set<Integer> seen = new HashSet<>();
+    boolean hasAlias = false;
     for (int i = 0; i < numbers.length; i++) {
+      hasAlias |= !seen.add(numbers[i]);
       enumProto.addValue(
           EnumValueDescriptorProto.newBuilder().setName(names[i]).setNumber(numbers[i]));
+    }
+    // Duplicate numbers make this an aliased enum, which protoc only accepts under allow_alias.
+    // FileDescriptor.buildFrom is laxer and would take it either way, but the fixture should be a
+    // schema that could actually exist in a .proto file. The reader ignores the option.
+    if (hasAlias) {
+      enumProto.setOptions(EnumOptions.newBuilder().setAllowAlias(true));
     }
     DescriptorProto message = DescriptorProto.newBuilder()
         .setName("TestMessage")
