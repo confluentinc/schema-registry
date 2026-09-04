@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.OneofDescriptor;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -3069,5 +3071,99 @@ class LogicalTypeToProtoConverterTest {
     Schema backUnion = back.getField("arr").getSchema().getElementType();
     assertThat(backUnion.getBranches().get(0).getFieldNumber()).isEqualTo(5);
     assertThat(backUnion.getBranches().get(1).getFieldNumber()).isEqualTo(9);
+  }
+
+  /** Enum with the given per-value numbers, wrapped in a one-field struct. */
+  private static Schema enumStruct(Integer... numbers) {
+    String[] names = {"RED", "GREEN", "BLUE"};
+    java.util.List<EnumValue> values = new java.util.ArrayList<>();
+    for (int i = 0; i < numbers.length; i++) {
+      Map<String, Object> p = null;
+      if (numbers[i] != null) {
+        p = new LinkedHashMap<>();
+        p.put(Schema.PROTOBUF_ENUM_NUMBER, String.valueOf(numbers[i]));
+      }
+      values.add(new EnumValue(names[i], null, p));
+    }
+    return Schema.createStruct(Arrays.asList(
+        new Field("color", Schema.createEnum(values).setNullable(false), 0)))
+        .setNullable(false);
+  }
+
+  @Test
+  void explicitEnumNumbersAreEmittedAndRoundTrip() {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(0, 5, 9)), "TestMessage").toDescriptor();
+    EnumDescriptor e = d.findFieldByName("color").getEnumType();
+    assertThat(e.findValueByName("GREEN").getNumber()).isEqualTo(5);
+    assertThat(e.findValueByName("BLUE").getNumber()).isEqualTo(9);
+    assertThat(e.getOptions().getAllowAlias()).isFalse();
+
+    Schema back = ProtoToLogicalTypeConverter.toRootSchema(new ProtobufSchema(d.getFile()));
+    java.util.List<EnumValue> vals = back.getField("color").getSchema().getEnumValues();
+    assertThat(vals.get(1).getEnumNumber()).isEqualTo(5);
+    assertThat(vals.get(2).getEnumNumber()).isEqualTo(9);
+  }
+
+  @Test
+  void duplicateEnumNumbersDeriveAllowAlias() {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(0, 1, 1)), "TestMessage").toDescriptor();
+    EnumDescriptor e = d.findFieldByName("color").getEnumType();
+    assertThat(e.getOptions().getAllowAlias()).isTrue();
+    assertThat(e.findValueByName("BLUE").getNumber()).isEqualTo(1);
+  }
+
+  @Test
+  void allowAliasIsNotSetWhenNothingAliases() {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(0, 1, 2)), "TestMessage").toDescriptor();
+    // protoc rejects allow_alias on an enum with no aliases, so it must stay unset.
+    assertThat(d.findFieldByName("color").getEnumType().getOptions().getAllowAlias()).isFalse();
+  }
+
+  @Test
+  void unnumberedEnumValuesAreAssignedAroundDeclaredNumbers() {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(0, null, 9)), "TestMessage").toDescriptor();
+    EnumDescriptor e = d.findFieldByName("color").getEnumType();
+    assertThat(e.findValueByName("GREEN").getNumber()).isEqualTo(1);
+    assertThat(e.findValueByName("BLUE").getNumber()).isEqualTo(9);
+    assertThat(e.getOptions().getAllowAlias()).isFalse();
+  }
+
+  @Test
+  void positionalFallbackSkipsEveryDeclaredNumber() {
+    // 0 and 1 are both taken, so GREEN's fallback has to walk past both rather than collide.
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(0, null, 1)), "TestMessage").toDescriptor();
+    EnumDescriptor e = d.findFieldByName("color").getEnumType();
+    assertThat(e.findValueByName("GREEN").getNumber()).isEqualTo(2);
+    assertThat(e.getOptions().getAllowAlias()).isFalse();
+  }
+
+  @Test
+  void enumWithDeclaredNonZeroFirstValueIsRejected() {
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(enumStruct(5, 6, 7)), "TestMessage"));
+  }
+
+  @Test
+  void enumWhoseFirstValueIsDisplacedFromZeroIsRejected() {
+    // RED is unnumbered but GREEN claims 0, pushing RED's fallback to 1 — invalid proto3 that
+    // neither EnumDescriptorProto.build nor FileDescriptor.buildFrom would catch.
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(enumStruct(null, 0, 2)), "TestMessage"));
+  }
+
+  @Test
+  void fullyUnnumberedEnumIsNumberedPositionally() {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(enumStruct(null, null, null)), "TestMessage").toDescriptor();
+    EnumDescriptor e = d.findFieldByName("color").getEnumType();
+    assertThat(e.getValues().stream().map(EnumValueDescriptor::getNumber))
+        .containsExactly(0, 1, 2);
   }
 }
