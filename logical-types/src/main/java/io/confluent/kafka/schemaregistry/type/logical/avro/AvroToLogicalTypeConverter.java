@@ -424,14 +424,7 @@ public class AvroToLogicalTypeConverter {
             (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
         List<EnumValue> enumValues = new ArrayList<>();
         for (int i = 0; i < symbols.size(); i++) {
-          String doc = null;
-          Map<String, Object> evParams = null;
-          if (enumMeta != null && i < enumMeta.size()) {
-            Map<String, Object> entry = enumMeta.get(i);
-            doc = (String) entry.get("doc");
-            evParams = (Map<String, Object>) entry.get("params");
-          }
-          enumValues.add(new EnumValue(symbols.get(i), doc, evParams));
+          enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
         }
         Schema enumSchema = Schema.createEnum(enumValues).setNullable(isNullable);
         enumSchema.setDoc(avroSchema.getDoc());
@@ -674,20 +667,35 @@ public class AvroToLogicalTypeConverter {
         (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
     List<EnumValue> enumValues = new ArrayList<>();
     for (int i = 0; i < symbols.size(); i++) {
-      String doc = null;
-      Map<String, Object> evParams = null;
-      if (enumMeta != null && i < enumMeta.size()) {
-        Map<String, Object> entry = enumMeta.get(i);
-        doc = (String) entry.get("doc");
-        evParams = (Map<String, Object>) entry.get("params");
-      }
-      enumValues.add(new EnumValue(symbols.get(i), doc, evParams));
+      enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
     }
     Schema enumSchema = Schema.createEnum(enumValues).setNullable(false);
     enumSchema.setDoc(avroSchema.getDoc());
     readSchemaTags(avroSchema, enumSchema);
     readSchemaParams(avroSchema, enumSchema);
     return enumSchema;
+  }
+
+  /**
+   * Build the enum value for {@code symbol}, taking its doc and params from entry {@code i} of a
+   * {@code confluent:enum} metadata list (absent or short list means no metadata). Format-native
+   * params are dropped for the same reason {@code readFieldParams} drops them: Avro owns no
+   * enum-value-level native slot, so a foreign {@code protobuf.enum.number} smuggled in here —
+   * whether hand-authored or left behind by an older writer — must not go on to steer Protobuf
+   * emission.
+   */
+  private static EnumValue readEnumValue(
+      String symbol, List<Map<String, Object>> enumMeta, int i) {
+    String doc = null;
+    Map<String, Object> params = null;
+    if (enumMeta != null && i < enumMeta.size()) {
+      Map<String, Object> entry = enumMeta.get(i);
+      doc = (String) entry.get("doc");
+      @SuppressWarnings("unchecked")
+      Map<String, Object> raw = (Map<String, Object>) entry.get("params");
+      params = raw != null ? Schema.stripFormatNativeParams(raw) : null;
+    }
+    return new EnumValue(symbol, doc, params);
   }
 
   private static <V> List<V> appendToList(final List<V> list, final V value) {
