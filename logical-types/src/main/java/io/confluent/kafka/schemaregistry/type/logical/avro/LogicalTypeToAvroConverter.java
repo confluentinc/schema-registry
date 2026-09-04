@@ -678,8 +678,11 @@ public class LogicalTypeToAvroConverter {
       if (ev.getDoc() != null) {
         entry.put("doc", ev.getDoc());
       }
-      if (!ev.getParams().isEmpty()) {
-        entry.put("params", ev.getParams());
+      // Strip before the emptiness check, not after: a value carrying only a format-native param
+      // (a Protobuf enum number) must not drag a confluent:enum property into the Avro schema.
+      Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
+      if (!userParams.isEmpty()) {
+        entry.put("params", userParams);
       }
       enumMeta.add(entry);
     }

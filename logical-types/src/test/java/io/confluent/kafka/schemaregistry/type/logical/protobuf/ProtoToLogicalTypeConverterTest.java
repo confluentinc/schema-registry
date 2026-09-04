@@ -21,12 +21,14 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Label;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumOptions;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -34,13 +36,16 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -115,6 +120,79 @@ class ProtoToLogicalTypeConverterTest {
     Schema result = ProtoToLogicalTypeConverter.toRootSchema(new ProtobufSchema(fd));
 
     assertTrue(result.getField("opt_field").getSchema().isNullable());
+  }
+
+  /** Build a message carrying one enum field, with the enum's values numbered as given. */
+  private Schema enumSchemaWithNumbers(int... numbers) throws Exception {
+    EnumDescriptorProto.Builder enumProto = EnumDescriptorProto.newBuilder().setName("Color");
+    String[] names = {"RED", "GREEN", "BLUE"};
+    Set<Integer> seen = new HashSet<>();
+    boolean hasAlias = false;
+    for (int i = 0; i < numbers.length; i++) {
+      hasAlias |= !seen.add(numbers[i]);
+      enumProto.addValue(
+          EnumValueDescriptorProto.newBuilder().setName(names[i]).setNumber(numbers[i]));
+    }
+    // Duplicate numbers make this an aliased enum, which protoc only accepts under allow_alias.
+    // FileDescriptor.buildFrom is laxer and would take it either way, but the fixture should be a
+    // schema that could actually exist in a .proto file. The reader ignores the option.
+    if (hasAlias) {
+      enumProto.setOptions(EnumOptions.newBuilder().setAllowAlias(true));
+    }
+    DescriptorProto message = DescriptorProto.newBuilder()
+        .setName("TestMessage")
+        .addEnumType(enumProto.build())
+        .addField(FieldDescriptorProto.newBuilder()
+            .setName("color").setNumber(1).setType(Type.TYPE_ENUM).setTypeName("Color"))
+        .build();
+    Schema result = ProtoToLogicalTypeConverter.toRootSchema(
+        new ProtobufSchema(buildFileDescriptor(message)));
+    return result.getField("color").getSchema();
+  }
+
+  @Test
+  void sequentialEnumNumbersAreNotRecorded() throws Exception {
+    // 0,1,2 is what the writer reproduces positionally, so nothing needs storing.
+    for (Schema.EnumValue ev : enumSchemaWithNumbers(0, 1, 2).getEnumValues()) {
+      assertNull(ev.getEnumNumber(), "expected no number recorded for " + ev.getSymbol());
+    }
+  }
+
+  @Test
+  void nonSequentialEnumNumbersAreRecordedForEveryValue() throws Exception {
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(0, 5, 9).getEnumValues();
+    assertEquals(0, values.get(0).getEnumNumber());
+    assertEquals(5, values.get(1).getEnumNumber());
+    assertEquals(9, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void aliasedEnumNumbersAreRecorded() throws Exception {
+    // Two symbols sharing a number is never sequential, so the whole set is recorded.
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(0, 1, 1).getEnumValues();
+    assertEquals(1, values.get(1).getEnumNumber());
+    assertEquals(1, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void enumNotStartingAtZeroIsRecorded() throws Exception {
+    // proto2 may start at 1. The reader records it faithfully even though the proto3 writer can't
+    // emit it — dropping the numbers here would let the writer silently renumber from 0.
+    List<Schema.EnumValue> values = enumSchemaWithNumbers(1, 2, 3).getEnumValues();
+    assertEquals(1, values.get(0).getEnumNumber());
+    assertEquals(2, values.get(1).getEnumNumber());
+    assertEquals(3, values.get(2).getEnumNumber());
+  }
+
+  @Test
+  void enumNotStartingAtZeroFailsOnTheWayBackToProto() throws Exception {
+    // The other half of the contract above: the numbering survives into LT and is then rejected
+    // loudly by the proto3 writer, rather than coming back as 0,1,2.
+    Schema enumSchema = enumSchemaWithNumbers(1, 2, 3);
+    Schema struct = Schema.createStruct(
+        List.of(new Schema.Field("color", enumSchema, 0))).setNullable(false);
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(struct), "TestMessage"));
   }
 
   @Test
