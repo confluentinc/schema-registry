@@ -36,6 +36,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -937,6 +938,27 @@ class CrossFormatRoundTripTest {
         .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
     assertFalse(LogicalTypeToJsonConverter.fromLogicalType(lt, "Order")
         .canonicalString().contains(Schema.PROTOBUF_ENUM_NUMBER));
+  }
+
+  @Test
+  void protobufEnumNumbersSmuggledIntoAvroDoNotReachProtobuf() {
+    // confluent:enum is a generic param container; Avro has no enum-value-level native slot. A
+    // protobuf.enum.number arriving through it — hand-authored, or left in a schema written before
+    // the emission fix — must not steer Protobuf numbering on the way back out.
+    AvroSchema avro = new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Order\",\"fields\":[{\"name\":\"status\",\"type\":"
+            + "{\"type\":\"enum\",\"name\":\"Status\",\"symbols\":[\"UNKNOWN\",\"SHIPPED\"],"
+            + "\"confluent:enum\":[{\"name\":\"UNKNOWN\"},"
+            + "{\"name\":\"SHIPPED\",\"params\":{\"protobuf.enum.number\":\"5\"}}]}}]}");
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(avro);
+
+    // A named Avro enum is promoted to a named type rather than staying inline on the field.
+    List<EnumValue> values = lt.getNamedTypes().get("Status").getEnumValues();
+    assertNull(values.get(1).getEnumNumber(), "smuggled enum number must not survive into LT");
+
+    // The enum therefore numbers positionally rather than inheriting the smuggled 5.
+    assertTrue(LogicalTypeToProtoConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains("SHIPPED = 1"));
   }
 
   private static LogicalType parseDdl(String ddl) {
