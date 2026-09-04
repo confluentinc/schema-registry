@@ -46,6 +46,15 @@ public abstract class Schema {
   public static final String PROTOBUF_FIELD_NUMBER = "protobuf.field.number";
 
   /**
+   * Reserved {@code params} key carrying an enum value's Protobuf number, populated by the
+   * Protobuf reader from {@code EnumValueDescriptor.getNumber()}. Read via
+   * {@link EnumValue#getEnumNumber()}. Format-native on the same terms as
+   * {@link #PROTOBUF_FIELD_NUMBER}. Unlike a field number it may be negative and may repeat
+   * (Protobuf's {@code allow_alias}).
+   */
+  public static final String PROTOBUF_ENUM_NUMBER = "protobuf.enum.number";
+
+  /**
    * Reserved {@code params} key carrying a field's Avro aliases (its previous names) as a
    * comma-delimited string, populated by the Avro reader from {@code Schema.Field.aliases()}.
    * Read via {@link Field#getAliases()}. Avro field names cannot contain commas, so the delimiter
@@ -108,6 +117,25 @@ public abstract class Schema {
     } catch (NumberFormatException e) {
       throw new ValidationException("'" + ownerName + "' has a non-numeric "
           + PROTOBUF_FIELD_NUMBER + " param: '" + v + "'");
+    }
+  }
+
+  /**
+   * Parse the {@link #PROTOBUF_ENUM_NUMBER} param from {@code params}, or {@code null} if absent.
+   * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
+   * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
+   * names the enum symbol for the error message.
+   */
+  static Integer parseEnumNumber(Map<String, Object> params, String ownerName) {
+    Object v = params.get(PROTOBUF_ENUM_NUMBER);
+    if (v == null) {
+      return null;
+    }
+    try {
+      return Integer.valueOf(v.toString());
+    } catch (NumberFormatException e) {
+      throw new ValidationException("'" + ownerName + "' has a non-numeric "
+          + PROTOBUF_ENUM_NUMBER + " param: '" + v + "'");
     }
   }
 
@@ -758,6 +786,17 @@ public abstract class Schema {
 
     public Map<String, Object> getParams() {
       return params;
+    }
+
+    /**
+     * The symbol's explicit Protobuf number, or {@code null} when unnumbered. The reader records
+     * all-or-nothing per enum and declines one whose first value is non-zero (proto3 cannot express
+     * it), so a set it recorded always starts at 0 and a {@code null} from it means "trivially
+     * sequential" rather than "unknown". A hand-authored schema may number only some values; the
+     * writer then gives each unnumbered one the next number no other value claims.
+     */
+    public Integer getEnumNumber() {
+      return parseEnumNumber(params, symbol);
     }
 
     @Override
