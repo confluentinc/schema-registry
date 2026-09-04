@@ -421,6 +421,12 @@ public class JsonToLogicalTypeConverter {
           Map<String, Object> entry = enumMeta.get(i);
           doc = (String) entry.get("doc");
           evParams = (Map<String, Object>) entry.get("params");
+          // JSON Schema owns no enum-value-level format-native slot, so drop any key smuggled in
+          // through confluent:enum (e.g. a foreign protobuf.enum.number) rather than letting it
+          // steer Protobuf emission later — same rule the field and branch readers apply.
+          if (evParams != null) {
+            evParams = Schema.stripFormatNativeParams(evParams);
+          }
         }
         values.add(new EnumValue(symbol, doc, evParams));
       }

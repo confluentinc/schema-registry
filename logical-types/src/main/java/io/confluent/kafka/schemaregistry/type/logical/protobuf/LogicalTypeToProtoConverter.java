@@ -548,12 +548,33 @@ public class LogicalTypeToProtoConverter {
       Schema enumSchema, String enumName, FromLogicalContext<?> ctx) {
     EnumDescriptorProto.Builder enumBuilder = EnumDescriptorProto.newBuilder()
         .setName(enumName);
-    int enumIndex = 0;
-    for (EnumValue ev : enumSchema.getEnumValues()) {
+    List<EnumValue> values = enumSchema.getEnumValues();
+    // Pass 1: reserve every author-declared number so unnumbered values can be assigned around
+    // them. Unlike a field number, a repeat is legal here — it declares an alias — so duplicates
+    // are counted rather than rejected. protoc in turn rejects allow_alias when nothing actually
+    // aliases, so the option is derived from the numbers rather than stored on the schema.
+    Set<Integer> reservedNumbers = new LinkedHashSet<>();
+    boolean hasAlias = false;
+    for (EnumValue ev : values) {
+      Integer declared = ev.getEnumNumber();
+      if (declared != null && !reservedNumbers.add(declared)) {
+        hasAlias = true;
+      }
+    }
+    if (hasAlias) {
+      enumBuilder.setOptions(EnumOptions.newBuilder().setAllowAlias(true));
+    }
+    // Pass 2 (below) assigns numbers: an author-declared number is used as-is; an unnumbered value
+    // gets the next number not already reserved. Enum numbering is 0-based, so the cursor starts at
+    // 0 rather than at 1 as it does for fields.
+    int[] numberCursor = {0};
+    for (EnumValue ev : values) {
+      Integer declared = ev.getEnumNumber();
       EnumValueDescriptorProto.Builder evBuilder =
           EnumValueDescriptorProto.newBuilder()
               .setName(ev.getSymbol())
-              .setNumber(enumIndex++);
+              .setNumber(declared != null
+                  ? declared : nextAvailableNumber(numberCursor, reservedNumbers));
       if (!ctx.isV1()) {
         Meta.Builder evMeta = buildEnumValueMeta(ev);
         if (evMeta != null) {
@@ -563,6 +584,16 @@ public class LogicalTypeToProtoConverter {
         }
       }
       enumBuilder.addValue(evBuilder.build());
+    }
+    // Proto3 requires the first value to be 0, and nothing downstream enforces it — neither
+    // EnumDescriptorProto.build nor FileDescriptor.buildFrom checks — so an invalid enum would
+    // otherwise reach the registry and fail only once protoc sees it. Two ways to land here: the
+    // first value declares a non-zero number, or it is unnumbered and a later value claimed 0,
+    // displacing the fallback to 1.
+    if (enumBuilder.getValueCount() > 0 && enumBuilder.getValue(0).getNumber() != 0) {
+      throw new ValidationException("Proto3 requires the first value of enum '" + enumName
+          + "' to have number 0, but '" + enumBuilder.getValue(0).getName() + "' has "
+          + enumBuilder.getValue(0).getNumber());
     }
     if (!ctx.isV1()) {
       addEnumMeta(enumBuilder, enumSchema);
@@ -641,7 +672,7 @@ public class LogicalTypeToProtoConverter {
           // free number — same rule as a regular field.
           final Integer branchDeclared = branch.getFieldNumber();
           final int branchNumber = branchDeclared != null
-              ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
+              ? branchDeclared : nextAvailableNumber(numberCursor, reservedNumbers);
           // Proto3 oneof can't contain repeated/map fields. Composite branches
           // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
           // regardless of nullability — fromField only wraps when nullable, so
@@ -683,7 +714,7 @@ public class LogicalTypeToProtoConverter {
         // otherwise assign the next number not reserved by an explicit one.
         final Integer declaredNumber = field.getFieldNumber();
         final int effectiveNumber = declaredNumber != null
-            ? declaredNumber : nextFieldNumber(numberCursor, reservedNumbers);
+            ? declaredNumber : nextAvailableNumber(numberCursor, reservedNumbers);
         final FieldDescriptorProto.Builder fieldProtoBuilder =
             fromField(
                 field.getSchema(),
@@ -1369,19 +1400,21 @@ public class LogicalTypeToProtoConverter {
   private static void addEnumMeta(EnumDescriptorProto.Builder builder, Schema schema) {
     Meta.Builder metaBuilder = buildSchemaMeta(schema);
     if (metaBuilder != null) {
-      builder.setOptions(EnumOptions.newBuilder()
+      // Merge onto any options already set (allow_alias), rather than replacing them.
+      builder.setOptions(builder.getOptions().toBuilder()
           .setExtension(MetaProto.enumMeta, metaBuilder.build())
           .build());
     }
   }
 
   /**
-   * Return the next positive field number not already reserved by an author-declared number,
-   * advancing {@code cursor} past it. Skipping reserved numbers guarantees a positional fallback
-   * never collides with an explicit number, and the monotonic cursor keeps successive fallbacks
-   * distinct.
+   * Return the next number not already reserved by an author-declared number, advancing
+   * {@code cursor} past it. Skipping reserved numbers guarantees a positional fallback never
+   * collides with an explicit number, and the monotonic cursor keeps successive fallbacks distinct.
+   * Shared by fields and enum values; the caller seeds the cursor with the format's first legal
+   * number (1 for fields, 0 for enum values).
    */
-  private static int nextFieldNumber(int[] cursor, Set<Integer> reserved) {
+  private static int nextAvailableNumber(int[] cursor, Set<Integer> reserved) {
     while (reserved.contains(cursor[0])) {
       cursor[0]++;
     }
@@ -1456,9 +1489,12 @@ public class LogicalTypeToProtoConverter {
       metaBuilder.setDoc(ev.getDoc());
       hasMeta = true;
     }
-    if (!ev.getParams().isEmpty()) {
+    // Format-native params ride their own native slots (the enum number via
+    // EnumValueDescriptorProto.number), never the generic meta params, so strip them here.
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
+    if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
-      ev.getParams().forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+      userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
       metaBuilder.putAllParams(stringParams);
       hasMeta = true;
     }

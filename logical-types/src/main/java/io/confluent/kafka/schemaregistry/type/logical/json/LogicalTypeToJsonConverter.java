@@ -629,8 +629,11 @@ public class LogicalTypeToJsonConverter {
         entry.put("doc", ev.getDoc());
         hasMeta = true;
       }
-      if (!ev.getParams().isEmpty()) {
-        entry.put("params", ev.getParams());
+      // Strip before the hasMeta check, not after: a value carrying only a format-native param
+      // (a Protobuf enum number) must not drag a confluent:enum property into the JSON schema.
+      Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
+      if (!userParams.isEmpty()) {
+        entry.put("params", userParams);
         hasMeta = true;
       }
       enumMeta.add(entry);
