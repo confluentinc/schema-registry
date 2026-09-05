@@ -121,12 +121,6 @@ public abstract class Schema {
   }
 
   /**
-   * Parse the {@link #PROTOBUF_ENUM_NUMBER} param from {@code params}, or {@code null} if absent.
-   * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
-   * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
-   * names the enum symbol for the error message.
-   */
-  /**
    * Parse the comma-delimited {@link #AVRO_ALIASES} param, or an empty list if absent. Shared by
    * {@link Field#getAliases()} and {@link Schema#getAliases()}.
    */
@@ -142,6 +136,12 @@ public abstract class Schema {
     return Collections.unmodifiableList(Arrays.asList(s.split(",")));
   }
 
+  /**
+   * Parse the {@link #PROTOBUF_ENUM_NUMBER} param from {@code params}, or {@code null} if absent.
+   * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
+   * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
+   * names the enum symbol for the error message.
+   */
   static Integer parseEnumNumber(Map<String, Object> params, String ownerName) {
     Object v = params.get(PROTOBUF_ENUM_NUMBER);
     if (v == null) {
@@ -217,9 +217,11 @@ public abstract class Schema {
   }
 
   /**
-   * This named type's Avro aliases (its previous fullnames), empty unless the Avro reader
-   * populated {@link #AVRO_ALIASES}. Always fullnames — Avro resolves relative aliases at parse
-   * time. Avro {@code fixed} is out of scope: it converts to an unnamed type with no home for them.
+   * This named type's Avro aliases (its previous names), or an empty list when
+   * {@link #AVRO_ALIASES} is unset. Values stored by the Avro reader are always fullnames, since
+   * Avro resolves relative aliases at parse time; the param is also settable through a DDL
+   * {@code WITH} clause or {@link #setParams}, and those values are returned as written. Avro
+   * {@code fixed} is out of scope: it converts to an unnamed type with no home for them.
    */
   public List<String> getAliases() {
     return parseAliases(params);
@@ -720,9 +722,10 @@ public abstract class Schema {
     }
 
     /**
-     * The field's Avro aliases (its previous names), or an empty list if the field did not
-     * originate from an Avro schema carrying aliases (only the Avro reader populates
-     * {@link Schema#AVRO_ALIASES}). Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
+     * The field's Avro aliases (its previous names), or an empty list when
+     * {@link Schema#AVRO_ALIASES} is unset. Populated by the Avro reader, but also settable
+     * through a DDL {@code WITH} clause or {@link Schema#setParams}, in which case the values are
+     * returned as written. Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
      */
     public List<String> getAliases() {
       return parseAliases(params);
