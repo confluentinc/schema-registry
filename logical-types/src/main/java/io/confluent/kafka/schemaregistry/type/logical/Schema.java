@@ -126,6 +126,22 @@ public abstract class Schema {
    * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
    * names the enum symbol for the error message.
    */
+  /**
+   * Parse the comma-delimited {@link #AVRO_ALIASES} param, or an empty list if absent. Shared by
+   * {@link Field#getAliases()} and {@link Schema#getAliases()}.
+   */
+  static List<String> parseAliases(Map<String, Object> params) {
+    Object v = params.get(AVRO_ALIASES);
+    if (v == null) {
+      return Collections.emptyList();
+    }
+    String s = v.toString();
+    if (s.isEmpty()) {
+      return Collections.emptyList();
+    }
+    return Collections.unmodifiableList(Arrays.asList(s.split(",")));
+  }
+
   static Integer parseEnumNumber(Map<String, Object> params, String ownerName) {
     Object v = params.get(PROTOBUF_ENUM_NUMBER);
     if (v == null) {
@@ -198,6 +214,15 @@ public abstract class Schema {
 
   public Map<String, Object> getParams() {
     return params;
+  }
+
+  /**
+   * This named type's Avro aliases (its previous fullnames), empty unless the Avro reader
+   * populated {@link #AVRO_ALIASES}. Always fullnames — Avro resolves relative aliases at parse
+   * time. Avro {@code fixed} is out of scope: it converts to an unnamed type with no home for them.
+   */
+  public List<String> getAliases() {
+    return parseAliases(params);
   }
 
   public Schema setParams(Map<String, Object> params) {
@@ -700,15 +725,7 @@ public abstract class Schema {
      * {@link Schema#AVRO_ALIASES}). Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
      */
     public List<String> getAliases() {
-      Object v = params.get(AVRO_ALIASES);
-      if (v == null) {
-        return Collections.emptyList();
-      }
-      String s = v.toString();
-      if (s.isEmpty()) {
-        return Collections.emptyList();
-      }
-      return Collections.unmodifiableList(Arrays.asList(s.split(",")));
+      return parseAliases(params);
     }
 
     /**
