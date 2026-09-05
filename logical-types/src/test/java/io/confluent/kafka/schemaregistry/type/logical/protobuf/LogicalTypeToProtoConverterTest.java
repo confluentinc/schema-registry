@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -3060,6 +3061,23 @@ class LogicalTypeToProtoConverterTest {
     Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(numberedFieldStruct(number)), "M").toDescriptor();
     assertThat(d.findFieldByName("a").getNumber()).isEqualTo(Integer.parseInt(number));
+  }
+
+  @Test
+  void positionalFieldNumbersSkipTheImplementationReservedRange() {
+    // The allocator must jump 19,000..19,999 as protoc does. Without the jump the 19,000th
+    // unnumbered field is handed 19000 and then rejected by our own range check, failing a schema
+    // that is perfectly legal.
+    List<Field> fields = new ArrayList<>();
+    for (int i = 0; i < 19000; i++) {
+      fields.add(new Field("f" + i, Schema.create(Schema.Type.INT).setNullable(false), i));
+    }
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.createStruct(fields).setNullable(false)), "M").toDescriptor();
+
+    assertThat(d.findFieldByName("f18997").getNumber()).isEqualTo(18998);
+    assertThat(d.findFieldByName("f18998").getNumber()).isEqualTo(18999);
+    assertThat(d.findFieldByName("f18999").getNumber()).isEqualTo(20000);
   }
 
   @Test

@@ -677,7 +677,7 @@ public class LogicalTypeToProtoConverter {
           // free number — same rule as a regular field.
           final Integer branchDeclared = branch.getFieldNumber();
           final int branchNumber = branchDeclared != null
-              ? branchDeclared : nextAvailableNumber(numberCursor, reservedNumbers);
+              ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           validateFieldNumber(branchNumber, branch.getName(), rowName);
           // Proto3 oneof can't contain repeated/map fields. Composite branches
           // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
@@ -720,7 +720,7 @@ public class LogicalTypeToProtoConverter {
         // otherwise assign the next number not reserved by an explicit one.
         final Integer declaredNumber = field.getFieldNumber();
         final int effectiveNumber = declaredNumber != null
-            ? declaredNumber : nextAvailableNumber(numberCursor, reservedNumbers);
+            ? declaredNumber : nextFieldNumber(numberCursor, reservedNumbers);
         validateFieldNumber(effectiveNumber, field.getName(), rowName);
         final FieldDescriptorProto.Builder fieldProtoBuilder =
             fromField(
@@ -1426,6 +1426,21 @@ public class LogicalTypeToProtoConverter {
       cursor[0]++;
     }
     return cursor[0]++;
+  }
+
+  /**
+   * Positional field number: {@link #nextAvailableNumber} plus a jump over the range Protobuf
+   * reserves for itself, so a message long enough to reach 19,000 keeps allocating at 20,000
+   * instead of tripping {@link #validateFieldNumber}. Enum allocation calls the generic helper
+   * directly — those numbers are legal there.
+   */
+  private static int nextFieldNumber(int[] cursor, Set<Integer> reserved) {
+    int number = nextAvailableNumber(cursor, reserved);
+    if (number >= IMPL_RESERVED_FIRST_FIELD_NUMBER && number <= IMPL_RESERVED_LAST_FIELD_NUMBER) {
+      cursor[0] = IMPL_RESERVED_LAST_FIELD_NUMBER + 1;
+      number = nextAvailableNumber(cursor, reserved);
+    }
+    return number;
   }
 
   /**

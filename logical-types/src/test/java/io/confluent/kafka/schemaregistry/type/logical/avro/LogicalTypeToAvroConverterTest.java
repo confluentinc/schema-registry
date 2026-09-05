@@ -2564,6 +2564,23 @@ class LogicalTypeToAvroConverterTest {
   }
 
   @Test
+  void aliasesSurviveOnRecordsReachedAsNamedTypes() {
+    // Addr is referenced twice, so it becomes a registered named type and is emitted by
+    // buildNamedRecord rather than inline. That path needs its own alias call — and since
+    // addSchemaParams strips avro.aliases, there is no fallback copy if it is missed.
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.acme\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":{\"type\":\"record\",\"name\":\"Addr\","
+        + "\"aliases\":[\"OldAddr\"],\"fields\":[{\"name\":\"s\",\"type\":\"string\"}]}},"
+        + "{\"name\":\"b\",\"type\":\"Addr\"}]}";
+
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    org.apache.avro.Schema back =
+        LogicalTypeToAvroConverter.fromLogicalType(lt, "Order").rawSchema();
+
+    assertThat(back.getField("a").schema().getAliases()).containsExactly("com.acme.OldAddr");
+  }
+
+  @Test
   void namedTypeAliasesDoNotLeakIntoConfluentParams() {
     // avro.aliases is format-native: it rides Avro's own aliases slot and must not also appear in
     // the generic container, which would otherwise be created solely to hold it.

@@ -529,6 +529,7 @@ public class LogicalTypeToAvroConverter {
     placeholder.setFields(avroFields);
     if (!ctx.isV1()) {
       addSchemaTags(placeholder, typeDef);
+      addNamedTypeAliases(placeholder, typeDef);
       addSchemaParams(placeholder, typeDef);
       addSchemaRules(placeholder, typeDef);
     }
