@@ -31,7 +31,10 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -3032,6 +3035,51 @@ class LogicalTypeToProtoConverterTest {
         .isInstanceOf(ValidationException.class);
   }
 
+  /** One-field struct whose single field declares the given Protobuf field number. */
+  private static Schema numberedFieldStruct(String number) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(Schema.PROTOBUF_FIELD_NUMBER, number);
+    return Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.create(Schema.Type.INT).setNullable(false), 0,
+            null, false, null, null, params)))
+        .setNullable(false);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "-1", "536870912", "19000", "19500", "19999"})
+  void testFieldNumberOutsideProtobufsLegalRangeRejected(String number) {
+    // protoc allows 1..536,870,911 and reserves 19,000..19,999; buildFrom only checks positivity.
+    assertThatThrownBy(() ->
+        LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(numberedFieldStruct(number)), "M"))
+        .isInstanceOf(ValidationException.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"1", "18999", "20000", "536870911"})
+  void testFieldNumberAtRangeBoundariesAccepted(String number) {
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(numberedFieldStruct(number)), "M").toDescriptor();
+    assertThat(d.findFieldByName("a").getNumber()).isEqualTo(Integer.parseInt(number));
+  }
+
+  @Test
+  void positionalFieldNumbersSkipTheImplementationReservedRange() {
+    // The allocator must jump 19,000..19,999 as protoc does. Without the jump the 19,000th
+    // unnumbered field is handed 19000 and then rejected by our own range check, failing a schema
+    // that is perfectly legal.
+    List<Field> fields = new ArrayList<>();
+    for (int i = 0; i < 19000; i++) {
+      fields.add(new Field("f" + i, Schema.create(Schema.Type.INT).setNullable(false), i));
+    }
+    Descriptor d = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.createStruct(fields).setNullable(false)), "M").toDescriptor();
+
+    assertThat(d.findFieldByName("f18997").getNumber()).isEqualTo(18998);
+    assertThat(d.findFieldByName("f18998").getNumber()).isEqualTo(18999);
+    assertThat(d.findFieldByName("f18999").getNumber()).isEqualTo(20000);
+  }
+
   @Test
   void testNonNumericFieldNumberRejectedAsValidation() {
     // A DDL-authored non-numeric protobuf.field.number must surface as a clean ValidationException,
@@ -3151,8 +3199,7 @@ class LogicalTypeToProtoConverterTest {
 
   @Test
   void enumWhoseFirstValueIsDisplacedFromZeroIsRejected() {
-    // RED is unnumbered but GREEN claims 0, pushing RED's fallback to 1 — invalid proto3 that
-    // neither EnumDescriptorProto.build nor FileDescriptor.buildFrom would catch.
+    // RED is unnumbered but GREEN claims 0, pushing RED's fallback to 1 — invalid proto3.
     assertThrows(ValidationException.class,
         () -> LogicalTypeToProtoConverter.fromLogicalType(
             new LogicalType(enumStruct(null, 0, 2)), "TestMessage"));
