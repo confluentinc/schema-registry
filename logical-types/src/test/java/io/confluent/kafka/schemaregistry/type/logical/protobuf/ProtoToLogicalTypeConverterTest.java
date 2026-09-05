@@ -133,9 +133,8 @@ class ProtoToLogicalTypeConverterTest {
       enumProto.addValue(
           EnumValueDescriptorProto.newBuilder().setName(names[i]).setNumber(numbers[i]));
     }
-    // Duplicate numbers make this an aliased enum, which protoc only accepts under allow_alias.
-    // FileDescriptor.buildFrom is laxer and would take it either way, but the fixture should be a
-    // schema that could actually exist in a .proto file. The reader ignores the option.
+    // protoc accepts an aliased enum only under allow_alias. buildFrom is laxer, but the fixture
+    // should be a schema that could exist in a .proto file. The reader ignores the option.
     if (hasAlias) {
       enumProto.setOptions(EnumOptions.newBuilder().setAllowAlias(true));
     }
@@ -176,8 +175,8 @@ class ProtoToLogicalTypeConverterTest {
 
   @Test
   void enumNotStartingAtZeroIsRecorded() throws Exception {
-    // proto2 may start at 1. The reader records it faithfully even though the proto3 writer can't
-    // emit it — dropping the numbers here would let the writer silently renumber from 0.
+    // proto2 may start at 1. Recorded faithfully even though the proto3 writer can't emit it —
+    // dropping the numbers would let the writer silently renumber from 0.
     List<Schema.EnumValue> values = enumSchemaWithNumbers(1, 2, 3).getEnumValues();
     assertEquals(1, values.get(0).getEnumNumber());
     assertEquals(2, values.get(1).getEnumNumber());
@@ -186,8 +185,7 @@ class ProtoToLogicalTypeConverterTest {
 
   @Test
   void enumNotStartingAtZeroFailsOnTheWayBackToProto() throws Exception {
-    // The other half of the contract above: the numbering survives into LT and is then rejected
-    // loudly by the proto3 writer, rather than coming back as 0,1,2.
+    // The other half: the numbering survives into LT and is then rejected by the proto3 writer.
     Schema enumSchema = enumSchemaWithNumbers(1, 2, 3);
     Schema struct = Schema.createStruct(
         List.of(new Schema.Field("color", enumSchema, 0))).setNullable(false);

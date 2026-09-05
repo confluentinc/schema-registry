@@ -69,6 +69,15 @@ import java.util.stream.Stream;
  */
 public class LogicalTypeToProtoConverter {
 
+  /** Lowest field number Protobuf permits. */
+  private static final int MIN_FIELD_NUMBER = 1;
+  /** Highest field number Protobuf permits (2^29 - 1). */
+  private static final int MAX_FIELD_NUMBER = 536870911;
+  /** First number in the range Protobuf reserves for its own implementation. */
+  private static final int IMPL_RESERVED_FIRST_FIELD_NUMBER = 19000;
+  /** Last number in that range, inclusive. */
+  private static final int IMPL_RESERVED_LAST_FIELD_NUMBER = 19999;
+
   private static final Set<Schema.Type> PROTO_MESSAGE_TYPES =
       EnumSet.of(
           Schema.Type.DECIMAL,
@@ -549,10 +558,9 @@ public class LogicalTypeToProtoConverter {
     EnumDescriptorProto.Builder enumBuilder = EnumDescriptorProto.newBuilder()
         .setName(enumName);
     List<EnumValue> values = enumSchema.getEnumValues();
-    // Pass 1: reserve every author-declared number so unnumbered values can be assigned around
-    // them. Unlike a field number, a repeat is legal here — it declares an alias — so duplicates
-    // are counted rather than rejected. protoc in turn rejects allow_alias when nothing actually
-    // aliases, so the option is derived from the numbers rather than stored on the schema.
+    // Pass 1: reserve author-declared numbers so unnumbered values can be assigned around them.
+    // Unlike a field number a repeat is legal — it declares an alias — so duplicates are counted,
+    // not rejected, and derive allow_alias, which protoc refuses when nothing actually aliases.
     Set<Integer> reservedNumbers = new LinkedHashSet<>();
     boolean hasAlias = false;
     for (EnumValue ev : values) {
@@ -564,9 +572,8 @@ public class LogicalTypeToProtoConverter {
     if (hasAlias) {
       enumBuilder.setOptions(EnumOptions.newBuilder().setAllowAlias(true));
     }
-    // Pass 2 (below) assigns numbers: an author-declared number is used as-is; an unnumbered value
-    // gets the next number not already reserved. Enum numbering is 0-based, so the cursor starts at
-    // 0 rather than at 1 as it does for fields.
+    // Pass 2: a declared number is used as-is, an unnumbered value takes the next unreserved one.
+    // Cursor starts at 0 because enum numbering is 0-based, unlike fields.
     int[] numberCursor = {0};
     for (EnumValue ev : values) {
       Integer declared = ev.getEnumNumber();
@@ -585,11 +592,9 @@ public class LogicalTypeToProtoConverter {
       }
       enumBuilder.addValue(evBuilder.build());
     }
-    // Proto3 requires the first value to be 0, and nothing downstream enforces it — neither
-    // EnumDescriptorProto.build nor FileDescriptor.buildFrom checks — so an invalid enum would
-    // otherwise reach the registry and fail only once protoc sees it. Two ways to land here: the
-    // first value declares a non-zero number, or it is unnumbered and a later value claimed 0,
-    // displacing the fallback to 1.
+    // Proto3 requires the first value to be 0 and nothing downstream enforces it — neither
+    // EnumDescriptorProto.build nor buildFrom checks. Two ways to land here: the first value
+    // declares a non-zero number, or it is unnumbered and a later value claimed 0.
     if (enumBuilder.getValueCount() > 0 && enumBuilder.getValue(0).getNumber() != 0) {
       throw new ValidationException("Proto3 requires the first value of enum '" + enumName
           + "' to have number 0, but '" + enumBuilder.getValue(0).getName() + "' has "
@@ -673,6 +678,7 @@ public class LogicalTypeToProtoConverter {
           final Integer branchDeclared = branch.getFieldNumber();
           final int branchNumber = branchDeclared != null
               ? branchDeclared : nextAvailableNumber(numberCursor, reservedNumbers);
+          validateFieldNumber(branchNumber, branch.getName(), rowName);
           // Proto3 oneof can't contain repeated/map fields. Composite branches
           // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
           // regardless of nullability — fromField only wraps when nullable, so
@@ -715,6 +721,7 @@ public class LogicalTypeToProtoConverter {
         final Integer declaredNumber = field.getFieldNumber();
         final int effectiveNumber = declaredNumber != null
             ? declaredNumber : nextAvailableNumber(numberCursor, reservedNumbers);
+        validateFieldNumber(effectiveNumber, field.getName(), rowName);
         final FieldDescriptorProto.Builder fieldProtoBuilder =
             fromField(
                 field.getSchema(),
@@ -1422,6 +1429,27 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
+   * Reject a field number protoc would refuse: outside 1..536,870,911, or inside the
+   * 19,000..19,999 range Protobuf reserves for itself. FileDescriptor.buildFrom checks only that a
+   * number is positive, so otherwise a bad {@link Schema#PROTOBUF_FIELD_NUMBER} would be stored
+   * and fail only under protoc. Applied to the emitted number, so it covers the positional
+   * fallback too. Enum numbers are exempt — plain int32, and may be negative.
+   */
+  private static void validateFieldNumber(int number, String fieldName, String rowName) {
+    if (number < MIN_FIELD_NUMBER || number > MAX_FIELD_NUMBER) {
+      throw new ValidationException("Field '" + fieldName + "' in struct '" + rowName
+          + "' has Protobuf field number " + number + ", outside the legal range "
+          + MIN_FIELD_NUMBER + ".." + MAX_FIELD_NUMBER);
+    }
+    if (number >= IMPL_RESERVED_FIRST_FIELD_NUMBER && number <= IMPL_RESERVED_LAST_FIELD_NUMBER) {
+      throw new ValidationException("Field '" + fieldName + "' in struct '" + rowName
+          + "' has Protobuf field number " + number + ", which falls in the range "
+          + IMPL_RESERVED_FIRST_FIELD_NUMBER + ".." + IMPL_RESERVED_LAST_FIELD_NUMBER
+          + " that Protobuf reserves for its own implementation");
+    }
+  }
+
+  /**
    * Add an author-declared field number to the reserved set, rejecting a duplicate — an invalid
    * proto that would otherwise surface as an opaque DescriptorValidationException. A {@code null}
    * number (unnumbered field or branch) is ignored.
@@ -1512,9 +1540,11 @@ public class LogicalTypeToProtoConverter {
       metaBuilder.addAllTags(schema.getTags());
       hasMeta = true;
     }
-    if (!schema.getParams().isEmpty()) {
+    // Strip first: a format-native param alone must not manufacture a Meta block.
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(schema.getParams());
+    if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
-      schema.getParams().forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+      userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
       metaBuilder.putAllParams(stringParams);
       hasMeta = true;
     }
