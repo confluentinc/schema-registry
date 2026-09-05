@@ -2544,4 +2544,36 @@ class LogicalTypeToAvroConverterTest {
     assertThat(s.getFieldNumber()).isNull();
     assertThat(s.getParams()).containsEntry("owner", "team-a");
   }
+
+  @Test
+  void recordAndEnumAliasesRoundTripThroughAvro() {
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.acme\","
+        + "\"aliases\":[\"OldOrder\"],\"fields\":["
+        + "{\"name\":\"s\",\"type\":{\"type\":\"enum\",\"name\":\"Status\","
+        + "\"aliases\":[\"OldStatus\"],\"symbols\":[\"A\",\"B\"]}}]}";
+    AvroSchema original = new AvroSchema(json);
+
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(original);
+    org.apache.avro.Schema back =
+        LogicalTypeToAvroConverter.fromLogicalType(lt, "Order").rawSchema();
+
+    // Relative in, fullname out: Avro resolved the alias on read and we store the resolved form,
+    // so it stays correct even if the type's namespace changes.
+    assertThat(back.getAliases()).containsExactly("com.acme.OldOrder");
+    assertThat(back.getField("s").schema().getAliases()).containsExactly("com.acme.OldStatus");
+  }
+
+  @Test
+  void namedTypeAliasesDoNotLeakIntoConfluentParams() {
+    // avro.aliases is format-native: it rides Avro's own aliases slot and must not also appear in
+    // the generic container, which would otherwise be created solely to hold it.
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.acme\","
+        + "\"aliases\":[\"OldOrder\"],\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}";
+
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(json));
+    org.apache.avro.Schema back =
+        LogicalTypeToAvroConverter.fromLogicalType(lt, "Order").rawSchema();
+
+    assertThat(back.getObjectProp("confluent:params")).isNull();
+  }
 }
