@@ -1,0 +1,200 @@
+{
+  "corpus": "apache/parquet-testing variant @ 4b1ce4502afff8d20c9b4bb08d07e04e21cdeff3",
+  "contract": [
+    "json is the exact expected text of the canonical variant-to-JSON conversion.",
+    "Decimals are fixed-point, never scientific, and keep their scale.",
+    "Floats and doubles carry the fewest digits that read back as the same value; two candidates of equal length equidistant from the value are settled toward the even digit.",
+    "Floats and doubles are laid out as Java's Double.toString lays them out: plain when the magnitude is in [1e-3, 1e7), scientific otherwise, always a digit either side of the point, an uppercase E, and no sign or zero-padding on a positive exponent.",
+    "For the 9 smallest float subnormals and Double.MIN_VALUE the JDK's own toString emits one digit more than needed; the shorter form here reads back as the identical value.",
+    "Temporal types are ISO-8601, T-separated, with the seconds field always present and the fractional group padded to 3, 6 or 9 digits.",
+    "Instants are normalised to UTC and spelled with a trailing Z."
+  ],
+  "cases": [
+    {
+      "name": "array_empty",
+      "type": "array",
+      "json": "[]",
+      "writeByteExact": true
+    },
+    {
+      "name": "array_nested",
+      "type": "array",
+      "json": "[{\"id\":1,\"thing\":{\"names\":[\"Contrarian\",\"Spider\"]}},null,{\"id\":2,\"names\":[\"Apple\",\"Ray\",null],\"type\":\"if\"}]",
+      "writeByteExact": false,
+      "writeNote": "Field and dictionary ordering are encoder choices, so re-encoding is asserted by value equivalence rather than by bytes."
+    },
+    {
+      "name": "array_primitive",
+      "type": "array",
+      "json": "[2,1,5,9]",
+      "writeByteExact": true
+    },
+    {
+      "name": "long_string",
+      "type": "string",
+      "json": "\"This string is for sure and certainly longer than 64 bytes and it also includes several non ascii characters such as 🐢, 💖, ♥️, 🎣 and 🤦!!\"",
+      "writeByteExact": true,
+      "dictionaryNote": "Absent from the upstream data_dictionary.json."
+    },
+    {
+      "name": "object_empty",
+      "type": "object",
+      "json": "{}",
+      "writeByteExact": true
+    },
+    {
+      "name": "object_nested",
+      "type": "object",
+      "json": "{\"id\":1,\"observation\":{\"location\":\"In the Volcano\",\"time\":\"12:34:56\",\"value\":{\"humidity\":456,\"temperature\":123}},\"species\":{\"name\":\"lava monster\",\"population\":6789}}",
+      "writeByteExact": false,
+      "writeNote": "Field and dictionary ordering are encoder choices, so re-encoding is asserted by value equivalence rather than by bytes."
+    },
+    {
+      "name": "object_primitive",
+      "type": "object",
+      "json": "{\"boolean_false_field\":false,\"boolean_true_field\":true,\"double_field\":1.23456789,\"int_field\":1,\"null_field\":null,\"string_field\":\"Apache Parquet\",\"timestamp_field\":\"2025-04-16T12:34:56.78\"}",
+      "writeByteExact": false,
+      "writeNote": "Field and dictionary ordering are encoder choices, so re-encoding is asserted by value equivalence rather than by bytes."
+    },
+    {
+      "name": "primitive_binary",
+      "type": "binary",
+      "json": "\"AxM33q2+78r+\"",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_boolean_false",
+      "type": "boolean",
+      "json": "false",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_boolean_true",
+      "type": "boolean",
+      "json": "true",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_date",
+      "type": "date",
+      "json": "\"2025-04-16\"",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_decimal16",
+      "type": "decimal16",
+      "json": "12345678912345678.90",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 1.2345678912345678e+16: it rendered the decimal through a binary double and lost the low digits. Ours is the exact unscaled value."
+    },
+    {
+      "name": "primitive_decimal4",
+      "type": "decimal4",
+      "json": "12.34",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_decimal8",
+      "type": "decimal8",
+      "json": "12345678.90",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 12345678.9, dropping the trailing zero. Scale is part of a decimal's identity, so it is preserved."
+    },
+    {
+      "name": "primitive_double",
+      "type": "double",
+      "json": "1.2345678901234E9",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 1234567890.1234, the same digits laid out without an exponent. Java's layout uses scientific notation above 1e7."
+    },
+    {
+      "name": "primitive_float",
+      "type": "float",
+      "json": "1.234568E9",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 1234567940.0, which is Java Float.toString's pre-JDK-19 digits rendered without an exponent. Ours is the shortest form that reads back as the same float32; both parse to the identical value."
+    },
+    {
+      "name": "primitive_int16",
+      "type": "int16",
+      "json": "1234",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_int32",
+      "type": "int32",
+      "json": "123456",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_int64",
+      "type": "int64",
+      "json": "1234567890123456789",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_int8",
+      "type": "int8",
+      "json": "42",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_null",
+      "type": "null",
+      "json": "null",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_string",
+      "type": "string",
+      "json": "\"This string is longer than 64 bytes and therefore does not fit in a short_string and it also includes several non ascii characters such as 🐢, 💖, ♥️, 🎣 and 🤦!!\"",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_time",
+      "type": "time",
+      "json": "\"12:33:54.123456\"",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 12:33:54:123456, with a colon before the microseconds. Not a valid time format."
+    },
+    {
+      "name": "primitive_timestamp",
+      "type": "timestamp_tz",
+      "json": "\"2025-04-16T16:34:56.780Z\"",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary says 2025-04-16 12:34:56.78-04:00. The type stores an instant and the bytes carry no offset, so rendering one would invent it; normalised to UTC with the T separator."
+    },
+    {
+      "name": "primitive_timestamp_nanos",
+      "type": "timestamp_nanos_tz",
+      "json": "\"2024-11-07T12:33:54.123456789Z\"",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary spells the UTC offset +00:00; ours uses Z. Same instant."
+    },
+    {
+      "name": "primitive_timestampntz",
+      "type": "timestamp_ntz",
+      "json": "\"2025-04-16T12:34:56.780\"",
+      "writeByteExact": true,
+      "dictionaryNote": "Dictionary separates date and time with a space and truncates to .78; ours uses T and pads the fractional group."
+    },
+    {
+      "name": "primitive_timestampntz_nanos",
+      "type": "timestamp_nanos_ntz",
+      "json": "\"2024-11-07T12:33:54.123456789\"",
+      "writeByteExact": true
+    },
+    {
+      "name": "primitive_uuid",
+      "type": "uuid",
+      "json": "\"f24f9b64-81fa-49d1-b74e-8c09a6e31c56\"",
+      "writeByteExact": true
+    },
+    {
+      "name": "short_string",
+      "type": "string",
+      "json": "\"Less than 64 bytes (❤️ with utf8)\"",
+      "writeByteExact": true
+    }
+  ]
+}

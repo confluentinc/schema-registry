@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.util.RawValue;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -147,19 +148,57 @@ public class VariantUtils {
 
   /**
    * Converts a Variant into a JSON string. This is the canonical cross-language form:
-   * decimals are fixed-point (never scientific) and temporal types are ISO-8601 with the
-   * seconds field always present.
+   * decimals are fixed-point (never scientific), floats and doubles carry the shortest digits
+   * that round-trip and are laid out as {@link Double#toString} lays them out, and temporal
+   * types are ISO-8601 with the seconds field always present.
    *
    * @param variant the Variant to convert
    * @return the JSON string representation
    */
   public static String toJsonString(Variant variant) {
     try {
-      return JSON_MAPPER.writeValueAsString(toJsonNode(variant));
+      return JSON_MAPPER.writeValueAsString(toPlainNumbers(toJsonNode(variant)));
     } catch (JsonProcessingException e) {
       // toJsonNode only produces standard scalar/container nodes, so this is not reachable.
       throw new IllegalStateException("Failed to serialize variant to JSON", e);
     }
+  }
+
+  /**
+   * Rewrites float and double nodes into the canonical numeric text. Zero and the non-finite
+   * values are left alone: their existing text is already correct, and a bareword is not
+   * something the replacement can carry.
+   */
+  private static JsonNode toPlainNumbers(JsonNode node) {
+    if (node instanceof ObjectNode) {
+      ObjectNode obj = FACTORY.objectNode();
+      Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+      while (fields.hasNext()) {
+        Map.Entry<String, JsonNode> field = fields.next();
+        obj.set(field.getKey(), toPlainNumbers(field.getValue()));
+      }
+      return obj;
+    }
+    if (node instanceof ArrayNode) {
+      ArrayNode arr = FACTORY.arrayNode();
+      for (JsonNode element : node) {
+        arr.add(toPlainNumbers(element));
+      }
+      return arr;
+    }
+    if (node.isFloat()) {
+      float f = node.floatValue();
+      return Float.isFinite(f) && f != 0.0f
+          ? FACTORY.rawValueNode(new RawValue(CanonicalNumber.render(f)))
+          : node;
+    }
+    if (node.isDouble()) {
+      double d = node.doubleValue();
+      return Double.isFinite(d) && d != 0.0d
+          ? FACTORY.rawValueNode(new RawValue(CanonicalNumber.render(d)))
+          : node;
+    }
+    return node;
   }
 
   /**

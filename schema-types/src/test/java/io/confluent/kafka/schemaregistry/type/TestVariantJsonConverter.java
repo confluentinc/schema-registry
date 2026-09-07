@@ -263,6 +263,55 @@ public class TestVariantJsonConverter {
     }
   }
 
+  @Test
+  public void testToJsonNumbersUseJavaLayout() {
+    // Plain inside [1e-3, 1e7), scientific outside, with the shortest round-tripping digits.
+    Assert.assertEquals("1.234568E9", toJsonString(b -> b.appendFloat(1234567936.0f)));
+    Assert.assertEquals("1.2345678901234E9", toJsonString(b -> b.appendDouble(1234567890.1234)));
+    Assert.assertEquals("1.23456789", toJsonString(b -> b.appendDouble(1.23456789)));
+    Assert.assertEquals("1.0", toJsonString(b -> b.appendDouble(1.0)));
+    Assert.assertEquals("1.0", toJsonString(b -> b.appendFloat(1.0f)));
+    Assert.assertEquals("0.1", toJsonString(b -> b.appendDouble(0.1)));
+  }
+
+  @Test
+  public void testToJsonNotationBoundary() {
+    Assert.assertEquals("0.001", toJsonString(b -> b.appendDouble(0.001)));
+    Assert.assertEquals("9.0E-4", toJsonString(b -> b.appendDouble(0.0009)));
+    Assert.assertEquals("9999999.0", toJsonString(b -> b.appendDouble(9999999.0)));
+    Assert.assertEquals("1.0E7", toJsonString(b -> b.appendDouble(1.0e7)));
+    Assert.assertEquals("1.0E300", toJsonString(b -> b.appendDouble(1e300)));
+    Assert.assertEquals("1.7976931348623157E308",
+        toJsonString(b -> b.appendDouble(Double.MAX_VALUE)));
+  }
+
+  @Test
+  public void testToJsonSettlesEquidistantDigitsTowardEven() {
+    // The exact float is 3458639.25, and .2 and .3 are equally close, so the even one wins.
+    Assert.assertEquals("3458639.2", toJsonString(b -> b.appendFloat(3458639.25f)));
+    Assert.assertEquals("-3458639.2", toJsonString(b -> b.appendFloat(-3458639.25f)));
+    // 1.0E23 is the case where Double.toString overshot before JDK 19.
+    Assert.assertEquals("1.0E23", toJsonString(b -> b.appendDouble(1.0E23)));
+    Assert.assertEquals("2.82879384806159E17",
+        toJsonString(b -> b.appendDouble(2.82879384806159E17)));
+  }
+
+  @Test
+  public void testToJsonPreservesNegativeZero() {
+    Assert.assertEquals("-0.0", toJsonString(b -> b.appendDouble(-0.0)));
+    Assert.assertEquals("-0.0", toJsonString(b -> b.appendFloat(-0.0f)));
+    Assert.assertEquals("0.0", toJsonString(b -> b.appendDouble(0.0)));
+    Assert.assertEquals("0.0", toJsonString(b -> b.appendFloat(0.0f)));
+  }
+
+  @Test
+  public void testToJsonNonFiniteAreBarewords() {
+    Assert.assertEquals("NaN", toJsonString(b -> b.appendDouble(Double.NaN)));
+    Assert.assertEquals("Infinity", toJsonString(b -> b.appendDouble(Double.POSITIVE_INFINITY)));
+    Assert.assertEquals("-Infinity", toJsonString(b -> b.appendDouble(Double.NEGATIVE_INFINITY)));
+    Assert.assertEquals("NaN", toJsonString(b -> b.appendFloat(Float.NaN)));
+  }
+
   private static String toJsonString(java.util.function.Consumer<VariantBuilder> append) {
     VariantBuilder builder = new VariantBuilder();
     append.accept(builder);
