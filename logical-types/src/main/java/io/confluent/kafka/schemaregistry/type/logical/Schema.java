@@ -121,6 +121,22 @@ public abstract class Schema {
   }
 
   /**
+   * Parse the comma-delimited {@link #AVRO_ALIASES} param, or an empty list if absent. Shared by
+   * {@link Field#getAliases()} and {@link Schema#getAliases()}.
+   */
+  static List<String> parseAliases(Map<String, Object> params) {
+    Object v = params.get(AVRO_ALIASES);
+    if (v == null) {
+      return Collections.emptyList();
+    }
+    String s = v.toString();
+    if (s.isEmpty()) {
+      return Collections.emptyList();
+    }
+    return Collections.unmodifiableList(Arrays.asList(s.split(",")));
+  }
+
+  /**
    * Parse the {@link #PROTOBUF_ENUM_NUMBER} param from {@code params}, or {@code null} if absent.
    * Throws a {@link ValidationException} (not a raw {@code NumberFormatException}) on a non-numeric
    * value, since this param is user-settable through a DDL {@code WITH} clause. {@code ownerName}
@@ -198,6 +214,17 @@ public abstract class Schema {
 
   public Map<String, Object> getParams() {
     return params;
+  }
+
+  /**
+   * This named type's Avro aliases (its previous names), or an empty list when
+   * {@link #AVRO_ALIASES} is unset. Values stored by the Avro reader are always fullnames, since
+   * Avro resolves relative aliases at parse time; the param is also settable through a DDL
+   * {@code WITH} clause or {@link #setParams}, and those values are returned as written. Avro
+   * {@code fixed} is out of scope: it converts to an unnamed type with no home for them.
+   */
+  public List<String> getAliases() {
+    return parseAliases(params);
   }
 
   public Schema setParams(Map<String, Object> params) {
@@ -695,20 +722,13 @@ public abstract class Schema {
     }
 
     /**
-     * The field's Avro aliases (its previous names), or an empty list if the field did not
-     * originate from an Avro schema carrying aliases (only the Avro reader populates
-     * {@link Schema#AVRO_ALIASES}). Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
+     * The field's Avro aliases (its previous names), or an empty list when
+     * {@link Schema#AVRO_ALIASES} is unset. Populated by the Avro reader, but also settable
+     * through a DDL {@code WITH} clause or {@link Schema#setParams}, in which case the values are
+     * returned as written. Stored comma-delimited; see {@link Schema#AVRO_ALIASES}.
      */
     public List<String> getAliases() {
-      Object v = params.get(AVRO_ALIASES);
-      if (v == null) {
-        return Collections.emptyList();
-      }
-      String s = v.toString();
-      if (s.isEmpty()) {
-        return Collections.emptyList();
-      }
-      return Collections.unmodifiableList(Arrays.asList(s.split(",")));
+      return parseAliases(params);
     }
 
     /**
