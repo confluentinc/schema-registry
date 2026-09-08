@@ -237,6 +237,24 @@ public class TestVariantScalarBuilder {
   }
 
   @Test
+  public void testDecimalBuilderRejectsNegativeScale() {
+    // The encoding stores the scale in one unsigned byte, so a negative scale would wrap
+    // (-1 becomes 255) and decode as a different number. 1E+2 has scale -2.
+    VariantBuilder vb = new VariantBuilder();
+    try {
+      vb.appendDecimal(new BigDecimal("1E+2"));
+      Assert.fail("expected a negative scale to be rejected");
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(e.getMessage(), e.getMessage().contains("non-negative"));
+    }
+
+    // A positive scale still encodes, including the large scale DECIMAL4 allows.
+    VariantBuilder ok = new VariantBuilder();
+    ok.appendDecimal(new BigDecimal("1.00"));
+    Assert.assertEquals(new BigDecimal("1.00"), ok.build().getDecimal());
+  }
+
+  @Test
   public void testDecimalBuilder() {
     // decimal4
     Arrays.asList(new BigDecimal("123.456"), new BigDecimal("-987.654")).forEach(d -> {
