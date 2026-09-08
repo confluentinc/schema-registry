@@ -227,6 +227,12 @@ public class VariantBuilder {
    */
   public void appendDecimal(BigDecimal d) {
     onAppend();
+    // The encoding stores the scale in a single unsigned byte, so a negative scale would wrap
+    // (-1 becomes 255) and change the value on decode.
+    if (d.scale() < 0) {
+      throw new IllegalArgumentException(
+          "decimal scale must be non-negative, got " + d.scale());
+    }
     BigInteger unscaled = d.unscaledValue();
     if (d.precision() <= VariantFormat.MAX_DECIMAL4_PRECISION) {
       checkCapacity(2 /* header and scale size */ + 4);
