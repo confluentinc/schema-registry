@@ -62,7 +62,8 @@
                 <artifactId>protobuf-maven-plugin</artifactId>
 
                 <configuration>
-                    <protocVersion>${protobuf.version}</protocVersion>
+                    <!-- keep in sync with confluent-common-bom's protobuf.version -->
+                    <protocVersion>4.34.0</protocVersion>
                     <outputDirectory>src/main/java</outputDirectory>
                     <sourceDirectories>
                         <include>src/main/proto</include>
