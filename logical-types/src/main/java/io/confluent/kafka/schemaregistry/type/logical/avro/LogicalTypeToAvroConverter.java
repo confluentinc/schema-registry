@@ -327,6 +327,7 @@ public class LogicalTypeToAvroConverter {
         // (no logical.anonymous marker) so the reader recovers its name.
         if (!ctx.isV1()) {
           addSchemaTags(recordSchema, schema);
+          addNamedTypeAliases(recordSchema, schema);
           addSchemaParams(recordSchema, schema, !isNamedRoot(rowName, ctx));
           addSchemaRules(recordSchema, schema);
           // Add field-level and union branch metadata as field props
@@ -360,6 +361,7 @@ public class LogicalTypeToAvroConverter {
           // Anonymous unless this enum was reached as a named-type reference
           // (rowName equals the qualified name of a registered named type), or it
           // is the named root (a bare inline ENUM carrying LogicalType.name).
+          addNamedTypeAliases(enumSchema, schema);
           addSchemaParams(enumSchema, schema,
               !ctx.hasNamedType(rowName) && !isNamedRoot(rowName, ctx));
           addEnumValueMeta(enumSchema, schema);
@@ -527,6 +529,7 @@ public class LogicalTypeToAvroConverter {
     placeholder.setFields(avroFields);
     if (!ctx.isV1()) {
       addSchemaTags(placeholder, typeDef);
+      addNamedTypeAliases(placeholder, typeDef);
       addSchemaParams(placeholder, typeDef);
       addSchemaRules(placeholder, typeDef);
     }
@@ -678,8 +681,7 @@ public class LogicalTypeToAvroConverter {
       if (ev.getDoc() != null) {
         entry.put("doc", ev.getDoc());
       }
-      // Strip before the emptiness check, not after: a value carrying only a format-native param
-      // (a Protobuf enum number) must not drag a confluent:enum property into the Avro schema.
+      // Strip first: a format-native param alone must not manufacture a confluent:enum property.
       Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
       if (!userParams.isEmpty()) {
         entry.put("params", userParams);
@@ -706,6 +708,16 @@ public class LogicalTypeToAvroConverter {
     return entry;
   }
 
+  /**
+   * Re-emit a named type's aliases through Avro's native {@code aliases} slot, the counterpart of
+   * {@code readSchemaParams} injecting them from it. Fullnames, so a namespace change is harmless.
+   */
+  private static void addNamedTypeAliases(org.apache.avro.Schema avroSchema, Schema schema) {
+    for (String alias : schema.getAliases()) {
+      avroSchema.addAlias(alias);
+    }
+  }
+
   private static void addSchemaParams(org.apache.avro.Schema avroSchema, Schema schema) {
     addSchemaParams(avroSchema, schema, false);
   }
@@ -718,8 +730,10 @@ public class LogicalTypeToAvroConverter {
    */
   private static void addSchemaParams(
       org.apache.avro.Schema avroSchema, Schema schema, boolean isAnonymous) {
-    if (!schema.getParams().isEmpty()) {
-      avroSchema.addProp("confluent:params", new LinkedHashMap<>(schema.getParams()));
+    // Aliases ride Avro's native slot; strip so one alone can't manufacture confluent:params.
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(schema.getParams());
+    if (!userParams.isEmpty()) {
+      avroSchema.addProp("confluent:params", new LinkedHashMap<>(userParams));
     }
     if (isAnonymous) {
       avroSchema.addProp(CommonConstants.LOGICAL_ANONYMOUS_PROP, "true");

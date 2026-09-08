@@ -677,12 +677,10 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
-   * Build the enum value for {@code symbol}, taking its doc and params from entry {@code i} of a
-   * {@code confluent:enum} metadata list (absent or short list means no metadata). Format-native
-   * params are dropped for the same reason {@code readFieldParams} drops them: Avro owns no
-   * enum-value-level native slot, so a foreign {@code protobuf.enum.number} smuggled in here —
-   * whether hand-authored or left behind by an older writer — must not go on to steer Protobuf
-   * emission.
+   * Build the enum value for {@code symbol} from entry {@code i} of a {@code confluent:enum}
+   * metadata list (absent or short list means none). Format-native params are dropped as in
+   * {@code readFieldParams}: Avro owns no enum-value slot, so a foreign
+   * {@code protobuf.enum.number} smuggled in here must not steer Protobuf emission.
    */
   private static EnumValue readEnumValue(
       String symbol, List<Map<String, Object>> enumMeta, int i) {
@@ -895,13 +893,27 @@ public class AvroToLogicalTypeConverter {
   }
 
   @SuppressWarnings("unchecked")
+  /**
+   * Read a named type's generic params plus its Avro aliases. Mirrors {@code readFieldParams} one
+   * level up: strip format-native keys from the generic container (a real slot owns them, so one
+   * found there was smuggled), then inject the authoritative aliases from that slot. Avro resolves
+   * relative aliases at parse time, so these are always fullnames.
+   */
   private static void readSchemaParams(org.apache.avro.Schema avroSchema, Schema schema) {
+    Map<String, Object> result = new LinkedHashMap<>();
     Object params = avroSchema.getObjectProp("confluent:params");
     if (params instanceof Map) {
-      Map<String, Object> userParams = (Map<String, Object>) params;
-      if (!userParams.isEmpty()) {
-        schema.setParams(new LinkedHashMap<>(userParams));
+      result.putAll((Map<String, Object>) params);
+      result.keySet().removeIf(Schema::isFormatNativeParam);
+    }
+    if (isNamedAvroType(avroSchema.getType())) {
+      Set<String> aliases = avroSchema.getAliases();
+      if (aliases != null && !aliases.isEmpty()) {
+        result.put(Schema.AVRO_ALIASES, String.join(",", aliases));
       }
+    }
+    if (!result.isEmpty()) {
+      schema.setParams(result);
     }
   }
 
