@@ -856,7 +856,9 @@ public class JsonToLogicalTypeConverter {
   private static void readSchemaParams(org.everit.json.schema.Schema jsonSchema, Schema schema) {
     Object params = jsonSchema.getUnprocessedProperties().get("confluent:params");
     if (params instanceof Map) {
-      Map<String, Object> userParams = (Map<String, Object>) params;
+      // JSON owns no named-type native slot, so a format-native key here was smuggled in.
+      Map<String, Object> userParams =
+          Schema.stripFormatNativeParams((Map<String, Object>) params);
       if (!userParams.isEmpty()) {
         schema.setParams(new LinkedHashMap<>(userParams));
       }
