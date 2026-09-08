@@ -918,8 +918,7 @@ class CrossFormatRoundTripTest {
 
   @Test
   void protobufEnumNumbersDoNotLeakIntoOtherFormats() {
-    // A sparsely numbered Protobuf enum records protobuf.enum.number on every value. That param is
-    // format-native: it rides Protobuf's own EnumValueDescriptorProto.number slot and must never
+    // protobuf.enum.number is format-native: it rides Protobuf's own number slot and must never
     // surface in Avro's or JSON's generic confluent:enum metadata.
     ProtobufSchema proto = new ProtobufSchema(
         "syntax = \"proto3\";\n"
@@ -942,9 +941,8 @@ class CrossFormatRoundTripTest {
 
   @Test
   void protobufEnumNumbersSmuggledIntoAvroDoNotReachProtobuf() {
-    // confluent:enum is a generic param container; Avro has no enum-value-level native slot. A
-    // protobuf.enum.number arriving through it — hand-authored, or left in a schema written before
-    // the emission fix — must not steer Protobuf numbering on the way back out.
+    // Avro has no enum-value native slot, so a protobuf.enum.number arriving through
+    // confluent:enum was smuggled there and must not steer Protobuf numbering on the way out.
     AvroSchema avro = new AvroSchema(
         "{\"type\":\"record\",\"name\":\"Order\",\"fields\":[{\"name\":\"status\",\"type\":"
             + "{\"type\":\"enum\",\"name\":\"Status\",\"symbols\":[\"UNKNOWN\",\"SHIPPED\"],"
@@ -959,6 +957,23 @@ class CrossFormatRoundTripTest {
     // The enum therefore numbers positionally rather than inheriting the smuggled 5.
     assertTrue(LogicalTypeToProtoConverter.fromLogicalType(lt, "Order")
         .canonicalString().contains("SHIPPED = 1"));
+  }
+
+  @Test
+  void avroNamedTypeAliasesDoNotLeakIntoOtherFormats() {
+    // Protobuf and JSON own no named-type alias slot, so avro.aliases must not surface in theirs.
+    AvroSchema avro = new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.acme\","
+            + "\"aliases\":[\"OldOrder\"],\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}");
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(avro);
+
+    // Guard: the alias really is on the LT, so the assertions below can't pass vacuously.
+    assertEquals(List.of("com.acme.OldOrder"), lt.getRootSchema().getAliases());
+
+    assertFalse(LogicalTypeToProtoConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.AVRO_ALIASES));
+    assertFalse(LogicalTypeToJsonConverter.fromLogicalType(lt, "Order")
+        .canonicalString().contains(Schema.AVRO_ALIASES));
   }
 
   private static LogicalType parseDdl(String ddl) {
