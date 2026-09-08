@@ -332,4 +332,48 @@ class AvroToLogicalTypeConverterTest {
 
     assertThat(struct.getField("a").getAliases()).containsExactly("a_old");
   }
+
+  @Test
+  void testRecordAliasesPopulatedFromAvro() {
+    String json = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.acme\","
+        + "\"aliases\":[\"OldOrder\",\"other.ns.LegacyOrder\"],"
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+
+    Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
+        .getRootSchema();
+
+    // A relative alias is resolved against the record's namespace by Avro's own parser, so what
+    // reaches LT is always a fullname — self-describing once the namespace context is gone.
+    assertThat(struct.getAliases())
+        .containsExactlyInAnyOrder("com.acme.OldOrder", "other.ns.LegacyOrder");
+  }
+
+  @Test
+  void testEnumAliasesPopulatedFromAvro() {
+    String json = "{\"type\":\"record\",\"name\":\"M\",\"namespace\":\"com.acme\",\"fields\":["
+        + "{\"name\":\"s\",\"type\":{\"type\":\"enum\",\"name\":\"Status\","
+        + "\"aliases\":[\"OldStatus\"],\"symbols\":[\"A\",\"B\"]}}]}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+
+    Schema enumSchema = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
+        .getNamedTypes().get("com.acme.Status");
+
+    assertThat(enumSchema.getAliases()).containsExactly("com.acme.OldStatus");
+  }
+
+  @Test
+  void testSmuggledAliasParamDoesNotSurvive() {
+    // Avro owns a real aliases slot, so an avro.aliases key sitting in the generic confluent:params
+    // container was hand-planted; it must not become the record's alias set.
+    String json = "{\"type\":\"record\",\"name\":\"M\",\"namespace\":\"com.acme\","
+        + "\"confluent:params\":{\"avro.aliases\":\"com.acme.Bogus\"},"
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+
+    Schema struct = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(parsed))
+        .getRootSchema();
+
+    assertThat(struct.getAliases()).isEmpty();
+  }
 }
