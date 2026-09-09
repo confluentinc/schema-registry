@@ -83,8 +83,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
             Optional.empty(),
             "",
             retryBackoffMs,
-            retryBackoffMaxMs,
-            true
+            retryBackoffMaxMs
         ),
         logContext,
         client,

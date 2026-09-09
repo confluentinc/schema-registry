@@ -115,7 +115,6 @@ after_pipeline:
               sem-trigger -p ksql -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
               sem-trigger -p confluent-security-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
               sem-trigger -p kafka-connect-replicator -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
-              sem-trigger -p ce-kafka-rest -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
               sem-trigger -p confluent-cloud-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
               sem-trigger -p schema-registry-plugins -b $SEMAPHORE_GIT_BRANCH -f .semaphore/semaphore.yml
             fi
