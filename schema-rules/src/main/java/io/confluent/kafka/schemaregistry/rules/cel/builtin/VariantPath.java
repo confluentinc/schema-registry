@@ -40,8 +40,10 @@ import java.util.List;
  * return {@code null} from {@link #walk}. Malformed paths throw
  * {@link IllegalArgumentException} at parse time.
  *
- * <p>Identifier names follow {@code [A-Za-z_][A-Za-z0-9_]*}. Use the quoted form
- * for any key with characters outside that set.
+ * <p>Identifier names follow {@code [letter_][letter digit _]*}, where letter and digit
+ * are Unicode-aware ({@code Character.isLetter} / {@code Character.isLetterOrDigit}), so
+ * accented and non-Latin names are identifiers too. Use the quoted form for any key with
+ * characters outside that set.
  *
  * <p><b>Negative indices are not supported.</b> RFC 9535 / Python / JS treat
  * {@code [-i]} as last-relative ({@code len + i}); we deliberately reject this
@@ -184,10 +186,9 @@ final class VariantPath {
   }
 
   private static String readIdent(Cursor c, String path) {
-    // First character must be letter or underscore, per the documented
-    // `[A-Za-z_][A-Za-z0-9_]*` grammar. Digit-leading idents are rejected —
-    // the quoted form `$["123"]` is required for keys that start with a digit
-    // (or any other non-identifier character).
+    // First character must be a letter or underscore. Digit-leading idents are
+    // rejected — the quoted form `$["123"]` is required for keys that start with a
+    // digit (or any other non-identifier character).
     if (!c.hasMore() || !(Character.isLetter(c.peek()) || c.peek() == '_')) {
       throw new IllegalArgumentException(
           "expected identifier (starting with a letter or '_') after '.' "

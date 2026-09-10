@@ -328,6 +328,32 @@ public final class Variant {
   }
 
   /**
+   * Equality is over the encoding: two Variants are equal when their metadata and their value
+   * bytes match. It is the same comparison a {@code confluent.type.Variant} protobuf message
+   * already gets, so a variant read from a field and one built by {@code variants.parseJson}
+   * answer the same way.
+   */
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof Variant)) {
+      return false;
+    }
+    Variant that = (Variant) o;
+    // ByteBuffer.equals compares the bytes remaining from the position, which is what a
+    // navigated variant needs - its buffer starts at the value, not at the parent's header.
+    return value.equals(that.value) && metadata.equals(that.metadata);
+  }
+
+  @Override
+  public int hashCode() {
+    // ByteBuffer.hashCode is likewise over the remaining bytes, so it agrees with equals.
+    return 31 * value.hashCode() + metadata.hashCode();
+  }
+
+  /**
    * Returns the cached object header, parsing it on first access.
    */
   private VariantFormat.ObjectInfo objectInfo() {
