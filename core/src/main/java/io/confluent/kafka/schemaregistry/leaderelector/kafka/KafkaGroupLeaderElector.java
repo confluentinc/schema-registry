@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.storage.LeaderElector;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
@@ -40,8 +41,8 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,7 +157,10 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           true,
           new ApiVersions(),
           logContext,
-          MetadataRecoveryStrategy.NONE);
+          MetadataRecoveryStrategy.NONE,
+          // bootstrap addresses are resolved eagerly above via metadata.bootstrap()
+          BootstrapConfiguration.DISABLED,
+          false);
 
       this.client = new ConsumerNetworkClient(
           logContext,

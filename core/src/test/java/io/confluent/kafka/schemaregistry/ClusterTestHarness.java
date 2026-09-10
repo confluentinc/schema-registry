@@ -34,7 +34,6 @@ import kafka.server.KafkaBroker;
 import kafka.server.QuorumTestHarness;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.List;
@@ -490,7 +489,9 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
     return sslProps;
   }
 
-  private static final boolean IS_IBM_SECURITY = Java.isIbmJdk() && !Java.isIbmJdkSemeru();
+  private static final boolean IS_IBM_SECURITY =
+      System.getProperty("java.vendor", "").contains("IBM")
+      && !System.getProperty("java.runtime.name", "").contains("Semeru");
 
   public static Properties saslConfigs(Optional<Properties> saslProperties) {
     Properties result = saslProperties.orElse(new Properties());

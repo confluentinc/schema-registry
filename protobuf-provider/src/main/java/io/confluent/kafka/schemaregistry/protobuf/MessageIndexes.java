@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
