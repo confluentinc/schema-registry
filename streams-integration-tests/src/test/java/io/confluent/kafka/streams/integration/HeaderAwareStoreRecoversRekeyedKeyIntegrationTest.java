@@ -17,42 +17,20 @@
 package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
@@ -90,7 +68,8 @@ import org.junit.jupiter.api.Test;
  * opposite of a plain, non-header store keyed by a header-mode serde, which would reconstruct the key
  * under the in-flight {@code OrderKey} id and get it wrong.)
  */
-public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest extends ClusterTestHarness {
+public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest
+    extends HeadersIQv2IntegrationTestBase {
 
   private static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
   private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
@@ -113,10 +92,6 @@ public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest extends ClusterTe
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
           + "\"fields\":[{\"name\":\"reconstructedKeySchema\",\"type\":\"string\"},"
           + "{\"name\":\"reconstructedValue\",\"type\":\"string\"}]}");
-
-  public HeaderAwareStoreRecoversRekeyedKeyIntegrationTest() {
-    super(1, true);
-  }
 
   @Test
   public void keyValueStore_recoversRekeyedKeyWithItsOwnSchema() throws Exception {
@@ -224,8 +199,9 @@ public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest extends ClusterTe
           "header-aware store recovers the stored key's own schema, not the in-flight OrderKey id");
       assertEquals("cust-1", report.get("reconstructedValue").toString(),
           "customerId round-trips correctly");
-    } finally {
       closeStreams(streams);
+    } finally {
+      closeStreamsQuietly(streams);
     }
   }
 
@@ -354,113 +330,5 @@ public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest extends ClusterTe
     GenericRecord value = new GenericData.Record(ORDER_VALUE_SCHEMA);
     value.put("customerId", customerId);
     return value;
-  }
-
-  private void createTopics(String... topicNames) throws Exception {
-    Properties adminProps = new Properties();
-    adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    try (AdminClient admin = AdminClient.create(adminProps)) {
-      List<NewTopic> topics = Arrays.stream(topicNames)
-          .map(name -> new NewTopic(name, 1, (short) 1))
-          .collect(Collectors.toList());
-      admin.createTopics(topics).all().get(30, TimeUnit.SECONDS);
-    }
-  }
-
-  private GenericAvroSerde createKeySerde() {
-    GenericAvroSerde serde = new GenericAvroSerde();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    serde.configure(config, true);
-    return serde;
-  }
-
-  private GenericAvroSerde createValueSerde() {
-    GenericAvroSerde serde = new GenericAvroSerde();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    serde.configure(config, false);
-    return serde;
-  }
-
-  private Properties createProducerProps() {
-    Properties props = new Properties();
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    props.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    return props;
-  }
-
-  private Properties createStreamsProps(String appId) {
-    Properties props = new Properties();
-    props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    return props;
-  }
-
-  private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId)
-      throws Exception {
-    CountDownLatch startedLatch = new CountDownLatch(1);
-    KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
-    streams.cleanUp();
-    streams.setStateListener((newState, oldState) -> {
-      if (newState == KafkaStreams.State.RUNNING) {
-        startedLatch.countDown();
-      }
-    });
-    streams.start();
-    boolean running = false;
-    try {
-      running = startedLatch.await(30, TimeUnit.SECONDS);
-      assertTrue(running, "KafkaStreams should reach RUNNING state");
-      return streams;
-    } finally {
-      if (!running) {
-        closeStreams(streams);
-      }
-    }
-  }
-
-  private void closeStreams(KafkaStreams streams) {
-    if (streams != null) {
-      streams.close(Duration.ofSeconds(10));
-    }
-  }
-
-  private List<ConsumerRecord<GenericRecord, GenericRecord>> consumeRecords(
-      String topic, String groupId, int expectedCount) {
-    Properties props = new Properties();
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
-
-    List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
-    try (KafkaConsumer<GenericRecord, GenericRecord> consumer = new KafkaConsumer<>(props)) {
-      consumer.subscribe(Collections.singletonList(topic));
-      long deadline = System.currentTimeMillis() + 30_000;
-      while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-        ConsumerRecords<GenericRecord, GenericRecord> records = consumer.poll(Duration.ofMillis(500));
-        for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
-          results.add(record);
-        }
-      }
-    }
-    assertEquals(expectedCount, results.size(),
-        "Expected " + expectedCount + " records from " + topic + " but got " + results.size());
-    return results;
   }
 }
