@@ -794,7 +794,22 @@ final class BuiltinOverload {
         if (t == Variant.Type.TIMESTAMP_TZ || t == Variant.Type.TIMESTAMP_NTZ
             || t == Variant.Type.TIMESTAMP_NANOS_TZ
             || t == Variant.Type.TIMESTAMP_NANOS_NTZ) {
-          return variantGetTimestamp(v);
+          Timestamp ts = variantGetTimestamp(v);
+          if (ts != null) {
+            return ts;
+          }
+          // A variant timestamp spans the whole int64 range while a CEL timestamp is
+          // 0001-9999, so an out-of-range value is reachable from data. Routed through
+          // nullOnError like a type mismatch: variants.as raises and names the range,
+          // variants.tryAs answers CEL null so a rule can guard. Building it instead left an
+          // invalid Timestamp in the type system - unrenderable (protobuf JSON refuses it),
+          // so only comparisons could consume it, which is where a wrong answer would hide.
+          if (nullOnError) {
+            return NullValue.NULL_VALUE;
+          }
+          throw new IllegalArgumentException(
+              "variants.as: timestamp " + v.getLong() + " is outside "
+                  + TimestampUtils.RANGE_TEXT);
         }
         break;
       case "bytes":
@@ -827,14 +842,17 @@ final class BuiltinOverload {
         "variants.as: variant is not " + typeStr + "-typed (type=" + t + ")");
   }
 
+  /**
+   * The variant's instant, or {@code null} when it falls outside the CEL timestamp range.
+   */
   private static Timestamp variantGetTimestamp(Variant v) {
     switch (v.getType()) {
       case TIMESTAMP_TZ:
       case TIMESTAMP_NTZ:
-        return TimestampUtils.fromEpochMicros(v.getLong());
+        return TimestampUtils.fromEpochMicrosOrNull(v.getLong());
       case TIMESTAMP_NANOS_TZ:
       case TIMESTAMP_NANOS_NTZ:
-        return TimestampUtils.fromEpochNanos(v.getLong());
+        return TimestampUtils.fromEpochNanosOrNull(v.getLong());
       default:
         // Unreachable: callers (variantAs) verify the type before invoking.
         throw new IllegalStateException(
