@@ -1967,6 +1967,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Governed by {@link SchemaRegistryConfig#SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG}, which despite
+   * its name also gates the pure-wildcard ({@code *}) subject, not just the empty-string subject.
+   */
   @Override
   public boolean allowEmptySubject() {
     return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
