@@ -33,6 +33,9 @@ final class TimestampUtils {
 
   // CEL's timestamp range: 0001-01-01T00:00:00Z through 9999-12-31T23:59:59.999999999Z,
   // the same bounds cel-java's standard timestamp(int) conversion enforces.
+  /** The CEL timestamp range, for an error message that names it. */
+  static final String RANGE_TEXT = "0001-01-01T00:00:00Z..9999-12-31T23:59:59.999999999Z";
+
   private static final long MIN_EPOCH_SECOND = -62135596800L;
   private static final long MAX_EPOCH_SECOND = 253402300799L;
 
@@ -102,23 +105,52 @@ final class TimestampUtils {
     // floorDiv/floorMod rather than / and %: a pre-epoch value is negative, and the
     // nano-of-second adjustment must stay non-negative.
     long seconds = Math.floorDiv(epoch, perSecond);
-    if (seconds < MIN_EPOCH_SECOND || seconds > MAX_EPOCH_SECOND) {
+    if (!isEpochSecondInRange(seconds)) {
       throw new IllegalArgumentException(
           "Timestamp out of range: " + seconds + " seconds since the epoch is outside "
-              + "0001-01-01T00:00:00Z..9999-12-31T23:59:59.999999999Z");
+              + RANGE_TEXT);
     }
     return Instant.ofEpochSecond(seconds, Math.floorMod(epoch, perSecond) * nanosPerUnit);
   }
 
-  static Timestamp fromEpochMicros(long us) {
-    long sec = Math.floorDiv(us, 1_000_000L);
-    int nanos = (int) (Math.floorMod(us, 1_000_000L) * 1_000L);
-    return Timestamp.newBuilder().setSeconds(sec).setNanos(nanos).build();
+  /**
+   * Whether an epoch-seconds value is inside the CEL timestamp range. One definition, shared by
+   * {@link #instantOfEpoch} - which refuses outright, being a constructor - and by the variant
+   * extraction path, which routes the refusal through {@code variants.as} / {@code tryAs}.
+   */
+  static boolean isEpochSecondInRange(long seconds) {
+    return seconds >= MIN_EPOCH_SECOND && seconds <= MAX_EPOCH_SECOND;
   }
 
-  static Timestamp fromEpochNanos(long ns) {
-    long sec = Math.floorDiv(ns, 1_000_000_000L);
-    int nanos = (int) Math.floorMod(ns, 1_000_000_000L);
+  /**
+   * A micros epoch as a Timestamp, or {@code null} when it falls outside the CEL range.
+   *
+   * <p>Null rather than an exception because the caller decides: {@code variants.as} raises and
+   * {@code variants.tryAs} answers CEL null, the same split those two already apply to a type
+   * mismatch. A variant timestamp spans the whole int64 range while a CEL timestamp is
+   * 0001-9999, so this is reachable from data - and an out-of-range Timestamp cannot be
+   * rendered anyway (protobuf JSON refuses it), leaving comparisons as the only thing it could
+   * do, which is exactly where a wrong answer would hide.
+   */
+  static Timestamp fromEpochMicrosOrNull(long us) {
+    return fromEpochOrNull(us, 1_000_000L, 1_000L);
+  }
+
+  /**
+   * A nanos epoch as a Timestamp, or {@code null} when outside the CEL range.
+   */
+  static Timestamp fromEpochNanosOrNull(long ns) {
+    return fromEpochOrNull(ns, 1_000_000_000L, 1L);
+  }
+
+  private static Timestamp fromEpochOrNull(long epoch, long perSecond, long nanosPerUnit) {
+    // floorDiv/floorMod, so a pre-epoch value keeps a non-negative nano-of-second - the same
+    // split instantOfEpoch uses.
+    long sec = Math.floorDiv(epoch, perSecond);
+    if (!isEpochSecondInRange(sec)) {
+      return null;
+    }
+    int nanos = (int) (Math.floorMod(epoch, perSecond) * nanosPerUnit);
     return Timestamp.newBuilder().setSeconds(sec).setNanos(nanos).build();
   }
 

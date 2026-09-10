@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.type.Variant;
+import io.confluent.kafka.schemaregistry.type.VariantBuilder;
 import io.confluent.kafka.schemaregistry.type.VariantUtils;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -43,6 +44,84 @@ public class CelValidatorVariantTest {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /** Build a Doc proto with a Variant field carrying the given JSON payload. */
+  private static DynamicMessage docWithVariant(ProtobufSchema schema, Variant v)
+      throws Exception {
+    Descriptor docDesc = schema.toDescriptor("test.Doc");
+    Descriptor variantDesc = docDesc.findFieldByName("payload").getMessageType();
+    DynamicMessage variantMsg = DynamicMessage.newBuilder(variantDesc)
+        .setField(variantDesc.findFieldByName("value"), toByteString(v.getValueBuffer()))
+        .setField(variantDesc.findFieldByName("metadata"), toByteString(v.getMetadataBuffer()))
+        .build();
+    return DynamicMessage.newBuilder(docDesc)
+        .setField(docDesc.findFieldByName("payload"), variantMsg)
+        .build();
+  }
+
+  private static Variant timestampVariant(long micros) {
+    VariantBuilder b = new VariantBuilder();
+    b.appendTimestampTz(micros);
+    return b.build();
+  }
+
+  /**
+   * A variant timestamp spans the whole int64 range while a CEL timestamp is 0001-9999, so an
+   * out-of-range value is reachable from data. {@code variants.as} has to refuse it and name the
+   * range; {@code variants.tryAs} has to answer CEL null, the same split the pair already
+   * applies to a type mismatch, so a rule can guard.
+   *
+   * <p>It used to build the Timestamp regardless, leaving an invalid instant in the type system:
+   * unrenderable - protobuf JSON refuses it - so comparisons were the only thing that could
+   * consume it, and {@code variants.as(v, "timestamp") < now} answered a confident false for a
+   * value that is not a time.
+   */
+  @Test
+  public void variantAsTimestampIsRangeChecked() throws Exception {
+    String template = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"%s\"}]\n"
+        + "  }];\n"
+        + "}\n";
+
+    // In range: the epoch, and one microsecond inside each end.
+    long maxMicros = 253402300799L * 1_000_000L + 999_999L;
+    long minMicros = -62135596800L * 1_000_000L;
+    for (long micros : new long[] {0L, maxMicros, minMicros}) {
+      ProtobufSchema schema = new ProtobufSchema(String.format(template,
+          "variants.as(this, \\\"timestamp\\\") == variants.as(this, \\\"timestamp\\\")"));
+      List<ValidationRuleError> errs = schema.validateMessage(
+          new CelValidator(), docWithVariant(schema, timestampVariant(micros)));
+      assertTrue(errs.isEmpty(), micros + " should be in range -> " + dumpCauses(errs));
+    }
+
+    // Out of range: variants.as refuses and names the range.
+    for (long micros : new long[] {Long.MAX_VALUE, Long.MIN_VALUE, maxMicros + 1_000_000L}) {
+      ProtobufSchema schema = new ProtobufSchema(String.format(template,
+          "variants.as(this, \\\"timestamp\\\") == variants.as(this, \\\"timestamp\\\")"));
+      List<ValidationRuleError> errs = schema.validateMessage(
+          new CelValidator(), docWithVariant(schema, timestampVariant(micros)));
+      assertEquals(1, errs.size(), micros + " should be refused");
+      assertTrue(dumpCauses(errs).contains("is outside 0001-01-01T00:00:00Z"),
+          "should name the range: " + dumpCauses(errs));
+    }
+
+    // tryAs answers CEL null instead, so a rule can guard on it.
+    ProtobufSchema guard = new ProtobufSchema(String.format(template,
+        "variants.tryAs(this, \\\"timestamp\\\") == null"));
+    assertTrue(guard.validateMessage(
+            new CelValidator(), docWithVariant(guard, timestampVariant(Long.MAX_VALUE))).isEmpty(),
+        "tryAs should answer CEL null for an out-of-range timestamp");
+    // And is not null for one in range - otherwise the guard above proves nothing.
+    ProtobufSchema inRange = new ProtobufSchema(String.format(template,
+        "variants.tryAs(this, \\\"timestamp\\\") != null"));
+    assertTrue(inRange.validateMessage(
+            new CelValidator(), docWithVariant(inRange, timestampVariant(0L))).isEmpty(),
+        "tryAs should answer a timestamp for an in-range value");
+  }
+
   private static DynamicMessage docWithVariantJson(ProtobufSchema schema, String json)
       throws Exception {
     Variant v = VariantUtils.fromJsonNode(MAPPER.readTree(json));
