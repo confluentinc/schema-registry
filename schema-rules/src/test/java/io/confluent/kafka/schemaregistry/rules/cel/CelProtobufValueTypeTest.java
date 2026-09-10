@@ -445,6 +445,52 @@ public class CelProtobufValueTypeTest {
     return ValueTypes.newBuilder().setLabel("hi").build();
   }
 
+  /**
+   * Variant {@code ==} is equality of the encoding, and the two ways a variant reaches CEL now
+   * agree on it. A field arrives as a {@code confluent.type.Variant} message, which cel-java
+   * compares field-by-field over the metadata and value bytes; {@code variants.parseJson} and
+   * {@code variant(...)} produce a codec Variant, which used to fall to {@code Object.equals}
+   * and report two byte-identical variants unequal. The contract is shared with the other six
+   * clients, none of which has an object identity to compare.
+   */
+  @Test
+  public void variantEqualityIsOverTheEncoding() throws Exception {
+    Variant v = VariantUtils.fromJson("{\"name\":\"alice\"}");
+    io.confluent.protobuf.type.Variant pv = io.confluent.protobuf.type.Variant.newBuilder()
+        .setValue(ByteString.copyFrom(v.getValueBuffer().duplicate()))
+        .setMetadata(ByteString.copyFrom(v.getMetadataBuffer().duplicate()))
+        .build();
+    // Two separately built fields holding the same document, and one holding a different one.
+    ValueTypes msg = message().toBuilder()
+        .addVariants(pv)
+        .addVariants(pv.toBuilder().build())
+        .addVariants(io.confluent.protobuf.type.Variant.newBuilder()
+            .setValue(ByteString.copyFrom(
+                VariantUtils.fromJson("{\"name\":\"bob\"}").getValueBuffer().duplicate()))
+            .setMetadata(ByteString.copyFrom(
+                VariantUtils.fromJson("{\"name\":\"bob\"}").getMetadataBuffer().duplicate()))
+            .build())
+        .build();
+
+    // The field form, unchanged by this: distinct messages, equal bytes.
+    assertTrue(condition("message.variants[0] == message.variants[1]", msg));
+    assertTrue(condition("message.data == message.variants[0]", msg));
+    assertTrue(condition("message.variants[0] != message.variants[2]", msg));
+    // Nested in a container, which recurses with the same equality.
+    assertTrue(condition("[message.data] == [message.variants[0]]", msg));
+
+    // The function form, which reference equality used to answer false for.
+    assertTrue(condition(
+        "variants.parseJson(\"{\\\"name\\\":\\\"alice\\\"}\") "
+            + "== variants.parseJson(\"{\\\"name\\\":\\\"alice\\\"}\")", msg));
+    assertTrue(condition("variant(message.data) == variant(message.data)", msg));
+    assertTrue(condition("variants.parseJson(\"1\") != variants.parseJson(\"2\")", msg));
+    // Navigation results: a sibling reached the same way from the same parent.
+    assertTrue(condition(
+        "variants.field(variant(message.data), \"name\") "
+            + "== variants.field(variant(message.data), \"name\")", msg));
+  }
+
   private static boolean condition(String expr, ValueTypes msg) throws Exception {
     Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
         CelExecutor.TYPE, null, null, expr, null, null, false);
