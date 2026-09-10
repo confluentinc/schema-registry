@@ -1204,9 +1204,15 @@ public abstract class AbstractKafkaSchemaSerDe
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
     int status = e.getStatus();
     if (status == 401) {
-      return new AuthenticationException(errorMessage, e);
+      return new AuthenticationException(errorMessage
+          + " (Schema Registry authentication failed with HTTP 401 Unauthorized; "
+          + "verify the Schema Registry credentials, e.g. the API key and secret "
+          + "or basic.auth.user.info): " + e.getMessage(), e);
     } else if (status == 403) {
-      return new AuthorizationException(errorMessage, e);
+      return new AuthorizationException(errorMessage
+          + " (Schema Registry authorization failed with HTTP 403 Forbidden; the "
+          + "configured Schema Registry principal is not permitted to perform this "
+          + "operation): " + e.getMessage(), e);
     } else if (status == 429) {        // Too Many Requests
       return new ThrottlingQuotaExceededException(e.getMessage());
     } else if (status == 408    // Request Timeout
