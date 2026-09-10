@@ -120,6 +120,11 @@
         <wire.version>6.4.5</wire.version>
         <swagger.version>2.2.42</swagger.version>
         <io.confluent.schema-registry.version>8.5.0-0</io.confluent.schema-registry.version>
+        <!-- Pin Avro to 1.12.1. Avro 1.12.2 (AVRO-4176) rejects object-wrapped named-type
+             references like {"type":"my.Custom"}, which SR previously accepted; taking the
+             transitive 1.12.2 bump would break existing customer schemas that use that form.
+             Revisit once the customer-impact of the stricter parsing is resolved. -->
+        <avro.version>1.12.1</avro.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
