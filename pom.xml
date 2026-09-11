@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[8.4.0-0, 8.4.1-0)</version>
+        <version>8.4.0-1282</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>8.4.0-0</version>
+    <version>8.4.0-1138</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -119,7 +119,7 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>6.4.5</wire.version>
         <swagger.version>2.2.42</swagger.version>
-        <io.confluent.schema-registry.version>8.4.0-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>8.4.0-1138</io.confluent.schema-registry.version>
         <!-- Pin Avro to 1.12.1. Avro 1.12.2 (AVRO-4176) rejects object-wrapped named-type
              references like {"type":"my.Custom"}, which SR previously accepted; taking the
              transitive 1.12.2 bump would break existing customer schemas that use that form.
