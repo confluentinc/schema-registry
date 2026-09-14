@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -77,6 +78,39 @@ public class ConfigResource {
   @Inject
   public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
+  }
+
+  /**
+   * Rejects a compatibilityLevel/compatibilityPolicy combination of FORWARD(_TRANSITIVE) and
+   * LOGICAL up front, using the effective (inheritance-resolved) value for whichever of the two
+   * fields this request leaves unset. Iceberg, the only current LOGICAL target, supports only
+   * backward-compatible evolution, so this pairing can never be satisfied.
+   */
+  private void validateLogicalCompatibilityPairing(String subject, ConfigUpdateRequest request) {
+    if (request.getCompatibilityLevel() == null && request.getCompatibilityPolicy() == null) {
+      return;
+    }
+    Config existingConfig;
+    try {
+      existingConfig = schemaRegistry.getConfigInScope(subject);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to get the configs for subject " + subject, e);
+    }
+    CompatibilityLevel effectiveLevel = request.getCompatibilityLevel() != null
+        ? CompatibilityLevel.forName(request.getCompatibilityLevel())
+        : (existingConfig != null
+            ? CompatibilityLevel.forName(existingConfig.getCompatibilityLevel()) : null);
+    CompatibilityPolicy effectivePolicy = request.getCompatibilityPolicy() != null
+        ? CompatibilityPolicy.forName(request.getCompatibilityPolicy())
+        : (existingConfig != null
+            ? CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy()) : null);
+    if (effectivePolicy == CompatibilityPolicy.LOGICAL
+        && (effectiveLevel == CompatibilityLevel.FORWARD
+            || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      throw new RestInvalidCompatibilityException(
+          "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
+    }
   }
 
   @Path("/{subject}")
@@ -146,6 +180,7 @@ public class ConfigResource {
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    validateLogicalCompatibilityPairing(subject, request);
 
     try {
       Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
@@ -258,6 +293,7 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
+    validateLogicalCompatibilityPairing(null, request);
     try {
       Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
       return new ConfigUpdateRequest(config);
