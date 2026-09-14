@@ -81,6 +81,36 @@ public class MergeEntitiesTest {
   }
 
   @Test
+  public void mergeConfigsInheritsCompatibilityLevelFromGlobal() throws Exception {
+    // A subject that only ever set compatibilityPolicy must still inherit compatibilityLevel from
+    // global, the same way compatibilityPolicy itself inherits when only compatibilityLevel is set.
+    Config global = new Config(
+        null, null, null, null, null, null,
+        "FULL", "STRICT", null, null, null, null, null);
+    Config subjectPolicyOnly = new Config(
+        null, null, null, null, null, null,
+        null, "LOGICAL", null, null, null, null, null);
+
+    Config merged = Config.mergeConfigs(global, subjectPolicyOnly);
+    assertEquals("FULL", merged.getCompatibilityLevel());
+    assertEquals("LOGICAL", merged.getCompatibilityPolicy());
+  }
+
+  @Test
+  public void mergeConfigsPrefersSubjectCompatibilityLevelWhenSet() throws Exception {
+    Config global = new Config(
+        null, null, null, null, null, null,
+        "FULL", "STRICT", null, null, null, null, null);
+    Config subjectBoth = new Config(
+        null, null, null, null, null, null,
+        "BACKWARD", "LOGICAL", null, null, null, null, null);
+
+    Config merged = Config.mergeConfigs(global, subjectBoth);
+    assertEquals("BACKWARD", merged.getCompatibilityLevel());
+    assertEquals("LOGICAL", merged.getCompatibilityPolicy());
+  }
+
+  @Test
   public void invalidRuleSets() throws Exception {
     Rule r1 = new Rule(null, null, null, null, "DUMMY", null, null, null, null, null, false);
     try {

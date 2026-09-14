@@ -1275,6 +1275,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL
+            && (compatibility == CompatibilityLevel.FORWARD
+                || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
+      // so this pairing can never be satisfied regardless of the schema being registered.
+      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      return errorMessages;
+    }
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1472,7 +1481,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (subject == null) {
         return lookupCache.config(null, true, defaultForTopLevel);
       }
-      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
+      // Pass no default here: a null compatibilityLevel must survive into mergeConfigs below so
+      // it can fall through to the subject's actual global override rather than being pre-filled
+      // with the hardcoded default before that inheritance ever runs.
+      Config subjectConfig = lookupCache.config(subject, false, null);
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
