@@ -96,6 +96,14 @@ final class IcebergComparison {
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
 
+  /**
+   * {@link Rule#FIELD_REORDERED} was removed because Iceberg identifies fields by name here and a
+   * reorder is invisible to that comparison. Kept off by default, but field-ID work may reinstate
+   * a reason to reject it -- flip this to re-enable the check without reconstructing it from
+   * scratch.
+   */
+  private static final boolean ENABLE_FIELD_REORDERED_CHECK = false;
+
   private final Schema originalRoot;
   private final Schema updateRoot;
   private final Map<String, Schema> originalNamedTypes;
@@ -241,6 +249,12 @@ final class IcebergComparison {
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
 
+    // Only read when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
+    int lastSeenOriginalIndex = -1;
+    final List<String> originalFieldOrder = originalFields.stream()
+        .map(field -> field.name)
+        .collect(Collectors.toList());
+
     final Set<String> updateFieldNames = updateFields.stream()
         .map(field -> field.name)
         .collect(Collectors.toSet());
@@ -260,6 +274,15 @@ final class IcebergComparison {
         // Do not descend into a field the original schema never had.
         continue;
       }
+
+      // Existing fields keep their relative order. The watermark advances even on a violation,
+      // so a single swap yields one finding rather than cascading.
+      final int originalIndex = originalFieldOrder.indexOf(updateField.name);
+      if (ENABLE_FIELD_REORDERED_CHECK && originalIndex < lastSeenOriginalIndex) {
+        add(Rule.FIELD_REORDERED, fieldPath,
+            "field moved ahead of a field that preceded it in the original schema");
+      }
+      lastSeenOriginalIndex = originalIndex;
 
       if (isEffectivelyNullable(originalField)
           && !isEffectivelyOptional(updateField, originalField)) {

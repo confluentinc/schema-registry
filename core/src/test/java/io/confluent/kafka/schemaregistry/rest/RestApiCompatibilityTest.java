@@ -404,6 +404,70 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testLogicalPolicyRegistrationBackstopCatchesALaterGlobalForwardChange()
+      throws Exception {
+    // The config-write guard has no way to see this coming: the subject sets only
+    // compatibilityPolicy (global is still the default at that point, so it succeeds), and only
+    // afterward does an unrelated global-level change make the pairing invalid. getConfigInScope
+    // must still resolve the subject's effective level to the real global value rather than
+    // silently defaulting it, so the registration-time backstop is what has to catch this.
+    String subject = "testSubject";
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(subjectConfig, subject).getCompatibilityPolicy(),
+        "Setting a subject-level LOGICAL policy should succeed"
+    );
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+
+    // A defaulted field addition is compatible under BACKWARD, FORWARD and FULL alike (and is not
+    // a logical REQUIRED_FIELD_ADDED, since it carries a default), so a rejection here can only
+    // come from the LOGICAL+FORWARD config guard itself, not from an incidental incompatibility.
+    // (Registering schemaString1 again verbatim would short-circuit on the identical-schema fast
+    // path before the compatibility check ever runs, so it must be a genuinely different schema.)
+    String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\",\"default\":\"x\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(schemaString2, subject);
+      fail("Registering under an effective LOGICAL+FORWARD config should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 
