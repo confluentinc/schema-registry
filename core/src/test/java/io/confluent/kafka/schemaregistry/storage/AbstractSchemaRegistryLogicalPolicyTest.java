@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -51,9 +52,14 @@ class AbstractSchemaRegistryLogicalPolicyTest {
 
   private static List<String> check(String policy, ParsedSchema newSchema,
       List<ParsedSchemaHolder> previous) {
+    return check("BACKWARD", policy, newSchema, previous);
+  }
+
+  private static List<String> check(String level, String policy, ParsedSchema newSchema,
+      List<ParsedSchemaHolder> previous) {
     AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
     Config config = new Config();
-    config.setCompatibilityLevel("BACKWARD");
+    config.setCompatibilityLevel(level);
     config.setCompatibilityPolicy(policy);
     return registry.isCompatibleWithPrevious(config, newSchema, previous);
   }
@@ -113,5 +119,38 @@ class AbstractSchemaRegistryLogicalPolicyTest {
     int last = errorTypeIndexes.get(errorTypeIndexes.size() - 1);
     assertTrue(last - first + 1 == errorTypeIndexes.size(),
         "errorType findings are not contiguous: " + errors);
+  }
+
+  @Test
+  void logicalPolicyRejectsForwardCompatibility() {
+    // Iceberg, the only current LOGICAL target, supports only backward-compatible evolution, so
+    // this pairing is rejected before either check runs -- even for a pair with no other findings.
+    List<String> errors = check(
+        "FORWARD", "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityPolicy=LOGICAL"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD"), errors.toString());
+  }
+
+  @Test
+  void logicalPolicyRejectsForwardTransitiveCompatibility() {
+    List<String> errors = check(
+        "FORWARD_TRANSITIVE", "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD_TRANSITIVE"), errors.toString());
+  }
+
+  @Test
+  void nonLogicalPolicyAllowsForwardCompatibility() {
+    // The rejection is specific to LOGICAL; FORWARD is otherwise a perfectly ordinary level.
+    List<String> errors = check(
+        "FORWARD", "STRICT",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
   }
 }

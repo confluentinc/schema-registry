@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import java.util.Collections;
@@ -314,6 +315,92 @@ public abstract class RestApiCompatibilityTest {
         restApp.restClient.registerSchema(schemaString4, subject),
         "Registering should succeed with backwards compatible schema"
     );
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsForwardCompatibilityInTheSameRequest() throws Exception {
+    // Iceberg, the only current LOGICAL target, supports only backward-compatible evolution, so
+    // this pairing must be rejected up front rather than accepted and left to fail at
+    // registration time.
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    config.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Setting FORWARD compatibility with LOGICAL policy should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsAnInheritedForwardCompatibility() throws Exception {
+    // The subject request only sets compatibilityPolicy; compatibilityLevel is inherited from the
+    // already-FORWARD global config. The rejection must see the resolved, inherited value.
+    String subject = "testSubject";
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(subjectConfig, subject);
+      fail("Setting LOGICAL policy under an inherited FORWARD compatibility level should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsForwardWhenClearingASubjectPolicyOverride()
+      throws Exception {
+    // The subject overrides the global LOGICAL policy with STRICT. A request that explicitly
+    // clears that override (JSON null, not omission) while setting FORWARD must still be
+    // rejected: the resulting effective policy falls through to the global LOGICAL, not to the
+    // override being cleared.
+    String subject = "testSubject";
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityPolicy(),
+        "Changing global compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(subjectOverride, subject).getCompatibilityPolicy(),
+        "Setting a subject-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, subject);
+      fail("Clearing a STRICT override back to LOGICAL while setting FORWARD should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
   }
 
   @Test
