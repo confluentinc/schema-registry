@@ -365,6 +365,45 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testLogicalPolicyRejectsForwardWhenClearingASubjectPolicyOverride()
+      throws Exception {
+    // The subject overrides the global LOGICAL policy with STRICT. A request that explicitly
+    // clears that override (JSON null, not omission) while setting FORWARD must still be
+    // rejected: the resulting effective policy falls through to the global LOGICAL, not to the
+    // override being cleared.
+    String subject = "testSubject";
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityPolicy(),
+        "Changing global compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(subjectOverride, subject).getCompatibilityPolicy(),
+        "Setting a subject-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, subject);
+      fail("Clearing a STRICT override back to LOGICAL while setting FORWARD should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 

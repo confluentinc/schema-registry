@@ -59,6 +59,7 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
+import java.util.Optional;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -85,25 +86,38 @@ public class ConfigResource {
    * LOGICAL up front, using the effective (inheritance-resolved) value for whichever of the two
    * fields this request leaves unset. Iceberg, the only current LOGICAL target, supports only
    * backward-compatible evolution, so this pairing can never be satisfied.
+   *
+   * <p>Distinguishes an omitted field (keep the current effective value) from one explicitly set
+   * to {@code null} to clear an override (fall through to the parent scope), the same distinction
+   * {@link io.confluent.kafka.schemaregistry.storage.ConfigValue#update} makes -- a plain getter
+   * collapses both to {@code null} and would let a cleared override escape this check.
    */
   private void validateLogicalCompatibilityPairing(String subject, ConfigUpdateRequest request) {
-    if (request.getCompatibilityLevel() == null && request.getCompatibilityPolicy() == null) {
+    Optional<String> requestedLevel = request.getOptionalCompatibilityLevel();
+    Optional<String> requestedPolicy = request.getOptionalCompatibilityPolicy();
+    if (requestedLevel == null && requestedPolicy == null) {
       return;
     }
     Config existingConfig;
+    Config parentConfig = null;
     try {
       existingConfig = schemaRegistry.getConfigInScope(subject);
+      boolean isClearingAnOverride =
+          (requestedLevel != null && !requestedLevel.isPresent())
+              || (requestedPolicy != null && !requestedPolicy.isPresent());
+      if (subject != null && isClearingAnOverride) {
+        // The parent scope a cleared subject-level override falls through to. (Global has no
+        // parent of its own; clearing it there resolves to the deployment's hardcoded default,
+        // which is never LOGICAL/FORWARD, so no parent lookup is needed in that case.)
+        parentConfig = schemaRegistry.getConfigInScope(null);
+      }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject " + subject, e);
     }
-    CompatibilityLevel effectiveLevel = request.getCompatibilityLevel() != null
-        ? CompatibilityLevel.forName(request.getCompatibilityLevel())
-        : (existingConfig != null
-            ? CompatibilityLevel.forName(existingConfig.getCompatibilityLevel()) : null);
-    CompatibilityPolicy effectivePolicy = request.getCompatibilityPolicy() != null
-        ? CompatibilityPolicy.forName(request.getCompatibilityPolicy())
-        : (existingConfig != null
-            ? CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy()) : null);
+    CompatibilityLevel effectiveLevel =
+        effectiveCompatibilityLevel(requestedLevel, existingConfig, parentConfig);
+    CompatibilityPolicy effectivePolicy =
+        effectiveCompatibilityPolicy(requestedPolicy, existingConfig, parentConfig);
     if (effectivePolicy == CompatibilityPolicy.LOGICAL
         && (effectiveLevel == CompatibilityLevel.FORWARD
             || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
@@ -111,6 +125,34 @@ public class ConfigResource {
           "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
               + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
     }
+  }
+
+  private static CompatibilityLevel effectiveCompatibilityLevel(
+      Optional<String> requested, Config existingConfig, Config parentConfig) {
+    if (requested == null) {
+      // Omitted: the update leaves this field alone, so the current effective value stands.
+      return existingConfig != null
+          ? CompatibilityLevel.forName(existingConfig.getCompatibilityLevel()) : null;
+    }
+    if (requested.isPresent()) {
+      return CompatibilityLevel.forName(requested.get());
+    }
+    // Explicitly cleared: falls through to the parent scope.
+    return parentConfig != null
+        ? CompatibilityLevel.forName(parentConfig.getCompatibilityLevel()) : null;
+  }
+
+  private static CompatibilityPolicy effectiveCompatibilityPolicy(
+      Optional<String> requested, Config existingConfig, Config parentConfig) {
+    if (requested == null) {
+      return existingConfig != null
+          ? CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy()) : null;
+    }
+    if (requested.isPresent()) {
+      return CompatibilityPolicy.forName(requested.get());
+    }
+    return parentConfig != null
+        ? CompatibilityPolicy.forName(parentConfig.getCompatibilityPolicy()) : null;
   }
 
   @Path("/{subject}")
