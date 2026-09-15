@@ -42,7 +42,12 @@ public class Incompatibility {
     REQUIRED_FIELD_ADDED,
     /** A field present in the original schema is missing from the update. */
     FIELD_DELETED,
-    /** Fields common to both schemas no longer appear in the same relative order. */
+    /** An enum symbol present in the original schema is missing from the update. */
+    ENUM_DELETED,
+    /**
+     * Fields common to both schemas no longer appear in the same relative order. Currently
+     * unreachable: {@code IcebergComparison.ENABLE_FIELD_REORDERED_CHECK} is off.
+     */
     FIELD_REORDERED,
     /** A nullable field was tightened to non-nullable. */
     NULLABLE_TO_NON_NULLABLE,

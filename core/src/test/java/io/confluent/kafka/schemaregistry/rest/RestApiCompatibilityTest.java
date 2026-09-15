@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import java.util.Collections;
@@ -314,6 +315,433 @@ public abstract class RestApiCompatibilityTest {
         restApp.restClient.registerSchema(schemaString4, subject),
         "Registering should succeed with backwards compatible schema"
     );
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsForwardCompatibilityInTheSameRequest() throws Exception {
+    // Iceberg, the only current LOGICAL target, supports only backward-compatible evolution, so
+    // this pairing must be rejected up front rather than accepted and left to fail at
+    // registration time.
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    config.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Setting FORWARD compatibility with LOGICAL policy should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsAnInheritedForwardCompatibility() throws Exception {
+    // The subject request only sets compatibilityPolicy; compatibilityLevel is inherited from the
+    // already-FORWARD global config. The rejection must see the resolved, inherited value.
+    String subject = "testSubject";
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(subjectConfig, subject);
+      fail("Setting LOGICAL policy under an inherited FORWARD compatibility level should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsForwardWhenClearingASubjectPolicyOverride()
+      throws Exception {
+    // The subject overrides the global LOGICAL policy with STRICT. A request that explicitly
+    // clears that override (JSON null, not omission) while setting FORWARD must still be
+    // rejected: the resulting effective policy falls through to the global LOGICAL, not to the
+    // override being cleared.
+    String subject = "testSubject";
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityPolicy(),
+        "Changing global compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(subjectOverride, subject).getCompatibilityPolicy(),
+        "Setting a subject-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, subject);
+      fail("Clearing a STRICT override back to LOGICAL while setting FORWARD should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRegistrationBackstopCatchesALaterGlobalForwardChange()
+      throws Exception {
+    // The config-write guard has no way to see this coming: the subject sets only
+    // compatibilityPolicy (global is still the default at that point, so it succeeds), and only
+    // afterward does an unrelated global-level change make the pairing invalid. getConfigInScope
+    // must still resolve the subject's effective level to the real global value rather than
+    // silently defaulting it, so the registration-time backstop is what has to catch this.
+    String subject = "testSubject";
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(subjectConfig, subject).getCompatibilityPolicy(),
+        "Setting a subject-level LOGICAL policy should succeed"
+    );
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+
+    // A defaulted field addition is compatible under BACKWARD, FORWARD and FULL alike (and is not
+    // a logical REQUIRED_FIELD_ADDED, since it carries a default), so a rejection here can only
+    // come from the LOGICAL+FORWARD config guard itself, not from an incidental incompatibility.
+    // (Registering schemaString1 again verbatim would short-circuit on the identical-schema fast
+    // path before the compatibility check ever runs, so it must be a genuinely different schema.)
+    String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\",\"default\":\"x\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(schemaString2, subject);
+      fail("Registering under an effective LOGICAL+FORWARD config should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyResolvesTheOwningContextNotTheTenantWideGlobal()
+      throws Exception {
+    // Global stays at its safe default (BACKWARD) throughout; only the context's own config is
+    // FORWARD. getConfigInScope must resolve this subject's effective level from its owning
+    // context, not skip straight past it to the tenant-wide global.
+    String context = ":.mycontext:";
+    String subject = context + "testSubject";
+
+    ConfigUpdateRequest contextConfig = new ConfigUpdateRequest();
+    contextConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(contextConfig, context).getCompatibilityLevel(),
+        "Setting the context-level compatibility level should succeed"
+    );
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    // Give the subject its own config record on an unrelated field first, so getConfigInScope's
+    // subject-level fetch is non-null and must merge with its context/global parents below,
+    // rather than taking the separate "no subject record at all" fallback path that already
+    // walked the context chain correctly before this fix.
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    assertEquals(
+        "application.version",
+        restApp.restClient.updateConfig(groupOnly, subject).getCompatibilityGroup(),
+        "Setting an unrelated subject-level field should succeed"
+    );
+
+    // Setting only compatibilityPolicy here must resolve the subject's effective level from its
+    // owning context (FORWARD), not the tenant-wide global (still the safe default) -- so this
+    // is rejected at config-write time, before registration is even attempted.
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(subjectConfig, subject);
+      fail("Setting LOGICAL policy under a context-inherited FORWARD compatibility level "
+          + "should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyResolvesTheOwningContextWhenClearingAnOverride()
+      throws Exception {
+    // The context (not global) is LOGICAL; the subject overrides it with STRICT. Clearing that
+    // override while setting FORWARD must resolve the parent as the context's LOGICAL, not skip
+    // past it to the (untouched, default) tenant-wide global.
+    String context = ":.mycontext2:";
+    String subject = context + "testSubject";
+
+    ConfigUpdateRequest contextConfig = new ConfigUpdateRequest();
+    contextConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(contextConfig, context).getCompatibilityPolicy(),
+        "Setting the context-level compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(subjectOverride, subject).getCompatibilityPolicy(),
+        "Setting a subject-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, subject);
+      fail("Clearing a STRICT override back to the context's LOGICAL while setting FORWARD "
+          + "should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyResolvesGlobalWhenClearingABareContextOverride()
+      throws Exception {
+    // A bare context scope is its own qualified context, so resolving its cleared override
+    // against "its context" would resolve against itself and see the very value being cleared.
+    // Its real parent is the tenant-wide global, which is LOGICAL here.
+    String context = ":.mycontext3:";
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityPolicy(),
+        "Setting the global compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest contextOverride = new ConfigUpdateRequest();
+    contextOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(contextOverride, context).getCompatibilityPolicy(),
+        "Setting a context-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, context);
+      fail("Clearing the context's STRICT override back to the global LOGICAL while setting "
+          + "FORWARD should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  /**
+   * getConfigInScope resolves a scope that has its own config record by merging it with its
+   * parents, and a scope that has none by walking the lookup cache's chain. Those two routes must
+   * agree on every inherited value, or the effective config silently depends on whether some
+   * unrelated field happens to be set locally. Asserts that invariant by reading the effective
+   * config before and after giving the scope a record that touches neither field.
+   */
+  private void assertInheritedConfigUnaffectedByAnUnrelatedLocalField(String scope)
+      throws Exception {
+    Config before = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    restApp.restClient.updateConfig(groupOnly, scope);
+
+    Config after = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    assertEquals(before.getCompatibilityLevel(), after.getCompatibilityLevel(),
+        "Inherited compatibilityLevel for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getCompatibilityPolicy(), after.getCompatibilityPolicy(),
+        "Inherited compatibilityPolicy for " + scope + " changed after setting an unrelated "
+            + "local field");
+  }
+
+  @Test
+  public void testInheritedConfigIsIndependentOfUnrelatedLocalFields() throws Exception {
+    // Set each tier to a distinct value so any tier that gets skipped or wrongly consulted
+    // changes the resolved answer: the global context is the last-resort parent, the tenant-wide
+    // config covers the default context, and a custom context covers its own subjects.
+    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
+    globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
+
+    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
+    tenantWide.setCompatibilityLevel(CompatibilityLevel.FULL.name);
+    restApp.restClient.updateConfig(tenantWide, null);
+
+    ConfigUpdateRequest customContext = new ConfigUpdateRequest();
+    customContext.setCompatibilityLevel(CompatibilityLevel.BACKWARD_TRANSITIVE.name);
+    restApp.restClient.updateConfig(customContext, ":.inherit:");
+
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField("defaultContextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.inherit:contextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.noConfigOfItsOwn:ctxSubject");
+    // A bare context scope: its parent is the global context, never the tenant-wide config.
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.bareContext:");
+  }
+
+  @Test
+  public void testClearingABareContextOverrideResolvesTheGlobalContextNotTenantWide()
+      throws Exception {
+    // The tenant-wide config is LOGICAL, but a bare context does not inherit from it -- its
+    // parent is the global context, which sets no policy here. Clearing the context's own STRICT
+    // override while setting FORWARD is therefore valid, and must not be rejected by resolving
+    // the cleared value against the wrong parent.
+    String context = ":.bareParent:";
+
+    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
+    tenantWide.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(tenantWide, null).getCompatibilityPolicy(),
+        "Setting the tenant-wide policy should succeed"
+    );
+
+    ConfigUpdateRequest contextOverride = new ConfigUpdateRequest();
+    contextOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(contextOverride, context).getCompatibilityPolicy(),
+        "Setting a context-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    restApp.restClient.updateConfig(clearOverrideAndSetForward, context);
+
+    Config resolved = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, context, true);
+    assertEquals(CompatibilityLevel.FORWARD.name, resolved.getCompatibilityLevel(),
+        "the context should now be FORWARD");
+    assertNull(resolved.getCompatibilityPolicy(),
+        "the cleared policy should fall through to the global context, which sets none");
+  }
+
+  @Test
+  public void testFieldsInheritIndependentlyFromDifferentTiers() throws Exception {
+    // The policy lives at one tier and the level at another, with nothing set locally. Under
+    // field-by-field inheritance both must come through; taking the nearest record whole would
+    // drop the policy entirely, and would do so only for subjects that have no local record.
+    ConfigUpdateRequest ctx = new ConfigUpdateRequest();
+    ctx.setCompatibilityLevel(CompatibilityLevel.FULL.name);
+    restApp.restClient.updateConfig(ctx, ":.split:");
+
+    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
+    globalContext.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
+
+    Config noRecord = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, ":.split:noRecordOfItsOwn", true);
+    assertEquals(CompatibilityLevel.FULL.name, noRecord.getCompatibilityLevel(),
+        "level should come from the owning context");
+    assertEquals("LOGICAL", noRecord.getCompatibilityPolicy(),
+        "policy should still be inherited from the global context");
+
+    // The same scope shape, but with a local record touching neither field, must agree.
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    restApp.restClient.updateConfig(groupOnly, ":.split:hasARecord");
+    Config hasRecord = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, ":.split:hasARecord", true);
+    assertEquals(noRecord.getCompatibilityLevel(), hasRecord.getCompatibilityLevel(),
+        "a local record on an unrelated field must not change the inherited level");
+    assertEquals(noRecord.getCompatibilityPolicy(), hasRecord.getCompatibilityPolicy(),
+        "a local record on an unrelated field must not change the inherited policy");
   }
 
   @Test

@@ -147,6 +147,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -1275,6 +1276,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL
+            && (compatibility == CompatibilityLevel.FORWARD
+                || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
+      // so this pairing can never be satisfied regardless of the schema being registered.
+      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      return errorMessages;
+    }
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1468,16 +1478,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Config getConfigInScope(String subject)
           throws SchemaRegistryStoreException {
     try {
+      // Every scope resolves through one field-by-field merge of the same tiers, so a scope
+      // inherits each unset field independently rather than taking the nearest record whole:
+      // the global context (itself falling back to the deployment default) underneath, then
+      // either the owning custom context or the tenant-wide config, then the scope's own
+      // values on top. A missing record at any tier simply contributes nothing.
+      //
+      // Each record is read with no default of its own, so an unset compatibilityLevel stays
+      // null and falls through the chain instead of being pre-filled with the deployment
+      // default before the inheritance runs.
       Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
-      if (subject == null) {
-        return lookupCache.config(null, true, defaultForTopLevel);
+      String globalContext = QualifiedSubject.createFromUnqualified(
+              tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
+          .toQualifiedContext();
+      Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
+
+      // The tenant-wide scope and a bare context are themselves the intermediate tier, so they
+      // have none of their own; only a leaf subject does.
+      QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
+      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
+        String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+            ? qs.toQualifiedContext()
+            : null;
+        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScope, false, null));
       }
-      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
-      if (subjectConfig == null) {
-        return lookupCache.config(subject, true, defaultForTopLevel);
-      }
-      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
-      return Config.mergeConfigs(globalConfig, subjectConfig);
+      return Config.mergeConfigs(resolved, lookupCache.config(subject, false, null));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
