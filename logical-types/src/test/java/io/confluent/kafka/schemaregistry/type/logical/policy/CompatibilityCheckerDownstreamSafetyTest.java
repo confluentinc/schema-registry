@@ -95,11 +95,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
     assertTrue(rules.contains(rule), mode + " expected " + rule + " but got " + rules);
   }
 
-  /**
-   * Rejected by Iceberg, accepted by Flink. The shape of every identity-level change now: Iceberg
-   * needs a stable field ID to apply it, whereas Flink SQL supports the operation and no stored
-   * value is reinterpreted or invented. See the criterion on {@code FlinkComparison}.
-   */
+  /** Rejected by Iceberg, accepted by Flink. */
   private static void assertIcebergOnly(LogicalType original, LogicalType update, Rule rule) {
     assertBlocked(Mode.ICEBERG_V2, original, update, rule);
     assertAllowed(Mode.FLINK, original, update);
@@ -181,9 +177,10 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void fieldReordering() {
-    assertIcebergOnly(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
-        rec(fld("b", "\"string\"") + "," + fld("a", "\"string\"")), Rule.FIELD_REORDERED);
+    assertAllowedByBoth(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
+        rec(fld("b", "\"string\"") + "," + fld("a", "\"string\"")));
   }
+
 
   @Test
   void jsonConstraintAdditions() {
@@ -286,9 +283,10 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void avroUnionBranchReordering() {
-    // Reordering two or more non-null branches reads as a struct-field reorder.
-    assertIcebergOnly(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
-        rec(fld("u", "[\"null\",\"int\",\"string\"]")), Rule.FIELD_REORDERED);
+    // Reordering two or more non-null branches reads as a struct-field reorder, which neither
+    // checker rejects.
+    assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
+        rec(fld("u", "[\"null\",\"int\",\"string\"]")));
     // Flipping only the null branch is a no-op: a two-member union containing a null collapses to a
     // nullable type regardless of branch order.
     assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\"]")),
@@ -343,17 +341,15 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void avroEnumValueDropsAreInvisibleToBothModes() {
-    // Invisible to both type comparisons: an enum derives to an unbounded VARCHAR for Flink and to a
-    // string for Iceberg, so the symbol set is part of neither type. The hazard is real -- a reader
-    // whose enum lacks a symbol historical records carry resolves it to the enum default -- but it
-    // belongs to the encoding, so the format-level checker owns it. Not implemented there either;
-    // leaving that gap open is a deliberate decision, not pending work.
+  void avroEnumValueDropIsRejectedByIcebergOnly() {
+    // Flink resolves a symbol historical records carry but the new schema lacks to the enum
+    // default at read time, so the drop is harmless there. Iceberg has already materialized rows
+    // with the literal symbol value and has no such resolution step.
     LogicalType before =
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"));
     LogicalType after =
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\"]}"));
-    assertAllowedByBoth(before, after);
+    assertIcebergOnly(before, after, Rule.ENUM_DELETED);
   }
 
   @Test
@@ -371,12 +367,12 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void protobufEnumValueRemovalIsInvisibleToBothModes() {
+  void protobufEnumValueRemovalIsRejectedByIcebergOnly() {
     // Same reasoning as the Avro case; one rule covers both formats because both derive an ENUM.
     LogicalType before = proto("syntax=\"proto3\";package t;message M{E e=1;}"
         + "enum E{UNSET=0;A=1;B=2;}");
     LogicalType after = proto("syntax=\"proto3\";package t;message M{E e=1;}"
         + "enum E{UNSET=0;A=1;}");
-    assertAllowedByBoth(before, after);
+    assertIcebergOnly(before, after, Rule.ENUM_DELETED);
   }
 }
