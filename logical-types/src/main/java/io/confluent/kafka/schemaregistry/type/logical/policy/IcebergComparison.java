@@ -65,12 +65,12 @@ import java.util.stream.Collectors;
  * field has no value for pre-existing rows. Adding to a nested struct is allowed, subject to the
  * same optional-or-defaulted requirement at every level.
  *
- * <p>{@link Rule#ENUM_DELETED} is deliberately <em>not</em> mirrored in {@code FlinkComparison},
- * which erases {@code ENUM} to {@code VARCHAR} and rejects this exact rule: Flink resolves an
- * unrecognized enum value to the enum's declared default at read time, so a deleted symbol is
- * harmless there. Iceberg has no such resolution step. A row is materialized with the literal
- * symbol value, and once that symbol is removed from the schema nothing declares the stored value
- * valid any longer.
+ * <p>{@link Rule#ENUM_DELETED} has no counterpart in {@code FlinkComparison}, which carried this
+ * rule once and dropped it: an ENUM erases to VARCHAR there, so losing a symbol cannot change the
+ * Flink type, and resolving a value the new schema no longer lists is Avro's behaviour and the
+ * Avro checker's to catch. Iceberg erases ENUM to {@code string} too, but looks past that erasure
+ * here: rows are already materialized with the literal symbol value and there is no resolution
+ * step, so once the symbol leaves the schema nothing declares the stored value valid.
  *
  * <p><b>One rule exists in the reference and not here, conditionally.</b> It rejects <em>any</em>
  * field added below the root, but is unreachable from that implementation's entry point. Matching
@@ -357,11 +357,9 @@ final class IcebergComparison {
           }
           return;
         case STRING:
-          // CHAR/VARCHAR/ENUM all erase to STRING; only an ENUM on both sides carries symbols
-          // to lose. Unlike FlinkComparison, which erases ENUM to VARCHAR and has a runtime
-          // default to resolve an unrecognized value at read time, Iceberg has already
-          // materialized rows with the literal symbol value and no such resolution step -- once
-          // the symbol is gone, nothing declares that stored value valid any longer.
+          // CHAR/VARCHAR/ENUM all erase to STRING; only an ENUM on both sides carries symbols to
+          // lose. FlinkComparison drops this rule because losing a symbol cannot change a VARCHAR;
+          // Iceberg has rows already materialized with the literal symbol value.
           if (original.getType() == Schema.Type.ENUM && update.getType() == Schema.Type.ENUM) {
             List<String> deletedSymbols = deletedEnumSymbols(original, update);
             if (!deletedSymbols.isEmpty()) {

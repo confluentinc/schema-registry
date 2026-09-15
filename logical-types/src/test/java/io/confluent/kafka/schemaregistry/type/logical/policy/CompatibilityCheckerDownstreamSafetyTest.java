@@ -342,9 +342,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void avroEnumValueDropIsRejectedByIcebergOnly() {
-    // Flink resolves a symbol historical records carry but the new schema lacks to the enum
-    // default at read time, so the drop is harmless there. Iceberg has already materialized rows
-    // with the literal symbol value and has no such resolution step.
+    // Flink erases ENUM to VARCHAR, so symbol membership is outside its comparison. Iceberg
+    // erases to string as well but looks past it: rows already hold the literal symbol value.
     LogicalType before =
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"));
     LogicalType after =

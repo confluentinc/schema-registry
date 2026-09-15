@@ -584,8 +584,8 @@ class CompatibilityCheckerEndToEndTest {
 
   @Test
   void anAvroEnumSymbolDropIsAFindingInIcebergModeOnly() {
-    // Flink resolves a dropped symbol to the enum default at read time, so it stays invisible
-    // there. Iceberg has already materialized rows with the literal symbol value.
+    // Flink erases ENUM to VARCHAR, so symbol membership is outside its comparison. Iceberg
+    // erases to string as well but looks past it: rows already hold the literal symbol value.
     LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ""));
     LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ""));
 
