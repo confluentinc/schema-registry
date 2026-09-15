@@ -179,11 +179,6 @@
                 <version>${caffeine.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.google.guava</groupId>
-                <artifactId>guava</artifactId>
-                <version>${guava.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.google.inject</groupId>
                 <artifactId>guice</artifactId>
                 <version>${guice.version}</version>
@@ -192,16 +187,6 @@
                 <groupId>com.netflix.governator</groupId>
                 <artifactId>governator-core</artifactId>
                 <version>1.17.13</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
-                <version>${protobuf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java-util</artifactId>
-                <version>${protobuf.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api.grpc</groupId>
@@ -332,26 +317,6 @@
                 <version>${tink.version}</version>
             </dependency>
             <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>aws-core</artifactId>
-                <version>${aws-java-sdk-v2.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>sdk-core</artifactId>
-                <version>${aws-java-sdk-v2.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>kms</artifactId>
-                <version>${aws-java-sdk-v2.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>sts</artifactId>
-                <version>${aws-java-sdk-v2.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-gcpkms</artifactId>
                 <version>${tink.gcp.kms.version}</version>
@@ -415,11 +380,6 @@
                         <artifactId>guava</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.httpcomponents.client5</groupId>
-                <artifactId>httpclient5</artifactId>
-                <version>${apache.httpclient5.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
@@ -539,11 +499,6 @@
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-streams-json-schema-serde</artifactId>
                 <version>${io.confluent.schema-registry.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>jakarta.ws.rs</groupId>
-                <artifactId>jakarta.ws.rs-api</artifactId>
-                <version>3.1.0</version>
             </dependency>
             <dependency>
                 <groupId>javax.annotation</groupId>
