@@ -147,6 +147,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -1468,20 +1469,45 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Config getConfigInScope(String subject)
           throws SchemaRegistryStoreException {
     try {
+      // Every scope resolves through one field-by-field merge of the same tiers, so a scope
+      // inherits each unset field independently rather than taking the nearest record whole:
+      // the global context (itself falling back to the deployment default) underneath, then
+      // either the owning custom context or the deployment-wide config, then the scope's own
+      // values on top. A missing record at any tier simply contributes nothing.
+      //
+      // Each record is read with no default of its own, so an unset compatibilityLevel stays
+      // null and falls through the chain instead of being pre-filled with the deployment
+      // default before the inheritance runs.
       Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
-      if (subject == null) {
-        return lookupCache.config(null, true, defaultForTopLevel);
+      String globalContext = QualifiedSubject.createFromUnqualified(
+              tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
+          .toQualifiedContext();
+      Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
+
+      // Only a leaf subject has an intermediate tier; a bare context is itself that tier.
+      QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
+      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
+        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScopeOf(qs), false, null));
       }
-      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
-      if (subjectConfig == null) {
-        return lookupCache.config(subject, true, defaultForTopLevel);
-      }
-      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
-      return Config.mergeConfigs(globalConfig, subjectConfig);
+      return Config.mergeConfigs(resolved, lookupCache.config(subject, false, null));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
     }
+  }
+
+  /**
+   * The scope a leaf subject inherits from before the global context: its own custom context, or
+   * the deployment-wide config for a subject in the default context.
+   *
+   * <p>Which key holds that deployment-wide config is a deployment concern, not a subject one: a
+   * multi-tenant registry keeps a separate one per tenant rather than the single unqualified
+   * record used here. Subclasses that partition config that way override this.
+   */
+  protected String midScopeOf(QualifiedSubject qs) {
+    return qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+        ? qs.toQualifiedContext()
+        : null;
   }
 
   protected QualifiedSubject replaceAlias(String context, String subject) {
