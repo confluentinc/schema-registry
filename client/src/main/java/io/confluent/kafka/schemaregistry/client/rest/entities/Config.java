@@ -279,6 +279,9 @@ public class Config {
     Boolean validateRules = subjectConfig.isValidateRules() != null
         ? subjectConfig.isValidateRules()
         : globalConfig.isValidateRules();
+    String compatibilityLevel = subjectConfig.getCompatibilityLevel() != null
+        ? subjectConfig.getCompatibilityLevel()
+        : globalConfig.getCompatibilityLevel();
     String compatibilityPolicy = subjectConfig.getCompatibilityPolicy() != null
         ? subjectConfig.getCompatibilityPolicy()
         : globalConfig.getCompatibilityPolicy();
@@ -292,7 +295,7 @@ public class Config {
         validateFields,
         validateNewSchemas,
         validateRules,
-        subjectConfig.getCompatibilityLevel(),
+        compatibilityLevel,
         compatibilityPolicy,
         compatibilityGroup,
         subjectConfig.getDefaultMetadata(),
