@@ -316,6 +316,125 @@ public abstract class RestApiCompatibilityTest {
     );
   }
 
+  /**
+   * getConfigInScope resolves every scope by merging the same tiers field by field, so a scope's
+   * inherited values must not depend on whether it happens to carry a record of its own. Asserts
+   * that invariant by reading the effective config before and after giving the scope a record
+   * that touches neither field.
+   */
+  private void assertInheritedConfigUnaffectedByAnUnrelatedLocalField(String scope)
+      throws Exception {
+    Config before = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    restApp.restClient.updateConfig(groupOnly, scope);
+
+    Config after = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    assertEquals(before.getCompatibilityLevel(), after.getCompatibilityLevel(),
+        "Inherited compatibilityLevel for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getCompatibilityPolicy(), after.getCompatibilityPolicy(),
+        "Inherited compatibilityPolicy for " + scope + " changed after setting an unrelated "
+            + "local field");
+  }
+
+  @Test
+  public void testInheritedConfigIsIndependentOfUnrelatedLocalFields() throws Exception {
+    // Set each tier to a distinct value so any tier that gets skipped or wrongly consulted
+    // changes the resolved answer: the global context is the last-resort parent, the tenant-wide
+    // config covers the default context, and a custom context covers its own subjects.
+    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
+    globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
+
+    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
+    tenantWide.setCompatibilityLevel(CompatibilityLevel.FULL.name);
+    restApp.restClient.updateConfig(tenantWide, null);
+
+    ConfigUpdateRequest customContext = new ConfigUpdateRequest();
+    customContext.setCompatibilityLevel(CompatibilityLevel.BACKWARD_TRANSITIVE.name);
+    restApp.restClient.updateConfig(customContext, ":.inherit:");
+
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField("defaultContextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.inherit:contextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.noConfigOfItsOwn:ctxSubject");
+    // A bare context scope: its parent is the global context, never the tenant-wide config.
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.bareContext:");
+  }
+
+  @Test
+  public void testClearingABareContextOverrideResolvesTheGlobalContextNotTenantWide()
+      throws Exception {
+    // The tenant-wide config sets a policy, but a bare context does not inherit from it -- its
+    // parent is the global context, which sets none here. Clearing the context's own override
+    // must therefore fall through to the global context rather than to the tenant-wide config.
+    String context = ":.bareParent:";
+
+    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
+    tenantWide.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(tenantWide, null).getCompatibilityPolicy(),
+        "Setting the tenant-wide policy should succeed"
+    );
+
+    ConfigUpdateRequest contextOverride = new ConfigUpdateRequest();
+    contextOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(contextOverride, context).getCompatibilityPolicy(),
+        "Setting a context-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    restApp.restClient.updateConfig(clearOverrideAndSetForward, context);
+
+    Config resolved = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, context, true);
+    assertEquals(CompatibilityLevel.FORWARD.name, resolved.getCompatibilityLevel(),
+        "the context should now be FORWARD");
+    assertNull(resolved.getCompatibilityPolicy(),
+        "the cleared policy should fall through to the global context, which sets none");
+  }
+
+  @Test
+  public void testFieldsInheritIndependentlyFromDifferentTiers() throws Exception {
+    // The policy lives at one tier and the level at another, with nothing set locally. Under
+    // field-by-field inheritance both must come through; taking the nearest record whole would
+    // drop the policy entirely, and would do so only for subjects that have no local record.
+    ConfigUpdateRequest ctx = new ConfigUpdateRequest();
+    ctx.setCompatibilityLevel(CompatibilityLevel.FULL.name);
+    restApp.restClient.updateConfig(ctx, ":.split:");
+
+    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
+    globalContext.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
+
+    Config noRecord = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, ":.split:noRecordOfItsOwn", true);
+    assertEquals(CompatibilityLevel.FULL.name, noRecord.getCompatibilityLevel(),
+        "level should come from the owning context");
+    assertEquals("LOGICAL", noRecord.getCompatibilityPolicy(),
+        "policy should still be inherited from the global context");
+
+    // The same scope shape, but with a local record touching neither field, must agree.
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    restApp.restClient.updateConfig(groupOnly, ":.split:hasARecord");
+    Config hasRecord = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, ":.split:hasARecord", true);
+    assertEquals(noRecord.getCompatibilityLevel(), hasRecord.getCompatibilityLevel(),
+        "a local record on an unrelated field must not change the inherited level");
+    assertEquals(noRecord.getCompatibilityPolicy(), hasRecord.getCompatibilityPolicy(),
+        "a local record on an unrelated field must not change the inherited policy");
+  }
+
   @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
