@@ -147,6 +147,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -1275,6 +1276,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL
+            && (compatibility == CompatibilityLevel.FORWARD
+                || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
+      // so this pairing can never be satisfied regardless of the schema being registered.
+      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      return errorMessages;
+    }
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1472,12 +1482,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (subject == null) {
         return lookupCache.config(null, true, defaultForTopLevel);
       }
-      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
+      // Pass no default here: a null compatibilityLevel must survive into mergeConfigs below so
+      // it can fall through the subject -> context -> global chain rather than being pre-filled
+      // with the hardcoded default before that inheritance ever runs.
+      Config subjectConfig = lookupCache.config(subject, false, null);
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
-      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
-      return Config.mergeConfigs(globalConfig, subjectConfig);
+      // Merge the same tiers, in the same order, that lookupCache.config walks when a scope has
+      // no record of its own, so a scope resolves identically either way: the global context
+      // (itself falling back to the deployment default) underneath, then either the owning
+      // custom context or the tenant-wide config, then the scope's own values on top. A bare
+      // context scope is its own qualified context, so it has no intermediate tier.
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      String globalContext = QualifiedSubject.createFromUnqualified(
+              tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
+          .toQualifiedContext();
+      Config parentConfig = lookupCache.config(globalContext, false, defaultForTopLevel);
+      if (qs == null || !qs.getSubject().isEmpty()) {
+        String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+            ? qs.toQualifiedContext()
+            : null;
+        parentConfig =
+            Config.mergeConfigs(parentConfig, lookupCache.config(midScope, false, null));
+      }
+      return Config.mergeConfigs(parentConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);

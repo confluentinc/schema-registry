@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -58,6 +59,7 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
+import java.util.Optional;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -77,6 +79,88 @@ public class ConfigResource {
   @Inject
   public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
+  }
+
+  /**
+   * Rejects a compatibilityLevel/compatibilityPolicy combination of FORWARD(_TRANSITIVE) and
+   * LOGICAL up front, using the effective (inheritance-resolved) value for whichever of the two
+   * fields this request leaves unset. Iceberg, the only current LOGICAL target, supports only
+   * backward-compatible evolution, so this pairing can never be satisfied.
+   *
+   * <p>Distinguishes an omitted field (keep the current effective value) from one explicitly set
+   * to {@code null} to clear an override (fall through to the parent scope), the same distinction
+   * {@link io.confluent.kafka.schemaregistry.storage.ConfigValue#update} makes -- a plain getter
+   * collapses both to {@code null} and would let a cleared override escape this check.
+   */
+  private void validateLogicalCompatibilityPairing(String subject, ConfigUpdateRequest request) {
+    Optional<String> requestedLevel = request.getOptionalCompatibilityLevel();
+    Optional<String> requestedPolicy = request.getOptionalCompatibilityPolicy();
+    if (requestedLevel == null && requestedPolicy == null) {
+      return;
+    }
+    Config existingConfig;
+    Config parentConfig = null;
+    try {
+      existingConfig = schemaRegistry.getConfigInScope(subject);
+      boolean isClearingAnOverride =
+          (requestedLevel != null && !requestedLevel.isPresent())
+              || (requestedPolicy != null && !requestedPolicy.isPresent());
+      if (subject != null && isClearingAnOverride) {
+        // The parent scope a cleared override falls through to: the owning context's config for
+        // a leaf subject in a custom context, otherwise the tenant-wide global. A bare context
+        // scope is its own qualified context, so it must step up to global rather than itself.
+        // (Global has no parent; clearing there resolves to the deployment's hardcoded default,
+        // which is never LOGICAL/FORWARD, so no parent lookup is needed in that case.)
+        QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), subject);
+        String parentScope = qs != null
+            && !qs.getSubject().isEmpty()
+            && !QualifiedSubject.DEFAULT_CONTEXT.equals(qs.getContext())
+            ? qs.toQualifiedContext()
+            : null;
+        parentConfig = schemaRegistry.getConfigInScope(parentScope);
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to get the configs for subject " + subject, e);
+    }
+    CompatibilityLevel effectiveLevel =
+        effectiveCompatibilityLevel(requestedLevel, existingConfig, parentConfig);
+    CompatibilityPolicy effectivePolicy =
+        effectiveCompatibilityPolicy(requestedPolicy, existingConfig, parentConfig);
+    if (effectivePolicy == CompatibilityPolicy.LOGICAL
+        && (effectiveLevel == CompatibilityLevel.FORWARD
+            || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      throw new RestInvalidCompatibilityException(
+          "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
+    }
+  }
+
+  private static CompatibilityLevel effectiveCompatibilityLevel(
+      Optional<String> requested, Config existingConfig, Config parentConfig) {
+    if (requested == null) {
+      // Omitted: the update leaves this field alone, so the current effective value stands.
+      return existingConfig != null
+          ? CompatibilityLevel.forName(existingConfig.getCompatibilityLevel()) : null;
+    }
+    if (requested.isPresent()) {
+      return CompatibilityLevel.forName(requested.get());
+    }
+    // Explicitly cleared: falls through to the parent scope.
+    return parentConfig != null
+        ? CompatibilityLevel.forName(parentConfig.getCompatibilityLevel()) : null;
+  }
+
+  private static CompatibilityPolicy effectiveCompatibilityPolicy(
+      Optional<String> requested, Config existingConfig, Config parentConfig) {
+    if (requested == null) {
+      return existingConfig != null
+          ? CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy()) : null;
+    }
+    if (requested.isPresent()) {
+      return CompatibilityPolicy.forName(requested.get());
+    }
+    return parentConfig != null
+        ? CompatibilityPolicy.forName(parentConfig.getCompatibilityPolicy()) : null;
   }
 
   @Path("/{subject}")
@@ -146,6 +230,7 @@ public class ConfigResource {
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    validateLogicalCompatibilityPairing(subject, request);
 
     try {
       Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
@@ -258,6 +343,7 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
+    validateLogicalCompatibilityPairing(null, request);
     try {
       Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
       return new ConfigUpdateRequest(config);
