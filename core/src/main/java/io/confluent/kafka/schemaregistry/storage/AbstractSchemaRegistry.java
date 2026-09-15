@@ -1478,35 +1478,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Config getConfigInScope(String subject)
           throws SchemaRegistryStoreException {
     try {
+      // Every scope resolves through one field-by-field merge of the same tiers, so a scope
+      // inherits each unset field independently rather than taking the nearest record whole:
+      // the global context (itself falling back to the deployment default) underneath, then
+      // either the owning custom context or the tenant-wide config, then the scope's own
+      // values on top. A missing record at any tier simply contributes nothing.
+      //
+      // Each record is read with no default of its own, so an unset compatibilityLevel stays
+      // null and falls through the chain instead of being pre-filled with the deployment
+      // default before the inheritance runs.
       Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
-      if (subject == null) {
-        return lookupCache.config(null, true, defaultForTopLevel);
-      }
-      // Pass no default here: a null compatibilityLevel must survive into mergeConfigs below so
-      // it can fall through the subject -> context -> global chain rather than being pre-filled
-      // with the hardcoded default before that inheritance ever runs.
-      Config subjectConfig = lookupCache.config(subject, false, null);
-      if (subjectConfig == null) {
-        return lookupCache.config(subject, true, defaultForTopLevel);
-      }
-      // Merge the same tiers, in the same order, that lookupCache.config walks when a scope has
-      // no record of its own, so a scope resolves identically either way: the global context
-      // (itself falling back to the deployment default) underneath, then either the owning
-      // custom context or the tenant-wide config, then the scope's own values on top. A bare
-      // context scope is its own qualified context, so it has no intermediate tier.
-      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       String globalContext = QualifiedSubject.createFromUnqualified(
               tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
           .toQualifiedContext();
-      Config parentConfig = lookupCache.config(globalContext, false, defaultForTopLevel);
-      if (qs == null || !qs.getSubject().isEmpty()) {
+      Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
+
+      // The tenant-wide scope and a bare context are themselves the intermediate tier, so they
+      // have none of their own; only a leaf subject does.
+      QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
+      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
         String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
             ? qs.toQualifiedContext()
             : null;
-        parentConfig =
-            Config.mergeConfigs(parentConfig, lookupCache.config(midScope, false, null));
+        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScope, false, null));
       }
-      return Config.mergeConfigs(parentConfig, subjectConfig);
+      return Config.mergeConfigs(resolved, lookupCache.config(subject, false, null));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);

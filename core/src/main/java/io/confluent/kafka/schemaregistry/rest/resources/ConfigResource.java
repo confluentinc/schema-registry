@@ -106,18 +106,7 @@ public class ConfigResource {
           (requestedLevel != null && !requestedLevel.isPresent())
               || (requestedPolicy != null && !requestedPolicy.isPresent());
       if (subject != null && isClearingAnOverride) {
-        // The parent scope a cleared override falls through to: the owning context's config for
-        // a leaf subject in a custom context, otherwise the tenant-wide global. A bare context
-        // scope is its own qualified context, so it must step up to global rather than itself.
-        // (Global has no parent; clearing there resolves to the deployment's hardcoded default,
-        // which is never LOGICAL/FORWARD, so no parent lookup is needed in that case.)
-        QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), subject);
-        String parentScope = qs != null
-            && !qs.getSubject().isEmpty()
-            && !QualifiedSubject.DEFAULT_CONTEXT.equals(qs.getContext())
-            ? qs.toQualifiedContext()
-            : null;
-        parentConfig = schemaRegistry.getConfigInScope(parentScope);
+        parentConfig = schemaRegistry.getConfigInScope(parentScopeOf(subject));
       }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject " + subject, e);
@@ -133,6 +122,30 @@ public class ConfigResource {
           "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
               + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
     }
+  }
+
+  /**
+   * The scope a cleared override at {@code subject} falls through to, mirroring the tier order
+   * {@code getConfigInScope} resolves: a leaf subject inherits from its owning custom context, or
+   * from the tenant-wide config when it is in the default context; a bare context is itself that
+   * tier, so it inherits from the global context.
+   *
+   * <p>The global context's own parent is the deployment default, which is not reachable from
+   * here, so clearing a field on {@code :.__GLOBAL:} still resolves against its current value.
+   */
+  private String parentScopeOf(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), subject);
+    if (qs != null && qs.getSubject().isEmpty()) {
+      return QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(),
+              QualifiedSubject.CONTEXT_DELIMITER + QualifiedSubject.GLOBAL_CONTEXT_NAME
+                  + QualifiedSubject.CONTEXT_DELIMITER)
+          .toQualifiedContext();
+    }
+    if (qs != null && !QualifiedSubject.DEFAULT_CONTEXT.equals(qs.getContext())) {
+      return qs.toQualifiedContext();
+    }
+    // A leaf subject in the default context, or a subject that does not parse.
+    return null;
   }
 
   private static CompatibilityLevel effectiveCompatibilityLevel(
