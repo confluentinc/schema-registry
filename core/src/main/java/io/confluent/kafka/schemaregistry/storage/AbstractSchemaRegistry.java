@@ -1275,6 +1275,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL
+            && (compatibility == CompatibilityLevel.FORWARD
+                || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
+      // so this pairing can never be satisfied regardless of the schema being registered.
+      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      return errorMessages;
+    }
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1472,11 +1481,22 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (subject == null) {
         return lookupCache.config(null, true, defaultForTopLevel);
       }
-      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
+      // Pass no default here: a null compatibilityLevel must survive into mergeConfigs below so
+      // it can fall through the subject -> context -> global chain rather than being pre-filled
+      // with the hardcoded default before that inheritance ever runs.
+      Config subjectConfig = lookupCache.config(subject, false, null);
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
       Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        // A subject in a custom context has an intermediate tier between it and the tenant-wide
+        // global: that context's own default config. Layer it in before the subject's own
+        // explicit values, which still take precedence over both.
+        Config contextConfig = lookupCache.config(qs.toQualifiedContext(), false, null);
+        globalConfig = Config.mergeConfigs(globalConfig, contextConfig);
+      }
       return Config.mergeConfigs(globalConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
