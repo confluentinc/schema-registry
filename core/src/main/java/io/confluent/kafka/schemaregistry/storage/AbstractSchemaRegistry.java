@@ -1493,22 +1493,30 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           .toQualifiedContext();
       Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
 
-      // Only a leaf subject has an intermediate tier; a context scope is itself that tier. That
-      // covers a bare context and, in a multi-tenant deployment, the wildcard subject naming the
-      // tenant-wide config -- QualifiedSubject.isContext knows both, so the rule stays in one
-      // place rather than being restated here.
+      // Only a leaf subject has an intermediate tier; a bare context is itself that tier.
       QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
-      if (subject != null && !QualifiedSubject.isContext(tenant(), subject)) {
-        String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
-            ? qs.toQualifiedContext()
-            : null;
-        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScope, false, null));
+      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
+        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScopeOf(qs), false, null));
       }
       return Config.mergeConfigs(resolved, lookupCache.config(subject, false, null));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
     }
+  }
+
+  /**
+   * The scope a leaf subject inherits from before the global context: its own custom context, or
+   * the deployment-wide config for a subject in the default context.
+   *
+   * <p>Which key holds that deployment-wide config is a deployment concern, not a subject one: a
+   * multi-tenant registry keeps a separate one per tenant rather than the single unqualified
+   * record used here. Subclasses that partition config that way override this.
+   */
+  protected String midScopeOf(QualifiedSubject qs) {
+    return qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+        ? qs.toQualifiedContext()
+        : null;
   }
 
   protected QualifiedSubject replaceAlias(String context, String subject) {

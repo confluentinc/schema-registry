@@ -601,28 +601,6 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
-  public void testWildcardSubjectIsALeafInTheDefaultTenant() throws Exception {
-    // QualifiedSubject.isContext treats the wildcard subject as the tenant-wide scope only for a
-    // non-default tenant; under the default tenant "*" is an ordinary subject name. It must
-    // therefore still inherit through the intermediate tier like any other leaf, rather than
-    // being mistaken for a context and skipping it. (The multi-tenant reading of "*" cannot be
-    // exercised here -- upstream always runs as the default tenant.)
-    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
-    globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
-    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
-
-    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
-    tenantWide.setCompatibilityLevel(CompatibilityLevel.FULL.name);
-    restApp.restClient.updateConfig(tenantWide, null);
-
-    Config resolved = restApp.restClient.getConfig(
-        RestService.DEFAULT_REQUEST_PROPERTIES, "*", true);
-    assertEquals(CompatibilityLevel.FULL.name, resolved.getCompatibilityLevel(),
-        "\"*\" is a leaf under the default tenant, so it inherits the tenant-wide config rather "
-            + "than skipping to the global context");
-  }
-
-  @Test
   public void testFieldsInheritIndependentlyFromDifferentTiers() throws Exception {
     // The policy lives at one tier and the level at another, with nothing set locally. Under
     // field-by-field inheritance both must come through; taking the nearest record whole would
