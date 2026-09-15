@@ -1482,13 +1482,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         return lookupCache.config(null, true, defaultForTopLevel);
       }
       // Pass no default here: a null compatibilityLevel must survive into mergeConfigs below so
-      // it can fall through to the subject's actual global override rather than being pre-filled
+      // it can fall through the subject -> context -> global chain rather than being pre-filled
       // with the hardcoded default before that inheritance ever runs.
       Config subjectConfig = lookupCache.config(subject, false, null);
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
       Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        // A subject in a custom context has an intermediate tier between it and the tenant-wide
+        // global: that context's own default config. Layer it in before the subject's own
+        // explicit values, which still take precedence over both.
+        Config contextConfig = lookupCache.config(qs.toQualifiedContext(), false, null);
+        globalConfig = Config.mergeConfigs(globalConfig, contextConfig);
+      }
       return Config.mergeConfigs(globalConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(

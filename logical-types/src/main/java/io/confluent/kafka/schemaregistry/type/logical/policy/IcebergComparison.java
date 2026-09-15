@@ -249,11 +249,13 @@ final class IcebergComparison {
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
 
-    // Only read when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
+    // Built and consulted only when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
+    // Guarding the whole block, not just the finding, avoids paying its O(n^2) index lookups on
+    // every struct comparison while the check is off.
     int lastSeenOriginalIndex = -1;
-    final List<String> originalFieldOrder = originalFields.stream()
-        .map(field -> field.name)
-        .collect(Collectors.toList());
+    final List<String> originalFieldOrder = ENABLE_FIELD_REORDERED_CHECK
+        ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
+        : null;
 
     final Set<String> updateFieldNames = updateFields.stream()
         .map(field -> field.name)
@@ -275,14 +277,16 @@ final class IcebergComparison {
         continue;
       }
 
-      // Existing fields keep their relative order. The watermark advances even on a violation,
-      // so a single swap yields one finding rather than cascading.
-      final int originalIndex = originalFieldOrder.indexOf(updateField.name);
-      if (ENABLE_FIELD_REORDERED_CHECK && originalIndex < lastSeenOriginalIndex) {
-        add(Rule.FIELD_REORDERED, fieldPath,
-            "field moved ahead of a field that preceded it in the original schema");
+      if (ENABLE_FIELD_REORDERED_CHECK) {
+        // Existing fields keep their relative order. The watermark advances even on a
+        // violation, so a single swap yields one finding rather than cascading.
+        final int originalIndex = originalFieldOrder.indexOf(updateField.name);
+        if (originalIndex < lastSeenOriginalIndex) {
+          add(Rule.FIELD_REORDERED, fieldPath,
+              "field moved ahead of a field that preceded it in the original schema");
+        }
+        lastSeenOriginalIndex = originalIndex;
       }
-      lastSeenOriginalIndex = originalIndex;
 
       if (isEffectivelyNullable(originalField)
           && !isEffectivelyOptional(updateField, originalField)) {

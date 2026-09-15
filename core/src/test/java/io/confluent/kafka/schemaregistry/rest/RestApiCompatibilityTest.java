@@ -468,6 +468,69 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testLogicalPolicyResolvesTheOwningContextNotTheTenantWideGlobal()
+      throws Exception {
+    // Global stays at its safe default (BACKWARD) throughout; only the context's own config is
+    // FORWARD. getConfigInScope must resolve this subject's effective level from its owning
+    // context, not skip straight past it to the tenant-wide global.
+    String context = ":.mycontext:";
+    String subject = context + "testSubject";
+
+    ConfigUpdateRequest contextConfig = new ConfigUpdateRequest();
+    contextConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(contextConfig, context).getCompatibilityLevel(),
+        "Setting the context-level compatibility level should succeed"
+    );
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    // Give the subject its own config record on an unrelated field first, so getConfigInScope's
+    // subject-level fetch is non-null and must merge with its context/global parents below,
+    // rather than taking the separate "no subject record at all" fallback path that already
+    // walked the context chain correctly before this fix.
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    assertEquals(
+        "application.version",
+        restApp.restClient.updateConfig(groupOnly, subject).getCompatibilityGroup(),
+        "Setting an unrelated subject-level field should succeed"
+    );
+
+    // Setting only compatibilityPolicy here must resolve the subject's effective level from its
+    // owning context (FORWARD), not the tenant-wide global (still the safe default) -- so this
+    // is rejected at config-write time, before registration is even attempted.
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(subjectConfig, subject);
+      fail("Setting LOGICAL policy under a context-inherited FORWARD compatibility level "
+          + "should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 
