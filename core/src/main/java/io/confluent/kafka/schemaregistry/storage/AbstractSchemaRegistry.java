@@ -1493,10 +1493,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           .toQualifiedContext();
       Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
 
-      // The tenant-wide scope and a bare context are themselves the intermediate tier, so they
-      // have none of their own; only a leaf subject does.
+      // Only a leaf subject has an intermediate tier; a context scope is itself that tier. That
+      // covers a bare context and, in a multi-tenant deployment, the wildcard subject naming the
+      // tenant-wide config -- QualifiedSubject.isContext knows both, so the rule stays in one
+      // place rather than being restated here.
       QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
-      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
+      if (subject != null && !QualifiedSubject.isContext(tenant(), subject)) {
         String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
             ? qs.toQualifiedContext()
             : null;

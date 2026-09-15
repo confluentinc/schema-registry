@@ -83,14 +83,16 @@ public class ConfigResource {
 
   /**
    * Rejects a compatibilityLevel/compatibilityPolicy combination of FORWARD(_TRANSITIVE) and
-   * LOGICAL up front, using the effective (inheritance-resolved) value for whichever of the two
-   * fields this request leaves unset. Iceberg, the only current LOGICAL target, supports only
+   * LOGICAL up front. Iceberg, the only current LOGICAL target, supports only
    * backward-compatible evolution, so this pairing can never be satisfied.
    *
-   * <p>Distinguishes an omitted field (keep the current effective value) from one explicitly set
-   * to {@code null} to clear an override (fall through to the parent scope), the same distinction
-   * {@link io.confluent.kafka.schemaregistry.storage.ConfigValue#update} makes -- a plain getter
-   * collapses both to {@code null} and would let a cleared override escape this check.
+   * <p>Checks only what this request determines on its own: a field it sets explicitly, or one
+   * it omits, whose current effective value already stands. A field explicitly set to
+   * {@code null} to clear an override takes its value from the scope's parent instead, which
+   * cannot be established here without re-deriving the inheritance chain -- so those updates are
+   * left to the registration-time check in
+   * {@code AbstractSchemaRegistry#isCompatibleWithPrevious}, which resolves the effective config
+   * for real and is the actual guarantee.
    */
   private void validateLogicalCompatibilityPairing(String subject, ConfigUpdateRequest request) {
     Optional<String> requestedLevel = request.getOptionalCompatibilityLevel();
@@ -98,23 +100,24 @@ public class ConfigResource {
     if (requestedLevel == null && requestedPolicy == null) {
       return;
     }
+    boolean isClearingAnOverride =
+        (requestedLevel != null && !requestedLevel.isPresent())
+            || (requestedPolicy != null && !requestedPolicy.isPresent());
+    if (isClearingAnOverride) {
+      return;
+    }
     Config existingConfig;
-    Config parentConfig = null;
     try {
       existingConfig = schemaRegistry.getConfigInScope(subject);
-      boolean isClearingAnOverride =
-          (requestedLevel != null && !requestedLevel.isPresent())
-              || (requestedPolicy != null && !requestedPolicy.isPresent());
-      if (subject != null && isClearingAnOverride) {
-        parentConfig = schemaRegistry.getConfigInScope(parentScopeOf(subject));
-      }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject " + subject, e);
     }
-    CompatibilityLevel effectiveLevel =
-        effectiveCompatibilityLevel(requestedLevel, existingConfig, parentConfig);
-    CompatibilityPolicy effectivePolicy =
-        effectiveCompatibilityPolicy(requestedPolicy, existingConfig, parentConfig);
+    CompatibilityLevel effectiveLevel = requestedLevel != null
+        ? CompatibilityLevel.forName(requestedLevel.get())
+        : CompatibilityLevel.forName(existingConfig.getCompatibilityLevel());
+    CompatibilityPolicy effectivePolicy = requestedPolicy != null
+        ? CompatibilityPolicy.forName(requestedPolicy.get())
+        : CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy());
     if (effectivePolicy == CompatibilityPolicy.LOGICAL
         && (effectiveLevel == CompatibilityLevel.FORWARD
             || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
@@ -122,58 +125,6 @@ public class ConfigResource {
           "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
               + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
     }
-  }
-
-  /**
-   * The scope a cleared override at {@code subject} falls through to, mirroring the tier order
-   * {@code getConfigInScope} resolves: a leaf subject inherits from its owning custom context, or
-   * from the tenant-wide config when it is in the default context; a bare context is itself that
-   * tier, so it inherits from the global context.
-   *
-   * <p>The global context's own parent is the deployment default, which is not reachable from
-   * here, so clearing a field on {@code :.__GLOBAL:} still resolves against its current value.
-   */
-  private String parentScopeOf(String subject) {
-    QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), subject);
-    if (qs != null && qs.getSubject().isEmpty()) {
-      return QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(),
-              QualifiedSubject.CONTEXT_DELIMITER + QualifiedSubject.GLOBAL_CONTEXT_NAME
-                  + QualifiedSubject.CONTEXT_DELIMITER)
-          .toQualifiedContext();
-    }
-    if (qs != null && !QualifiedSubject.DEFAULT_CONTEXT.equals(qs.getContext())) {
-      return qs.toQualifiedContext();
-    }
-    // A leaf subject in the default context, or a subject that does not parse.
-    return null;
-  }
-
-  private static CompatibilityLevel effectiveCompatibilityLevel(
-      Optional<String> requested, Config existingConfig, Config parentConfig) {
-    if (requested == null) {
-      // Omitted: the update leaves this field alone, so the current effective value stands.
-      return existingConfig != null
-          ? CompatibilityLevel.forName(existingConfig.getCompatibilityLevel()) : null;
-    }
-    if (requested.isPresent()) {
-      return CompatibilityLevel.forName(requested.get());
-    }
-    // Explicitly cleared: falls through to the parent scope.
-    return parentConfig != null
-        ? CompatibilityLevel.forName(parentConfig.getCompatibilityLevel()) : null;
-  }
-
-  private static CompatibilityPolicy effectiveCompatibilityPolicy(
-      Optional<String> requested, Config existingConfig, Config parentConfig) {
-    if (requested == null) {
-      return existingConfig != null
-          ? CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy()) : null;
-    }
-    if (requested.isPresent()) {
-      return CompatibilityPolicy.forName(requested.get());
-    }
-    return parentConfig != null
-        ? CompatibilityPolicy.forName(parentConfig.getCompatibilityPolicy()) : null;
   }
 
   @Path("/{subject}")
