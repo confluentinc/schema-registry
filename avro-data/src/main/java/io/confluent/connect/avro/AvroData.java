@@ -619,7 +619,10 @@ public class AvroData {
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
           if (isUnionSchema(schema)) {
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Object object = ignoreDefaultForNullables
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
@@ -637,7 +640,10 @@ public class AvroData {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema, scrubInvalidNames);
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name(), scrubInvalidNames);
               org.apache.avro.Schema.Field theField = underlyingAvroSchema.getField(fieldName);
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
@@ -1748,7 +1754,10 @@ public class AvroData {
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
             int index = 0;
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Schema fieldSchema = field.schema();
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value, index)
                   || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
@@ -1768,7 +1777,10 @@ public class AvroData {
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             trackConvertedContainer(toConnectContext);
             Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               Object convertedFieldValue = toConnectData(field.schema(),
                   original.getOrDefault(fieldName, field.schema().defaultValue()),
@@ -1780,7 +1792,10 @@ public class AvroData {
             IndexedRecord original = (IndexedRecord) value;
             trackConvertedContainer(toConnectContext);
             Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               int avroFieldIndex = original.getSchema().getField(fieldName).pos();
               Object convertedFieldValue =
