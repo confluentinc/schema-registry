@@ -51,9 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       on the grounds that the target table's version was unknown.
  * </ul>
  *
- * <p>Everything else is version-independent: drops, renames, reordering, nullability tightening, and
- * the rest of the promotion table are all governed by field identity or by value representation, and
- * neither changed in v3.
+ * <p>Everything else is version-independent: drops, enum symbol deletion, nullability tightening
+ * and the rest of the promotion table are unchanged in v3.
  */
 class CompatibilityCheckerIcebergV3Test {
 
@@ -286,7 +285,7 @@ class CompatibilityCheckerIcebergV3Test {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void dropsRenamesAndReorderingAreRejectedAtBothVersions() {
+  void dropsAndRenamesAreRejectedAtBothVersions() {
     LogicalType two = schema(
         required("a", type(Schema.Type.INT)), required("b", type(Schema.Type.INT)));
 
@@ -294,9 +293,24 @@ class CompatibilityCheckerIcebergV3Test {
     assertBothReject(two,
         schema(required("a", type(Schema.Type.INT)), required("renamed", type(Schema.Type.INT))),
         Rule.FIELD_DELETED);
-    assertBothReject(two,
-        schema(required("b", type(Schema.Type.INT)), required("a", type(Schema.Type.INT))),
-        Rule.FIELD_REORDERED);
+  }
+
+  @Test
+  void reorderingIsAcceptedAtBothVersions() {
+    LogicalType two = schema(
+        required("a", type(Schema.Type.INT)), required("b", type(Schema.Type.INT)));
+
+    assertBothAccept(two,
+        schema(required("b", type(Schema.Type.INT)), required("a", type(Schema.Type.INT))));
+  }
+
+  @Test
+  void enumSymbolDeletionIsRejectedAtBothVersions() {
+    assertBothReject(
+        col(Schema.createEnum(Arrays.asList(
+            new Schema.EnumValue("A"), new Schema.EnumValue("B")))),
+        col(Schema.createEnum(Collections.singletonList(new Schema.EnumValue("A")))),
+        Rule.ENUM_DELETED);
   }
 
   @Test
