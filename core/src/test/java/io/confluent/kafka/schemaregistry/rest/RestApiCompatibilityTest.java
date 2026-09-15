@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import java.util.Collections;
@@ -433,6 +434,201 @@ public abstract class RestApiCompatibilityTest {
         "a local record on an unrelated field must not change the inherited level");
     assertEquals(noRecord.getCompatibilityPolicy(), hasRecord.getCompatibilityPolicy(),
         "a local record on an unrelated field must not change the inherited policy");
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsForwardCompatibilityInTheSameRequest() throws Exception {
+    // Iceberg, the only current LOGICAL target, supports only backward-compatible evolution, so
+    // this pairing must be rejected up front rather than accepted and left to fail at
+    // registration time.
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    config.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Setting FORWARD compatibility with LOGICAL policy should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+    }
+  }
+
+  /** Asserts that setting only the policy is rejected because the level is inherited. */
+  private void assertLogicalPolicyRejectedAgainstInheritedLevel(
+      String subject, String expectedLevel) throws Exception {
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(subjectConfig, subject);
+      fail("Setting LOGICAL policy for " + subject + " under an inherited " + expectedLevel
+          + " compatibility level should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=" + expectedLevel),
+          "Should be rejected against the inherited level " + expectedLevel + ": "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsAnInheritedForwardCompatibility() throws Exception {
+    // The request sets only compatibilityPolicy; the level is inherited. Each tier uses a
+    // distinct forward level so the rejection can only be attributed to the tier under test.
+
+    // Inherited from the owning context, while the tenant-wide config is still the safe default.
+    String context = ":.mycontext:";
+    ConfigUpdateRequest contextConfig = new ConfigUpdateRequest();
+    contextConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD_TRANSITIVE.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD_TRANSITIVE.name,
+        restApp.restClient.updateConfig(contextConfig, context).getCompatibilityLevel(),
+        "Setting the context-level compatibility level should succeed"
+    );
+    assertLogicalPolicyRejectedAgainstInheritedLevel(
+        context + "contextSubject", CompatibilityLevel.FORWARD_TRANSITIVE.name);
+
+    // Inherited from the tenant-wide config, for a subject in the default context.
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+    assertLogicalPolicyRejectedAgainstInheritedLevel(
+        "testSubject", CompatibilityLevel.FORWARD.name);
+  }
+
+  @Test
+  public void testClearingAnOverrideDefersToTheRegistrationTimeCheck() throws Exception {
+    // A cleared field takes its value from the scope's parent, which the config-write guard
+    // deliberately does not try to re-derive. Such an update is therefore accepted, and the
+    // resulting pairing is caught at registration instead.
+    String subject = "testSubject";
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(globalConfig, null);
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    restApp.restClient.updateConfig(subjectOverride, subject);
+
+    // Clearing the override exposes the inherited LOGICAL alongside the FORWARD being set here.
+    // The write is accepted rather than rejected up front.
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(clearOverrideAndSetForward, subject)
+            .getCompatibilityLevel(),
+        "Clearing an override is not validated up front"
+    );
+
+    String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\",\"default\":\"x\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(schemaString2, subject);
+      fail("Registering under the resulting LOGICAL+FORWARD config should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD guard at registration: " + e.getMessage()
+      );
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRegistrationBackstopCatchesALaterGlobalForwardChange()
+      throws Exception {
+    // The config-write guard has no way to see this coming: the subject sets only
+    // compatibilityPolicy (global is still the default at that point, so it succeeds), and only
+    // afterward does an unrelated global-level change make the pairing invalid. getConfigInScope
+    // must still resolve the subject's effective level to the real global value rather than
+    // silently defaulting it, so the registration-time backstop is what has to catch this.
+    String subject = "testSubject";
+
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(subjectConfig, subject).getCompatibilityPolicy(),
+        "Setting a subject-level LOGICAL policy should succeed"
+    );
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    assertEquals(
+        CompatibilityLevel.FORWARD.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+
+    // A defaulted field addition is compatible under BACKWARD, FORWARD and FULL alike (and is not
+    // a logical REQUIRED_FIELD_ADDED, since it carries a default), so a rejection here can only
+    // come from the LOGICAL+FORWARD config guard itself, not from an incidental incompatibility.
+    // (Registering schemaString1 again verbatim would short-circuit on the identical-schema fast
+    // path before the compatibility check ever runs, so it must be a genuinely different schema.)
+    String schemaString2 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\",\"default\":\"x\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(schemaString2, subject);
+      fail("Registering under an effective LOGICAL+FORWARD config should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
   }
 
   @Test

@@ -178,12 +178,22 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void enumSymbolChangesAreInvisibleToIceberg() {
+  void enumSymbolAdditionIsCompatible() {
     assertCompatible(
         struct(required("s", Schema.createEnum(
             Collections.singletonList(new Schema.EnumValue("A"))), 0)),
         struct(required("s", Schema.createEnum(
             Arrays.asList(new Schema.EnumValue("A"), new Schema.EnumValue("B"))), 0)));
+  }
+
+  @Test
+  void enumSymbolDeletionIsIncompatible() {
+    assertSingle(
+        struct(required("s", Schema.createEnum(
+            Arrays.asList(new Schema.EnumValue("A"), new Schema.EnumValue("B"))), 0)),
+        struct(required("s", Schema.createEnum(
+            Collections.singletonList(new Schema.EnumValue("A"))), 0)),
+        Rule.ENUM_DELETED);
   }
 
   @Test
@@ -364,17 +374,16 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void reorderingUnionBranchesIsIncompatible() {
+  void reorderingUnionBranchesIsCompatible() {
     Schema before = Schema.createUnion(Arrays.asList(
         new UnionBranch("s", Schema.createString()),
         new UnionBranch("i", Schema.create(Schema.Type.INT))));
     Schema after = Schema.createUnion(Arrays.asList(
         new UnionBranch("i", Schema.create(Schema.Type.INT)),
         new UnionBranch("s", Schema.createString())));
-    assertSingle(
+    assertCompatible(
         struct(new Field("u", before, 0)),
-        struct(new Field("u", after, 0)),
-        Rule.FIELD_REORDERED);
+        struct(new Field("u", after, 0)));
   }
 
   // ---------------------------------------------------------------------------------------------
