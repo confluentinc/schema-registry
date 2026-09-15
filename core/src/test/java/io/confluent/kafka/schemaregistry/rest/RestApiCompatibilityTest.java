@@ -578,6 +578,103 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testLogicalPolicyResolvesGlobalWhenClearingABareContextOverride()
+      throws Exception {
+    // A bare context scope is its own qualified context, so resolving its cleared override
+    // against "its context" would resolve against itself and see the very value being cleared.
+    // Its real parent is the tenant-wide global, which is LOGICAL here.
+    String context = ":.mycontext3:";
+
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityPolicy(),
+        "Setting the global compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest contextOverride = new ConfigUpdateRequest();
+    contextOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(contextOverride, context).getCompatibilityPolicy(),
+        "Setting a context-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, context);
+      fail("Clearing the context's STRICT override back to the global LOGICAL while setting "
+          + "FORWARD should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  /**
+   * getConfigInScope resolves a scope that has its own config record by merging it with its
+   * parents, and a scope that has none by walking the lookup cache's chain. Those two routes must
+   * agree on every inherited value, or the effective config silently depends on whether some
+   * unrelated field happens to be set locally. Asserts that invariant by reading the effective
+   * config before and after giving the scope a record that touches neither field.
+   */
+  private void assertInheritedConfigUnaffectedByAnUnrelatedLocalField(String scope)
+      throws Exception {
+    Config before = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    ConfigUpdateRequest groupOnly = new ConfigUpdateRequest();
+    groupOnly.setCompatibilityGroup("application.version");
+    restApp.restClient.updateConfig(groupOnly, scope);
+
+    Config after = restApp.restClient.getConfig(
+        RestService.DEFAULT_REQUEST_PROPERTIES, scope, true);
+
+    assertEquals(before.getCompatibilityLevel(), after.getCompatibilityLevel(),
+        "Inherited compatibilityLevel for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getCompatibilityPolicy(), after.getCompatibilityPolicy(),
+        "Inherited compatibilityPolicy for " + scope + " changed after setting an unrelated "
+            + "local field");
+  }
+
+  @Test
+  public void testInheritedConfigIsIndependentOfUnrelatedLocalFields() throws Exception {
+    // Set each tier to a distinct value so any tier that gets skipped or wrongly consulted
+    // changes the resolved answer: the global context is the last-resort parent, the tenant-wide
+    // config covers the default context, and a custom context covers its own subjects.
+    ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
+    globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
+
+    ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
+    tenantWide.setCompatibilityLevel(CompatibilityLevel.FULL.name);
+    restApp.restClient.updateConfig(tenantWide, null);
+
+    ConfigUpdateRequest customContext = new ConfigUpdateRequest();
+    customContext.setCompatibilityLevel(CompatibilityLevel.BACKWARD_TRANSITIVE.name);
+    restApp.restClient.updateConfig(customContext, ":.inherit:");
+
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField("defaultContextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.inherit:contextSubject");
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.noConfigOfItsOwn:ctxSubject");
+    // A bare context scope: its parent is the global context, never the tenant-wide config.
+    assertInheritedConfigUnaffectedByAnUnrelatedLocalField(":.bareContext:");
+  }
+
+  @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 

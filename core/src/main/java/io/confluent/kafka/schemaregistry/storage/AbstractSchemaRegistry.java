@@ -147,6 +147,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -1488,16 +1489,24 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
-      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
+      // Merge the same tiers, in the same order, that lookupCache.config walks when a scope has
+      // no record of its own, so a scope resolves identically either way: the global context
+      // (itself falling back to the deployment default) underneath, then either the owning
+      // custom context or the tenant-wide config, then the scope's own values on top. A bare
+      // context scope is its own qualified context, so it has no intermediate tier.
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        // A subject in a custom context has an intermediate tier between it and the tenant-wide
-        // global: that context's own default config. Layer it in before the subject's own
-        // explicit values, which still take precedence over both.
-        Config contextConfig = lookupCache.config(qs.toQualifiedContext(), false, null);
-        globalConfig = Config.mergeConfigs(globalConfig, contextConfig);
+      String globalContext = QualifiedSubject.createFromUnqualified(
+              tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
+          .toQualifiedContext();
+      Config parentConfig = lookupCache.config(globalContext, false, defaultForTopLevel);
+      if (qs == null || !qs.getSubject().isEmpty()) {
+        String midScope = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+            ? qs.toQualifiedContext()
+            : null;
+        parentConfig =
+            Config.mergeConfigs(parentConfig, lookupCache.config(midScope, false, null));
       }
-      return Config.mergeConfigs(globalConfig, subjectConfig);
+      return Config.mergeConfigs(parentConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
