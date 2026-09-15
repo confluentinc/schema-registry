@@ -60,16 +60,17 @@ import java.util.stream.Collectors;
  * to; and named-type references with their cycle guards have no counterpart at all, Iceberg schemas
  * being unable to recurse.
  *
- * <p><b>Deliberately stricter than the Iceberg spec.</b> The spec permits delete, rename and
- * reorder because Iceberg identifies fields by a stable ID. A {@link LogicalType} carries no field
- * IDs, so this compares two schemas <em>by name</em> and can distinguish neither a rename from a
- * delete-plus-add nor which of two orderings is newer. Do not relax these to match the spec without
- * first solving field-ID continuity.
- *
  * <p>{@link Rule#REQUIRED_FIELD_ADDED} is the one rule that <em>is</em> a genuine Iceberg
  * constraint: {@code initial-default} arrived in spec v3, so before that a newly added required
  * field has no value for pre-existing rows. Adding to a nested struct is allowed, subject to the
  * same optional-or-defaulted requirement at every level.
+ *
+ * <p>{@link Rule#ENUM_DELETED} is deliberately <em>not</em> mirrored in {@code FlinkComparison},
+ * which erases {@code ENUM} to {@code VARCHAR} and rejects this exact rule: Flink resolves an
+ * unrecognized enum value to the enum's declared default at read time, so a deleted symbol is
+ * harmless there. Iceberg has no such resolution step. A row is materialized with the literal
+ * symbol value, and once that symbol is removed from the schema nothing declares the stored value
+ * valid any longer.
  *
  * <p><b>One rule exists in the reference and not here, conditionally.</b> It rejects <em>any</em>
  * field added below the root, but is unreachable from that implementation's entry point. Matching
@@ -94,6 +95,14 @@ final class IcebergComparison {
    * Format version that added {@code initial-default} and {@code write-default}.
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
+
+  /**
+   * {@link Rule#FIELD_REORDERED} was removed because Iceberg identifies fields by name here and a
+   * reorder is invisible to that comparison. Kept off by default, but field-ID work may reinstate
+   * a reason to reject it -- flip this to re-enable the check without reconstructing it from
+   * scratch.
+   */
+  private static final boolean ENABLE_FIELD_REORDERED_CHECK = false;
 
   private final Schema originalRoot;
   private final Schema updateRoot;
@@ -240,17 +249,18 @@ final class IcebergComparison {
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
 
+    // Built and consulted only when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
+    // Guarding the whole block, not just the finding, avoids paying its O(n^2) index lookups on
+    // every struct comparison while the check is off.
     int lastSeenOriginalIndex = -1;
-    int updatePosition = -1;
-    final List<String> originalFieldOrder = originalFields.stream()
-        .map(field -> field.name)
-        .collect(Collectors.toList());
+    final List<String> originalFieldOrder = ENABLE_FIELD_REORDERED_CHECK
+        ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
+        : null;
 
     final Set<String> updateFieldNames = updateFields.stream()
         .map(field -> field.name)
         .collect(Collectors.toSet());
     for (FieldView updateField : updateFields) {
-      updatePosition++;
       final String fieldPath = childPath(path, updateField.name);
       final FieldView originalField = originalFieldMap.get(updateField.name);
 
@@ -267,14 +277,16 @@ final class IcebergComparison {
         continue;
       }
 
-      // Existing fields keep their relative order. The watermark advances even on a violation,
-      // so a single swap yields one finding rather than cascading.
-      final int originalIndex = originalFieldOrder.indexOf(updateField.name);
-      if (originalIndex < lastSeenOriginalIndex) {
-        add(Rule.FIELD_REORDERED, fieldPath,
-            "field moved ahead of a field that preceded it in the original schema");
+      if (ENABLE_FIELD_REORDERED_CHECK) {
+        // Existing fields keep their relative order. The watermark advances even on a
+        // violation, so a single swap yields one finding rather than cascading.
+        final int originalIndex = originalFieldOrder.indexOf(updateField.name);
+        if (originalIndex < lastSeenOriginalIndex) {
+          add(Rule.FIELD_REORDERED, fieldPath,
+              "field moved ahead of a field that preceded it in the original schema");
+        }
+        lastSeenOriginalIndex = originalIndex;
       }
-      lastSeenOriginalIndex = originalIndex;
 
       if (isEffectivelyNullable(originalField)
           && !isEffectivelyOptional(updateField, originalField)) {
@@ -344,6 +356,22 @@ final class IcebergComparison {
                 + " (fixed-length binary cannot change length)");
           }
           return;
+        case STRING:
+          // CHAR/VARCHAR/ENUM all erase to STRING; only an ENUM on both sides carries symbols
+          // to lose. Unlike FlinkComparison, which erases ENUM to VARCHAR and has a runtime
+          // default to resolve an unrecognized value at read time, Iceberg has already
+          // materialized rows with the literal symbol value and no such resolution step -- once
+          // the symbol is gone, nothing declares that stored value valid any longer.
+          if (original.getType() == Schema.Type.ENUM && update.getType() == Schema.Type.ENUM) {
+            List<String> deletedSymbols = deletedEnumSymbols(original, update);
+            if (!deletedSymbols.isEmpty()) {
+              add(Rule.ENUM_DELETED, path,
+                  "enum symbol(s) " + deletedSymbols + " present in the original schema are "
+                      + "missing from the update; pre-existing rows may already hold one of "
+                      + "these values, which Iceberg has no default to fall back to");
+            }
+          }
+          return;
         default:
           return;
       }
@@ -352,6 +380,19 @@ final class IcebergComparison {
     if (!isPromotionAllowed(originalClass, updateClass)) {
       add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update));
     }
+  }
+
+  /**
+   * Symbols in {@code original}'s enum missing from {@code update}'s, in declaration order.
+   */
+  private static List<String> deletedEnumSymbols(Schema original, Schema update) {
+    Set<String> updateSymbols = update.getEnumValues().stream()
+        .map(Schema.EnumValue::getSymbol)
+        .collect(Collectors.toSet());
+    return original.getEnumValues().stream()
+        .map(Schema.EnumValue::getSymbol)
+        .filter(symbol -> !updateSymbols.contains(symbol))
+        .collect(Collectors.toList());
   }
 
   /**
