@@ -255,16 +255,14 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void reorderingProtoFieldDeclarationsIsRejectedByIcebergOnly() {
-    // Tag numbers are untouched, so the format layer is indifferent, and Flink identifies columns by
-    // name -- so only Iceberg, which needs a field ID to reposition a column, objects.
+  void reorderingProtoFieldDeclarationsIsAcceptedByBoth() {
     LogicalType before = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string a = 1; string b = 2; }\n");
     LogicalType after = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string b = 2; string a = 1; }\n");
 
     assertCompatible(Mode.FLINK, before, after);
-    assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -581,19 +579,18 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   // -----------------------------------------------------------------------------------------------
-  // Enum symbol removal, from real schema text -- no longer a finding in either mode
+  // Enum symbol removal, from real schema text -- a finding in Iceberg mode only
   // -----------------------------------------------------------------------------------------------
 
   @Test
-  void anAvroEnumSymbolDropIsNotAFindingInEitherMode() {
-    // An ENUM derives to VARCHAR for Flink and to string for Iceberg, so the symbol set is not part
-    // of either type. The hazard is real -- a reader resolves a dropped symbol to the enum default --
-    // but it belongs to the encoding, so the format-level checker owns it.
+  void anAvroEnumSymbolDropIsAFindingInIcebergModeOnly() {
+    // Flink erases ENUM to VARCHAR, so symbol membership is outside its comparison. Iceberg
+    // erases to string as well but looks past it: rows already hold the literal symbol value.
     LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ""));
     LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ""));
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG_V2, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.ENUM_DELETED, "e");
   }
 
   private static String enumRecord(String symbols, String extra) {
