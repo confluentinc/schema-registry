@@ -531,6 +531,53 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
+  public void testLogicalPolicyResolvesTheOwningContextWhenClearingAnOverride()
+      throws Exception {
+    // The context (not global) is LOGICAL; the subject overrides it with STRICT. Clearing that
+    // override while setting FORWARD must resolve the parent as the context's LOGICAL, not skip
+    // past it to the (untouched, default) tenant-wide global.
+    String context = ":.mycontext2:";
+    String subject = context + "testSubject";
+
+    ConfigUpdateRequest contextConfig = new ConfigUpdateRequest();
+    contextConfig.setCompatibilityPolicy("LOGICAL");
+    assertEquals(
+        "LOGICAL",
+        restApp.restClient.updateConfig(contextConfig, context).getCompatibilityPolicy(),
+        "Setting the context-level compatibility policy should succeed"
+    );
+
+    ConfigUpdateRequest subjectOverride = new ConfigUpdateRequest();
+    subjectOverride.setCompatibilityPolicy("STRICT");
+    assertEquals(
+        "STRICT",
+        restApp.restClient.updateConfig(subjectOverride, subject).getCompatibilityPolicy(),
+        "Setting a subject-level policy override should succeed"
+    );
+
+    ConfigUpdateRequest clearOverrideAndSetForward = new ConfigUpdateRequest();
+    clearOverrideAndSetForward.setCompatibilityPolicy(Optional.empty());
+    clearOverrideAndSetForward.setCompatibilityLevel(CompatibilityLevel.FORWARD.name);
+    try {
+      restApp.restClient.updateConfig(clearOverrideAndSetForward, subject);
+      fail("Clearing a STRICT override back to the context's LOGICAL while setting FORWARD "
+          + "should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(
+          e.getMessage().contains("compatibilityPolicy=LOGICAL")
+              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
+              + e.getMessage()
+      );
+    }
+  }
+
+  @Test
   public void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 

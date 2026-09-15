@@ -106,10 +106,15 @@ public class ConfigResource {
           (requestedLevel != null && !requestedLevel.isPresent())
               || (requestedPolicy != null && !requestedPolicy.isPresent());
       if (subject != null && isClearingAnOverride) {
-        // The parent scope a cleared subject-level override falls through to. (Global has no
-        // parent of its own; clearing it there resolves to the deployment's hardcoded default,
-        // which is never LOGICAL/FORWARD, so no parent lookup is needed in that case.)
-        parentConfig = schemaRegistry.getConfigInScope(null);
+        // The parent scope a cleared subject-level override falls through to: the owning
+        // context's config for a subject in a custom context, otherwise the tenant-wide global.
+        // (Global has no parent of its own; clearing it there resolves to the deployment's
+        // hardcoded default, which is never LOGICAL/FORWARD, so no parent lookup is needed then.)
+        QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), subject);
+        String parentScope = qs != null && !QualifiedSubject.DEFAULT_CONTEXT.equals(qs.getContext())
+            ? qs.toQualifiedContext()
+            : null;
+        parentConfig = schemaRegistry.getConfigInScope(parentScope);
       }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject " + subject, e);
