@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -317,11 +318,17 @@ public abstract class RestApiCompatibilityTest {
     );
   }
 
+  private static RuleSet ruleSetNamed(String name, String expr) {
+    return new RuleSet(Collections.emptyList(), Collections.singletonList(
+        new Rule(name, null, RuleKind.CONDITION, RuleMode.WRITE, "CEL", null, null, expr,
+            null, null, false)));
+  }
+
   /**
    * getConfigInScope resolves every scope by merging the same tiers field by field, so a scope's
    * inherited values must not depend on whether it happens to carry a record of its own. Asserts
    * that invariant by reading the effective config before and after giving the scope a record
-   * that touches neither field.
+   * that touches none of the fields checked.
    */
   private void assertInheritedConfigUnaffectedByAnUnrelatedLocalField(String scope)
       throws Exception {
@@ -341,6 +348,20 @@ public abstract class RestApiCompatibilityTest {
     assertEquals(before.getCompatibilityPolicy(), after.getCompatibilityPolicy(),
         "Inherited compatibilityPolicy for " + scope + " changed after setting an unrelated "
             + "local field");
+    // Rule sets drive encryption and transforms at registration, so losing one here is a
+    // data-plane change, not just a different answer from the config endpoint.
+    assertEquals(before.getDefaultMetadata(), after.getDefaultMetadata(),
+        "Inherited defaultMetadata for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getOverrideMetadata(), after.getOverrideMetadata(),
+        "Inherited overrideMetadata for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getDefaultRuleSet(), after.getDefaultRuleSet(),
+        "Inherited defaultRuleSet for " + scope + " changed after setting an unrelated "
+            + "local field");
+    assertEquals(before.getOverrideRuleSet(), after.getOverrideRuleSet(),
+        "Inherited overrideRuleSet for " + scope + " changed after setting an unrelated "
+            + "local field");
   }
 
   @Test
@@ -348,8 +369,18 @@ public abstract class RestApiCompatibilityTest {
     // Set each tier to a distinct value so any tier that gets skipped or wrongly consulted
     // changes the resolved answer: the global context is the last-resort parent, the tenant-wide
     // config covers the default context, and a custom context covers its own subjects.
+    // Metadata and rule sets ride along on the outermost tier so the assertions about them are
+    // not vacuous: every scope below should still see them once it has a record of its own.
     ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
     globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    // All four carry distinct values, so a field left out of the merge shows up as a null and a
+    // default/override cross-wiring shows up as the wrong one.
+    globalContext.setDefaultMetadata(
+        new Metadata(null, Collections.singletonMap("owner", "platform"), null));
+    globalContext.setOverrideMetadata(
+        new Metadata(null, Collections.singletonMap("tier", "gold"), null));
+    globalContext.setDefaultRuleSet(ruleSetNamed("checkLen", "size(message.f1) < 100"));
+    globalContext.setOverrideRuleSet(ruleSetNamed("checkNotEmpty", "size(message.f1) > 0"));
     restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
 
     ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
