@@ -288,6 +288,18 @@ public class Config {
     String compatibilityGroup = subjectConfig.getCompatibilityGroup() != null
         ? subjectConfig.getCompatibilityGroup()
         : globalConfig.getCompatibilityGroup();
+    Metadata defaultMetadata = subjectConfig.getDefaultMetadata() != null
+        ? subjectConfig.getDefaultMetadata()
+        : globalConfig.getDefaultMetadata();
+    Metadata overrideMetadata = subjectConfig.getOverrideMetadata() != null
+        ? subjectConfig.getOverrideMetadata()
+        : globalConfig.getOverrideMetadata();
+    RuleSet defaultRuleSet = subjectConfig.getDefaultRuleSet() != null
+        ? subjectConfig.getDefaultRuleSet()
+        : globalConfig.getDefaultRuleSet();
+    RuleSet overrideRuleSet = subjectConfig.getOverrideRuleSet() != null
+        ? subjectConfig.getOverrideRuleSet()
+        : globalConfig.getOverrideRuleSet();
     return new Config(
         subjectConfig.getAlias(),
         subjectConfig.getAliasForDeks(),
@@ -298,10 +310,10 @@ public class Config {
         compatibilityLevel,
         compatibilityPolicy,
         compatibilityGroup,
-        subjectConfig.getDefaultMetadata(),
-        subjectConfig.getOverrideMetadata(),
-        subjectConfig.getDefaultRuleSet(),
-        subjectConfig.getOverrideRuleSet()
+        defaultMetadata,
+        overrideMetadata,
+        defaultRuleSet,
+        overrideRuleSet
     );
   }
 
