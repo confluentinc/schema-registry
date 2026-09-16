@@ -466,7 +466,9 @@ public class AssociationsResource {
           context, dryRun, request, headerProperties);
       asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (AssociationBatchLimitExceededException e) {
-      throw Errors.associationBatchLimitExceededException(e.getMessage());
+      log.debug("Associations batchMutate request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException();
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Mutate associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
