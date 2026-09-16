@@ -26,6 +26,8 @@ import java.util.Set;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_VALUE_DELETED_NO_NUMBER_RESERVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.RESERVED_ENUM_VALUE_NUMBER_DELETED;
 
 public class EnumSchemaDiff {
   static void compare(final Context ctx, final EnumElement original, final EnumElement update) {
@@ -40,12 +42,20 @@ public class EnumSchemaDiff {
     Set<Integer> allTags = new HashSet<>(originalByTag.keySet());
     allTags.addAll(updateByTag.keySet());
 
+    if (ReservedNumbers.anyNumberNoLongerReserved(
+        original.getReserveds(), update.getReserveds())) {
+      ctx.addDifference(RESERVED_ENUM_VALUE_NUMBER_DELETED);
+    }
+
     for (Integer tag : allTags) {
       try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
         EnumConstantElement originalEnumConstant = originalByTag.get(tag);
         EnumConstantElement updateEnumConstant = updateByTag.get(tag);
         if (updateEnumConstant == null) {
           ctx.addDifference(ENUM_CONST_REMOVED);
+          if (!ReservedNumbers.isReserved(update.getReserveds(), tag)) {
+            ctx.addDifference(ENUM_VALUE_DELETED_NO_NUMBER_RESERVED);
+          }
         } else if (originalEnumConstant == null) {
           ctx.addDifference(ENUM_CONST_ADDED);
         } else if (!originalEnumConstant.getName().equals(updateEnumConstant.getName())) {

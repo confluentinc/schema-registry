@@ -20,7 +20,9 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.EN
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_VALUE_DELETED_NO_NUMBER_RESERVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_DELETED_NO_NUMBER_RESERVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAME_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_STRING_OR_BYTES_LABEL_CHANGED;
@@ -32,6 +34,8 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ON
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_MOVED_TO_TOP_LEVEL;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.PACKAGE_CHANGED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.RESERVED_ENUM_VALUE_NUMBER_DELETED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.RESERVED_FIELD_NUMBER_DELETED;
 
 import com.google.common.base.Objects;
 import com.squareup.wire.schema.internal.parser.EnumElement;
@@ -49,7 +53,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class SchemaDiff {
-  public static final Set<Type> COMPATIBLE_CHANGES;
+  public static final Set<Type> COMPATIBLE_CHANGES_STRICT;
+  public static final Set<Type> COMPATIBLE_CHANGES_LOGICAL;
 
   static {
     Set<Type> changes = new HashSet<>();
@@ -70,17 +75,29 @@ public class SchemaDiff {
     changes.add(ONEOF_FIELD_ADDED);
     changes.add(ONEOF_FIELD_MOVED_TO_TOP_LEVEL);
 
-    COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_LOGICAL = Collections.unmodifiableSet(new HashSet<>(changes));
+
+    changes.add(FIELD_DELETED_NO_NUMBER_RESERVED);
+    changes.add(ENUM_VALUE_DELETED_NO_NUMBER_RESERVED);
+    changes.add(RESERVED_FIELD_NUMBER_DELETED);
+    changes.add(RESERVED_ENUM_VALUE_NUMBER_DELETED);
+
+    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(new HashSet<>(changes));
   }
 
   public static List<Difference> compare(
+          Set<Type> compatibleChanges,
           final ProtobufSchema original,
           final ProtobufSchema update) {
-    final Context ctx = new Context(COMPATIBLE_CHANGES);
+    final Context ctx = new Context(compatibleChanges);
     ctx.collectTypeInfo(original, true);
     ctx.collectTypeInfo(update, false);
     compare(ctx, original.rawSchema(), update.rawSchema());
     return ctx.getDifferences();
+  }
+
+  public static List<Difference> compare(ProtobufSchema original, ProtobufSchema update) {
+    return compare(COMPATIBLE_CHANGES_STRICT, original, update);
   }
 
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
