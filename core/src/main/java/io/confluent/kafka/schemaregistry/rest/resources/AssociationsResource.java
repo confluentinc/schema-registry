@@ -405,7 +405,9 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Batch get associations.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch get response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
+          + "batchGet request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
@@ -424,6 +426,10 @@ public class AssociationsResource {
       AssociationBatchResponse response =
           schemaRegistry.batchGetAssociations(includeSchemas, request);
       return Response.status(207).entity(response).build();
+    } catch (AssociationBatchLimitExceededException e) {
+      log.debug("Associations batchGet request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException();
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {

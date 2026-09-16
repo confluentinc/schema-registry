@@ -209,6 +209,18 @@ public class SchemaRegistryConfig extends RestConfig {
       "association.batch.mutate.max.association.batch.payload.bytes";
   public static final int MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DEFAULT = 1000;
   /**
+   * <code>association.batch.get.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG =
+      "association.batch.get.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.get.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG =
+      "association.batch.get.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 10;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -585,6 +597,16 @@ public class SchemaRegistryConfig extends RestConfig {
       + "an entire Associations batchMutate request. Not enforced when the request has a "
       + "single association in total, when it contains no inline schemas, or when "
       + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " on the Associations "
+      + "batchGet API. When false (the default), batchGet requests are never rejected for "
+      + "exceeding this limit.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC =
+      "Maximum number of schemas that may be retrieved across an entire Associations batchGet "
+      + "request (relevant only when the request's includeSchemas parameter is true; a request "
+      + "with includeSchemas=false never retrieves any schemas and is not subject to this "
+      + "limit). Not enforced when " + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG
+      + " is false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -913,6 +935,14 @@ public class SchemaRegistryConfig extends RestConfig {
         MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DEFAULT,
         ConfigDef.Importance.LOW, MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DOC
     )
+    .define(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC
+    )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
     )
@@ -1234,6 +1264,14 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public int maxAssociationBatchPayloadBytes() {
     return getInt(MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public boolean associationBatchGetLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerGetBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG);
   }
 
   public static void main(String[] args) {

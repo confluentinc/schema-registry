@@ -2667,6 +2667,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
+    checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
@@ -2732,6 +2733,55 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         metricsContainer.getAssociationBatchGetSuccess(),
         metricsContainer.getAssociationBatchGetFailure());
     return new AssociationBatchResponse(results);
+  }
+
+  // A request with includeSchemas=false never retrieves any schemas, so it is exempt
+  // regardless of configuration. Rejects the whole request (rather than a single query result)
+  // so this must run before any query is processed. Resolves each query's matching associations
+  // the same way the main loop does, purely to count how many schemas would be retrieved --
+  // cheap, since these are local materialized-view reads, not Kafka round trips.
+  private void checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      return;
+    }
+
+    int totalSchemaFetches = 0;
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              query.getResourceName(), query.getResourceNamespace(),
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        totalSchemaFetches += associations.size();
+      } catch (Exception e) {
+        // A malformed or not-found query retrieves no schemas; the main loop will surface
+        // its error as usual once processing actually reaches it.
+      }
+    }
+
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (totalSchemaFetches > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchGet request would retrieve %d schemas, exceeding the configured"
+              + " maximum of %d schemas per batch", totalSchemaFetches, maxNum));
+    }
   }
 
   private void recordAssociationBatchMetrics(
