@@ -318,6 +318,12 @@ public abstract class RestApiCompatibilityTest {
     );
   }
 
+  private static RuleSet ruleSetNamed(String name, String expr) {
+    return new RuleSet(Collections.emptyList(), Collections.singletonList(
+        new Rule(name, null, RuleKind.CONDITION, RuleMode.WRITE, "CEL", null, null, expr,
+            null, null, false)));
+  }
+
   /**
    * getConfigInScope resolves every scope by merging the same tiers field by field, so a scope's
    * inherited values must not depend on whether it happens to carry a record of its own. Asserts
@@ -367,11 +373,14 @@ public abstract class RestApiCompatibilityTest {
     // not vacuous: every scope below should still see them once it has a record of its own.
     ConfigUpdateRequest globalContext = new ConfigUpdateRequest();
     globalContext.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    // All four carry distinct values, so a field left out of the merge shows up as a null and a
+    // default/override cross-wiring shows up as the wrong one.
     globalContext.setDefaultMetadata(
         new Metadata(null, Collections.singletonMap("owner", "platform"), null));
-    globalContext.setOverrideRuleSet(new RuleSet(Collections.emptyList(),
-        Collections.singletonList(new Rule("checkLen", null, RuleKind.CONDITION,
-            RuleMode.WRITE, "CEL", null, null, "size(message.f1) < 100", null, null, false))));
+    globalContext.setOverrideMetadata(
+        new Metadata(null, Collections.singletonMap("tier", "gold"), null));
+    globalContext.setDefaultRuleSet(ruleSetNamed("checkLen", "size(message.f1) < 100"));
+    globalContext.setOverrideRuleSet(ruleSetNamed("checkNotEmpty", "size(message.f1) > 0"));
     restApp.restClient.updateConfig(globalContext, ":.__GLOBAL:");
 
     ConfigUpdateRequest tenantWide = new ConfigUpdateRequest();
