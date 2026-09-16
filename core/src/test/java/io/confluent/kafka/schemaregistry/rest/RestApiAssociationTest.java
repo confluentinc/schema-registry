@@ -4190,5 +4190,35 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
+  @Test
+  public void testBatchMutateSizeLimitsDisabledByDefault() throws Exception {
+    // association.batch.mutate.limits.enabled defaults to false, so a batch that would exceed
+    // every configured limit (association count, entry payload bytes, batch payload bytes)
+    // is still processed rather than rejected.
+    StringBuilder padding = new StringBuilder();
+    for (int i = 0; i < 200; i++) {
+      padding.append('x');
+    }
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    for (int i = 0; i < 11; i++) {
+      RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+      schemaRequest.setSchema("{\"type\":\"record\",\"name\":\"LimitsDisabled" + i + "\",\"fields\":["
+          + "{\"name\":\"f\",\"type\":\"string\",\"default\":\"" + padding + "\"}]}");
+      AssociationCreateOp createOp = new AssociationCreateOp(
+          null, "value", null, null, schemaRequest, null);
+      requests.add(new AssociationOpRequest(
+          "limits-disabled-" + i, "default", "limits-disabled-" + i + "-id", "topic",
+          Collections.singletonList(createOp)));
+    }
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertEquals(11, response.getResults().size());
+    for (AssociationResult result : response.getResults()) {
+      assertNull(result.getError());
+    }
+  }
+
 }
 

@@ -399,7 +399,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   default AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws SchemaRegistryException {
     return null;
   }
 
