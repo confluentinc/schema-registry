@@ -2667,10 +2667,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
-    checkAssociationBatchGetLimits(includeSchemas, request);
+    List<List<Association>> resolvedAssociations =
+        checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
-    for (AssociationGetRequest query : request.getRequests()) {
+    List<AssociationGetRequest> queries = request.getRequests();
+    for (int index = 0; index < queries.size(); index++) {
+      AssociationGetRequest query = queries.get(index);
       try {
         query.validate();
         String resourceType = query.getResourceType();
@@ -2684,15 +2687,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         String resourceName = query.getResourceName();
         String resourceNamespace = query.getResourceNamespace();
         String resourceId = query.getResourceId();
-        List<Association> associations;
-        if (resourceId != null && !resourceId.isEmpty()) {
-          associations = getAssociationsByResourceId(
-              resourceId, resourceType, associationTypes, query.getLifecycle());
-        } else {
-          associations = getAssociationsByResourceName(
-              resourceName, resourceNamespace,
-              resourceType, associationTypes, query.getLifecycle());
-        }
+        List<Association> associations = resolvedAssociations != null
+            ? resolvedAssociations.get(index)
+            : lookupAssociationsForGet(query, resourceType, associationTypes);
         if (!associations.isEmpty()) {
           Association first = associations.get(0);
           if (resourceName == null) {
@@ -2735,20 +2732,41 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
+  private List<Association> lookupAssociationsForGet(
+      AssociationGetRequest query, String resourceType, List<String> associationTypes)
+      throws SchemaRegistryException {
+    String resourceId = query.getResourceId();
+    if (resourceId != null && !resourceId.isEmpty()) {
+      return getAssociationsByResourceId(
+          resourceId, resourceType, associationTypes, query.getLifecycle());
+    }
+    return getAssociationsByResourceName(
+        query.getResourceName(), query.getResourceNamespace(),
+        resourceType, associationTypes, query.getLifecycle());
+  }
+
   // A request with includeSchemas=false never retrieves any schemas, so it is exempt
-  // regardless of configuration. Rejects the whole request (rather than a single query result)
-  // so this must run before any query is processed. Resolves each query's matching associations
-  // the same way the main loop does, purely to count how many schemas would be retrieved --
-  // cheap, since these are local materialized-view reads, not Kafka round trips.
-  private void checkAssociationBatchGetLimits(
+  // regardless of configuration. A resourceId/resourceName can have at most one "key" and one
+  // "value" association, so a single query can never match more than 2 -- if even that worst
+  // case fits under the configured max, the limit can never be violated and this returns
+  // without touching the store at all. Only when the batch is large enough that this cheap
+  // bound can't rule out a violation does it resolve the actual matches, once per query, and
+  // returns them so the caller can reuse them instead of looking them up again.
+  private List<List<Association>> checkAssociationBatchGetLimits(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws AssociationBatchLimitExceededException {
     if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
-      return;
+      return null;
+    }
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (request.getRequests().size() * 2L <= maxNum) {
+      return null;
     }
 
+    List<List<Association>> resolved = new ArrayList<>();
     int totalSchemaFetches = 0;
     for (AssociationGetRequest query : request.getRequests()) {
+      List<Association> associations;
       try {
         query.validate();
         String resourceType = query.getResourceType();
@@ -2759,29 +2777,22 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         if (associationTypes == null) {
           associationTypes = Collections.emptyList();
         }
-        String resourceId = query.getResourceId();
-        List<Association> associations;
-        if (resourceId != null && !resourceId.isEmpty()) {
-          associations = getAssociationsByResourceId(
-              resourceId, resourceType, associationTypes, query.getLifecycle());
-        } else {
-          associations = getAssociationsByResourceName(
-              query.getResourceName(), query.getResourceNamespace(),
-              resourceType, associationTypes, query.getLifecycle());
-        }
-        totalSchemaFetches += associations.size();
+        associations = lookupAssociationsForGet(query, resourceType, associationTypes);
       } catch (Exception e) {
         // A malformed or not-found query retrieves no schemas; the main loop will surface
         // its error as usual once processing actually reaches it.
+        associations = Collections.emptyList();
       }
+      resolved.add(associations);
+      totalSchemaFetches += associations.size();
     }
 
-    int maxNum = config().maxAssociationNumPerGetBatch();
     if (totalSchemaFetches > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
           "Associations batchGet request would retrieve %d schemas, exceeding the configured"
               + " maximum of %d schemas per batch", totalSchemaFetches, maxNum));
     }
+    return resolved;
   }
 
   private void recordAssociationBatchMetrics(
