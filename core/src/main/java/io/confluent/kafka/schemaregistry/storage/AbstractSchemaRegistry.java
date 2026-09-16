@@ -2667,13 +2667,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
-    List<List<Association>> resolvedAssociations =
-        checkAssociationBatchGetLimits(includeSchemas, request);
+    checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
-    List<AssociationGetRequest> queries = request.getRequests();
-    for (int index = 0; index < queries.size(); index++) {
-      AssociationGetRequest query = queries.get(index);
+    for (AssociationGetRequest query : request.getRequests()) {
       try {
         query.validate();
         String resourceType = query.getResourceType();
@@ -2687,9 +2684,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         String resourceName = query.getResourceName();
         String resourceNamespace = query.getResourceNamespace();
         String resourceId = query.getResourceId();
-        List<Association> associations = resolvedAssociations != null
-            ? resolvedAssociations.get(index)
-            : lookupAssociationsForGet(query, resourceType, associationTypes);
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
         if (!associations.isEmpty()) {
           Association first = associations.get(0);
           if (resourceName == null) {
@@ -2732,67 +2735,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  private List<Association> lookupAssociationsForGet(
-      AssociationGetRequest query, String resourceType, List<String> associationTypes)
-      throws SchemaRegistryException {
-    String resourceId = query.getResourceId();
-    if (resourceId != null && !resourceId.isEmpty()) {
-      return getAssociationsByResourceId(
-          resourceId, resourceType, associationTypes, query.getLifecycle());
-    }
-    return getAssociationsByResourceName(
-        query.getResourceName(), query.getResourceNamespace(),
-        resourceType, associationTypes, query.getLifecycle());
-  }
-
   // A request with includeSchemas=false never retrieves any schemas, so it is exempt
-  // regardless of configuration. A resourceId/resourceName can have at most one "key" and one
-  // "value" association, so a single query can never match more than 2 -- if even that worst
-  // case fits under the configured max, the limit can never be violated and this returns
-  // without touching the store at all. Only when the batch is large enough that this cheap
-  // bound can't rule out a violation does it resolve the actual matches, once per query, and
-  // returns them so the caller can reuse them instead of looking them up again.
-  private List<List<Association>> checkAssociationBatchGetLimits(
+  // regardless of configuration. The limit is on the number of items in the request payload
+  // (association.batch.get.max.association.num.per.batch), so this is a cheap, request-body-only
+  // check with no store lookup.
+  private void checkAssociationBatchGetLimits(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws AssociationBatchLimitExceededException {
     if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
-      return null;
+      return;
     }
+    int numAssociations = request.getRequests().size();
     int maxNum = config().maxAssociationNumPerGetBatch();
-    if (request.getRequests().size() * 2L <= maxNum) {
-      return null;
-    }
-
-    List<List<Association>> resolved = new ArrayList<>();
-    int totalSchemaFetches = 0;
-    for (AssociationGetRequest query : request.getRequests()) {
-      List<Association> associations;
-      try {
-        query.validate();
-        String resourceType = query.getResourceType();
-        if (resourceType == null || resourceType.isEmpty()) {
-          resourceType = "topic";
-        }
-        List<String> associationTypes = query.getAssociationTypes();
-        if (associationTypes == null) {
-          associationTypes = Collections.emptyList();
-        }
-        associations = lookupAssociationsForGet(query, resourceType, associationTypes);
-      } catch (Exception e) {
-        // A malformed or not-found query retrieves no schemas; the main loop will surface
-        // its error as usual once processing actually reaches it.
-        associations = Collections.emptyList();
-      }
-      resolved.add(associations);
-      totalSchemaFetches += associations.size();
-    }
-
-    if (totalSchemaFetches > maxNum) {
+    if (numAssociations > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchGet request would retrieve %d schemas, exceeding the configured"
-              + " maximum of %d schemas per batch", totalSchemaFetches, maxNum));
+          "Associations batchGet request has %d items, exceeding the configured maximum of %d"
+              + " associations per batch", numAssociations, maxNum));
     }
-    return resolved;
   }
 
   private void recordAssociationBatchMetrics(
@@ -2988,14 +2947,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return;
     }
 
-    int maxNum = config().maxAssociationNumPerBatch();
+    int maxNum = config().maxAssociationNumPerMutateBatch();
     if (totalAssociations > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
           "Associations batchMutate request has %d associations, exceeding the configured"
               + " maximum of %d associations per batch", totalAssociations, maxNum));
     }
 
-    long maxBatchBytes = config().maxAssociationBatchPayloadBytes();
+    long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
     if (totalPayloadBytes > maxBatchBytes) {
       throw new AssociationBatchLimitExceededException(String.format(
           "Associations batchMutate request has a cumulative association payload size of %d"
@@ -3003,7 +2962,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           totalPayloadBytes, maxBatchBytes));
     }
 
-    long maxEntryBytes = config().maxAssociationEntryPayloadBytes();
+    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
     for (AssociationOpRequest req : request.getRequests()) {
       List<? extends AssociationOp> ops = req.getAssociations();
       if (ops == null) {

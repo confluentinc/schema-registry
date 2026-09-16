@@ -40,9 +40,9 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for the Associations batchMutate size/count limits
  * ({@link SchemaRegistryConfig#ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG},
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_NUM_PER_BATCH_CONFIG},
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_CONFIG}, and
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG}), with enforcement
+ * {@link SchemaRegistryConfig#MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG},
+ * {@link SchemaRegistryConfig#MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG}, and
+ * {@link SchemaRegistryConfig#MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG}), with enforcement
  * explicitly enabled at the shipped default thresholds (10 / 100 bytes / 1000 bytes).
  */
 public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
@@ -120,7 +120,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   @Test
   public void testExceedsMaxAssociationNumPerBatch() throws Exception {
     // 11 associations with inline schemas, each individually tiny, exceeds the default
-    // MAX_ASSOCIATION_NUM_PER_BATCH of 10.
+    // MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH of 10.
     List<AssociationOpRequest> requests = new ArrayList<>();
     for (int i = 0; i < 11; i++) {
       requests.add(createOpRequest("num-limit-" + i, "{}"));
@@ -136,7 +136,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   @Test
   public void testExceedsMaxAssociationEntryPayloadBytes() throws Exception {
     // One resource entry has an association payload well over the default
-    // MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES of 100 bytes, while the total count (2) and the
+    // MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES of 100 bytes, while the total count (2) and the
     // cumulative payload stay well under the other two limits.
     List<AssociationOpRequest> requests = new ArrayList<>();
     requests.add(createOpRequest("entry-limit-big", "\"" + padded(150) + "\""));
@@ -152,7 +152,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   @Test
   public void testExceedsMaxAssociationBatchPayloadBytes() throws Exception {
     // 9 resource entries, each under the default association count limit (10), whose
-    // cumulative payload exceeds the default MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES of 1000 bytes.
+    // cumulative payload exceeds the default MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES of 1000 bytes.
     List<AssociationOpRequest> requests = new ArrayList<>();
     for (int i = 0; i < 9; i++) {
       requests.add(createOpRequest("batch-limit-" + i, "\"" + padded(150) + "\""));
