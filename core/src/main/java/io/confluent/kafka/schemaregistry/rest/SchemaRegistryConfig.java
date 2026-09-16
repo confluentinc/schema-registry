@@ -185,6 +185,30 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String ASSOCIATIONS_ENABLE = "associations.enable";
   public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
   /**
+   * <code>association.batch.mutate.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG =
+      "association.batch.mutate.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.mutate.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_BATCH_DEFAULT = 10;
+  /**
+   * <code>association.batch.mutate.max.association.entry.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.entry.payload.bytes";
+  public static final int MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_DEFAULT = 100;
+  /**
+   * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.batch.payload.bytes";
+  public static final int MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DEFAULT = 1000;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -540,6 +564,27 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String ASSOCIATIONS_ENABLE_DOC =
       "If true, enable support for associations between resources and subjects.";
+  protected static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_BATCH_CONFIG + ", "
+      + MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_CONFIG + ", and "
+      + MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchMutate API. "
+      + "When false (the default), batchMutate requests are never rejected for exceeding "
+      + "these limits.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_BATCH_DOC =
+      "Maximum number of associations allowed across an entire Associations batchMutate "
+      + "request. Not enforced when the request has a single association in total, when it "
+      + "contains no inline schemas, or when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG
+      + " is false.";
+  protected static final String MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_DOC =
+      "Maximum payload size in bytes (subject plus inline schema) allowed for a single "
+      + "resource entry in an Associations batchMutate request. Not enforced when the request "
+      + "has a single association in total, when it contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DOC =
+      "Maximum cumulative payload size in bytes (subjects plus inline schemas) allowed across "
+      + "an entire Associations batchMutate request. Not enforced when the request has a "
+      + "single association in total, when it contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -852,6 +897,22 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
         ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
+    .define(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_BATCH_DOC
+    )
+    .define(MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_DOC
+    )
+    .define(MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_DOC
+    )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
     )
@@ -1157,6 +1218,22 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public boolean enableAssociations() {
     return getBoolean(ASSOCIATIONS_ENABLE);
+  }
+
+  public boolean associationBatchMutateLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_BATCH_CONFIG);
+  }
+
+  public int maxAssociationEntryPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_ENTRY_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public int maxAssociationBatchPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_BATCH_PAYLOAD_BYTES_CONFIG);
   }
 
   public static void main(String[] args) {

@@ -83,6 +83,11 @@ public class Errors {
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
+  public static final int ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE = 42213;
+  // Deliberately generic: the specific limit and measured value are debug-logged server-side
+  // only, not returned to the client.
+  public static final String ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE =
+      "Associations batchMutate request exceeded a configured limit";
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -260,5 +265,9 @@ public class Errors {
     return new RestConflictException(
         String.format(TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT, max),
         TOO_MANY_ASSOCIATIONS_ERROR_CODE);
+  }
+
+  public static RestAssociationBatchLimitExceededException associationBatchLimitExceededException() {
+    return new RestAssociationBatchLimitExceededException(ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE);
   }
 }
