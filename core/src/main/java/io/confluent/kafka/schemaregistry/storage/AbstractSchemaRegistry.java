@@ -58,6 +58,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
@@ -99,6 +100,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -2665,9 +2667,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
+    List<List<Association>> resolvedAssociations =
+        checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
-    for (AssociationGetRequest query : request.getRequests()) {
+    List<AssociationGetRequest> queries = request.getRequests();
+    for (int index = 0; index < queries.size(); index++) {
+      AssociationGetRequest query = queries.get(index);
       try {
         query.validate();
         String resourceType = query.getResourceType();
@@ -2681,15 +2687,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         String resourceName = query.getResourceName();
         String resourceNamespace = query.getResourceNamespace();
         String resourceId = query.getResourceId();
-        List<Association> associations;
-        if (resourceId != null && !resourceId.isEmpty()) {
-          associations = getAssociationsByResourceId(
-              resourceId, resourceType, associationTypes, query.getLifecycle());
-        } else {
-          associations = getAssociationsByResourceName(
-              resourceName, resourceNamespace,
-              resourceType, associationTypes, query.getLifecycle());
-        }
+        List<Association> associations = resolvedAssociations != null
+            ? resolvedAssociations.get(index)
+            : lookupAssociationsForGet(query, resourceType, associationTypes);
         if (!associations.isEmpty()) {
           Association first = associations.get(0);
           if (resourceName == null) {
@@ -2732,6 +2732,69 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
+  private List<Association> lookupAssociationsForGet(
+      AssociationGetRequest query, String resourceType, List<String> associationTypes)
+      throws SchemaRegistryException {
+    String resourceId = query.getResourceId();
+    if (resourceId != null && !resourceId.isEmpty()) {
+      return getAssociationsByResourceId(
+          resourceId, resourceType, associationTypes, query.getLifecycle());
+    }
+    return getAssociationsByResourceName(
+        query.getResourceName(), query.getResourceNamespace(),
+        resourceType, associationTypes, query.getLifecycle());
+  }
+
+  // A request with includeSchemas=false never retrieves any schemas, so it is exempt
+  // regardless of configuration. A resourceId/resourceName can have at most one "key" and one
+  // "value" association, so a single query can never match more than 2 -- if even that worst
+  // case fits under the configured max, the limit can never be violated and this returns
+  // without touching the store at all. Only when the batch is large enough that this cheap
+  // bound can't rule out a violation does it resolve the actual matches, once per query, and
+  // returns them so the caller can reuse them instead of looking them up again.
+  private List<List<Association>> checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      return null;
+    }
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (request.getRequests().size() * 2L <= maxNum) {
+      return null;
+    }
+
+    List<List<Association>> resolved = new ArrayList<>();
+    int totalSchemaFetches = 0;
+    for (AssociationGetRequest query : request.getRequests()) {
+      List<Association> associations;
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        associations = lookupAssociationsForGet(query, resourceType, associationTypes);
+      } catch (Exception e) {
+        // A malformed or not-found query retrieves no schemas; the main loop will surface
+        // its error as usual once processing actually reaches it.
+        associations = Collections.emptyList();
+      }
+      resolved.add(associations);
+      totalSchemaFetches += associations.size();
+    }
+
+    if (totalSchemaFetches > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchGet request would retrieve %d schemas, exceeding the configured"
+              + " maximum of %d schemas per batch", totalSchemaFetches, maxNum));
+    }
+    return resolved;
+  }
+
   private void recordAssociationBatchMetrics(
       List<AssociationResult> results,
       SchemaRegistryMetric successMetric,
@@ -2746,7 +2809,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   public AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    checkAssociationBatchLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -2887,6 +2952,88 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         metricsContainer.getAssociationBatchMutateSuccess(),
         metricsContainer.getAssociationBatchMutateFailure());
     return new AssociationBatchResponse(results);
+  }
+
+  // A request with a single association in total (the Flink shape) or with no inline schema
+  // anywhere in the batch (the Kafka Cluster Linking shape) is exempt from all three limits
+  // below, regardless of configuration. Rejects the whole request (rather than a single
+  // resource entry) so this must run before any resource entry is processed.
+  private void checkAssociationBatchLimits(AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!config().associationBatchMutateLimitsEnabled()) {
+      return;
+    }
+
+    int totalAssociations = 0;
+    long totalPayloadBytes = 0;
+    boolean hasInlineSchema = false;
+    for (AssociationOpRequest req : request.getRequests()) {
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      totalAssociations += ops.size();
+      for (AssociationOp op : ops) {
+        if (op instanceof AssociationCreateOrUpdateOp) {
+          AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+          totalPayloadBytes += associationOpPayloadSize(createOrUpdateOp);
+          if (createOrUpdateOp.getSchema() != null) {
+            hasInlineSchema = true;
+          }
+        }
+      }
+    }
+
+    if (totalAssociations <= 1 || !hasInlineSchema) {
+      return;
+    }
+
+    int maxNum = config().maxAssociationNumPerBatch();
+    if (totalAssociations > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has %d associations, exceeding the configured"
+              + " maximum of %d associations per batch", totalAssociations, maxNum));
+    }
+
+    long maxBatchBytes = config().maxAssociationBatchPayloadBytes();
+    if (totalPayloadBytes > maxBatchBytes) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has a cumulative association payload size of %d"
+              + " bytes, exceeding the configured maximum of %d bytes per batch",
+          totalPayloadBytes, maxBatchBytes));
+    }
+
+    long maxEntryBytes = config().maxAssociationEntryPayloadBytes();
+    for (AssociationOpRequest req : request.getRequests()) {
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      long entryPayloadBytes = 0;
+      for (AssociationOp op : ops) {
+        if (op instanceof AssociationCreateOrUpdateOp) {
+          entryPayloadBytes += associationOpPayloadSize((AssociationCreateOrUpdateOp) op);
+        }
+      }
+      if (entryPayloadBytes > maxEntryBytes) {
+        throw new AssociationBatchLimitExceededException(String.format(
+            "Associations batchMutate request entry for resource '%s' has an association"
+                + " payload size of %d bytes, exceeding the configured maximum of %d bytes",
+            req.getResourceName(), entryPayloadBytes, maxEntryBytes));
+      }
+    }
+  }
+
+  private static long associationOpPayloadSize(AssociationCreateOrUpdateOp op) {
+    long size = 0;
+    if (op.getSubject() != null) {
+      size += op.getSubject().getBytes(StandardCharsets.UTF_8).length;
+    }
+    RegisterSchemaRequest schema = op.getSchema();
+    if (schema != null && schema.getSchema() != null) {
+      size += schema.getSchema().getBytes(StandardCharsets.UTF_8).length;
+    }
+    return size;
   }
 
   // --------------- Association query methods ---------------
