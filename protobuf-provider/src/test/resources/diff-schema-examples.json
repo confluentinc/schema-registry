@@ -75,7 +75,8 @@
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\n",
     "changes": [
-      "FIELD_REMOVED #/TestMessage/2"
+      "FIELD_REMOVED #/TestMessage/2",
+      "FIELD_DELETED_NO_NUMBER_RESERVED #/TestMessage/2"
     ],
     "compatible": true
   },
@@ -84,7 +85,8 @@
     "original_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n    required string test_string2 = 2;\n}",
     "update_schema": "syntax = \"proto2\";\nmessage TestMessage {\n    optional string test_string = 1;\n}\n",
     "changes": [
-      "REQUIRED_FIELD_REMOVED #/TestMessage/2"
+      "REQUIRED_FIELD_REMOVED #/TestMessage/2",
+      "FIELD_DELETED_NO_NUMBER_RESERVED #/TestMessage/2"
     ],
     "compatible": false
   },
@@ -94,6 +96,7 @@
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 2;\n}",
     "changes": [
       "FIELD_REMOVED #/TestMessage/1",
+      "FIELD_DELETED_NO_NUMBER_RESERVED #/TestMessage/1",
       "FIELD_ADDED #/TestMessage/2"
     ],
     "compatible": true
@@ -192,7 +195,8 @@
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n        int32 other_id = 3;\n}\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n}\n}",
     "changes": [
-      "ONEOF_FIELD_REMOVED #/TestMessage/new_oneof/3"
+      "ONEOF_FIELD_REMOVED #/TestMessage/new_oneof/3",
+      "FIELD_DELETED_NO_NUMBER_RESERVED #/TestMessage/new_oneof/3"
     ],
     "compatible": false
   },
@@ -653,7 +657,8 @@
     "changes": [
       "ONEOF_REMOVED #/Message/g",
       "ONEOF_ADDED #/Message/g2",
-      "ONEOF_FIELD_REMOVED #/Message/g/2"
+      "ONEOF_FIELD_REMOVED #/Message/g/2",
+      "FIELD_DELETED_NO_NUMBER_RESERVED #/Message/g/2"
     ],
     "compatible": false
   },
@@ -675,5 +680,86 @@
       "FIELD_SCALAR_KIND_CHANGED #/Message/2"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect reserved field number un-reserved",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2;\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "changes": [
+      "RESERVED_FIELD_NUMBER_DELETED #/TestMessage"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved field number range shrunk",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 5;\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 3;\n    string test_string = 1;\n}",
+    "changes": [
+      "RESERVED_FIELD_NUMBER_DELETED #/TestMessage"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved field number un-reserved and reused",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 1;\n    string test_string = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    int32 f1 = 1;\n    string test_string = 2;\n}",
+    "changes": [
+      "RESERVED_FIELD_NUMBER_DELETED #/TestMessage",
+      "FIELD_ADDED #/TestMessage/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved enum value number un-reserved",
+    "original_schema": "syntax = \"proto3\";\nenum Status {\n    reserved 2;\n    ACTIVE = 0;\n}",
+    "update_schema": "syntax = \"proto3\";\nenum Status {\n    ACTIVE = 0;\n}",
+    "changes": [
+      "RESERVED_ENUM_VALUE_NUMBER_DELETED #/Status"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved enum value number range shrunk",
+    "original_schema": "syntax = \"proto3\";\nenum Status {\n    reserved 2 to 5;\n    ACTIVE = 0;\n}",
+    "update_schema": "syntax = \"proto3\";\nenum Status {\n    reserved 2 to 3;\n    ACTIVE = 0;\n}",
+    "changes": [
+      "RESERVED_ENUM_VALUE_NUMBER_DELETED #/Status"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved enum value number un-reserved and reused",
+    "original_schema": "syntax = \"proto3\";\nenum Status {\n    reserved 1;\n    ACTIVE = 0;\n}",
+    "update_schema": "syntax = \"proto3\";\nenum Status {\n    ACTIVE = 0;\n    OTHER = 1;\n}",
+    "changes": [
+      "RESERVED_ENUM_VALUE_NUMBER_DELETED #/Status",
+      "ENUM_CONST_ADDED #/Status/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removed field whose number is covered by a reserved range",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 5;\n    string test_string = 1;\n    string test_string2 = 3;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 5;\n    string test_string = 1;\n}",
+    "changes": [
+      "FIELD_REMOVED #/TestMessage/3"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved range split into adjacent sub-ranges still fully covering",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 10;\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 5, 6 to 10;\n    string test_string = 1;\n}",
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "Detect reserved range split with a gap, no longer fully covering",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 10;\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    reserved 2 to 5, 7 to 10;\n    string test_string = 1;\n}",
+    "changes": [
+      "RESERVED_FIELD_NUMBER_DELETED #/TestMessage"
+    ],
+    "compatible": true
   }
 ]

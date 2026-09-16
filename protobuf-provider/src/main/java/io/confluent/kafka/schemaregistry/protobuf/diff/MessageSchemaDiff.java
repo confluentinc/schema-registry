@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_DELETED_NO_NUMBER_RESERVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_MOVED_TO_EXISTING_ONEOF;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MULTIPLE_FIELDS_MOVED_TO_ONEOF;
@@ -37,6 +38,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ON
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.REQUIRED_FIELD_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.REQUIRED_FIELD_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.RESERVED_FIELD_NUMBER_DELETED;
 
 public class MessageSchemaDiff {
   static void compare(
@@ -60,6 +62,11 @@ public class MessageSchemaDiff {
         Map<Integer, String> updateTagToOneOf = new HashMap<>();
         Map<String, OneOfElement> updateOneOfs = new HashMap<>();
         collectFields(update, updateByTag, updateTagToOneOf, updateOneOfs);
+
+        if (ReservedNumbers.anyNumberNoLongerReserved(
+            original.getReserveds(), update.getReserveds())) {
+          ctx.addDifference(RESERVED_FIELD_NUMBER_DELETED);
+        }
 
         // A oneof that is removed (by name) and none of whose members survive
         // anywhere in the update is a complete deletion, which is treated as
@@ -137,18 +144,8 @@ public class MessageSchemaDiff {
           String updateOneOf = updateTagToOneOf.get(tag);
           if (updateField == null) {
             // Removed from the message entirely.
-            if (originalOneOf != null) {
-              // A member of an original oneof that no longer exists anywhere. This
-              // is a genuine removal (data loss), unless the whole oneof was deleted.
-              if (!completelyDeletedOneOfs.contains(originalOneOf)) {
-                addAtOneOf(ctx, originalOneOf, tag, ONEOF_FIELD_REMOVED);
-              }
-            } else {
-              try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
-                ctx.addDifference(originalField.getLabel() == Label.REQUIRED
-                    ? REQUIRED_FIELD_REMOVED : FIELD_REMOVED);
-              }
-            }
+            handleRemovedField(
+                ctx, update, originalField, tag, originalOneOf, completelyDeletedOneOfs);
           } else if (originalField == null) {
             // Added to the message.
             if (updateOneOf != null) {
@@ -185,6 +182,35 @@ public class MessageSchemaDiff {
         }
       }
       SchemaDiff.compareTypeElements(ctx, original.getNestedTypes(), update.getNestedTypes());
+    }
+  }
+
+  private static void handleRemovedField(
+      final Context ctx,
+      final MessageElement update,
+      final FieldElement originalField,
+      final Integer tag,
+      final String originalOneOf,
+      final Set<String> completelyDeletedOneOfs
+  ) {
+    boolean tagReserved = ReservedNumbers.isReserved(update.getReserveds(), tag);
+    if (originalOneOf != null) {
+      // A member of an original oneof that no longer exists anywhere. This
+      // is a genuine removal (data loss), unless the whole oneof was deleted.
+      if (!completelyDeletedOneOfs.contains(originalOneOf)) {
+        addAtOneOf(ctx, originalOneOf, tag, ONEOF_FIELD_REMOVED);
+        if (!tagReserved) {
+          addAtOneOf(ctx, originalOneOf, tag, FIELD_DELETED_NO_NUMBER_RESERVED);
+        }
+      }
+    } else {
+      try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
+        ctx.addDifference(originalField.getLabel() == Label.REQUIRED
+            ? REQUIRED_FIELD_REMOVED : FIELD_REMOVED);
+        if (!tagReserved) {
+          ctx.addDifference(FIELD_DELETED_NO_NUMBER_RESERVED);
+        }
+      }
     }
   }
 

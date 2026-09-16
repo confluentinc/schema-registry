@@ -128,7 +128,7 @@ public class SchemaDiffTest {
       u = u.copy(getMetadata(testCase, "update"), null);
       List<Difference> differences = SchemaDiff.compare(o, u);
       final List<Difference> incompatibleDiffs = differences.stream()
-          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(diff.getType()))
           .collect(Collectors.toList());
       assertThat(
           description,

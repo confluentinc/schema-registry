@@ -28,7 +28,9 @@ public class Difference {
     ONEOF_ADDED, ONEOF_REMOVED,
     ONEOF_FIELD_ADDED, ONEOF_FIELD_REMOVED,
     ONEOF_FIELD_MOVED_TO_TOP_LEVEL,
-    MULTIPLE_FIELDS_MOVED_TO_ONEOF, FIELD_MOVED_TO_EXISTING_ONEOF
+    MULTIPLE_FIELDS_MOVED_TO_ONEOF, FIELD_MOVED_TO_EXISTING_ONEOF,
+    FIELD_DELETED_NO_NUMBER_RESERVED, ENUM_VALUE_DELETED_NO_NUMBER_RESERVED,
+    RESERVED_FIELD_NUMBER_DELETED, RESERVED_ENUM_VALUE_NUMBER_DELETED
   }
 
   private final String fullPath;
@@ -115,6 +117,22 @@ public class Difference {
       case FIELD_MOVED_TO_EXISTING_ONEOF:
         errorDescription = "A field in the oneof at path '" + fullPath
                              + "' in the %s schema is outside an existing oneof in the %s schema";
+        break;
+      case FIELD_DELETED_NO_NUMBER_RESERVED:
+        errorDescription = "The field at path '" + fullPath + "' in the %s schema was deleted "
+                             + "in the %s schema without reserving its field number";
+        break;
+      case ENUM_VALUE_DELETED_NO_NUMBER_RESERVED:
+        errorDescription = "The enum value at path '" + fullPath + "' in the %s schema was "
+                             + "deleted in the %s schema without reserving its number";
+        break;
+      case RESERVED_FIELD_NUMBER_DELETED:
+        errorDescription = "A reserved field number at path '" + fullPath + "' in the %s schema "
+                             + "is no longer reserved in the %s schema";
+        break;
+      case RESERVED_ENUM_VALUE_NUMBER_DELETED:
+        errorDescription = "A reserved enum value number at path '" + fullPath
+                             + "' in the %s schema is no longer reserved in the %s schema";
         break;
       default:
         errorDescription = "";

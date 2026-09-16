@@ -65,6 +65,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
 
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.PROTO3;
@@ -3818,5 +3819,28 @@ public class ProtobufSchemaTest {
 
     assertEquals("the rule was evaluated against the wrong names: " + errors,
         Collections.emptyList(), errors);
+  }
+
+  @Test
+  public void testReservedFieldNumberDeletedStrictVsLogical() {
+    ProtobufSchema original = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message TestMessage {\n"
+        + "    reserved 1;\n"
+        + "    string test_string = 2;\n"
+        + "}\n");
+    ProtobufSchema update = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message TestMessage {\n"
+        + "    int32 f1 = 1;\n"
+        + "    string test_string = 2;\n"
+        + "}\n");
+
+    assertTrue("STRICT should allow un-reserving and reusing a field number",
+        update.isBackwardCompatible(original).isEmpty());
+    assertTrue("STRICT should allow un-reserving and reusing a field number",
+        update.isBackwardCompatible(CompatibilityPolicy.STRICT, original).isEmpty());
+
+    List<String> logicalErrors =
+        update.isBackwardCompatible(CompatibilityPolicy.LOGICAL, original);
+    assertFalse("LOGICAL should reject un-reserving and reusing a field number", logicalErrors.isEmpty());
   }
 }
