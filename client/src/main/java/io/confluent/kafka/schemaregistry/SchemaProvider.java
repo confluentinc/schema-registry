@@ -50,6 +50,21 @@ public interface SchemaProvider extends Configurable {
   String schemaType();
 
   /**
+   * Returns whether parsing {@code schema} yields a result that depends on its subject.
+   *
+   * <p>Almost no provider reads the subject, so the parsed form of a given body is the same under
+   * every subject and callers are free to cache it by content alone. A provider that does read the
+   * subject -- to name something the body leaves unnamed, say -- must say so here, otherwise two
+   * subjects sharing a body would share the first one's result.
+   *
+   * @param schema the schema about to be parsed
+   * @return whether the result depends on the schema's subject
+   */
+  default boolean isSubjectDependent(Schema schema) {
+    return false;
+  }
+
+  /**
    * Parses a schema.
    *
    * @param schema the schema
