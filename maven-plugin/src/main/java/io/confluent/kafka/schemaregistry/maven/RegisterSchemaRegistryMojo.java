@@ -58,7 +58,7 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
     RegisterSchemaResponse response =
         this.client().registerWithRequestResponse(subject, request, normalizeSchemas);
     Integer id = response.getId();
-    Integer version = resolveVersion(subject, response);
+    Integer version = resolveVersion(subject, request, response);
     getLog().info(
         String.format(
             "Registered subject(%s) with id %s version %s",
@@ -74,10 +74,16 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
   /**
    * Resolves the registered version, preferring the one the response carries. A registry before
-   * CP 8.0 leaves it unset, in which case the echoed schema -- already converted to its native
-   * form -- is looked up instead.
+   * CP 8.0 leaves it unset, so the version is looked up instead -- by the schema the response
+   * echoes when there is one, and otherwise by re-sending the request, which also covers a
+   * registry that returns nothing but an id.
+   *
+   * <p>Leaving it unresolved would not fail the registration, but another subject referencing
+   * this one without an explicit version would fall back to {@code -1}, binding to whatever is
+   * latest rather than to what was just registered.
    */
-  private Integer resolveVersion(String subject, RegisterSchemaResponse response)
+  private Integer resolveVersion(
+      String subject, RegisterSchemaRequest request, RegisterSchemaResponse response)
       throws IOException, RestClientException {
     if (response.getVersion() != null && response.getVersion() > 0) {
       return response.getVersion();
@@ -88,10 +94,8 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
         return this.client().getVersion(subject, schema.get(), normalizeSchemas);
       }
     }
-    // Without a version or a schema to look one up by, the version stays unknown. It is only
-    // needed to resolve this subject as another subject's reference, so registration still stands.
-    getLog().warn(String.format("Could not determine the registered version of subject(%s)",
-        subject));
-    return null;
+    return this.client()
+        .getIdWithRequestResponse(subject, request, normalizeSchemas)
+        .getVersion();
   }
 }

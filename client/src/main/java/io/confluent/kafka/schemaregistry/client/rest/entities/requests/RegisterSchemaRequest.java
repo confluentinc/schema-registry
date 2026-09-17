@@ -23,14 +23,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -75,7 +76,10 @@ public class RegisterSchemaRequest {
     request.setVersion(getVersion());
     request.setId(getId());
     request.setSchemaType(getSchemaType());
-    request.setReferences(getReferences());
+    // References are mutable and take part in equality, so a copy used as a cache key must not
+    // share them with the original.
+    request.setReferences(getReferences() == null ? null
+        : getReferences().stream().map(SchemaReference::copy).collect(Collectors.toList()));
     request.setMetadata(getMetadata());
     request.setRuleSet(getRuleSet());
     request.setSchema(getSchema());

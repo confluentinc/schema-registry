@@ -20,6 +20,8 @@ import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -73,6 +75,15 @@ public class LogicalSchemaProvider extends AbstractSchemaProvider {
   @Override
   public String schemaType() {
     return delegate.schemaType();
+  }
+
+  /**
+   * Only a DDL body reads the subject, and then only to name a root the script leaves anonymous.
+   * A native body is handed to the delegate untouched, so it stays cacheable by content alone.
+   */
+  @Override
+  public boolean isSubjectDependent(Schema schema) {
+    return isLogical(schema.getSchema());
   }
 
   @Override
@@ -152,11 +163,14 @@ public class LogicalSchemaProvider extends AbstractSchemaProvider {
     try {
       switch (schemaType().toUpperCase(Locale.ROOT)) {
         case AvroSchema.TYPE:
-          return LogicalTypeToAvroConverter.fromLogicalType(logicalType, rowName);
+          return withRequested(
+              LogicalTypeToAvroConverter.fromLogicalType(logicalType, rowName), schema);
         case JsonSchema.TYPE:
-          return LogicalTypeToJsonConverter.fromLogicalType(logicalType, rowName);
+          return withRequested(
+              LogicalTypeToJsonConverter.fromLogicalType(logicalType, rowName), schema);
         case ProtobufSchema.TYPE:
-          return LogicalTypeToProtoConverter.fromLogicalType(logicalType, rowName);
+          return withRequested(
+              LogicalTypeToProtoConverter.fromLogicalType(logicalType, rowName), schema);
         default:
           throw new ValidationException(
               "Unsupported schemaType '" + schemaType() + "' for a logical type schema; "
@@ -170,6 +184,20 @@ public class LogicalSchemaProvider extends AbstractSchemaProvider {
           "Logical type schema cannot be represented as " + schemaType() + ": " + e.getMessage(),
           e);
     }
+  }
+
+  /**
+   * Carries the requested metadata and rule set onto the converted schema, the way a native
+   * provider carries them onto what it parses. The conversion sets metadata of its own, so the
+   * two are merged rather than replaced, with the request winning on a conflicting property.
+   */
+  private static ParsedSchema withRequested(ParsedSchema converted, Schema schema) {
+    if (schema.getMetadata() == null && schema.getRuleSet() == null) {
+      return converted;
+    }
+    Metadata metadata = Metadata.mergeMetadata(converted.metadata(), schema.getMetadata());
+    RuleSet ruleSet = schema.getRuleSet() != null ? schema.getRuleSet() : converted.ruleSet();
+    return converted.copy(metadata, ruleSet);
   }
 
   /**

@@ -223,9 +223,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  private static Schema contentCacheKey(Schema schema) {
+  private Schema contentCacheKey(Schema schema) {
+    // The subject is part of the key only for a provider whose result depends on it, so that two
+    // subjects sharing a body do not share the first one's parse.
+    SchemaProvider provider = providers.get(
+        schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE);
+    String subject = provider != null && provider.isSubjectDependent(schema)
+        ? schema.getSubject() : null;
     return new Schema(
-        null, null, null, schema.getSchemaType(), schema.getReferences(),
+        subject, null, null, schema.getSchemaType(), schema.getReferences(),
         schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
   }
 
