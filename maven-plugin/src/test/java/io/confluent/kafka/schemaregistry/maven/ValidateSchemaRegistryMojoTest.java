@@ -62,6 +62,31 @@ public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
     this.mojo.execute();
   }
 
+  @Test
+  public void validateLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile, "STRUCT User (name STRING, age INT); TYPE User");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void validateLogicalTypeWithExternalImports() throws Exception {
+    String subject = "TestExternalSubject-value";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile,
+        "USING TYPE Ext FOR REF 'http://example.com/ext.json'; TYPE STRUCT<f Ext>");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
   @Test(expected = IllegalStateException.class)
   public void malformedSchema() throws IOException, MojoFailureException, MojoExecutionException {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();

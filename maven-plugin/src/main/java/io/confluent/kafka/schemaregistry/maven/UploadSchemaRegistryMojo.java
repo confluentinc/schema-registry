@@ -39,6 +39,7 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
@@ -119,15 +120,25 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       String schemaString = MojoUtils.readFile(file, StandardCharsets.UTF_8);
       Optional<ParsedSchema> schema = client().parseSchema(
           schemaType, schemaString, schemaReferences, metadata, ruleSet);
+      RegisterSchemaRequest request;
       if (schema.isPresent()) {
         schemas.put(key, schema.get());
+        request = new RegisterSchemaRequest(schema.get());
+      } else if (LogicalSchema.isLogical(schemaString)) {
+        // Registered as-is: the registry recognizes the DDL and converts it to schemaType itself.
+        request = new RegisterSchemaRequest();
+        request.setSchemaType(schemaType);
+        request.setSchema(schemaString);
+        request.setReferences(schemaReferences);
+        request.setMetadata(metadata);
+        request.setRuleSet(ruleSet);
       } else {
         getLog().error("Schema for " + key + " could not be parsed.");
         errors++;
         return;
       }
 
-      boolean success = processSchema(key, file, schema.get(), schemaVersions);
+      boolean success = processSchema(key, file, request, schemaVersions);
       if (!success) {
         failures++;
       }
@@ -180,7 +191,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   protected abstract boolean processSchema(String subject,
                                            File schemaPath,
-                                           ParsedSchema schema,
+                                           RegisterSchemaRequest request,
                                            Map<String, Integer> schemaVersions)
       throws IOException, RestClientException;
 
