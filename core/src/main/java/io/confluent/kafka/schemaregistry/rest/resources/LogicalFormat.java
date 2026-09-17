@@ -25,17 +25,14 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
-import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
-import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
-import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
-import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 
+import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -127,43 +124,20 @@ final class LogicalFormat {
               + "AVRO, JSON, PROTOBUF");
     }
 
-    LogicalType parsed;
-    try {
-      LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
-      visitor.visit(script);
-      parsed = visitor.toLogicalType();
-    } catch (RuntimeException e) {
-      throw new InvalidSchemaException("Invalid logical type schema: " + e.getMessage(), e);
-    }
-
-    LogicalType logicalType =
-        attachReferences(schemaRegistry, subject, parsed, request.getReferences());
-    String rowName = rowNameFor(subject);
-
     ParsedSchema nativeSchema;
     try {
-      switch (schemaType.toUpperCase(Locale.ROOT)) {
-        case "AVRO":
-          nativeSchema = LogicalTypeToAvroConverter.fromLogicalType(logicalType, rowName);
-          break;
-        case "JSON":
-          nativeSchema = LogicalTypeToJsonConverter.fromLogicalType(logicalType, rowName);
-          break;
-        case "PROTOBUF":
-          nativeSchema = LogicalTypeToProtoConverter.fromLogicalType(logicalType, rowName);
-          break;
-        default:
-          throw new InvalidSchemaException(
-              "Unsupported schemaType '" + schemaType + "' for a logical type schema; "
-                  + "must be one of AVRO, JSON, PROTOBUF");
-      }
-    } catch (RuntimeException e) {
-      throw new InvalidSchemaException(
-          "Logical type schema cannot be represented as " + schemaType + ": "
-              + e.getMessage(), e);
+      nativeSchema = LogicalTypeConversion.toNative(
+          script,
+          new Schema(subject, request),
+          resolveReferences(schemaRegistry, subject, request.getReferences()));
+    } catch (ValidationException e) {
+      throw new InvalidSchemaException(e.getMessage(), e);
     }
     request.setSchemaType(nativeSchema.schemaType());
     request.setSchema(nativeSchema.canonicalString());
+    // The conversion records how the type was emitted, which is part of the schema being
+    // registered rather than an artifact of reading it, so it is stored alongside the caller's.
+    request.setMetadata(nativeSchema.metadata());
   }
 
   /**
@@ -184,35 +158,30 @@ final class LogicalFormat {
   }
 
   /**
-   * Logical Type carries external-type bindings (name/alias to URI) but never SR coordinates, see
-   * {@link LogicalType#getExternalImports()}. If the parsed type references anything external,
-   * this resolves it against the caller-declared {@code references} the same way a native
-   * registration would -- reusing {@link AbstractSchemaProvider#resolveReferences} so
-   * parent-context qualification and transitive resolution match native registration exactly, and
-   * keying the result by each reference's own name, the convention every native
-   * {@code resolvedReferences}
-   * map already follows.
+   * Resolves the caller-declared references the same way a native registration would, reusing
+   * {@link AbstractSchemaProvider#resolveReferences} so that parent-context qualification and
+   * transitive resolution match it exactly, and keying the result by each reference's own name,
+   * the convention every native {@code resolvedReferences} map already follows.
+   *
+   * <p>Both flags are deliberately permissive, because this resolution is not a validation gate --
+   * it only supplies the referenced definitions the conversion needs to emit a native schema.
+   * Every caller feeds that native schema straight into a path that re-resolves the same
+   * references and enforces the configured mode: validateAsNew is derived per-caller
+   * (schemaId < 0 && schema.validate.new.schemas on register, the config alone on a compatibility
+   * check, false on lookup), and referenceVersionsStrict comes from the provider. Resolving
+   * strictly here would reject a soft-deleted reference that the equivalent native request accepts
+   * whenever the caller's own flag works out to false.
    */
-  private static LogicalType attachReferences(
+  private static Map<String, String> resolveReferences(
       final SchemaRegistry schemaRegistry,
       final String subject,
-      final LogicalType parsed,
       final List<SchemaReference> references)
       throws SchemaRegistryException {
     if (references == null || references.isEmpty()) {
-      return parsed;
+      return Collections.emptyMap();
     }
-    // Both flags are deliberately permissive, because this resolution is not a validation gate --
-    // it only supplies the referenced definitions the conversion needs to emit a native schema.
-    // Every caller feeds that native schema straight into a path that re-resolves the same
-    // references and enforces the configured mode: validateAsNew is derived per-caller
-    // (schemaId < 0 && schema.validate.new.schemas on register, the config alone on a
-    // compatibility check, false on lookup), and referenceVersionsStrict comes from the provider.
-    // Resolving strictly here would reject a soft-deleted reference that the equivalent native
-    // request accepts whenever the caller's own flag works out to false.
-    Map<String, String> resolvedReferences;
     try {
-      resolvedReferences = AbstractSchemaProvider.resolveReferences(
+      return AbstractSchemaProvider.resolveReferences(
           schemaRegistry, subject, references, false, false);
     } catch (IllegalArgumentException | IllegalStateException e) {
       // resolveReferences throws IllegalArgument/IllegalState on a missing or conflicting
@@ -220,23 +189,5 @@ final class LogicalFormat {
       // register path wraps it in AbstractSchemaRegistry.loadSchema.
       throw new InvalidSchemaException("Could not resolve schema references: " + e.getMessage(), e);
     }
-    return new LogicalType(
-        parsed.getName(),
-        parsed.getNamespace(),
-        parsed.getRootSchema(),
-        parsed.getNamedTypes(),
-        parsed.getExternalTypes(),
-        parsed.getExternalImports(),
-        references,
-        resolvedReferences,
-        parsed.getDefaultValues());
-  }
-
-  private static String rowNameFor(final String subject) {
-    String sanitized = subject == null ? "" : subject.replaceAll("[^A-Za-z0-9_]", "_");
-    if (sanitized.isEmpty() || Character.isDigit(sanitized.charAt(0))) {
-      sanitized = "Envelope" + sanitized;
-    }
-    return sanitized;
   }
 }
