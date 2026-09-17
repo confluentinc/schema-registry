@@ -113,6 +113,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private RestService leaderRestService;
   private final int leaderConnectTimeoutMs;
   private final int leaderReadTimeoutMs;
+  private final int leaderConnectRetries;
+  private final int leaderRetriesWaitMs;
+  private final int leaderRetriesMaxWaitMs;
   private final LeaderForwardingClient leaderForwardingClient;
   private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
@@ -143,6 +146,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
+    this.leaderConnectRetries = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_RETRIES);
+    this.leaderRetriesWaitMs = config.getInt(SchemaRegistryConfig.LEADER_RETRIES_WAIT_MS);
+    this.leaderRetriesMaxWaitMs = config.getInt(SchemaRegistryConfig.LEADER_RETRIES_MAX_WAIT_MS);
     this.leaderForwardingClient = createLeaderForwardingClient(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
@@ -345,6 +351,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
+        leaderRestService.setRetries(
+            leaderConnectRetries, leaderRetriesWaitMs, leaderRetriesMaxWaitMs);
         SSLSocketFactory forwardingSslSocketFactory = leaderForwardingClient != null
             ? leaderForwardingClient.sslSocketFactory() : null;
         if (forwardingSslSocketFactory != null) {
