@@ -33,11 +33,45 @@ import java.util.Map;
 
 public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   RegisterSchemaRegistryMojo mojo;
+  MockSchemaRegistryClient client;
 
   @Before
   public void createMojo(){
     this.mojo = new RegisterSchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.client = new MockSchemaRegistryClient();
+    this.mojo.client(this.client);
+  }
+
+  @Test
+  public void registerLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    String ddl = "TYPE STRUCT<name STRING, age INT>";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile, ddl);
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+    expectedVersions.put(subject, 1);
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+    // The DDL is registered as-is; converting it to Avro is the registry's job.
+    Assert.assertThat(
+        this.client.getLatestSchemaMetadata(subject).getSchema(), IsEqual.equalTo(ddl));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void registerMalformedSchemaStillFails() throws Exception {
+    String subject = "TestMalformedSubject-value";
+    File schemaFile = new File(this.tempDirectory, subject + ".avsc");
+    writeMalformedFile(schemaFile);
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, schemaFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
   }
 
   @Test

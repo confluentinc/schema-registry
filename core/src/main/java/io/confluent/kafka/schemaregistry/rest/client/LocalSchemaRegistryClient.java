@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
@@ -52,6 +53,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.resources.LogicalFormat;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.Mode;
@@ -200,7 +202,44 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    Schema s = new Schema(subject, version, id, schema);
+    return doRegister(subject, new Schema(subject, version, id, schema), normalize,
+        propagateSchemaTags);
+  }
+
+  @Override
+  public synchronized RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
+      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
+    }
+    RegisterSchemaRequest nativeRequest = toNative(subject, request);
+    return doRegister(subject, new Schema(subject, nativeRequest), normalize,
+        nativeRequest.doPropagateSchemaTags());
+  }
+
+  /**
+   * Converts a logical types DDL body to its native form, as the resource layer does before a
+   * request reaches the registry. The conversion rewrites the body in place, so it runs against a
+   * copy: over REST only the server's own copy is ever rewritten, and the caller's request should
+   * be no different here.
+   */
+  private RegisterSchemaRequest toNative(String subject, RegisterSchemaRequest request) {
+    RegisterSchemaRequest converted = request.copy();
+    try {
+      LogicalFormat.tryConvertToNative(schemaRegistry, subject, converted);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while converting schema for subject " + subject, e);
+    }
+    return converted;
+  }
+
+  private synchronized RegisterSchemaResponse doRegister(
+      String subject, Schema s, boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
     try {
       return new RegisterSchemaResponse(
           schemaRegistry.register(subject, s, normalize, propagateSchemaTags));
@@ -410,6 +449,31 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Checks a request against the subject's latest version.
+   */
+  @Override
+  public List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
+      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
+    }
+    Schema schema = new Schema(subject, toNative(subject, request));
+    try {
+      Schema latest = schemaRegistry.getLatestVersion(subject);
+      List<SchemaKey> previousSchemas = latest != null
+          ? Collections.singletonList(new SchemaKey(subject, latest.getVersion()))
+          : Collections.emptyList();
+      return schemaRegistry.isCompatible(subject, schema, previousSchemas, normalize);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while testing compatibility for subject " + subject, e);
+    }
+  }
+
   @Override
   public Config updateConfig(String subject, Config config)
       throws IOException,
@@ -558,13 +622,27 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
+      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
+    }
+    return doLookUp(subject, new Schema(subject, toNative(subject, request)), normalize);
+  }
+
+  @Override
   public RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    Schema s = new Schema(subject, 0, -1, schema);
+    return doLookUp(subject, new Schema(subject, 0, -1, schema), normalize);
+  }
+
+  private RegisterSchemaResponse doLookUp(String subject, Schema s, boolean normalize)
+      throws IOException, RestClientException {
     Schema matchingSchema = null;
     try {
       if (!schemaRegistry.hasSubjects(subject, false)) {

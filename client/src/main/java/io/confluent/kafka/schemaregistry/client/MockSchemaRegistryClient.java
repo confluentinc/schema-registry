@@ -27,7 +27,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -66,6 +68,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.LinkedList;
@@ -372,6 +375,36 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
       return schemaResponse;
     }
+  }
+
+  @Override
+  public RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(
+        subject,
+        parseOrRaw(subject, request),
+        request.getVersion() != null ? request.getVersion() : 0,
+        request.getId() != null ? request.getId() : -1,
+        normalize,
+        request.doPropagateSchemaTags());
+  }
+
+  /**
+   * Resolves a request to the schema this client stores it under. A body no provider can parse --
+   * a logical types DDL, say, which the real registry converts server-side -- is carried opaquely
+   * instead, and seeded into the parsed-schema cache so that later reads of the stored entity
+   * resolve to the same carrier rather than failing to parse.
+   */
+  private ParsedSchema parseOrRaw(String subject, RegisterSchemaRequest request) {
+    Schema entity = new Schema(subject, request);
+    Optional<ParsedSchema> parsed = parseSchema(entity);
+    if (parsed.isPresent()) {
+      return parsed.get();
+    }
+    ParsedSchema raw = new RawSchema(request);
+    parsedSchemaCache.put(contentCacheKey(entity), raw);
+    return raw;
   }
 
   @Override
@@ -702,6 +735,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(subject, parseOrRaw(subject, request), normalize);
+  }
+
+  @Override
   public RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
@@ -822,6 +862,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);
+  }
+
+  @Override
+  public List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return testCompatibilityVerbose(subject, parseOrRaw(subject, request));
   }
 
   @Override
@@ -1476,6 +1523,129 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
     for (Association associationToDelete : associationsToDelete) {
       deleteAssociation(associationToDelete, cascadeLifecycle);
+    }
+  }
+
+  /**
+   * Carries a request body that no provider can parse, so that this client can store and return it
+   * like any other schema. It is identified by its content alone; anything that would require
+   * understanding the body is unsupported.
+   */
+  private static class RawSchema implements ParsedSchema {
+
+    private final String schemaType;
+    private final String schema;
+    private final List<SchemaReference> references;
+    private final Metadata metadata;
+    private final RuleSet ruleSet;
+    private final Integer version;
+
+    RawSchema(RegisterSchemaRequest request) {
+      this(request.getSchemaType(), request.getSchema(), request.getReferences(),
+          request.getMetadata(), request.getRuleSet(), request.getVersion());
+    }
+
+    RawSchema(String schemaType, String schema, List<SchemaReference> references,
+        Metadata metadata, RuleSet ruleSet, Integer version) {
+      this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+      this.schema = schema;
+      this.references = references != null ? references : Collections.emptyList();
+      this.metadata = metadata;
+      this.ruleSet = ruleSet;
+      this.version = version;
+    }
+
+    @Override
+    public String schemaType() {
+      return schemaType;
+    }
+
+    @Override
+    public String name() {
+      return null;
+    }
+
+    @Override
+    public String canonicalString() {
+      return schema;
+    }
+
+    @Override
+    public Integer version() {
+      return version;
+    }
+
+    @Override
+    public List<SchemaReference> references() {
+      return references;
+    }
+
+    @Override
+    public Metadata metadata() {
+      return metadata;
+    }
+
+    @Override
+    public RuleSet ruleSet() {
+      return ruleSet;
+    }
+
+    @Override
+    public Object rawSchema() {
+      return schema;
+    }
+
+    @Override
+    public ParsedSchema copy() {
+      return new RawSchema(schemaType, schema, references, metadata, ruleSet, version);
+    }
+
+    @Override
+    public ParsedSchema copy(Integer version) {
+      return new RawSchema(schemaType, schema, references, metadata, ruleSet, version);
+    }
+
+    @Override
+    public ParsedSchema copy(Metadata metadata, RuleSet ruleSet) {
+      return new RawSchema(schemaType, schema, references, metadata, ruleSet, version);
+    }
+
+    @Override
+    public ParsedSchema copy(
+        Map<SchemaEntity, Set<String>> tagsToAdd, Map<SchemaEntity, Set<String>> tagsToRemove) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      RawSchema that = (RawSchema) o;
+      return Objects.equals(schemaType, that.schemaType)
+          && Objects.equals(schema, that.schema)
+          && Objects.equals(references, that.references)
+          && Objects.equals(metadata, that.metadata)
+          && Objects.equals(ruleSet, that.ruleSet)
+          && Objects.equals(version, that.version);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schemaType, schema, references, metadata, ruleSet, version);
+    }
+
+    @Override
+    public String toString() {
+      return schema;
     }
   }
 }
