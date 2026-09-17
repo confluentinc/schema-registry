@@ -381,8 +381,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return provider.parseSchemaOrElseThrow(schema, validateAsNew, normalize);
     } catch (Exception e) {
-      throw new InvalidSchemaException("Invalid schema of type " + type
-              + ", details: " + e.getMessage());
+      // Logged here because this is the last point that holds the cause: the exception below
+      // carries it on, but the resource layer reports only a message to the client. A provider
+      // does not log a parse failure itself, since a caller may be parsing a body it expects to
+      // read another way.
+      String errMsg = "Invalid schema of type " + type + ", details: " + e.getMessage();
+      log.error(errMsg, e);
+      throw new InvalidSchemaException(errMsg, e);
     }
   }
 
