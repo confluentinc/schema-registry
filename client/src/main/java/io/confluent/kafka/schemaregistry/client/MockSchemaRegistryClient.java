@@ -223,9 +223,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  private static Schema contentCacheKey(Schema schema) {
+  private Schema contentCacheKey(Schema schema) {
+    // The subject is part of the key only for a provider whose result depends on it, so that two
+    // subjects sharing a body do not share the first one's parse.
+    SchemaProvider provider = providers.get(
+        schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE);
+    String subject = provider != null && provider.isSubjectDependent(schema)
+        ? schema.getSubject() : null;
     return new Schema(
-        null, null, null, schema.getSchemaType(), schema.getReferences(),
+        subject, null, null, schema.getSchemaType(), schema.getReferences(),
         schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
   }
 
@@ -372,6 +378,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
       return schemaResponse;
     }
+  }
+
+  @Override
+  public RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(
+        subject,
+        parseSchemaOrElseThrow(new Schema(subject, request)),
+        request.getVersion() != null ? request.getVersion() : 0,
+        request.getId() != null ? request.getId() : -1,
+        normalize,
+        request.doPropagateSchemaTags());
   }
 
   @Override
@@ -702,6 +721,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(
+        subject, parseSchemaOrElseThrow(new Schema(subject, request)), normalize);
+  }
+
+  @Override
   public RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
@@ -822,6 +849,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);
+  }
+
+  @Override
+  public List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return testCompatibilityVerbose(
+        subject, parseSchemaOrElseThrow(new Schema(subject, request)));
   }
 
   @Override

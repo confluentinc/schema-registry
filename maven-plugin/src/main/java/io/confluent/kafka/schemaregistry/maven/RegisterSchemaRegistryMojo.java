@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
@@ -41,28 +42,23 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
   @Override
   protected boolean processSchema(String subject,
                                   File schemaPath,
-                                  ParsedSchema schema,
+                                  RegisterSchemaRequest request,
                                   Map<String, Integer> schemaVersions)
       throws IOException, RestClientException {
 
     if (getLog().isDebugEnabled()) {
       getLog().debug(
-          String.format("Calling register('%s', '%s')", subject, schema)
+          String.format("Calling register('%s', '%s')", subject, request.getSchema())
       );
     }
 
-    RegisterSchemaResponse response =
-        this.client().registerWithResponse(subject, schema, normalizeSchemas, propagateSchemaTags);
-    if (response.getSchema() != null) {
-      Optional<ParsedSchema> optSchema =
-          this.client().parseSchema(new Schema(subject, response));
-      if (optSchema.isPresent()) {
-        schema = optSchema.get();
-        schema = schema.copy(response.getVersion());
-      }
+    if (propagateSchemaTags) {
+      request.setPropagateSchemaTags(true);
     }
+    RegisterSchemaResponse response =
+        this.client().registerWithRequestResponse(subject, request, normalizeSchemas);
     Integer id = response.getId();
-    Integer version = this.client().getVersion(subject, schema, normalizeSchemas);
+    Integer version = resolveVersion(subject, request, response);
     getLog().info(
         String.format(
             "Registered subject(%s) with id %s version %s",
@@ -70,7 +66,36 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
             id,
             version
         ));
-    schemaVersions.put(subject, version);
+    if (version != null) {
+      schemaVersions.put(subject, version);
+    }
     return true;
+  }
+
+  /**
+   * Resolves the registered version, preferring the one the response carries. A registry before
+   * CP 8.0 leaves it unset, so the version is looked up instead -- by the schema the response
+   * echoes when there is one, and otherwise by re-sending the request, which also covers a
+   * registry that returns nothing but an id.
+   *
+   * <p>Leaving it unresolved would not fail the registration, but another subject referencing
+   * this one without an explicit version would fall back to {@code -1}, binding to whatever is
+   * latest rather than to what was just registered.
+   */
+  private Integer resolveVersion(
+      String subject, RegisterSchemaRequest request, RegisterSchemaResponse response)
+      throws IOException, RestClientException {
+    if (response.getVersion() != null && response.getVersion() > 0) {
+      return response.getVersion();
+    }
+    if (response.getSchema() != null) {
+      Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(subject, response));
+      if (schema.isPresent()) {
+        return this.client().getVersion(subject, schema.get(), normalizeSchemas);
+      }
+    }
+    return this.client()
+        .getIdWithRequestResponse(subject, request, normalizeSchemas)
+        .getVersion();
   }
 }
