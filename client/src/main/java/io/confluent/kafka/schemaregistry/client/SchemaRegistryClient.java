@@ -211,8 +211,26 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException;
 
+  /**
+   * Returns the latest schema rendered in {@code format}, which the registry interprets -- the
+   * formats a schema can be rendered in depend on its type.
+   */
+  default SchemaMetadata getLatestSchemaMetadata(String subject, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
+
+  /**
+   * Returns a version of a schema rendered in {@code format}, which the registry interprets --
+   * the formats a schema can be rendered in depend on its type.
+   */
+  default SchemaMetadata getSchemaMetadata(String subject, int version, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   default SchemaMetadata getSchemaMetadata(String subject, int version,
       boolean lookupDeletedSchema) throws IOException, RestClientException {
