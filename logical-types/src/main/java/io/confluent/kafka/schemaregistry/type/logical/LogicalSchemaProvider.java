@@ -57,12 +57,13 @@ public class LogicalSchemaProvider extends AbstractSchemaProvider {
   }
 
   /**
-   * Only a DDL body reads the subject, and then only to name a root the script leaves anonymous.
-   * A native body is handed to the delegate untouched, so it stays cacheable by content alone.
+   * A DDL body reads the subject, to name a root the script leaves anonymous. A native body is
+   * handed to the delegate untouched, so whether it reads the subject is the delegate's to say --
+   * a wrapped provider that depends on the subject must not lose that by being wrapped.
    */
   @Override
   public boolean isSubjectDependent(Schema schema) {
-    return isLogical(schema.getSchema());
+    return delegate.isSubjectDependent(schema) || isLogical(schema.getSchema());
   }
 
   @Override
