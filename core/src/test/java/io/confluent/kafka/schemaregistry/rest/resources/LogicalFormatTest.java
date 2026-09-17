@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,31 @@ class LogicalFormatTest {
     assertTrue(LogicalFormat.tryConvertToNative(
         registryRejectingNative(), "widgets-value", request));
     assertEquals(AvroSchema.TYPE, request.getSchemaType());
+  }
+
+  @Test
+  void tryConvertToNativeRecordsHowTheTypeWasEmitted() throws Exception {
+    // The conversion describes what it emitted, and that belongs to the schema being registered
+    // rather than to the act of reading it, so the request carries it on to storage.
+    RegisterSchemaRequest request = requestFor("JSON", STRUCT_DDL);
+
+    assertTrue(LogicalFormat.tryConvertToNative(
+        registryRejectingNative(), "widgets-value", request));
+    assertNotNull(request.getMetadata(), "conversion metadata must survive onto the request");
+    assertEquals("2", request.getMetadata().getProperties().get("confluent:edition"));
+  }
+
+  @Test
+  void tryConvertToNativeKeepsRequestedMetadata() throws Exception {
+    RegisterSchemaRequest request = requestFor("JSON", STRUCT_DDL);
+    request.setMetadata(new Metadata(
+        null, Collections.singletonMap("owner", "payments"), null));
+
+    assertTrue(LogicalFormat.tryConvertToNative(
+        registryRejectingNative(), "widgets-value", request));
+    // Merged, not replaced: both what the caller asked for and what the conversion recorded.
+    assertEquals("payments", request.getMetadata().getProperties().get("owner"));
+    assertEquals("2", request.getMetadata().getProperties().get("confluent:edition"));
   }
 
   @Test

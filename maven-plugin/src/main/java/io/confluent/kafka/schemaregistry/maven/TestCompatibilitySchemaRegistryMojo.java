@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -38,17 +38,18 @@ public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMoj
   @Override
   protected boolean processSchema(String subject,
                                   File schemaPath,
-                                  ParsedSchema schema,
+                                  RegisterSchemaRequest request,
                                   Map<String, Integer> schemaVersions)
       throws IOException, RestClientException {
 
     if (getLog().isDebugEnabled()) {
       getLog().debug(
-          String.format("Calling testCompatibility('%s', '%s')", subject, schema)
+          String.format("Calling testCompatibility('%s', '%s')", subject, request.getSchema())
       );
     }
 
-    List<String> errorMessages = this.client().testCompatibilityVerbose(subject, schema);
+    List<String> errorMessages =
+        this.client().testCompatibilityVerboseWithRequest(subject, request, false);
     boolean compatible = errorMessages.isEmpty();
 
     if (compatible) {
