@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
@@ -87,6 +88,7 @@ import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHan
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -100,7 +102,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -2929,7 +2930,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     int totalAssociations = 0;
-    long totalPayloadBytes = 0;
     boolean hasInlineSchema = false;
     for (AssociationOpRequest req : request.getRequests()) {
       List<? extends AssociationOp> ops = req.getAssociations();
@@ -2938,12 +2938,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
       totalAssociations += ops.size();
       for (AssociationOp op : ops) {
-        if (op instanceof AssociationCreateOrUpdateOp) {
-          AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
-          totalPayloadBytes += associationOpPayloadSize(createOrUpdateOp);
-          if (createOrUpdateOp.getSchema() != null) {
-            hasInlineSchema = true;
-          }
+        if (op instanceof AssociationCreateOrUpdateOp
+            && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
+          hasInlineSchema = true;
         }
       }
     }
@@ -2959,45 +2956,37 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               + " maximum of %d associations per batch", totalAssociations, maxNum));
     }
 
+    // Measured as the full serialized size of the request/entry (not just selected fields
+    // like subject/schema) so that references, metadata, ruleSet, tags, etc. all count too.
+    long requestPayloadBytes = jsonPayloadSize(request);
     long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
-    if (totalPayloadBytes > maxBatchBytes) {
+    if (requestPayloadBytes > maxBatchBytes) {
       throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchMutate request has a cumulative association payload size of %d"
-              + " bytes, exceeding the configured maximum of %d bytes per batch",
-          totalPayloadBytes, maxBatchBytes));
+          "Associations batchMutate request has a payload size of %d bytes, exceeding the"
+              + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
     }
 
     long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
     for (AssociationOpRequest req : request.getRequests()) {
-      List<? extends AssociationOp> ops = req.getAssociations();
-      if (ops == null) {
-        continue;
-      }
-      long entryPayloadBytes = 0;
-      for (AssociationOp op : ops) {
-        if (op instanceof AssociationCreateOrUpdateOp) {
-          entryPayloadBytes += associationOpPayloadSize((AssociationCreateOrUpdateOp) op);
-        }
-      }
+      long entryPayloadBytes = jsonPayloadSize(req);
       if (entryPayloadBytes > maxEntryBytes) {
         throw new AssociationBatchLimitExceededException(String.format(
-            "Associations batchMutate request entry for resource '%s' has an association"
-                + " payload size of %d bytes, exceeding the configured maximum of %d bytes",
+            "Associations batchMutate request entry for resource '%s' has a payload size of %d"
+                + " bytes, exceeding the configured maximum of %d bytes",
             req.getResourceName(), entryPayloadBytes, maxEntryBytes));
       }
     }
   }
 
-  private static long associationOpPayloadSize(AssociationCreateOrUpdateOp op) {
-    long size = 0;
-    if (op.getSubject() != null) {
-      size += op.getSubject().getBytes(StandardCharsets.UTF_8).length;
+  // Full serialized (JSON) size of an already-successfully-deserialized request or entry
+  // object, so the byte-count reflects every field it carries rather than a hand-picked subset.
+  private static long jsonPayloadSize(Object obj) {
+    try {
+      return JacksonMapper.INSTANCE.writeValueAsBytes(obj).length;
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException(
+          "Unexpected error measuring payload size of an already-deserialized object", e);
     }
-    RegisterSchemaRequest schema = op.getSchema();
-    if (schema != null && schema.getSchema() != null) {
-      size += schema.getSchema().getBytes(StandardCharsets.UTF_8).length;
-    }
-    return size;
   }
 
   // --------------- Association query methods ---------------
