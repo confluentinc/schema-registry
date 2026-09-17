@@ -147,9 +147,6 @@ public class CompatibilityResource {
       throw Errors.versionNotFoundException(versionId.getVersionId());
     }
     try {
-      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
-      // schemaType before the check.
-      LogicalFormat.tryConvertToNative(schemaRegistry, subject, request);
       Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
@@ -238,9 +235,6 @@ public class CompatibilityResource {
           + subject, e);
     }
     try {
-      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
-      // schemaType before the check.
-      LogicalFormat.tryConvertToNative(schemaRegistry, subject, request);
       Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());

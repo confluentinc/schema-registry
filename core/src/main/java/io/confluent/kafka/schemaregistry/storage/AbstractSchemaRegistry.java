@@ -72,6 +72,7 @@ import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -333,19 +334,37 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
-    for (SchemaProvider provider : defaultSchemaProviders) {
-      provider.configure(schemaProviderConfigs);
-    }
     Map<String, SchemaProvider> providerMap = new HashMap<>();
-    registerProviders(providerMap, defaultSchemaProviders);
+    registerProviders(providerMap, withLogicalTypes(defaultSchemaProviders, schemaProviderConfigs));
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
     // Allow custom providers to override default providers
-    registerProviders(providerMap, customSchemaProviders);
+    registerProviders(providerMap, withLogicalTypes(customSchemaProviders, schemaProviderConfigs));
     metricsContainer.getCustomSchemaProviderCount().record(customSchemaProviders.size());
     return providerMap;
+  }
+
+  /**
+   * Wraps each provider so that a logical types DDL body is read as the native schema it denotes,
+   * whatever format the provider itself reads. Reading a schema is where that belongs: every path
+   * that parses one -- register, lookup, compatibility -- then accepts DDL alike, and a custom
+   * provider does not have to know about logical types to be usable with them.
+   *
+   * <p>Configuring happens after wrapping, because the wrapper resolves a DDL body's references
+   * itself and so needs the version fetcher too, not only the provider it wraps.
+   */
+  private List<SchemaProvider> withLogicalTypes(
+      List<SchemaProvider> providers, Map<String, Object> configs) {
+    List<SchemaProvider> wrapped = new ArrayList<>(providers.size());
+    for (SchemaProvider provider : providers) {
+      SchemaProvider logical = provider instanceof LogicalSchemaProvider
+          ? provider : new LogicalSchemaProvider(provider);
+      logical.configure(configs);
+      wrapped.add(logical);
+    }
+    return wrapped;
   }
 
   protected void registerProviders(
@@ -651,6 +670,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
     schema.setSchemaType(parsedSchema.schemaType());
     schema.setSchema(parsedSchema.canonicalString());
+    schema.setMetadata(parsedSchema.metadata());
     schema.setReferences(parsedSchema.references());
     return parsedSchema;
   }
