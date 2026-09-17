@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -404,7 +405,9 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Batch get associations.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch get response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
+          + "batchGet request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
@@ -423,6 +426,10 @@ public class AssociationsResource {
       AssociationBatchResponse response =
           schemaRegistry.batchGetAssociations(includeSchemas, request);
       return Response.status(207).entity(response).build();
+    } catch (AssociationBatchLimitExceededException e) {
+      log.debug("Associations batchGet request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException();
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -434,7 +441,9 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Mutate associations in batch.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
+          + "batchMutate request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-mutate")
   @DocumentedName("mutateAssociations")
@@ -462,6 +471,10 @@ public class AssociationsResource {
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(Response.status(207).entity(response).build());
+    } catch (AssociationBatchLimitExceededException e) {
+      log.debug("Associations batchMutate request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException();
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Mutate associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
