@@ -40,6 +40,12 @@ public class SchemaRegistryTest {
     }
   }
 
+  protected void writeText(File outputPath, String contents) throws IOException {
+    try (FileWriter writer = new FileWriter(outputPath)) {
+      writer.write(contents);
+    }
+  }
+
   protected void writeMalformedFile(File file) throws IOException {
     try (FileWriter writer = new FileWriter(file)) {
       writer.write("[");
