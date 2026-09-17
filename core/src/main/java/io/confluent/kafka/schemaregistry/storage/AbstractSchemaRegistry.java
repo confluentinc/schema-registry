@@ -2741,10 +2741,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  // A request with includeSchemas=false never retrieves any schemas, so it is exempt
-  // regardless of configuration. The limit is on the number of items in the request payload
-  // (association.batch.get.max.association.num.per.batch), so this is a cheap, request-body-only
-  // check with no store lookup.
   private void checkAssociationBatchGetLimits(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws AssociationBatchLimitExceededException {
@@ -2919,10 +2915,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  // A request with a single association in total (the Flink shape) or with no inline schema
-  // anywhere in the batch (the Kafka Cluster Linking shape) is exempt from all three limits
-  // below, regardless of configuration. Rejects the whole request (rather than a single
-  // resource entry) so this must run before any resource entry is processed.
   private void checkAssociationBatchLimits(AssociationBatchRequest request)
       throws AssociationBatchLimitExceededException {
     if (!config().associationBatchMutateLimitsEnabled()) {
@@ -2956,8 +2948,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               + " maximum of %d associations per batch", totalAssociations, maxNum));
     }
 
-    // Measured as the full serialized size of the request/entry (not just selected fields
-    // like subject/schema) so that references, metadata, ruleSet, tags, etc. all count too.
     long requestPayloadBytes = jsonPayloadSize(request);
     long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
     if (requestPayloadBytes > maxBatchBytes) {
@@ -2967,19 +2957,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
-    for (AssociationOpRequest req : request.getRequests()) {
-      long entryPayloadBytes = jsonPayloadSize(req);
+    List<AssociationOpRequest> reqs = request.getRequests();
+    for (int i = 0; i < reqs.size(); i++) {
+      long entryPayloadBytes = jsonPayloadSize(reqs.get(i));
       if (entryPayloadBytes > maxEntryBytes) {
         throw new AssociationBatchLimitExceededException(String.format(
-            "Associations batchMutate request entry for resource '%s' has a payload size of %d"
+            "Associations batchMutate request entry %d of %d has a payload size of %d"
                 + " bytes, exceeding the configured maximum of %d bytes",
-            req.getResourceName(), entryPayloadBytes, maxEntryBytes));
+            i + 1, reqs.size(), entryPayloadBytes, maxEntryBytes));
       }
     }
   }
 
-  // Full serialized (JSON) size of an already-successfully-deserialized request or entry
-  // object, so the byte-count reflects every field it carries rather than a hand-picked subset.
   private static long jsonPayloadSize(Object obj) {
     try {
       return JacksonMapper.INSTANCE.writeValueAsBytes(obj).length;
