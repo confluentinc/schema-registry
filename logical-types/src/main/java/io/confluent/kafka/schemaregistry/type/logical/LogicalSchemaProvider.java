@@ -86,14 +86,19 @@ public class LogicalSchemaProvider extends AbstractSchemaProvider {
         // Neither native nor DDL: the native failure is the one worth reporting.
         throw e;
       }
-      return LogicalTypeConversion.toNative(script.get(), schema, resolveReferences(schema));
+      // validateAsNew has to reach the resolution: this is the only parse of the body, so unlike
+      // a conversion whose output is reparsed afterwards, nothing downstream re-resolves these
+      // references under the caller's own flag. Resolving permissively here would let a new
+      // registration accept a soft-deleted reference that it should reject.
+      return LogicalTypeConversion.toNative(
+          script.get(), schema, resolveReferences(schema, validateAsNew));
     }
   }
 
   @Override
-  protected Map<String, String> resolveReferences(Schema schema) {
+  protected Map<String, String> resolveReferences(Schema schema, boolean validateAsNew) {
     try {
-      return super.resolveReferences(schema);
+      return super.resolveReferences(schema, validateAsNew);
     } catch (IllegalArgumentException | IllegalStateException e) {
       throw new ValidationException("Could not resolve schema references: " + e.getMessage(), e);
     }
