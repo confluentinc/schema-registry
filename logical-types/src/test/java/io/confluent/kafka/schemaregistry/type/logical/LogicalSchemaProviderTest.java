@@ -159,6 +159,42 @@ class LogicalSchemaProviderTest {
   }
 
   @Test
+  void nativeSchemaTextIsNeverReadAsDdl() {
+    // Real schema text of every format must lose to the native parse, so a native body is never
+    // reinterpreted as a logical one.
+    for (String nativeText : new String[] {
+        "{\"type\":\"record\",\"name\":\"W\",\"fields\":[]}",
+        "{\"type\":\"object\",\"properties\":{}}",
+        "syntax = \"proto3\"; message W { string id = 1; }",
+        "enum E { A = 0; }"}) {
+      assertFalse(LogicalSchemaProvider.isLogical(nativeText), nativeText);
+    }
+  }
+
+  @Test
+  void sanitizesASubjectThatCannotNameARecord() {
+    // A subject is not constrained the way a record name is, so the characters a name cannot
+    // carry are replaced rather than rejected.
+    Schema schema = new Schema("...", null, null, AvroSchema.TYPE, Collections.emptyList(), DDL);
+    ParsedSchema parsed =
+        new LogicalAvroSchemaProvider().parseSchemaOrElseThrow(schema, false, false);
+    assertTrue(parsed.canonicalString().contains("\"name\":\"___\""), parsed.canonicalString());
+  }
+
+  @Test
+  void failsWhenAReferenceCannotBeResolved() {
+    SchemaProvider provider = new LogicalAvroSchemaProvider();
+    provider.configure(Collections.singletonMap(
+        SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, fetcherFor(null)));
+
+    Schema schema = new Schema(SUBJECT, null, null, AvroSchema.TYPE,
+        Collections.singletonList(new SchemaReference("Address", "Address-value", 1)),
+        "TYPE STRUCT<home Address>");
+    assertThrows(ValidationException.class,
+        () -> provider.parseSchemaOrElseThrow(schema, false, false));
+  }
+
+  @Test
   void resolvesReferences() {
     Schema referenced = new Schema("Address-value", 1, 1, AvroSchema.TYPE,
         Collections.emptyList(), "{\"type\":\"record\",\"name\":\"Address\",\"fields\":"
@@ -185,7 +221,7 @@ class LogicalSchemaProviderTest {
 
       @Override
       public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
-        return referenced.getSubject().equals(subject) ? referenced : null;
+        return referenced != null && referenced.getSubject().equals(subject) ? referenced : null;
       }
     };
   }
