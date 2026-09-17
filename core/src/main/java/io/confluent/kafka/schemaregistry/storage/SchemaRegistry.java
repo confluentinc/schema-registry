@@ -102,6 +102,18 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema register(String subject, Schema schema, boolean normalize, boolean force,
       boolean propagateSchemaTags) throws SchemaRegistryException;
 
+  /**
+   * Registers what a request asks for, rather than a schema already extracted from it.
+   *
+   * <p>A request carries operations that a {@link Schema} cannot: the tags to add and remove are
+   * applied to the schema being registered, so a caller holding a request should register it
+   * whole instead of converting it and losing them.
+   */
+  default Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException();
+  }
+
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
       return get(subject, version, returnDeletedSchema);

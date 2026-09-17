@@ -204,10 +204,18 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    return doRegister(subject, new Schema(subject, version, id, schema), normalize,
-        propagateSchemaTags);
+    final String qualified = subject;
+    final Schema s = new Schema(subject, version, id, schema);
+    return doRegister(qualified,
+        () -> schemaRegistry.register(qualified, s, normalize, propagateSchemaTags));
   }
 
+  /**
+   * Registers the request whole, so that the operations only a request can carry -- the tags to
+   * add and remove -- are applied as they would be over REST. Only the body is rewritten, to the
+   * native schema the configured providers read it as, since the registry parses with its own
+   * providers and those need not understand logical types DDL.
+   */
   @Override
   public synchronized RegisterSchemaResponse registerWithRequestResponse(
       String subject, RegisterSchemaRequest request, boolean normalize)
@@ -215,32 +223,38 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    return doRegister(subject, toNativeSchema(subject, request), normalize,
-        request.doPropagateSchemaTags());
+    final String qualified = subject;
+    final RegisterSchemaRequest nativeRequest = toNativeRequest(qualified, request);
+    return doRegister(qualified,
+        () -> schemaRegistry.register(qualified, nativeRequest, normalize));
   }
 
   /**
-   * Reads a request with the configured providers, so that a logical types DDL body becomes the
-   * native schema it denotes before the registry sees it. The registry parses with its own
-   * providers, which need not be the ones configured here, so the conversion happens up front
-   * rather than being left to it.
+   * Copies a request with its body replaced by the native schema the configured providers read it
+   * as, leaving every other field -- including the tag operations -- untouched. This is the same
+   * rewrite the resource layer performs for a logical types DDL body arriving over REST.
    */
-  private Schema toNativeSchema(String subject, RegisterSchemaRequest request) {
-    Schema schema = new Schema(subject, request);
-    Optional<ParsedSchema> parsed = parseSchema(schema);
+  private RegisterSchemaRequest toNativeRequest(String subject, RegisterSchemaRequest request) {
+    RegisterSchemaRequest converted = request.copy();
+    Optional<ParsedSchema> parsed = parseSchema(new Schema(subject, converted));
     if (!parsed.isPresent()) {
       throw Errors.invalidSchemaException(
-          new InvalidSchemaException("Invalid schema of type " + schema.getSchemaType()));
+          new InvalidSchemaException("Invalid schema of type " + request.getSchemaType()));
     }
-    return new Schema(subject, schema.getVersion(), schema.getId(), parsed.get());
+    converted.setSchemaType(parsed.get().schemaType());
+    converted.setSchema(parsed.get().canonicalString());
+    converted.setMetadata(parsed.get().metadata());
+    return converted;
   }
 
+  /**
+   * Runs a registration, translating what the registry throws into the equivalent REST error.
+   */
   private synchronized RegisterSchemaResponse doRegister(
-      String subject, Schema s, boolean normalize, boolean propagateSchemaTags)
+      String subject, Registration registration)
       throws IOException, RestClientException {
     try {
-      return new RegisterSchemaResponse(
-          schemaRegistry.register(subject, s, normalize, propagateSchemaTags));
+      return new RegisterSchemaResponse(registration.run());
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
@@ -264,6 +278,13 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while registering schema", e);
     }
+  }
+
+  /** A registration to run, so that callers differing only in what they register share the
+   * translation of what it throws. */
+  @FunctionalInterface
+  private interface Registration {
+    Schema run() throws SchemaRegistryException;
   }
 
   @Override
@@ -460,7 +481,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
     try {
-      Schema schema = toNativeSchema(subject, request);
+      Schema schema = new Schema(subject, toNativeRequest(subject, request));
       Schema latest = schemaRegistry.getLatestVersion(subject);
       List<SchemaKey> previousSchemas = latest != null
           ? Collections.singletonList(new SchemaKey(subject, latest.getVersion()))
@@ -638,7 +659,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
-    return doLookUp(subject, toNativeSchema(subject, request), normalize);
+    return doLookUp(subject, new Schema(subject, toNativeRequest(subject, request)), normalize);
   }
 
   private RegisterSchemaResponse doLookUp(String subject, Schema s, boolean normalize)
