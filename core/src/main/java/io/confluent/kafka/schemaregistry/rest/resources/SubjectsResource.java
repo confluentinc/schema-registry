@@ -130,9 +130,6 @@ public class SubjectsResource {
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
-      // Auto-detect a logical-types DDL body (native-first) and convert it to the requested native
-      // schemaType before lookup.
-      LogicalFormat.tryConvertToNative(schemaRegistry, subject, request);
       // returns version if the schema exists. Otherwise returns 404
       Schema schema = new Schema(subject, request);
       if (!normalize) {
