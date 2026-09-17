@@ -24,9 +24,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 
@@ -123,11 +126,44 @@ class LogicalSchemaProviderTest {
   }
 
   @Test
-  void rejectsExternalImports() {
+  void avroRejectsExternalImports() {
+    // External imports are a JSON-only construct, so the target format decides, not this provider.
     ValidationException e = assertThrows(ValidationException.class,
         () -> parse(new LogicalAvroSchemaProvider(),
             "USING TYPE Ext FOR REF 'http://example.com/ext.json'; TYPE STRUCT<f Ext>"));
     assertTrue(e.getMessage().contains("external imports"), e.getMessage());
+  }
+
+  @Test
+  void resolvesReferences() {
+    Schema referenced = new Schema("Address-value", 1, 1, AvroSchema.TYPE,
+        Collections.emptyList(), "{\"type\":\"record\",\"name\":\"Address\",\"fields\":"
+        + "[{\"name\":\"street\",\"type\":\"string\"}]}");
+    SchemaProvider provider = new LogicalAvroSchemaProvider();
+    provider.configure(Collections.singletonMap(
+        SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, fetcherFor(referenced)));
+
+    Schema schema = new Schema(SUBJECT, null, null, AvroSchema.TYPE,
+        Collections.singletonList(new SchemaReference("Address", "Address-value", 1)),
+        "TYPE STRUCT<home Address>");
+    ParsedSchema parsed = provider.parseSchemaOrElseThrow(schema, false, false);
+
+    assertEquals(AvroSchema.TYPE, parsed.schemaType());
+    assertTrue(parsed.canonicalString().contains("Address"), parsed.canonicalString());
+  }
+
+  private SchemaVersionFetcher fetcherFor(Schema referenced) {
+    return new SchemaVersionFetcher() {
+      @Override
+      public String tenant() {
+        return QualifiedSubject.DEFAULT_TENANT;
+      }
+
+      @Override
+      public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
+        return referenced.getSubject().equals(subject) ? referenced : null;
+      }
+    };
   }
 
   @Test

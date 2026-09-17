@@ -16,16 +16,19 @@
 
 package io.confluent.kafka.schemaregistry.type.logical;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -41,7 +44,7 @@ import java.util.Map;
  * so that what it stores is decided server-side -- must send the DDL itself rather than the
  * schema this returns.
  */
-public class LogicalSchemaProvider implements SchemaProvider {
+public class LogicalSchemaProvider extends AbstractSchemaProvider {
 
   private final SchemaProvider delegate;
 
@@ -74,6 +77,9 @@ public class LogicalSchemaProvider implements SchemaProvider {
 
   @Override
   public void configure(Map<String, ?> configs) {
+    // Both halves need configuring: the delegate parses native bodies, while this class resolves
+    // the references of a DDL body through the version fetcher the base class captures.
+    super.configure(configs);
     delegate.configure(configs);
   }
 
@@ -90,8 +96,36 @@ public class LogicalSchemaProvider implements SchemaProvider {
         // Neither native nor DDL: the native failure is the one worth reporting.
         throw e;
       }
-      return toNative(schema, toLogicalType(script));
+      return toNative(schema, attachReferences(schema, toLogicalType(script)));
     }
+  }
+
+  /**
+   * A logical type carries external-type bindings but never registry coordinates, so a type that
+   * references anything external is resolved against the caller-declared references the way a
+   * native schema's are, and the resolved definitions are attached for the conversion to emit.
+   */
+  private LogicalType attachReferences(Schema schema, LogicalType parsed) {
+    List<SchemaReference> references = schema.getReferences();
+    if (references == null || references.isEmpty()) {
+      return parsed;
+    }
+    Map<String, String> resolvedReferences;
+    try {
+      resolvedReferences = resolveReferences(schema);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      throw new ValidationException("Could not resolve schema references: " + e.getMessage(), e);
+    }
+    return new LogicalType(
+        parsed.getName(),
+        parsed.getNamespace(),
+        parsed.getRootSchema(),
+        parsed.getNamedTypes(),
+        parsed.getExternalTypes(),
+        parsed.getExternalImports(),
+        references,
+        resolvedReferences,
+        parsed.getDefaultValues());
   }
 
   /**
@@ -109,13 +143,11 @@ public class LogicalSchemaProvider implements SchemaProvider {
     }
   }
 
+  /**
+   * External imports are left to the converters, which decide per format: they are a JSON-only
+   * construct, so the Avro and Protobuf converters reject a type that carries them.
+   */
   private ParsedSchema toNative(Schema schema, LogicalType logicalType) {
-    if (!logicalType.getExternalImports().isEmpty()) {
-      throw new ValidationException(
-          "Cannot convert a logical type schema with external imports "
-              + logicalType.getExternalImports().keySet()
-              + "; resolving them requires the registry");
-    }
     String rowName = rowName(schema.getSubject());
     try {
       switch (schemaType().toUpperCase(Locale.ROOT)) {
