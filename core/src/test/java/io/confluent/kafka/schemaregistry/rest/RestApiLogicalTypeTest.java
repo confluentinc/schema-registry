@@ -76,6 +76,23 @@ public abstract class RestApiLogicalTypeTest {
   }
 
   /**
+   * The declared schema type picks the format a DDL body is converted to, and it is matched
+   * without regard to case.
+   */
+  @Test
+  public void testLowerCaseSchemaTypeStillConverts() throws Exception {
+    String subject = "lowercase-value";
+
+    restApp.restClient.registerSchema(
+        "TYPE STRUCT(id STRING)", "avro", Collections.emptyList(), subject);
+
+    Schema stored = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1);
+    assertEquals(AvroSchema.TYPE, stored.getSchemaType());
+    assertTrue(stored.getSchema().contains("\"record\""), stored.getSchema());
+  }
+
+  /**
    * A DDL body is recognized by its own syntax, so a native schema submitted under the same
    * schemaType must still be stored as it was written.
    */
