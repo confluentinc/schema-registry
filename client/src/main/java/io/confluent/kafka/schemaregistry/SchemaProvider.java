@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.apache.kafka.common.Configurable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
  * which takes a comma-separated list of such factories.
  */
 public interface SchemaProvider extends Configurable {
+
+  Logger LOG = LoggerFactory.getLogger(SchemaProvider.class);
 
   String SCHEMA_VERSION_FETCHER_CONFIG = "schemaVersionFetcher";
 
@@ -72,11 +76,7 @@ public interface SchemaProvider extends Configurable {
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(Schema schema, boolean validateAsNew) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(schema, validateAsNew, false));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+    return parseSchema(schema, validateAsNew, false);
   }
 
   /**
@@ -92,6 +92,11 @@ public interface SchemaProvider extends Configurable {
     try {
       return Optional.of(parseSchemaOrElseThrow(schema, validateAsNew, normalize));
     } catch (Exception e) {
+      // Logged here rather than where it is thrown, because this is where the reason is lost:
+      // an empty result says only that the schema could not be read. A caller that wants to
+      // decide for itself -- one classifying a body it may parse another way -- should use
+      // parseSchemaOrElseThrow and get the exception instead of a log line.
+      LOG.error("Could not parse schema of type {}", schema.getSchemaType(), e);
       return Optional.empty();
     }
   }
@@ -107,13 +112,9 @@ public interface SchemaProvider extends Configurable {
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
                                              boolean validateAsNew) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString),
-          validateAsNew, false));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+    return parseSchema(
+        new Schema(null, null, null, schemaType(), references, schemaString),
+        validateAsNew, false);
   }
 
   /**
@@ -129,13 +130,9 @@ public interface SchemaProvider extends Configurable {
                                              List<SchemaReference> references,
                                              boolean validateAsNew,
                                              boolean normalize) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString),
-          validateAsNew, normalize));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+    return parseSchema(
+        new Schema(null, null, null, schemaType(), references, schemaString),
+        validateAsNew, normalize);
   }
 
   default Optional<ParsedSchema> parseSchema(String schemaString,

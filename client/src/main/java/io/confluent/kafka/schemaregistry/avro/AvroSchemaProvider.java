@@ -19,12 +19,8 @@ package io.confluent.kafka.schemaregistry.avro;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class AvroSchemaProvider extends AbstractSchemaProvider {
-
-  private static final Logger log = LoggerFactory.getLogger(AvroSchemaProvider.class);
 
   @Override
   public String schemaType() {
@@ -45,7 +41,6 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
           validateAsNew
       );
     } catch (Exception e) {
-      log.error("Could not parse Avro schema", e);
       throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
           + ", details: " + e.getMessage(), e);
     }
