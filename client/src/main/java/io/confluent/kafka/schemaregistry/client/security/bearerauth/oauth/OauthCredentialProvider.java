@@ -24,12 +24,10 @@ import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 
 /**
  * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
@@ -86,8 +84,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     return new OauthTokenCache(cacheExpiryBufferSeconds);
   }
 
-  private AccessTokenRetriever getTokenRetriever(ConfigurationUtils cu) {
-
+  private JwtRetriever getTokenRetriever(ConfigurationUtils cu) {
     String clientId = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID);
     String clientSecret = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
     String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE, false);
@@ -108,15 +105,15 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
       sslSocketFactory = new HostSslSocketFactory(jou.createSSLSocketFactory(), url.getHost());
     }
 
-    return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
+    return new HttpJwtRetriever(clientId, clientSecret, scope, sslSocketFactory,
         url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
         loginReadTimeoutMs, false);
   }
 
-  private AccessTokenValidator getTokenValidator(Map<String, ?> configs) {
+  private JwtValidator getTokenValidator(Map<String, ?> configs) {
     String scopeClaimName = SchemaRegistryClientConfig.getBearerAuthScopeClaimName(configs);
     String subClaimName = SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
-    return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
+    return new ClientJwtValidator(scopeClaimName, subClaimName);
   }
 
 }

@@ -29,6 +29,9 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -705,6 +708,55 @@ public abstract class RestApiModeTest {
     assertEquals(
             globalMode,
             restApp.restClient.getMode(subject, true).getMode());
+  }
+
+  @Test
+  public void testSetForwardMode() throws Exception {
+    String subject = "testSubject";
+    String mode = "FORWARD";
+
+    try {
+      restApp.restClient.setMode(mode, subject);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+
+    try {
+      restApp.restClient.setMode(mode).getMode();
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+  }
+
+  @Test
+  public void testSetForwardModeForNonGlobalContext() throws Exception {
+    // only support global context
+    String mode = "FORWARD";
+    restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME);
+    assertEquals(mode, restApp.restClient.getMode(CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME).getMode());
+
+    try {
+      restApp.restClient.setMode(mode, null);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+
+    try {
+      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + DEFAULT_CONTEXT);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+
+    try {
+      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + ":subject-name");
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
   }
 
   @Test
