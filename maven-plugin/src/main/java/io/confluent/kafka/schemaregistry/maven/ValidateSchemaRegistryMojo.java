@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.File;
@@ -40,14 +41,14 @@ public class ValidateSchemaRegistryMojo extends UploadSchemaRegistryMojo {
           String.format("Calling validate('%s', '%s')", subject, request.getSchema())
       );
     }
+    // A logical types DDL body is parsed by the configured providers like any other, so this
+    // validates the native schema the registry would store rather than the DDL itself.
     Optional<ParsedSchema> schema = this.client().parseSchema(
-        request.getSchemaType(), request.getSchema(), request.getReferences(),
-        request.getMetadata(), request.getRuleSet());
-    if (schema.isPresent()) {
-      schema.get().validate(false);
-    } else {
-      LogicalSchema.validate(subject, request.getSchemaType(), request.getSchema(), false);
+        new Schema(subject, request));
+    if (!schema.isPresent()) {
+      throw new IOException("Schema for " + subject + " could not be parsed.");
     }
+    schema.get().validate(false);
     return true;
   }
 }

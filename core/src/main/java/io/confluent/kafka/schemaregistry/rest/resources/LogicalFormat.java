@@ -41,7 +41,7 @@ import java.util.Map;
 /**
  * Converts between Logical Type format and the native Avro/JSON/Protobuf formats.
  */
-public final class LogicalFormat {
+final class LogicalFormat {
 
   static final String FORMAT_LOGICAL = "logical";
 
@@ -78,7 +78,7 @@ public final class LogicalFormat {
    *
    * @return whether the body was logical and has been replaced by its native equivalent
    */
-  public static boolean tryConvertToNative(
+  static boolean tryConvertToNative(
       final SchemaRegistry schemaRegistry,
       final String subject,
       final RegisterSchemaRequest request)

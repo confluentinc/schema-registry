@@ -38,7 +38,7 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   @Before
   public void createMojo(){
     this.mojo = new RegisterSchemaRegistryMojo();
-    this.client = new MockSchemaRegistryClient();
+    this.client = new MockSchemaRegistryClient(MojoUtils.defaultSchemaProviders());
     this.mojo.client(this.client);
   }
 
@@ -57,9 +57,13 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();
     expectedVersions.put(subject, 1);
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
-    // The DDL is registered as-is; converting it to Avro is the registry's job.
-    Assert.assertThat(
-        this.client.getLatestSchemaMetadata(subject).getSchema(), IsEqual.equalTo(ddl));
+    // The plugin sends the DDL; what gets stored is the native schema it denotes. (The registry
+    // names the root after the subject; this client names it from whichever parse cached it
+    // first, so the name is not asserted here.)
+    String registered = this.client.getLatestSchemaMetadata(subject).getSchema();
+    Assert.assertNotEquals(ddl, registered);
+    Assert.assertTrue(registered, registered.contains("\"type\":\"record\""));
+    Assert.assertTrue(registered, registered.contains("\"name\":\"age\""));
   }
 
   @Test(expected = IllegalStateException.class)

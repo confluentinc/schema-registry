@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 
 public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
@@ -120,18 +121,19 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       String schemaString = MojoUtils.readFile(file, StandardCharsets.UTF_8);
       Optional<ParsedSchema> schema = client().parseSchema(
           schemaType, schemaString, schemaReferences, metadata, ruleSet);
+      schema.ifPresent(s -> schemas.put(key, s));
       RegisterSchemaRequest request;
-      if (schema.isPresent()) {
-        schemas.put(key, schema.get());
-        request = new RegisterSchemaRequest(schema.get());
-      } else if (LogicalSchema.isLogical(schemaString)) {
-        // Registered as-is: the registry recognizes the DDL and converts it to schemaType itself.
+      if (LogicalSchemaProvider.isLogical(schemaString)) {
+        // Sent as-is so that the registry performs the conversion, which keeps what gets stored
+        // independent of whether the providers configured here can convert DDL themselves.
         request = new RegisterSchemaRequest();
         request.setSchemaType(schemaType);
         request.setSchema(schemaString);
         request.setReferences(schemaReferences);
         request.setMetadata(metadata);
         request.setRuleSet(ruleSet);
+      } else if (schema.isPresent()) {
+        request = new RegisterSchemaRequest(schema.get());
       } else {
         getLog().error("Schema for " + key + " could not be parsed.");
         errors++;

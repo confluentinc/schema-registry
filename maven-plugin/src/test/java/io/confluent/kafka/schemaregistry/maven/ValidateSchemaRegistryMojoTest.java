@@ -34,7 +34,7 @@ public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
   @Before
   public void createMojo(){
     this.mojo = new ValidateSchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.mojo.client(new MockSchemaRegistryClient(MojoUtils.defaultSchemaProviders()));
   }
 
   @Test
