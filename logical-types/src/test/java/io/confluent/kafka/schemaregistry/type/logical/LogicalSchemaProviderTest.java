@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -123,6 +124,29 @@ class LogicalSchemaProviderTest {
     // Parses as DDL, so the DDL error is what should surface rather than a native one.
     assertThrows(ValidationException.class,
         () -> parse(new LogicalAvroSchemaProvider(), "STRUCT User (name STRING); TYPE Missing"));
+  }
+
+  @Test
+  void carriesConversionAndRequestedMetadata() {
+    Schema schema = new Schema(SUBJECT, null, null, JsonSchema.TYPE, Collections.emptyList(),
+        new Metadata(null, Collections.singletonMap("owner", "payments"), null), null, DDL);
+    ParsedSchema parsed =
+        new LogicalJsonSchemaProvider().parseSchemaOrElseThrow(schema, false, false);
+
+    // Merged, not replaced -- the same result the registry produces for the same body.
+    assertEquals("payments", parsed.metadata().getProperties().get("owner"));
+    assertEquals("2", parsed.metadata().getProperties().get("confluent:edition"));
+  }
+
+  @Test
+  void jsonAcceptsExternalImports() {
+    // External imports are a JSON construct: they name a target an FQN cannot address, and the
+    // JSON writer emits the URI as the reference. Only Avro and Protobuf, which cannot express
+    // one, reject them -- so the target format decides, exactly as the registry lets it.
+    ParsedSchema parsed = parse(new LogicalJsonSchemaProvider(),
+        "USING TYPE Ext FOR REF 'http://example.com/ext.json'; TYPE STRUCT<f Ext>");
+    assertTrue(parsed.canonicalString().contains("http://example.com/ext.json"),
+        parsed.canonicalString());
   }
 
   @Test

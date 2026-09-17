@@ -94,8 +94,16 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
         return this.client().getVersion(subject, schema.get(), normalizeSchemas);
       }
     }
-    return this.client()
+    Integer version = this.client()
         .getIdWithRequestResponse(subject, request, normalizeSchemas)
         .getVersion();
+    if (version == null) {
+      // Leaves this subject out of schemaVersions, so a dependent subject referencing it without
+      // an explicit version falls back to latest. That fallback warns on its own, but says nothing
+      // about why the version was unknown.
+      getLog().warn(String.format("Could not determine the registered version of subject(%s)",
+          subject));
+    }
+    return version;
   }
 }
