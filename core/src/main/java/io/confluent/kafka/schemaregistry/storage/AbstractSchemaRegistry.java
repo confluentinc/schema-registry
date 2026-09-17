@@ -73,6 +73,7 @@ import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -111,6 +112,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -335,19 +337,40 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
-    for (SchemaProvider provider : defaultSchemaProviders) {
-      provider.configure(schemaProviderConfigs);
-    }
     Map<String, SchemaProvider> providerMap = new HashMap<>();
-    registerProviders(providerMap, defaultSchemaProviders);
+    registerProviders(providerMap,
+        withLogicalTypes(defaultSchemaProviders, schemaProviderConfigs));
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
     // Allow custom providers to override default providers
-    registerProviders(providerMap, customSchemaProviders);
+    registerProviders(providerMap,
+        withLogicalTypes(customSchemaProviders, schemaProviderConfigs));
     metricsContainer.getCustomSchemaProviderCount().record(customSchemaProviders.size());
     return providerMap;
+  }
+
+  /**
+   * Wraps each provider so that a logical types DDL body is read as the native schema it denotes,
+   * whatever format the provider itself reads. Reading a schema is where that belongs: every path
+   * that parses one -- register, lookup, compatibility -- then accepts DDL alike, and a custom
+   * provider does not have to know about logical types to be usable with them.
+   *
+   * <p>Configuring happens after wrapping, because the wrapper resolves a DDL body's references
+   * itself and so needs the version fetcher too, not only the provider it wraps. A provider that
+   * arrives already configured is configured again, which configuring is expected to tolerate.
+   */
+  private List<SchemaProvider> withLogicalTypes(
+      List<SchemaProvider> providers, Map<String, Object> configs) {
+    List<SchemaProvider> wrapped = new ArrayList<>(providers.size());
+    for (SchemaProvider provider : providers) {
+      SchemaProvider logical = provider instanceof LogicalSchemaProvider
+          ? provider : new LogicalSchemaProvider(provider);
+      logical.configure(configs);
+      wrapped.add(logical);
+    }
+    return wrapped;
   }
 
   protected void registerProviders(
@@ -660,6 +683,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     schema.setSchemaType(parsedSchema.schemaType());
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
+    // Merged rather than replaced: a conversion records metadata of its own that has to reach
+    // storage, but a provider that does not carry the requested metadata onto what it parses
+    // must not thereby erase it.
+    schema.setMetadata(mergeMetadata(schema.getMetadata(), parsedSchema.metadata()));
     return parsedSchema;
   }
 
@@ -2078,9 +2105,19 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return resourceExtensions;
   }
 
+  /**
+   * Looks a provider up by schema type, falling back to a case-insensitive match. A logical types
+   * body used to reach its converter whatever the case of its declared type, because the
+   * conversion upper-cased it; resolving the provider case-insensitively keeps that true now that
+   * the provider is what converts.
+   */
   @Override
   public SchemaProvider schemaProvider(String schemaType) {
-    return providers.get(schemaType);
+    SchemaProvider provider = providers.get(schemaType);
+    if (provider != null || schemaType == null) {
+      return provider;
+    }
+    return providers.get(schemaType.toUpperCase(Locale.ROOT));
   }
 
   @Override
