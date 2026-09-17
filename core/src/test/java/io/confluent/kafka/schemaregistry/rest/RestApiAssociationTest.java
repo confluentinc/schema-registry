@@ -4192,9 +4192,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
   @Test
   public void testBatchMutateSizeLimitsDisabledByDefault() throws Exception {
-    // association.batch.mutate.limits.enabled defaults to false, so a batch that would exceed
-    // every configured limit (association count, entry payload bytes, batch payload bytes)
-    // is still processed rather than rejected.
     StringBuilder padding = new StringBuilder();
     for (int i = 0; i < 200; i++) {
       padding.append('x');

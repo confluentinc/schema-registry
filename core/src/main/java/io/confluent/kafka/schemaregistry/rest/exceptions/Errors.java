@@ -84,8 +84,6 @@ public class Errors {
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
   public static final int ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE = 42213;
-  // Deliberately generic (used by both batchMutate and batchGet): the specific limit and
-  // measured value are debug-logged server-side only, not returned to the client.
   public static final String ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE =
       "Associations batch request exceeded a configured limit";
 
