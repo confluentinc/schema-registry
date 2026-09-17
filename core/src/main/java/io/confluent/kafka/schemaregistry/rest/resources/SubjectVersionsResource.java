@@ -493,11 +493,6 @@ public class SubjectVersionsResource {
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
-      // Input format is auto-detected from the body (native-first: only a body that fails to parse
-      // as its declared native schemaType and then parses as logical DDL is treated as logical).
-      // A logical body is converted to the requested native schemaType before registration. The
-      // `format` query param is not consulted for input; it only renders the response (below).
-      LogicalFormat.tryConvertToNative(schemaRegistry, subjectName, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
