@@ -39,15 +39,6 @@ import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests for the Associations batchGet count limit
- * ({@link SchemaRegistryConfig#ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG},
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG}), with enforcement
- * explicitly enabled at the shipped default threshold (10). The limit is on the number of
- * items in the request payload, not the number of schemas actually matched/retrieved, so it is
- * a cheap, request-body-only check -- most of these tests don't need any stored associations to
- * exist to exercise it.
- */
 public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   public RestApiAssociationBatchGetLimitsTest() {
@@ -61,9 +52,6 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
     return props;
   }
 
-  // Creates one resource with a single "value" association carrying a schema. A single
-  // association is exempt from the (disabled, in this test class) batchMutate limits, so this
-  // always succeeds regardless of that unrelated feature.
   private static void createResource(RestApp restApp, String resourceName, int index)
       throws Exception {
     RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
@@ -86,8 +74,6 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testIncludeSchemasFalseExemptFromLimit() throws Exception {
-    // 11 request items exceeds the default limit of 10, but includeSchemas is false, so the
-    // limit is never enforced. None of these resources need to actually exist.
     int numItems = 11;
     List<AssociationGetRequest> queries = new ArrayList<>();
     for (int i = 0; i < numItems; i++) {
@@ -102,7 +88,6 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testIncludeSchemasTrueWithinLimitSucceeds() throws Exception {
-    // 10 request items, at (not over) the default limit of 10.
     int numItems = 10;
     List<AssociationGetRequest> queries = new ArrayList<>();
     for (int i = 0; i < numItems; i++) {
@@ -123,8 +108,6 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testIncludeSchemasTrueExceedsMaxAssociationNumPerGetBatch() throws Exception {
-    // 11 request items exceeds the default limit of 10. None of these resources need to
-    // actually exist -- the limit is on the request payload, not on what it resolves to.
     int numItems = 11;
     List<AssociationGetRequest> queries = new ArrayList<>();
     for (int i = 0; i < numItems; i++) {
