@@ -37,14 +37,6 @@ import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests for the Associations batchMutate size/count limits
- * ({@link SchemaRegistryConfig#ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG},
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG},
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG}, and
- * {@link SchemaRegistryConfig#MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG}), with enforcement
- * explicitly enabled at the shipped default thresholds (10 / 100 bytes / 1000 bytes).
- */
 public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
   public RestApiAssociationBatchLimitsTest() {
@@ -78,7 +70,6 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testSingleAssociationExemptFromAllLimits() throws Exception {
-    // A single association is exempt regardless of size (protects Flink-style calls).
     String hugeSchema = "{\"type\":\"record\",\"name\":\"Huge\",\"fields\":["
         + "{\"name\":\"f\",\"type\":\"string\",\"default\":\"" + padded(1200) + "\"}]}";
     List<AssociationOpRequest> requests = new ArrayList<>();
@@ -93,8 +84,6 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testNoInlineSchemaExemptFromAllLimits() throws Exception {
-    // No association in the batch carries an inline schema, so the whole batch is exempt
-    // regardless of count (protects Kafka Cluster Linking-style calls).
     int numResources = 12;
     List<String> subjects = TestUtils.getRandomCanonicalAvroString(numResources);
     List<AssociationOpRequest> requests = new ArrayList<>();
@@ -118,9 +107,27 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRealisticBatchAtMaxCountSucceedsUnderDefaultLimits() throws Exception {
+    String realisticSchema = "{\"type\":\"record\",\"name\":\"OrderEvent\",\"fields\":["
+        + "{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"customerId\",\"type\":\"string\"},"
+        + "{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"timestamp\",\"type\":\"long\"}]}";
+    int numResources = 10;
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    for (int i = 0; i < numResources; i++) {
+      requests.add(createOpRequest("orders-topic-" + i, realisticSchema));
+    }
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertEquals(numResources, response.getResults().size());
+    for (AssociationResult result : response.getResults()) {
+      assertNull(result.getError());
+    }
+  }
+
+  @Test
   public void testExceedsMaxAssociationNumPerBatch() throws Exception {
-    // 11 associations with inline schemas, each individually tiny, exceeds the default
-    // MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH of 10.
     List<AssociationOpRequest> requests = new ArrayList<>();
     for (int i = 0; i < 11; i++) {
       requests.add(createOpRequest("num-limit-" + i, "{}"));
@@ -135,11 +142,8 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testExceedsMaxAssociationEntryPayloadBytes() throws Exception {
-    // One resource entry has an association payload well over the default
-    // MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES of 100 bytes, while the total count (2) and the
-    // cumulative payload stay well under the other two limits.
     List<AssociationOpRequest> requests = new ArrayList<>();
-    requests.add(createOpRequest("entry-limit-big", "\"" + padded(150) + "\""));
+    requests.add(createOpRequest("entry-limit-big", "\"" + padded(1500) + "\""));
     requests.add(createOpRequest("entry-limit-small", "{}"));
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
 
@@ -151,11 +155,9 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testExceedsMaxAssociationBatchPayloadBytes() throws Exception {
-    // 9 resource entries, each under the default association count limit (10), whose
-    // cumulative payload exceeds the default MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES of 1000 bytes.
     List<AssociationOpRequest> requests = new ArrayList<>();
     for (int i = 0; i < 9; i++) {
-      requests.add(createOpRequest("batch-limit-" + i, "\"" + padded(150) + "\""));
+      requests.add(createOpRequest("batch-limit-" + i, "\"" + padded(1200) + "\""));
     }
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
 

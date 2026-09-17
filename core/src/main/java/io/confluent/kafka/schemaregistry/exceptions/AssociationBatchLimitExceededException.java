@@ -15,10 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
-/**
- * Thrown when an Associations batchMutate request exceeds one of the configured batch size
- * limits (association count, per-entry payload size, or cumulative payload size).
- */
 public class AssociationBatchLimitExceededException extends SchemaRegistryException {
 
   public AssociationBatchLimitExceededException(String message, Throwable cause) {
