@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -128,6 +129,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default RegisterSchemaResponse registerWithResponse(
       String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
@@ -260,6 +267,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  default List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   default String updateCompatibility(String subject, String compatibility)
       throws IOException, RestClientException {
     return updateConfig(subject, new Config(compatibility)).getCompatibilityLevel();
@@ -369,6 +382,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
