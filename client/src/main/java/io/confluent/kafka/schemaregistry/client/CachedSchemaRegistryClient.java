@@ -800,10 +800,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return new SchemaMetadata(response);
   }
 
-  /**
-   * Not cached, which needs no special handling here: the version cache is consulted only when
-   * looking up deleted schemas, and this does not.
-   */
   @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version, String format)
       throws IOException, RestClientException {
@@ -827,11 +823,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return schema;
   }
 
-  /**
-   * Not cached. The latest-version cache is keyed by subject alone, so a rendered response stored
-   * there would be handed to a later caller that asked for no format at all -- and keying it by
-   * format would restructure a cache the whole client depends on to serve this one call.
-   */
   @Override
   public SchemaMetadata getLatestSchemaMetadata(String subject, String format)
       throws IOException, RestClientException {
