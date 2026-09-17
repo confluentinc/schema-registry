@@ -28,16 +28,11 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
-import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
-import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
-import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
-import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
