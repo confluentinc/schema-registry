@@ -70,6 +70,21 @@ public class RegisterSchemaRequest {
     this.schema = schema.getSchema();
   }
 
+  public RegisterSchemaRequest copy() {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setVersion(getVersion());
+    request.setId(getId());
+    request.setSchemaType(getSchemaType());
+    request.setReferences(getReferences());
+    request.setMetadata(getMetadata());
+    request.setRuleSet(getRuleSet());
+    request.setSchema(getSchema());
+    request.setSchemaTagsToAdd(getSchemaTagsToAdd());
+    request.setSchemaTagsToRemove(getSchemaTagsToRemove());
+    request.setPropagateSchemaTags(isPropagateSchemaTags());
+    return request;
+  }
+
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }

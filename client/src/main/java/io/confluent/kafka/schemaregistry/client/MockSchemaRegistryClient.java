@@ -375,6 +375,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return registerWithResponse(
+        subject,
+        parseSchemaOrElseThrow(new Schema(subject, request)),
+        request.getVersion() != null ? request.getVersion() : 0,
+        request.getId() != null ? request.getId() : -1,
+        normalize,
+        request.doPropagateSchemaTags());
+  }
+
+  @Override
   public ParsedSchema getSchemaById(int id) throws IOException, RestClientException {
     return getSchemaBySubjectAndId(NO_SUBJECT, id);
   }
@@ -702,6 +715,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(
+        subject, parseSchemaOrElseThrow(new Schema(subject, request)), normalize);
+  }
+
+  @Override
   public RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
@@ -822,6 +843,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);
+  }
+
+  @Override
+  public List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    return testCompatibilityVerbose(
+        subject, parseSchemaOrElseThrow(new Schema(subject, request)));
   }
 
   @Override
