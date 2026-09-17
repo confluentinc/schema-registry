@@ -34,7 +34,7 @@ public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
   @Before
   public void createMojo(){
     this.mojo = new ValidateSchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.mojo.client(new MockSchemaRegistryClient(MojoUtils.defaultSchemaProviders()));
   }
 
   @Test
@@ -58,6 +58,31 @@ public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
       expectedVersions.put(valueSubject, version);
     }
 
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
+  @Test
+  public void validateLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile, "STRUCT User (name STRING, age INT); TYPE User");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void validateLogicalTypeWithExternalImports() throws Exception {
+    String subject = "TestExternalSubject-value";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile,
+        "USING TYPE Ext FOR REF 'http://example.com/ext.json'; TYPE STRUCT<f Ext>");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
     this.mojo.subjects = subjectToFile;
     this.mojo.execute();
   }
