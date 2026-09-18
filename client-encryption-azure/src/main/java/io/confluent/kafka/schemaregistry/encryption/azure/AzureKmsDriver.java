@@ -24,6 +24,7 @@ import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.crypto.tink.KmsClient;
+import com.microsoft.aad.msal4j.MsalServiceException;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -58,13 +59,24 @@ public class AzureKmsDriver implements KmsDriver {
     return AzureKmsClient.PREFIX;
   }
 
+  // AAD error codes (see the "AADSTS" prefix in a token-acquisition failure's message) that
+  // indicate the caller's identity is not authorized, rather than a transient/server-side issue.
+  // AADSTS70025: no federated identity credential matches the presented workload identity
+  // assertion, e.g. because the credential was never configured for that identity.
+  private static final String AADSTS_NO_FEDERATED_CREDENTIAL = "AADSTS70025";
+
   @Override
   public boolean isAccessDeniedException(Throwable t) {
-    if (!(t instanceof HttpResponseException)) {
-      return false;
+    if (t instanceof HttpResponseException) {
+      HttpResponseException e = (HttpResponseException) t;
+      return e.getResponse() != null && isAccessDeniedStatus(e.getResponse().getStatusCode());
     }
-    HttpResponseException e = (HttpResponseException) t;
-    return e.getResponse() != null && isAccessDeniedStatus(e.getResponse().getStatusCode());
+    if (t instanceof MsalServiceException) {
+      // MSAL doesn't expose the AADSTS code as a structured field; it's only in the message.
+      String message = t.getMessage();
+      return message != null && message.contains(AADSTS_NO_FEDERATED_CREDENTIAL);
+    }
+    return false;
   }
 
   /**
