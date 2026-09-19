@@ -2519,6 +2519,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<String> errorLogs = isCompatible(qualifiedSubject,
           toSchemaWithTags(qualifiedSubject, schema), previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
+        log.warn("Rejected association schema registration for subject '{}': {}",
+            qualifiedSubject, errorLogs);
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
     }
