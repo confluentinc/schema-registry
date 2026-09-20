@@ -634,7 +634,9 @@ public class EncryptionExecutor implements RuleExecutor {
             return toObject(type, ciphertext);
           case READ:
             ciphertext = toBytes(type, value);
-            if (ciphertext == null) {
+            // Nothing encrypted an empty value, as a field the writer never wrote reads; no
+            // ciphertext is empty, so none is left undecrypted.
+            if (ciphertext == null || ciphertext.length == 0) {
               return value;
             }
             if (type == Type.STRING) {
