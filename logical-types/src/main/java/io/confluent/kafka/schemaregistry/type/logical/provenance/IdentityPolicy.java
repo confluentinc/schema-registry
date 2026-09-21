@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
