@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -182,8 +183,45 @@ public final class ProvenanceResult {
    *
    * @throws IllegalStateException if the schema is recursive, which has no finite inlining
    */
-  public Map<List<Integer>, LocatedProvenance> inlinedProvenance(int version) {
+  public List<InlinedMember> inlinedProvenance(int version) {
     return PathInliner.inline(versions.get(version), byVersion.get(version));
+  }
+
+  /**
+   * Every version's members with an id allocated per location — what a provenance endpoint serves.
+   *
+   * <p>Ids are allocated by walking versions in the order supplied and, within a version, members
+   * in path order, taking the next integer the first time a location is seen. A rename keeps its
+   * id, a drop retires it, and a column re-added under an old name takes a fresh one.
+   *
+   * @throws IllegalStateException if a schema is recursive, or if an id would appear twice within
+   *     one version — which can only happen if allocation stopped being per location
+   */
+  public ProvenanceReport report() {
+    Map<LocatedProvenance, Integer> idByLocation = new LinkedHashMap<>();
+    List<ProvenanceReport.Version> reported = new ArrayList<>(versionCount());
+    int nextId = 1;
+
+    for (int version = 0; version < versionCount(); version++) {
+      List<ProvenanceReport.Member> members = new ArrayList<>();
+      Set<Integer> seenThisVersion = new HashSet<>();
+      for (InlinedMember member : inlinedProvenance(version)) {
+        Integer id = idByLocation.get(member.getLocation());
+        if (id == null) {
+          id = nextId++;
+          idByLocation.put(member.getLocation(), id);
+        }
+        if (!seenThisVersion.add(id)) {
+          throw new IllegalStateException("Provenance id " + id + " appears twice in version "
+              + version + ", at " + member.getPath() + ". An id must identify a location, not a "
+              + "logical entity, or a consumer joining on it cannot tell two uses of one shared "
+              + "named type apart.");
+        }
+        members.add(new ProvenanceReport.Member(member.getPath(), member.getNames(), id));
+      }
+      reported.add(new ProvenanceReport.Version(version, members));
+    }
+    return new ProvenanceReport(reported, nextId - 1);
   }
 
   @Override

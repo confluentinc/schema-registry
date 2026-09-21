@@ -71,5 +71,29 @@ public enum IdentityPolicy {
    * a rename is a drop plus an add. Identities are {@link StringIdentity} and therefore stable:
    * reusing a name after a gap resolves to the same identity, on a new presence interval.
    */
-  JSON
+  JSON;
+
+  /**
+   * The policy for a registry schema type — {@code AVRO}, {@code PROTOBUF} or {@code JSON}, as
+   * {@code ParsedSchema.schemaType()} reports it.
+   *
+   * <p>Takes the type rather than the schema so that a caller who knows the format never falls back
+   * to {@link #AUTO} and its documented hole. Unknown types throw rather than defaulting, because
+   * silently guessing is exactly what this avoids.
+   */
+  public static IdentityPolicy forSchemaType(String schemaType) {
+    if (schemaType == null) {
+      throw new IllegalArgumentException("No schema type given");
+    }
+    switch (schemaType) {
+      case "AVRO":
+        return AVRO;
+      case "PROTOBUF":
+        return PROTOBUF;
+      case "JSON":
+        return JSON;
+      default:
+        throw new IllegalArgumentException("Unsupported schema type: " + schemaType);
+    }
+  }
 }
