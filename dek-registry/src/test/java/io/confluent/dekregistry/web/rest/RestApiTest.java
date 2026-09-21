@@ -17,6 +17,7 @@ package io.confluent.dekregistry.web.rest;
 
 import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -30,7 +31,6 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
-import io.confluent.dekregistry.web.rest.resources.KmsPropsRedactor;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -145,19 +145,28 @@ public class RestApiTest extends ClusterTestHarness {
 
     Kek newKek = client.createKek(
         headers, kekName, kmsType, kmsKeyId, kmsProps, null, false, false);
-    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
     newKek = client.getKek(kekName, false);
-    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
     Map<String, String> updatedProps = new HashMap<>();
     updatedProps.put("token.id", "s.anothersecrettoken");
     updatedProps.put("namespace", "updated-namespace");
     newKek = client.updateKek(headers, kekName, updatedProps, null, null);
-    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
+
+    // Simulate a read-modify-write client: it fetched the (redacted) kek above, which
+    // naturally omits token.id, and PUTs that map straight back, alongside a genuine
+    // change to doc. This must not clear/corrupt the real stored secret.
+    Map<String, String> readModifyWriteProps = new HashMap<>(newKek.getKmsProps());
+    newKek = client.updateKek(headers, kekName, readModifyWriteProps, "updated-doc", null);
+    assertFalse(newKek.getKmsProps().containsKey("token.id"));
+    assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
+    assertEquals("updated-doc", newKek.getDoc());
   }
 
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {

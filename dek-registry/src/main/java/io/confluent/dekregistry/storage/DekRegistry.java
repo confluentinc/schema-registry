@@ -37,6 +37,7 @@ import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
 import io.confluent.dekregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.dekregistry.web.rest.handlers.EncryptionUpdateRequestHandler;
+import io.confluent.dekregistry.web.rest.resources.KmsPropsRedactor;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
@@ -501,14 +502,20 @@ public class DekRegistry implements Closeable {
 
     String kmsType = normalizeKmsType(request.getKmsType());
 
+    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
+    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
+
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
+    if (oldKey != null) {
+      // Recreating a soft-deleted kek: don't let a redacted secret read back from a prior
+      // getKek overwrite the real value.
+      kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey.getKmsProps());
+    }
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
-    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
-    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the kek is deleted
     if (oldKey != null
         && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
@@ -756,7 +763,7 @@ public class DekRegistry implements Closeable {
       return null;
     }
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
+        ? KmsPropsRedactor.merge(request.getKmsProps(), key.getKmsProps())
         : key.getKmsProps();
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();

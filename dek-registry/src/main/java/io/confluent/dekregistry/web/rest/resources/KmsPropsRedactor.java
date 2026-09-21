@@ -28,6 +28,13 @@ import java.util.TreeMap;
  * Masks KMS authentication secrets before a KEK is returned to a client. KEK
  * {@code kmsProps} carry per-driver KMS auth material (e.g. a Vault token); only the
  * write/KMS-client-construction path needs the real values, never a read response.
+ *
+ * <p>Secrets are dropped from the map entirely rather than replaced with a placeholder:
+ * every supported KMS driver (hcvault, aws, azure, gcp, local) falls back to an ambient
+ * credential (an IAM role, managed identity, workload identity, a local env var, etc.)
+ * precisely when the corresponding config key is absent/{@code null}. Substituting a
+ * non-null placeholder would defeat that fallback and cause the driver to try
+ * authenticating with the literal placeholder string instead.
  */
 public final class KmsPropsRedactor {
 
@@ -52,11 +59,7 @@ public final class KmsPropsRedactor {
       return Collections.emptySortedMap();
     }
     SortedMap<String, String> redacted = new TreeMap<>(kmsProps);
-    for (String key : SENSITIVE_KEYS) {
-      if (redacted.containsKey(key)) {
-        redacted.put(key, REDACTED_VALUE);
-      }
-    }
+    redacted.keySet().removeAll(SENSITIVE_KEYS);
     return redacted;
   }
 
@@ -79,5 +82,30 @@ public final class KmsPropsRedactor {
     redacted.setOffset(kek.getOffset());
     redacted.setTimestamp(kek.getTimestamp());
     return redacted;
+  }
+
+  /**
+   * Resolves an incoming {@code kmsProps} update against the currently stored value. A
+   * client that read back a redacted kek (via {@link #redact}, which omits secret keys)
+   * and later submits that map back verbatim naturally omits those keys too; for each
+   * known secret key, an omitted value (or, defensively, one still carrying the legacy
+   * {@link #REDACTED_VALUE} placeholder) is treated as "unchanged" and resolved against
+   * the stored value rather than clearing/overwriting the real secret. A secret key
+   * submitted with any other value is treated as a genuine update.
+   */
+  public static SortedMap<String, String> merge(
+      Map<String, String> requestedKmsProps, Map<String, String> existingKmsProps) {
+    SortedMap<String, String> merged = new TreeMap<>(requestedKmsProps);
+    if (existingKmsProps != null) {
+      for (String key : SENSITIVE_KEYS) {
+        if (!existingKmsProps.containsKey(key)) {
+          continue;
+        }
+        if (!merged.containsKey(key) || REDACTED_VALUE.equals(merged.get(key))) {
+          merged.put(key, existingKmsProps.get(key));
+        }
+      }
+    }
+    return merged;
   }
 }
