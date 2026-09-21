@@ -535,6 +535,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             parsedSchema,
             undeletedVersions));
         isCompatible = compatibilityErrorLogs.isEmpty();
+        if (!isCompatible) {
+          log.warn("Rejected schema registration for subject '{}' (compatibility level={}, "
+                  + "compatibility policy={}): {}",
+              subject, config.getCompatibilityLevel(), config.getCompatibilityPolicy(),
+              compatibilityErrorLogs);
+        }
       }
 
       if (isCompatible) {
