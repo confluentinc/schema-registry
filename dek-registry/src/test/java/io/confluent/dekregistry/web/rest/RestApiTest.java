@@ -30,6 +30,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
+import io.confluent.dekregistry.web.rest.resources.KmsPropsRedactor;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -128,6 +129,35 @@ public class RestApiTest extends ClusterTestHarness {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
     testBasic(headers, true);
+  }
+
+  @Test
+  public void testKekKmsPropsRedaction() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+
+    String kekName = "kek-redact";
+    String kmsType = "test-kms";
+    String kmsKeyId = "myid";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.supersecretvaulttoken");
+    kmsProps.put("namespace", "my-namespace");
+
+    Kek newKek = client.createKek(
+        headers, kekName, kmsType, kmsKeyId, kmsProps, null, false, false);
+    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
+
+    newKek = client.getKek(kekName, false);
+    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
+
+    Map<String, String> updatedProps = new HashMap<>();
+    updatedProps.put("token.id", "s.anothersecrettoken");
+    updatedProps.put("namespace", "updated-namespace");
+    newKek = client.updateKek(headers, kekName, updatedProps, null, null);
+    assertEquals(KmsPropsRedactor.REDACTED_VALUE, newKek.getKmsProps().get("token.id"));
+    assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
   }
 
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
