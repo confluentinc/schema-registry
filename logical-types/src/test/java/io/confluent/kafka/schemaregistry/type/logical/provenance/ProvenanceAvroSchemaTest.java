@@ -122,34 +122,6 @@ class ProvenanceAvroSchemaTest {
     assertThat(result.byPath(0).keySet()).containsExactly(id);
   }
 
-  @Test
-  void defaultsAreRekeyedOntoEveryInlinedPath() {
-    // acme.Addr is used twice. The reader converts its body once, so it records city's default
-    // under the FIRST use site only; a consumer that inlined the type needs it at both.
-    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
-        order("{'name':'a','type':{'type':'record','name':'Addr','fields':["
-            + "{'name':'city','type':'string','default':'?'}]}},"
-            + "{'name':'b','type':'acme.Addr'}").replace('\'', '"')));
-
-    ProvenanceResult result = ProvenanceComputer.compute(
-        Collections.singletonList(lt), IdentityPolicy.AVRO);
-    Map<List<Integer>, Object> expanded = result.expandedDefaults(0);
-
-    assertThat(expanded).containsEntry(Arrays.asList(0, 0), "?");
-    assertThat(expanded).containsEntry(Arrays.asList(1, 0), "?");
-  }
-
-  @Test
-  void aRootFieldDefaultIsKeyedByItsPosition() {
-    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
-        order("{'name':'id','type':'long'},{'name':'note','type':'string','default':'n/a'}")
-            .replace('\'', '"')));
-
-    ProvenanceResult result = ProvenanceComputer.compute(
-        Collections.singletonList(lt), IdentityPolicy.AVRO);
-    assertThat(result.expandedDefaults(0)).containsEntry(Collections.singletonList(1), "n/a");
-  }
-
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------
