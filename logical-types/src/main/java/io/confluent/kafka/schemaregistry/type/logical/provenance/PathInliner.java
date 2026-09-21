@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -52,15 +51,14 @@ final class PathInliner {
    * of provenances that locates it. Named types themselves are absent: they are definitions, not
    * locations, and one unreachable from the root contributes nothing.
    */
-  static Map<List<Integer>, LocatedProvenance> inline(
-      LogicalType logicalType, Map<PathKey, Provenance> byPath) {
-    Map<List<Integer>, LocatedProvenance> sink = new LinkedHashMap<>();
+  static List<InlinedMember> inline(LogicalType logicalType, Map<PathKey, Provenance> byPath) {
+    List<InlinedMember> sink = new ArrayList<>();
     inlineInto(Side.root(logicalType), Collections.emptyList(), byPath, sink);
-    return Collections.unmodifiableMap(sink);
+    return Collections.unmodifiableList(sink);
   }
 
   private static void inlineInto(Side side, List<Provenance> ancestors,
-      Map<PathKey, Provenance> byPath, Map<List<Integer>, LocatedProvenance> sink) {
+      Map<PathKey, Provenance> byPath, List<InlinedMember> sink) {
     if (side.type == null) {
       return;
     }
@@ -72,7 +70,7 @@ final class PathInliner {
       case UNION: {
         int members = memberCount(side.type);
         for (int i = 0; i < members; i++) {
-          Side member = side.member(memberType(side.type, i), i, i);
+          Side member = side.descend(memberType(side.type, i), i, memberName(side.type, i));
           Provenance provenance = byPath.get(member.definition);
           if (provenance == null) {
             // Not an entity the resolver emitted, so this location cannot be named. Should not
@@ -80,7 +78,7 @@ final class PathInliner {
             continue;
           }
           LocatedProvenance located = LocatedProvenance.of(ancestors, provenance);
-          sink.put(member.inlined, located);
+          sink.add(new InlinedMember(member.inlined, member.names, located));
           inlineInto(member, located.getChain(), byPath, sink);
         }
         break;
@@ -88,11 +86,11 @@ final class PathInliner {
       case ARRAY:
       case MULTISET:
         // A collection step is not an entity, so the chain does not grow.
-        inlineInto(side.member(side.type.getElementType(), 0, 0), ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getElementType(), 0, "[]"), ancestors, byPath, sink);
         break;
       case MAP:
-        inlineInto(side.member(side.type.getKeyType(), 0, 0), ancestors, byPath, sink);
-        inlineInto(side.member(side.type.getValueType(), 1, 1), ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getKeyType(), 0, "{key}"), ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getValueType(), 1, "{value}"), ancestors, byPath, sink);
         break;
       default:
         break;
@@ -105,36 +103,35 @@ final class PathInliner {
     private final LogicalType logicalType;
     private final Schema type;
     private final List<Integer> inlined;
+    private final List<String> names;
     private final PathKey definition;
     private final Set<String> inProgress;
 
-    private Side(LogicalType logicalType, Schema type, List<Integer> inlined,
+    private Side(LogicalType logicalType, Schema type, List<Integer> inlined, List<String> names,
         PathKey definition, Set<String> inProgress) {
       this.logicalType = logicalType;
       this.type = type;
       this.inlined = inlined;
+      this.names = names;
       this.definition = definition;
       this.inProgress = inProgress;
     }
 
     static Side root(LogicalType logicalType) {
       return new Side(logicalType, logicalType.getRootSchema(), Collections.emptyList(),
-          PathKey.ofRoot(), new LinkedHashSet<>());
+          Collections.emptyList(), PathKey.ofRoot(), new LinkedHashSet<>());
     }
 
-    Side at(Schema newType, List<Integer> newInlined, PathKey newDefinition) {
-      return new Side(logicalType, newType, newInlined, newDefinition, inProgress);
-    }
-
-    /** One step down: an inlined step, and the matching definition step. */
-    Side member(Schema newType, int inlinedStep, int definitionStep) {
-      return at(newType, append(inlined, inlinedStep), definition.child(definitionStep));
+    /** One step down, whether to a member or through a collection. */
+    Side descend(Schema newType, int step, String name) {
+      return new Side(logicalType, newType, append(inlined, step), appendName(names, name),
+          definition.child(step), inProgress);
     }
 
     /**
      * Runs {@code body} on this side resolved through its reference. A reference adds no step to
-     * either coordinate — the member that held it already did — but it does move the definition
-     * root to the named type.
+     * any coordinate — the member that held it already did — but it does move the definition root
+     * to the named type.
      */
     void dereferencing(Consumer<Side> body) {
       String name = type.getQualifiedName();
@@ -142,11 +139,18 @@ final class PathInliner {
         throw new IllegalStateException("Cannot inline a recursive named type: " + name);
       }
       try {
-        body.accept(at(logicalType.getNamedTypes().get(name), inlined, PathKey.ofNamedType(name)));
+        body.accept(new Side(logicalType, logicalType.getNamedTypes().get(name), inlined, names,
+            PathKey.ofNamedType(name), inProgress));
       } finally {
         inProgress.remove(name);
       }
     }
+  }
+
+  private static String memberName(Schema type, int index) {
+    return type.getType() == Schema.Type.STRUCT
+        ? type.getFields().get(index).getName()
+        : type.getBranches().get(index).getName();
   }
 
   private static int memberCount(Schema type) {
@@ -164,6 +168,13 @@ final class PathInliner {
     return type.getType() == Schema.Type.STRUCT
         ? type.getFields().get(index).getSchema()
         : type.getBranches().get(index).getSchema();
+  }
+
+  private static List<String> appendName(List<String> names, String name) {
+    List<String> extended = new ArrayList<>(names.size() + 1);
+    extended.addAll(names);
+    extended.add(name);
+    return Collections.unmodifiableList(extended);
   }
 
   private static List<Integer> append(List<Integer> path, int step) {

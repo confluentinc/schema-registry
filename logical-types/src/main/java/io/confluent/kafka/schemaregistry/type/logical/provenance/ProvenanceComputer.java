@@ -162,6 +162,14 @@ public final class ProvenanceComputer {
     return new ProvenanceResult(versions, byVersion);
   }
 
+  /**
+   * Computes provenance and packages it as a {@link ProvenanceReport} — every version's members
+   * with an id allocated per location. The form a provenance endpoint serves.
+   */
+  public static ProvenanceReport report(List<LogicalType> versions, IdentityPolicy policy) {
+    return compute(versions, policy).report();
+  }
+
   // -----------------------------------------------------------------------------------------
   // Phase 2 -- Validate
   // -----------------------------------------------------------------------------------------
