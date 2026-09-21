@@ -43,11 +43,6 @@ import java.util.Set;
  */
 public final class ProvenanceResult {
 
-  /**
-   * The value {@link #positionMapping} uses for a column the source does not have.
-   */
-  public static final int ABSENT = -1;
-
   private final List<LogicalType> versions;
   private final List<Map<PathKey, Provenance>> byVersion;
   private final List<Set<Provenance>> memberSets;
@@ -173,116 +168,22 @@ public final class ProvenanceResult {
   }
 
   // -----------------------------------------------------------------------------------------
-  // Inlined views, for consumers that have expanded every named type
+  // Inlined view, for consumers that have inlined every named type
   // -----------------------------------------------------------------------------------------
 
   /**
-   * One version's members keyed by inlined index path instead of definition site — the addressing
-   * a consumer uses when it has followed every {@code NAMED_TYPE_REF}, as Flink's {@code RowType}
-   * does.
+   * One version's members keyed by inlined index path, each valued by the chain of provenances
+   * that locates it — references followed, so a type shared by two fields appears once per use
+   * site with a distinct chain.
    *
-   * <p>Named types themselves do not appear: they are definitions, not locations. A type shared by
-   * two fields appears once per use site, so the same {@link Provenance} may be reached by more
-   * than one path.
+   * <p>This is the view a consumer needs when its own model has no shared types, such as deriving
+   * Iceberg column ids or matching two versions by location: every physical location needs its own
+   * identifier, where {@link #byPath} reports one entry for the shared definition.
    *
    * @throws IllegalStateException if the schema is recursive, which has no finite inlining
    */
-  public Map<List<Integer>, Provenance> expandedProvenance(int version) {
-    return PathExpander.expand(versions.get(version), byVersion.get(version));
-  }
-
-  /**
-   * {@link #correspondence} in inlined coordinates: where each shared member sits in
-   * {@code target}, mapped to where it sits in {@code source}.
-   *
-   * <p>This cannot be derived by joining two {@link #expandedProvenance} maps, because inlining
-   * puts a shared type's members at several paths and only the prefix says which use site is
-   * meant. Both versions are walked in step instead. A member the source lacks ends that subtree,
-   * as does a structural divergence between the two.
-   *
-   * @throws IllegalStateException if either schema is recursive
-   */
-  public Map<List<Integer>, List<Integer>> expandedCorrespondence(int target, int source) {
-    return paired(target, source).paths();
-  }
-
-  /**
-   * One version's declared default values, keyed by inlined index path.
-   *
-   * <p>{@code LogicalType.getDefaultValues()} keys a member of a named type by the path of that
-   * type's <em>first</em> occurrence, because the readers convert a named type's body once. This
-   * re-keys them onto every occurrence, which is what a consumer that inlined the type needs, and
-   * is what supplies a value for a column the source does not have.
-   *
-   * <p>A declared {@code null} default is kept as a null value, so distinguishing it from "no
-   * default" means using {@code containsKey}. For projection the two are equivalent: both mean the
-   * column reads as null.
-   *
-   * <p>Verified against the Avro reader's convention. The Protobuf reader walks through
-   * synthesized wrapper structs, so its default paths carry extra steps that this does not strip.
-   *
-   * @throws IllegalStateException if the schema is recursive
-   */
-  public Map<List<Integer>, Object> expandedDefaults(int version) {
-    return PathExpander.expandDefaults(versions.get(version));
-  }
-
-  /**
-   * Each container's correspondence as positions, keyed by the container's inlined path — the
-   * empty path for the root row, {@code [1]} for a row at target position 1, {@code [0, 0]} for
-   * the row inside a collection at position 0.
-   *
-   * <p>The form a projecting consumer builds its plan from. It makes no assumption about how a
-   * consumer nests rows within collections: walk your own type and look up the path you are at. A
-   * container with no entry is one the walk stopped at, because it is absent or its types
-   * diverged — see {@link #absences}.
-   *
-   * @throws IllegalStateException if either schema is recursive
-   */
-  public Map<List<Integer>, PositionMapping> positionMappings(int target, int source) {
-    return paired(target, source).containers();
-  }
-
-  /**
-   * Why each unmatched member of {@code target} is unmatched, keyed by inlined path.
-   *
-   * <p>A member missing from {@link #expandedCorrespondence} says only that nothing feeds it.
-   * This says which of three things happened, which is what an operator-facing message needs.
-   *
-   * @throws IllegalStateException if either schema is recursive
-   */
-  public Map<List<Integer>, Absence> absences(int target, int source) {
-    return paired(target, source).absences();
-  }
-
-  /**
-   * True when projecting {@code source} onto {@code target} would be a no-op: every member of
-   * every container is fed by the member at the same position, nothing is absent, and no container
-   * differs in arity. A consumer can then use the source's rows unchanged.
-   *
-   * @throws IllegalStateException if either schema is recursive
-   */
-  public boolean isIdentity(int target, int source) {
-    PathExpander.Correspondence paired = paired(target, source);
-    if (!paired.absences().isEmpty()) {
-      return false;
-    }
-    for (Map.Entry<List<Integer>, List<Integer>> entry : paired.paths().entrySet()) {
-      if (!entry.getKey().equals(entry.getValue())) {
-        return false;
-      }
-    }
-    for (PositionMapping mapping : paired.containers().values()) {
-      if (!mapping.isIdentity()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private PathExpander.Correspondence paired(int target, int source) {
-    return PathExpander.correspond(
-        versions.get(target), versions.get(source), correspondence(target, source));
+  public Map<List<Integer>, LocatedProvenance> inlinedProvenance(int version) {
+    return PathInliner.inline(versions.get(version), byVersion.get(version));
   }
 
   @Override

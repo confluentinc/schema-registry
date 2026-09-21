@@ -36,7 +36,7 @@ import java.util.Objects;
  * {@code Schema.Field#getPosition()}, which a {@code oneof} makes unreliable.
  *
  * <p>A bare index path cannot address a member of a named type, because entities are keyed at their
- * definition site rather than expanded per use (that is what terminates the walk on a recursive
+ * definition site rather than inlined per use (that is what terminates the walk on a recursive
  * type and keeps a shared type a single entity). {@link #getTypeName()} supplies the missing root:
  * {@code null} for the root schema, otherwise the named type's qualified name.
  *
