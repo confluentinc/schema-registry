@@ -136,7 +136,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return dekRegistry.toKekEntity(key);
+    return KmsPropsRedactor.redact(dekRegistry.toKekEntity(key));
   }
 
   @GET
@@ -339,7 +339,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       }
 
       Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
@@ -375,7 +375,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       dekRegistry.testKek(kek);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (DekGenerationException e) {
       throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (InvalidKeyException e) {
@@ -516,7 +516,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
