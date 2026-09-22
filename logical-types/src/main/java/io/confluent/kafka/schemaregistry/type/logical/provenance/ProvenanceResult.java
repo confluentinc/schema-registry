@@ -216,7 +216,8 @@ public final class ProvenanceResult {
               + "logical entity, or a consumer joining on it cannot tell two uses of one shared "
               + "named type apart.");
         }
-        members.add(new ProvenanceReport.Member(member.getPath(), member.getNames(), id));
+        members.add(new ProvenanceReport.Member(
+            member.getPath(), member.getNames(), id, member.getDefaultValue()));
       }
       reported.add(new ProvenanceReport.Version(version, members));
     }
