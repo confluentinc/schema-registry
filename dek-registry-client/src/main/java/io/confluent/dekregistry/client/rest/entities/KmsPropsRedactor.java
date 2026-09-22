@@ -104,13 +104,26 @@ public final class KmsPropsRedactor {
   /**
    * Backfills any secret key the server redacted from {@code response} with the real
    * value the caller just supplied in {@code request}, so a client's local cache of a
-   * create/update response retains a credential it can actually use.
+   * create/update response retains a credential it can actually use. Unlike
+   * {@link #merge}, a placeholder or missing value in {@code request} is never copied
+   * over: {@code request} is what a caller just wrote, not a previously-stored value, so
+   * a placeholder there means the caller doesn't actually have the real secret either
+   * (e.g. a legacy caller resubmitting a displayed placeholder), and copying it in would
+   * cache that literal placeholder string as if it were a usable credential.
    */
   public static Kek restoreWriteTimeSecrets(Kek response, Map<String, String> request) {
     if (response == null) {
       return null;
     }
-    SortedMap<String, String> restored = merge(response.getKmsProps(), request);
+    SortedMap<String, String> restored = new TreeMap<>(response.getKmsProps());
+    if (request != null) {
+      for (String key : SENSITIVE_KEYS) {
+        String value = request.get(key);
+        if (value != null && !REDACTED_VALUE.equals(value)) {
+          restored.put(key, value);
+        }
+      }
+    }
     return new Kek(response.getName(), response.getKmsType(), response.getKmsKeyId(),
         restored, response.getDoc(), response.isShared(),
         response.getTimestamp(), response.getDeleted());

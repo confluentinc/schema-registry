@@ -235,12 +235,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     request.setDeleted(deleted);
-    Kek kek = restService.createKek(requestProperties, request);
-    // The server always redacts secrets from its response; restore the real value this
-    // caller just supplied so this process can still use it for encrypt/decrypt.
-    kek = KmsPropsRedactor.restoreWriteTimeSecrets(kek, kmsProps);
-    kekCache.put(new KekId(name, deleted), kek);
-    return kek;
+    Kek response = restService.createKek(requestProperties, request);
+    // The wire response always redacts secrets; cache a copy with the real value this
+    // caller just supplied restored, so this process's own subsequent getKek calls can
+    // still use it for encrypt/decrypt. The redacted response itself is what's returned.
+    Kek cachedKek = KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps);
+    kekCache.put(new KekId(name, deleted), cachedKek);
+    return response;
   }
 
   @Override
@@ -354,12 +355,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
-    Kek kek = restService.updateKek(requestProperties, name, request);
-    // The server always redacts secrets from its response; restore the real value this
-    // caller just supplied so this process can still use it for encrypt/decrypt.
-    kek = KmsPropsRedactor.restoreWriteTimeSecrets(kek, kmsProps);
-    kekCache.put(new KekId(name, false), kek);
-    return kek;
+    Kek response = restService.updateKek(requestProperties, name, request);
+    // The wire response always redacts secrets; cache a copy with the real value this
+    // caller just supplied restored, so this process's own subsequent getKek calls can
+    // still use it for encrypt/decrypt. The redacted response itself is what's returned.
+    Kek cachedKek = KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps);
+    kekCache.put(new KekId(name, false), cachedKek);
+    return response;
   }
 
   @Override

@@ -148,8 +148,14 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
-    // createKek populates the client's local cache; reset it so this actually exercises
-    // a fresh GET against the server rather than replaying the cached create response.
+    // Before any reset, a getKek for the same kek is served from the client's local
+    // cache, which createKek populated with the real secret it just supplied restored
+    // (the wire response above stays redacted) -- so this process can still use it.
+    newKek = client.getKek(kekName, false);
+    assertEquals("s.supersecretvaulttoken", newKek.getKmsProps().get("token.id"));
+    assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
+
+    // Resetting the cache forces a fresh GET against the server, which always redacts.
     client.reset();
     newKek = client.getKek(kekName, false);
     assertFalse(newKek.getKmsProps().containsKey("token.id"));

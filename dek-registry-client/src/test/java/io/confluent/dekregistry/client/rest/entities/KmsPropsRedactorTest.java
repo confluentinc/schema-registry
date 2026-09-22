@@ -124,4 +124,21 @@ public class KmsPropsRedactorTest {
     assertFalse(restored.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", restored.getKmsProps().get("namespace"));
   }
+
+  @Test
+  public void testRestoreWriteTimeSecretsIgnoresPlaceholderInOriginalRequest() {
+    // A legacy caller that resubmits a displayed placeholder instead of the real secret
+    // doesn't actually have the real value either; caching the literal placeholder
+    // string would be just as broken as a redacted-on-read response.
+    Map<String, String> responseProps = new HashMap<>();
+    responseProps.put("namespace", "my-namespace");
+    Kek response = new Kek("kek1", "hcvault", "key1", responseProps, null, true, 1L, null);
+
+    Map<String, String> requestProps = new HashMap<>();
+    requestProps.put("token.id", KmsPropsRedactor.REDACTED_VALUE);
+
+    Kek restored = KmsPropsRedactor.restoreWriteTimeSecrets(response, requestProps);
+
+    assertFalse(restored.getKmsProps().containsKey("token.id"));
+  }
 }
