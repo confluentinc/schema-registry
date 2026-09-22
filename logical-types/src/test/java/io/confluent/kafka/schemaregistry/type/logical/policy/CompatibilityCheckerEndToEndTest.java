@@ -265,6 +265,26 @@ class CompatibilityCheckerEndToEndTest {
     assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
+  @Test
+  void droppingAOneofBranchWithoutCollapsingItIsAFindingInIcebergModeOnly() {
+    // The multi-branch case, distinct from a 2-to-1 collapse: "b" is dropped but the oneof still
+    // has two remaining branches, so this exercises branch removal on its own rather than mixed
+    // with whatever a singleton oneof does. A oneof lowers to the same UNION-of-optional-branches
+    // shape a real Avro/JSON union does, so the verdict mirrors removingAUnionBranchIsCompatible /
+    // removingAUnionBranchIsIncompatible in CompatibilityCheckerFlinkTest / CompatibilityCheckerTest
+    // -- pinned here from real proto text rather than a hand-built Schema, since nothing else
+    // exercises oneof-branch removal through the converter.
+    LogicalType before = fromProto(
+        "syntax = \"proto3\";\npackage t;\n"
+            + "message M { oneof payload { string a = 1; int32 b = 2; bool c = 3; } }\n");
+    LogicalType after = fromProto(
+        "syntax = \"proto3\";\npackage t;\n"
+            + "message M { oneof payload { string a = 1; bool c = 3; } }\n");
+
+    assertCompatible(Mode.FLINK, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.FIELD_DELETED, "payload.b");
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Avro -- a declared default inside a nested record, and the Iceberg format-version split
   // ---------------------------------------------------------------------------------------------
@@ -596,5 +616,106 @@ class CompatibilityCheckerEndToEndTest {
   private static String enumRecord(String symbols, String extra) {
     return "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"e\",\"type\":"
         + "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":" + symbols + extra + "}}]}";
+  }
+
+  @Test
+  void aProtobufEnumValueDropIsAFindingInIcebergModeOnlyJustLikeAvro() {
+    // ENUM_DELETED is keyed off Schema.Type.ENUM, not off which source format produced it, and a
+    // proto enum converts through Schema.createEnum exactly as an Avro enum does -- so this is the
+    // same rule reached from the other format, pinned separately because nothing previously drove
+    // an enum comparison through the real proto converter.
+    LogicalType before = fromProto(
+        "syntax = \"proto3\";\npackage t;\n"
+            + "message M { enum Grade { UNKNOWN = 0; ALPHA = 1; BETA = 2; GAMMA = 3; } "
+            + "Grade grade = 1; }\n");
+    LogicalType after = fromProto(
+        "syntax = \"proto3\";\npackage t;\n"
+            + "message M { enum Grade { UNKNOWN = 0; ALPHA = 1; BETA = 2; } Grade grade = 1; }\n");
+
+    assertCompatible(Mode.FLINK, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.ENUM_DELETED, "grade");
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Field reordering -- pinned from real schema text now that the check is disabled
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void reorderingAvroFieldsIsAcceptedByBothNowThatTheReorderCheckIsOff() {
+    // IcebergComparison.ENABLE_FIELD_REORDERED_CHECK is off (see Rule.FIELD_REORDERED's javadoc),
+    // and FlinkComparison never had this rule. reorderingProtoFieldDeclarationsIsAcceptedByBoth
+    // pins that for Protobuf; nothing pinned it for Avro, so flipping the flag back on would
+    // change this verdict silently rather than failing a test that says so.
+    LogicalType before = fromAvro(
+        "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+            + "{\"name\":\"a\",\"type\":\"string\"},"
+            + "{\"name\":\"b\",\"type\":\"string\"},"
+            + "{\"name\":\"c\",\"type\":\"string\"}]}");
+    LogicalType after = fromAvro(
+        "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+            + "{\"name\":\"c\",\"type\":\"string\"},"
+            + "{\"name\":\"a\",\"type\":\"string\"},"
+            + "{\"name\":\"b\",\"type\":\"string\"}]}");
+
+    assertCompatible(Mode.FLINK, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
+  }
+
+  @Test
+  void reorderingAvroUnionBranchesIsAcceptedByBothNowThatTheReorderCheckIsOff() {
+    // Same flag, exercised through a union's branches (which lower to struct fields) instead of a
+    // record's own fields -- the reachable path an Avro non-null-member union reorder actually
+    // takes, pinned from real schema text.
+    LogicalType before = fromAvro(
+        "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"u\",\"type\":"
+            + "[\"string\",\"int\"]}]}");
+    LogicalType after = fromAvro(
+        "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"u\",\"type\":"
+            + "[\"int\",\"string\"]}]}");
+
+    assertCompatible(Mode.FLINK, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // JSON -- narrowing and nullability-tightening on an already-declared property
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void narrowingAJsonIntegerViaConnectTypeChangesTheDerivedType() {
+    // Plain "integer" derives to BIGINT; connect.type "int32" derives to INT (see testIntegerType
+    // in JsonToLogicalTypeConverterTest), so this is int64 -> int32 narrowing realized the way a
+    // Kafka Connect-flavoured JSON Schema actually expresses it, not a hand-built Schema pair.
+    LogicalType before = fromJson(
+        "{\"type\":\"object\",\"properties\":{"
+            + "\"amount\":{\"type\":\"integer\",\"connect.index\":0}},\"required\":[\"amount\"]}");
+    LogicalType after = fromJson(
+        "{\"type\":\"object\",\"properties\":{"
+            + "\"amount\":{\"type\":\"integer\",\"connect.type\":\"int32\",\"connect.index\":0}},"
+            + "\"required\":[\"amount\"]}");
+
+    assertSingle(Mode.FLINK, before, after, Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.UNSUPPORTED_TYPE_CHANGE);
+  }
+
+  @Test
+  void movingAnAlreadyDeclaredJsonPropertyIntoRequiredIsRejected() {
+    // Distinct from addingARequiredJsonPropertyIsRejected: "age" is present in "properties" on
+    // both sides and only moves in and out of "required" -- an existing optional column tightened,
+    // not a new column added. Mirrors makingAnAvroFieldNullableIsAcceptedAndTheReverseIsNot for
+    // JSON's own nullability channel (membership in "required") instead of Avro's nullable union.
+    LogicalType optional = fromJson(
+        "{\"type\":\"object\",\"properties\":{"
+            + "\"id\":{\"type\":\"string\",\"connect.index\":0},"
+            + "\"age\":{\"type\":\"integer\",\"connect.index\":1}},\"required\":[\"id\"]}");
+    LogicalType required = fromJson(
+        "{\"type\":\"object\",\"properties\":{"
+            + "\"id\":{\"type\":\"string\",\"connect.index\":0},"
+            + "\"age\":{\"type\":\"integer\",\"connect.index\":1}},\"required\":[\"id\",\"age\"]}");
+
+    assertCompatible(Mode.FLINK, required, optional);
+    assertCompatible(Mode.ICEBERG_V2, required, optional);
+    assertSingle(Mode.FLINK, optional, required, Rule.NULLABLE_TO_NON_NULLABLE);
+    assertSingle(Mode.ICEBERG_V2, optional, required, Rule.NULLABLE_TO_NON_NULLABLE);
   }
 }
