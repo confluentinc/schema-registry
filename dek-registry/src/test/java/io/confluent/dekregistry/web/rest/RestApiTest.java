@@ -148,6 +148,9 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
+    // createKek populates the client's local cache; reset it so this actually exercises
+    // a fresh GET against the server rather than replaying the cached create response.
+    client.reset();
     newKek = client.getKek(kekName, false);
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));

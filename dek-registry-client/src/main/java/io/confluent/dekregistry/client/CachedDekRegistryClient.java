@@ -25,6 +25,7 @@ import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -235,6 +236,9 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setShared(shared);
     request.setDeleted(deleted);
     Kek kek = restService.createKek(requestProperties, request);
+    // The server always redacts secrets from its response; restore the real value this
+    // caller just supplied so this process can still use it for encrypt/decrypt.
+    kek = KmsPropsRedactor.restoreWriteTimeSecrets(kek, kmsProps);
     kekCache.put(new KekId(name, deleted), kek);
     return kek;
   }
@@ -351,6 +355,9 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek kek = restService.updateKek(requestProperties, name, request);
+    // The server always redacts secrets from its response; restore the real value this
+    // caller just supplied so this process can still use it for encrypt/decrypt.
+    kek = KmsPropsRedactor.restoreWriteTimeSecrets(kek, kmsProps);
     kekCache.put(new KekId(name, false), kek);
     return kek;
   }

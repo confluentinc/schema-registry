@@ -1,23 +1,22 @@
 /*
  * Copyright 2026 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
- * License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package io.confluent.dekregistry.web.rest.resources;
+package io.confluent.dekregistry.client.rest.entities;
 
 import com.google.common.collect.ImmutableSet;
-import io.confluent.dekregistry.client.rest.entities.Kek;
-import io.confluent.dekregistry.storage.KeyEncryptionKey;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -25,7 +24,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Masks KMS authentication secrets before a KEK is returned to a client. KEK
+ * Masks KMS authentication secrets before a KEK is returned over the wire. KEK
  * {@code kmsProps} carry per-driver KMS auth material (e.g. a Vault token); only the
  * write/KMS-client-construction path needs the real values, never a read response.
  *
@@ -35,6 +34,11 @@ import java.util.TreeMap;
  * precisely when the corresponding config key is absent/{@code null}. Substituting a
  * non-null placeholder would defeat that fallback and cause the driver to try
  * authenticating with the literal placeholder string instead.
+ *
+ * <p>Used by both the DEK Registry server (to redact outbound REST responses) and this
+ * client library (to restore the real value a caller just supplied on a create/update,
+ * into its own local cache of that server response, since the wire response itself is
+ * always redacted).
  */
 public final class KmsPropsRedactor {
 
@@ -72,18 +76,6 @@ public final class KmsPropsRedactor {
         kek.getTimestamp(), kek.getDeleted());
   }
 
-  public static KeyEncryptionKey redact(KeyEncryptionKey kek) {
-    if (kek == null) {
-      return null;
-    }
-    KeyEncryptionKey redacted = new KeyEncryptionKey(kek.getName(), kek.getKmsType(),
-        kek.getKmsKeyId(), redact(kek.getKmsProps()), kek.getDoc(), kek.isShared(),
-        kek.isDeleted());
-    redacted.setOffset(kek.getOffset());
-    redacted.setTimestamp(kek.getTimestamp());
-    return redacted;
-  }
-
   /**
    * Resolves an incoming {@code kmsProps} update against the currently stored value. A
    * client that read back a redacted kek (via {@link #redact}, which omits secret keys)
@@ -107,5 +99,20 @@ public final class KmsPropsRedactor {
       }
     }
     return merged;
+  }
+
+  /**
+   * Backfills any secret key the server redacted from {@code response} with the real
+   * value the caller just supplied in {@code request}, so a client's local cache of a
+   * create/update response retains a credential it can actually use.
+   */
+  public static Kek restoreWriteTimeSecrets(Kek response, Map<String, String> request) {
+    if (response == null) {
+      return null;
+    }
+    SortedMap<String, String> restored = merge(response.getKmsProps(), request);
+    return new Kek(response.getName(), response.getKmsType(), response.getKmsKeyId(),
+        restored, response.getDoc(), response.isShared(),
+        response.getTimestamp(), response.getDeleted());
   }
 }

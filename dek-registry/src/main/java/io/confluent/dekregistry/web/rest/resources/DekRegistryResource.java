@@ -26,6 +26,7 @@ import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.storage.DataEncryptionKey;
 import io.confluent.dekregistry.storage.DekRegistry;
@@ -333,8 +334,18 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       if (request.isShared() && testSharing) {
+        SortedMap<String, String> kmsProps = request.getKmsProps() != null
+            ? new TreeMap<>(request.getKmsProps())
+            : new TreeMap<>();
+        // Recreating a soft-deleted kek from a redacted getKek response: resolve any
+        // omitted/legacy-placeholder secret against the deleted kek's stored value so
+        // the preflight test uses the same properties the actual create will persist.
+        KeyEncryptionKey existingKey = dekRegistry.getKek(request.getName(), true);
+        if (existingKey != null) {
+          kmsProps = KmsPropsRedactor.merge(kmsProps, existingKey.getKmsProps());
+        }
         KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
-            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
+            request.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(kek);
       }
 
@@ -375,7 +386,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       dekRegistry.testKek(kek);
-      asyncResponse.resume(KmsPropsRedactor.redact(kek));
+      asyncResponse.resume(KeyEncryptionKeyRedactor.redact(kek));
     } catch (DekGenerationException e) {
       throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (InvalidKeyException e) {
@@ -504,8 +515,10 @@ public class DekRegistryResource extends SchemaRegistryResource {
     try {
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
+        // Resolve any omitted/legacy-placeholder secret against the stored kek so the
+        // preflight test uses the same properties the actual update will persist.
         SortedMap<String, String> kmsProps = request.getKmsProps() != null
-            ? new TreeMap<>(request.getKmsProps())
+            ? KmsPropsRedactor.merge(request.getKmsProps(), oldKek.getKmsProps())
             : oldKek.getKmsProps();
         KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
             oldKek.getKmsKeyId(), kmsProps, null, true, false);
