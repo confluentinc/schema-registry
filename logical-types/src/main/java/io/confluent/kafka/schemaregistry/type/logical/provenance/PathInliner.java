@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,11 @@ import java.util.function.Consumer;
  *
  * <p>A recursive type has no finite inlining, so a cycle throws rather than being truncated. Any
  * consumer that needs inlined paths cannot represent a cycle either.
+ *
+ * <p>Default values are picked up on the way past. {@link LogicalType#getDefaultValues()} keys a
+ * named type's members by the path of that type's <em>first</em> occurrence, so the walk records
+ * where it first dereferences each named type and resolves the key from there — which gives both
+ * uses of a shared type the same default, as they should have.
  */
 final class PathInliner {
 
@@ -77,7 +83,8 @@ final class PathInliner {
             continue;
           }
           LocatedProvenance located = LocatedProvenance.of(ancestors, provenance);
-          sink.add(new InlinedMember(member.inlined, member.names, located));
+          sink.add(new InlinedMember(
+              member.inlined, member.names, located, member.defaultValue()));
           inlineInto(member, located.getChain(), byPath, sink);
         }
         break;
@@ -105,26 +112,58 @@ final class PathInliner {
     private final List<String> names;
     private final PathKey definition;
     private final Set<String> inProgress;
+    /** Where each named type was first inlined — shared across the walk, written once per type. */
+    private final Map<String, List<Integer>> firstInlined;
 
     private Side(LogicalType logicalType, Schema type, List<Integer> inlined, List<String> names,
-        PathKey definition, Set<String> inProgress) {
+        PathKey definition, Set<String> inProgress, Map<String, List<Integer>> firstInlined) {
       this.logicalType = logicalType;
       this.type = type;
       this.inlined = inlined;
       this.names = names;
       this.definition = definition;
       this.inProgress = inProgress;
+      this.firstInlined = firstInlined;
     }
 
     static Side root(LogicalType logicalType) {
       return new Side(logicalType, logicalType.getRootSchema(), Collections.emptyList(),
-          Collections.emptyList(), PathKey.ofRoot(), new LinkedHashSet<>());
+          Collections.emptyList(), PathKey.ofRoot(), new LinkedHashSet<>(), new HashMap<>());
     }
 
     /** One step down, whether to a member or through a collection. */
     Side descend(Schema newType, int step, String name) {
       return new Side(logicalType, newType, append(inlined, step), appendName(names, name),
-          definition.child(step), inProgress);
+          definition.child(step), inProgress, firstInlined);
+    }
+
+    /**
+     * This member's declared default, or {@code null} where it has none.
+     *
+     * <p>A struct default is left out. The readers normalise scalars and collections into common
+     * Java values but pass a struct default through in the source format's own shape, so there is
+     * nothing here a consumer could read without knowing which format it came from.
+     */
+    Object defaultValue() {
+      Schema target = resolved(type);
+      if (target != null && target.getType() == Schema.Type.STRUCT) {
+        return null;
+      }
+      List<Integer> root = definition.getTypeName() == null
+          ? Collections.emptyList()
+          : firstInlined.get(definition.getTypeName());
+      if (root == null) {
+        return null;
+      }
+      List<Integer> key = new ArrayList<>(root);
+      key.addAll(definition.getIndexPath());
+      return logicalType.getDefaultValues().get(key);
+    }
+
+    private Schema resolved(Schema schema) {
+      return schema != null && schema.getType() == Schema.Type.NAMED_TYPE_REF
+          ? logicalType.getNamedTypes().get(schema.getQualifiedName())
+          : schema;
     }
 
     /**
@@ -137,9 +176,10 @@ final class PathInliner {
       if (!inProgress.add(name)) {
         throw new IllegalStateException("Cannot inline a recursive named type: " + name);
       }
+      firstInlined.putIfAbsent(name, inlined);
       try {
         body.accept(new Side(logicalType, logicalType.getNamedTypes().get(name), inlined, names,
-            PathKey.ofNamedType(name), inProgress));
+            PathKey.ofNamedType(name), inProgress, firstInlined));
       } finally {
         inProgress.remove(name);
       }

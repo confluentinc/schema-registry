@@ -100,11 +100,13 @@ public final class ProvenanceReport {
     private final List<Integer> path;
     private final List<String> names;
     private final int id;
+    private final Object defaultValue;
 
-    Member(List<Integer> path, List<String> names, int id) {
+    Member(List<Integer> path, List<String> names, int id, Object defaultValue) {
       this.path = path;
       this.names = names;
       this.id = id;
+      this.defaultValue = defaultValue;
     }
 
     public List<Integer> getPath() {
@@ -123,6 +125,14 @@ public final class ProvenanceReport {
      * A rename keeps it, a drop retires it permanently, and a column re-added under an old name
      * takes a fresh one.
      */
+    /**
+     * What reading this member yields when a writer has no counterpart for it, or {@code null}
+     * where there is nothing to read. See {@link InlinedMember#getDefaultValue()}.
+     */
+    public Object getDefaultValue() {
+      return defaultValue;
+    }
+
     public int getId() {
       return id;
     }

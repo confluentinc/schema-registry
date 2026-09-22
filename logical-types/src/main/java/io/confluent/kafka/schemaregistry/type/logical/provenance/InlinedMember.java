@@ -29,11 +29,14 @@ public final class InlinedMember {
   private final List<Integer> path;
   private final List<String> names;
   private final LocatedProvenance location;
+  private final Object defaultValue;
 
-  InlinedMember(List<Integer> path, List<String> names, LocatedProvenance location) {
+  InlinedMember(List<Integer> path, List<String> names, LocatedProvenance location,
+      Object defaultValue) {
     this.path = path;
     this.names = names;
     this.location = location;
+    this.defaultValue = defaultValue;
   }
 
   /**
@@ -64,8 +67,31 @@ public final class InlinedMember {
     return location;
   }
 
+  /**
+   * What reading this member yields when a writer has no counterpart for it, or {@code null} where
+   * there is nothing to read.
+   *
+   * <p>Not "what the author declared": for Protobuf this includes the language's own rule that an
+   * unset scalar reads as its zero value and an absent {@code repeated} field as an empty list,
+   * which is why a Protobuf column added later never leaves a consumer without a value and an Avro
+   * one may.
+   *
+   * <p>A common Java value — {@code String}, a boxed number, {@code BigDecimal}, {@code LocalDate},
+   * {@code LocalTime}, {@code LocalDateTime}, {@code Instant}, {@code byte[]}, {@code List} or
+   * {@code Map} — normalised by the reader, not the source format's own representation. A struct
+   * default is never reported, since only that one is passed through unnormalised.
+   *
+   * <p>An explicitly declared null default is indistinguishable from none, because the readers do
+   * not record one: a null that survived a round trip could not be told from the string
+   * {@code "null"} or from an empty value.
+   */
+  public Object getDefaultValue() {
+    return defaultValue;
+  }
+
   @Override
   public String toString() {
-    return path + " " + names + " " + location;
+    return path + " " + names + " " + location
+        + (defaultValue != null ? " default=" + defaultValue : "");
   }
 }
