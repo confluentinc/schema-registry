@@ -131,6 +131,40 @@ public class KmsPropsRedactorTest {
   }
 
   @Test
+  public void testRestoreWriteTimeSecretsClearsValueOnExplicitNull() {
+    // Simulates a value a prior cache-fallback layer already restored onto the base
+    // for this call (see CachedDekRegistryClient.withRestoredSecretsForCache).
+    Map<String, String> responseProps = new HashMap<>();
+    responseProps.put("token.id", "s.oldcachedtoken");
+    responseProps.put("namespace", "my-namespace");
+    Kek response = new Kek("kek1", "hcvault", "key1", responseProps, null, true, 1L, null);
+
+    // The caller explicitly clears the secret -- distinct from omitting it entirely.
+    Map<String, String> requestProps = new HashMap<>();
+    requestProps.put("token.id", null);
+
+    Kek restored = KmsPropsRedactor.restoreWriteTimeSecrets(response, requestProps);
+
+    assertFalse(restored.getKmsProps().containsKey("token.id"));
+    assertEquals("my-namespace", restored.getKmsProps().get("namespace"));
+  }
+
+  @Test
+  public void testRestoreWriteTimeSecretsPreservesValueWhenKeyOmitted() {
+    Map<String, String> responseProps = new HashMap<>();
+    responseProps.put("token.id", "s.oldcachedtoken");
+    Kek response = new Kek("kek1", "hcvault", "key1", responseProps, null, true, 1L, null);
+
+    // token.id is entirely absent here -- distinct from an explicit null.
+    Map<String, String> requestProps = new HashMap<>();
+    requestProps.put("namespace", "my-namespace");
+
+    Kek restored = KmsPropsRedactor.restoreWriteTimeSecrets(response, requestProps);
+
+    assertEquals("s.oldcachedtoken", restored.getKmsProps().get("token.id"));
+  }
+
+  @Test
   public void testRestoreWriteTimeSecretsIsNoOpWithoutOriginalRequest() {
     Map<String, String> responseProps = new HashMap<>();
     responseProps.put("namespace", "my-namespace");

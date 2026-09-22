@@ -121,8 +121,16 @@ public final class KmsPropsRedactor {
     SortedMap<String, String> restored = new TreeMap<>(response.getKmsProps());
     if (request != null) {
       for (String key : SENSITIVE_KEYS) {
+        // An omitted key means "unchanged" (nothing to restore or clear here); an
+        // explicit null, like the server, means a genuine clear -- distinct from
+        // omission, and must drop any previously-cached/fallback value for this key.
+        if (!request.containsKey(key)) {
+          continue;
+        }
         String value = request.get(key);
-        if (value != null && !REDACTED_VALUE.equals(value)) {
+        if (value == null) {
+          restored.remove(key);
+        } else if (!REDACTED_VALUE.equals(value)) {
           restored.put(key, value);
         }
       }
