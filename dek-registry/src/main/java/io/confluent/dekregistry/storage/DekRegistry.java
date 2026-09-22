@@ -508,11 +508,10 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
-    if (oldKey != null) {
-      // Recreating a soft-deleted kek: don't let a redacted secret read back from a prior
-      // getKek overwrite the real value.
-      kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey.getKmsProps());
-    }
+    // Recreating a soft-deleted kek: don't let a redacted secret read back from a prior
+    // getKek overwrite the real value. Also normalizes a bare/legacy-placeholder secret
+    // on a genuinely new kek (no oldKey) to omitted, rather than storing it verbatim.
+    kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey != null ? oldKey.getKmsProps() : null);
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 

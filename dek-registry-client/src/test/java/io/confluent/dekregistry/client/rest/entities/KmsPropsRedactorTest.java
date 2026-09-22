@@ -96,6 +96,23 @@ public class KmsPropsRedactorTest {
   }
 
   @Test
+  public void testMergeNormalizesPlaceholderToOmittedWhenNoStoredValue() {
+    // No existing kek at all (a genuinely new create) and no stored value for this key
+    // either way: a placeholder must never be persisted as a literal non-null value.
+    Map<String, String> requested = new HashMap<>();
+    requested.put("token.id", KmsPropsRedactor.REDACTED_VALUE);
+
+    SortedMap<String, String> mergedWithNoExisting = KmsPropsRedactor.merge(requested, null);
+    assertFalse(mergedWithNoExisting.containsKey("token.id"));
+
+    Map<String, String> existingWithoutThisKey = new HashMap<>();
+    existingWithoutThisKey.put("namespace", "my-namespace");
+    SortedMap<String, String> mergedWithUnrelatedExisting =
+        KmsPropsRedactor.merge(requested, existingWithoutThisKey);
+    assertFalse(mergedWithUnrelatedExisting.containsKey("token.id"));
+  }
+
+  @Test
   public void testRestoreWriteTimeSecretsBackfillsFromOriginalRequest() {
     // Simulates the server's create/update response, which always redacts secrets.
     Map<String, String> responseProps = new HashMap<>();

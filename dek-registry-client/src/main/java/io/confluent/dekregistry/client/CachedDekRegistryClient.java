@@ -236,12 +236,33 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setShared(shared);
     request.setDeleted(deleted);
     Kek response = restService.createKek(requestProperties, request);
-    // The wire response always redacts secrets; cache a copy with the real value this
-    // caller just supplied restored, so this process's own subsequent getKek calls can
-    // still use it for encrypt/decrypt. The redacted response itself is what's returned.
-    Kek cachedKek = KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps);
+    // The wire response always redacts secrets; cache a copy with the real value
+    // restored, so this process's own subsequent getKek calls can still use it for
+    // encrypt/decrypt. The redacted response itself is what's returned.
+    Kek cachedKek = withRestoredSecretsForCache(name, deleted, response, kmsProps);
     kekCache.put(new KekId(name, deleted), cachedKek);
     return response;
+  }
+
+  /**
+   * Restores secrets into {@code response} for caching, preferring (in order): a genuine
+   * new value in {@code kmsProps} (what the caller just wrote), then a value this client
+   * already had cached for this kek under either deleted state (e.g. it cached the real
+   * secret before this kek was soft-deleted, and is now recreating/undeleting it, or it
+   * updated this kek before without resupplying an unrelated secret), then whatever
+   * {@code response} itself carries (redacted/omitted, if neither source has it).
+   */
+  private Kek withRestoredSecretsForCache(
+      String name, boolean deleted, Kek response, Map<String, String> kmsProps) {
+    Kek withCacheFallback = response;
+    for (boolean lookupDeleted : new boolean[] {!deleted, deleted}) {
+      Kek previouslyCached = kekCache.getIfPresent(new KekId(name, lookupDeleted));
+      if (previouslyCached != null) {
+        withCacheFallback = KmsPropsRedactor.restoreWriteTimeSecrets(
+            withCacheFallback, previouslyCached.getKmsProps());
+      }
+    }
+    return KmsPropsRedactor.restoreWriteTimeSecrets(withCacheFallback, kmsProps);
   }
 
   @Override
@@ -356,10 +377,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek response = restService.updateKek(requestProperties, name, request);
-    // The wire response always redacts secrets; cache a copy with the real value this
-    // caller just supplied restored, so this process's own subsequent getKek calls can
-    // still use it for encrypt/decrypt. The redacted response itself is what's returned.
-    Kek cachedKek = KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps);
+    // The wire response always redacts secrets; cache a copy with the real value
+    // restored, so this process's own subsequent getKek calls can still use it for
+    // encrypt/decrypt. The redacted response itself is what's returned.
+    Kek cachedKek = withRestoredSecretsForCache(name, false, response, kmsProps);
     kekCache.put(new KekId(name, false), cachedKek);
     return response;
   }

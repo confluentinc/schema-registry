@@ -82,20 +82,23 @@ public final class KmsPropsRedactor {
    * and later submits that map back verbatim naturally omits those keys too; for each
    * known secret key, an omitted value (or, defensively, one still carrying the legacy
    * {@link #REDACTED_VALUE} placeholder) is treated as "unchanged" and resolved against
-   * the stored value rather than clearing/overwriting the real secret. A secret key
-   * submitted with any other value is treated as a genuine update.
+   * the stored value. If there is no stored value either, the placeholder is normalized
+   * to omitted rather than left as a literal non-null string, so it can never be
+   * persisted or handed to a KMS driver verbatim. A secret key submitted with any other
+   * value is treated as a genuine update.
    */
   public static SortedMap<String, String> merge(
       Map<String, String> requestedKmsProps, Map<String, String> existingKmsProps) {
     SortedMap<String, String> merged = new TreeMap<>(requestedKmsProps);
-    if (existingKmsProps != null) {
-      for (String key : SENSITIVE_KEYS) {
-        if (!existingKmsProps.containsKey(key)) {
-          continue;
-        }
-        if (!merged.containsKey(key) || REDACTED_VALUE.equals(merged.get(key))) {
-          merged.put(key, existingKmsProps.get(key));
-        }
+    for (String key : SENSITIVE_KEYS) {
+      if (merged.containsKey(key) && !REDACTED_VALUE.equals(merged.get(key))) {
+        continue;
+      }
+      String existingValue = existingKmsProps != null ? existingKmsProps.get(key) : null;
+      if (existingValue != null) {
+        merged.put(key, existingValue);
+      } else {
+        merged.remove(key);
       }
     }
     return merged;
