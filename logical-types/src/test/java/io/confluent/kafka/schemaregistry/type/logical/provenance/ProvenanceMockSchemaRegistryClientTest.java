@@ -92,6 +92,18 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertCode(422, 42213, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, false));
   }
 
+  @Test
+  void aVersionOutsideTheRangePlaysNoPart() throws Exception {
+    register("{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
+        + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
+    register(record(field("a", "int")));
+    register(record(field("a", "int"), field("b", "int")));
+
+    // v1 has no provenance at all, and a range that leaves it out does not care.
+    SchemaProvenance later = client.getProvenanceByVersion(SUBJECT, "2", "3", false, false, false);
+    assertThat(pids(later.getVersions().get(1))).containsExactly(1, 2);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------

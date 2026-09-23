@@ -79,8 +79,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private SchemaProvenance provenance(String subject, List<ProvenanceHistory.Entry> history,
       int from, int to, boolean includeInterior, boolean verbose,
       boolean includeMultipleMessages) throws IOException, RestClientException {
-    List<ParsedSchema> schemas = new ArrayList<>(history.size());
-    for (ProvenanceHistory.Entry entry : history) {
+    List<ProvenanceHistory.Entry> range = ProvenanceHistory.range(history, from, to);
+    List<ParsedSchema> schemas = new ArrayList<>(range.size());
+    for (ProvenanceHistory.Entry entry : range) {
       try {
         schemas.add(getSchemaBySubjectAndId(subject, entry.getSchemaId()));
       } catch (RuntimeException e) {
@@ -90,7 +91,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = ProvenanceHistory.compute(subject, history, schemas, includeMultipleMessages);
+      whole = ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (ValidationException e) {
