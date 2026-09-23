@@ -105,6 +105,18 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aRangeIsComputedFromItsOwnFirstVersion() throws Exception {
+    register(SUBJECT, record(field("a", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int"), field("c", "int")));
+
+    // v1 plays no part: ids start at v2, and pair v2 with v3 exactly as the whole history would.
+    SchemaProvenance later = byVersion(SUBJECT, "2", "3", false, false);
+    assertEquals(Arrays.asList(1, 2), pids(later.getVersions().get(0)));
+    assertEquals(Arrays.asList(1, 2, 3), pids(later.getVersions().get(1)));
+  }
+
+  @Test
   public void namesAreLeftOutUnlessVerbose() throws Exception {
     register(SUBJECT, record(field("id", "int")));
 
@@ -203,6 +215,16 @@ public abstract class RestApiProvenanceTest {
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
     assertError(422, Errors.RECURSIVE_SCHEMA_ERROR_CODE,
         () -> byVersion(SUBJECT, "1", "1", false, false));
+  }
+
+  @Test
+  public void aBrokenVersionOutsideTheRangeDoesNotFailIt() throws Exception {
+    register(SUBJECT, "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
+        + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
+    register(SUBJECT, record(field("a", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int")));
+
+    assertEquals(Arrays.asList(2, 3), versions(byVersion(SUBJECT, "2", "3", false, false)));
   }
 
   @Test

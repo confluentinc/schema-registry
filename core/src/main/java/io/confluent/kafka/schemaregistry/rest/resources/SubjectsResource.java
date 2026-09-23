@@ -98,16 +98,16 @@ public class SubjectsResource {
   private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  /** Provenance histories retained. Each holds a whole subject's report, so the bound is low. */
+  /** Provenance ranges retained. Each holds a report over many versions, so the bound is low. */
   private static final int MAX_CACHED_PROVENANCE_HISTORIES = 100;
 
   /**
-   * Whole-history provenance, verbose, keyed by the subject and every (version, schema id) in its
-   * history. Provenance is always computed over the whole history from the first version,
-   * soft-deleted versions included, and a version's ids depend only on the versions before it, so
-   * one computation serves every request against that history. Any registration or deletion
-   * changes the key, so nothing needs invalidating, and many readers starting at once collapse into
-   * one computation per node.
+   * Provenance over one requested range, verbose, keyed by the subject, the mode, and every
+   * (version, schema id) in the range, soft-deleted versions included. It is computed over the
+   * range alone — its ends and everything between — so a version outside it, however old or
+   * however broken, has no effect. Any registration or deletion inside the range changes the key,
+   * so nothing needs invalidating, and many readers asking for the same range collapse into one
+   * computation per node.
    */
   private final Cache<List<Object>, SchemaProvenance> provenanceCache =
       Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).build();
@@ -493,10 +493,15 @@ public class SubjectsResource {
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
       boolean includeInterior, boolean verbose, boolean includeMultipleMessages) {
+    int low = Math.min(from, to);
+    int high = Math.max(from, to);
+    List<Schema> range = history.stream()
+        .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
+        .collect(Collectors.toList());
     // computeProvenance never returns null, so neither does the cache.
     SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
-        provenanceKey(subject, history, includeMultipleMessages),
-        k -> computeProvenance(subject, history, includeMultipleMessages)));
+        provenanceKey(subject, range, includeMultipleMessages),
+        k -> computeProvenance(subject, range, includeMultipleMessages)));
     return ProvenanceHistory.slice(whole, from, to, includeInterior, verbose);
   }
 

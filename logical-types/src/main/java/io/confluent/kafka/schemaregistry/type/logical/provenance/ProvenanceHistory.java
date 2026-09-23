@@ -34,11 +34,12 @@ import java.util.stream.Collectors;
  * What a provenance endpoint computes from a subject's history, independent of where the history
  * is stored — so the registry and any client standing in for it answer identically.
  *
- * <p>Provenance is computed over the whole history from its first version and then sliced to the
- * request: allocation is anchored at the first version so that every caller agrees on the ids, and
- * a version's ids depend only on the versions before it. Resolving a request to versions is here
- * too, so that "latest" and a schema id mean the same thing on both sides; turning a failure into
- * an error is left to the caller, which knows its own error model.
+ * <p>Provenance is computed over the requested range only — its two ends and every version between
+ * them — and then sliced to what the request returns. Ids are allocated from the range's first
+ * version, so they are comparable within one response and not across responses for different
+ * ranges: what a consumer relies on is the pairing within a response. Resolving a request to
+ * versions is here too, so that "latest" and a schema id mean the same thing on both sides;
+ * turning a failure into an error is left to the caller, which knows its own error model.
  */
 public final class ProvenanceHistory {
 
@@ -143,6 +144,18 @@ public final class ProvenanceHistory {
     }
     return SchemaProvenanceEncoder.encode(
         subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions, true);
+  }
+
+  /**
+   * The part of {@code history} a range covers: every version from the lower end to the higher,
+   * soft-deleted ones included, in version order. Provenance is computed over exactly this.
+   */
+  public static List<Entry> range(List<Entry> history, int from, int to) {
+    int low = Math.min(from, to);
+    int high = Math.max(from, to);
+    return history.stream()
+        .filter(e -> e.getVersion() >= low && e.getVersion() <= high)
+        .collect(Collectors.toList());
   }
 
   /**
