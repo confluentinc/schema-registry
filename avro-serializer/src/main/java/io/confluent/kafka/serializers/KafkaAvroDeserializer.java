@@ -147,6 +147,15 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
   }
 
   @Override
+  public GenericContainerWithVersion deserializeWithReaderSchemas(
+      String topic, Headers headers, byte[] bytes,
+      ReaderSchemaResolver readerSchemaResolver,
+      boolean includeRuleResults) {
+    return deserializeWithReaderSchemasAndVersion(
+        topic, isKey, headers, bytes, readerSchemaResolver, includeRuleResults);
+  }
+
+  @Override
   public void close() {
     try {
       super.close();

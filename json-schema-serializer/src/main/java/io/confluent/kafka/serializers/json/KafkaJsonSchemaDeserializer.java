@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.json;
 
+import io.confluent.kafka.serializers.ReaderSchemaResolver;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.serializers.DeserializerWithSchema;
@@ -110,6 +111,14 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
       boolean includeRuleResults) {
     return deserializeWithSchemaAndVersion(
         topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  @Override
+  public JsonSchemaAndValue deserializeWithReaderSchemas(
+      String topic, Headers headers, byte[] bytes,
+      ReaderSchemaResolver readerSchemaResolver, boolean includeRuleResults) {
+    return (JsonSchemaAndValue) deserializeResolving(
+        true, topic, isKey, headers, bytes, readerSchemaResolver, includeRuleResults);
   }
 
   @Override
