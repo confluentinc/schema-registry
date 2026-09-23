@@ -115,12 +115,21 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String USE_LATEST_VERSION_DOC =
       "Specify if the Serializer should use the latest subject version for serialization";
 
-  public static final String USE_PROVENANCE = "use.provenance";
-  public static final String USE_PROVENANCE_DEFAULT = "false";
-  public static final String USE_PROVENANCE_DOC =
-      "Whether the Deserializer pairs writer fields with reader fields by schema provenance rather "
-          + "than by name or field number, and by which version of the provenance algorithm: "
-          + "'false', or a version such as 'v1'";
+  public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
+  public static final String PROVENANCE_ALGORITHM_DOC =
+      "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
+          + "writer fields with reader fields rather than by name or field number; unset or "
+          + "'none' to pair them as usual";
+
+  public static final String PROVENANCE_CACHE_SIZE = "provenance.cache.size";
+  public static final int PROVENANCE_CACHE_SIZE_DEFAULT = 1000;
+  public static final String PROVENANCE_CACHE_SIZE_DOC =
+      "The maximum size for caches holding provenance pairings and reader schema ids";
+
+  public static final String PROVENANCE_CACHE_TTL = "provenance.cache.ttl.sec";
+  public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
+  public static final String PROVENANCE_CACHE_TTL_DOC =
+      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL";
 
   public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
   public static final String USE_LATEST_WITH_METADATA_DOC =
@@ -398,8 +407,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
-        .define(USE_PROVENANCE, Type.STRING, USE_PROVENANCE_DEFAULT,
-                Importance.LOW, USE_PROVENANCE_DOC)
+        .define(PROVENANCE_ALGORITHM, Type.STRING, null,
+                Importance.LOW, PROVENANCE_ALGORITHM_DOC)
+        .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
+                Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
+        .define(PROVENANCE_CACHE_TTL, Type.INT, PROVENANCE_CACHE_TTL_DEFAULT,
+                Importance.LOW, PROVENANCE_CACHE_TTL_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
         .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,
@@ -546,9 +559,17 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   /**
    * The provenance algorithm version to project with, or null when provenance is off.
    */
-  public String useProvenance() {
-    String value = this.getString(USE_PROVENANCE);
-    return value == null || value.isEmpty() || "false".equalsIgnoreCase(value) ? null : value;
+  public String getProvenanceAlgorithm() {
+    String value = this.getString(PROVENANCE_ALGORITHM);
+    return value == null || value.isEmpty() || "none".equalsIgnoreCase(value) ? null : value;
+  }
+
+  public int getProvenanceCacheSize() {
+    return this.getInt(PROVENANCE_CACHE_SIZE);
+  }
+
+  public int getProvenanceCacheTtl() {
+    return this.getInt(PROVENANCE_CACHE_TTL);
   }
 
   public boolean getLatestCompatibilityStrict() {

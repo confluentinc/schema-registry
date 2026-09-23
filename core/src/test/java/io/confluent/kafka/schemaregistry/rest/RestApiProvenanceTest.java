@@ -334,7 +334,7 @@ public abstract class RestApiProvenanceTest {
     config.put("use.schema.id", client.getId(SUBJECT, new AvroSchema(v1)));
     byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders", record);
     config.remove("use.schema.id");
-    config.put("use.provenance", "v1");
+    config.put("provenance.algorithm", "v1");
 
     // v3 re-adds name, dropped at v2: with provenance it is a new column and reads its default.
     GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)

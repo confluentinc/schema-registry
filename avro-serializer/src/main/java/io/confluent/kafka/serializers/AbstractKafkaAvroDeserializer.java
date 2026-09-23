@@ -91,7 +91,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   // Created on first use, once the deserializer is configured; a race builds an equivalent one.
   private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
     if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+      provenanceProjector = new ProvenanceProjector<>(
+          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
     }
     return provenanceProjector;
   }
@@ -589,14 +590,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     /**
-     * With {@code use.provenance}, the writer renamed after the reader as provenance pairs them,
-     * and the reader with the aliases provenance overrode removed; null to read without it. Only
-     * names change, so the resolver still promotes, maps enum symbols, matches unions and fills
-     * defaults as it always has.
+     * With {@code provenance.algorithm}, the writer renamed after the reader as provenance pairs
+     * them, and the reader with the aliases provenance overrode removed; null to read without it.
+     * Only names change, so the resolver still promotes, maps enum symbols, matches unions and
+     * fills defaults as it always has.
      */
     private AvroProvenanceRenamer.Renamed projectByProvenance(
         AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
-      if (useProvenance == null || readerAvroSchema == null) {
+      if (provenanceAlgorithm == null || readerAvroSchema == null) {
         return null;
       }
       return provenanceProjector().project(getSubject(), schemaId, writerAvroSchema,

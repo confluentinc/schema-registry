@@ -396,13 +396,13 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   /**
-   * With {@code use.provenance}, {@code node} with every property provenance marks as new removed,
-   * parsing the payload first if nothing has yet; {@code node} unchanged otherwise.
+   * With {@code provenance.algorithm}, {@code node} with every property provenance marks as new
+   * removed, parsing the payload first if nothing has yet; {@code node} unchanged otherwise.
    */
   private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
       ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
       int start, int length) throws IOException {
-    if (useProvenance == null || reader == null || !migrations.isEmpty()) {
+    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return node;
     }
     List<List<String>> removals = provenanceProjector()
@@ -423,7 +423,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   // Created on first use, once the deserializer is configured; a race builds an equivalent one.
   private ProvenanceProjector<List<List<String>>> provenanceProjector() {
     if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+      provenanceProjector = new ProvenanceProjector<>(
+          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
     }
     return provenanceProjector;
   }

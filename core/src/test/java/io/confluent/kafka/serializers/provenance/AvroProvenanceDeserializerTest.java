@@ -43,7 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Avro read with {@code use.provenance}: type changes the resolver handles must read exactly as
+ * Avro read with {@code provenance.algorithm}: type changes the resolver handles must read exactly as
  * without provenance, and only what history decides — a rename chained through an interior
  * version, a column dropped and re-added — may differ.
  */
@@ -275,7 +275,7 @@ class AvroProvenanceDeserializerTest {
     config.put("auto.register.schemas", false);
     config.put("use.latest.version", false);
     if (provenance != null) {
-      config.put("use.provenance", provenance);
+      config.put("provenance.algorithm", provenance);
     }
     return config;
   }

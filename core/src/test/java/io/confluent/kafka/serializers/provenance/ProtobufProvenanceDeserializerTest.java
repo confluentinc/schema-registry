@@ -40,7 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Protobuf read with {@code use.provenance}: wire-compatible type changes read exactly as without
+ * Protobuf read with {@code provenance.algorithm}: wire-compatible type changes read exactly as without
  * provenance; a reused field number, and messages of a multi-message file, follow provenance.
  */
 class ProtobufProvenanceDeserializerTest {
@@ -268,7 +268,7 @@ class ProtobufProvenanceDeserializerTest {
     config.put("auto.register.schemas", false);
     config.put("use.latest.version", false);
     if (provenance != null) {
-      config.put("use.provenance", provenance);
+      config.put("provenance.algorithm", provenance);
     }
     return config;
   }
