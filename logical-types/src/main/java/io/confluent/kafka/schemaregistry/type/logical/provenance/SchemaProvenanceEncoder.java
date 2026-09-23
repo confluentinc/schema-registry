@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceDefaults;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -28,8 +27,8 @@ import java.util.List;
  * Turns a {@link ProvenanceReport} into the {@link SchemaProvenance} the REST endpoint serves.
  *
  * <p>The one place the in-process result becomes the wire contract, shared by the endpoint and by
- * anything standing in for it in-process, so a test double speaks exactly the production shape —
- * encoded defaults included — rather than a shortcut around it.
+ * anything standing in for it in-process, so a test double speaks exactly the production shape
+ * rather than a shortcut around it.
  */
 public final class SchemaProvenanceEncoder {
 
@@ -61,8 +60,7 @@ public final class SchemaProvenanceEncoder {
         fields.add(new ProvenanceField(
             member.getPath(),
             verbose ? member.getNames() : null,
-            member.getId(),
-            ProvenanceDefaults.encode(member.getDefaultValue())));
+            member.getId()));
       }
       encoded.add(new ProvenanceVersion(
           versions == null ? null : versions.get(i), schemaIds.get(i), fields));

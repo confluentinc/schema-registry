@@ -165,7 +165,7 @@ public final class ProvenanceHistory {
 
   private static ProvenanceVersion withoutNames(ProvenanceVersion version) {
     List<ProvenanceField> fields = version.getFields().stream()
-        .map(m -> new ProvenanceField(m.getPath(), null, m.getPid(), m.getDefaultValue()))
+        .map(m -> new ProvenanceField(m.getPath(), null, m.getPid()))
         .collect(Collectors.toList());
     return new ProvenanceVersion(version.getVersion(), version.getId(), fields);
   }

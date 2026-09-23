@@ -72,7 +72,6 @@ public abstract class RestApiProvenanceTest {
     assertEquals(Arrays.asList(1, 2, 4), pids(provenance.getVersions().get(1)));
     ProvenanceField tier = provenance.getVersions().get(1).getFields().get(2);
     assertEquals(Collections.singletonList("tier"), tier.getNames());
-    assertEquals("standard", tier.getDefaultValue());
   }
 
   @Test
