@@ -102,14 +102,23 @@ class ProvenanceInlinedPathTest {
         InlinedMember::getPath, InlinedMember::getNames).containsExactly(
         tuple(path(0), names("id")),
         tuple(path(1), names("addr")),
-        tuple(path(1, 0), names("addr", "city")),               // through a reference
+        tuple(path(1, 0), names("addr", "acme.Address", "city")), // the entry step, then city
         tuple(path(2), names("items")),
-        tuple(path(2, 0, 0), names("items", "[]", "sku")),      // array element
+        tuple(path(2, 0, 0), names("items", null, "sku")),        // array element
         tuple(path(3), names("byId")),
-        tuple(path(3, 1, 0), names("byId", "{value}", "label")), // map value
+        tuple(path(3, 1, 0), names("byId", null, "label")),       // map value
         tuple(path(4), names("choice")),
         tuple(path(4, 0), names("choice", "a")),                 // union branches
         tuple(path(4, 1), names("choice", "b")));
+  }
+
+  @Test
+  void anEdgeWithNoRecordedStepsLeavesItsNamesUnknown() {
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(lt(struct(
+        new Field("o", struct(field("a")), 0)))));
+
+    assertThat(result.inlinedProvenance(0)).extracting(InlinedMember::getNames)
+        .containsOnlyNulls();
   }
 
   @Test
@@ -277,12 +286,15 @@ class ProvenanceInlinedPathTest {
     namedTypes.put("acme.Address", struct(field("city")));
     return new LogicalType(struct(
         field("id"),
-        new Field("addr", Schema.createNamedTypeRef("acme.Address"), 1),
+        // An entry step, as an Avro collapsed union records it: spelled only on the way down.
+        new Field("addr", Schema.createNamedTypeRef("acme.Address")
+            .setNativeEntryNames(names("acme.Address")), 1).setNativeNames(names("addr")),
         arrayOf("items", struct(field("sku"))),
         mapOf("byId", struct(field("label"))),
         new Field("choice", Schema.createUnion(Arrays.asList(
-            new UnionBranch("a", Schema.create(Schema.Type.INT)),
-            new UnionBranch("b", Schema.create(Schema.Type.INT)))), 4)), namedTypes);
+            new UnionBranch("a", Schema.create(Schema.Type.INT)).setNativeNames(names("a")),
+            new UnionBranch("b", Schema.create(Schema.Type.INT)).setNativeNames(names("b")))), 4)
+            .setNativeNames(names("choice"))), namedTypes);
   }
 
   /** {@code acme.Order { id, addr: acme.Address { city } }}, rooted at a reference. */
@@ -308,16 +320,20 @@ class ProvenanceInlinedPathTest {
     Map<String, Schema> namedTypes = new LinkedHashMap<>();
     namedTypes.put("Address", struct(field("city"), field(second, aliases)));
     return new LogicalType(struct(
-        new Field("home", Schema.createNamedTypeRef("Address"), 0),
-        new Field("work", Schema.createNamedTypeRef("Address"), 1)), namedTypes);
+        new Field("home", Schema.createNamedTypeRef("Address"), 0).setNativeNames(names("home")),
+        new Field("work", Schema.createNamedTypeRef("Address"), 1).setNativeNames(names("work"))),
+        namedTypes);
   }
 
   private static Field arrayOf(String name, Schema element) {
-    return new Field(name, Schema.createArray(element), 0);
+    return new Field(name, Schema.createArray(element).setElementNativeNames(names((String) null)),
+        0).setNativeNames(names(name));
   }
 
   private static Field mapOf(String name, Schema value) {
-    return new Field(name, Schema.createMap(Schema.createString(), value), 0);
+    return new Field(name, Schema.createMap(Schema.createString(), value)
+        .setKeyNativeNames(names()).setValueNativeNames(names((String) null)), 0)
+        .setNativeNames(names(name));
   }
 
   private static List<Integer> path(Integer... steps) {
@@ -343,6 +359,7 @@ class ProvenanceInlinedPathTest {
   private static Field field(String name, String... aliases) {
     Map<String, Object> params = aliases.length == 0
         ? null : Map.of(Schema.AVRO_ALIASES, String.join(",", aliases));
-    return new Field(name, Schema.create(Schema.Type.INT), 0, null, false, null, null, params);
+    return new Field(name, Schema.create(Schema.Type.INT), 0, null, false, null, null, params)
+        .setNativeNames(names(name));
   }
 }

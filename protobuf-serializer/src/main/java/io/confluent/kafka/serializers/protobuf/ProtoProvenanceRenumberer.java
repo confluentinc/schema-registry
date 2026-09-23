@@ -23,7 +23,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.Descriptors.OneofDescriptor;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
@@ -43,8 +42,8 @@ import java.util.Set;
  * uses, so the writer's field lands in the unknown fields and the reader's reads as unset. Names,
  * types, options, metadata and rules are untouched, so domain rules see the reader as it is.
  *
- * <p>Fields are found by the names the provenance response carries along each path, so the walk
- * follows exactly the logical-type paths the ids were allocated on.
+ * <p>Fields are found by the names the provenance response carries, which the converter recorded
+ * as the descriptor's own route to each location.
  */
 final class ProtoProvenanceRenumberer {
 
@@ -93,46 +92,22 @@ final class ProtoProvenanceRenumberer {
     Descriptor message = root;
     if (multi) {
       message = topLevel(names.get(0));
-      if (names.size() == 1) {
-        // The synthetic field over a whole message: nothing in the file carries it.
-        return;
-      }
       i = 1;
     }
+    // Every step is a field of the message we stand on: repeated elements and oneofs are no
+    // steps, and a map entry's key and value are its fields.
     Descriptor owner = null;
     FieldDescriptor field = null;
-    while (i < names.size()) {
-      String name = names.get(i);
-      if ("[]".equals(name)) {
-        message = messageOf(field);
-        i++;
-        continue;
-      }
-      if ("{key}".equals(name) || "{value}".equals(name)) {
-        field = field.getMessageType().findFieldByName("{key}".equals(name) ? "key" : "value");
-        message = messageOf(field);
-        owner = null;
-        i++;
-        continue;
-      }
-      if (message == null) {
+    for (; i < names.size(); i++) {
+      if (message == null || names.get(i) == null) {
         throw new ProvenanceUnavailableException("Cannot locate " + names + " in the reader");
       }
-      OneofDescriptor oneof = realOneof(message, name);
-      if (oneof != null) {
-        if (i + 1 == names.size()) {
-          // The oneof itself, not a field: it has no number.
-          return;
-        }
-        name = names.get(++i);
-      }
-      field = message.findFieldByName(name);
+      field = message.findFieldByName(names.get(i));
       if (field == null) {
         throw new ProvenanceUnavailableException("Cannot locate " + names + " in the reader");
       }
       owner = message;
-      message = field.isMapField() ? null : messageOf(field);
-      i++;
+      message = messageOf(field);
     }
     if (owner != null) {
       decide(owner, field, move);
@@ -165,15 +140,6 @@ final class ProtoProvenanceRenumberer {
     return field != null && field.getJavaType() == FieldDescriptor.JavaType.MESSAGE
         ? field.getMessageType()
         : null;
-  }
-
-  private static OneofDescriptor realOneof(Descriptor message, String name) {
-    for (OneofDescriptor oneof : message.getRealOneofs()) {
-      if (oneof.getName().equals(name)) {
-        return oneof;
-      }
-    }
-    return null;
   }
 
   private FileDescriptor build() {

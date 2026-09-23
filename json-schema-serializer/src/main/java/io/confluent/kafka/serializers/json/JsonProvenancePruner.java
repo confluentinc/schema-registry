@@ -34,9 +34,6 @@ import java.util.List;
  */
 final class JsonProvenancePruner {
 
-  private static final String ELEMENT = "[]";
-  private static final String VALUE = "{value}";
-
   private JsonProvenancePruner() {
   }
 
@@ -48,7 +45,7 @@ final class JsonProvenancePruner {
     List<List<String>> paths = new ArrayList<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (names != null && mapping.writerPathOf(path) == null) {
+      if (names != null && isProperty(mapping, path, names) && mapping.writerPathOf(path) == null) {
         paths.add(names);
       }
     }
@@ -64,6 +61,23 @@ final class JsonProvenancePruner {
   }
 
   /**
+   * Whether the location at {@code path} is a property of its own. A union branch has no step in
+   * the document, so it spells the same names as the location holding it and is never removed.
+   */
+  private static boolean isProperty(ProvenanceMapping mapping, List<Integer> path,
+      List<String> names) {
+    if (names.isEmpty() || names.get(names.size() - 1) == null) {
+      return false;
+    }
+    for (int k = 1; k < path.size(); k++) {
+      if (names.equals(mapping.readerNamesOf(path.subList(0, k)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Removes every path in {@code removals} from {@code document}, in place.
    */
   static void prune(JsonNode document, List<List<String>> removals) {
@@ -76,13 +90,11 @@ final class JsonProvenancePruner {
     if (node == null) {
       return;
     }
-    String token = path.get(step);
-    String name = ProvenanceMapping.memberNameOf(token);
+    String name = path.get(step);
     if (name == null) {
+      // An unnamed step: each element of an array, or each value of an object keyed by string.
       if (step + 1 < path.size()) {
-        for (JsonNode child : children(node, token)) {
-          prune(child, path, step + 1);
-        }
+        node.elements().forEachRemaining(child -> prune(child, path, step + 1));
       }
       return;
     }
@@ -94,23 +106,5 @@ final class JsonProvenancePruner {
     } else {
       prune(node.get(name), path, step + 1);
     }
-  }
-
-  /**
-   * What a collection step leads to: an array's elements, or a map's keys or values. A map is an
-   * object keyed by string, whose keys hold nothing, or an array of {@code key}/{@code value}
-   * entries.
-   */
-  private static List<JsonNode> children(JsonNode node, String token) {
-    List<JsonNode> children = new ArrayList<>();
-    if (ELEMENT.equals(token) && node.isArray()) {
-      node.elements().forEachRemaining(children::add);
-    } else if (VALUE.equals(token) && node.isObject()) {
-      node.elements().forEachRemaining(children::add);
-    } else if (node.isArray()) {
-      String member = VALUE.equals(token) ? "value" : "key";
-      node.elements().forEachRemaining(entry -> children.add(entry.get(member)));
-    }
-    return children;
   }
 }

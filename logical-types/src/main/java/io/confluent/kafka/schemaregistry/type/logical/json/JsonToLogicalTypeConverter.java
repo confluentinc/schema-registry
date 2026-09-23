@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Collections;
@@ -670,7 +671,9 @@ public class JsonToLogicalTypeConverter {
         }
         Schema branchType = convertWithCycleDetection(
             subSchema, true, ctx, appendToList(indexPath, index));
-        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));
+        // A document has no step for a union branch.
+        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams)
+            .setNativeNames(Collections.emptyList()));
         index++;
       }
     }
@@ -701,7 +704,9 @@ public class JsonToLogicalTypeConverter {
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getPropertySchemas().get(VALUE_FIELD), false,
           ctx, appendToList(indexPath, 1));
-      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
+      // Natively an array of entries: an element, then its key or value property.
+      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
+          Arrays.asList(null, KEY_FIELD), Arrays.asList(null, VALUE_FIELD));
     } else {
       // ARRAY appends [0] for the element type, matching upstream Flink's
       // JSON convention (Avro-style). Proto's ARRAY adds no index, which is
@@ -710,7 +715,8 @@ public class JsonToLogicalTypeConverter {
       return Schema.createArray(
           convertWithCycleDetection(
               allItemSchema, false, ctx, appendToList(indexPath, 0)))
-          .setNullable(isNullable);
+          .setNullable(isNullable)
+          .setElementNativeNames(Collections.singletonList(null));
     }
   }
 
@@ -728,10 +734,20 @@ public class JsonToLogicalTypeConverter {
           objectSchema.getSchemaOfAdditionalProperties(), false,
           ctx, appendToList(indexPath, 1));
       final Schema keyType = readMapKeyType(objectSchema);
-      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
+      // An object keyed by string: its keys hold nothing, its values are one unnamed step.
+      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
+          Collections.emptyList(), Collections.singletonList(null));
     } else {
       return convertRowType(isNullable, ctx, objectSchema, indexPath);
     }
+  }
+
+  /** Records the native steps to a map's key and value, or to a multiset's element (its key). */
+  private static Schema withMapSteps(
+      Schema mapLike, List<String> keySteps, List<String> valueSteps) {
+    return mapLike.getType() == Schema.Type.MULTISET
+        ? mapLike.setElementNativeNames(keySteps)
+        : mapLike.setKeyNativeNames(keySteps).setValueNativeNames(valueSteps);
   }
 
   private static Schema createMapLikeType(
@@ -787,7 +803,8 @@ public class JsonToLogicalTypeConverter {
           readRules(subSchema);
       fields.add(new Field(subFieldName, fieldType, pos,
           defaultValue, hasDefault, subSchema.getDescription(),
-          fieldTags, fieldParams, fieldRules));
+          fieldTags, fieldParams, fieldRules)
+          .setNativeNames(Collections.singletonList(subFieldName)));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     structSchema.setDoc(objectSchema.getDescription());

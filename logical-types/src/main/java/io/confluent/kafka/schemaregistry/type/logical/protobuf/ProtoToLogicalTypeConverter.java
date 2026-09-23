@@ -273,7 +273,8 @@ public class ProtoToLogicalTypeConverter {
     for (Descriptor message : messageTypes) {
       fields.add(new Field(message.getFullName(),
           Schema.createNamedTypeRef(message.getFullName()).setNullable(true),
-          message.getIndex()));
+          message.getIndex())
+          .setNativeNames(Collections.singletonList(message.getFullName())));
     }
     final Schema root = Schema.createStruct(fields)
         .setNullable(false)
@@ -564,8 +565,10 @@ public class ProtoToLogicalTypeConverter {
     for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
           oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
+      // A oneof is no step in the descriptor: its members are fields of this message.
       fields.add(new Field(oneOfDescriptor.getName(), unionSchema, index++,
-          null, false, null, null, null));
+          null, false, null, null, null)
+          .setNativeNames(Collections.emptyList()));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     // Read message-level doc/tags/params from MessageOptions
@@ -633,7 +636,8 @@ public class ProtoToLogicalTypeConverter {
         branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
       }
       branches.add(new UnionBranch(
-          fieldDescriptor.getName(), fieldSchema, description, branchParams));
+          fieldDescriptor.getName(), fieldSchema, description, branchParams)
+          .setNativeNames(Collections.singletonList(fieldDescriptor.getName())));
     }
     return Schema.createUnion(branches).setNullable(true);
   }
@@ -740,7 +744,8 @@ public class ProtoToLogicalTypeConverter {
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
         defaultValue, hasDefault, derivedDefault, description, fieldTags,
-        effectiveParams, fieldRules);
+        effectiveParams, fieldRules)
+        .setNativeNames(Collections.singletonList(field.getName()));
   }
 
   /**
@@ -1184,6 +1189,8 @@ public class ProtoToLogicalTypeConverter {
                 schema, ctx, false, indexPath))
             .setNullable(isNullableType);
       }
+      // A repeated field's elements are its values: no step in the descriptor.
+      arraySchema.setElementNativeNames(Collections.emptyList());
       // Proto spec: an absent repeated field is an empty list. Record that as
       // the implicit default so downstream consumers (e.g. Tableflow
       // schema-evolution compat checks) can treat "adding a new repeated
@@ -1233,7 +1240,12 @@ public class ProtoToLogicalTypeConverter {
     FieldDescriptor valueField = wrapper.findFieldByName(
         CommonConstants.FLINK_WRAPPER_FIELD_NAME);
     if (valueField != null && valueField.getRealContainingOneof() == null) {
-      return fieldToLogicalType(valueField, ctx, indexPath);
+      // The logical type sees through the wrapper; natively its payload field is a step.
+      final Schema payload = fieldToLogicalType(valueField, ctx, indexPath);
+      final List<String> entry = new ArrayList<>();
+      entry.add(valueField.getName());
+      entry.addAll(payload.getNativeEntryNames());
+      return payload.setNativeEntryNames(entry);
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
@@ -1287,8 +1299,10 @@ public class ProtoToLogicalTypeConverter {
     // is present because oneof branches flatten into the field list).
     final Schema entryStruct = toLogicalTypeNested(
         false, descriptor.getMessageType(), ctx, indexPath);
-    final Schema keyType = entryStruct.getField(CommonConstants.KEY_FIELD).getSchema();
-    final Schema valueType = entryStruct.getField(CommonConstants.VALUE_FIELD).getSchema();
+    final Field keyField = entryStruct.getField(CommonConstants.KEY_FIELD);
+    final Field valueField = entryStruct.getField(CommonConstants.VALUE_FIELD);
+    final Schema keyType = keyField.getSchema();
+    final Schema valueType = valueField.getSchema();
 
     final boolean isMultiset =
         getMeta(descriptor)
@@ -1308,9 +1322,13 @@ public class ProtoToLogicalTypeConverter {
         throw new ValidationException(
             "Unexpected value type for a MULTISET type: " + valueType);
       }
-      return Schema.createMultiset(keyType).setNullable(isNullableType);
+      return Schema.createMultiset(keyType).setNullable(isNullableType)
+          .setElementNativeNames(keyField.getNativeNames());
     } else {
-      return Schema.createMap(keyType, valueType).setNullable(isNullableType);
+      // The entry's own fields, so a oneof key contributes no step of its own.
+      return Schema.createMap(keyType, valueType).setNullable(isNullableType)
+          .setKeyNativeNames(keyField.getNativeNames())
+          .setValueNativeNames(valueField.getNativeNames());
     }
   }
 
