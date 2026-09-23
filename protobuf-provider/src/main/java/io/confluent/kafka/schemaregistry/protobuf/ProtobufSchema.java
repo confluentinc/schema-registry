@@ -144,6 +144,7 @@ import io.confluent.protobuf.type.DecimalProto;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -2473,8 +2474,14 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     try {
-      Class<?> cls = Class.forName(clsName);
+      // resolve without initializing so no static initializer runs before the type check
+      Class<?> cls = Class.forName(clsName, false, ProtobufSchema.class.getClassLoader());
       Method parseMethod = cls.getDeclaredMethod("getDescriptor");
+      if (!Modifier.isStatic(parseMethod.getModifiers())
+          || !GenericDescriptor.class.isAssignableFrom(parseMethod.getReturnType())) {
+        throw new IllegalArgumentException("Class " + clsName
+            + " is not a valid protobuf message class");
+      }
       return (GenericDescriptor) parseMethod.invoke(null);
     } catch (ClassNotFoundException e) {
       throw new IllegalArgumentException("Class " + clsName + " could not be found.");
