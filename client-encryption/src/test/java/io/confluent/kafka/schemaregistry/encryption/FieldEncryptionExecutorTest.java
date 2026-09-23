@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
+import io.confluent.kafka.serializers.ReaderSchemas;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
@@ -24,6 +26,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -2318,6 +2321,83 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
     assertFalse("errorMessage should be absent for DECRYPTED",
         meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
+  }
+
+  @Test
+  public void testReaderSchemasResolveAWriterRenamedAfterTheReaderAndDecrypt() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    AvroSchema avroSchema = new AvroSchema(createUserSchema()).copy(metadata, ruleSet);
+    int registeredId = schemaRegistry.register(topic + "-value", avroSchema);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    // The reader calls "name" "full_name" and declares no alias; only the resolver's renamed
+    // writer pairs the two. Decryption must still find the tagged field under its reader name.
+    Schema renamed = new Schema.Parser().parse(
+        createUserSchema().toString().replace("\"name\":\"name\"", "\"name\":\"full_name\""));
+    AvroSchema reader = new AvroSchema(renamed).copy(metadata, ruleSet);
+    AvroSchema resolveAs = new AvroSchema(renamed);
+    List<Object> seen = new ArrayList<>();
+    GenericContainerWithVersion wrapper = avroDeserializer.deserializeWithReaderSchemas(
+        topic, headers, bytes, (subject, writerId, writer) -> {
+          seen.add(subject);
+          seen.add(writerId.getId());
+          return ReaderSchemas.of(reader, resolveAs);
+        }, true);
+
+    assertEquals(Arrays.asList(topic + "-value", registeredId), seen);
+    GenericRecord record = (GenericRecord) wrapper.getValue();
+    assertEquals("testUser", record.get("full_name").toString());
+    // The writer reported back is the true one, not the schema it was resolved as.
+    assertNotNull(((AvroSchema) wrapper.getWriterSchema()).rawSchema().getField("name"));
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(RuleResult.Result.SUCCESS, rr.result());
+  }
+
+  @Test
+  public void testReaderSchemasPassTheProtobufReaderAndDecrypt() throws Exception {
+    Widget widget = Widget.newBuilder().setName("alice").setSize(123).build();
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType())
+        .copy(getMetadata("kek1"), ruleSet);
+    int registeredId = schemaRegistry.register(topic + "-value", protobufSchema);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
+
+    List<Object> seen = new ArrayList<>();
+    ProtobufSchemaAndValue result = protobufDeserializer.deserializeWithReaderSchemas(
+        topic, headers, bytes, (subject, writerId, writer) -> {
+          seen.add(subject);
+          seen.add(writerId.getId());
+          return ReaderSchemas.of(writer);
+        }, true);
+
+    assertEquals(Arrays.asList(topic + "-value", registeredId), seen);
+    DynamicMessage message = (DynamicMessage) result.getValue();
+    assertEquals("alice",
+        message.getField(message.getDescriptorForType().findFieldByName("name")));
+  }
+
+  @Test
+  public void testReaderSchemasRejectAProtobufWriterToResolveAs() throws Exception {
+    Widget widget = Widget.newBuilder().setName("alice").setSize(123).build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    schemaRegistry.register(topic + "-value", protobufSchema);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
+
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> protobufDeserializer.deserializeWithReaderSchemas(topic, headers, bytes,
+            (subject, writerId, writer) -> ReaderSchemas.of(writer, writer), false));
+    assertTrue(String.valueOf(e.getCause()), e.getCause() instanceof IllegalArgumentException);
   }
 
   @Test

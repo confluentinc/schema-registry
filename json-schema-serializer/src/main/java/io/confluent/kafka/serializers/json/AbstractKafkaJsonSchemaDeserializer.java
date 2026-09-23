@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.ReaderSchemas;
+import io.confluent.kafka.serializers.ReaderSchemaResolver;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.ArrayList;
@@ -142,6 +144,19 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
       boolean includeRuleResults
   ) throws SerializationException, InvalidConfigurationException {
+    return deserializeResolving(includeSchemaAndVersion, topic, key, headers, payload,
+        ReaderSchemaResolver.of(writerToReaderSchemaFunc), includeRuleResults);
+  }
+
+  /**
+   * Reads with the schema {@code readerSchemaResolver} chooses. JSON Schema decodes with the reader
+   * alone, so a resolver naming a writer schema to resolve as is rejected.
+   */
+  protected Object deserializeResolving(
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
+      ReaderSchemaResolver readerSchemaResolver,
+      boolean includeRuleResults
+  ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the deserializer "
@@ -173,9 +188,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       List<Migration> migrations = Collections.emptyList();
-      ParsedSchema readerSchema = writerToReaderSchemaFunc != null
-          ? writerToReaderSchemaFunc.apply(schema)
-          : null;
+      ParsedSchema readerSchema = readerSchemaFor(
+          readerSchemaResolver, subject, schemaId, schema);
       if (readerSchema == null) {
         if (metadata != null) {
           readerSchema = getLatestWithMetadata(subject).getSchema();
@@ -390,6 +404,21 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       SchemaId schemaId, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+  }
+
+  private static ParsedSchema readerSchemaFor(ReaderSchemaResolver readerSchemaResolver,
+      String subject, SchemaId writerId, ParsedSchema writer) {
+    ReaderSchemas resolved = readerSchemaResolver != null
+        ? readerSchemaResolver.resolve(subject, writerId, writer)
+        : null;
+    if (resolved == null) {
+      return null;
+    }
+    if (resolved.getResolveWriterAs() != null) {
+      throw new IllegalArgumentException(
+          "JSON Schema decodes with the reader schema alone; resolveWriterAs is Avro-only");
+    }
+    return resolved.getReader();
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(

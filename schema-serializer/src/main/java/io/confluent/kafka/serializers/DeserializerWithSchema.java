@@ -32,4 +32,17 @@ public interface DeserializerWithSchema<T> extends Deserializer<T> {
   ParsedSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] data,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
       boolean includeRuleResults);
+
+  /**
+   * As {@link #deserializeWithSchema(String, Headers, byte[], Function, boolean)}, but the resolver
+   * is told the writer's subject and schema id, and may name a writer schema to resolve as.
+   *
+   * <p>Named apart from the {@code deserializeWithSchema} overloads so that a call passing a null
+   * function stays unambiguous.
+   */
+  default ParsedSchemaAndValue deserializeWithReaderSchemas(String topic, Headers headers,
+      byte[] data, ReaderSchemaResolver readerSchemaResolver, boolean includeRuleResults) {
+    throw new UnsupportedOperationException(
+        getClass().getName() + " does not support deserializeWithReaderSchemas");
+  }
 }

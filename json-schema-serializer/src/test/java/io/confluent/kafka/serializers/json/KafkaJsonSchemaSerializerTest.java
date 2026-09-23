@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers.json;
 
+import java.util.Arrays;
+import java.util.ArrayList;
+import io.confluent.kafka.serializers.ReaderSchemas;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -860,5 +863,38 @@ public class KafkaJsonSchemaSerializerTest {
     assertEquals(expectedSchema.normalize().canonicalString(),
         schemaAndValue.getSchema().normalize().canonicalString());
     assertEquals(user, schemaAndValue.getValue());
+  }
+
+  @Test
+  public void testDeserializeWithReaderSchemasSeesTheWritersSubjectAndId() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    int writerId = schemaRegistry.getId(topic + "-value",
+        JsonSchemaUtils.getSchema(user, null, null, true, true, serializer.objectMapper(),
+            schemaRegistry));
+
+    List<Object> seen = new ArrayList<>();
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithReaderSchemas(topic, headers, bytes, (subject, id, writer) -> {
+          seen.add(subject);
+          seen.add(id.getId());
+          return ReaderSchemas.of(writer);
+        }, false);
+
+    assertEquals(Arrays.asList(topic + "-value", writerId), seen);
+    assertEquals(user, schemaAndValue.getValue());
+  }
+
+  @Test
+  public void testDeserializeWithReaderSchemasRejectsAWriterToResolveAs() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> getDeserializer(User.class).deserializeWithReaderSchemas(topic, headers, bytes,
+            (subject, id, writer) -> ReaderSchemas.of(writer, writer), false));
+    assertTrue(String.valueOf(e.getCause()), e.getCause() instanceof IllegalArgumentException);
   }
 }

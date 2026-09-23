@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import io.confluent.kafka.serializers.ReaderSchemaResolver;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -104,6 +105,14 @@ public class KafkaProtobufDeserializer<T extends Message>
       boolean includeRuleResults) {
     return deserializeWithSchemaAndVersion(
         topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  @Override
+  public ProtobufSchemaAndValue deserializeWithReaderSchemas(
+      String topic, Headers headers, byte[] bytes,
+      ReaderSchemaResolver readerSchemaResolver, boolean includeRuleResults) {
+    return (ProtobufSchemaAndValue) deserializeResolving(
+        true, topic, isKey, headers, bytes, readerSchemaResolver, includeRuleResults);
   }
 
   @Override
