@@ -20,7 +20,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import org.junit.jupiter.api.Test;
 
@@ -59,32 +58,12 @@ class SchemaProvenanceEncoderTest {
   }
 
   @Test
-  void defaultsAreInTheirWireForm() {
-    // The date default reaches the wire as RFC 3339, not as a LocalDate or Avro's day count.
-    ProvenanceField since = encode(Arrays.asList(1001, 1002), null, false)
-        .getVersions().get(1).getFields().get(2);
-    assertThat(since.getDefaultValue()).isEqualTo("1970-01-02");
-  }
-
-  @Test
   void namesAndVersionsAreLeftOutWhenNotAskedForOrNotKnown() {
     SchemaProvenance encoded = encode(Arrays.asList(1001, 1002), null, false);
     assertThat(encoded.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsOnlyNulls();
     assertThat(encoded.getVersions().get(0).getFields())
         .extracting(ProvenanceField::getNames).containsOnlyNulls();
-  }
-
-  @Test
-  void anEmptyProtobufDefaultSurvives() {
-    ProtobufSchema proto = new ProtobufSchema(
-        "syntax = \"proto3\";\npackage p;\nmessage Row { string name = 1; }\n");
-    SchemaProvenance encoded = SchemaProvenanceEncoder.encode("s",
-        ProvenanceComputer.report(
-            Collections.singletonList(LogicalTypeConversion.toLogicalType(proto)),
-            IdentityPolicy.PROTOBUF),
-        Collections.singletonList(7), null, false);
-    assertThat(encoded.getVersions().get(0).getFields().get(0).getDefaultValue()).isEqualTo("");
   }
 
   @Test

@@ -25,9 +25,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * One field of one version: where it sits, what it is called, which provenance id it carries,
- * and what it reads as when a writer has no counterpart for it. A field is any addressable
- * position in the inlined schema: a struct field or a union branch.
+ * One field of one version: where it sits, what it is called, and which provenance id it carries.
+ * A field is any addressable position in the inlined schema: a struct field or a union branch.
  *
  * <p>The {@code pid} identifies the field <em>at a location</em> in the fully inlined schema. A
  * named type used by two fields gives each of its fields two ids, one per use site, so a consumer
@@ -42,17 +41,14 @@ public class ProvenanceField {
   private List<Integer> path;
   private List<String> names;
   private Integer pid;
-  private Object defaultValue;
 
   @JsonCreator
   public ProvenanceField(@JsonProperty("path") List<Integer> path,
                           @JsonProperty("names") List<String> names,
-                          @JsonProperty("pid") Integer pid,
-                          @JsonProperty("default") Object defaultValue) {
+                          @JsonProperty("pid") Integer pid) {
     this.path = path;
     this.names = names;
     this.pid = pid;
-    this.defaultValue = defaultValue;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "The inlined index path from the "
@@ -93,27 +89,6 @@ public class ProvenanceField {
     this.pid = pid;
   }
 
-  /**
-   * What reading this field yields when a writer has no counterpart for it, encoded by {@link
-   * ProvenanceDefaults}; absent where there is nothing to read.
-   *
-   * <p>Included whenever it is non-null, even when empty. Protobuf's implicit defaults are
-   * exactly the empty string and the empty list, and dropping those as "empty" would make them
-   * indistinguishable from having no default at all.
-   */
-  @io.swagger.v3.oas.annotations.media.Schema(description = "What reading this field yields when "
-      + "a writer has no counterpart for it; absent where there is nothing to read")
-  @JsonInclude(JsonInclude.Include.NON_NULL)
-  @JsonProperty("default")
-  public Object getDefaultValue() {
-    return defaultValue;
-  }
-
-  @JsonProperty("default")
-  public void setDefaultValue(Object defaultValue) {
-    this.defaultValue = defaultValue;
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -125,18 +100,16 @@ public class ProvenanceField {
     ProvenanceField that = (ProvenanceField) o;
     return Objects.equals(path, that.path)
         && Objects.equals(names, that.names)
-        && Objects.equals(pid, that.pid)
-        && Objects.equals(defaultValue, that.defaultValue);
+        && Objects.equals(pid, that.pid);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(path, names, pid, defaultValue);
+    return Objects.hash(path, names, pid);
   }
 
   @Override
   public String toString() {
-    return "{path=" + path + ",names=" + names + ",pid=" + pid
-        + (defaultValue != null ? ",default=" + defaultValue : "") + "}";
+    return "{path=" + path + ",names=" + names + ",pid=" + pid + "}";
   }
 }
