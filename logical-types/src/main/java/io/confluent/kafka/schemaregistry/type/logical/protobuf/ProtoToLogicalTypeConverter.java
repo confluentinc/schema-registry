@@ -60,19 +60,42 @@ public class ProtoToLogicalTypeConverter {
   private static final int DEFAULT_DECIMAL_PRECISION = 10;
   private static final int DEFAULT_DECIMAL_SCALE = 0;
 
+  /**
+   * Marks the synthetic root {@link #toLogicalType(ProtobufSchema, boolean)} builds over every
+   * top-level message. Its fields carry no Protobuf field numbers, so provenance identifies them by
+   * name rather than deriving numbers from their position.
+   */
+  public static final String MULTI_MESSAGE_ROOT_PARAM = "confluent:multi-message-root";
+
   public static Schema toRootSchema(final ProtobufSchema schema) {
     return toLogicalType(schema).getRootSchema();
   }
 
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
+    return toLogicalType(schema, false);
+  }
+
+  /**
+   * As {@link #toLogicalType(ProtobufSchema)}; with {@code includeMultipleMessages}, the root is a
+   * synthetic struct with one field per top-level message, in file order, each a reference to that
+   * message and named by its fully qualified name. Every message is then a named type, the first
+   * one included, and a file declaring a single message is wrapped all the same.
+   */
+  public static LogicalType toLogicalType(
+      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+    if (includeMultipleMessages && schema.rawSchema() != null
+        && schema.rawSchema().getTypes().isEmpty()) {
+      throw new ValidationException("Protobuf file has no top-level messages");
+    }
     try {
-      return toLogicalTypeInternal(schema);
+      return toLogicalTypeInternal(schema, includeMultipleMessages);
     } catch (StackOverflowError e) {
       throw new ValidationException("Protobuf schema nests types too deeply to convert");
     }
   }
 
-  private static LogicalType toLogicalTypeInternal(final ProtobufSchema schema) {
+  private static LogicalType toLogicalTypeInternal(
+      final ProtobufSchema schema, final boolean includeMultipleMessages) {
     // Re-export-only file: the local proto has no types of its own, just
     // `import public "..."`. Detect this BEFORE toDescriptor(), because
     // toDescriptor() resolves through the public import to the imported file
@@ -102,7 +125,9 @@ public class ProtoToLogicalTypeConverter {
     // Mirrors ProtobufData's wrapper.for.raw.primitives behavior. Wrapped
     // roots are inherently nullable (the message itself can be unset).
     final FileDescriptor file = rootDescriptor.getFile();
-    Optional<Schema> unwrapped = toUnwrappedSchema(rootDescriptor);
+    Optional<Schema> unwrapped = includeMultipleMessages
+        ? Optional.empty()
+        : toUnwrappedSchema(rootDescriptor);
     if (unwrapped.isPresent()) {
       return new LogicalType(
           emptyToNull(file.getPackage()),
@@ -118,16 +143,7 @@ public class ProtoToLogicalTypeConverter {
     // each resolved external schema, so nested external types are recognized.
     // Enum-only files (no top-level messages) are skipped — the top-level
     // enum's name is already in the set from the constructor.
-    for (Map.Entry<String, String> entry :
-        schema.resolvedReferences().entrySet()) {
-      ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
-          schema.references(), schema.resolvedReferences(),
-          null, null, null, null);
-      Descriptor refDescriptor = parsedRef.toDescriptor();
-      if (refDescriptor != null) {
-        collectExternalTypeNames(refDescriptor.getFile(), ctx);
-      }
-    }
+    collectReferencedTypeNames(schema, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
       throw new ValidationException(
@@ -165,6 +181,9 @@ public class ProtoToLogicalTypeConverter {
     // field references to nested types emit NAMED_TYPE_REF instead of inlining.
     for (Descriptor topLevel : messageTypes) {
       preRegisterNestedTypes(topLevel, ctx);
+    }
+    if (includeMultipleMessages) {
+      return multiMessageLogicalType(schema, file, messageTypes, ctx);
     }
     // Build the root body and replace the placeholder.
     Schema rootBody = toLogicalTypeNested(
@@ -212,6 +231,57 @@ public class ProtoToLogicalTypeConverter {
         rootName,
         emptyToNull(file.getPackage()),
         rootSchema,
+        ctx.getNamedTypes(),
+        ctx.getExternalTypes(),
+        Map.of(),
+        schema.references(),
+        schema.resolvedReferences(),
+        ctx.getDefaultValues());
+  }
+
+  private static void collectReferencedTypeNames(
+      final ProtobufSchema schema, final ToLogicalContext<String> ctx) {
+    for (Map.Entry<String, String> entry : schema.resolvedReferences().entrySet()) {
+      ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
+          schema.references(), schema.resolvedReferences(),
+          null, null, null, null);
+      Descriptor refDescriptor = parsedRef.toDescriptor();
+      if (refDescriptor != null) {
+        collectExternalTypeNames(refDescriptor.getFile(), ctx);
+      }
+    }
+  }
+
+  /**
+   * Every top-level message a named type, built at its own index as Flink's multi-message row
+   * builds it, under a synthetic root of references in file order.
+   */
+  private static LogicalType multiMessageLogicalType(final ProtobufSchema schema,
+      final FileDescriptor file, final List<Descriptor> messageTypes,
+      final ToLogicalContext<String> ctx) {
+    for (Descriptor message : messageTypes) {
+      ctx.putNamedType(message.getFullName(), toLogicalTypeNested(false, message, ctx,
+          Collections.singletonList(message.getIndex())));
+    }
+    for (com.google.protobuf.Descriptors.EnumDescriptor enm : file.getEnumTypes()) {
+      ctx.putNamedType(enm.getFullName(), convertEnumDescriptor(enm));
+    }
+    for (Descriptor topLevel : messageTypes) {
+      buildNestedBodies(topLevel, ctx);
+    }
+    final List<Field> fields = new ArrayList<>(messageTypes.size());
+    for (Descriptor message : messageTypes) {
+      fields.add(new Field(message.getFullName(),
+          Schema.createNamedTypeRef(message.getFullName()).setNullable(true),
+          message.getIndex()));
+    }
+    final Schema root = Schema.createStruct(fields)
+        .setNullable(false)
+        .setParams(Collections.singletonMap(MULTI_MESSAGE_ROOT_PARAM, true));
+    return new LogicalType(
+        null,
+        emptyToNull(file.getPackage()),
+        root,
         ctx.getNamedTypes(),
         ctx.getExternalTypes(),
         Map.of(),

@@ -17,11 +17,13 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -116,13 +118,25 @@ public final class ProvenanceHistory {
    */
   public static SchemaProvenance compute(String subject, List<Entry> history,
       List<ParsedSchema> schemas) {
+    return compute(subject, history, schemas, false);
+  }
+
+  /**
+   * As {@link #compute(String, List, List)}; with {@code includeMultipleMessages}, each Protobuf
+   * version is rooted at a synthetic struct over all its top-level messages. Other formats have
+   * one root regardless, and ignore it.
+   */
+  public static SchemaProvenance compute(String subject, List<Entry> history,
+      List<ParsedSchema> schemas, boolean includeMultipleMessages) {
     List<LogicalType> logicalTypes = new ArrayList<>(history.size());
     List<IdentityPolicy> policies = new ArrayList<>(history.size());
     List<Integer> ids = new ArrayList<>(history.size());
     List<Integer> versions = new ArrayList<>(history.size());
     for (int i = 0; i < history.size(); i++) {
       ParsedSchema schema = schemas.get(i);
-      logicalTypes.add(LogicalTypeConversion.toLogicalType(schema));
+      logicalTypes.add(includeMultipleMessages && schema instanceof ProtobufSchema
+          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
+          : LogicalTypeConversion.toLogicalType(schema));
       policies.add(IdentityPolicy.forSchemaType(schema.schemaType()));
       ids.add(history.get(i).getSchemaId());
       versions.add(history.get(i).getVersion());

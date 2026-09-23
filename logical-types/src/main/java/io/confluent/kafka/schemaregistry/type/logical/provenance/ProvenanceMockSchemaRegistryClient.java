@@ -59,25 +59,26 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose) throws IOException, RestClientException {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
-        includeInterior, verbose);
+        includeInterior, verbose, includeMultipleMessages);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean verbose)
-      throws IOException, RestClientException {
+      String toVersion, boolean includeInterior, boolean verbose,
+      boolean includeMultipleMessages) throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
-    return provenance(subject, history,
-        named(history, fromVersion), named(history, toVersion), includeInterior, verbose);
+    return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
+        includeInterior, verbose, includeMultipleMessages);
   }
 
   private SchemaProvenance provenance(String subject, List<ProvenanceHistory.Entry> history,
-      int from, int to, boolean includeInterior, boolean verbose)
-      throws IOException, RestClientException {
+      int from, int to, boolean includeInterior, boolean verbose,
+      boolean includeMultipleMessages) throws IOException, RestClientException {
     List<ParsedSchema> schemas = new ArrayList<>(history.size());
     for (ProvenanceHistory.Entry entry : history) {
       try {
@@ -89,7 +90,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = ProvenanceHistory.compute(subject, history, schemas);
+      whole = ProvenanceHistory.compute(subject, history, schemas, includeMultipleMessages);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (ValidationException e) {

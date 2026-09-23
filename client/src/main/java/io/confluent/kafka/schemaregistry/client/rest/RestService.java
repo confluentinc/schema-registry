@@ -1599,19 +1599,23 @@ public class RestService implements Closeable, Configurable {
   /**
    * The provenance of {@code subject}'s columns between two versions — every column's id, stable
    * across renames — addressed by version number. {@code "latest"} is accepted as a version.
+   * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
+   * top-level messages; other formats ignore it.
    */
   public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
                                                  String subject,
                                                  String fromVersion,
                                                  String toVersion,
                                                  boolean includeInterior,
-                                                 boolean verbose)
+                                                 boolean verbose,
+                                                 boolean includeMultipleMessages)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam("fromVersion", fromVersion);
     builder.queryParam("toVersion", toVersion);
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("verbose", verbose);
+    builder.queryParam("includeMultipleMessages", includeMultipleMessages);
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
@@ -1625,13 +1629,15 @@ public class RestService implements Closeable, Configurable {
                                             int fromId,
                                             int toId,
                                             boolean includeInterior,
-                                            boolean verbose)
+                                            boolean verbose,
+                                            boolean includeMultipleMessages)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam("fromId", fromId);
     builder.queryParam("toId", toId);
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("verbose", verbose);
+    builder.queryParam("includeMultipleMessages", includeMultipleMessages);
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
