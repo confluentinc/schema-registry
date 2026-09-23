@@ -22,10 +22,8 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -52,9 +50,6 @@ import java.util.function.Consumer;
  * uses of a shared type the same default, as they should have.
  */
 final class PathInliner {
-
-  private static final Set<String> COLLECTION_TOKENS =
-      new HashSet<>(Arrays.asList("[]", "{key}", "{value}"));
 
   private PathInliner() {
   }
@@ -83,7 +78,7 @@ final class PathInliner {
       case UNION: {
         int members = memberCount(side.type);
         for (int i = 0; i < members; i++) {
-          Side member = side.descend(memberType(side.type, i), i, memberName(side.type, i));
+          Side member = side.descend(memberType(side.type, i), i, memberSteps(side.type, i));
           Provenance provenance = byPath.get(member.definition);
           if (provenance == null) {
             // Not an entity the resolver emitted, so this location cannot be named. Should not
@@ -100,11 +95,14 @@ final class PathInliner {
       case ARRAY:
       case MULTISET:
         // A collection step is not an entity, so the chain does not grow.
-        inlineInto(side.descend(side.type.getElementType(), 0, "[]"), ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getElementType(), 0, side.type.getElementNativeNames()),
+            ancestors, byPath, sink);
         break;
       case MAP:
-        inlineInto(side.descend(side.type.getKeyType(), 0, "{key}"), ancestors, byPath, sink);
-        inlineInto(side.descend(side.type.getValueType(), 1, "{value}"), ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getKeyType(), 0, side.type.getKeyNativeNames()),
+            ancestors, byPath, sink);
+        inlineInto(side.descend(side.type.getValueType(), 1, side.type.getValueNativeNames()),
+            ancestors, byPath, sink);
         break;
       default:
         break;
@@ -117,32 +115,40 @@ final class PathInliner {
     private final LogicalType logicalType;
     private final Schema type;
     private final List<Integer> inlined;
+    // The native names so far, or null once an edge recorded none; see Schema#getNativeEntryNames.
     private final List<String> names;
+    // Entry steps of the node we stand on, spelled only if the walk goes further.
+    private final List<String> pending;
     private final PathKey definition;
     private final Set<String> inProgress;
     /** Where each named type was first inlined — shared across the walk, written once per type. */
     private final Map<String, List<Integer>> firstInlined;
 
     private Side(LogicalType logicalType, Schema type, List<Integer> inlined, List<String> names,
-        PathKey definition, Set<String> inProgress, Map<String, List<Integer>> firstInlined) {
+        List<String> pending, PathKey definition, Set<String> inProgress,
+        Map<String, List<Integer>> firstInlined) {
       this.logicalType = logicalType;
       this.type = type;
       this.inlined = inlined;
       this.names = names;
+      this.pending = pending;
       this.definition = definition;
       this.inProgress = inProgress;
       this.firstInlined = firstInlined;
     }
 
     static Side root(LogicalType logicalType) {
-      return new Side(logicalType, logicalType.getRootSchema(), Collections.emptyList(),
-          Collections.emptyList(), PathKey.ofRoot(), new LinkedHashSet<>(), new HashMap<>());
+      Schema root = logicalType.getRootSchema();
+      return new Side(logicalType, root, Collections.emptyList(), Collections.emptyList(),
+          entryOf(root), PathKey.ofRoot(), new LinkedHashSet<>(), new HashMap<>());
     }
 
-    /** One step down, whether to a member or through a collection. */
-    Side descend(Schema newType, int step, String name) {
-      return new Side(logicalType, newType, append(inlined, step), appendName(names, name),
-          definition.child(step), inProgress, firstInlined);
+    /**
+     * One step down, whether to a member or through a collection, spelled by {@code steps}.
+     */
+    Side descend(Schema newType, int step, List<String> steps) {
+      return new Side(logicalType, newType, append(inlined, step), spell(names, pending, steps),
+          entryOf(newType), definition.child(step), inProgress, firstInlined);
     }
 
     /**
@@ -186,7 +192,8 @@ final class PathInliner {
       }
       firstInlined.putIfAbsent(name, inlined);
       try {
-        body.accept(new Side(logicalType, logicalType.getNamedTypes().get(name), inlined, names,
+        Schema named = logicalType.getNamedTypes().get(name);
+        body.accept(new Side(logicalType, named, inlined, names, spell(pending, entryOf(named)),
             PathKey.ofNamedType(name), inProgress, firstInlined));
       } finally {
         inProgress.remove(name);
@@ -224,22 +231,32 @@ final class PathInliner {
     return value;
   }
 
-  private static String memberName(Schema type, int index) {
-    return escaped(type.getType() == Schema.Type.STRUCT
-        ? type.getFields().get(index).getName()
-        : type.getBranches().get(index).getName());
+  private static List<String> memberSteps(Schema type, int index) {
+    return type.getType() == Schema.Type.STRUCT
+        ? type.getFields().get(index).getNativeNames()
+        : type.getBranches().get(index).getNativeNames();
+  }
+
+  private static List<String> entryOf(Schema type) {
+    return type != null ? type.getNativeEntryNames() : Collections.emptyList();
   }
 
   /**
-   * A member name that spells a collection token, or starts with {@code $$}, takes a leading
-   * {@code $$}, so no member step reads as a collection step. Only JSON Schema allows such names.
+   * {@code names}, then {@code pending}, then {@code steps}; null if any part is unknown.
    */
-  static String escaped(String name) {
-    if (name == null) {
+  private static List<String> spell(List<String> names, List<String> pending, List<String> steps) {
+    if (names == null || steps == null) {
       return null;
     }
-    boolean clashes = COLLECTION_TOKENS.contains(name) || name.startsWith("$$");
-    return clashes ? "$$" + name : name;
+    List<String> spelled = new ArrayList<>(names.size() + pending.size() + steps.size());
+    spelled.addAll(names);
+    spelled.addAll(pending);
+    spelled.addAll(steps);
+    return Collections.unmodifiableList(spelled);
+  }
+
+  private static List<String> spell(List<String> first, List<String> second) {
+    return spell(first, Collections.emptyList(), second);
   }
 
   private static int memberCount(Schema type) {
@@ -257,13 +274,6 @@ final class PathInliner {
     return type.getType() == Schema.Type.STRUCT
         ? type.getFields().get(index).getSchema()
         : type.getBranches().get(index).getSchema();
-  }
-
-  private static List<String> appendName(List<String> names, String name) {
-    List<String> extended = new ArrayList<>(names.size() + 1);
-    extended.addAll(names);
-    extended.add(name);
-    return Collections.unmodifiableList(extended);
   }
 
   private static List<Integer> append(List<Integer> path, int step) {

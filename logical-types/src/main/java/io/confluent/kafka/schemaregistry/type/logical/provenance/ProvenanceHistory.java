@@ -16,14 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
-import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
@@ -155,35 +156,29 @@ public final class ProvenanceHistory {
     List<Integer> versions = new ArrayList<>(history.size());
     for (int i = 0; i < history.size(); i++) {
       ParsedSchema schema = schemas.get(i);
-      logicalTypes.add(includeMultipleMessages && schema instanceof ProtobufSchema
-          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
-          : LogicalTypeConversion.toLogicalType(schema));
+      logicalTypes.add(logicalTypeOf(schema, includeMultipleMessages));
       policies.add(IdentityPolicy.forSchemaType(schema.schemaType()));
       ids.add(history.get(i).getSchemaId());
       versions.add(history.get(i).getVersion());
     }
     SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
         subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions);
-    for (int i = 0; i < history.size(); i++) {
-      if (schemas.get(i) instanceof ProtobufSchema) {
-        withNativeNames(encoded.getVersions().get(i), (ProtobufSchema) schemas.get(i),
-            includeMultipleMessages);
-      }
-    }
     encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
     return encoded;
   }
 
   /**
-   * Respells each field's names as the descriptor does, so a consumer walking it by name passes
-   * through the {@code flink.wrapped} wrappers the logical type sees through.
+   * The logical type provenance is computed on: edition V1, the one the Metastore's columns follow.
+   * Only the JSON reader differs by edition, keeping a bare one-branch union and naming union
+   * branches by position.
    */
-  private static void withNativeNames(ProvenanceVersion version, ProtobufSchema schema,
-      boolean includeMultipleMessages) {
-    Descriptor root = schema.toDescriptor();
-    for (ProvenanceField field : version.getFields()) {
-      field.setNames(ProtoNativeNames.of(root, includeMultipleMessages, field.getNames()));
+  private static LogicalType logicalTypeOf(ParsedSchema schema, boolean includeMultipleMessages) {
+    if (schema instanceof JsonSchema) {
+      return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
+    return includeMultipleMessages && schema instanceof ProtobufSchema
+        ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
+        : LogicalTypeConversion.toLogicalType(schema);
   }
 
   /**

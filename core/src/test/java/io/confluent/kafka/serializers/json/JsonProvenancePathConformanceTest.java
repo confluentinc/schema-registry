@@ -79,7 +79,7 @@ class JsonProvenancePathConformanceTest {
                 + "{\"$ref\":\"#/definitions/O\"}},\"definitions\":{\"O\":"
                 + object("\"a\":" + INT + "%s") + "}}",
             "{\"o\":{\"a\":1,\"t\":2}}", "{\"o\":{\"a\":1}}"),
-        // Property names that spell a collection token, or start with $ or $$.
+        // Property names that look like tokens or escapes are plain names.
         prunes("property named []", object("\"[]\":" + object("\"a\":" + INT + "%s")),
             "{\"[]\":{\"a\":1,\"t\":2}}", "{\"[]\":{\"a\":1}}"),
         prunes("property named {value}", object("\"{value}\":" + object("\"a\":" + INT + "%s")),
@@ -109,9 +109,13 @@ class JsonProvenancePathConformanceTest {
         // A tuple has no logical form, so its schema has no provenance at all.
         prunes("tuple items", object("\"tup\":{\"type\":\"array\",\"items\":["
                 + object("\"a\":" + INT + "%s") + "," + INT + "]}"), "{}", null),
-        prunes("oneOf is left alone", object("\"u\":{\"oneOf\":[" + INT + ","
+        // A re-added union branch has no property of its own: the field holding it stays.
+        Arguments.of("a re-added oneOf branch", ",{\"type\":\"string\"}",
+            object("\"u\":{\"oneOf\":[" + INT + "%s]}"), "{\"u\":5}", "{\"u\":5}"),
+        // A union branch is no step in the document, so a property inside one is found.
+        prunes("inside a oneOf branch", object("\"u\":{\"oneOf\":[" + INT + ","
                 + object("\"a\":" + INT + "%s") + "]}"),
-            "{\"u\":{\"a\":1,\"t\":2}}", "{\"u\":{\"a\":1,\"t\":2}}"));
+            "{\"u\":{\"a\":1,\"t\":2}}", "{\"u\":{\"a\":1}}"));
   }
 
   @ParameterizedTest(name = "{0}")
