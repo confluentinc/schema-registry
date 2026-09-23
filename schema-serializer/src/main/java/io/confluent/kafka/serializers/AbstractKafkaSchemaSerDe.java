@@ -136,6 +136,8 @@ public abstract class AbstractKafkaSchemaSerDe
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
+  // The provenance algorithm version deserializers project with; null when provenance is off.
+  protected String useProvenance;
   protected Map<String, String> metadata;
   protected ExecutionEnvironment executionEnv;
   protected boolean enableRuleServiceLoader;
@@ -219,6 +221,7 @@ public abstract class AbstractKafkaSchemaSerDe
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
+    useProvenance = config.useProvenance();
     validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();

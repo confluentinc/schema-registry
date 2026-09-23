@@ -16,8 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
-import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
-import io.confluent.kafka.serializers.ReaderSchemas;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
@@ -2258,6 +2258,137 @@ public abstract class FieldEncryptionExecutorTest {
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
+  // ---- Provenance: decryption runs against the reader's names while fields pair by history ----
+
+  private Map<String, Object> provenanceProps(boolean provenance) throws Exception {
+    Map<String, Object> props = fieldEncryptionProps.getClientProperties("mock://");
+    props.put(CLOCK, fakeClock);
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false);
+    if (provenance) {
+      props.put(AbstractKafkaSchemaSerDeConfig.USE_PROVENANCE, "v1");
+    }
+    return props;
+  }
+
+  private ProvenanceMockSchemaRegistryClient provenanceRegistry() {
+    return new ProvenanceMockSchemaRegistryClient(ImmutableList.of(
+        new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
+  }
+
+  private RuleSet encryptPii() {
+    return new RuleSet(Collections.emptyList(), ImmutableList.of(new Rule("rule1", null, null,
+        null, FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null,
+        false)));
+  }
+
+  @Test
+  public void testProvenanceFollowsAnAvroRenameChainAndDecrypts() throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String tagged = ", \"confluent:tags\": [\"PII\"]";
+    AvroSchema v1 = avroRecord("{\"name\": \"name\", \"type\": \"string\"" + tagged + "}")
+        .copy(metadata, encryptPii());
+    AvroSchema v2 = avroRecord("{\"name\": \"full_name\", \"type\": \"string\", "
+        + "\"aliases\": [\"name\"]" + tagged + "}").copy(metadata, encryptPii());
+    AvroSchema v3 = avroRecord("{\"name\": \"display_name\", \"type\": \"string\", "
+        + "\"aliases\": [\"full_name\"], \"default\": \"?\"" + tagged + "}")
+        .copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    GenericRecord record = new GenericData.Record(v1.rawSchema());
+    record.put("name", "testUser");
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaAvroSerializer(registry, provenanceProps(false))
+        .serialize(topic, headers, record);
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    GenericRecord on = (GenericRecord) new KafkaAvroDeserializer(registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("testUser", on.get("display_name").toString());
+    // Without provenance display_name takes its default, which the rule then fails to decrypt.
+    assertThrows(SerializationException.class,
+        () -> new KafkaAvroDeserializer(registry, provenanceProps(false))
+            .deserializeWithSchema(topic, headers, bytes, writer -> v3));
+  }
+
+  @Test
+  public void testProvenanceKeepsAReusedProtobufNumberAwayFromTheOldDataAndDecrypts()
+      throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String header = "syntax = \"proto3\";\npackage p;\nimport \"confluent/meta.proto\";\n";
+    String name = "string name = 1 [(confluent.field_meta).tags = \"PII\"];";
+    ProtobufSchema v1 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " string note = 2; }").copy(metadata, encryptPii());
+    ProtobufSchema v2 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " }").copy(metadata, encryptPii());
+    ProtobufSchema v3 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " string memo = 2; }").copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    Descriptor row = v1.toDescriptor();
+    DynamicMessage message = DynamicMessage.newBuilder(row)
+        .setField(row.findFieldByName("name"), "alice")
+        .setField(row.findFieldByName("note"), "ada").build();
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaProtobufSerializer<DynamicMessage>(registry, provenanceProps(false))
+        .serialize(topic, headers, message);
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    DynamicMessage on = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    DynamicMessage off = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        registry, provenanceProps(false))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("alice", on.getField(on.getDescriptorForType().findFieldByName("name")));
+    assertEquals("", on.getField(on.getDescriptorForType().findFieldByName("memo")));
+    assertEquals("ada", off.getField(off.getDescriptorForType().findFieldByName("memo")));
+  }
+
+  @Test
+  public void testProvenancePrunesAReAddedJsonPropertyAndDecrypts() throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String name = "\"name\": {\"type\": \"string\", \"confluent:tags\": [\"PII\"]}";
+    JsonSchema v1 = jsonObject(name + ", \"note\": {\"type\": \"string\"}")
+        .copy(metadata, encryptPii());
+    JsonSchema v2 = jsonObject(name).copy(metadata, encryptPii());
+    JsonSchema v3 = jsonObject(name
+        + ", \"note\": {\"type\": \"string\", \"description\": \"new\"}")
+        .copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaJsonSchemaSerializer<Object>(registry, provenanceProps(false))
+        .serialize(topic, headers, JsonSchemaUtils.envelope(v1,
+            new ObjectMapper().readTree("{\"name\": \"alice\", \"note\": \"ada\"}")));
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(
+        registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    JsonNode off = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(
+        registry, provenanceProps(false))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("alice", on.get("name").asText());
+    assertFalse(on.has("note"));
+    assertEquals("ada", off.get("note").asText());
+  }
+
+  private static AvroSchema avroRecord(String field) {
+    return new AvroSchema("{\"type\": \"record\", \"name\": \"User\", "
+        + "\"namespace\": \"example.avro\", \"fields\": [" + field + "]}");
+  }
+
+  private static JsonSchema jsonObject(String properties) {
+    return new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+        + properties + "}}");
+  }
+
   // ---- Tests for ParsedSchemaAndValue rule results + writer info ----
 
   /** Find the RuleResult for the first ENCRYPT rule in the wrapper. */
@@ -2321,83 +2452,6 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
     assertFalse("errorMessage should be absent for DECRYPTED",
         meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
-  }
-
-  @Test
-  public void testReaderSchemasResolveAWriterRenamedAfterTheReaderAndDecrypt() throws Exception {
-    IndexedRecord avroRecord = createUserRecord();
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
-        null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = getMetadata("kek1");
-    AvroSchema avroSchema = new AvroSchema(createUserSchema()).copy(metadata, ruleSet);
-    int registeredId = schemaRegistry.register(topic + "-value", avroSchema);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
-
-    // The reader calls "name" "full_name" and declares no alias; only the resolver's renamed
-    // writer pairs the two. Decryption must still find the tagged field under its reader name.
-    Schema renamed = new Schema.Parser().parse(
-        createUserSchema().toString().replace("\"name\":\"name\"", "\"name\":\"full_name\""));
-    AvroSchema reader = new AvroSchema(renamed).copy(metadata, ruleSet);
-    AvroSchema resolveAs = new AvroSchema(renamed);
-    List<Object> seen = new ArrayList<>();
-    GenericContainerWithVersion wrapper = avroDeserializer.deserializeWithReaderSchemas(
-        topic, headers, bytes, (subject, writerId, writer) -> {
-          seen.add(subject);
-          seen.add(writerId.getId());
-          return ReaderSchemas.of(reader, resolveAs);
-        }, true);
-
-    assertEquals(Arrays.asList(topic + "-value", registeredId), seen);
-    GenericRecord record = (GenericRecord) wrapper.getValue();
-    assertEquals("testUser", record.get("full_name").toString());
-    // The writer reported back is the true one, not the schema it was resolved as.
-    assertNotNull(((AvroSchema) wrapper.getWriterSchema()).rawSchema().getField("name"));
-    RuleResult rr = findEncryptRuleResult(wrapper);
-    assertNotNull("expected an ENCRYPT RuleResult", rr);
-    assertEquals(RuleResult.Result.SUCCESS, rr.result());
-  }
-
-  @Test
-  public void testReaderSchemasPassTheProtobufReaderAndDecrypt() throws Exception {
-    Widget widget = Widget.newBuilder().setName("alice").setSize(123).build();
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
-    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType())
-        .copy(getMetadata("kek1"), ruleSet);
-    int registeredId = schemaRegistry.register(topic + "-value", protobufSchema);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
-
-    List<Object> seen = new ArrayList<>();
-    ProtobufSchemaAndValue result = protobufDeserializer.deserializeWithReaderSchemas(
-        topic, headers, bytes, (subject, writerId, writer) -> {
-          seen.add(subject);
-          seen.add(writerId.getId());
-          return ReaderSchemas.of(writer);
-        }, true);
-
-    assertEquals(Arrays.asList(topic + "-value", registeredId), seen);
-    DynamicMessage message = (DynamicMessage) result.getValue();
-    assertEquals("alice",
-        message.getField(message.getDescriptorForType().findFieldByName("name")));
-  }
-
-  @Test
-  public void testReaderSchemasRejectAProtobufWriterToResolveAs() throws Exception {
-    Widget widget = Widget.newBuilder().setName("alice").setSize(123).build();
-    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
-    schemaRegistry.register(topic + "-value", protobufSchema);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
-
-    SerializationException e = assertThrows(SerializationException.class,
-        () -> protobufDeserializer.deserializeWithReaderSchemas(topic, headers, bytes,
-            (subject, writerId, writer) -> ReaderSchemas.of(writer, writer), false));
-    assertTrue(String.valueOf(e.getCause()), e.getCause() instanceof IllegalArgumentException);
   }
 
   @Test

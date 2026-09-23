@@ -48,6 +48,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int INVALID_VERSION = 42202;
   private static final int RECURSIVE_SCHEMA = 42213;
   private static final int UNRESOLVABLE_REFERENCE = 42214;
+  private static final int UNKNOWN_ALGORITHM = 42216;
 
   public ProvenanceMockSchemaRegistryClient() {
     super();
@@ -59,26 +60,32 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
-        includeInterior, verbose, includeMultipleMessages);
+        includeInterior, verbose, includeMultipleMessages, algorithm);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior, boolean verbose,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
-        includeInterior, verbose, includeMultipleMessages);
+        includeInterior, verbose, includeMultipleMessages, algorithm);
   }
 
   private SchemaProvenance provenance(String subject, List<ProvenanceHistory.Entry> history,
       int from, int to, boolean includeInterior, boolean verbose,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+    ProvenanceAlgorithm version;
+    try {
+      version = ProvenanceAlgorithm.of(algorithm);
+    } catch (IllegalArgumentException e) {
+      throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
+    }
     List<ProvenanceHistory.Entry> range = ProvenanceHistory.range(history, from, to);
     List<ParsedSchema> schemas = new ArrayList<>(range.size());
     for (ProvenanceHistory.Entry entry : range) {
@@ -91,7 +98,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages);
+      whole = ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages, version);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (ValidationException e) {

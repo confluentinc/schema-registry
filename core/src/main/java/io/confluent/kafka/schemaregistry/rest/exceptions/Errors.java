@@ -90,6 +90,7 @@ public class Errors {
   public static final int RECURSIVE_SCHEMA_ERROR_CODE = 42213;
   public static final int UNRESOLVABLE_REFERENCE_ERROR_CODE = 42214;
   public static final int INVALID_PROVENANCE_REQUEST_ERROR_CODE = 42215;
+  public static final int UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE = 42216;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -268,6 +269,11 @@ public class Errors {
   /** The request does not name exactly one range, by version or by schema id. */
   public static RestConstraintViolationException invalidProvenanceRequestException(String message) {
     return new RestConstraintViolationException(message, INVALID_PROVENANCE_REQUEST_ERROR_CODE);
+  }
+
+  public static RestConstraintViolationException unknownProvenanceAlgorithmException(
+      String message) {
+    return new RestConstraintViolationException(message, UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE);
   }
 
   public static RestException associationNotFoundException(String resource) {

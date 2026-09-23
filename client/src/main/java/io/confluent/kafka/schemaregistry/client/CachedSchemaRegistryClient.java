@@ -907,18 +907,18 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
    */
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
     return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, fromId, toId, includeInterior, verbose, includeMultipleMessages);
+        subject, fromId, toId, includeInterior, verbose, includeMultipleMessages, algorithm);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior, boolean verbose,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
-    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, fromVersion, toVersion, includeInterior, verbose, includeMultipleMessages);
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromVersion, toVersion, includeInterior, verbose, includeMultipleMessages, algorithm);
   }
 
   @Override

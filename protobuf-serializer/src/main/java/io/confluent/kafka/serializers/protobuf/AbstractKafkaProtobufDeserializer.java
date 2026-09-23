@@ -31,9 +31,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
-import io.confluent.kafka.serializers.ReaderSchemas;
-import io.confluent.kafka.serializers.ReaderSchemaResolver;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.ArrayList;
@@ -148,19 +147,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
       boolean includeRuleResults
   ) throws SerializationException, InvalidConfigurationException {
-    return deserializeResolving(includeSchemaAndVersion, topic, key, headers, payload,
-        ReaderSchemaResolver.of(writerToReaderSchemaFunc), includeRuleResults);
-  }
-
-  /**
-   * Reads with the schema {@code readerSchemaResolver} chooses. Protobuf decodes with the reader
-   * alone, so a resolver naming a writer schema to resolve as is rejected.
-   */
-  protected Object deserializeResolving(
-      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
-      ReaderSchemaResolver readerSchemaResolver,
-      boolean includeRuleResults
-  ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the deserializer "
@@ -195,8 +181,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       List<Migration> migrations = Collections.emptyList();
-      ProtobufSchema readerSchema = (ProtobufSchema) readerSchemaFor(
-          readerSchemaResolver, subject, schemaId, schema);
+      ProtobufSchema readerSchema = writerToReaderSchemaFunc != null
+          ? (ProtobufSchema) writerToReaderSchemaFunc.apply(schema)
+          : null;
       if (readerSchema == null) {
         if (metadata != null) {
           readerSchema = (ProtobufSchema) getLatestWithMetadata(subject).getSchema();
@@ -217,6 +204,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (readerSchema.toDescriptor(name) != null) {
         readerSchema = schemaWithName(readerSchema, name);
       }
+      readerSchema = byProvenance(subject, schemaId, schema, readerSchema, name, migrations);
 
       int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
@@ -309,6 +297,38 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
   }
 
+  /**
+   * With {@code use.provenance}, the reader renumbered so that a field reusing a number the writer
+   * uses for something else no longer takes the writer's data; the reader itself otherwise. A file
+   * of several top-level messages pairs the writer's message with the reader's by name, and a
+   * writer message the reader does not declare cannot be read into it.
+   */
+  private ProtobufSchema byProvenance(String subject, SchemaId writerId, ProtobufSchema writer,
+      ProtobufSchema reader, String name, List<Migration> migrations) {
+    if (useProvenance == null || reader == null || !migrations.isEmpty()) {
+      return reader;
+    }
+    boolean multi = writer.toDescriptor().getFile().getMessageTypes().size() > 1
+        || reader.toDescriptor().getFile().getMessageTypes().size() > 1;
+    if (multi && reader.toDescriptor(name) == null) {
+      throw new SerializationException("The record was written as message " + name
+          + ", which the reader schema does not declare");
+    }
+    return provenanceProjector().project(subject, writerId, writer, reader, multi,
+        mapping -> ProtoProvenanceRenumberer.renumber(reader, mapping, multi))
+        .orElse(reader);
+  }
+
+  private ProvenanceProjector<ProtobufSchema> provenanceProjector;
+
+  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  private ProvenanceProjector<ProtobufSchema> provenanceProjector() {
+    if (provenanceProjector == null) {
+      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+    }
+    return provenanceProjector;
+  }
+
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
     try {
@@ -364,21 +384,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       SchemaId schemaId, ProtobufSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return (ProtobufSchema) getSchemaBySchemaId(subject, schemaId);
-  }
-
-  private static ParsedSchema readerSchemaFor(ReaderSchemaResolver readerSchemaResolver,
-      String subject, SchemaId writerId, ParsedSchema writer) {
-    ReaderSchemas resolved = readerSchemaResolver != null
-        ? readerSchemaResolver.resolve(subject, writerId, writer)
-        : null;
-    if (resolved == null) {
-      return null;
-    }
-    if (resolved.getResolveWriterAs() != null) {
-      throw new IllegalArgumentException(
-          "Protobuf decodes with the reader schema alone; resolveWriterAs is Avro-only");
-    }
-    return resolved.getReader();
   }
 
   protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(

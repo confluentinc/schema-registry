@@ -39,12 +39,19 @@ import java.util.Objects;
 public class SchemaProvenance {
 
   private String subject;
+  private String algorithm;
   private List<ProvenanceVersion> versions;
+
+  public SchemaProvenance(String subject, List<ProvenanceVersion> versions) {
+    this(subject, null, versions);
+  }
 
   @JsonCreator
   public SchemaProvenance(@JsonProperty("subject") String subject,
+                          @JsonProperty("algorithm") String algorithm,
                           @JsonProperty("versions") List<ProvenanceVersion> versions) {
     this.subject = subject;
+    this.algorithm = algorithm;
     this.versions = versions;
   }
 
@@ -58,6 +65,18 @@ public class SchemaProvenance {
   @JsonProperty("subject")
   public void setSubject(String subject) {
     this.subject = subject;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The version of the provenance "
+      + "algorithm that computed this response", example = "v1")
+  @JsonProperty("algorithm")
+  public String getAlgorithm() {
+    return algorithm;
+  }
+
+  @JsonProperty("algorithm")
+  public void setAlgorithm(String algorithm) {
+    this.algorithm = algorithm;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "The versions returned, in ascending "
@@ -82,16 +101,17 @@ public class SchemaProvenance {
     }
     SchemaProvenance that = (SchemaProvenance) o;
     return Objects.equals(subject, that.subject)
+        && Objects.equals(algorithm, that.algorithm)
         && Objects.equals(versions, that.versions);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(subject, versions);
+    return Objects.hash(subject, algorithm, versions);
   }
 
   @Override
   public String toString() {
-    return "{subject=" + subject + ",versions=" + versions + "}";
+    return "{subject=" + subject + ",algorithm=" + algorithm + ",versions=" + versions + "}";
   }
 }

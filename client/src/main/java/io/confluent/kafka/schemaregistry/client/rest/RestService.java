@@ -1600,7 +1600,8 @@ public class RestService implements Closeable, Configurable {
    * The provenance of {@code subject}'s columns between two versions — every column's id, stable
    * across renames — addressed by version number. {@code "latest"} is accepted as a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
-   * top-level messages; other formats ignore it.
+   * top-level messages; other formats ignore it. {@code algorithm} names the version of the
+   * provenance algorithm, such as {@code "v1"}; null asks for the latest.
    */
   public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
                                                  String subject,
@@ -1608,7 +1609,8 @@ public class RestService implements Closeable, Configurable {
                                                  String toVersion,
                                                  boolean includeInterior,
                                                  boolean verbose,
-                                                 boolean includeMultipleMessages)
+                                                 boolean includeMultipleMessages,
+                                                 String algorithm)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam("fromVersion", fromVersion);
@@ -1616,6 +1618,9 @@ public class RestService implements Closeable, Configurable {
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("verbose", verbose);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
+    if (algorithm != null) {
+      builder.queryParam("algorithm", algorithm);
+    }
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
@@ -1630,7 +1635,8 @@ public class RestService implements Closeable, Configurable {
                                             int toId,
                                             boolean includeInterior,
                                             boolean verbose,
-                                            boolean includeMultipleMessages)
+                                            boolean includeMultipleMessages,
+                                            String algorithm)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam("fromId", fromId);
@@ -1638,6 +1644,9 @@ public class RestService implements Closeable, Configurable {
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("verbose", verbose);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
+    if (algorithm != null) {
+      builder.queryParam("algorithm", algorithm);
+    }
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }

@@ -265,10 +265,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * deserializer uses, since a record carries a schema id and never a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
    * top-level messages, so paths gain one leading step; ids from the two modes are not comparable.
+   * {@code algorithm} names the version of the provenance algorithm; null asks for the latest.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -278,7 +279,7 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    */
   default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior, boolean verbose,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
