@@ -88,7 +88,7 @@ public class ProvenanceProjectorTest {
 
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-        boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+        boolean includeInterior, boolean includeMultipleMessages,
         String algorithm) {
       asked++;
       throw new UnsupportedOperationException("no provenance here");

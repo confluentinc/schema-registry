@@ -268,8 +268,8 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * {@code algorithm} names the version of the provenance algorithm; null asks for the latest.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
-      String algorithm) throws IOException, RestClientException {
+      boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -278,8 +278,8 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * "latest"}.
    */
   default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean verbose,
-      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

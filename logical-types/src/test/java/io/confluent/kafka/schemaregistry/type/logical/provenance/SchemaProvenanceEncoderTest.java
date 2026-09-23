@@ -43,7 +43,7 @@ class SchemaProvenanceEncoderTest {
 
   @Test
   void carriesSchemaIdsVersionsAndPids() {
-    SchemaProvenance encoded = encode(Arrays.asList(1001, 1002), Arrays.asList(1, 2), true);
+    SchemaProvenance encoded = encode(Arrays.asList(1001, 1002), Arrays.asList(1, 2));
 
     assertThat(encoded.getSubject()).isEqualTo("s");
     assertThat(encoded.getVersions()).extracting(ProvenanceVersion::getVersion)
@@ -58,26 +58,24 @@ class SchemaProvenanceEncoderTest {
   }
 
   @Test
-  void namesAndVersionsAreLeftOutWhenNotAskedForOrNotKnown() {
-    SchemaProvenance encoded = encode(Arrays.asList(1001, 1002), null, false);
+  void versionsAreLeftOutWhenNotKnown() {
+    SchemaProvenance encoded = encode(Arrays.asList(1001, 1002), null);
     assertThat(encoded.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsOnlyNulls();
-    assertThat(encoded.getVersions().get(0).getFields())
-        .extracting(ProvenanceField::getNames).containsOnlyNulls();
   }
 
   @Test
   void rejectsListsThatDoNotMatchTheVersions() {
-    assertThatThrownBy(() -> encode(Collections.singletonList(1001), null, false))
+    assertThatThrownBy(() -> encode(Collections.singletonList(1001), null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   private static SchemaProvenance encode(
-      java.util.List<Integer> schemaIds, java.util.List<Integer> versions, boolean verbose) {
+      java.util.List<Integer> schemaIds, java.util.List<Integer> versions) {
     return SchemaProvenanceEncoder.encode("s",
         ProvenanceComputer.report(Arrays.asList(
             LogicalTypeConversion.toLogicalType(V1), LogicalTypeConversion.toLogicalType(V2)),
             IdentityPolicy.AVRO),
-        schemaIds, versions, verbose);
+        schemaIds, versions);
   }
 }

@@ -64,8 +64,9 @@ public class ProvenanceField {
     this.path = path;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "The same path in names, with [], "
-      + "{key} and {value} for collection steps. Informational only; returned when verbose",
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The location as the native schema "
+      + "spells it: member names, with [], {key} and {value} for collection steps. A member name "
+      + "spelling one of those, or starting with $$, is escaped with a leading $$",
       example = "[\"home\", \"city\"]")
   @JsonProperty("names")
   public List<String> getNames() {

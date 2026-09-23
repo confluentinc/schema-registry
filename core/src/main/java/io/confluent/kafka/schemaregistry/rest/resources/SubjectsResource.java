@@ -103,7 +103,7 @@ public class SubjectsResource {
   private static final int MAX_CACHED_PROVENANCE_HISTORIES = 100;
 
   /**
-   * Provenance over one requested range, verbose, keyed by the subject, the mode, and every
+   * Provenance over one requested range, keyed by the subject, the mode, and every
    * (version, schema id) in the range, soft-deleted versions included. It is computed over the
    * range alone — its ends and everything between — so a version outside it, however old or
    * however broken, has no effect. Any registration or deletion inside the range changes the key,
@@ -363,8 +363,6 @@ public class SubjectsResource {
       @QueryParam("toId") Integer toId,
       @Parameter(description = "Whether to return every version in the range, not only its ends")
       @DefaultValue("false") @QueryParam("includeInterior") boolean includeInterior,
-      @Parameter(description = "Whether to return each field's names")
-      @DefaultValue("false") @QueryParam("verbose") boolean verbose,
       @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
           + "top-level messages; ignored for other formats")
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
@@ -393,9 +391,9 @@ public class SubjectsResource {
     String errorMessage = "Error while computing provenance for subject " + subject;
     try {
       return byVersion
-          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior, verbose,
+          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior,
               includeMultipleMessages, version)
-          : provenanceById(subject, fromId, toId, includeInterior, verbose,
+          : provenanceById(subject, fromId, toId, includeInterior,
               includeMultipleMessages, version);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
@@ -474,12 +472,12 @@ public class SubjectsResource {
    * The range between two versions, each a version number or {@code "latest"}.
    */
   private SchemaProvenance provenanceByVersion(String subject, String fromVersion, String toVersion,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      boolean includeInterior, boolean includeMultipleMessages,
       ProvenanceAlgorithm algorithm) throws SchemaRegistryException, InvalidVersionException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
     List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionNamed(fromVersion, entries),
-        versionNamed(toVersion, entries), includeInterior, verbose, includeMultipleMessages,
+        versionNamed(toVersion, entries), includeInterior, includeMultipleMessages,
         algorithm);
   }
 
@@ -487,12 +485,12 @@ public class SubjectsResource {
    * The range between the versions carrying two schema ids, in either order.
    */
   private SchemaProvenance provenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      boolean includeInterior, boolean includeMultipleMessages,
       ProvenanceAlgorithm algorithm) throws SchemaRegistryException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
     List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
-        versionOfId(toId, subject, entries), includeInterior, verbose, includeMultipleMessages,
+        versionOfId(toId, subject, entries), includeInterior, includeMultipleMessages,
         algorithm);
   }
 
@@ -505,7 +503,7 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      boolean includeInterior, boolean includeMultipleMessages,
       ProvenanceAlgorithm algorithm) {
     int low = Math.min(from, to);
     int high = Math.max(from, to);
@@ -516,7 +514,7 @@ public class SubjectsResource {
     SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
         provenanceKey(subject, range, includeMultipleMessages, algorithm),
         k -> computeProvenance(subject, range, includeMultipleMessages, algorithm)));
-    return ProvenanceHistory.slice(whole, from, to, includeInterior, verbose);
+    return ProvenanceHistory.slice(whole, from, to, includeInterior);
   }
 
   /**

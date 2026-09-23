@@ -1608,7 +1608,6 @@ public class RestService implements Closeable, Configurable {
                                                  String fromVersion,
                                                  String toVersion,
                                                  boolean includeInterior,
-                                                 boolean verbose,
                                                  boolean includeMultipleMessages,
                                                  String algorithm)
       throws IOException, RestClientException {
@@ -1616,7 +1615,6 @@ public class RestService implements Closeable, Configurable {
     builder.queryParam("fromVersion", fromVersion);
     builder.queryParam("toVersion", toVersion);
     builder.queryParam("includeInterior", includeInterior);
-    builder.queryParam("verbose", verbose);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
     if (algorithm != null) {
       builder.queryParam("algorithm", algorithm);
@@ -1634,7 +1632,6 @@ public class RestService implements Closeable, Configurable {
                                             int fromId,
                                             int toId,
                                             boolean includeInterior,
-                                            boolean verbose,
                                             boolean includeMultipleMessages,
                                             String algorithm)
       throws IOException, RestClientException {
@@ -1642,7 +1639,6 @@ public class RestService implements Closeable, Configurable {
     builder.queryParam("fromId", fromId);
     builder.queryParam("toId", toId);
     builder.queryParam("includeInterior", includeInterior);
-    builder.queryParam("verbose", verbose);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
     if (algorithm != null) {
       builder.queryParam("algorithm", algorithm);

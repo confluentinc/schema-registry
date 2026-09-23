@@ -115,7 +115,7 @@ public final class ProvenanceProjector<T> {
         return Outcome.unavailable();
       }
       SchemaProvenance provenance = client.getProvenanceById(
-          subject, writerId, readerId, false, true, includeMultipleMessages, algorithm);
+          subject, writerId, readerId, false, includeMultipleMessages, algorithm);
       return Outcome.of(build.apply(ProvenanceMapping.join(provenance, writerId, readerId)));
     } catch (IOException e) {
       throw new SerializationException(

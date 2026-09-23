@@ -22,8 +22,10 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,6 +52,9 @@ import java.util.function.Consumer;
  * uses of a shared type the same default, as they should have.
  */
 final class PathInliner {
+
+  private static final Set<String> COLLECTION_TOKENS =
+      new HashSet<>(Arrays.asList("[]", "{key}", "{value}"));
 
   private PathInliner() {
   }
@@ -220,9 +225,21 @@ final class PathInliner {
   }
 
   private static String memberName(Schema type, int index) {
-    return type.getType() == Schema.Type.STRUCT
+    return escaped(type.getType() == Schema.Type.STRUCT
         ? type.getFields().get(index).getName()
-        : type.getBranches().get(index).getName();
+        : type.getBranches().get(index).getName());
+  }
+
+  /**
+   * A member name that spells a collection token, or starts with {@code $$}, takes a leading
+   * {@code $$}, so no member step reads as a collection step. Only JSON Schema allows such names.
+   */
+  static String escaped(String name) {
+    if (name == null) {
+      return null;
+    }
+    boolean clashes = COLLECTION_TOKENS.contains(name) || name.startsWith("$$");
+    return clashes ? "$$" + name : name;
   }
 
   private static int memberCount(Schema type) {
