@@ -624,7 +624,8 @@ public class ProtobufSchemaUtils {
                 .map(o -> new ExtensionsElement(
                     r.getLocation(),
                     r.getDocumentation(),
-                    Collections.singletonList(o))
+                    Collections.singletonList(o),
+                    Collections.emptyList())
                 )
             )
             .collect(Collectors.toList());
