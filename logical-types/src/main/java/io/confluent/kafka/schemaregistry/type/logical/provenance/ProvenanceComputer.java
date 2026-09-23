@@ -169,6 +169,15 @@ public final class ProvenanceComputer {
     return compute(versions, policy).report();
   }
 
+  /**
+   * As {@link #report(List, IdentityPolicy)}, with a policy per version — for a history whose
+   * versions were not all read from the same format.
+   */
+  public static ProvenanceReport report(List<LogicalType> versions,
+      List<IdentityPolicy> policies) {
+    return compute(versions, policies).report();
+  }
+
   // -----------------------------------------------------------------------------------------
   // Phase 2 -- Validate
   // -----------------------------------------------------------------------------------------

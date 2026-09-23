@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.FakeTicker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -62,6 +63,7 @@ import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -954,5 +956,22 @@ public class CachedSchemaRegistryClientTest {
   private static String avroSchemaString(final int i) {
     return "{\"type\": \"record\", \"name\": \"Blah" + i + "\", "
         + "\"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+  }
+
+  @Test
+  public void testProvenanceIsFetchedUncachedAndPassedThroughUnchanged() throws Exception {
+    SchemaProvenance byId = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
+    SchemaProvenance byVersion = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
+    expect(restService.getProvenanceById(anyObject(), eq(SUBJECT_0), eq(2), eq(1), eq(true),
+        eq(false))).andReturn(byId).times(2);
+    expect(restService.getProvenanceByVersion(anyObject(), eq(SUBJECT_0), eq("1"), eq("latest"),
+        eq(false), eq(true))).andReturn(byVersion);
+    replay(restService);
+
+    // Asked twice, fetched twice: the registry caches per history, the caller per mapping.
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true, false));
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true, false));
+    assertSame(byVersion, client.getProvenanceByVersion(SUBJECT_0, "1", "latest", false, true));
+    verify(restService);
   }
 }

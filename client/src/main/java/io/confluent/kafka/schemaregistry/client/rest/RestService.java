@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFil
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
@@ -159,6 +160,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
+      };
+  private static final TypeReference<SchemaProvenance> GET_PROVENANCE_RESPONSE_TYPE =
+      new TypeReference<SchemaProvenance>() {
       };
   private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<SubjectVersion>>() {
@@ -1590,6 +1594,46 @@ public class RestService implements Closeable, Configurable {
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
         ALL_VERSIONS_RESPONSE_TYPE);
     return response;
+  }
+
+  /**
+   * The provenance of {@code subject}'s columns between two versions — every column's id, stable
+   * across renames — addressed by version number. {@code "latest"} is accepted as a version.
+   */
+  public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
+                                                 String subject,
+                                                 String fromVersion,
+                                                 String toVersion,
+                                                 boolean includeInterior,
+                                                 boolean verbose)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
+    builder.queryParam("fromVersion", fromVersion);
+    builder.queryParam("toVersion", toVersion);
+    builder.queryParam("includeInterior", includeInterior);
+    builder.queryParam("verbose", verbose);
+    String path = builder.build(subject).toString();
+    return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
+  }
+
+  /**
+   * As {@link #getProvenanceByVersion}, addressed by schema id — the form a deserializer uses,
+   * since a record carries its schema id and never a version. The two may be in either order.
+   */
+  public SchemaProvenance getProvenanceById(Map<String, String> requestProperties,
+                                            String subject,
+                                            int fromId,
+                                            int toId,
+                                            boolean includeInterior,
+                                            boolean verbose)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
+    builder.queryParam("fromId", fromId);
+    builder.queryParam("toId", toId);
+    builder.queryParam("includeInterior", includeInterior);
+    builder.queryParam("verbose", verbose);
+    String path = builder.build(subject).toString();
+    return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
 
   public List<Integer> getAllVersionsWithPagination(Map<String, String> requestProperties,

@@ -16,12 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -157,7 +160,7 @@ final class PathInliner {
       }
       List<Integer> key = new ArrayList<>(root);
       key.addAll(definition.getIndexPath());
-      return logicalType.getDefaultValues().get(key);
+      return normalise(logicalType.getDefaultValues().get(key));
     }
 
     private Schema resolved(Schema schema) {
@@ -174,7 +177,7 @@ final class PathInliner {
     void dereferencing(Consumer<Side> body) {
       String name = type.getQualifiedName();
       if (!inProgress.add(name)) {
-        throw new IllegalStateException("Cannot inline a recursive named type: " + name);
+        throw new RecursiveTypeException(name);
       }
       firstInlined.putIfAbsent(name, inlined);
       try {
@@ -184,6 +187,36 @@ final class PathInliner {
         inProgress.remove(name);
       }
     }
+  }
+
+  /**
+   * A recorded default in the common Java form the report promises.
+   *
+   * <p>The Protobuf reader deliberately records its format's native default types, mirroring
+   * Flink's catalog defaults: an enum as its {@link EnumValueDescriptor}, bytes as a {@link
+   * ByteString}. Normalising here, at the provenance boundary, keeps that parity intact for the
+   * readers' other callers while giving every provenance consumer plain values.
+   */
+  static Object normalise(Object value) {
+    if (value instanceof EnumValueDescriptor) {
+      return ((EnumValueDescriptor) value).getName();
+    }
+    if (value instanceof ByteString) {
+      return ((ByteString) value).toByteArray();
+    }
+    if (value instanceof List) {
+      List<Object> normalised = new ArrayList<>();
+      for (Object element : (List<?>) value) {
+        normalised.add(normalise(element));
+      }
+      return normalised;
+    }
+    if (value instanceof Map) {
+      Map<Object, Object> normalised = new LinkedHashMap<>();
+      ((Map<?, ?>) value).forEach((k, v) -> normalised.put(normalise(k), normalise(v)));
+      return normalised;
+    }
+    return value;
   }
 
   private static String memberName(Schema type, int index) {
