@@ -362,7 +362,11 @@ public class SubjectsResource {
       @Parameter(description = "Whether to return every version in the range, not only its ends")
       @DefaultValue("false") @QueryParam("includeInterior") boolean includeInterior,
       @Parameter(description = "Whether to return each field's names")
-      @DefaultValue("false") @QueryParam("verbose") boolean verbose) {
+      @DefaultValue("false") @QueryParam("verbose") boolean verbose,
+      @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
+          + "top-level messages; ignored for other formats")
+      @DefaultValue("false") @QueryParam("includeMultipleMessages")
+      boolean includeMultipleMessages) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     boolean byVersion = fromVersion != null || toVersion != null;
@@ -378,8 +382,10 @@ public class SubjectsResource {
     String errorMessage = "Error while computing provenance for subject " + subject;
     try {
       return byVersion
-          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior, verbose)
-          : provenanceById(subject, fromId, toId, includeInterior, verbose);
+          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior, verbose,
+              includeMultipleMessages)
+          : provenanceById(subject, fromId, toId, includeInterior, verbose,
+              includeMultipleMessages);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -457,23 +463,24 @@ public class SubjectsResource {
    * The range between two versions, each a version number or {@code "latest"}.
    */
   private SchemaProvenance provenanceByVersion(String subject, String fromVersion, String toVersion,
-      boolean includeInterior, boolean verbose)
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
       throws SchemaRegistryException, InvalidVersionException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
     List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionNamed(fromVersion, entries),
-        versionNamed(toVersion, entries), includeInterior, verbose);
+        versionNamed(toVersion, entries), includeInterior, verbose, includeMultipleMessages);
   }
 
   /**
    * The range between the versions carrying two schema ids, in either order.
    */
   private SchemaProvenance provenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose) throws SchemaRegistryException {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages)
+      throws SchemaRegistryException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
     List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
-        versionOfId(toId, subject, entries), includeInterior, verbose);
+        versionOfId(toId, subject, entries), includeInterior, verbose, includeMultipleMessages);
   }
 
   private List<Schema> nonEmptyProvenanceHistory(String subject) throws SchemaRegistryException {
@@ -485,10 +492,11 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
-      boolean includeInterior, boolean verbose) {
+      boolean includeInterior, boolean verbose, boolean includeMultipleMessages) {
     // computeProvenance never returns null, so neither does the cache.
     SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
-        provenanceKey(subject, history), k -> computeProvenance(subject, history)));
+        provenanceKey(subject, history, includeMultipleMessages),
+        k -> computeProvenance(subject, history, includeMultipleMessages)));
     return ProvenanceHistory.slice(whole, from, to, includeInterior, verbose);
   }
 
@@ -538,9 +546,12 @@ public class SubjectsResource {
     return version.getAsInt();
   }
 
-  private static List<Object> provenanceKey(String subject, List<Schema> history) {
-    List<Object> key = new ArrayList<>(1 + 2 * history.size());
+  private static List<Object> provenanceKey(String subject, List<Schema> history,
+      boolean includeMultipleMessages) {
+    // The mode is part of the key: its paths and ids are not comparable with the other's.
+    List<Object> key = new ArrayList<>(2 + 2 * history.size());
     key.add(subject);
+    key.add(includeMultipleMessages);
     for (Schema schema : history) {
       key.add(schema.getVersion());
       key.add(schema.getId());
@@ -548,7 +559,8 @@ public class SubjectsResource {
     return key;
   }
 
-  private SchemaProvenance computeProvenance(String subject, List<Schema> history) {
+  private SchemaProvenance computeProvenance(String subject, List<Schema> history,
+      boolean includeMultipleMessages) {
     List<ParsedSchema> parsed = new ArrayList<>(history.size());
     for (Schema schema : history) {
       try {
@@ -559,7 +571,8 @@ public class SubjectsResource {
       }
     }
     try {
-      return ProvenanceHistory.compute(subject, provenanceEntries(history), parsed);
+      return ProvenanceHistory.compute(
+          subject, provenanceEntries(history), parsed, includeMultipleMessages);
     } catch (RecursiveTypeException e) {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (ValidationException e) {

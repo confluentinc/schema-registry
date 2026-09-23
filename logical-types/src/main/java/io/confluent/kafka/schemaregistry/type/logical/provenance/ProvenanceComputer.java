@@ -16,10 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -804,7 +806,11 @@ public final class ProvenanceComputer {
      * it is gated on knowing the source format.
      */
     private Map<Object, Integer> deriveNumbers(Schema struct) {
-      if (policy != IdentityPolicy.PROTOBUF || recordsAnyNumber(struct)) {
+      // The multi-message root is synthetic: its fields name messages and never had numbers, so
+      // they follow their names and reordering the file's messages leaves every id in place.
+      if (policy != IdentityPolicy.PROTOBUF || recordsAnyNumber(struct)
+          || Boolean.TRUE.equals(
+              struct.getParams().get(ProtoToLogicalTypeConverter.MULTI_MESSAGE_ROOT_PARAM))) {
         return Collections.emptyMap();
       }
       Map<Object, Integer> derived = new IdentityHashMap<>();
