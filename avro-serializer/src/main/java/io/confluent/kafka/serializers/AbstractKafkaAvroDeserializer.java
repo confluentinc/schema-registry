@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -83,6 +84,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     datumReaderCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
+  }
+
+  private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector;
+
+  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
+    if (provenanceProjector == null) {
+      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+    }
+    return provenanceProjector;
   }
 
   protected void configure(KafkaAvroDeserializerConfig config) {
@@ -265,20 +276,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
       boolean includeRuleResults)
       throws SerializationException, InvalidConfigurationException {
-    return deserializeWithReaderSchemasAndVersion(topic, isKey, headers, payload,
-        ReaderSchemaResolver.of(writerToReaderSchemaFunc), includeRuleResults);
-  }
-
-  /**
-   * Reads with the schemas {@code readerSchemaResolver} chooses. Its {@code resolveWriterAs}, when
-   * given, is what the datum reader decodes with in place of the true writer; the writer reported
-   * back is still the true one.
-   */
-  protected GenericContainerWithVersion deserializeWithReaderSchemasAndVersion(
-      String topic, boolean isKey, Headers headers, byte[] payload,
-      ReaderSchemaResolver readerSchemaResolver,
-      boolean includeRuleResults)
-      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -297,18 +294,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     DeserializationContext context =
         new DeserializationContext(topic, isKey, headers, payload, includeRuleResults);
     AvroSchema schema = context.schemaForDeserialize();
-    ReaderSchemas resolved = readerSchemaResolver != null
-        ? readerSchemaResolver.resolve(context.getSubject(), context.getSchemaId(), schema)
-        : null;
-    AvroSchema readerAvroSchema = readerSchemaResolver != null
-        ? (resolved != null ? (AvroSchema) resolved.getReader() : null)
+    AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
+        ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
         : specificAvroReaderSchema != null
             ? new AvroSchema(specificAvroReaderSchema)
             : null;
-    AvroSchema resolveWriterAs = resolved != null
-        ? (AvroSchema) resolved.getResolveWriterAs()
-        : null;
-    Object result = context.read(schema, readerAvroSchema, resolveWriterAs);
+    Object result = context.read(schema, readerAvroSchema);
     readerAvroSchema = context.getReaderSchema();
 
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
@@ -597,21 +588,32 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return ruleResults;
     }
 
+    /**
+     * With {@code use.provenance}, the writer renamed after the reader as provenance pairs them,
+     * and the reader with the aliases provenance overrode removed; null to read without it. Only
+     * names change, so the resolver still promotes, maps enum symbols, matches unions and fills
+     * defaults as it always has.
+     */
+    private AvroProvenanceRenamer.Renamed projectByProvenance(
+        AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
+      if (useProvenance == null || readerAvroSchema == null) {
+        return null;
+      }
+      return provenanceProjector().project(getSubject(), schemaId, writerAvroSchema,
+          readerAvroSchema, false, mapping -> {
+            AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+                writerAvroSchema.rawSchema(), readerAvroSchema.rawSchema(), mapping);
+            AvroProvenanceRenamer.requireEveryFieldHasAValue(renamed);
+            return renamed;
+          }).orElse(null);
+    }
+
     Object read(AvroSchema writerAvroSchema) {
       return read(writerAvroSchema,
           specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
     }
 
     Object read(AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
-      return read(writerAvroSchema, readerAvroSchema, null);
-    }
-
-    /**
-     * Reads the payload, decoding it as {@code resolveWriterAs} when given. That schema must share
-     * the true writer's binary layout; it only changes how the resolver pairs fields.
-     */
-    Object read(AvroSchema writerAvroSchema, AvroSchema readerAvroSchema,
-        AvroSchema resolveWriterAs) {
       try {
         List<Migration> migrations = Collections.emptyList();
         if (readerAvroSchema == null) {
@@ -639,13 +641,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           // if migration is required, then initially use GenericDatumReader
           reader = new GenericDatumReader<>(writerSchema, writerSchema,
               AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
-        } else if (resolveWriterAs != null) {
-          Schema resolvingWriter = resolveWriterAs.rawSchema();
-          reader = datumReaderCache.get(
-              new DatumReaderKey(schemaId, readerSchema, resolvingWriter),
-              () -> createDatumReader(schemaId, resolvingWriter, readerSchema));
         } else {
-          reader = getDatumReader(schemaId, writerSchema, readerSchema);
+          AvroProvenanceRenamer.Renamed renamed =
+              projectByProvenance(writerAvroSchema, readerAvroSchema);
+          reader = renamed == null
+              ? getDatumReader(schemaId, writerSchema, readerSchema)
+              : datumReaderCache.get(
+                  new DatumReaderKey(schemaId, renamed.reader, renamed.writer),
+                  () -> createDatumReader(schemaId, renamed.writer, renamed.reader));
         }
         int length = buffer.remaining();
         Object result;
@@ -725,7 +728,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   static class DatumReaderKey {
     private final SchemaId writerSchemaId;
     private final Schema readerSchema;
-    // The writer schema decoded as in place of the true one, when the caller supplied one.
+    // The writer schema decoded as in place of the true one, when provenance renamed it.
     private final Schema resolvingWriterSchema;
 
     DatumReaderKey(SchemaId writerSchemaId, Schema readerSchema) {
@@ -763,8 +766,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return "DatumReaderKey{"
           + "writerSchemaId=" + writerSchemaId
           + ", readerSchema=" + readerSchema
-          + (resolvingWriterSchema != null
-              ? ", resolvingWriterSchema=" + resolvingWriterSchema : "")
           + '}';
     }
   }

@@ -15,6 +15,15 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.GenericRecord;
+import java.util.Map;
+import java.util.HashMap;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,7 +90,7 @@ public abstract class RestApiProvenanceTest {
 
     // Named newer-first, as a writer newer than its reader would be.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false, false, false, null);
 
     assertEquals(Arrays.asList(1, 2), versions(provenance));
     assertEquals(Arrays.asList(v1, v2), schemaIds(provenance));
@@ -134,7 +143,7 @@ public abstract class RestApiProvenanceTest {
 
     // Old records on a topic are exactly the ones written under since-deleted schemas.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false, false, false, null);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
   }
 
@@ -199,7 +208,7 @@ public abstract class RestApiProvenanceTest {
     // Distinct from every other 404, so a reader knows to stop asking and read without it.
     assertError(404, Errors.SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false, false, false));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false, false, false, null));
   }
 
   @Test
@@ -249,9 +258,9 @@ public abstract class RestApiProvenanceTest {
         proto, ProtobufSchema.TYPE, Collections.emptyList(), SUBJECT).getId();
 
     SchemaProvenance plain = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, false, null);
     SchemaProvenance multi = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, true);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, true, null);
 
     assertEquals(Arrays.asList(Arrays.asList(0)), paths(plain.getVersions().get(0)));
     assertEquals(Arrays.asList(Arrays.asList(0), Arrays.asList(0, 0), Arrays.asList(1),
@@ -266,9 +275,72 @@ public abstract class RestApiProvenanceTest {
 
     assertEquals(
         restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, false),
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, false, null),
         restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, true));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, true, null));
+  }
+
+  @Test
+  public void theResponseNamesTheAlgorithmThatComputedIt() throws Exception {
+    int id = register(SUBJECT, record(field("id", "int")));
+
+    SchemaProvenance latest = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, false, null);
+    SchemaProvenance v1 = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, false, "v1");
+
+    assertEquals("v1", latest.getAlgorithm());
+    assertEquals(latest, v1);
+  }
+
+  @Test
+  public void anUnknownAlgorithmIsRejected() throws Exception {
+    int id = register(SUBJECT, record(field("id", "int")));
+
+    assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
+        () -> restApp.restClient.getProvenanceById(
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, false, "v9"));
+  }
+
+  @Test
+  public void aSoftDeletedReaderIsStillProjectedByTheDeserializer() throws Exception {
+    assertEquals("new", readReAddedColumn(true));
+  }
+
+  @Test
+  public void aRegisteredReaderIsProjectedByTheDeserializer() throws Exception {
+    assertEquals("new", readReAddedColumn(false));
+  }
+
+  private String readReAddedColumn(boolean deleteReader) throws Exception {
+    String v1 = record(field("id", "int"), field("name", "string"));
+    String v2 = record(field("id", "int"));
+    String v3 = record(field("id", "int"),
+        "{\"name\":\"name\",\"type\":\"string\",\"default\":\"new\"}");
+    register(SUBJECT, v1);
+    register(SUBJECT, v2);
+    register(SUBJECT, v3);
+    if (deleteReader) {
+      restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "3");
+    }
+
+    SchemaRegistryClient client = new CachedSchemaRegistryClient(restApp.restClient, 10);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "bogus");
+    config.put("auto.register.schemas", false);
+    config.put("use.latest.version", false);
+    org.apache.avro.Schema writer = new org.apache.avro.Schema.Parser().parse(v1);
+    GenericRecord record = new GenericRecordBuilder(writer).set("id", 7).set("name", "ada").build();
+    config.put("use.schema.id", client.getId(SUBJECT, new AvroSchema(v1)));
+    byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders", record);
+    config.remove("use.schema.id");
+    config.put("use.provenance", "v1");
+
+    // v3 re-adds name, dropped at v2: with provenance it is a new column and reads its default.
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)
+        .deserializeWithSchema("orders", new RecordHeaders(), bytes,
+            new org.apache.avro.Schema.Parser().parse(v3)).getValue();
+    return read.get("name").toString();
   }
 
   // -------------------------------------------------------------------------------------------
@@ -283,7 +355,8 @@ public abstract class RestApiProvenanceTest {
   private SchemaProvenance byVersion(String subject, String from, String to,
       boolean includeInterior, boolean verbose) throws Exception {
     return restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior, verbose, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior, verbose, false,
+        null);
   }
 
   private static void assertError(int status, int code, ThrowingRunnable call) {

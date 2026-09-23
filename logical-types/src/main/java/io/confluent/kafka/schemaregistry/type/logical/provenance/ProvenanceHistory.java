@@ -129,6 +129,25 @@ public final class ProvenanceHistory {
    */
   public static SchemaProvenance compute(String subject, List<Entry> history,
       List<ParsedSchema> schemas, boolean includeMultipleMessages) {
+    return compute(subject, history, schemas, includeMultipleMessages, ProvenanceAlgorithm.LATEST);
+  }
+
+  /**
+   * As {@link #compute(String, List, List, boolean)}, by the named version of the algorithm, which
+   * the result records.
+   */
+  public static SchemaProvenance compute(String subject, List<Entry> history,
+      List<ParsedSchema> schemas, boolean includeMultipleMessages, ProvenanceAlgorithm algorithm) {
+    switch (algorithm) {
+      case V1:
+        return computeV1(subject, history, schemas, includeMultipleMessages);
+      default:
+        throw new IllegalArgumentException("Unsupported provenance algorithm " + algorithm);
+    }
+  }
+
+  private static SchemaProvenance computeV1(String subject, List<Entry> history,
+      List<ParsedSchema> schemas, boolean includeMultipleMessages) {
     List<LogicalType> logicalTypes = new ArrayList<>(history.size());
     List<IdentityPolicy> policies = new ArrayList<>(history.size());
     List<Integer> ids = new ArrayList<>(history.size());
@@ -142,8 +161,10 @@ public final class ProvenanceHistory {
       ids.add(history.get(i).getSchemaId());
       versions.add(history.get(i).getVersion());
     }
-    return SchemaProvenanceEncoder.encode(
+    SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
         subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions, true);
+    encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
+    return encoded;
   }
 
   /**
@@ -173,7 +194,7 @@ public final class ProvenanceHistory {
             : v.getVersion() == low || v.getVersion() == high)
         .map(v -> verbose ? v : withoutNames(v))
         .collect(Collectors.toList());
-    return new SchemaProvenance(whole.getSubject(), versions);
+    return new SchemaProvenance(whole.getSubject(), whole.getAlgorithm(), versions);
   }
 
   private static ProvenanceVersion withoutNames(ProvenanceVersion version) {

@@ -46,7 +46,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v2 = register(record(field("id", "int"),
         "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]}"));
 
-    SchemaProvenance provenance = client.getProvenanceById(SUBJECT, v2, v1, false, true, false);
+    SchemaProvenance provenance = client.getProvenanceById(SUBJECT, v2, v1, false, true, false, null);
 
     assertThat(provenance.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 2);
@@ -63,14 +63,14 @@ class ProvenanceMockSchemaRegistryClientTest {
     register(record(field("b", "int")));
     register(record(field("a", "int"), field("b", "int"), field("c", "int")));
 
-    SchemaProvenance ends = client.getProvenanceByVersion(SUBJECT, "1", "latest", false, false, false);
+    SchemaProvenance ends = client.getProvenanceByVersion(SUBJECT, "1", "latest", false, false, false, null);
     assertThat(ends.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 3);
     // a was dropped at v2, which is not returned but still decides v3's ids.
     assertThat(pids(ends.getVersions().get(1))).containsExactly(3, 2, 4);
     assertThat(ends.getVersions().get(0).getFields().get(0).getNames()).isNull();
 
-    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "3", true, false, false).getVersions())
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "3", true, false, false, null).getVersions())
         .hasSize(3);
   }
 
@@ -79,17 +79,17 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v1 = register(record(field("id", "int")));
     int other = client.register("other-value", new AvroSchema(record(field("x", "string"))));
 
-    assertCode(404, 40401, () -> client.getProvenanceById("nope-value", v1, v1, false, false, false));
-    assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false, false, false));
-    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false, false, false));
-    assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false, false, false));
+    assertCode(404, 40401, () -> client.getProvenanceById("nope-value", v1, v1, false, false, false, null));
+    assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false, false, false, null));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false, false, false, null));
+    assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false, false, false, null));
   }
 
   @Test
   void aRecursiveSchemaHasNoProvenance() throws Exception {
     int v1 = register("{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
-    assertCode(422, 42213, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, false));
+    assertCode(422, 42213, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, false, null));
   }
 
   @Test
@@ -100,7 +100,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     register(record(field("a", "int"), field("b", "int")));
 
     // v1 has no provenance at all, and a range that leaves it out does not care.
-    SchemaProvenance later = client.getProvenanceByVersion(SUBJECT, "2", "3", false, false, false);
+    SchemaProvenance later = client.getProvenanceByVersion(SUBJECT, "2", "3", false, false, false, null);
     assertThat(pids(later.getVersions().get(1))).containsExactly(1, 2);
   }
 

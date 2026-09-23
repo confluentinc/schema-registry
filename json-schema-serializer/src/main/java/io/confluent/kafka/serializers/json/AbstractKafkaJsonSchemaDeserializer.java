@@ -27,9 +27,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
-import io.confluent.kafka.serializers.ReaderSchemas;
-import io.confluent.kafka.serializers.ReaderSchemaResolver;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.ArrayList;
@@ -144,19 +143,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
       boolean includeRuleResults
   ) throws SerializationException, InvalidConfigurationException {
-    return deserializeResolving(includeSchemaAndVersion, topic, key, headers, payload,
-        ReaderSchemaResolver.of(writerToReaderSchemaFunc), includeRuleResults);
-  }
-
-  /**
-   * Reads with the schema {@code readerSchemaResolver} chooses. JSON Schema decodes with the reader
-   * alone, so a resolver naming a writer schema to resolve as is rejected.
-   */
-  protected Object deserializeResolving(
-      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
-      ReaderSchemaResolver readerSchemaResolver,
-      boolean includeRuleResults
-  ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
           "SchemaRegistryClient not found. You need to configure the deserializer "
@@ -188,8 +174,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       List<Migration> migrations = Collections.emptyList();
-      ParsedSchema readerSchema = readerSchemaFor(
-          readerSchemaResolver, subject, schemaId, schema);
+      ParsedSchema readerSchema = writerToReaderSchemaFunc != null
+          ? writerToReaderSchemaFunc.apply(schema)
+          : null;
       if (readerSchema == null) {
         if (metadata != null) {
           readerSchema = getLatestWithMetadata(subject).getSchema();
@@ -214,7 +201,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         jsonNode = (JsonNode) executeMigrations(migrations, subject, topic, headers, jsonNode);
       }
 
-      JsonSchema writerSchema = schema;
+      final JsonSchema writerSchema = schema;
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
@@ -234,6 +221,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (validate && !validateBeforeDomainRules) {
         jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
+      jsonNode = byProvenance(subject, schemaId, writerSchema, readerSchema, migrations, jsonNode,
+          buffer, start, length);
 
       Object value;
       if (type != null && !Object.class.equals(type)) {
@@ -406,19 +395,37 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
   }
 
-  private static ParsedSchema readerSchemaFor(ReaderSchemaResolver readerSchemaResolver,
-      String subject, SchemaId writerId, ParsedSchema writer) {
-    ReaderSchemas resolved = readerSchemaResolver != null
-        ? readerSchemaResolver.resolve(subject, writerId, writer)
-        : null;
-    if (resolved == null) {
-      return null;
+  /**
+   * With {@code use.provenance}, {@code node} with every property provenance marks as new removed,
+   * parsing the payload first if nothing has yet; {@code node} unchanged otherwise.
+   */
+  private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
+      ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
+      int start, int length) throws IOException {
+    if (useProvenance == null || reader == null || !migrations.isEmpty()) {
+      return node;
     }
-    if (resolved.getResolveWriterAs() != null) {
-      throw new IllegalArgumentException(
-          "JSON Schema decodes with the reader schema alone; resolveWriterAs is Avro-only");
+    List<List<String>> removals = provenanceProjector()
+        .project(subject, writerId, writer, reader, false, JsonProvenancePruner::removals)
+        .orElse(Collections.emptyList());
+    if (removals.isEmpty()) {
+      return node;
     }
-    return resolved.getReader();
+    JsonNode document = node != null
+        ? node
+        : objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+    JsonProvenancePruner.prune(document, removals);
+    return document;
+  }
+
+  private ProvenanceProjector<List<List<String>>> provenanceProjector;
+
+  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  private ProvenanceProjector<List<List<String>>> provenanceProjector() {
+    if (provenanceProjector == null) {
+      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+    }
+    return provenanceProjector;
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
