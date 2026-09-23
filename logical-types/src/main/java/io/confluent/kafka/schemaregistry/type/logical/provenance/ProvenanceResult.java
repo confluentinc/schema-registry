@@ -44,11 +44,14 @@ import java.util.Set;
 public final class ProvenanceResult {
 
   private final List<LogicalType> versions;
+  private final List<IdentityPolicy> policies;
   private final List<Map<PathKey, Provenance>> byVersion;
   private final List<Set<Provenance>> memberSets;
 
-  ProvenanceResult(List<LogicalType> versions, List<Map<PathKey, Provenance>> byVersion) {
+  ProvenanceResult(List<LogicalType> versions, List<IdentityPolicy> policies,
+      List<Map<PathKey, Provenance>> byVersion) {
     this.versions = Collections.unmodifiableList(new ArrayList<>(versions));
+    this.policies = Collections.unmodifiableList(new ArrayList<>(policies));
     List<Map<PathKey, Provenance>> paths = new ArrayList<>(byVersion.size());
     List<Set<Provenance>> members = new ArrayList<>(byVersion.size());
     for (Map<PathKey, Provenance> version : byVersion) {
@@ -183,7 +186,8 @@ public final class ProvenanceResult {
    * @throws IllegalStateException if the schema is recursive, which has no finite inlining
    */
   public List<InlinedMember> inlinedProvenance(int version) {
-    return PathInliner.inline(versions.get(version), byVersion.get(version));
+    return PathInliner.inline(versions.get(version), byVersion.get(version),
+        ProvenanceComputer.seesThroughNamedTypes(policies.get(version)));
   }
 
   /**
