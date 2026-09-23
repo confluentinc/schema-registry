@@ -59,9 +59,11 @@ final class PathInliner {
    * of provenances that locates it. Named types themselves are absent: they are definitions, not
    * locations, and one unreachable from the root contributes nothing.
    */
-  static List<InlinedMember> inline(LogicalType logicalType, Map<PathKey, Provenance> byPath) {
+  static List<InlinedMember> inline(LogicalType logicalType, Map<PathKey, Provenance> byPath,
+      boolean seesThroughNamedTypes) {
     List<InlinedMember> sink = new ArrayList<>();
-    inlineInto(Side.root(logicalType), Collections.emptyList(), byPath, sink);
+    inlineInto(Side.root(logicalType, seesThroughNamedTypes), Collections.emptyList(), byPath,
+        sink);
     return Collections.unmodifiableList(sink);
   }
 
@@ -121,12 +123,14 @@ final class PathInliner {
     private final List<String> pending;
     private final PathKey definition;
     private final Set<String> inProgress;
+    /** Whether a named type's members were identified where it is used (JSON), not defined. */
+    private final boolean seesThroughNamedTypes;
     /** Where each named type was first inlined — shared across the walk, written once per type. */
     private final Map<String, List<Integer>> firstInlined;
 
     private Side(LogicalType logicalType, Schema type, List<Integer> inlined, List<String> names,
         List<String> pending, PathKey definition, Set<String> inProgress,
-        Map<String, List<Integer>> firstInlined) {
+        boolean seesThroughNamedTypes, Map<String, List<Integer>> firstInlined) {
       this.logicalType = logicalType;
       this.type = type;
       this.inlined = inlined;
@@ -134,13 +138,15 @@ final class PathInliner {
       this.pending = pending;
       this.definition = definition;
       this.inProgress = inProgress;
+      this.seesThroughNamedTypes = seesThroughNamedTypes;
       this.firstInlined = firstInlined;
     }
 
-    static Side root(LogicalType logicalType) {
+    static Side root(LogicalType logicalType, boolean seesThroughNamedTypes) {
       Schema root = logicalType.getRootSchema();
       return new Side(logicalType, root, Collections.emptyList(), Collections.emptyList(),
-          entryOf(root), PathKey.ofRoot(), new LinkedHashSet<>(), new HashMap<>());
+          entryOf(root), PathKey.ofRoot(), new LinkedHashSet<>(), seesThroughNamedTypes,
+          new HashMap<>());
     }
 
     /**
@@ -148,7 +154,8 @@ final class PathInliner {
      */
     Side descend(Schema newType, int step, List<String> steps) {
       return new Side(logicalType, newType, append(inlined, step), spell(names, pending, steps),
-          entryOf(newType), definition.child(step), inProgress, firstInlined);
+          entryOf(newType), definition.child(step), inProgress, seesThroughNamedTypes,
+          firstInlined);
     }
 
     /**
@@ -193,8 +200,10 @@ final class PathInliner {
       firstInlined.putIfAbsent(name, inlined);
       try {
         Schema named = logicalType.getNamedTypes().get(name);
+        // Where the resolver saw through the type, its members were keyed at the use site.
         body.accept(new Side(logicalType, named, inlined, names, spell(pending, entryOf(named)),
-            PathKey.ofNamedType(name), inProgress, firstInlined));
+            seesThroughNamedTypes ? definition : PathKey.ofNamedType(name), inProgress,
+            seesThroughNamedTypes, firstInlined));
       } finally {
         inProgress.remove(name);
       }

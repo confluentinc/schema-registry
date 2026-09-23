@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Assigns a {@link Provenance} to every field, branch and named type across a sequence of
@@ -101,7 +103,20 @@ import java.util.TreeMap;
  */
 public final class ProvenanceComputer {
 
+  /** Avro's promotions, which carry an unnamed union branch's identity when unambiguous. */
+  private static final List<Set<String>> PROMOTION_FAMILIES = Arrays.asList(
+      new HashSet<>(Arrays.asList("int", "long", "float", "double")),
+      new HashSet<>(Arrays.asList("string", "bytes")));
+
   private ProvenanceComputer() {
+  }
+
+  /**
+   * A JSON definition key never reaches the data, so under the JSON policy a named type is
+   * transparent: its members are identified where it is used, as if inlined.
+   */
+  static boolean seesThroughNamedTypes(IdentityPolicy policy) {
+    return policy == IdentityPolicy.JSON;
   }
 
   /**
@@ -160,7 +175,7 @@ public final class ProvenanceComputer {
       validate(resolver, history, version);
       byVersion.add(commit(resolver.entities, version, history));
     }
-    return new ProvenanceResult(versions, byVersion);
+    return new ProvenanceResult(versions, policies, byVersion);
   }
 
   /**
@@ -256,6 +271,7 @@ public final class ProvenanceComputer {
             new NameKey(entity.identity.getKind(), entity.scope, entity.name);
       }
       syncNames(entity, history.identityIndex, entityState);
+      entityState.memberNumbers = entity.memberNumbers;
       provenance.put(entity.path,
           new Provenance(entity.identity, entityState.presenceStartVersion));
     }
@@ -335,6 +351,9 @@ public final class ProvenanceComputer {
      */
     private NameKey canonicalName;
 
+    /** A Protobuf oneof's member field numbers when last committed; null for anything else. */
+    private Set<Integer> memberNumbers;
+
     EntityState(int presenceStartVersion) {
       this.presenceStartVersion = presenceStartVersion;
     }
@@ -387,14 +406,16 @@ public final class ProvenanceComputer {
     private final String name;
     private final PathKey path;
     private final Set<NameKey> declaredNames;
+    private final Set<Integer> memberNumbers;
 
     Entity(Identity identity, Scope scope, String name, PathKey path,
-        Set<NameKey> declaredNames) {
+        Set<NameKey> declaredNames, Set<Integer> memberNumbers) {
       this.identity = identity;
       this.scope = scope;
       this.name = name;
       this.path = path;
       this.declaredNames = declaredNames;
+      this.memberNumbers = memberNumbers;
     }
   }
 
@@ -448,6 +469,10 @@ public final class ProvenanceComputer {
     /** Every name released in this version, across all scopes. Scope-qualified, so one set does. */
     private final Set<NameKey> released = new HashSet<>();
 
+    private Map<String, Schema> namedTypes = Collections.emptyMap();
+    /** Named types being walked through, under a policy that sees through them. */
+    private final Set<String> inlining = new HashSet<>();
+
     Resolver(int version, IdentityPolicy policy, History history) {
       this.version = version;
       this.policy = policy;
@@ -457,9 +482,11 @@ public final class ProvenanceComputer {
     void resolve(LogicalType logicalType) {
       // The root scope holds the named type definitions and, when the root schema is not just a
       // reference, its own members. Kind keeps the two apart.
+      namedTypes = logicalType.getNamedTypes();
       List<Candidate> rootPeers = new ArrayList<>();
-      for (Map.Entry<String, Schema> entry
-          : new TreeMap<>(logicalType.getNamedTypes()).entrySet()) {
+      for (Map.Entry<String, Schema> entry : seesThroughNamedTypes()
+          ? Collections.<String, Schema>emptyMap().entrySet()
+          : new TreeMap<>(namedTypes).entrySet()) {
         rootPeers.add(new Candidate(EntityKind.NAMED_TYPE, entry.getKey(),
             entry.getValue() != null ? entry.getValue().getAliases() : null, null,
             PathKey.ofNamedType(entry.getKey()), entry.getValue(), Collections.emptyMap()));
@@ -474,7 +501,8 @@ public final class ProvenanceComputer {
 
       processGroup(rootPeers, RootScope.INSTANCE);
 
-      if (root != null && !rootHasMembers && root.getType() != Schema.Type.NAMED_TYPE_REF) {
+      if (root != null && !rootHasMembers
+          && (seesThroughNamedTypes() || root.getType() != Schema.Type.NAMED_TYPE_REF)) {
         // A collection or primitive at the root: its members live in a stepped scope of their own.
         processType(root, RootScope.INSTANCE, PathKey.ofRoot(), Collections.emptyMap());
       }
@@ -489,14 +517,14 @@ public final class ProvenanceComputer {
       released.addAll(releasedHere);
 
       for (Candidate peer : peers) {
-        Identity identity = resolveIdentity(peer, scope, releasedHere);
+        Identity identity = resolveIdentity(peer, scope, releasedHere, peers);
         if (!seen.add(identity)) {
           throw new IllegalStateException(
               "Multiple entities resolve to the same logical identity at version " + version
                   + ": " + identity + " (at " + peer.path + ")");
         }
-        entities.add(new Entity(
-            identity, scope, peer.name, peer.path, declaredNames(peer, scope)));
+        entities.add(new Entity(identity, scope, peer.name, peer.path,
+            declaredNames(peer, scope), memberNumbersOf(peer)));
         processType(peer.body, identity, peer.path, peer.childDerived);
       }
     }
@@ -531,10 +559,29 @@ public final class ProvenanceComputer {
           processType(schema.getValueType(),
               StepScope.step(scope, "{value}"), path.child(1), derived);
           break;
+        case NAMED_TYPE_REF:
+          if (seesThroughNamedTypes()) {
+            // Walked where it is used, as if inlined, so its members are scoped by the field
+            // referencing it and a reference changes no identity.
+            String name = schema.getQualifiedName();
+            if (!inlining.add(name)) {
+              throw new RecursiveTypeException(name);
+            }
+            try {
+              processType(namedTypes.get(name), scope, path, derived);
+            } finally {
+              inlining.remove(name);
+            }
+          }
+          break;
         default:
-          // Primitives, enums and named type references have no members.
+          // Primitives and enums have no members; a named type is walked at its definition.
           break;
       }
+    }
+
+    private boolean seesThroughNamedTypes() {
+      return ProvenanceComputer.seesThroughNamedTypes(policy);
     }
 
     /**
@@ -558,7 +605,7 @@ public final class ProvenanceComputer {
         List<UnionBranch> branches = container.getBranches();
         for (int i = 0; i < branches.size(); i++) {
           UnionBranch branch = branches.get(i);
-          candidates.add(new Candidate(EntityKind.BRANCH, branch.getName(), null,
+          candidates.add(new Candidate(EntityKind.BRANCH, branch.getName(), branchAliases(branch),
               numberOf(branch.getFieldNumber(), branch, enclosingDerived), parentPath.child(i),
               branch.getSchema(), enclosingDerived));
         }
@@ -669,7 +716,8 @@ public final class ProvenanceComputer {
     // Identity resolution
     // -------------------------------------------------------------------------------------
 
-    private Identity resolveIdentity(Candidate peer, Scope scope, Set<NameKey> releasedHere) {
+    private Identity resolveIdentity(Candidate peer, Scope scope, Set<NameKey> releasedHere,
+        List<Candidate> peers) {
       if (peer.name == null) {
         throw new IllegalArgumentException(
             "Entity at " + peer.path + " has no name (version " + version + ")");
@@ -678,8 +726,15 @@ public final class ProvenanceComputer {
         case JSON:
           return new Identity(peer.kind, scope, new StringIdentity(peer.name));
         case PROTOBUF:
-          // A message has no alias mechanism, so it follows its name; a oneof container field has
-          // no number in either direction and follows its name too.
+          // A message has no alias mechanism, so it follows its name. A oneof container field has
+          // no number and follows its members' numbers, so renaming it changes nothing.
+          Set<Integer> members = memberNumbersOf(peer);
+          if (members != null) {
+            Identity continued = oneofContinuation(scope, members);
+            return continued != null
+                ? continued
+                : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
+          }
           return peer.number != null
               ? new Identity(peer.kind, scope, new IntegerIdentity(peer.number))
               : new Identity(peer.kind, scope, new StringIdentity(peer.name));
@@ -692,11 +747,22 @@ public final class ProvenanceComputer {
         default:
           break;
       }
-      return resolveByName(peer, scope, releasedHere);
+      Identity matched = matchByName(peer, scope, releasedHere);
+      if (matched == null && policy == IdentityPolicy.AVRO && peer.kind == EntityKind.BRANCH) {
+        matched = familyContinuation(peer, scope, peers);
+      }
+      // Brand new, or a historical identity resetting. Folding the minting version into the value
+      // keeps it distinct from a live entity that previously released this name.
+      return matched != null
+          ? matched
+          : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
     }
 
-    /** Avro rules: the canonical name while it is still live, or any explicit alias. */
-    private Identity resolveByName(Candidate peer, Scope scope, Set<NameKey> releasedHere) {
+    /**
+     * Avro rules: the canonical name while it is still live, or any explicit alias; null if
+     * neither matches.
+     */
+    private Identity matchByName(Candidate peer, Scope scope, Set<NameKey> releasedHere) {
       validateAliases(peer);
       Set<Identity> matches = new LinkedHashSet<>();
 
@@ -726,12 +792,108 @@ public final class ProvenanceComputer {
         throw new IllegalStateException("Ambiguous identity resolution at version " + version
             + ": " + peer.path + " matches multiple historical identities " + matches);
       }
-      if (matches.size() == 1) {
-        return matches.iterator().next();
+      return matches.size() == 1 ? matches.iterator().next() : null;
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Union branches and oneofs
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * A named Avro branch's type aliases, spelled as the branch name is — simple or full — so a
+     * type renamed with an alias keeps its branch. None for a branch named by a hint.
+     */
+    private List<String> branchAliases(UnionBranch branch) {
+      if (policy != IdentityPolicy.AVRO
+          || branch.getSchema().getType() != Schema.Type.NAMED_TYPE_REF) {
+        return null;
       }
-      // Brand new, or a historical identity resetting. Folding the minting version into the value
-      // keeps it distinct from a live entity that previously released this name.
-      return new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
+      String typeName = branch.getSchema().getQualifiedName();
+      Schema named = namedTypes.get(typeName);
+      boolean simple = branch.getName().equals(simpleName(typeName));
+      if (named == null || (!simple && !branch.getName().equals(typeName))) {
+        return null;
+      }
+      List<String> aliases = new ArrayList<>();
+      for (String alias : named.getAliases()) {
+        String spelled = simple ? simpleName(alias) : alias;
+        if (!spelled.equals(branch.getName()) && !aliases.contains(spelled)) {
+          aliases.add(spelled);
+        }
+      }
+      return aliases;
+    }
+
+    /**
+     * The historical branch an unnamed Avro branch promotes from, when the promotion is
+     * unambiguous: this union has one branch of its family, and the scope had one live one.
+     */
+    private Identity familyContinuation(Candidate peer, Scope scope, List<Candidate> peers) {
+      Set<String> family = familyOf(peer.name);
+      if (family == null || peer.body == null
+          || peer.body.getType() == Schema.Type.NAMED_TYPE_REF
+          || peers.stream().filter(p -> p.kind == EntityKind.BRANCH && family.contains(p.name))
+              .count() != 1) {
+        return null;
+      }
+      Identity found = null;
+      for (Identity historical
+          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
+        if (!isLiveBranchOf(historical, family)) {
+          continue;
+        }
+        if (found != null) {
+          return null;
+        }
+        found = historical;
+      }
+      return found != null && !seen.contains(found) ? found : null;
+    }
+
+    private boolean isLiveBranchOf(Identity historical, Set<String> family) {
+      if (historical.getKind() != EntityKind.BRANCH) {
+        return false;
+      }
+      EntityState state = history.state.get(historical);
+      return state != null && state.active && state.canonicalName != null
+          && family.contains(state.canonicalName.name);
+    }
+
+    /** A Protobuf oneof's member field numbers; null for anything that is not a oneof. */
+    private Set<Integer> memberNumbersOf(Candidate peer) {
+      if (policy != IdentityPolicy.PROTOBUF || peer.kind != EntityKind.FIELD
+          || peer.number != null || !isUnion(peer.body)) {
+        return null;
+      }
+      Set<Integer> numbers = new TreeSet<>();
+      for (UnionBranch branch : peer.body.getBranches()) {
+        Integer number = numberOf(branch.getFieldNumber(), branch, peer.childDerived);
+        if (number != null) {
+          numbers.add(number);
+        }
+      }
+      return numbers.isEmpty() ? null : numbers;
+    }
+
+    /**
+     * The live oneof in {@code scope} sharing a member number with {@code members}; null if there
+     * is none, or members come from more than one.
+     */
+    private Identity oneofContinuation(Scope scope, Set<Integer> members) {
+      Identity found = null;
+      for (Identity historical
+          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
+        EntityState state = history.state.get(historical);
+        if (state == null || !state.active || state.memberNumbers == null
+            || Collections.disjoint(state.memberNumbers, members)) {
+          continue;
+        }
+        if (found != null) {
+          return null;
+        }
+        found = historical;
+      }
+      return found != null && !seen.contains(found) ? found : null;
     }
 
     private void validateAliases(Candidate peer) {
@@ -848,6 +1010,19 @@ public final class ProvenanceComputer {
 
     private static boolean isUnion(Schema schema) {
       return schema != null && schema.getType() == Schema.Type.UNION;
+    }
+
+    private static String simpleName(String fullName) {
+      return fullName.substring(fullName.lastIndexOf('.') + 1);
+    }
+
+    private static Set<String> familyOf(String typeName) {
+      for (Set<String> family : PROMOTION_FAMILIES) {
+        if (family.contains(typeName)) {
+          return family;
+        }
+      }
+      return null;
     }
   }
 }
