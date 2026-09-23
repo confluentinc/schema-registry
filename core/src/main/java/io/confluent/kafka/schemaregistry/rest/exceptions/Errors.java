@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
 
@@ -48,6 +49,9 @@ public class Errors {
   public static final int SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE = 40409;
   public static final String ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT = "Association for '%s' not found.";
   public static final int ASSOCIATION_NOT_FOUND_ERROR_CODE = 40410;
+  public static final String SCHEMA_ID_NOT_IN_SUBJECT_MESSAGE_FORMAT =
+      "Schema id %s has no version under subject '%s'.";
+  public static final int SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE = 40411;
 
   // HTTP 409
   public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = 40901;
@@ -83,6 +87,9 @@ public class Errors {
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
+  public static final int RECURSIVE_SCHEMA_ERROR_CODE = 42213;
+  public static final int UNRESOLVABLE_REFERENCE_ERROR_CODE = 42214;
+  public static final int INVALID_PROVENANCE_REQUEST_ERROR_CODE = 42215;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -236,6 +243,31 @@ public class Errors {
     return new RestConflictException(
         String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT, assocType, subject),
         ASSOCIATION_FROZEN_ERROR_CODE);
+  }
+
+  /**
+   * The schema id has no version under the subject. Permanent: a caller should stop asking and
+   * read without provenance, rather than retry.
+   */
+  public static RestException schemaIdNotInSubjectException(int id, String subject) {
+    return new RestNotFoundException(
+        String.format(SCHEMA_ID_NOT_IN_SUBJECT_MESSAGE_FORMAT, id, subject),
+        SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE);
+  }
+
+  /** A version's schema refers to itself, and so has no finite inlining. */
+  public static RestConstraintViolationException recursiveSchemaException(String message) {
+    return new RestConstraintViolationException(message, RECURSIVE_SCHEMA_ERROR_CODE);
+  }
+
+  /** A version's schema could not be parsed, most likely because a reference cannot resolve. */
+  public static RestConstraintViolationException unresolvableReferenceException(String message) {
+    return new RestConstraintViolationException(message, UNRESOLVABLE_REFERENCE_ERROR_CODE);
+  }
+
+  /** The request does not name exactly one range, by version or by schema id. */
+  public static RestConstraintViolationException invalidProvenanceRequestException(String message) {
+    return new RestConstraintViolationException(message, INVALID_PROVENANCE_REQUEST_ERROR_CODE);
   }
 
   public static RestException associationNotFoundException(String resource) {

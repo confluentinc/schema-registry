@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -122,6 +121,27 @@ class ProvenanceDefaultsTest {
         entry(Arrays.asList(0), 0),
         entry(Arrays.asList(1), ""),
         entry(Arrays.asList(2), Collections.emptyList()));
+  }
+
+  @Test
+  void protobufEnumAndBytesDefaultsAreNormalised() {
+    // The reader records Protobuf's native default types -- an enum descriptor, a ByteString --
+    // mirroring Flink's catalog. The report must carry plain values, or nothing can encode them.
+    Map<List<Integer>, Object> declared = defaultsOf(new ProtobufSchema(
+        "syntax = \"proto2\";\npackage p;\n"
+            + "message Row {\n"
+            + "  optional Color c = 1 [default = GREEN];\n"
+            + "  optional bytes b = 2 [default = \"\\001\"];\n"
+            + "  enum Color { RED = 0; GREEN = 1; }\n"
+            + "}\n"));
+    assertThat(declared.get(Arrays.asList(0))).isEqualTo("GREEN");
+    assertThat(declared.get(Arrays.asList(1))).isEqualTo(new byte[] {1});
+
+    Map<List<Integer>, Object> implicit = defaultsOf(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Row { Color c = 1; bytes b = 2; enum Color { RED = 0; GREEN = 1; } }\n"));
+    assertThat(implicit.get(Arrays.asList(0))).isEqualTo("RED");
+    assertThat(implicit.get(Arrays.asList(1))).isEqualTo(new byte[0]);
   }
 
   // -------------------------------------------------------------------------------------------
