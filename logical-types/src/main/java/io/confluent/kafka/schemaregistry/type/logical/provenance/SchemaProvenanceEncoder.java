@@ -41,11 +41,10 @@ public final class SchemaProvenanceEncoder {
    * @param schemaIds the schema id of each version, in the report's order
    * @param versions the version number of each version, or {@code null} where the caller does not
    *     know them, as a caller computing from schemas alone does not
-   * @param verbose whether to include each member's names
    * @throws IllegalArgumentException if a list does not have one entry per version
    */
   public static SchemaProvenance encode(String subject, ProvenanceReport report,
-      List<Integer> schemaIds, List<Integer> versions, boolean verbose) {
+      List<Integer> schemaIds, List<Integer> versions) {
     List<ProvenanceReport.Version> reported = report.getVersions();
     if (schemaIds.size() != reported.size()
         || (versions != null && versions.size() != reported.size())) {
@@ -59,7 +58,7 @@ public final class SchemaProvenanceEncoder {
       for (ProvenanceReport.Member member : reported.get(i).getMembers()) {
         fields.add(new ProvenanceField(
             member.getPath(),
-            verbose ? member.getNames() : null,
+            member.getNames(),
             member.getId()));
       }
       encoded.add(new ProvenanceVersion(

@@ -28,7 +28,7 @@ import java.util.Map;
 /**
  * Which writer field feeds each reader field, from joining two versions of a {@link
  * SchemaProvenance} on the provenance id. Paths are the endpoint's inlined index paths; names are
- * the same paths in names, present when the response was verbose.
+ * the same paths in names.
  */
 public final class ProvenanceMapping {
 
@@ -107,6 +107,18 @@ public final class ProvenanceMapping {
    */
   public List<List<Integer>> readerPaths() {
     return readerPaths;
+  }
+
+  /**
+   * The member name a names step stands for, or null if the step is a collection step ({@code
+   * []}, {@code {key}} or {@code {value}}). A member name spelling one of those arrives escaped
+   * with a leading {@code $$}.
+   */
+  public static String memberNameOf(String step) {
+    if ("[]".equals(step) || "{key}".equals(step) || "{value}".equals(step)) {
+      return null;
+    }
+    return step.startsWith("$$") ? step.substring(2) : step;
   }
 
   /**

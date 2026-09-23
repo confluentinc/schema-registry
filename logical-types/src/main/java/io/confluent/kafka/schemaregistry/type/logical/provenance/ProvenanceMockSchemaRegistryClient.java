@@ -60,25 +60,25 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean verbose, boolean includeMultipleMessages,
+      boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
-        includeInterior, verbose, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages, algorithm);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean verbose,
+      String toVersion, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     List<ProvenanceHistory.Entry> history = history(subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
-        includeInterior, verbose, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages, algorithm);
   }
 
   private SchemaProvenance provenance(String subject, List<ProvenanceHistory.Entry> history,
-      int from, int to, boolean includeInterior, boolean verbose,
+      int from, int to, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     ProvenanceAlgorithm version;
     try {
@@ -104,7 +104,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
     }
-    return ProvenanceHistory.slice(whole, from, to, includeInterior, verbose);
+    return ProvenanceHistory.slice(whole, from, to, includeInterior);
   }
 
   private List<ProvenanceHistory.Entry> history(String subject)

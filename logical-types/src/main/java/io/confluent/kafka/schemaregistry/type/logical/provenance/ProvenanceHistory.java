@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
@@ -110,7 +111,7 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The whole history's provenance, verbose, from each version's parsed schema.
+   * The whole history's provenance, from each version's parsed schema.
    *
    * @param schemas each version's schema, in the same order as {@code history}
    * @throws RecursiveTypeException if a version's schema refers to itself
@@ -162,9 +163,27 @@ public final class ProvenanceHistory {
       versions.add(history.get(i).getVersion());
     }
     SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
-        subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions, true);
+        subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions);
+    for (int i = 0; i < history.size(); i++) {
+      if (schemas.get(i) instanceof ProtobufSchema) {
+        withNativeNames(encoded.getVersions().get(i), (ProtobufSchema) schemas.get(i),
+            includeMultipleMessages);
+      }
+    }
     encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
     return encoded;
+  }
+
+  /**
+   * Respells each field's names as the descriptor does, so a consumer walking it by name passes
+   * through the {@code flink.wrapped} wrappers the logical type sees through.
+   */
+  private static void withNativeNames(ProvenanceVersion version, ProtobufSchema schema,
+      boolean includeMultipleMessages) {
+    Descriptor root = schema.toDescriptor();
+    for (ProvenanceField field : version.getFields()) {
+      field.setNames(ProtoNativeNames.of(root, includeMultipleMessages, field.getNames()));
+    }
   }
 
   /**
@@ -181,26 +200,17 @@ public final class ProvenanceHistory {
 
   /**
    * The versions a request asked for, from the whole history: both ends, or everything between
-   * them. Names are dropped unless asked for; everything else is shared with {@code whole}, which
-   * is never modified.
+   * them. Everything is shared with {@code whole}, which is never modified.
    */
   public static SchemaProvenance slice(SchemaProvenance whole, int from, int to,
-      boolean includeInterior, boolean verbose) {
+      boolean includeInterior) {
     int low = Math.min(from, to);
     int high = Math.max(from, to);
     List<ProvenanceVersion> versions = whole.getVersions().stream()
         .filter(v -> includeInterior
             ? v.getVersion() >= low && v.getVersion() <= high
             : v.getVersion() == low || v.getVersion() == high)
-        .map(v -> verbose ? v : withoutNames(v))
         .collect(Collectors.toList());
     return new SchemaProvenance(whole.getSubject(), whole.getAlgorithm(), versions);
-  }
-
-  private static ProvenanceVersion withoutNames(ProvenanceVersion version) {
-    List<ProvenanceField> fields = version.getFields().stream()
-        .map(m -> new ProvenanceField(m.getPath(), null, m.getPid()))
-        .collect(Collectors.toList());
-    return new ProvenanceVersion(version.getVersion(), version.getId(), fields);
   }
 }

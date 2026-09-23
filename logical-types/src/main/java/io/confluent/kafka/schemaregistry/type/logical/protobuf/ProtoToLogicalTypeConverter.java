@@ -1147,6 +1147,18 @@ public class ProtoToLogicalTypeConverter {
     return Optional.empty();
   }
 
+  /**
+   * True if {@code field} holds a {@code flink.wrapped} wrapper message, which the logical type
+   * sees through to the wrapper's {@code value} field or oneof. Repeated, the wrapper is the
+   * element.
+   */
+  public static boolean isFlinkWrapped(final FieldDescriptor field) {
+    return getMeta(field)
+        .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
+        .map(Boolean::parseBoolean)
+        .orElse(false);
+  }
+
   private static Schema convertRepeated(
       final FieldDescriptor schema,
       final ToLogicalContext<String> ctx,
@@ -1155,11 +1167,7 @@ public class ProtoToLogicalTypeConverter {
     if (isMapDescriptor(schema)) {
       return toMapSchema(schema, isNullableType, ctx, indexPath);
     } else {
-      final boolean isArrayElementWrapped =
-          getMeta(schema)
-              .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
-              .map(Boolean::parseBoolean)
-              .orElse(false);
+      final boolean isArrayElementWrapped = isFlinkWrapped(schema);
       final Schema arraySchema;
       if (isArrayElementWrapped) {
         // The wrapper is a single-payload struct: either a regular field named
@@ -1194,11 +1202,7 @@ public class ProtoToLogicalTypeConverter {
       final FieldDescriptor descriptor,
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
-    final boolean isRepeatedWrapped =
-        getMeta(descriptor)
-            .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+    final boolean isRepeatedWrapped = isFlinkWrapped(descriptor);
     if (isRepeatedWrapped) {
       // The wrapper struct has a single payload named "value" — either a
       // regular field (RepeatedWrapper), or a oneof (OneofWrapper for wrapped

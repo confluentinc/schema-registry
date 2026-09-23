@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -77,12 +76,12 @@ final class JsonProvenancePruner {
     if (node == null) {
       return;
     }
-    String name = path.get(step);
-    if (ELEMENT.equals(name) || VALUE.equals(name)) {
+    String token = path.get(step);
+    String name = ProvenanceMapping.memberNameOf(token);
+    if (name == null) {
       if (step + 1 < path.size()) {
-        Iterator<JsonNode> children = node.elements();
-        while (children.hasNext()) {
-          prune(children.next(), path, step + 1);
+        for (JsonNode child : children(node, token)) {
+          prune(child, path, step + 1);
         }
       }
       return;
@@ -95,5 +94,23 @@ final class JsonProvenancePruner {
     } else {
       prune(node.get(name), path, step + 1);
     }
+  }
+
+  /**
+   * What a collection step leads to: an array's elements, or a map's keys or values. A map is an
+   * object keyed by string, whose keys hold nothing, or an array of {@code key}/{@code value}
+   * entries.
+   */
+  private static List<JsonNode> children(JsonNode node, String token) {
+    List<JsonNode> children = new ArrayList<>();
+    if (ELEMENT.equals(token) && node.isArray()) {
+      node.elements().forEachRemaining(children::add);
+    } else if (VALUE.equals(token) && node.isObject()) {
+      node.elements().forEachRemaining(children::add);
+    } else if (node.isArray()) {
+      String member = VALUE.equals(token) ? "value" : "key";
+      node.elements().forEachRemaining(entry -> children.add(entry.get(member)));
+    }
+    return children;
   }
 }
