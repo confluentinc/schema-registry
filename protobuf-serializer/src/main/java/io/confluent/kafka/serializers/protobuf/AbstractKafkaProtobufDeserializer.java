@@ -298,14 +298,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   /**
-   * With {@code use.provenance}, the reader renumbered so that a field reusing a number the writer
-   * uses for something else no longer takes the writer's data; the reader itself otherwise. A file
-   * of several top-level messages pairs the writer's message with the reader's by name, and a
-   * writer message the reader does not declare cannot be read into it.
+   * With {@code provenance.algorithm}, the reader renumbered so that a field reusing a number
+   * the writer uses for something else no longer takes the writer's data; the reader itself
+   * otherwise. A file of several top-level messages pairs the writer's message with the reader's
+   * by name, and a writer message the reader does not declare cannot be read into it.
    */
   private ProtobufSchema byProvenance(String subject, SchemaId writerId, ProtobufSchema writer,
       ProtobufSchema reader, String name, List<Migration> migrations) {
-    if (useProvenance == null || reader == null || !migrations.isEmpty()) {
+    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return reader;
     }
     boolean multi = writer.toDescriptor().getFile().getMessageTypes().size() > 1
@@ -324,7 +324,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   // Created on first use, once the deserializer is configured; a race builds an equivalent one.
   private ProvenanceProjector<ProtobufSchema> provenanceProjector() {
     if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(schemaRegistry, useProvenance);
+      provenanceProjector = new ProvenanceProjector<>(
+          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
     }
     return provenanceProjector;
   }

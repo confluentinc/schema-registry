@@ -34,7 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * JSON Schema read with {@code use.provenance}: a property dropped and re-added across an interior
+ * JSON Schema read with {@code provenance.algorithm}: a property dropped and re-added across an interior
  * version is pruned from the document, since the reader's property is a new one.
  */
 class JsonProvenanceDeserializerTest {
@@ -128,7 +128,7 @@ class JsonProvenanceDeserializerTest {
     config.put("auto.register.schemas", false);
     config.put("use.latest.version", false);
     if (provenance != null) {
-      config.put("use.provenance", provenance);
+      config.put("provenance.algorithm", provenance);
     }
     return config;
   }

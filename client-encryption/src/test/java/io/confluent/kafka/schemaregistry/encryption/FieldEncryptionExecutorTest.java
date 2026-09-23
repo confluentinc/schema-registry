@@ -2265,7 +2265,7 @@ public abstract class FieldEncryptionExecutorTest {
     props.put(CLOCK, fakeClock);
     props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false);
     if (provenance) {
-      props.put(AbstractKafkaSchemaSerDeConfig.USE_PROVENANCE, "v1");
+      props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
     }
     return props;
   }

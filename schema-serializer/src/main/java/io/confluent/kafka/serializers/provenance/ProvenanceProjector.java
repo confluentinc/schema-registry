@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
@@ -42,9 +43,11 @@ import org.slf4j.LoggerFactory;
  * <p>Failures are told apart by what asking again could change. A transient one — the registry
  * unreachable, a 5xx, 408 or 429 — fails the record and is never cached. Provenance that is
  * unavailable for the pair — any other error, a reader that is not a version of the subject, a
- * pairing no single schema can express — is cached, warned about once, and the writer is read as
+ * pairing no single schema can express — is cached and warned about, and the writer is read as
  * without provenance. Anything else the build throws fails the record, and is cached so that one
- * unreadable writer costs one build rather than one per record.
+ * unreadable writer costs one build rather than one per record. Cached outcomes expire after
+ * {@code provenance.cache.ttl.sec} and are then worked out afresh, warning included, so a fallback
+ * is not permanent.
  *
  * @param <T> what the build produces
  */
@@ -52,18 +55,30 @@ public final class ProvenanceProjector<T> {
 
   private static final Logger log = LoggerFactory.getLogger(ProvenanceProjector.class);
 
-  private static final int MAX_CACHED = 1000;
 
   private final SchemaRegistryClient client;
   private final String algorithm;
-  private final Cache<List<Object>, Outcome<T>> outcomes =
-      CacheBuilder.newBuilder().maximumSize(MAX_CACHED).build();
-  private final Cache<List<Object>, Optional<Integer>> readerIds =
-      CacheBuilder.newBuilder().maximumSize(MAX_CACHED).build();
+  private final Cache<List<Object>, Outcome<T>> outcomes;
+  private final Cache<List<Object>, Optional<Integer>> readerIds;
 
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm) {
+  /**
+   * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
+   * entries of each kind for {@code cacheTtlSec} seconds, or indefinitely when that is negative.
+   */
+  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
+      int cacheTtlSec) {
     this.client = client;
     this.algorithm = algorithm;
+    this.outcomes = cache(cacheSize, cacheTtlSec);
+    this.readerIds = cache(cacheSize, cacheTtlSec);
+  }
+
+  private static <K, V> Cache<K, V> cache(int size, int ttlSec) {
+    CacheBuilder<Object, Object> builder = CacheBuilder.newBuilder().maximumSize(size);
+    if (ttlSec >= 0) {
+      builder = builder.expireAfterWrite(ttlSec, TimeUnit.SECONDS);
+    }
+    return builder.build();
   }
 
   /**
