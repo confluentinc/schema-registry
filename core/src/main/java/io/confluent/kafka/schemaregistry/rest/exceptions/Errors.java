@@ -265,7 +265,9 @@ public class Errors {
         TOO_MANY_ASSOCIATIONS_ERROR_CODE);
   }
 
-  public static RestAssociationBatchLimitExceededException associationBatchLimitExceededException() {
-    return new RestAssociationBatchLimitExceededException(ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE);
+  public static RestAssociationBatchLimitExceededException associationBatchLimitExceededException(
+      String message) {
+    return new RestAssociationBatchLimitExceededException(
+        message != null ? message : ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE);
   }
 }
