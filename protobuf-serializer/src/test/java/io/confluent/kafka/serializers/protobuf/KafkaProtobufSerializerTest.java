@@ -35,6 +35,7 @@ import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos;
@@ -56,6 +57,9 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class KafkaProtobufSerializerTest {
 
@@ -308,6 +312,39 @@ public class KafkaProtobufSerializerTest {
     KafkaProtobufDeserializer unconfiguredSerializer = new KafkaProtobufDeserializer();
     byte[] randomBytes = "foo".getBytes();
     unconfiguredSerializer.deserialize("foo", randomBytes);
+  }
+
+  // Must match StaticInitClass.PROPERTY; not referenced directly to avoid
+  // loading the class
+  private static final String STATIC_INITIALIZER_RAN_PROPERTY =
+      "io.confluent.test.protobuf.static.initializer.ran";
+  private static final String NON_PROTOBUF_CLASS_SCHEMA = "syntax = \"proto3\";\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.staticinit\";\n"
+      + "option java_multiple_files = true;\n"
+      + "message StaticInitClass { string f = 1; }\n";
+
+  @Test
+  public void testDeriveTypeDoesNotInitializeNonProtobufClass() {
+    ProtobufSchema schema = new ProtobufSchema(NON_PROTOBUF_CLASS_SCHEMA);
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor())
+        .setField(schema.toDescriptor().findFieldByName("f"), "hi")
+        .build();
+    byte[] bytes = protobufSerializer.serialize("canary", message);
+
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> deriveTypeDeserializer.deserialize("canary", bytes));
+    assertTrue(e.getCause().getMessage().contains("not a valid protobuf message class"));
+    assertNull(System.getProperty(STATIC_INITIALIZER_RAN_PROPERTY));
+  }
+
+  @Test
+  public void testToSpecificDescriptorDoesNotInitializeNonProtobufClass() {
+    ProtobufSchema schema = new ProtobufSchema(NON_PROTOBUF_CLASS_SCHEMA);
+
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> schema.toSpecificDescriptor(null));
+    assertTrue(e.getMessage().contains("not a valid protobuf message class"));
+    assertNull(System.getProperty(STATIC_INITIALIZER_RAN_PROPERTY));
   }
 
   @Test
