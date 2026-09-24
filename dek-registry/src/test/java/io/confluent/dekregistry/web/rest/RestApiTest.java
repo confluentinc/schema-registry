@@ -181,6 +181,31 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("updated-doc", newKek.getDoc());
   }
 
+  @Test
+  public void testRecreatedKekDoesNotInheritStaleCachedSecret() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-recreate";
+    Map<String, String> oldProps = new HashMap<>();
+    oldProps.put("token.id", "s.oldtoken");
+    client.createKek(headers, kekName, "test-kms", "myid", oldProps, null, false, false);
+
+    // Another process hard-deletes the kek, so this client's cache isn't invalidated.
+    CachedDekRegistryClient otherClient = new CachedDekRegistryClient(
+        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls()),
+        1000, 60, null, null, fakeTicker);
+    otherClient.deleteKek(headers, kekName, false);
+    otherClient.deleteKek(headers, kekName, true);
+
+    Map<String, String> newProps = new HashMap<>();
+    newProps.put("namespace", "my-namespace");
+    client.createKek(headers, kekName, "test-kms", "myid", newProps, null, false, false);
+
+    Kek cached = client.getKek(kekName, false);
+    assertFalse(cached.getKmsProps().containsKey("token.id"));
+    assertEquals("my-namespace", cached.getKmsProps().get("namespace"));
+  }
+
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
     String kek3Name = "kek3";

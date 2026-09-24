@@ -24,7 +24,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Drops KMS auth secrets from a KEK's {@code kmsProps} before it crosses the wire.
+ * Drops KMS auth secrets from a KEK's {@code kmsProps} before it's output.
  *
  * <p>Secrets are omitted rather than replaced with a placeholder: every KMS driver falls
  * back to an ambient credential when the config key is absent, and a non-null placeholder
