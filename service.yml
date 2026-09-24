@@ -42,3 +42,7 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
     - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
+code_review:
+  agent: true
+  risk:
+    publish: true
