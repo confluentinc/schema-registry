@@ -53,6 +53,9 @@ final class ProtoProvenanceRenumberer {
 
   // The largest field number protobuf allows; fresh numbers are taken downwards from here.
   private static final int MAX_FIELD_NUMBER = 536_870_911;
+  // Reserved for the protobuf implementation; protoc rejects a field using one.
+  private static final int FIRST_RESERVED_NUMBER = 19_000;
+  private static final int LAST_RESERVED_NUMBER = 19_999;
 
   private final FileDescriptor file;
   private final int readerId;
@@ -270,9 +273,7 @@ final class ProtoProvenanceRenumberer {
       int next = MAX_FIELD_NUMBER;
       for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
         if (Boolean.TRUE.equals(decided.get(field.getNumber()))) {
-          while (taken.contains(next) || inExtensionRange(message, next)) {
-            next--;
-          }
+          next = freeNumber(message, taken, next);
           taken.add(next);
           field.setNumber(next--);
         }
@@ -285,12 +286,36 @@ final class ProtoProvenanceRenumberer {
     }
   }
 
-  private static boolean inExtensionRange(DescriptorProto.Builder message, int number) {
-    for (DescriptorProto.ExtensionRange range : message.getExtensionRangeList()) {
-      if (number >= range.getStart() && number < range.getEnd()) {
-        return true;
+  /**
+   * The highest number at or below {@code from} that no field takes, no extension range covers
+   * and the implementation does not reserve. An extension range is jumped over whole: one running
+   * to the maximum would otherwise be stepped through number by number.
+   */
+  private static int freeNumber(DescriptorProto.Builder message, Set<Integer> taken, int from) {
+    int number = from;
+    while (number > 0) {
+      DescriptorProto.ExtensionRange range = extensionRangeHolding(message, number);
+      if (range != null) {
+        number = range.getStart() - 1;
+      } else if (number >= FIRST_RESERVED_NUMBER && number <= LAST_RESERVED_NUMBER) {
+        number = FIRST_RESERVED_NUMBER - 1;
+      } else if (taken.contains(number)) {
+        number--;
+      } else {
+        return number;
       }
     }
-    return false;
+    throw new ProvenanceUnavailableException(
+        "Message " + message.getName() + " has no field number left to move a field to");
+  }
+
+  private static DescriptorProto.ExtensionRange extensionRangeHolding(
+      DescriptorProto.Builder message, int number) {
+    for (DescriptorProto.ExtensionRange range : message.getExtensionRangeList()) {
+      if (number >= range.getStart() && number < range.getEnd()) {
+        return range;
+      }
+    }
+    return null;
   }
 }

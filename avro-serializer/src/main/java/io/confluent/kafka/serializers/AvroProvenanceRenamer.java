@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +66,8 @@ final class AvroProvenanceRenamer {
   // so one left on a new type could rename a writer type provenance already placed elsewhere.
   private final Set<Schema> locatedReaderTypes =
       Collections.newSetFromMap(new IdentityHashMap<>());
+  // The reader's own type names, which no throwaway name may take.
+  private final Set<String> readerTypeNames = new HashSet<>();
   // Sink branches to append to a reader union, by the original reader union.
   private final Map<Schema, List<Schema>> sinks = new IdentityHashMap<>();
   // Clones made inside a union, by full name, and the reader type each was renamed after.
@@ -107,9 +110,9 @@ final class AvroProvenanceRenamer {
     requireReachable(writer, mapping.writerPaths(), mapping::writerNamesOf, mapping.writerId());
     requireReachable(reader, mapping.readerPaths(), mapping::readerNamesOf, mapping.readerId());
     final AvroProvenanceRenamer renamer = new AvroProvenanceRenamer(mapping);
+    renamer.locate(reader, Collections.emptyList());
     final Schema renamedWriter = renamer.renameAt(
         writer, Collections.emptyList(), reader, Collections.emptyList(), false);
-    renamer.locate(reader, Collections.emptyList());
     final Renamed renamed = new Renamed(
         renamedWriter, renamer.readerCopy(reader, new IdentityHashMap<>()));
     renamer.verify(Resolver.resolve(renamed.writer, renamed.reader),
@@ -227,7 +230,8 @@ final class AvroProvenanceRenamer {
         final List<Integer> paired = mapping.readerPathOf(location);
         counterpart = paired == null ? null : pairedChild(target, readerAt, fieldAt, paired);
         if (counterpart == null) {
-          fields.add(new Field(UNMATCHED + field.pos(), discard(field.schema()), field.doc()));
+          fields.add(new Field(unmatchedField(target, field.pos()), discard(field.schema()),
+              field.doc()));
           continue;
         }
       } else {
@@ -361,7 +365,28 @@ final class AvroProvenanceRenamer {
   }
 
   private String throwawayName(Schema writer) {
-    return UNMATCHED + "type_" + throwaway++ + "_" + writer.getName();
+    String name;
+    do {
+      name = UNMATCHED + "type_" + throwaway++ + "_" + writer.getName();
+    } while (readerTypeNames.contains(name));
+    return name;
+  }
+
+  /** A name for an unpaired writer field that no field of the reader record has. */
+  private static String unmatchedField(Schema target, int position) {
+    String name = UNMATCHED + position;
+    while (target != null && target.getField(name) != null) {
+      name += "_";
+    }
+    return name;
+  }
+
+  private String cloneNamespace(Schema built) {
+    String namespace;
+    do {
+      namespace = UNMATCHED + "clone_" + throwaway++;
+    } while (readerTypeNames.contains(namespace + "." + built.getName()));
+    return namespace;
   }
 
   /**
@@ -386,7 +411,7 @@ final class AvroProvenanceRenamer {
           "Provenance would give the Avro type " + built.getFullName()
               + " two different definitions inside a union, which one schema cannot express.");
     }
-    final Schema clone = register(cloneAs(built, UNMATCHED + "clone_" + throwaway++), false);
+    final Schema clone = register(cloneAs(built, cloneNamespace(built)), false);
     if (inUnion) {
       cloneTargets.put(clone.getFullName(), built.getFullName());
     }
@@ -466,8 +491,11 @@ final class AvroProvenanceRenamer {
    * Collects every named type of {@code reader} held by a location, {@code at} natively.
    */
   private void locate(Schema reader, List<String> at) {
-    if (isNamed(reader) && mapping.readerPathAt(at) != null) {
-      locatedReaderTypes.add(reader);
+    if (isNamed(reader)) {
+      readerTypeNames.add(reader.getFullName());
+      if (mapping.readerPathAt(at) != null) {
+        locatedReaderTypes.add(reader);
+      }
     }
     switch (reader.getType()) {
       case RECORD:

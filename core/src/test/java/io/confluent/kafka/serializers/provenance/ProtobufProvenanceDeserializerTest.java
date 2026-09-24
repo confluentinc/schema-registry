@@ -169,6 +169,28 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aRenumberedReadComesBackInTheReadersOwnNumbers() throws Exception {
+    // Renumbering is only for parsing. A message handed over in the renumbered descriptor could
+    // not be addressed by the reader's own field descriptors, and would forward memo under the
+    // throwaway number.
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    ProtobufSchema v2 = row("int32 id = 1;");
+    ProtobufSchema v3 = row("int32 id = 1;", "string memo = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage read = read(v3, bytes, "v1");
+    FieldDescriptor memo = v3.toDescriptor().findFieldByName("memo");
+    assertEquals(2, read.getDescriptorForType().findFieldByName("memo").getNumber());
+    assertEquals(7, read.getField(v3.toDescriptor().findFieldByName("id")));
+    DynamicMessage forwarded = DynamicMessage.parseFrom(v3.toDescriptor(),
+        read.toBuilder().setField(memo, "new").build().toByteArray());
+    assertEquals("new", forwarded.getField(memo));
+    assertTrue(forwarded.getUnknownFields().asMap().isEmpty());
+  }
+
+  @Test
   void aReusedNumbersOldDataIsNotKeptInUnknownFields() throws Exception {
     ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
     ProtobufSchema v2 = row("int32 id = 1;");
