@@ -23,9 +23,12 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Message;
+import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,25 +69,110 @@ final class ProtoProvenanceRenumberer {
    *     different numberings, a field needing a new number belongs to an imported file, or a path
    *     cannot be located in the reader
    */
-  static ProtobufSchema renumber(ProtobufSchema reader, ProvenanceMapping mapping,
+  static Renumbered renumber(ProtobufSchema reader, ProvenanceMapping mapping,
       boolean includeMultipleMessages) {
     Descriptor root = reader.toDescriptor();
     ProtoProvenanceRenumberer renumberer = new ProtoProvenanceRenumberer(root.getFile());
+    Set<List<Integer>> moving = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
       if (names == null) {
         throw new ProvenanceUnavailableException("The provenance response carries no names");
       }
-      renumberer.visit(root, names, includeMultipleMessages, mapping.writerPathOf(path) == null);
+      if (underMovingField(path, moving, mapping)) {
+        // Nothing under a field that moves is ever read, so nothing under it needs a number.
+        continue;
+      }
+      boolean move = mapping.writerPathOf(path) == null;
+      if (move) {
+        moving.add(path);
+      }
+      renumberer.visit(root, names, includeMultipleMessages, move);
     }
     FileDescriptor renumbered = renumberer.build();
     if (renumbered == root.getFile()) {
-      return reader;
+      return new Renumbered(reader, Collections.emptyMap());
     }
     Descriptor renamedRoot = renumbered.findMessageTypeByName(root.getName());
     ProtobufSchema schema = new ProtobufSchema(renamedRoot != null ? renamedRoot : root,
         reader.references());
-    return (ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet());
+    return new Renumbered((ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet()),
+        renumberer.movedNumbers());
+  }
+
+  /**
+   * Whether an ancestor of {@code path} is a moving field. A oneof moving is no field: its names
+   * are its parent's, and its members still need numbers of their own.
+   */
+  private static boolean underMovingField(List<Integer> path, Set<List<Integer>> moving,
+      ProvenanceMapping mapping) {
+    for (int k = 1; k < path.size(); k++) {
+      List<Integer> ancestor = path.subList(0, k);
+      if (moving.contains(ancestor)) {
+        List<String> names = mapping.readerNamesOf(ancestor);
+        List<String> parent = k > 1 ? mapping.readerNamesOf(path.subList(0, k - 1)) : null;
+        if (names != null && !names.isEmpty() && !names.equals(parent)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A renumbered reader, and the numbers moved in each message: a writer's data under one of them
+   * now sits in that message's unknown fields, and is dropped from there.
+   */
+  static final class Renumbered {
+    final ProtobufSchema schema;
+    private final Map<String, Set<Integer>> moved;
+
+    private Renumbered(ProtobufSchema schema, Map<String, Set<Integer>> moved) {
+      this.schema = schema;
+      this.moved = moved;
+    }
+
+    boolean movedAny() {
+      return !moved.isEmpty();
+    }
+
+    /**
+     * {@code message} without the unknown fields a moved number left behind, at any depth, so the
+     * old value cannot come back if the message is written out again.
+     */
+    Message dropMoved(Message message) {
+      Message.Builder builder = message.toBuilder();
+      Set<Integer> numbers = moved.get(message.getDescriptorForType().getFullName());
+      if (numbers != null) {
+        UnknownFieldSet.Builder unknown = UnknownFieldSet.newBuilder(message.getUnknownFields());
+        numbers.forEach(unknown::clearField);
+        builder.setUnknownFields(unknown.build());
+      }
+      for (FieldDescriptor field : message.getDescriptorForType().getFields()) {
+        if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
+          continue;
+        }
+        if (field.isRepeated()) {
+          for (int i = 0; i < message.getRepeatedFieldCount(field); i++) {
+            builder.setRepeatedField(field, i,
+                dropMoved((Message) message.getRepeatedField(field, i)));
+          }
+        } else if (message.hasField(field)) {
+          builder.setField(field, dropMoved((Message) message.getField(field)));
+        }
+      }
+      return builder.build();
+    }
+  }
+
+  private Map<String, Set<Integer>> movedNumbers() {
+    Map<String, Set<Integer>> moved = new HashMap<>();
+    moves.forEach((message, decided) -> decided.forEach((number, move) -> {
+      if (move) {
+        moved.computeIfAbsent(message, m -> new HashSet<>()).add(number);
+      }
+    }));
+    return moved;
   }
 
   private void visit(Descriptor root, List<String> names, boolean multi, boolean move) {

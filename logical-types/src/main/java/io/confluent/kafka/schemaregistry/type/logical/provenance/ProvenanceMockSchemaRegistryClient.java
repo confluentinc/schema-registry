@@ -103,6 +103,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
+    } catch (RuntimeException e) {
+      // As the registry does: any other computation failure is the schema's, a 422.
+      throw new RestClientException(String.valueOf(e.getMessage()), 422, INVALID_SCHEMA);
     }
     return ProvenanceHistory.slice(whole, from, to, includeInterior);
   }

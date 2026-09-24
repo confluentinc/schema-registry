@@ -17,10 +17,13 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -31,6 +34,9 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProt
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
@@ -39,9 +45,9 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The Protobuf renumberer finds fields by the names provenance reports, so it must reach the
- * field each location stands for. Each corpus schema is read under a writer it shares nothing
- * with: every field that is a location must move, and nothing generated may.
+ * The Protobuf renumberer finds fields by the names the converter records, so every location's
+ * names must reach a field of the descriptor, and a renumbering moves only the outermost fields
+ * that have no writer counterpart.
  */
 class ProtoProvenancePathConformanceTest {
 
@@ -75,7 +81,34 @@ class ProtoProvenancePathConformanceTest {
 
   @ParameterizedTest(name = "{0}")
   @MethodSource("corpus")
-  void everyLocationReachesItsFieldAndNothingGeneratedMoves(
+  void everyLocationsNamesReachAFieldOfTheDescriptor(
+      String label, ProtobufSchema reader, boolean multi) {
+    ProvenanceVersion version = ProvenanceHistory.compute("s",
+        Arrays.asList(new ProvenanceHistory.Entry(1, 1, false)),
+        Arrays.<ParsedSchema>asList(reader), multi).getVersions().get(0);
+    Map<List<Integer>, List<String>> names = new HashMap<>();
+    version.getFields().forEach(f -> names.put(f.getPath(), f.getNames()));
+
+    for (ProvenanceField field : version.getFields()) {
+      assertNotNull(field.getNames(), "names at " + field.getPath());
+      List<Integer> parent = field.getPath().subList(0, field.getPath().size() - 1);
+      if (field.getNames().equals(names.getOrDefault(parent, Collections.emptyList()))) {
+        continue; // a oneof: no step of its own
+      }
+      if (multi && field.getNames().size() == 1) {
+        // A top-level message of a multi-message file.
+        assertNotNull(reader.toDescriptor().getFile()
+            .findMessageTypeByName(simple(field.getNames().get(0))), field.getNames().toString());
+        continue;
+      }
+      assertNotNull(walk(reader.toDescriptor(), field.getNames(), multi),
+          field.getNames() + " at " + field.getPath());
+    }
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("corpus")
+  void againstAWriterSharingNothingOnlyTheOutermostFieldsMove(
       String label, ProtobufSchema reader, boolean multi) {
     ProtobufSchema writer = new ProtobufSchema("syntax = \"proto3\";\nmessage Nothing {}\n");
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
@@ -84,28 +117,50 @@ class ProtoProvenancePathConformanceTest {
         Arrays.<ParsedSchema>asList(writer, reader), multi);
 
     ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
-        reader, ProvenanceMapping.join(provenance, 1, 2), multi);
+        reader, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
 
-    Map<String, Boolean> expected = new TreeMap<>();
+    // Nothing under a moving field is read; a multi-message writer's record is of a message the
+    // reader declares or fails, so there nothing moves at all.
+    Descriptor root = reader.toDescriptor();
+    Map<String, Integer> before = numbers(root);
     Map<String, Boolean> moved = new TreeMap<>();
-    Map<String, Integer> before = numbers(reader.toDescriptor());
+    Map<String, Boolean> expected = new TreeMap<>();
     numbers(renumbered.toDescriptor()).forEach((name, number) -> {
       moved.put(name, !number.equals(before.get(name)));
-      expected.put(name, !generated(name));
+      expected.put(name, !multi && root.findFieldByName(simple(name)) != null
+          && name.equals(root.getFullName() + "." + simple(name)));
     });
     assertEquals(expected, moved);
   }
 
-  // -------------------------------------------------------------------------------------------
-
-  /** A wrapper's payload, or a map entry's key or value: generated, never a location. */
-  private static boolean generated(String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    String message = parts[parts.length - 2];
-    String field = parts[parts.length - 1];
-    return message.endsWith("Wrapper") && field.equals("value")
-        || message.endsWith("Entry") && (field.equals("key") || field.equals("value"));
+  /** The field {@code names} reach, walking as the renumberer does; null if they do not. */
+  private static FieldDescriptor walk(Descriptor root, List<String> names, boolean multi) {
+    Descriptor message = root;
+    int i = 0;
+    if (multi) {
+      message = root.getFile().findMessageTypeByName(simple(names.get(0)));
+      i = 1;
+    }
+    FieldDescriptor field = null;
+    for (; i < names.size(); i++) {
+      if (message == null || names.get(i) == null) {
+        return null;
+      }
+      field = message.findFieldByName(names.get(i));
+      if (field == null) {
+        return null;
+      }
+      message = field.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+          ? field.getMessageType() : null;
+    }
+    return field;
   }
+
+  private static String simple(String fullName) {
+    return fullName.substring(fullName.lastIndexOf('.') + 1);
+  }
+
+  // -------------------------------------------------------------------------------------------
 
   private static Map<String, Integer> numbers(Descriptor root) {
     Map<String, Integer> numbers = new TreeMap<>();

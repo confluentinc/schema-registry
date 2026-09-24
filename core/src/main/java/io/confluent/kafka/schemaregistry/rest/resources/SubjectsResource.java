@@ -595,6 +595,10 @@ public class SubjectsResource {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (ValidationException e) {
       throw Errors.invalidSchemaException(e);
+    } catch (RuntimeException e) {
+      // Any other failure is this schema's, not the server's: a 4xx, so a client falls back and
+      // caches that instead of retrying every record.
+      throw Errors.invalidSchemaException(e);
     }
   }
 }

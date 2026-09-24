@@ -64,10 +64,11 @@ public class ProvenanceField {
     this.path = path;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "The location as the native schema "
-      + "spells it: member names, with [], {key} and {value} for collection steps. A member name "
-      + "spelling one of those, or starting with $$, is escaped with a leading $$",
-      example = "[\"home\", \"city\"]")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The location in the native schema's "
+      + "or document's own names, one per native step: a field, property or union branch name, "
+      + "or null for an array element or map value. Steps the logical type hides are included "
+      + "and steps with no native form left out, so it need not match path step for step",
+      example = "[\"items\", null, \"sku\"]")
   @JsonProperty("names")
   public List<String> getNames() {
     return names;

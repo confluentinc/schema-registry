@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
@@ -222,6 +223,16 @@ public abstract class RestApiProvenanceTest {
     register(SUBJECT, "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
     assertError(422, Errors.RECURSIVE_SCHEMA_ERROR_CODE,
+        () -> byVersion(SUBJECT, "1", "1", false));
+  }
+
+  @Test
+  public void anyOtherComputationFailureIsA422() throws Exception {
+    // The JSON reader throws a NullPointerException on a map with no value schema.
+    restApp.restClient.registerSchema("{\"type\":\"object\",\"properties\":"
+        + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}",
+        JsonSchema.TYPE, Collections.emptyList(), SUBJECT);
+    assertError(422, Errors.INVALID_SCHEMA_ERROR_CODE,
         () -> byVersion(SUBJECT, "1", "1", false));
   }
 

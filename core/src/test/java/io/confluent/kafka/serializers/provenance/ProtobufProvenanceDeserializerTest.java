@@ -147,6 +147,64 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReusedNumbersOldDataIsNotKeptInUnknownFields() throws Exception {
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    ProtobufSchema v2 = row("int32 id = 1;");
+    ProtobufSchema v3 = row("int32 id = 1;", "string memo = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    // Nor is it kept aside, to come back if the message is written out again.
+    assertTrue(read(v3, bytes, "v1").getUnknownFields().asMap().isEmpty());
+  }
+
+  @Test
+  void aNewFieldOfAnImportedTypeReusingANumberReadsUnset() throws Exception {
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    ProtobufSchema v2 = row("int32 id = 1;");
+    ProtobufSchema v3 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"google/protobuf/duration.proto\";\n"
+        + "message Row {\n  int32 id = 1;\n  google.protobuf.Duration d = 2;\n}\n");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    // d moves; nothing under it needs a number, so Duration's own fields are left alone.
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("d")));
+  }
+
+  @Test
+  void aSharedMessageUsedByANewFieldKeepsTheOldFieldsData() throws Exception {
+    ProtobufSchema v1 = row("In a = 1;", "message In { int32 x = 1; }");
+    ProtobufSchema v2 = row("In a = 1;", "In b = 2;", "message In { int32 x = 1; }");
+    byte[] bytes = write(v1, b -> {
+      Descriptor in = field(b, "a").getMessageType();
+      b.setField(field(b, "a"), DynamicMessage.newBuilder(in)
+          .setField(in.findFieldByName("x"), 5).build());
+    });
+    client.register(SUBJECT, v2);
+
+    assertEquals(5, get((DynamicMessage) get(read(v2, bytes, "v1"), "a"), "x"));
+  }
+
+  @Test
+  void aRequiredReaderFieldReusingANumberFailsTheRecord() throws Exception {
+    ProtobufSchema v1 = proto2("required int32 id = 1;", "optional string note = 2;");
+    ProtobufSchema v2 = proto2("required int32 id = 1;");
+    ProtobufSchema v3 = proto2("required int32 id = 1;", "required string memo = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    // memo moves, so the record has no value for a field the reader requires.
+    assertThrows(Exception.class, () -> read(v3, bytes, "v1"));
+    assertEquals("ada", get(read(v3, bytes, null), "memo"));
+  }
+
+  @Test
   void aMessageIsReadAsTheReadersMessageOfTheSameNameWhenTheFileIsReordered()
       throws Exception {
     ProtobufSchema writer = file(ORDER, REFUND);
@@ -276,6 +334,11 @@ class ProtobufProvenanceDeserializerTest {
   // One message, Row, holding the given members.
   private static ProtobufSchema row(String... members) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage Row {\n  "
+        + String.join("\n  ", members) + "\n}\n");
+  }
+
+  private static ProtobufSchema proto2(String... members) {
+    return new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n  "
         + String.join("\n  ", members) + "\n}\n");
   }
 

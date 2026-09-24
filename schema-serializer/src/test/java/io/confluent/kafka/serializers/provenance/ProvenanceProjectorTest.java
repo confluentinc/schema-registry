@@ -59,6 +59,21 @@ public class ProvenanceProjectorTest {
     assertEquals(3, client.asked);
   }
 
+  @Test
+  public void aSuppliedReaderIdIsUsedAsIs() throws Exception {
+    CountingClient client = new CountingClient();
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    // Registered nowhere, as a reader with a writer's rules merged onto it is not.
+    ParsedSchema merged = new AvroSchema("\"double\"");
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(merged, client.readerId)).apply(client.writerSchema);
+
+    projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, client.writer, (String) null),
+        client.writerSchema, handedOver, false, mapping -> "built");
+    assertEquals(1, client.asked);
+    assertEquals(client.readerId, client.lastReaderId);
+  }
+
   private static void ask(ProvenanceProjector<String> projector, CountingClient client)
       throws Exception {
     ask(projector, client, client.writer);
@@ -78,12 +93,14 @@ public class ProvenanceProjectorTest {
     final ParsedSchema reader = new AvroSchema("\"long\"");
     final int writer;
     final int otherWriter;
+    final int readerId;
     int asked;
+    int lastReaderId;
 
     CountingClient() throws Exception {
       writer = register(SUBJECT, writerSchema);
       otherWriter = register(SUBJECT, new AvroSchema("\"string\""));
-      register(SUBJECT, reader);
+      readerId = register(SUBJECT, reader);
     }
 
     @Override
@@ -91,6 +108,7 @@ public class ProvenanceProjectorTest {
         boolean includeInterior, boolean includeMultipleMessages,
         String algorithm) {
       asked++;
+      lastReaderId = toId;
       throw new UnsupportedOperationException("no provenance here");
     }
   }

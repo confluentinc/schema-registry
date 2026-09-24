@@ -60,6 +60,8 @@ public final class ProvenanceProjector<T> {
   private final String algorithm;
   private final Cache<List<Object>, Outcome<T>> outcomes;
   private final Cache<List<Object>, Optional<Integer>> readerIds;
+  // Readers whose registered version the caller named, by the schema handed over.
+  private final Cache<ParsedSchema, Integer> suppliedReaderIds;
 
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
@@ -71,6 +73,25 @@ public final class ProvenanceProjector<T> {
     this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.readerIds = cache(cacheSize, cacheTtlSec);
+    this.suppliedReaderIds = cache(cacheSize, cacheTtlSec);
+  }
+
+  /**
+   * {@code readers} as the reader function the deserializers take, remembering the registered id
+   * each reader comes with so it is used instead of being looked up.
+   */
+  public Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return writer -> {
+      ReaderSchema reader = readers.apply(writer);
+      if (reader == null) {
+        return null;
+      }
+      if (reader.getRegisteredId() != null) {
+        suppliedReaderIds.put(reader.getSchema(), reader.getRegisteredId());
+      }
+      return reader.getSchema();
+    };
   }
 
   private static <K, V> Cache<K, V> cache(int size, int ttlSec) {
@@ -94,7 +115,9 @@ public final class ProvenanceProjector<T> {
     if (subject == null || writerId == null || writerId.getId() == null || reader == null) {
       return Optional.empty();
     }
-    List<Object> key = Arrays.asList(subject, writerId.getId(), reader, includeMultipleMessages);
+    // A supplied reader id is part of the question: the same schema may stand for either version.
+    List<Object> key = Arrays.asList(subject, writerId.getId(), reader, includeMultipleMessages,
+        suppliedReaderIds.getIfPresent(reader));
     Outcome<T> outcome = outcomes.getIfPresent(key);
     if (outcome == null) {
       outcome = compute(subject, writerId.getId(), writer, reader, includeMultipleMessages, build);
@@ -144,13 +167,18 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * The schema id of {@code reader} under {@code subject}: the registered version it is, or else
-   * the latest version it equals once metadata, rules and inline tags are set aside. A reader with
+   * The schema id of {@code reader} under {@code subject}: the one its caller supplied, else the
+   * registered version it is, or else the latest version it equals once metadata, rules and inline
+   * tags are set aside. A reader with
    * a writer's rules merged onto it has the same structure as the version it was pinned to, and
    * provenance depends on structure alone. Null when no version matches.
    */
   private Integer readerId(String subject, ParsedSchema reader)
       throws IOException, RestClientException {
+    Integer supplied = suppliedReaderIds.getIfPresent(reader);
+    if (supplied != null) {
+      return supplied;
+    }
     List<Object> key = Arrays.asList(subject, reader);
     Optional<Integer> cached = readerIds.getIfPresent(key);
     if (cached != null) {
