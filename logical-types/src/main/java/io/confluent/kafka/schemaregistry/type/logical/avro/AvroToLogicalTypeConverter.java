@@ -620,7 +620,7 @@ public class AvroToLogicalTypeConverter {
           }
           // Natively a branch is found by its type's full name, which Avro keeps unique.
           branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
-              .setNativeNames(Collections.singletonList(member.getFullName())));
+              .setNativeNames(Collections.singletonList(member.getNativeName())));
         }
         return Schema.createUnion(branches).setNullable(hasNull);
       }
@@ -1014,12 +1014,16 @@ public class AvroToLogicalTypeConverter {
 
   private static final class UnionMember {
     private final String simpleName;
+    // The branch name when simple names collide: the full name, dots made underscores.
     private final String fullName;
+    // The full name as Avro spells it, which finds the branch natively.
+    private final String nativeName;
     private final Schema schema;
 
     private UnionMember(String simpleName, String fullName, Schema schema) {
       this.simpleName = simpleName;
       this.fullName = fullName.replace('.', '_');
+      this.nativeName = fullName;
       this.schema = schema;
     }
 
@@ -1029,6 +1033,10 @@ public class AvroToLogicalTypeConverter {
 
     public String getFullName() {
       return fullName;
+    }
+
+    public String getNativeName() {
+      return nativeName;
     }
 
     public Schema getSchema() {

@@ -53,6 +53,17 @@ class AvroProvenancePathConformanceTest {
         record("{\"name\":\"r\",\"type\":[\"null\"," + inner("A", "x", "int") + "]}"),
         record("{\"name\":\"r\",\"type\":[" + inner("A", "x", "int") + ",\"null\","
             + inner("B", "y", "string") + "]}"),
+        // Namespaced branches of a proper union: records, records sharing a simple name, an enum
+        // and a fixed. A branch is found natively by its full name.
+        record("{\"name\":\"r\",\"type\":[\"string\",{\"type\":\"record\",\"name\":\"A\","
+            + "\"namespace\":\"n1\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}]}"),
+        record("{\"name\":\"r\",\"type\":[{\"type\":\"record\",\"name\":\"A\",\"namespace\":"
+            + "\"n1\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]},{\"type\":\"record\","
+            + "\"name\":\"A\",\"namespace\":\"n2\",\"fields\":[{\"name\":\"y\","
+            + "\"type\":\"int\"}]}]}"),
+        record("{\"name\":\"e\",\"type\":[\"string\",{\"type\":\"enum\",\"name\":\"E\","
+            + "\"namespace\":\"n1\",\"symbols\":[\"X\"]},{\"type\":\"fixed\",\"name\":\"F\","
+            + "\"namespace\":\"n1\",\"size\":2}]}"),
         // Arrays and maps of records, of unions, and nested.
         record("{\"name\":\"xs\",\"type\":{\"type\":\"array\",\"items\":"
             + inner("A", "x", "int") + "}}"),
