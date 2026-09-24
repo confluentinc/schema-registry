@@ -97,10 +97,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, SchemaProvider> providers;
   private final Ticker ticker;
 
-  private static final String NO_SUBJECT = "";
-  private static final int HTTP_NOT_FOUND = 404;
-  private static final int VERSION_NOT_FOUND_ERROR_CODE = 40402;
-  private static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
+  static final String NO_SUBJECT = "";
+  static final int HTTP_NOT_FOUND = 404;
+  static final int VERSION_NOT_FOUND_ERROR_CODE = 40402;
+  static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
   private static final int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
@@ -292,23 +292,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .expireAfterWrite(missingVersionTTL, TimeUnit.SECONDS)
         .build();
 
-    this.providers = providers != null && !providers.isEmpty()
-        ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
-        : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
-    if (configs != null) {
-      String prefix = SchemaProvider.SCHEMA_PROVIDERS_PREFIX + ".";
-      for (Map.Entry<String, ?> entry : configs.entrySet()) {
-        if (entry.getKey().startsWith(prefix)) {
-          schemaProviderConfigs.put(
-              entry.getKey().substring(prefix.length()), entry.getValue());
-        }
-      }
-    }
-    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    for (SchemaProvider provider : this.providers.values()) {
-      provider.configure(schemaProviderConfigs);
-    }
+    this.providers = configureProviders(providers, configs, this);
 
     this.parsedSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
@@ -338,6 +322,33 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
       }
     }
+  }
+
+  /**
+   * Indexes {@code providers} by schema type, defaulting to Avro alone, and configures each with
+   * the {@code schema.providers.}-prefixed entries of {@code configs} and with {@code fetcher} for
+   * resolving references. Shared with {@link CachedAsyncSchemaRegistryClient}.
+   */
+  static Map<String, SchemaProvider> configureProviders(
+      List<SchemaProvider> providers, Map<String, ?> configs, SchemaVersionFetcher fetcher) {
+    Map<String, SchemaProvider> providersByType = providers != null && !providers.isEmpty()
+        ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
+        : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    if (configs != null) {
+      String prefix = SchemaProvider.SCHEMA_PROVIDERS_PREFIX + ".";
+      for (Map.Entry<String, ?> entry : configs.entrySet()) {
+        if (entry.getKey().startsWith(prefix)) {
+          schemaProviderConfigs.put(
+              entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+      }
+    }
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, fetcher);
+    for (SchemaProvider provider : providersByType.values()) {
+      provider.configure(schemaProviderConfigs);
+    }
+    return providersByType;
   }
 
   @Override
@@ -375,7 +386,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  private Schema contentCacheKey(Schema schema) {
+  static Schema contentCacheKey(Map<String, SchemaProvider> providers, Schema schema) {
     // The subject is part of the key only for a provider whose result depends on it, so that two
     // subjects sharing a body do not share the first one's parse.
     SchemaProvider provider = providers.get(
@@ -391,7 +402,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
     // Use a content-based cache key by stripping subject, version, and id,
     // so the same schema content produces the same cache entry regardless of subject
-    Schema cacheKey = contentCacheKey(schema);
+    Schema cacheKey = contentCacheKey(providers, schema);
     try {
       return parsedSchemaCache.get(cacheKey, () -> {
         String schemaType = schema.getSchemaType();
@@ -1364,17 +1375,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  private boolean isVersionNotFoundException(RestClientException rce) {
+  static boolean isVersionNotFoundException(RestClientException rce) {
     return rce.getStatus() == HTTP_NOT_FOUND && rce.getErrorCode() == VERSION_NOT_FOUND_ERROR_CODE;
   }
 
-  private boolean isSchemaOrSubjectNotFoundException(RestClientException rce) {
+  static boolean isSchemaOrSubjectNotFoundException(RestClientException rce) {
     return rce.getStatus() == HTTP_NOT_FOUND
         && (rce.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE
         || rce.getErrorCode() == SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
-  private static String toQualifiedContext(String subject) {
+  static String toQualifiedContext(String subject) {
     QualifiedSubject qualifiedSubject =
         QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
