@@ -160,6 +160,32 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
+  void aTypeMovedOutOfTheNullNamespaceContinuesByADottedAlias() {
+    // Avro spells an alias in the null namespace ".A" when the aliasing type has a namespace.
+    List<Map<String, Integer>> pids = pids(
+        avro(f("u", "[\"string\"," + rec("A", f("x", I)) + "]")),
+        avro(f("u", "[\"string\",{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"n\","
+            + "\"aliases\":[\".A\"],\"fields\":[" + f("x", I) + "]}]")));
+    assertThat(same(pids, "u.A.x", "u.n.B.x")).isTrue();
+  }
+
+  @Test
+  void aBranchKeepsItsIdentityWhenItsSimpleNameStopsColliding() {
+    // The logical type names a branch by its simple name unless another shares it; Avro, and so
+    // provenance, by its full name.
+    String n1 = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"n1\",\"fields\":["
+        + f("x", I) + "]}";
+    String n2 = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"n2\",\"fields\":["
+        + f("x", I) + "]}";
+    String renamed = "{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"n1\",\"aliases\":"
+        + "[\"n1.A\"],\"fields\":[" + f("x", I) + "]}";
+    List<Map<String, Integer>> pids = pids(avro(f("u", "[" + n1 + "," + n2 + "]")),
+        avro(f("u", "[" + renamed + "," + n2 + "]")));
+    assertThat(same(pids, "u.n1.A.x", "u.n1.B.x")).isTrue();
+    assertThat(same(pids, "u.n2.A.x", "u.n2.A.x")).isTrue();
+  }
+
+  @Test
   void aLocationWhoseTypeChangesAndChangesBackStartsOver() {
     String a = rec("A", f("x", I));
     List<Map<String, Integer>> avro = pids(avro(f("w", a), f("u", "\"A\"")),

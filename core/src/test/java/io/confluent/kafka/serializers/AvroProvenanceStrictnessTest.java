@@ -125,6 +125,26 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
+  void aNewTypesAliasCannotMoveAPlacedBranch() throws Exception {
+    // v2's new field v holds Q, aliased P. Avro applies a type alias across the whole writer, so
+    // left on the reader it would rename u's P to Q, and u's value would match O by structure.
+    String p = "{\"type\":\"record\",\"name\":\"P\",\"fields\":"
+        + "[{\"name\":\"x\",\"type\":\"int\"}]}";
+    Schema v1 = record("[\"null\",\"string\"," + p + "]", "v1");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"f\",\"type\":[\"null\",\"string\",{\"type\":\"record\",\"name\":\"O\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}," + p + "]},"
+        + "{\"name\":\"v\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Q\","
+        + "\"aliases\":[\"P\"],\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}],"
+        + "\"default\":null}]}");
+    register(v2);
+    Schema pType = v1.getField("f").schema().getTypes().get(2);
+    GenericRecord read = read(v2, write(v1, new GenericRecordBuilder(pType).set("x", 5).build()),
+        "v1");
+    assertEquals("P", ((GenericRecord) read.get("f")).getSchema().getName());
+  }
+
+  @Test
   void aSuppliedReaderIdChoosesTheVersionAStructuralMatchWouldNot() throws Exception {
     // v1 and v3 are structurally equal; note was dropped at v2, so it is a new column in v3.
     Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["

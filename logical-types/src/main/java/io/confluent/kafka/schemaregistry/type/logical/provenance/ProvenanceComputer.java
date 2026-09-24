@@ -540,20 +540,44 @@ public final class ProvenanceComputer {
       }
     }
 
-    /** A named type's aliases, which only Avro has. */
+    /** A named type's aliases, which only Avro has, as full names. */
     private List<String> typeAliases(Schema named) {
-      return policy == IdentityPolicy.PROTOBUF || named.getAliases() == null
-          ? Collections.emptyList() : named.getAliases();
+      if (policy == IdentityPolicy.PROTOBUF || named.getAliases() == null) {
+        return Collections.emptyList();
+      }
+      List<String> aliases = new ArrayList<>();
+      for (String alias : named.getAliases()) {
+        aliases.add(fullAlias(alias));
+      }
+      return aliases;
+    }
+
+    /**
+     * An Avro type alias as a full name. Avro spells one in the null namespace {@code .Name} when
+     * the aliasing type has a namespace of its own; its full name is {@code Name}.
+     */
+    private static String fullAlias(String alias) {
+      return alias.startsWith(".") ? alias.substring(1) : alias;
     }
 
     /** True for a named Avro branch, whose name and aliases are its type's. */
     private boolean isUseOfItsType(Candidate peer) {
-      if (policy != IdentityPolicy.AVRO || peer.kind != EntityKind.BRANCH || peer.body == null
-          || peer.body.getType() != Schema.Type.NAMED_TYPE_REF) {
-        return false;
-      }
-      String typeName = peer.body.getQualifiedName();
-      return peer.name.equals(typeName) || peer.name.equals(simpleName(typeName));
+      return isNamedAvroBranch(peer.kind, peer.body);
+    }
+
+    private boolean isNamedAvroBranch(EntityKind kind, Schema body) {
+      return policy == IdentityPolicy.AVRO && kind == EntityKind.BRANCH && body != null
+          && body.getType() == Schema.Type.NAMED_TYPE_REF;
+    }
+
+    /**
+     * A branch's name for identity. A named Avro branch is its type's full name, as Avro finds a
+     * branch: the logical type's own name for it is shortened, and lengthened again where simple
+     * names collide, so a branch would change identity with its siblings.
+     */
+    private String branchName(UnionBranch branch) {
+      return isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())
+          ? branch.getSchema().getQualifiedName() : branch.getName();
     }
 
     private boolean seesThroughNamedTypes() {
@@ -581,9 +605,9 @@ public final class ProvenanceComputer {
         List<UnionBranch> branches = container.getBranches();
         for (int i = 0; i < branches.size(); i++) {
           UnionBranch branch = branches.get(i);
-          candidates.add(new Candidate(EntityKind.BRANCH, branch.getName(), branchAliases(branch),
-              numberOf(branch.getFieldNumber(), branch, enclosingDerived), parentPath.child(i),
-              branch.getSchema(), enclosingDerived));
+          candidates.add(new Candidate(EntityKind.BRANCH, branchName(branch),
+              branchAliases(branch), numberOf(branch.getFieldNumber(), branch, enclosingDerived),
+              parentPath.child(i), branch.getSchema(), enclosingDerived));
         }
       }
       return candidates;
@@ -726,29 +750,13 @@ public final class ProvenanceComputer {
     // Union branches and oneofs
     // -------------------------------------------------------------------------------------
 
-    /**
-     * A named Avro branch's type aliases, spelled as the branch name is — simple or full — so a
-     * type renamed with an alias keeps its branch. None for a branch named by a hint.
-     */
+    /** A named Avro branch's type aliases, as full names, so a renamed type keeps its branch. */
     private List<String> branchAliases(UnionBranch branch) {
-      if (policy != IdentityPolicy.AVRO
-          || branch.getSchema().getType() != Schema.Type.NAMED_TYPE_REF) {
+      if (!isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())) {
         return null;
       }
-      String typeName = branch.getSchema().getQualifiedName();
-      Schema named = namedTypes.get(typeName);
-      boolean simple = branch.getName().equals(simpleName(typeName));
-      if (named == null || (!simple && !branch.getName().equals(typeName))) {
-        return null;
-      }
-      List<String> aliases = new ArrayList<>();
-      for (String alias : named.getAliases()) {
-        String spelled = simple ? simpleName(alias) : alias;
-        if (!spelled.equals(branch.getName()) && !aliases.contains(spelled)) {
-          aliases.add(spelled);
-        }
-      }
-      return aliases;
+      Schema named = namedTypes.get(branch.getSchema().getQualifiedName());
+      return named != null ? typeAliases(named) : null;
     }
 
     /**
@@ -910,10 +918,6 @@ public final class ProvenanceComputer {
 
     private static boolean isUnion(Schema schema) {
       return schema != null && schema.getType() == Schema.Type.UNION;
-    }
-
-    private static String simpleName(String fullName) {
-      return fullName.substring(fullName.lastIndexOf('.') + 1);
     }
 
     private static Set<String> familyOf(String typeName) {

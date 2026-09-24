@@ -61,6 +61,10 @@ final class AvroProvenanceRenamer {
   // must not apply again.
   private final Set<Schema> matchedReaderTypes =
       Collections.newSetFromMap(new IdentityHashMap<>());
+  // Reader types at a location, paired or not. Avro applies a type alias across the whole writer,
+  // so one left on a new type could rename a writer type provenance already placed elsewhere.
+  private final Set<Schema> locatedReaderTypes =
+      Collections.newSetFromMap(new IdentityHashMap<>());
   // Sink branches to append to a reader union, by the original reader union.
   private final Map<Schema, List<Schema>> sinks = new IdentityHashMap<>();
   // Clones made inside a union, by full name, and the reader type each was renamed after.
@@ -105,6 +109,7 @@ final class AvroProvenanceRenamer {
     final AvroProvenanceRenamer renamer = new AvroProvenanceRenamer(mapping);
     final Schema renamedWriter = renamer.renameAt(
         writer, Collections.emptyList(), reader, Collections.emptyList(), false);
+    renamer.locate(reader, Collections.emptyList());
     final Renamed renamed = new Renamed(
         renamedWriter, renamer.readerCopy(reader, new IdentityHashMap<>()));
     renamer.verify(Resolver.resolve(renamed.writer, renamed.reader),
@@ -413,10 +418,11 @@ final class AvroProvenanceRenamer {
   // -------------------------------------------------------------------------------------------
 
   /**
-   * {@code reader} with the aliases of every matched type and the field aliases of every matched
-   * record removed, and the sinks added to their unions. Avro applies a reader's aliases to the
-   * writer before resolving; the writer already bears the reader's names, so a matched type's
-   * alias could only rename it a second time — onto another type, or into a duplicate.
+   * {@code reader} with the aliases of every matched type or type at a location, and the field
+   * aliases of every matched record, removed, and the sinks added to their unions. Avro applies a
+   * reader's aliases to the writer before resolving, across the whole writer; the writer already
+   * bears the reader's names at every location, so such an alias could only rename a placed type
+   * a second time — onto another type, into a duplicate, or into a branch with a new id.
    */
   private Schema readerCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema copied = copies.get(reader);
@@ -441,7 +447,7 @@ final class AvroProvenanceRenamer {
       }
       case ENUM:
       case FIXED: {
-        if (!matchedReaderTypes.contains(reader)) {
+        if (!stripsAliases(reader)) {
           return reader;
         }
         final Schema copy = reader.getType() == Type.ENUM
@@ -454,6 +460,42 @@ final class AvroProvenanceRenamer {
       default:
         return reader;
     }
+  }
+
+  /**
+   * Collects every named type of {@code reader} held by a location, {@code at} natively.
+   */
+  private void locate(Schema reader, List<String> at) {
+    if (isNamed(reader) && mapping.readerPathAt(at) != null) {
+      locatedReaderTypes.add(reader);
+    }
+    switch (reader.getType()) {
+      case RECORD:
+        for (Field field : reader.getFields()) {
+          locate(field.schema(), append(at, field.name()));
+        }
+        break;
+      case ARRAY:
+        locate(reader.getElementType(), append(at, null));
+        break;
+      case MAP:
+        locate(reader.getValueType(), append(at, null));
+        break;
+      case UNION: {
+        // A nullable union the logical type collapses has no branch step.
+        final boolean collapsed = nonNull(reader).size() == 1;
+        for (Schema branch : reader.getTypes()) {
+          locate(branch, collapsed ? at : append(at, branch.getFullName()));
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  private boolean stripsAliases(Schema reader) {
+    return matchedReaderTypes.contains(reader) || locatedReaderTypes.contains(reader);
   }
 
   private static Schema fixedCopy(Schema reader) {
@@ -470,7 +512,7 @@ final class AvroProvenanceRenamer {
     final Schema record = Schema.createRecord(
         reader.getName(), reader.getDoc(), reader.getNamespace(), reader.isError());
     final boolean matched = matchedReaderTypes.contains(reader);
-    if (!matched) {
+    if (!stripsAliases(reader)) {
       reader.getAliases().forEach(record::addAlias);
     }
     copies.put(reader, record);
