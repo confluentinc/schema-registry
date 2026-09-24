@@ -253,6 +253,7 @@ final class IcebergComparison {
     // Guarding the whole block, not just the finding, avoids paying its O(n^2) index lookups on
     // every struct comparison while the check is off.
     int lastSeenOriginalIndex = -1;
+    String lastSeenFieldName = null;
     final List<String> originalFieldOrder = ENABLE_FIELD_REORDERED_CHECK
         ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
         : null;
@@ -280,12 +281,20 @@ final class IcebergComparison {
       if (ENABLE_FIELD_REORDERED_CHECK) {
         // Existing fields keep their relative order. The watermark advances even on a
         // violation, so a single swap yields one finding rather than cascading.
+        //
+        // Named explicitly rather than said generically ("moved ahead of a field that preceded
+        // it"): the two fields named here are updateField (this one, at fieldPath) and
+        // lastSeenFieldName (the previous one processed) -- naming both, and which preceded
+        // which in which schema, is what keeps this correct once wording no longer gets to lean
+        // on "original"/"update" implying "old"/"new" (see CompatibilityChecker's javadoc).
         final int originalIndex = originalFieldOrder.indexOf(updateField.name);
         if (originalIndex < lastSeenOriginalIndex) {
           add(Rule.FIELD_REORDERED, fieldPath,
-              "field moved ahead of a field that preceded it in the writer's schema");
+              "'" + updateField.name + "' preceded '" + lastSeenFieldName
+                  + "' in the writer's schema, but now follows it in the reader's schema");
         }
         lastSeenOriginalIndex = originalIndex;
+        lastSeenFieldName = updateField.name;
       }
 
       if (isEffectivelyNullable(originalField)

@@ -76,13 +76,15 @@ public final class LogicalTypeChecker {
   /**
    * Whether {@code update} may replace {@code original} under {@code mode}.
    *
-   * <p>Direction is BACKWARD: the {@code update} schema must be able to read data written with the
-   * {@code original} schema. Says nothing about whether either schema is usable on its own terms —
-   * pair that with {@link #validate}.
+   * <p>{@code original} is the schema data was written under; {@code update} is the schema now
+   * reading that data — see {@link CompatibilityChecker}'s class javadoc for the full contract,
+   * including why a caller after the mirror (forward) question passes the same two schemas
+   * swapped rather than calling a separate method. Says nothing about whether either schema is
+   * usable on its own terms — pair that with {@link #validate}.
    *
    * @param mode     which consumer's rules to apply
-   * @param original the currently registered schema
-   * @param update   the proposed schema
+   * @param original the schema data was written under (the writer's schema)
+   * @param update   the schema now reading that data (the reader's schema)
    * @return every violation found, or {@link CompatibilityResult#compatible()} if there are none
    */
   public static CompatibilityResult compare(

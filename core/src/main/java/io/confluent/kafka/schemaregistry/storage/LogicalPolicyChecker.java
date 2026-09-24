@@ -178,19 +178,6 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * Renders one finding as {@code {errorType:"<rule>", category:["<mode>", ...],
-   * description:"<message>", additionalInfo:"<path>"}} -- mirroring the {@code {errorType,
-   * description, additionalInfo}} shape the native JSON/Protobuf checks already use (see
-   * {@code io.confluent.kafka.schemaregistry.json.diff.Difference}), with {@code category} added
-   * to carry which mode(s) flagged it.
-   *
-   * <p>{@code category} lists every mode that flagged this {@code (rule, path)} -- {@link
-   * Mode#FLINK} and {@link Mode#ICEBERG_V2} frequently flag the same underlying violation at the
-   * same path, since their checkers are independent implementations. Only one message is ever
-   * shown: when modes disagree on the wording, {@link #MODES}' order (FLINK before ICEBERG_V2)
-   * picks a single representative rather than repeating the same finding once per mode.
-   */
-  /**
    * Renders a schema that could not be converted to a {@link LogicalType} at all, in the same
    * {@code {errorType, category, description, additionalInfo}} shape {@link #describeFinding}
    * produces -- a bare string here used to sit next to those objects in the same {@code details}
@@ -211,6 +198,19 @@ public final class LogicalPolicyChecker {
         + "\", additionalInfo:\"\"}";
   }
 
+  /**
+   * Renders one finding as {@code {errorType:"<rule>", category:["<mode>", ...],
+   * description:"<message>", additionalInfo:"<path>"}} -- mirroring the {@code {errorType,
+   * description, additionalInfo}} shape the native JSON/Protobuf checks already use (see
+   * {@code io.confluent.kafka.schemaregistry.json.diff.Difference}), with {@code category} added
+   * to carry which mode(s) flagged it.
+   *
+   * <p>{@code category} lists every mode that flagged this {@code (rule, path)} -- {@link
+   * Mode#FLINK} and {@link Mode#ICEBERG_V2} frequently flag the same underlying violation at the
+   * same path, since their checkers are independent implementations. Only one message is ever
+   * shown: when modes disagree on the wording, {@link #MODES}' order (FLINK before ICEBERG_V2)
+   * picks a single representative rather than repeating the same finding once per mode.
+   */
   private static String describeFinding(FindingKey key, Map<Mode, String> messagesByMode) {
     String modes = messagesByMode.keySet().stream()
         .map(mode -> "\"" + mode + "\"")

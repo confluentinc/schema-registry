@@ -43,6 +43,16 @@ class LogicalPolicyCheckerTest {
           + "{\"name\":\"a\",\"type\":\"int\"},"
           + "{\"name\":\"b\",\"type\":\"int\"}]}";
 
+  // A pair differing only in field 'n's type (BIGINT vs INT), for exercising the shared
+  // type-change message (describeChange / UNSUPPORTED_TYPE_CHANGE) rather than a field-presence
+  // one -- long -> int is a narrowing, so comparing WIDE against NARROW in one direction rejects.
+  private static final String RECORD_A_LONG =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"n\",\"type\":\"long\"}]}";
+  private static final String RECORD_A_NARROW =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"n\",\"type\":\"int\"}]}";
+
   // An empty record -> derives to an empty struct, which is invalid under Iceberg (EMPTY_STRUCT).
   private static final String EMPTY_RECORD =
       "{\"type\":\"record\",\"name\":\"E\",\"fields\":[]}";
@@ -119,6 +129,55 @@ class LogicalPolicyCheckerTest {
     assertTrue(forwardErrors.stream().anyMatch(e -> e.contains("FIELD_DELETED")),
         forwardErrors.toString());
     assertFalse(forwardErrors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")),
+        forwardErrors.toString());
+  }
+
+  @Test
+  void backwardAndForwardMessagesNameTheWriterAndReaderCorrectly() {
+    // Same pair as backwardAndForwardCheckOppositeDirections, but pinning the actual wording
+    // rather than just which Rule fired -- this is exactly the fact that swapping which schema is
+    // "original" and which is "update" between the two directions is meant to preserve.
+    //
+    // REQUIRED_FIELD_ADDED fires in both FLINK and ICEBERG_V2 at the same path, and
+    // describeFinding keeps only one representative message -- FLINK's, since it precedes
+    // ICEBERG_V2 in MODES -- so this pins FLINK's wording ("column..."), not ICEBERG's ("field...").
+    // FIELD_DELETED has no FlinkComparison counterpart, so that one is unambiguous.
+    List<String> backwardErrors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
+    assertTrue(backwardErrors.stream().anyMatch(e -> e.contains(
+        "column is required by the reader's schema but missing from the writer's schema")),
+        backwardErrors.toString());
+
+    List<String> forwardErrors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.FORWARD);
+    assertTrue(forwardErrors.stream().anyMatch(e -> e.contains(
+        "field present in the writer's schema is missing from the reader's schema")),
+        forwardErrors.toString());
+  }
+
+  @Test
+  void backwardAndForwardTypeChangeMessagesNameTheWriterAndReaderCorrectly() {
+    // A shared-helper message (describeChange, behind UNSUPPORTED_TYPE_CHANGE) rather than a
+    // field-presence one. Unlike field presence, narrowing is genuinely asymmetric: long-write /
+    // int-read is unsafe (truncates), but int-write / long-read is safe (widens) -- so reusing the
+    // same (new, previous) pair across both directions, as the test above does, would exercise two
+    // different real changes rather than the same one told two ways. To pin the same underlying
+    // hazard (data written as BIGINT, read as INT) via both directions, BACKWARD takes it with
+    // new=NARROW/previous=LONG, and FORWARD takes it with the pair swapped, new=LONG/previous=
+    // NARROW -- both then resolve to writer=LONG, reader=NARROW, and both must report the same
+    // message.
+    List<String> backwardErrors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A_NARROW), List.of(holder(RECORD_A_LONG)),
+        CompatibilityLevel.BACKWARD);
+    assertTrue(backwardErrors.stream().anyMatch(e -> e.contains(
+        "type is BIGINT in the writer's schema and INT in the reader's schema")),
+        backwardErrors.toString());
+
+    List<String> forwardErrors = LogicalPolicyChecker.check(
+        new AvroSchema(RECORD_A_LONG), List.of(holder(RECORD_A_NARROW)),
+        CompatibilityLevel.FORWARD);
+    assertTrue(forwardErrors.stream().anyMatch(e -> e.contains(
+        "type is BIGINT in the writer's schema and INT in the reader's schema")),
         forwardErrors.toString());
   }
 
