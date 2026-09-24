@@ -2962,14 +2962,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return;
     }
 
-    int totalAssociations = 0;
     boolean hasInlineSchema = false;
     for (AssociationOpRequest req : request.getRequests()) {
       List<? extends AssociationOp> ops = req.getAssociations();
       if (ops == null) {
         continue;
       }
-      totalAssociations += ops.size();
       for (AssociationOp op : ops) {
         if (op instanceof AssociationCreateOrUpdateOp
             && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
@@ -2978,14 +2976,17 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
     }
 
-    if (totalAssociations <= 1 || !hasInlineSchema) {
+    // No inline schema anywhere in the batch means no schema payload to bound, so none of the
+    // limits below apply, regardless of how many topics or associations are in the request.
+    if (!hasInlineSchema) {
       return;
     }
 
     // batchSize is defined as the number of topics (resource entries) in the request, not the
     // number of individual association ops; a single topic may carry both a key and a value
     // association without counting as two topics.
-    int numTopics = request.getRequests().size();
+    List<AssociationOpRequest> reqs = request.getRequests();
+    int numTopics = reqs.size();
     int maxNum = config().maxAssociationNumPerMutateBatch();
     if (numTopics > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
@@ -2994,26 +2995,43 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               + " schema", numTopics, maxNum));
     }
 
+    // Check the most granular thing first: each individual association's inline schema payload
+    // (including references, metadata, etc., i.e. the whole RegisterSchemaRequest) against the
+    // per-association limit, so a violation names the exact offending association.
+    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
+    for (int i = 0; i < reqs.size(); i++) {
+      AssociationOpRequest req = reqs.get(i);
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (!(op instanceof AssociationCreateOrUpdateOp)) {
+          continue;
+        }
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        RegisterSchemaRequest schema = createOrUpdateOp.getSchema();
+        if (schema == null) {
+          continue;
+        }
+        long schemaPayloadBytes = jsonPayloadSize(schema);
+        if (schemaPayloadBytes > maxEntryBytes) {
+          throw new AssociationBatchLimitExceededException(String.format(
+              "The '%s' association's schema for resourceId '%s' (topic %d of %d in the"
+                  + " Associations batchMutate request) has a payload size of %d bytes,"
+                  + " exceeding the configured maximum of %d bytes per association schema",
+              createOrUpdateOp.getAssociationType(), req.getResourceId(), i + 1, reqs.size(),
+              schemaPayloadBytes, maxEntryBytes));
+        }
+      }
+    }
+
     long requestPayloadBytes = jsonPayloadSize(request);
     long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
     if (requestPayloadBytes > maxBatchBytes) {
       throw new AssociationBatchLimitExceededException(String.format(
           "Associations batchMutate request has a payload size of %d bytes, exceeding the"
               + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
-    }
-
-    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
-    List<AssociationOpRequest> reqs = request.getRequests();
-    for (int i = 0; i < reqs.size(); i++) {
-      AssociationOpRequest req = reqs.get(i);
-      long entryPayloadBytes = jsonPayloadSize(req);
-      if (entryPayloadBytes > maxEntryBytes) {
-        throw new AssociationBatchLimitExceededException(String.format(
-            "Association with resourceId '%s' (entry %d of %d in the Associations batchMutate"
-                + " request) has a payload size of %d bytes, exceeding the configured maximum"
-                + " of %d bytes per resource entry", req.getResourceId(), i + 1, reqs.size(),
-            entryPayloadBytes, maxEntryBytes));
-      }
     }
   }
 

@@ -72,17 +72,35 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testSingleAssociationExemptFromAllLimits() throws Exception {
-    String hugeSchema = "{\"type\":\"record\",\"name\":\"Huge\",\"fields\":["
+  public void testSingleAssociationWithSmallSchemaSucceeds() throws Exception {
+    // A batch of exactly one association is not exempt from the limits (there is no such
+    // carve-out); it simply succeeds here because its schema is well under the byte limits.
+    String smallSchema = "{\"type\":\"record\",\"name\":\"Small\",\"fields\":["
         + "{\"name\":\"f\",\"type\":\"string\",\"default\":\"" + padded(1200) + "\"}]}";
     List<AssociationOpRequest> requests = new ArrayList<>();
-    requests.add(createOpRequest("single-assoc-exempt", hugeSchema));
+    requests.add(createOpRequest("single-assoc-small", smallSchema));
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
 
     AssociationBatchResponse response = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
     assertEquals(1, response.getResults().size());
     assertNull(response.getResults().get(0).getError());
+  }
+
+  @Test
+  public void testSingleAssociationWithOversizedSchemaFails() throws Exception {
+    // A batch of exactly one association is still subject to the per-association payload
+    // limit; there is no exemption for trivially small batches.
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(createOpRequest("single-assoc-oversized", "\"" + padded(1_100_000) + "\""));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
+
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.mutateAssociations(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
+    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
+    assertTrue(e.getMessage().contains("'value' association's schema"));
+    assertTrue(e.getMessage().contains("resourceId 'single-assoc-oversized-id'"));
   }
 
   @Test
@@ -154,11 +172,12 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testExceedsMaxAssociationEntryPayloadBytes() throws Exception {
-    // A single topic (1 resourceId, so it doesn't trip the topic-count limit) whose combined
-    // key+value payload exceeds the per-entry byte limit.
+  public void testExceedsMaxAssociationEntryPayloadBytesForValueAssociation() throws Exception {
+    // A single topic (so it doesn't trip the topic-count limit) whose value association's
+    // schema alone exceeds the per-association byte limit; the small key association is
+    // unaffected, proving the check is per-association, not per-topic.
     RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("\"" + padded(1500) + "\"");
+    valueSchemaRequest.setSchema("\"" + padded(1_100_000) + "\"");
     RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
     keySchemaRequest.setSchema("{}");
     AssociationOpRequest opRequest = new AssociationOpRequest(
@@ -173,24 +192,47 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
         restApp.restClient.mutateAssociations(
             RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
     assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    // The violating entry's resourceId is called out explicitly in the message.
+    assertTrue(e.getMessage().contains("'value' association's schema"));
     assertTrue(e.getMessage().contains("resourceId 'entry-limit-big-id'"));
-    assertTrue(e.getMessage().contains("per resource entry"));
+    assertTrue(e.getMessage().contains("per association schema"));
+  }
+
+  @Test
+  public void testExceedsMaxAssociationEntryPayloadBytesForKeyAssociation() throws Exception {
+    // Same as above but with the oversized schema on the key association instead, confirming
+    // the check correctly identifies whichever association is the actual offender.
+    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
+    valueSchemaRequest.setSchema("{}");
+    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
+    keySchemaRequest.setSchema("\"" + padded(1_100_000) + "\"");
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        "entry-limit-key-big", "default", "entry-limit-key-big-id", "topic",
+        java.util.Arrays.asList(
+            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null),
+            new AssociationCreateOp(null, "key", null, null, keySchemaRequest, null)));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
+        Collections.singletonList(opRequest));
+
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.mutateAssociations(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
+    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
+    assertTrue(e.getMessage().contains("'key' association's schema"));
+    assertTrue(e.getMessage().contains("resourceId 'entry-limit-key-big-id'"));
   }
 
   @Test
   public void testExceedsMaxAssociationBatchPayloadBytes() throws Exception {
-    // A single topic whose combined key+value payload exceeds the cumulative batch byte limit
-    // (checked ahead of the per-entry limit, so this fires the batch-level violation).
+    // A single small association whose overall request payload still exceeds the cumulative
+    // batch byte limit because of an oversized resourceNamespace, not the schema itself; this
+    // isolates the batch-total check from the (now per-association) entry check, since the
+    // entry check only looks at each op's schema, not the surrounding topic fields.
     RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("\"" + padded(6000) + "\"");
-    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema("\"" + padded(6000) + "\"");
+    valueSchemaRequest.setSchema("{}");
     AssociationOpRequest opRequest = new AssociationOpRequest(
-        "batch-limit-big", "default", "batch-limit-big-id", "topic",
-        java.util.Arrays.asList(
-            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null),
-            new AssociationCreateOp(null, "key", null, null, keySchemaRequest, null)));
+        "batch-limit-big", padded(2_200_000), "batch-limit-big-id", "topic",
+        Collections.singletonList(
+            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null)));
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(
         Collections.singletonList(opRequest));
 

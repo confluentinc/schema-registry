@@ -201,13 +201,13 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG =
       "association.batch.mutate.max.association.entry.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1000;
+  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_048_576;
   /**
    * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
    */
   public static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG =
       "association.batch.mutate.max.association.batch.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 10000;
+  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_097_152;
   /**
    * <code>association.batch.get.limits.enabled</code>
    */
@@ -586,18 +586,19 @@ public class SchemaRegistryConfig extends RestConfig {
       "Maximum number of topics (resource entries) allowed across an entire Associations "
       + "batchMutate request when any association in the request carries an inline schema; a "
       + "single topic may include both a key and a value association without counting as two "
-      + "topics. Not enforced when the request has a single association in total, when it "
-      + "contains no inline schemas, or when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG
-      + " is false.";
+      + "topics. Not enforced when the request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC =
-      "Maximum payload size in bytes (subject plus inline schema) allowed for a single "
-      + "resource entry in an Associations batchMutate request. Not enforced when the request "
-      + "has a single association in total, when it contains no inline schemas, or when "
+      "Maximum payload size in bytes of a single association's inline schema (the whole "
+      + "RegisterSchemaRequest, including any references and metadata) in an Associations "
+      + "batchMutate request; checked independently per association, so a topic's key and "
+      + "value schemas are each measured and bounded on their own. Not enforced when the "
+      + "request contains no inline schemas, or when "
       + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC =
-      "Maximum cumulative payload size in bytes (subjects plus inline schemas) allowed across "
-      + "an entire Associations batchMutate request. Not enforced when the request has a "
-      + "single association in total, when it contains no inline schemas, or when "
+      "Maximum cumulative payload size in bytes of the entire Associations batchMutate "
+      + "request (all topics, subjects, and inline schemas combined). Not enforced when the "
+      + "request contains no inline schemas, or when "
       + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC =
       "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " on the Associations "
