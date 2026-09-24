@@ -449,4 +449,27 @@ class JsonToLogicalTypeConverterTest {
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
     assertThat(lt.getName()).isEqualTo("Order");
   }
+
+  @Test
+  void aNullEnumMemberMakesTheEnumNullable() {
+    Schema p = convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[\"a\",\"b\",null]}}}").getRootSchema().getField("p").getSchema();
+
+    assertThat(p.getType()).isEqualTo(Schema.Type.ENUM);
+    assertThat(p.isNullable()).isTrue();
+    assertThat(p.getEnumValues()).extracting(Schema.EnumValue::getSymbol).containsExactly("a", "b");
+  }
+
+  @Test
+  void anEnumOfOnlyNullIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[null]}}}")).isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void aMapWithNoValueSchemaIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"))
+        .isInstanceOf(ValidationException.class);
+  }
 }

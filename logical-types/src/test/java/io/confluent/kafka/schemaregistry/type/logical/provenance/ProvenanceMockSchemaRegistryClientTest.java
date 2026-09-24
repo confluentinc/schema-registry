@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -87,11 +88,24 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
-  void anyOtherComputationFailureIsA422() throws Exception {
-    // The JSON reader throws a NullPointerException on a map with no value schema.
+  void aMapWithNoValueSchemaHasNoLogicalForm() throws Exception {
     int v1 = client.register(SUBJECT, new JsonSchema("{\"type\":\"object\",\"properties\":"
         + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"));
     assertCode(422, 42201, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, null));
+  }
+
+  @Test
+  void anUnexpectedComputationFailureIsAServerError() throws Exception {
+    ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
+          List<ParsedSchema> schemas, boolean includeMultipleMessages,
+          ProvenanceAlgorithm algorithm) {
+        throw new NullPointerException("unexpected");
+      }
+    };
+    int v1 = failing.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
+    assertCode(500, 500, () -> failing.getProvenanceById(SUBJECT, v1, v1, false, false, null));
   }
 
   @Test

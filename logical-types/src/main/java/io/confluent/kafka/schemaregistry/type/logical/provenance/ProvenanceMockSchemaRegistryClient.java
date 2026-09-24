@@ -49,6 +49,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int RECURSIVE_SCHEMA = 42213;
   private static final int UNRESOLVABLE_REFERENCE = 42214;
   private static final int UNKNOWN_ALGORITHM = 42216;
+  // The registry's generic server error carries its HTTP status as its error code.
+  private static final int SERVER_ERROR = 500;
 
   public ProvenanceMockSchemaRegistryClient() {
     super();
@@ -98,16 +100,25 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages, version);
+      whole = compute(subject, range, schemas, includeMultipleMessages, version);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
     } catch (RuntimeException e) {
-      // As the registry does: any other computation failure is the schema's, a 422.
-      throw new RestClientException(String.valueOf(e.getMessage()), 422, INVALID_SCHEMA);
+      // As the registry does: any other computation failure is a server error.
+      throw new RestClientException(String.valueOf(e.getMessage()), 500, SERVER_ERROR);
     }
     return ProvenanceHistory.slice(whole, from, to, includeInterior);
+  }
+
+  /**
+   * The provenance of {@code range}, as the registry computes it; overridable so a test can make
+   * the computation fail.
+   */
+  protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
+      List<ParsedSchema> schemas, boolean includeMultipleMessages, ProvenanceAlgorithm algorithm) {
+    return ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages, algorithm);
   }
 
   private List<ProvenanceHistory.Entry> history(String subject)

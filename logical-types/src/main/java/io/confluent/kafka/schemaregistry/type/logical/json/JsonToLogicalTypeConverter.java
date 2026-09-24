@@ -408,8 +408,15 @@ public class JsonToLogicalTypeConverter {
       List<?> possibleValues = enumSchema.getPossibleValuesAsList();
       List<EnumValue> values = new ArrayList<>();
       Set<String> seenSymbols = new HashSet<>();
+      boolean allowsNull = false;
       for (int i = 0; i < possibleValues.size(); i++) {
-        String symbol = possibleValues.get(i).toString();
+        Object possible = possibleValues.get(i);
+        if (possible == null || JSONObject.NULL.equals(possible)) {
+          // A null member is the idiom for a nullable enum, not a symbol.
+          allowsNull = true;
+          continue;
+        }
+        String symbol = possible.toString();
         // JSON Schema only "SHOULD" require unique enum values; tolerate
         // duplicates by keeping the first occurrence's metadata.
         if (!seenSymbols.add(symbol)) {
@@ -431,7 +438,10 @@ public class JsonToLogicalTypeConverter {
         }
         values.add(new EnumValue(symbol, doc, evParams));
       }
-      Schema result = Schema.createEnum(values).setNullable(isNullable);
+      if (values.isEmpty()) {
+        throw new ValidationException("An enum must list at least one value other than null");
+      }
+      Schema result = Schema.createEnum(values).setNullable(isNullable || allowsNull);
       result.setDoc(schema.getDescription());
       readSchemaTags(schema, result);
       readSchemaParams(schema, result);
@@ -728,6 +738,10 @@ public class JsonToLogicalTypeConverter {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           objectSchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
+      if (objectSchema.getSchemaOfAdditionalProperties() == null) {
+        throw new ValidationException(
+            "A map (connect.type: map) must declare its values with additionalProperties");
+      }
       // MAP value at appendToList(indexPath, 1); key type read from
       // unprocessedProperties (no schema body to walk for default capture).
       final Schema valueType = convertWithCycleDetection(

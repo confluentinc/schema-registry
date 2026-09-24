@@ -18,13 +18,20 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Optional;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 public class ProvenanceProjectorTest {
@@ -74,6 +81,48 @@ public class ProvenanceProjectorTest {
     assertEquals(client.readerId, client.lastReaderId);
   }
 
+  @Test
+  public void aRejectedRequestFailsEveryRecordFromThatWriter() throws Exception {
+    for (int[] rejection : new int[][] {{422, 42202}, {422, 42215}, {404, 40402}}) {
+      CountingClient client = new CountingClient();
+      client.failure = new RestClientException("rejected", rejection[0], rejection[1]);
+      ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+      for (int record = 0; record < 2; record++) {
+        SerializationException e = assertThrows(SerializationException.class,
+            () -> ask(projector, client));
+        assertTrue(e.getMessage(), e.getMessage().contains("rejected the provenance request"));
+      }
+      assertEquals(1, client.asked);
+    }
+  }
+
+  @Test
+  public void aServerErrorFailsTheRecordAndIsAskedAgain() throws Exception {
+    CountingClient client = new CountingClient();
+    client.failure = new RestClientException("boom", 500, 500);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    assertThrows(SerializationException.class, () -> ask(projector, client));
+    assertThrows(SerializationException.class, () -> ask(projector, client));
+    assertEquals(2, client.asked);
+  }
+
+  @Test
+  public void aBuildThatFindsTheResponseInconsistentFailsEveryRecord() throws Exception {
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    for (int record = 0; record < 2; record++) {
+      assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
+          client.writerSchema, client.reader, false, mapping -> {
+            throw new SerializationException("inconsistent");
+          }));
+    }
+    assertEquals(1, client.asked);
+  }
+
   private static void ask(ProvenanceProjector<String> projector, CountingClient client)
       throws Exception {
     ask(projector, client, client.writer);
@@ -87,7 +136,7 @@ public class ProvenanceProjectorTest {
     assertFalse(built.isPresent());
   }
 
-  // Answers every provenance request as unavailable, counting how often it is asked.
+  // Answers every provenance request as unavailable, or as set, counting how often it is asked.
   private static final class CountingClient extends MockSchemaRegistryClient {
     final ParsedSchema writerSchema = new AvroSchema("\"int\"");
     final ParsedSchema reader = new AvroSchema("\"long\"");
@@ -96,6 +145,8 @@ public class ProvenanceProjectorTest {
     final int readerId;
     int asked;
     int lastReaderId;
+    RestClientException failure;
+    SchemaProvenance provenance;
 
     CountingClient() throws Exception {
       writer = register(SUBJECT, writerSchema);
@@ -106,9 +157,15 @@ public class ProvenanceProjectorTest {
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
         boolean includeInterior, boolean includeMultipleMessages,
-        String algorithm) {
+        String algorithm) throws RestClientException {
       asked++;
       lastReaderId = toId;
+      if (failure != null) {
+        throw failure;
+      }
+      if (provenance != null) {
+        return provenance;
+      }
       throw new UnsupportedOperationException("no provenance here");
     }
   }

@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * Carries provenance into protobuf's parser by renumbering the reader's descriptor.
@@ -54,11 +55,13 @@ final class ProtoProvenanceRenumberer {
   private static final int MAX_FIELD_NUMBER = 536_870_911;
 
   private final FileDescriptor file;
+  private final int readerId;
   // For each message, by full name: which of its field numbers must move.
   private final Map<String, Map<Integer, Boolean>> moves = new HashMap<>();
 
-  private ProtoProvenanceRenumberer(FileDescriptor file) {
+  private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
     this.file = file;
+    this.readerId = readerId;
   }
 
   /**
@@ -66,19 +69,19 @@ final class ProtoProvenanceRenumberer {
    * number; {@code reader} itself when there is nothing to move.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
-   *     different numberings, a field needing a new number belongs to an imported file, or a path
-   *     cannot be located in the reader
+   *     different numberings, or a field needing a new number belongs to an imported file
+   * @throws SerializationException if a location's names are missing or not in the reader
    */
   static Renumbered renumber(ProtobufSchema reader, ProvenanceMapping mapping,
       boolean includeMultipleMessages) {
+    // A location the walk cannot find would escape provenance without a trace.
+    mapping.requireNames();
     Descriptor root = reader.toDescriptor();
-    ProtoProvenanceRenumberer renumberer = new ProtoProvenanceRenumberer(root.getFile());
+    ProtoProvenanceRenumberer renumberer =
+        new ProtoProvenanceRenumberer(root.getFile(), mapping.readerId());
     Set<List<Integer>> moving = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (names == null) {
-        throw new ProvenanceUnavailableException("The provenance response carries no names");
-      }
       if (underMovingField(path, moving, mapping)) {
         // Nothing under a field that moves is ever read, so nothing under it needs a number.
         continue;
@@ -192,11 +195,11 @@ final class ProtoProvenanceRenumberer {
     FieldDescriptor field = null;
     for (; i < names.size(); i++) {
       if (message == null || names.get(i) == null) {
-        throw new ProvenanceUnavailableException("Cannot locate " + names + " in the reader");
+        throw notInSchema(names);
       }
       field = message.findFieldByName(names.get(i));
       if (field == null) {
-        throw new ProvenanceUnavailableException("Cannot locate " + names + " in the reader");
+        throw notInSchema(names);
       }
       owner = message;
       message = messageOf(field);
@@ -225,7 +228,12 @@ final class ProtoProvenanceRenumberer {
         return message;
       }
     }
-    throw new ProvenanceUnavailableException("The reader declares no message " + fullName);
+    throw notInSchema(Collections.singletonList(fullName));
+  }
+
+  private SerializationException notInSchema(List<String> names) {
+    return new SerializationException(
+        "Location " + names + " of schema id " + readerId + " is not in the schema");
   }
 
   private static Descriptor messageOf(FieldDescriptor field) {
@@ -247,7 +255,7 @@ final class ProtoProvenanceRenumberer {
       return FileDescriptor.buildFrom(
           proto.build(), file.getDependencies().toArray(new FileDescriptor[0]));
     } catch (DescriptorValidationException e) {
-      throw new ProvenanceUnavailableException(
+      throw new SerializationException(
           "Could not renumber " + file.getName() + " after provenance: " + e.getMessage(), e);
     }
   }

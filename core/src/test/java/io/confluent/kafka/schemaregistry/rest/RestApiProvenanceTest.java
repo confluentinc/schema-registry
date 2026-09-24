@@ -227,8 +227,7 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
-  public void anyOtherComputationFailureIsA422() throws Exception {
-    // The JSON reader throws a NullPointerException on a map with no value schema.
+  public void aMapWithNoValueSchemaHasNoLogicalForm() throws Exception {
     restApp.restClient.registerSchema("{\"type\":\"object\",\"properties\":"
         + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}",
         JsonSchema.TYPE, Collections.emptyList(), SUBJECT);

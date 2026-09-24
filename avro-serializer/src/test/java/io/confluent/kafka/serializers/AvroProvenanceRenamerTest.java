@@ -124,6 +124,34 @@ public class AvroProvenanceRenamerTest {
         writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name")))));
   }
 
+  @Test
+  public void aLocationWithoutNamesFailsEveryRecord() {
+    Schema schema = record("R", field("a", "\"int\""));
+    assertThrows(SerializationException.class, () -> AvroProvenanceRenamer.rename(schema, schema,
+        mapping(pids(p(1, "a")), pids(new ProvenanceField(Arrays.asList(1), null, 1)))));
+  }
+
+  @Test
+  public void aLocationNotInTheSchemaFailsEveryRecord() {
+    Schema schema = record("R", field("a", "\"int\""));
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> AvroProvenanceRenamer.rename(schema, schema,
+            mapping(pids(p(1, "a"), p(2, "ghost")), pids(p(1, "a")))));
+    assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 1"));
+  }
+
+  @Test
+  public void aPairingAcrossParentsFailsEveryRecord() {
+    // a.x and b.y share a pid, though a and b are different locations.
+    Schema schema = record("R", field("a", record("A", field("x", "\"int\"")).toString()),
+        field("b", record("B", field("y", "\"int\"")).toString()));
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> AvroProvenanceRenamer.rename(schema, schema, mapping(
+            pids(p(1, "a"), p(2, "a", "x"), p(3, "b"), p(4, "b", "y")),
+            pids(p(1, "a"), p(4, "a", "x"), p(3, "b"), p(2, "b", "y")))));
+    assertTrue(e.getMessage(), e.getMessage().contains("different parents"));
+  }
+
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
       List<ProvenanceField> reader) {
     return ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
