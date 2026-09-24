@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
@@ -88,7 +89,7 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testIncludeSchemasTrueWithinLimitSucceeds() throws Exception {
-    int numItems = 10;
+    int numItems = 1;
     List<AssociationGetRequest> queries = new ArrayList<>();
     for (int i = 0; i < numItems; i++) {
       String resourceName = "get-limit-within-" + i;
@@ -108,7 +109,7 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
   @Test
   public void testIncludeSchemasTrueExceedsMaxAssociationNumPerGetBatch() throws Exception {
-    int numItems = 11;
+    int numItems = 2;
     List<AssociationGetRequest> queries = new ArrayList<>();
     for (int i = 0; i < numItems; i++) {
       queries.add(getRequestFor("get-limit-exceeded-" + i + "-id"));
@@ -119,5 +120,7 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
         restApp.restClient.batchGetAssociations(
             RestService.DEFAULT_REQUEST_PROPERTIES, true, getRequest));
     assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
+    assertTrue(e.getMessage().contains("2 topics"));
+    assertTrue(e.getMessage().contains("maximum of 1"));
   }
 }
