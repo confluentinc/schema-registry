@@ -236,21 +236,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setShared(shared);
     request.setDeleted(deleted);
     Kek response = restService.createKek(requestProperties, request);
-    // The wire response always redacts secrets; cache a copy with the real value
-    // restored, so this process's own subsequent getKek calls can still use it for
-    // encrypt/decrypt. The redacted response itself is what's returned.
+    // The wire response is always redacted; cache the real value so this process can
+    // still use it for encrypt/decrypt.
     Kek cachedKek = withRestoredSecretsForCache(name, deleted, response, kmsProps);
     kekCache.put(new KekId(name, deleted), cachedKek);
     return response;
   }
 
   /**
-   * Restores secrets into {@code response} for caching, preferring (in order): a genuine
-   * new value in {@code kmsProps} (what the caller just wrote), then a value this client
-   * already had cached for this kek under either deleted state (e.g. it cached the real
-   * secret before this kek was soft-deleted, and is now recreating/undeleting it, or it
-   * updated this kek before without resupplying an unrelated secret), then whatever
-   * {@code response} itself carries (redacted/omitted, if neither source has it).
+   * Restores secrets into {@code response} for caching, preferring: the value just
+   * written in {@code kmsProps}, then a value cached under either deleted state, then
+   * whatever {@code response} itself carries.
    */
   private Kek withRestoredSecretsForCache(
       String name, boolean deleted, Kek response, Map<String, String> kmsProps) {
@@ -377,9 +373,8 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek response = restService.updateKek(requestProperties, name, request);
-    // The wire response always redacts secrets; cache a copy with the real value
-    // restored, so this process's own subsequent getKek calls can still use it for
-    // encrypt/decrypt. The redacted response itself is what's returned.
+    // The wire response is always redacted; cache the real value so this process can
+    // still use it for encrypt/decrypt.
     Kek cachedKek = withRestoredSecretsForCache(name, false, response, kmsProps);
     kekCache.put(new KekId(name, false), cachedKek);
     return response;

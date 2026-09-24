@@ -24,21 +24,14 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Masks KMS authentication secrets before a KEK is returned over the wire. KEK
- * {@code kmsProps} carry per-driver KMS auth material (e.g. a Vault token); only the
- * write/KMS-client-construction path needs the real values, never a read response.
+ * Drops KMS auth secrets from a KEK's {@code kmsProps} before it crosses the wire.
  *
- * <p>Secrets are dropped from the map entirely rather than replaced with a placeholder:
- * every supported KMS driver (hcvault, aws, azure, gcp, local) falls back to an ambient
- * credential (an IAM role, managed identity, workload identity, a local env var, etc.)
- * precisely when the corresponding config key is absent/{@code null}. Substituting a
- * non-null placeholder would defeat that fallback and cause the driver to try
- * authenticating with the literal placeholder string instead.
+ * <p>Secrets are omitted rather than replaced with a placeholder: every KMS driver falls
+ * back to an ambient credential when the config key is absent, and a non-null placeholder
+ * would defeat that fallback.
  *
- * <p>Used by both the DEK Registry server (to redact outbound REST responses) and this
- * client library (to restore the real value a caller just supplied on a create/update,
- * into its own local cache of that server response, since the wire response itself is
- * always redacted).
+ * <p>Used by the server (to redact responses) and this client (to restore a just-written
+ * secret into its own cache, since the wire response is always redacted).
  */
 public final class KmsPropsRedactor {
 
@@ -77,15 +70,10 @@ public final class KmsPropsRedactor {
   }
 
   /**
-   * Resolves an incoming {@code kmsProps} update against the currently stored value. A
-   * client that read back a redacted kek (via {@link #redact}, which omits secret keys)
-   * and later submits that map back verbatim naturally omits those keys too; for each
-   * known secret key, an omitted value (or, defensively, one still carrying the legacy
-   * {@link #REDACTED_VALUE} placeholder) is treated as "unchanged" and resolved against
-   * the stored value. If there is no stored value either, the placeholder is normalized
-   * to omitted rather than left as a literal non-null string, so it can never be
-   * persisted or handed to a KMS driver verbatim. A secret key submitted with any other
-   * value is treated as a genuine update.
+   * Resolves a requested {@code kmsProps} update against the stored value: an omitted (or
+   * legacy {@link #REDACTED_VALUE}) secret key means "unchanged" and is restored from
+   * {@code existingKmsProps} (or dropped if nothing is stored). Any other value is a
+   * genuine update.
    */
   public static SortedMap<String, String> merge(
       Map<String, String> requestedKmsProps, Map<String, String> existingKmsProps) {
@@ -105,14 +93,10 @@ public final class KmsPropsRedactor {
   }
 
   /**
-   * Backfills any secret key the server redacted from {@code response} with the real
-   * value the caller just supplied in {@code request}, so a client's local cache of a
-   * create/update response retains a credential it can actually use. Unlike
-   * {@link #merge}, a placeholder or missing value in {@code request} is never copied
-   * over: {@code request} is what a caller just wrote, not a previously-stored value, so
-   * a placeholder there means the caller doesn't actually have the real secret either
-   * (e.g. a legacy caller resubmitting a displayed placeholder), and copying it in would
-   * cache that literal placeholder string as if it were a usable credential.
+   * Backfills secrets the server redacted from {@code response} using the caller's own
+   * {@code request}, so this client's cache keeps a usable credential. Unlike
+   * {@link #merge}, a placeholder or omitted key in {@code request} is never copied in --
+   * the caller doesn't have the real value either in that case.
    */
   public static Kek restoreWriteTimeSecrets(Kek response, Map<String, String> request) {
     if (response == null) {
@@ -121,9 +105,7 @@ public final class KmsPropsRedactor {
     SortedMap<String, String> restored = new TreeMap<>(response.getKmsProps());
     if (request != null) {
       for (String key : SENSITIVE_KEYS) {
-        // An omitted key means "unchanged" (nothing to restore or clear here); an
-        // explicit null, like the server, means a genuine clear -- distinct from
-        // omission, and must drop any previously-cached/fallback value for this key.
+        // Omitted means unchanged; explicit null means clear.
         if (!request.containsKey(key)) {
           continue;
         }

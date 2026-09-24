@@ -45,8 +45,7 @@ public class KmsPropsRedactorTest {
     existing.put("token.id", "s.supersecrettoken");
     existing.put("namespace", "my-namespace");
 
-    // Simulates a client that GETs a kek (the redacted response omits token.id entirely)
-    // and PUTs that map straight back, along with a genuine change to a non-sensitive prop.
+    // The client PUTs a GET response straight back, plus a genuine unrelated change.
     Map<String, String> requested = new HashMap<>();
     requested.put("namespace", "updated-namespace");
 
@@ -61,8 +60,7 @@ public class KmsPropsRedactorTest {
     Map<String, String> existing = new HashMap<>();
     existing.put("token.id", "s.supersecrettoken");
 
-    // Defensive case: some caller sends the literal placeholder back instead of omitting
-    // the key (e.g. a UI that always includes the field with its displayed value).
+    // Defensive: some caller sends the literal placeholder back instead of omitting it.
     Map<String, String> requested = new HashMap<>();
     requested.put("token.id", KmsPropsRedactor.REDACTED_VALUE);
 
@@ -97,8 +95,7 @@ public class KmsPropsRedactorTest {
 
   @Test
   public void testMergeNormalizesPlaceholderToOmittedWhenNoStoredValue() {
-    // No existing kek at all (a genuinely new create) and no stored value for this key
-    // either way: a placeholder must never be persisted as a literal non-null value.
+    // Genuinely new create: a placeholder must never be persisted verbatim.
     Map<String, String> requested = new HashMap<>();
     requested.put("token.id", KmsPropsRedactor.REDACTED_VALUE);
 
@@ -132,8 +129,7 @@ public class KmsPropsRedactorTest {
 
   @Test
   public void testRestoreWriteTimeSecretsClearsValueOnExplicitNull() {
-    // Simulates a value a prior cache-fallback layer already restored onto the base
-    // for this call (see CachedDekRegistryClient.withRestoredSecretsForCache).
+    // A value a prior cache-fallback layer already restored onto the base for this call.
     Map<String, String> responseProps = new HashMap<>();
     responseProps.put("token.id", "s.oldcachedtoken");
     responseProps.put("namespace", "my-namespace");
@@ -178,9 +174,7 @@ public class KmsPropsRedactorTest {
 
   @Test
   public void testRestoreWriteTimeSecretsIgnoresPlaceholderInOriginalRequest() {
-    // A legacy caller that resubmits a displayed placeholder instead of the real secret
-    // doesn't actually have the real value either; caching the literal placeholder
-    // string would be just as broken as a redacted-on-read response.
+    // A legacy caller resubmitting the placeholder doesn't have the real value either.
     Map<String, String> responseProps = new HashMap<>();
     responseProps.put("namespace", "my-namespace");
     Kek response = new Kek("kek1", "hcvault", "key1", responseProps, null, true, 1L, null);

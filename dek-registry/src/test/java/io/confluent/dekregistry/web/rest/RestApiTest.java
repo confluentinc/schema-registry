@@ -148,9 +148,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
-    // Before any reset, a getKek for the same kek is served from the client's local
-    // cache, which createKek populated with the real secret it just supplied restored
-    // (the wire response above stays redacted) -- so this process can still use it.
+    // Served from the client's cache, which createKek restored the real secret into.
     newKek = client.getKek(kekName, false);
     assertEquals("s.supersecretvaulttoken", newKek.getKmsProps().get("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
@@ -168,16 +166,14 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
 
-    // A later update that omits kmsProps entirely (e.g. only touching doc) must not lose
-    // the secret this client already had cached for this kek.
+    // An update that omits kmsProps entirely must not lose the already-cached secret.
     Kek docOnlyUpdate = client.updateKek(headers, kekName, null, "doc-only-change", null);
     assertFalse(docOnlyUpdate.getKmsProps().containsKey("token.id"));
     Kek cachedAfterDocOnlyUpdate = client.getKek(kekName, false);
     assertEquals("s.anothersecrettoken", cachedAfterDocOnlyUpdate.getKmsProps().get("token.id"));
 
-    // Simulate a read-modify-write client: it fetched the (redacted) kek above, which
-    // naturally omits token.id, and PUTs that map straight back, alongside a genuine
-    // change to doc. This must not clear/corrupt the real stored secret.
+    // Read-modify-write: PUT the redacted map straight back plus a real doc change --
+    // must not clear/corrupt the stored secret.
     Map<String, String> readModifyWriteProps = new HashMap<>(newKek.getKmsProps());
     newKek = client.updateKek(headers, kekName, readModifyWriteProps, "updated-doc", null);
     assertFalse(newKek.getKmsProps().containsKey("token.id"));

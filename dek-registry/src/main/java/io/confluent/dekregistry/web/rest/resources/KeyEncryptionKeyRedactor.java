@@ -19,10 +19,8 @@ import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.storage.KeyEncryptionKey;
 
 /**
- * Server-only extension of {@link KmsPropsRedactor} for the internal {@link KeyEncryptionKey}
- * storage entity, which the client library has no visibility into. The shared
- * {@code Map}/{@code Kek}-based redact/merge logic lives in the client library so
- * {@code CachedDekRegistryClient} can apply the same semantics to its own cache.
+ * {@link KmsPropsRedactor} for the internal {@link KeyEncryptionKey} storage entity,
+ * which the client library has no visibility into.
  */
 public final class KeyEncryptionKeyRedactor {
 
