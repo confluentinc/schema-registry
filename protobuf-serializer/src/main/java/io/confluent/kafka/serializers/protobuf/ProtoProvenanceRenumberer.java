@@ -87,6 +87,10 @@ final class ProtoProvenanceRenumberer {
       if (move) {
         moving.add(path);
       }
+      if (names.equals(mapping.enclosingReaderNamesOf(path))) {
+        // A oneof: no step of its own, so no field to number; its members are visited as fields.
+        continue;
+      }
       renumberer.visit(root, names, includeMultipleMessages, move);
     }
     FileDescriptor renumbered = renumberer.build();
@@ -110,8 +114,8 @@ final class ProtoProvenanceRenumberer {
       List<Integer> ancestor = path.subList(0, k);
       if (moving.contains(ancestor)) {
         List<String> names = mapping.readerNamesOf(ancestor);
-        List<String> parent = k > 1 ? mapping.readerNamesOf(path.subList(0, k - 1)) : null;
-        if (names != null && !names.isEmpty() && !names.equals(parent)) {
+        if (names != null && !names.isEmpty()
+            && !names.equals(mapping.enclosingReaderNamesOf(ancestor))) {
           return true;
         }
       }

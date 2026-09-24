@@ -131,6 +131,20 @@ public final class ProvenanceMapping {
   }
 
   /**
+   * The names of the nearest reader location enclosing {@code readerPath} — skipping steps into
+   * an array or map, which are no locations — or an empty list at the root.
+   */
+  public List<String> enclosingReaderNamesOf(List<Integer> readerPath) {
+    for (int k = readerPath.size() - 1; k > 0; k--) {
+      List<String> names = readerNames.get(readerPath.subList(0, k));
+      if (names != null) {
+        return names;
+      }
+    }
+    return Collections.emptyList();
+  }
+
+  /**
    * The reader location spelled {@code names}, or null if there is none.
    */
   public List<Integer> readerPathAt(List<String> names) {

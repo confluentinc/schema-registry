@@ -125,8 +125,35 @@ final class JsonProvenancePruner {
    */
   void prune(JsonNode document) {
     for (Target target : targets) {
-      walk(target, reader, document, 0, new ArrayList<>(), false);
+      walk(target.names, reader, document, 0, new ArrayList<>(), false,
+          (node, object, name, choices, ambiguous) -> {
+            if (!keeps(target, choices, ambiguous)) {
+              remove(node, object, name);
+            }
+          });
     }
+  }
+
+  /** What to do at a property the walk reaches, with the union branches taken to reach it. */
+  interface AtProperty {
+    void accept(ObjectNode node, ObjectSchema object, String name, List<Integer> choices,
+        boolean ambiguous);
+  }
+
+  /**
+   * The union branches {@code document} takes on the way to the property spelled {@code names},
+   * as the pruner resolves them; null if it does not reach one.
+   */
+  static List<Integer> branchesTaken(JsonSchema reader, JsonNode document, List<String> names) {
+    List<List<Integer>> taken = new ArrayList<>();
+    walk(names, reader.rawSchema(), document, 0, new ArrayList<>(), false,
+        (node, object, name, choices, ambiguous) -> taken.add(choices));
+    return taken.isEmpty() ? null : taken.get(0);
+  }
+
+  /** As the response spells them: the branch index of every union branch on the way to a path. */
+  static List<Integer> branchChoicesAt(ProvenanceMapping mapping, List<Integer> path) {
+    return branchChoices(mapping, path);
   }
 
   /**
@@ -139,11 +166,25 @@ final class JsonProvenancePruner {
         && !isBranch(mapping, path, names);
   }
 
+  /**
+   * Whether the location at {@code path} is a union branch: a JSON location is a property or a
+   * branch.
+   */
   private static boolean isBranch(ProvenanceMapping mapping, List<Integer> path,
       List<String> names) {
-    List<String> parent = path.size() > 1
-        ? mapping.readerNamesOf(path.subList(0, path.size() - 1)) : Collections.emptyList();
-    return names.equals(parent);
+    List<String> enclosing = mapping.enclosingReaderNamesOf(path);
+    if (names.size() < enclosing.size()
+        || !names.subList(0, enclosing.size()).equals(enclosing)) {
+      return false;
+    }
+    // A branch spells its enclosing location's names, then at most unnamed steps into an array or
+    // map; a property adds a name of its own.
+    for (String step : names.subList(enclosing.size(), names.size())) {
+      if (step != null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -161,20 +202,21 @@ final class JsonProvenancePruner {
     return choices;
   }
 
-  private void walk(Target target, Schema schema, JsonNode node, int step, List<Integer> choices,
-      boolean ambiguous) {
+  private static void walk(List<String> names, Schema schema, JsonNode node, int step,
+      List<Integer> choices, boolean ambiguous, AtProperty at) {
     if (schema == null || node == null) {
       return;
     }
     if (schema instanceof ReferenceSchema) {
-      walk(target, ((ReferenceSchema) schema).getReferredSchema(), node, step, choices, ambiguous);
+      walk(names, ((ReferenceSchema) schema).getReferredSchema(), node, step, choices, ambiguous,
+          at);
       return;
     }
     if (schema instanceof CombinedSchema) {
-      walkCombined(target, (CombinedSchema) schema, node, step, choices, ambiguous);
+      walkCombined(names, (CombinedSchema) schema, node, step, choices, ambiguous, at);
       return;
     }
-    String name = target.names.get(step);
+    String name = names.get(step);
     if (name == null) {
       // An unnamed step: each element of an array, or each value of an object keyed by string.
       Schema child = schema instanceof ArraySchema
@@ -182,7 +224,7 @@ final class JsonProvenancePruner {
           : schema instanceof ObjectSchema
               ? ((ObjectSchema) schema).getSchemaOfAdditionalProperties() : null;
       for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
-        walk(target, child, it.next(), step + 1, choices, ambiguous);
+        walk(names, child, it.next(), step + 1, choices, ambiguous, at);
       }
       return;
     }
@@ -191,21 +233,21 @@ final class JsonProvenancePruner {
       return;
     }
     ObjectSchema object = (ObjectSchema) schema;
-    if (step + 1 < target.names.size()) {
-      walk(target, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
-          ambiguous);
-    } else if (!keeps(target, choices, ambiguous)) {
-      remove((ObjectNode) node, object, name);
+    if (step + 1 < names.size()) {
+      walk(names, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
+          ambiguous, at);
+    } else {
+      at.accept((ObjectNode) node, object, name, choices, ambiguous);
     }
   }
 
-  private void walkCombined(Target target, CombinedSchema schema, JsonNode node, int step,
-      List<Integer> choices, boolean ambiguous) {
+  private static void walkCombined(List<String> names, CombinedSchema schema, JsonNode node,
+      int step, List<Integer> choices, boolean ambiguous, AtProperty at) {
     List<Schema> subschemas = new ArrayList<>(schema.getSubschemas());
     if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
       // The converter merges an allOf; the next step lives in whichever part declares it.
       for (Schema part : subschemas) {
-        walk(target, part, node, step, choices, ambiguous);
+        walk(names, part, node, step, choices, ambiguous, at);
       }
       return;
     }
@@ -217,28 +259,23 @@ final class JsonProvenancePruner {
     }
     if (branches.size() == 1 && branches.size() < subschemas.size()) {
       // A nullable union, which the logical type collapses: no branch step.
-      walk(target, branches.get(0), node, step, choices, ambiguous);
+      walk(names, branches.get(0), node, step, choices, ambiguous, at);
       return;
     }
-    int chosen = -1;
-    boolean several = false;
+    List<Integer> valid = new ArrayList<>();
     for (int i = 0; i < branches.size(); i++) {
       if (validates(branches.get(i), node)) {
-        if (chosen >= 0) {
-          several = true;
-          break;
-        }
-        chosen = i;
+        valid.add(i);
       }
     }
-    if (chosen < 0) {
-      return;
+    // Objects are open by default, so a value can validate against several branches. Then it is
+    // ambiguous, and every such branch is walked, so the property is reached through whichever
+    // declares it.
+    for (int i : valid) {
+      List<Integer> extended = new ArrayList<>(choices);
+      extended.add(i);
+      walk(names, branches.get(i), node, step, extended, ambiguous || valid.size() > 1, at);
     }
-    List<Integer> extended = new ArrayList<>(choices);
-    extended.add(chosen);
-    // oneOf takes the first valid branch as JsonSchema does; overlapping anyOf is ambiguous.
-    walk(target, branches.get(chosen), node, step, extended,
-        ambiguous || (several && schema.getCriterion() == CombinedSchema.ANY_CRITERION));
   }
 
   /**

@@ -191,6 +191,26 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aNewOneofInARepeatedMessageStillRenumbersItsMembers() throws Exception {
+    // The oneof is new, so it moves, but it is no field: its member memo reuses note's number.
+    ProtobufSchema v1 = row("repeated E es = 1;", "message E { int32 x = 1; string note = 2; }");
+    ProtobufSchema v2 = row("repeated E es = 1;", "message E { int32 x = 1; }");
+    ProtobufSchema v3 = row("repeated E es = 1;",
+        "message E { int32 x = 1; oneof c { string memo = 2; } }");
+    byte[] bytes = write(v1, b -> {
+      Descriptor e = field(b, "es").getMessageType();
+      b.addRepeatedField(field(b, "es"), DynamicMessage.newBuilder(e)
+          .setField(e.findFieldByName("x"), 7).setField(e.findFieldByName("note"), "ada").build());
+    });
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage element = (DynamicMessage) ((List<?>) get(read(v3, bytes, "v1"), "es")).get(0);
+    assertEquals(7, get(element, "x"));
+    assertEquals("", get(element, "memo"));
+  }
+
+  @Test
   void aRequiredReaderFieldReusingANumberFailsTheRecord() throws Exception {
     ProtobufSchema v1 = proto2("required int32 id = 1;", "optional string note = 2;");
     ProtobufSchema v2 = proto2("required int32 id = 1;");
