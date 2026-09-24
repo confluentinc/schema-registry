@@ -128,8 +128,9 @@ public final class ProvenanceProjector<T> {
 
   private Outcome<T> compute(String subject, int writerId, ParsedSchema writer,
       ParsedSchema reader, boolean includeMultipleMessages, Function<ProvenanceMapping, T> build) {
+    Integer readerId = null;
     try {
-      Integer readerId = readerId(subject, reader);
+      readerId = readerId(subject, reader);
       if (readerId == null) {
         throw new ProvenanceUnavailableException(
             "The reader schema is not a version of subject " + subject);
@@ -148,15 +149,34 @@ public final class ProvenanceProjector<T> {
         throw new SerializationException(
             "Schema Registry could not serve provenance for schema id " + writerId, e);
       }
+      if (isRejectedRequest(e)) {
+        // The request is always two schema ids, well formed: a rejection of it cannot be the
+        // schemas' doing.
+        return failed(subject, writerId, new SerializationException("Schema Registry rejected "
+            + "the provenance request for schema ids " + writerId + " and " + readerId + ": "
+            + e.getMessage(), e));
+      }
       return unavailable(subject, writerId, e);
     } catch (ProvenanceUnavailableException | UnsupportedOperationException e) {
       return unavailable(subject, writerId, e);
     } catch (RuntimeException e) {
-      return Outcome.failed(e instanceof SerializationException
+      return failed(subject, writerId, e instanceof SerializationException
           ? (SerializationException) e
           : new SerializationException("Could not project schema id " + writerId
               + " by provenance: " + e.getMessage(), e));
     }
+  }
+
+  private Outcome<T> failed(String subject, int writerId, SerializationException e) {
+    // Logged here, where the outcome is cached, so once per writer schema, not per record.
+    log.error("Records of schema id {} of subject {} cannot be read by provenance: {}",
+        writerId, subject, e.getMessage());
+    return Outcome.failed(e);
+  }
+
+  /** A rejection of a request the projector never makes: a bad version, request or range. */
+  private static boolean isRejectedRequest(RestClientException e) {
+    return e.getErrorCode() == 42202 || e.getErrorCode() == 42215 || e.getErrorCode() == 40402;
   }
 
   private Outcome<T> unavailable(String subject, int writerId, Exception e) {

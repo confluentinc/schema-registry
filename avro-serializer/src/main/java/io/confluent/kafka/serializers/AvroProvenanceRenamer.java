@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Carries provenance into Avro's resolver by renaming, the way {@link Schema#applyAliases} carries
@@ -93,6 +94,10 @@ final class AvroProvenanceRenamer {
    *     different id
    */
   static Renamed rename(Schema writer, Schema reader, ProvenanceMapping mapping) {
+    // A location the walk cannot find would escape provenance without a trace.
+    mapping.requireNames();
+    requireReachable(writer, mapping.writerPaths(), mapping::writerNamesOf, mapping.writerId());
+    requireReachable(reader, mapping.readerPaths(), mapping::readerNamesOf, mapping.readerId());
     final AvroProvenanceRenamer renamer = new AvroProvenanceRenamer(mapping);
     final Schema renamedWriter = renamer.renameAt(
         writer, Collections.emptyList(), reader, Collections.emptyList(), false);
@@ -211,8 +216,7 @@ final class AvroProvenanceRenamer {
       Field counterpart;
       if (location != null) {
         final List<Integer> paired = mapping.readerPathOf(location);
-        counterpart = target == null || paired == null
-            ? null : childOf(target, readerAt, mapping.readerNamesOf(paired));
+        counterpart = paired == null ? null : pairedChild(target, readerAt, fieldAt, paired);
         if (counterpart == null) {
           fields.add(new Field(UNMATCHED + field.pos(), discard(field.schema()), field.doc()));
           continue;
@@ -249,8 +253,8 @@ final class AvroProvenanceRenamer {
         // A branch of a proper union: renamed after the branch provenance pairs it with.
         final List<Integer> paired = mapping.readerPathOf(location);
         final List<String> pairedAt = paired != null ? mapping.readerNamesOf(paired) : null;
-        final Schema counterpart =
-            target != null && pairedAt != null ? branchOf(target, readerAt, pairedAt) : null;
+        final Schema counterpart = pairedAt == null ? null : pairedBranch(
+            target, readerAt, branchAt, pairedAt);
         branches.add(counterpart != null
             ? renameAt(branch, branchAt, counterpart, pairedAt, true)
             : unmatchedBranch(branch, reader));
@@ -529,6 +533,74 @@ final class AvroProvenanceRenamer {
       throw new ProvenanceUnavailableException("The resolver would read " + writerAt
           + " into " + readerAt + ", which provenance does not pair with it");
     }
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Consistency with the response
+  // -------------------------------------------------------------------------------------------
+
+  /**
+   * Fails unless every location's names lead through {@code schema}: a field by name, a union
+   * branch by its type's full name, null for an array element or map value.
+   */
+  private static void requireReachable(Schema schema, List<List<Integer>> paths,
+      Function<List<Integer>, List<String>> namesOf, int schemaId) {
+    for (List<Integer> path : paths) {
+      final List<String> names = namesOf.apply(path);
+      if (!reaches(schema, names)) {
+        throw new SerializationException("Location " + names + " of schema id " + schemaId
+            + " is not in the schema");
+      }
+    }
+  }
+
+  private static boolean reaches(Schema schema, List<String> names) {
+    Schema at = schema;
+    for (String step : names) {
+      if (at == null) {
+        return false;
+      }
+      if (step == null) {
+        at = at.getType() == Type.ARRAY ? at.getElementType()
+            : at.getType() == Type.MAP ? at.getValueType() : null;
+      } else if (at.getType() == Type.RECORD) {
+        at = at.getField(step) != null ? at.getField(step).schema() : null;
+      } else if (at.getType() == Type.UNION) {
+        at = branchNamed(at, step, false);
+      } else {
+        return false;
+      }
+    }
+    return at != null;
+  }
+
+  /**
+   * The reader field provenance pairs a writer field with, which must be a child of the reader
+   * record the walk stands on: a pid continues only where its parent does.
+   */
+  private Field pairedChild(Schema record, List<String> recordAt, List<String> writerAt,
+      List<Integer> paired) {
+    final List<String> pairedAt = mapping.readerNamesOf(paired);
+    final Field field = record != null ? childOf(record, recordAt, pairedAt) : null;
+    if (field == null) {
+      throw parentsDiffer(writerAt, pairedAt);
+    }
+    return field;
+  }
+
+  private Schema pairedBranch(Schema union, List<String> unionAt, List<String> writerAt,
+      List<String> pairedAt) {
+    final Schema branch = union != null ? branchOf(union, unionAt, pairedAt) : null;
+    if (branch == null) {
+      throw parentsDiffer(writerAt, pairedAt);
+    }
+    return branch;
+  }
+
+  private SerializationException parentsDiffer(List<String> writerAt, List<String> readerAt) {
+    return new SerializationException("Writer location " + writerAt + " of schema id "
+        + mapping.writerId() + " and reader location " + readerAt + " of schema id "
+        + mapping.readerId() + " have different parents");
   }
 
   // -------------------------------------------------------------------------------------------

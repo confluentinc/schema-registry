@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * Which writer field feeds each reader field, from joining two versions of a {@link
@@ -39,15 +40,23 @@ public final class ProvenanceMapping {
   private final Map<List<String>, List<Integer>> readerAt;
   private final Map<List<String>, List<Integer>> writerAt;
   private final List<List<Integer>> readerPaths;
+  private final List<List<Integer>> writerPaths;
+  private final int writerId;
+  private final int readerId;
 
   private ProvenanceMapping(ProvenanceVersion writer, ProvenanceVersion reader) {
+    writerId = writer.getId();
+    readerId = reader.getId();
     Map<Integer, List<Integer>> writerByPid = new HashMap<>();
     writerNames = new HashMap<>();
     writerAt = new HashMap<>();
+    List<List<Integer>> written = new ArrayList<>();
     for (ProvenanceField field : writer.getFields()) {
+      written.add(field.getPath());
       writerByPid.put(field.getPid(), field.getPath());
       index(field, writerNames, writerAt);
     }
+    writerPaths = Collections.unmodifiableList(written);
     readerToWriter = new HashMap<>();
     writerToReader = new HashMap<>();
     readerNames = new HashMap<>();
@@ -78,7 +87,7 @@ public final class ProvenanceMapping {
    * Joins the versions of {@code provenance} with schema ids {@code writerId} and {@code
    * readerId}. Versions are found by schema id, never by position: the writer may be the newer.
    *
-   * @throws ProvenanceUnavailableException if either schema id is not among the versions
+   * @throws SerializationException if either schema id is not among the versions
    */
   public static ProvenanceMapping join(SchemaProvenance provenance, int writerId, int readerId) {
     return new ProvenanceMapping(
@@ -91,8 +100,50 @@ public final class ProvenanceMapping {
         return version;
       }
     }
-    throw new ProvenanceUnavailableException(
-        "The provenance returned has no version with schema id " + schemaId);
+    throw new SerializationException(
+        "The provenance response has no version with schema id " + schemaId);
+  }
+
+  /**
+   * Fails unless every location on both sides carries names: a reader can only find what they
+   * spell, and one it cannot find would silently escape provenance.
+   *
+   * @throws SerializationException naming the first location without names
+   */
+  public void requireNames() {
+    requireNames(writerPaths, writerNames, writerId);
+    requireNames(readerPaths, readerNames, readerId);
+  }
+
+  private static void requireNames(List<List<Integer>> paths,
+      Map<List<Integer>, List<String>> names, int schemaId) {
+    for (List<Integer> path : paths) {
+      if (!names.containsKey(path)) {
+        throw new SerializationException("The provenance response gives no names for location "
+            + path + " of schema id " + schemaId);
+      }
+    }
+  }
+
+  /**
+   * The writer's schema id.
+   */
+  public int writerId() {
+    return writerId;
+  }
+
+  /**
+   * The reader's schema id.
+   */
+  public int readerId() {
+    return readerId;
+  }
+
+  /**
+   * Every writer field's path, in path order.
+   */
+  public List<List<Integer>> writerPaths() {
+    return writerPaths;
   }
 
   /**

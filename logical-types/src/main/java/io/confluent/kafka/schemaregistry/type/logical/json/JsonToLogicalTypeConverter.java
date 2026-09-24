@@ -866,6 +866,10 @@ public class JsonToLogicalTypeConverter {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           objectSchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
+      if (objectSchema.getSchemaOfAdditionalProperties() == null) {
+        throw new ValidationException(
+            "A map (connect.type: map) must declare its values with additionalProperties");
+      }
       // MAP value at appendToList(indexPath, 1); key type read from
       // unprocessedProperties (no schema body to walk for default capture).
       final Schema valueType = convertWithCycleDetection(

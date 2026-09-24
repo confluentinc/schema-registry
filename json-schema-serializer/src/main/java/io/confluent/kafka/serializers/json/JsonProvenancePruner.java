@@ -22,13 +22,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
@@ -93,12 +96,18 @@ final class JsonProvenancePruner {
 
   /**
    * The plan for reading a writer's documents under {@code reader} as {@code mapping} pairs them.
+   *
+   * @throws SerializationException if a location's names are missing, or a property to prune is
+   *     not declared by the reader
    */
   static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader) {
+    // A property the walk cannot find would keep a value provenance says is new.
+    mapping.requireNames();
+    Schema raw = reader.rawSchema();
     Map<List<String>, Target> byNames = new LinkedHashMap<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (names != null && isProperty(mapping, path, names)) {
+      if (isProperty(mapping, path, names)) {
         byNames.computeIfAbsent(names, Target::new).candidates.add(
             new Candidate(branchChoices(mapping, path), mapping.writerPathOf(path) != null));
       }
@@ -106,12 +115,16 @@ final class JsonProvenancePruner {
     List<Target> targets = new ArrayList<>();
     for (Target target : byNames.values()) {
       if (target.candidates.stream().anyMatch(c -> !c.continues)) {
+        if (!declares(target.names, raw, 0, new HashSet<>())) {
+          throw new SerializationException("Property " + target.names + " of schema id "
+              + mapping.readerId() + " is not declared by the reader schema");
+        }
         targets.add(target);
       }
     }
     // Outermost first: a property removed takes whatever lay under it along.
     targets.sort(Comparator.comparingInt(t -> t.names.size()));
-    return new JsonProvenancePruner(reader.rawSchema(), Collections.unmodifiableList(targets));
+    return new JsonProvenancePruner(raw, Collections.unmodifiableList(targets));
   }
 
   boolean isEmpty() {
@@ -200,6 +213,43 @@ final class JsonProvenancePruner {
       }
     }
     return choices;
+  }
+
+  /**
+   * Whether some branch of {@code schema} declares the property spelled by {@code names} from
+   * {@code step} on, looking where {@link #walk} would.
+   */
+  private static boolean declares(List<String> names, Schema schema, int step,
+      Set<Map.Entry<Schema, Integer>> seen) {
+    if (schema == null || !seen.add(new AbstractMap.SimpleImmutableEntry<>(schema, step))) {
+      return false;
+    }
+    if (schema instanceof ReferenceSchema) {
+      return declares(names, ((ReferenceSchema) schema).getReferredSchema(), step, seen);
+    }
+    if (schema instanceof CombinedSchema) {
+      for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+        if (declares(names, subschema, step, seen)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    String name = names.get(step);
+    Schema child;
+    if (name == null) {
+      child = schema instanceof ArraySchema
+          ? ((ArraySchema) schema).getAllItemSchema()
+          : schema instanceof ObjectSchema
+              ? ((ObjectSchema) schema).getSchemaOfAdditionalProperties() : null;
+    } else {
+      child = schema instanceof ObjectSchema
+          ? ((ObjectSchema) schema).getPropertySchemas().get(name) : null;
+    }
+    if (child == null) {
+      return false;
+    }
+    return step + 1 == names.size() || declares(names, child, step + 1, seen);
   }
 
   private static void walk(List<String> names, Schema schema, JsonNode node, int step,
