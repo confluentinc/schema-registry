@@ -195,7 +195,7 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG =
       "association.batch.mutate.max.association.num.per.batch";
-  public static final int MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT = 10;
+  public static final int MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT = 1;
   /**
    * <code>association.batch.mutate.max.association.entry.payload.bytes</code>
    */
@@ -219,7 +219,7 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG =
       "association.batch.get.max.association.num.per.batch";
-  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 10;
+  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 1;
   /**
    * <code>mode.mutability</code>*
    */
@@ -583,8 +583,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "When false (the default), batchMutate requests are never rejected for exceeding "
       + "these limits.";
   protected static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC =
-      "Maximum number of associations allowed across an entire Associations batchMutate "
-      + "request. Not enforced when the request has a single association in total, when it "
+      "Maximum number of topics (resource entries) allowed across an entire Associations "
+      + "batchMutate request when any association in the request carries an inline schema; a "
+      + "single topic may include both a key and a value association without counting as two "
+      + "topics. Not enforced when the request has a single association in total, when it "
       + "contains no inline schemas, or when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG
       + " is false.";
   protected static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC =
@@ -602,11 +604,12 @@ public class SchemaRegistryConfig extends RestConfig {
       + "batchGet API. When false (the default), batchGet requests are never rejected for "
       + "exceeding this limit.";
   protected static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC =
-      "Maximum number of schemas that may be retrieved across an entire Associations batchGet "
-      + "request (relevant only when the request's includeSchemas parameter is true; a request "
-      + "with includeSchemas=false never retrieves any schemas and is not subject to this "
-      + "limit). Not enforced when " + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG
-      + " is false.";
+      "Maximum number of topics (resource entries) that may be queried across an entire "
+      + "Associations batchGet request (relevant only when the request's includeSchemas "
+      + "parameter is true; a request with includeSchemas=false never retrieves any schemas "
+      + "and is not subject to this limit). A single topic may request both a key and a value "
+      + "association without counting as two topics. Not enforced when "
+      + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =

@@ -2786,12 +2786,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
       return;
     }
-    int numAssociations = request.getRequests().size();
+    // batchSize is defined as the number of topics (resource entries) in the request; a single
+    // topic may request both a key and a value association without counting as two topics.
+    int numTopics = request.getRequests().size();
     int maxNum = config().maxAssociationNumPerGetBatch();
-    if (numAssociations > maxNum) {
+    if (numTopics > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchGet request has %d items, exceeding the configured maximum of %d"
-              + " associations per batch", numAssociations, maxNum));
+          "Associations batchGet request has %d topics, exceeding the configured maximum of %d"
+              + " topics per batch when includeSchemas is true", numTopics, maxNum));
     }
   }
 
@@ -2980,11 +2982,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return;
     }
 
+    // batchSize is defined as the number of topics (resource entries) in the request, not the
+    // number of individual association ops; a single topic may carry both a key and a value
+    // association without counting as two topics.
+    int numTopics = request.getRequests().size();
     int maxNum = config().maxAssociationNumPerMutateBatch();
-    if (totalAssociations > maxNum) {
+    if (numTopics > maxNum) {
       throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchMutate request has %d associations, exceeding the configured"
-              + " maximum of %d associations per batch", totalAssociations, maxNum));
+          "Associations batchMutate request has %d topics, exceeding the configured maximum"
+              + " of %d topics per batch when any association in the batch carries an inline"
+              + " schema", numTopics, maxNum));
     }
 
     long requestPayloadBytes = jsonPayloadSize(request);
@@ -2998,12 +3005,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
     List<AssociationOpRequest> reqs = request.getRequests();
     for (int i = 0; i < reqs.size(); i++) {
-      long entryPayloadBytes = jsonPayloadSize(reqs.get(i));
+      AssociationOpRequest req = reqs.get(i);
+      long entryPayloadBytes = jsonPayloadSize(req);
       if (entryPayloadBytes > maxEntryBytes) {
         throw new AssociationBatchLimitExceededException(String.format(
-            "Associations batchMutate request entry %d of %d has a payload size of %d"
-                + " bytes, exceeding the configured maximum of %d bytes",
-            i + 1, reqs.size(), entryPayloadBytes, maxEntryBytes));
+            "Association with resourceId '%s' (entry %d of %d in the Associations batchMutate"
+                + " request) has a payload size of %d bytes, exceeding the configured maximum"
+                + " of %d bytes per resource entry", req.getResourceId(), i + 1, reqs.size(),
+            entryPayloadBytes, maxEntryBytes));
       }
     }
   }
