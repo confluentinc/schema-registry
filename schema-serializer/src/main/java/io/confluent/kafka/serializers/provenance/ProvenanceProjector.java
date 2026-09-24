@@ -40,6 +40,12 @@ import org.slf4j.LoggerFactory;
  * Builds, once per writer schema and reader, whatever a deserializer needs to read the writer
  * paired with the reader by provenance, and caches it.
  *
+ * <p>Provenance pairs registered versions by schema id. A reader's id is the one its caller
+ * supplied, else the one it is registered under; a writer's is the one its record carries. Where
+ * that is missing — a record naming its schema by GUID — or names no version of the subject, it
+ * is looked up the same way. A schema matching no version exactly takes the latest version it
+ * equals once metadata, rules and inline tags are set aside: provenance depends on structure alone.
+ *
  * <p>Failures are told apart by what asking again could change. A transient one — the registry
  * unreachable, a 5xx, 408 or 429 — fails the record and is never cached. Provenance that is
  * unavailable for the pair — any other error, a reader that is not a version of the subject, a
@@ -55,11 +61,14 @@ public final class ProvenanceProjector<T> {
 
   private static final Logger log = LoggerFactory.getLogger(ProvenanceProjector.class);
 
+  // The registry's answer for a schema id with no version under the subject.
+  private static final int SCHEMA_ID_NOT_IN_SUBJECT = 40411;
 
   private final SchemaRegistryClient client;
   private final String algorithm;
   private final Cache<List<Object>, Outcome<T>> outcomes;
-  private final Cache<List<Object>, Optional<Integer>> readerIds;
+  // Schemas' registered ids under a subject, as looked up.
+  private final Cache<List<Object>, Optional<Integer>> registeredIds;
   // Readers whose registered version the caller named, by the schema handed over.
   private final Cache<ParsedSchema, Integer> suppliedReaderIds;
 
@@ -72,7 +81,7 @@ public final class ProvenanceProjector<T> {
     this.client = client;
     this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
-    this.readerIds = cache(cacheSize, cacheTtlSec);
+    this.registeredIds = cache(cacheSize, cacheTtlSec);
     this.suppliedReaderIds = cache(cacheSize, cacheTtlSec);
   }
 
@@ -87,8 +96,8 @@ public final class ProvenanceProjector<T> {
       if (reader == null) {
         return null;
       }
-      if (reader.getRegisteredId() != null) {
-        suppliedReaderIds.put(reader.getSchema(), reader.getRegisteredId());
+      if (reader.getId() != null) {
+        suppliedReaderIds.put(reader.getSchema(), reader.getId());
       }
       return reader.getSchema();
     };
@@ -112,65 +121,104 @@ public final class ProvenanceProjector<T> {
   public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
       ParsedSchema reader, boolean includeMultipleMessages,
       Function<ProvenanceMapping, T> build) {
-    if (subject == null || writerId == null || writerId.getId() == null || reader == null) {
+    if (subject == null || reader == null || !names(writerId)) {
       return Optional.empty();
     }
-    // A supplied reader id is part of the question: the same schema may stand for either version.
-    List<Object> key = Arrays.asList(subject, writerId.getId(), reader, includeMultipleMessages,
-        suppliedReaderIds.getIfPresent(reader));
+    // A writer named by GUID alone is keyed by it; its schema id is looked up when computed. A
+    // supplied reader id is part of the question: the same schema may stand for either version.
+    List<Object> key = Arrays.asList(subject,
+        writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader,
+        includeMultipleMessages, suppliedReaderIds.getIfPresent(reader));
     Outcome<T> outcome = outcomes.getIfPresent(key);
     if (outcome == null) {
-      outcome = compute(subject, writerId.getId(), writer, reader, includeMultipleMessages, build);
+      outcome = compute(subject, writerId, writer, reader, includeMultipleMessages, build);
       outcomes.put(key, outcome);
     }
     return outcome.get();
   }
 
-  private Outcome<T> compute(String subject, int writerId, ParsedSchema writer,
+  private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,
       ParsedSchema reader, boolean includeMultipleMessages, Function<ProvenanceMapping, T> build) {
+    String written = writerSchemaId.getId() != null
+        ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
+    Integer writerId = writerSchemaId.getId();
     Integer readerId = null;
     try {
+      if (writerId == null) {
+        writerId = registeredId(subject, writer);
+        if (writerId == null) {
+          throw new ProvenanceUnavailableException(
+              "The writer schema is not a version of subject " + subject);
+        }
+      }
       readerId = readerId(subject, reader);
       if (readerId == null) {
         throw new ProvenanceUnavailableException(
             "The reader schema is not a version of subject " + subject);
       }
-      if (readerId == writerId) {
+      SchemaProvenance provenance;
+      try {
+        provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
+      } catch (RestClientException e) {
+        // A writer id under no version of the subject: the writer's schema may still equal one.
+        Integer equal = e.getErrorCode() == SCHEMA_ID_NOT_IN_SUBJECT
+            ? structuralMatch(subject, writer) : null;
+        if (equal == null || equal.equals(writerId)) {
+          throw e;
+        }
+        writerId = equal;
+        provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
+      }
+      if (provenance == null) {
         return Outcome.unavailable();
       }
-      SchemaProvenance provenance = client.getProvenanceById(
-          subject, writerId, readerId, false, includeMultipleMessages, algorithm);
       return Outcome.of(build.apply(ProvenanceMapping.join(provenance, writerId, readerId)));
     } catch (IOException e) {
       throw new SerializationException(
-          "Could not reach Schema Registry for the provenance of schema id " + writerId, e);
+          "Could not reach Schema Registry for the provenance of " + written, e);
     } catch (RestClientException e) {
       if (isTransient(e.getStatus())) {
         throw new SerializationException(
-            "Schema Registry could not serve provenance for schema id " + writerId, e);
+            "Schema Registry could not serve provenance for " + written, e);
       }
       if (isRejectedRequest(e)) {
         // The request is always two schema ids, well formed: a rejection of it cannot be the
         // schemas' doing.
-        return failed(subject, writerId, new SerializationException("Schema Registry rejected "
+        return failed(subject, written, new SerializationException("Schema Registry rejected "
             + "the provenance request for schema ids " + writerId + " and " + readerId + ": "
             + e.getMessage(), e));
       }
-      return unavailable(subject, writerId, e);
+      return unavailable(subject, written, e);
     } catch (ProvenanceUnavailableException | UnsupportedOperationException e) {
-      return unavailable(subject, writerId, e);
+      return unavailable(subject, written, e);
     } catch (RuntimeException e) {
-      return failed(subject, writerId, e instanceof SerializationException
+      return failed(subject, written, e instanceof SerializationException
           ? (SerializationException) e
-          : new SerializationException("Could not project schema id " + writerId
+          : new SerializationException("Could not project " + written
               + " by provenance: " + e.getMessage(), e));
     }
   }
 
-  private Outcome<T> failed(String subject, int writerId, SerializationException e) {
+  /**
+   * Whether {@code schemaId} names a schema, by id or by GUID.
+   */
+  private static boolean names(SchemaId schemaId) {
+    return schemaId != null && (schemaId.getId() != null || schemaId.getGuid() != null);
+  }
+
+  /**
+   * The provenance pairing two versions; null when they are one and the same.
+   */
+  private SchemaProvenance provenance(String subject, int writerId, int readerId,
+      boolean includeMultipleMessages) throws IOException, RestClientException {
+    return writerId == readerId ? null : client.getProvenanceById(
+        subject, writerId, readerId, false, includeMultipleMessages, algorithm);
+  }
+
+  private Outcome<T> failed(String subject, String written, SerializationException e) {
     // Logged here, where the outcome is cached, so once per writer schema, not per record.
-    log.error("Records of schema id {} of subject {} cannot be read by provenance: {}",
-        writerId, subject, e.getMessage());
+    log.error("Records of {} of subject {} cannot be read by provenance: {}",
+        written, subject, e.getMessage());
     return Outcome.failed(e);
   }
 
@@ -179,47 +227,51 @@ public final class ProvenanceProjector<T> {
     return e.getErrorCode() == 42202 || e.getErrorCode() == 42215 || e.getErrorCode() == 40402;
   }
 
-  private Outcome<T> unavailable(String subject, int writerId, Exception e) {
+  private Outcome<T> unavailable(String subject, String written, Exception e) {
     // Logged here, where the outcome is cached, so once per writer schema, not per record.
-    log.warn("No provenance for schema id {} of subject {}; reading it without provenance. {}",
-        writerId, subject, e.getMessage());
+    log.warn("No provenance for {} of subject {}; reading it without provenance. {}",
+        written, subject, e.getMessage());
     return Outcome.unavailable();
   }
 
   /**
    * The schema id of {@code reader} under {@code subject}: the one its caller supplied, else the
-   * registered version it is, or else the latest version it equals once metadata, rules and inline
-   * tags are set aside. A reader with
-   * a writer's rules merged onto it has the same structure as the version it was pinned to, and
-   * provenance depends on structure alone. Null when no version matches.
+   * one it is registered under. A reader with a writer's rules merged onto it matches no version
+   * exactly, but has the structure of the version it was pinned to.
    */
   private Integer readerId(String subject, ParsedSchema reader)
       throws IOException, RestClientException {
     Integer supplied = suppliedReaderIds.getIfPresent(reader);
-    if (supplied != null) {
-      return supplied;
-    }
-    List<Object> key = Arrays.asList(subject, reader);
-    Optional<Integer> cached = readerIds.getIfPresent(key);
+    return supplied != null ? supplied : registeredId(subject, reader);
+  }
+
+  /**
+   * The schema id {@code schema} is registered under in {@code subject}, or else the latest
+   * version it equals once metadata, rules and inline tags are set aside; null when none does.
+   */
+  private Integer registeredId(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    List<Object> key = Arrays.asList(subject, schema);
+    Optional<Integer> cached = registeredIds.getIfPresent(key);
     if (cached != null) {
       return cached.orElse(null);
     }
     Integer id;
     try {
-      id = client.getId(subject, reader);
+      id = client.getId(subject, schema);
     } catch (RestClientException e) {
       if (e.getStatus() != 404) {
         throw e;
       }
-      id = structuralMatch(subject, reader);
+      id = structuralMatch(subject, schema);
     }
-    readerIds.put(key, Optional.ofNullable(id));
+    registeredIds.put(key, Optional.ofNullable(id));
     return id;
   }
 
-  private Integer structuralMatch(String subject, ParsedSchema reader)
+  private Integer structuralMatch(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    String wanted = structure(reader);
+    String wanted = structure(schema);
     List<Integer> versions;
     try {
       versions = client.getAllVersions(subject, true);

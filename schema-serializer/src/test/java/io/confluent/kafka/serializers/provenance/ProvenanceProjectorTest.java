@@ -24,12 +24,16 @@ import static org.junit.Assert.assertTrue;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
@@ -123,6 +127,47 @@ public class ProvenanceProjectorTest {
     assertEquals(1, client.asked);
   }
 
+  @Test
+  public void aWriterNamedByGuidIsAskedAboutByItsId() throws Exception {
+    CountingClient client = new CountingClient();
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SchemaId byGuid = new SchemaId(AvroSchema.TYPE, null,
+        client.getGuid(SUBJECT, client.writerSchema));
+    for (int record = 0; record < 2; record++) {
+      projector.project(SUBJECT, byGuid, client.writerSchema, client.reader, false, m -> "built");
+    }
+    assertEquals(1, client.asked);
+    assertEquals(client.writer, client.lastWriterId);
+  }
+
+  @Test
+  public void aWriterNamedByGuidOfNoVersionFallsBack() throws Exception {
+    CountingClient client = new CountingClient();
+    ParsedSchema foreign = new AvroSchema("\"boolean\"");
+    client.register("other-value", foreign);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    Optional<String> built = projector.project(SUBJECT,
+        new SchemaId(AvroSchema.TYPE, null, client.getGuid("other-value", foreign)), foreign,
+        client.reader, false, m -> "built");
+    assertFalse(built.isPresent());
+    assertEquals(0, client.asked);
+  }
+
+  @Test
+  public void aWriterIdUnderNoVersionIsMatchedByStructure() throws Exception {
+    CountingClient client = new CountingClient();
+    client.rejectsForeignWriters = true;
+    // The writer's own schema is the subject's first version with other metadata on it.
+    ParsedSchema withMetadata = client.writerSchema.copy(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null), null);
+    int foreign = client.register("other-value", withMetadata);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, foreign, (String) null),
+        withMetadata, client.reader, false, m -> "built");
+    assertEquals(2, client.asked);
+    assertEquals(client.writer, client.lastWriterId);
+  }
+
   private static void ask(ProvenanceProjector<String> projector, CountingClient client)
       throws Exception {
     ask(projector, client, client.writer);
@@ -138,13 +183,24 @@ public class ProvenanceProjectorTest {
 
   // Answers every provenance request as unavailable, or as set, counting how often it is asked.
   private static final class CountingClient extends MockSchemaRegistryClient {
+
+    List<Integer> idsOf(String subject) throws IOException, RestClientException {
+      List<Integer> ids = new ArrayList<>();
+      for (int version : getAllVersions(subject)) {
+        ids.add(getSchemaMetadata(subject, version).getId());
+      }
+      return ids;
+    }
+
     final ParsedSchema writerSchema = new AvroSchema("\"int\"");
     final ParsedSchema reader = new AvroSchema("\"long\"");
     final int writer;
     final int otherWriter;
     final int readerId;
     int asked;
+    int lastWriterId;
     int lastReaderId;
+    boolean rejectsForeignWriters;
     RestClientException failure;
     SchemaProvenance provenance;
 
@@ -157,9 +213,13 @@ public class ProvenanceProjectorTest {
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
         boolean includeInterior, boolean includeMultipleMessages,
-        String algorithm) throws RestClientException {
+        String algorithm) throws IOException, RestClientException {
       asked++;
+      lastWriterId = fromId;
       lastReaderId = toId;
+      if (rejectsForeignWriters && !idsOf(subject).contains(fromId)) {
+        throw new RestClientException("not a version", 404, 40411);
+      }
       if (failure != null) {
         throw failure;
       }

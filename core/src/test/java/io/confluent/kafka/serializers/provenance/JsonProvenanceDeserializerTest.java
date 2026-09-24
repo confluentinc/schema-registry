@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -67,6 +68,26 @@ class JsonProvenanceDeserializerTest {
     assertEquals(7, on.get("id").asInt());
     assertFalse(on.has("note"));
     assertEquals("ada", read(v3, bytes, null).get("note").asText());
+  }
+
+  @Test
+  void aRecordNamingItsSchemaByGuidAloneIsReadByProvenance() throws Exception {
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"new\"}");
+    client.register(SUBJECT, v1);
+    RecordHeaders headers = new RecordHeaders();
+    Map<String, Object> byGuid = config(null);
+    byGuid.put("value.schema.id.serializer", HeaderSchemaIdSerializer.class.getName());
+    byte[] bytes = new KafkaJsonSchemaSerializer<>(client, byGuid).serialize(TOPIC, headers,
+        JsonSchemaUtils.envelope(v1, MAPPER.readTree("{\"id\": 7, \"note\": \"ada\"}")));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config("v1"))
+        .deserializeWithSchema(TOPIC, headers, bytes, writer -> v3).getValue();
+    assertFalse(on.has("note"));
   }
 
   @Test

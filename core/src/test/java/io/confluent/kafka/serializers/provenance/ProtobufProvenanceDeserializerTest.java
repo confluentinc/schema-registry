@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.HashMap;
@@ -144,6 +145,27 @@ class ProtobufProvenanceDeserializerTest {
 
     assertEquals("", get(read(v3, bytes, "v1"), "memo"));
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
+  }
+
+  @Test
+  void aRecordNamingItsSchemaByGuidAloneIsReadByProvenance() throws Exception {
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    ProtobufSchema v2 = row("int32 id = 1;");
+    ProtobufSchema v3 = row("int32 id = 1;", "string memo = 2;");
+    client.register(SUBJECT, v1);
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(v1.toDescriptor());
+    builder.setField(field(builder, "id"), 7).setField(field(builder, "note"), "ada");
+    RecordHeaders headers = new RecordHeaders();
+    Map<String, Object> byGuid = config(null);
+    byGuid.put("value.schema.id.serializer", HeaderSchemaIdSerializer.class.getName());
+    byte[] bytes = new KafkaProtobufSerializer<DynamicMessage>(client, byGuid)
+        .serialize(TOPIC, headers, builder.build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage on = (DynamicMessage) new KafkaProtobufDeserializer<>(client, config("v1"))
+        .deserializeWithSchema(TOPIC, headers, bytes, writer -> v3).getValue();
+    assertEquals("", get(on, "memo"));
   }
 
   @Test

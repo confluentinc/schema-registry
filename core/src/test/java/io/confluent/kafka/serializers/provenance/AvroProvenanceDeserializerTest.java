@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
@@ -200,6 +201,23 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aRecordNamingItsSchemaByGuidAloneIsReadByProvenance() throws Exception {
+    Schema v1 = record(idField(), string("name"));
+    Schema v2 = record(idField());
+    Schema v3 = record(idField(), "{\"name\":\"name\",\"type\":\"string\",\"default\":\"new\"}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaAvroSerializer(client, byGuid(config(null))).serialize(
+        TOPIC, headers, new GenericRecordBuilder(v1).set("id", 7).set("name", "ada").build());
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, new AvroSchema(v3));
+
+    GenericRecord on = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, headers, bytes, v3).getValue();
+    assertEquals("new", on.get("name").toString());
+  }
+
+  @Test
   void aReaderWithRulesMergedOnIsFoundByItsStructure() throws Exception {
     // Flink merges the writer's metadata and rules onto its pinned reader; the result is no
     // registered version, but it has the structure of one, which is all provenance needs.
@@ -277,6 +295,12 @@ class AvroProvenanceDeserializerTest {
     if (provenance != null) {
       config.put("provenance.algorithm", provenance);
     }
+    return config;
+  }
+
+  // The record then carries its schema's GUID, in a header, and no id.
+  private static Map<String, Object> byGuid(Map<String, Object> config) {
+    config.put("value.schema.id.serializer", HeaderSchemaIdSerializer.class.getName());
     return config;
   }
 
