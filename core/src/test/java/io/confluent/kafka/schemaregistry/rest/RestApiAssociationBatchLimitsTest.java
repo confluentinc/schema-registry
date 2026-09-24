@@ -92,7 +92,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
     // A batch of exactly one association is still subject to the per-association payload
     // limit; there is no exemption for trivially small batches.
     List<AssociationOpRequest> requests = new ArrayList<>();
-    requests.add(createOpRequest("single-assoc-oversized", "\"" + padded(1_100_000) + "\""));
+    requests.add(createOpRequest("single-assoc-oversized", "\"" + padded(1_150_000) + "\""));
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
 
     RestClientException e = assertThrows(RestClientException.class, () ->
@@ -177,7 +177,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
     // schema alone exceeds the per-association byte limit; the small key association is
     // unaffected, proving the check is per-association, not per-topic.
     RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("\"" + padded(1_100_000) + "\"");
+    valueSchemaRequest.setSchema("\"" + padded(1_150_000) + "\"");
     RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
     keySchemaRequest.setSchema("{}");
     AssociationOpRequest opRequest = new AssociationOpRequest(
@@ -204,7 +204,7 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
     RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
     valueSchemaRequest.setSchema("{}");
     RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema("\"" + padded(1_100_000) + "\"");
+    keySchemaRequest.setSchema("\"" + padded(1_150_000) + "\"");
     AssociationOpRequest opRequest = new AssociationOpRequest(
         "entry-limit-key-big", "default", "entry-limit-key-big-id", "topic",
         java.util.Arrays.asList(

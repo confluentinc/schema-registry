@@ -201,13 +201,13 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG =
       "association.batch.mutate.max.association.entry.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_048_576;
+  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_100_000;
   /**
    * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
    */
   public static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG =
       "association.batch.mutate.max.association.batch.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_097_152;
+  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_100_000;
   /**
    * <code>association.batch.get.limits.enabled</code>
    */
