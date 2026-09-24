@@ -159,16 +159,16 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aPrunedAliasCannotReconnectLater() {
-    // Same ladder, but v3 declares the alias. The mapping was pruned at v2, so there is nothing
-    // left to reconnect to and the field mints a fresh identity.
+  void anAliasNamesAnyCanonicalNameTheIdentityHeld() {
+    // Same ladder, but v3 aliases the v0 name. An Avro alias names what a writer's field was
+    // actually called, so other reads v0's name -- and continues the identity full_name carried.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("name"))),
         lt(struct(field("full_name", "name"))),
         lt(struct(field("full_name"))),
         lt(struct(field("other", "name")))));
 
-    assertThat(at(result, 3, 0).getIdentity()).isNotEqualTo(at(result, 0, 0).getIdentity());
+    assertThat(at(result, 3, 0)).isEqualTo(at(result, 0, 0));
   }
 
   @Test
@@ -260,16 +260,41 @@ class ProvenanceComputerTest {
 
   @Test
   void anExplicitAliasOutranksACanonicalMatchForTheSameIdentity() {
-    // Both peers claim a's identity at v1: the field still called a by canonical name, and b by
-    // explicitly aliasing a's former alias x. An alias is a deliberate statement of lineage, so b
-    // is the continuation -- which releases the name a, and the field still called a starts over.
+    // Both peers claim a's identity at v1: the new field called a by name, and b by aliasing a.
+    // Avro renames the writer's a to the field aliasing it, so b continues and a starts over.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(field("a", "x"))),
-        lt(struct(field("a"), field("b", "x")))));
+        lt(struct(field("a"))),
+        lt(struct(field("a"), field("b", "a")))));
 
     assertThat(at(result, 1, 1)).isEqualTo(at(result, 0, 0));
     assertThat(at(result, 1, 0).getIdentity()).isNotEqualTo(at(result, 0, 0).getIdentity());
     assertThat(at(result, 1, 0).getIdentity().getIdentityOriginVersion()).isEqualTo(1);
+  }
+
+  @Test
+  void aCarriedForwardAliasClaimsNothingNew() {
+    // v1's rename-and-reuse, kept as is in v2: full_name's alias names the new field's identity
+    // now, but full_name introduced it at v1, so both fields simply continue.
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("name"))),
+        lt(struct(field("full_name", "name"), field("name"))),
+        lt(struct(field("full_name", "name"), field("name")))));
+
+    assertThat(at(result, 1, 0)).isEqualTo(at(result, 0, 0));
+    assertThat(at(result, 2, 0)).isEqualTo(at(result, 1, 0));
+    assertThat(at(result, 2, 1)).isEqualTo(at(result, 1, 1));
+  }
+
+  @Test
+  void aFormerAliasClaimsNothing() {
+    // x was only ever a's alias. Avro reads aliases from the reader alone, so a reader field
+    // aliasing x finds nothing in a writer whose field is called a.
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("a", "x"))),
+        lt(struct(field("a"), field("b", "x")))));
+
+    assertThat(at(result, 1, 0)).isEqualTo(at(result, 0, 0));
+    assertThat(at(result, 1, 1).getIdentity().getIdentityOriginVersion()).isEqualTo(1);
   }
 
   @Test
@@ -335,28 +360,37 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void anEntityMatchingTwoHistoricalIdentitiesIsRejected() {
+  void anEntityContinuingItselfAndAliasingAnotherIsRejected() {
+    // p continues p and, by a new alias, q: one field cannot continue two.
     assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("p"), field("q"))),
         lt(struct(field("p", "q"))))))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("matches multiple historical identities");
+        .isInstanceOf(AmbiguousProvenanceException.class)
+        .hasMessageContaining("names another identity by a new alias");
   }
 
   @Test
-  void aDuplicateAliasIsRejected() {
+  void twoFieldsSwappedByAliasesAreRejected() {
     assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(field("a", "x", "x"))))))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Duplicate alias");
+        lt(struct(field("a"), field("b"))),
+        lt(struct(field("b", "a"), field("a", "b"))))))
+        .isInstanceOf(AmbiguousProvenanceException.class);
   }
 
   @Test
-  void anAliasRepeatingTheCanonicalNameIsRejected() {
-    assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(field("a", "a"))))))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("duplicates the canonical name");
+  void aDuplicateAliasChangesNothing() {
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("a"))),
+        lt(struct(field("b", "a", "a")))));
+    assertThat(at(result, 1, 0)).isEqualTo(at(result, 0, 0));
+  }
+
+  @Test
+  void anAliasRepeatingTheCanonicalNameChangesNothing() {
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("a"))),
+        lt(struct(field("a", "a")))));
+    assertThat(at(result, 1, 0)).isEqualTo(at(result, 0, 0));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -368,16 +402,26 @@ class ProvenanceComputerTest {
     Map<String, Schema> namedTypes = new LinkedHashMap<>();
     namedTypes.put("com.acme.User", struct(field("name")));
     namedTypes.put("com.acme.Order", struct(field("name")));
-    LogicalType version = lt(Schema.createNamedTypeRef("com.acme.User"), namedTypes);
+    LogicalType version = lt(struct(
+        new Field("user", Schema.createNamedTypeRef("com.acme.User"), 0),
+        new Field("order", Schema.createNamedTypeRef("com.acme.Order"), 1)), namedTypes);
 
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(version));
 
-    Provenance user = result.at(0, PathKey.ofNamedType("com.acme.User").child(0));
-    Provenance order = result.at(0, PathKey.ofNamedType("com.acme.Order").child(0));
+    Provenance user = result.at(0, PathKey.ofRoot().child(0).child(0));
+    Provenance order = result.at(0, PathKey.ofRoot().child(1).child(0));
     assertThat(user).isNotNull();
     assertThat(order).isNotNull();
     assertThat(user).isNotEqualTo(order);
-    assertThat(result.memberProvenance(0)).containsExactlyInAnyOrder(user, order);
+    assertThat(result.memberProvenance(0)).contains(user, order).hasSize(4);
+  }
+
+  @Test
+  void aTypeUnreachableFromTheRootHasNoEntities() {
+    // Named types are resolved where they are used, so one that is never used contributes nothing.
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("id")), namedTypes("Unused", struct(field("x"))))));
+    assertThat(result.byPath(0)).hasSize(1);
   }
 
   @Test
@@ -391,14 +435,9 @@ class ProvenanceComputerTest {
         lt(Schema.createNamedTypeRef("com.acme.User"), v0),
         lt(Schema.createNamedTypeRef("com.acme.Person"), v1)));
 
-    Provenance before = result.at(0, PathKey.ofNamedType("com.acme.User").child(0));
-    Provenance after = result.at(1, PathKey.ofNamedType("com.acme.Person").child(0));
-    assertThat(after).isEqualTo(before);
-    // The path moved with the rename, the provenance did not -- a path is a location, not an
-    // identity. The correspondence is what a caller projects with.
-    assertThat(result.correspondence(0, 1)).containsEntry(
-        PathKey.ofNamedType("com.acme.User").child(0),
-        PathKey.ofNamedType("com.acme.Person").child(0));
+    PathKey city = PathKey.ofRoot().child(0);
+    assertThat(result.at(1, city)).isNotNull().isEqualTo(result.at(0, city));
+    assertThat(result.correspondence(0, 1)).containsEntry(city, city);
   }
 
   @Test
@@ -411,7 +450,7 @@ class ProvenanceComputerTest {
         lt(struct()),
         lt(Schema.createNamedTypeRef("com.acme.Address"), present)));
 
-    PathKey city = PathKey.ofNamedType("com.acme.Address").child(0);
+    PathKey city = PathKey.ofRoot().child(0);
     assertThat(result.at(2, city)).isNotEqualTo(result.at(0, city));
     assertThat(result.at(2, city).getPresenceStartVersion()).isEqualTo(2);
     assertThat(result.intersection(0, 2)).isEmpty();
@@ -430,9 +469,9 @@ class ProvenanceComputerTest {
         lt(Schema.createNamedTypeRef("Address"), cityOnly),
         lt(Schema.createNamedTypeRef("Address"), both)));
 
-    PathKey address = PathKey.ofNamedType("Address");
-    PathKey city = address.child(0);
-    PathKey zip = address.child(1);
+    PathKey address = PathKey.ofTypeUse("Address", PathKey.ofRoot());
+    PathKey city = PathKey.ofRoot().child(0);
+    PathKey zip = PathKey.ofRoot().child(1);
 
     assertThat(result.at(2, address)).isEqualTo(result.at(0, address));
     assertThat(result.at(2, city)).isEqualTo(result.at(0, city));
@@ -458,34 +497,90 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aRecursiveTypeTerminates() {
+  void aRecursiveTypeIsRejected() {
+    // A type is resolved at every use, and a recursive one has no finite set of uses.
     Map<String, Schema> namedTypes = new LinkedHashMap<>();
     namedTypes.put("Node", struct(
         field("value"),
         new Field("next", Schema.createNamedTypeRef("Node"), 1)));
 
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        lt(Schema.createNamedTypeRef("Node"), namedTypes)));
+    assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
+        lt(Schema.createNamedTypeRef("Node"), namedTypes))))
+        .isInstanceOf(RecursiveTypeException.class);
+  }
 
-    // One entry for the type, one per field -- the body is walked at its definition, not per use.
-    assertThat(result.byPath(0)).hasSize(3);
-    assertThat(result.memberProvenance(0)).hasSize(2);
+  @Test
+  void aLocationWhoseTypeChangesAndChangesBackStartsOver() {
+    // u holds A, then B, then A again, while w holds A throughout. A never leaves the schema, but
+    // it left u, so u.x is new at v2 rather than v0's again.
+    Map<String, Schema> types = namedTypes("A", struct(field("x")), "B", struct(field("x")));
+    IntFunction<LogicalType> holding = t -> lt(struct(
+        new Field("w", Schema.createNamedTypeRef("A"), 0),
+        new Field("u", Schema.createNamedTypeRef(t == 0 ? "A" : "B"), 1)), types);
+
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        holding.apply(0), holding.apply(1), holding.apply(0)));
+
+    PathKey ux = PathKey.ofRoot().child(1).child(0);
+    PathKey wx = PathKey.ofRoot().child(0).child(0);
+    assertThat(result.at(2, ux)).isNotEqualTo(result.at(0, ux));
+    assertThat(result.at(2, ux).getPresenceStartVersion()).isEqualTo(2);
+    assertThat(result.at(2, wx)).isEqualTo(result.at(0, wx));
+  }
+
+  @Test
+  void twoTypesMergedByAliasKeepEachLocationsLineage() {
+    // billing's BillingAddress becomes Address, which aliases it, and line1 becomes street.
+    LogicalType v0 = lt(struct(
+        new Field("shipping", Schema.createNamedTypeRef("Address"), 0),
+        new Field("billing", Schema.createNamedTypeRef("BillingAddress"), 1)),
+        namedTypes("Address", struct(field("street")),
+            "BillingAddress", struct(field("line1"), field("zip"))));
+    LogicalType v1 = lt(struct(
+        new Field("shipping", Schema.createNamedTypeRef("Address"), 0),
+        new Field("billing", Schema.createNamedTypeRef("Address"), 1)),
+        namedTypes("Address", aliased(struct(field("street", "line1")), "BillingAddress")));
+
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(v0, v1));
+
+    assertThat(result.at(1, PathKey.ofRoot().child(0).child(0)))
+        .isEqualTo(result.at(0, PathKey.ofRoot().child(0).child(0)));
+    assertThat(result.at(1, PathKey.ofRoot().child(1).child(0)))
+        .isEqualTo(result.at(0, PathKey.ofRoot().child(1).child(0)));
+  }
+
+  @Test
+  void oneTypeSplitInTwoKeepsEachLocationsLineage() {
+    LogicalType v0 = lt(struct(
+        new Field("u", Schema.createNamedTypeRef("A"), 0),
+        new Field("v", Schema.createNamedTypeRef("A"), 1)),
+        namedTypes("A", struct(field("x"))));
+    LogicalType v1 = lt(struct(
+        new Field("u", Schema.createNamedTypeRef("A"), 0),
+        new Field("v", Schema.createNamedTypeRef("C"), 1)),
+        namedTypes("A", struct(field("x")), "C", aliased(struct(field("x")), "A")));
+
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(v0, v1));
+
+    for (int site = 0; site < 2; site++) {
+      PathKey x = PathKey.ofRoot().child(site).child(0);
+      assertThat(result.at(1, x)).isEqualTo(result.at(0, x));
+    }
   }
 
   @Test
   void aTakeoverInOneScopeDoesNotAffectAnother() {
-    // The released-name set is global, relying on every NameKey carrying its scope. User.name
-    // going away and coming back must leave Order.name untouched.
+    // User.name going away and coming back must leave Order.name untouched.
+    IntFunction<LogicalType> version = hasName -> lt(struct(
+        new Field("user", Schema.createNamedTypeRef("User"), 0),
+        new Field("order", Schema.createNamedTypeRef("Order"), 1)), namedTypes(
+            "User", hasName == 1 ? struct(field("name")) : struct(),
+            "Order", struct(field("name"))));
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        lt(Schema.createNamedTypeRef("User"), namedTypes(
-            "User", struct(field("name")), "Order", struct(field("name")))),
-        lt(Schema.createNamedTypeRef("User"), namedTypes(
-            "User", struct(), "Order", struct(field("name")))),
-        lt(Schema.createNamedTypeRef("User"), namedTypes(
-            "User", struct(field("name")), "Order", struct(field("name"))))));
+        version.apply(1), version.apply(0), version.apply(1)));
 
-    PathKey userName = PathKey.ofNamedType("User").child(0);
-    PathKey orderName = PathKey.ofNamedType("Order").child(0);
+    PathKey userName = PathKey.ofRoot().child(0).child(0);
+    PathKey orderName = PathKey.ofRoot().child(1).child(0);
 
     assertThat(result.at(1, orderName)).isEqualTo(result.at(0, orderName));
     assertThat(result.at(2, orderName)).isEqualTo(result.at(0, orderName));
@@ -503,10 +598,9 @@ class ProvenanceComputerTest {
         lt(Schema.createNamedTypeRef("Person"), namedTypes("Person",
             aliased(struct(new Field("address", struct(field("city")), 0)), "User")))));
 
-    PathKey before = PathKey.ofNamedType("User").child(0).child(0);
-    PathKey after = PathKey.ofNamedType("Person").child(0).child(0);
-    assertThat(result.at(1, after)).isEqualTo(result.at(0, before));
-    assertThat(result.correspondence(0, 1)).containsEntry(before, after);
+    PathKey city = PathKey.ofRoot().child(0).child(0);
+    assertThat(result.at(1, city)).isNotNull().isEqualTo(result.at(0, city));
+    assertThat(result.correspondence(0, 1)).containsEntry(city, city);
   }
 
   @Test
@@ -524,8 +618,9 @@ class ProvenanceComputerTest {
     assertThat(result.at(2, person).getPresenceStartVersion()).isEqualTo(2);
     // city carries no alias of its own, so it mints a fresh identity even though its scope -- the
     // record's identity -- is unchanged. Reconnection is per entity, never inherited.
-    assertThat(result.at(2, person.child(0)).getIdentity())
-        .isNotEqualTo(result.at(0, user.child(0)).getIdentity());
+    PathKey city = PathKey.ofRoot().child(0);
+    assertThat(result.at(2, city).getIdentity())
+        .isNotEqualTo(result.at(0, city).getIdentity());
     assertThat(result.intersection(0, 2)).isEmpty();
   }
 
@@ -687,11 +782,11 @@ class ProvenanceComputerTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void twoFieldsClaimingOneAliasIsRejected() {
-    assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(field("a", "shared"), field("b", "shared"))))))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Conflicting mapping");
+  void twoFieldsSharingAnAliasThatNamesNothingAreFine() {
+    // Aliases are lookups into history; one naming nothing claims nothing.
+    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+        lt(struct(field("a", "shared"), field("b", "shared")))));
+    assertThat(result.byPath(0)).hasSize(2);
   }
 
   @Test
@@ -737,8 +832,8 @@ class ProvenanceComputerTest {
         lt(Schema.createNamedTypeRef("acme.Person"), v1)), IdentityPolicy.PROTOBUF);
 
     // Protobuf has no message alias, so a renamed message is a new message and its fields restart.
-    assertThat(result.at(1, PathKey.ofNamedType("acme.Person").child(0)))
-        .isNotEqualTo(result.at(0, PathKey.ofNamedType("acme.User").child(0)));
+    assertThat(result.at(1, PathKey.ofRoot().child(0)))
+        .isNotEqualTo(result.at(0, PathKey.ofRoot().child(0)));
     assertThat(result.intersection(0, 1)).isEmpty();
   }
 
@@ -749,7 +844,7 @@ class ProvenanceComputerTest {
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(new Field("Thing", Schema.createNamedTypeRef("Thing"), 0)), namedTypes)));
 
-    Provenance namedType = result.at(0, PathKey.ofNamedType("Thing"));
+    Provenance namedType = result.at(0, PathKey.ofTypeUse("Thing", PathKey.ofRoot().child(0)));
     Provenance rootField = result.at(0, PathKey.ofRoot().child(0));
     assertThat(namedType.getKind()).isEqualTo(EntityKind.NAMED_TYPE);
     assertThat(rootField.getKind()).isEqualTo(EntityKind.FIELD);

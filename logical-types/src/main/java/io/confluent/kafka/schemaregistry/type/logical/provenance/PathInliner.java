@@ -32,14 +32,14 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Re-keys provenance from definition sites onto fully inlined index paths.
+ * Chains provenance along fully inlined index paths.
  *
  * <p>{@link PathKey} addresses an entity where it is <em>defined</em> — a named type's members are
  * keyed once, under that type. A consumer that has inlined every reference, as Flink's
  * {@code RowType} and an Iceberg schema both have, addresses the same entity by the path it walked
  * to reach it, and needs to tell two uses of one shared type apart. This walks the
  * {@link LogicalType} from its root following every {@code NAMED_TYPE_REF}, carrying the inlined
- * path, the definition site and the chain of enclosing provenances at once.
+ * path, the key the resolver used and the chain of enclosing provenances at once.
  *
  * <p>A recursive type has no finite inlining, so a cycle throws rather than being truncated. Any
  * consumer that needs inlined paths cannot represent a cycle either.
@@ -121,7 +121,11 @@ final class PathInliner {
     private final List<String> names;
     // Entry steps of the node we stand on, spelled only if the walk goes further.
     private final List<String> pending;
+    // Where the resolver keyed this location: always where it is used.
     private final PathKey definition;
+    // Where the LT keys its default: a named type's members by that type's first occurrence,
+    // except under JSON, whose named types are transparent.
+    private final PathKey defaults;
     private final Set<String> inProgress;
     /** Whether a named type's members were identified where it is used (JSON), not defined. */
     private final boolean seesThroughNamedTypes;
@@ -129,7 +133,7 @@ final class PathInliner {
     private final Map<String, List<Integer>> firstInlined;
 
     private Side(LogicalType logicalType, Schema type, List<Integer> inlined, List<String> names,
-        List<String> pending, PathKey definition, Set<String> inProgress,
+        List<String> pending, PathKey definition, PathKey defaults, Set<String> inProgress,
         boolean seesThroughNamedTypes, Map<String, List<Integer>> firstInlined) {
       this.logicalType = logicalType;
       this.type = type;
@@ -137,6 +141,7 @@ final class PathInliner {
       this.names = names;
       this.pending = pending;
       this.definition = definition;
+      this.defaults = defaults;
       this.inProgress = inProgress;
       this.seesThroughNamedTypes = seesThroughNamedTypes;
       this.firstInlined = firstInlined;
@@ -145,7 +150,8 @@ final class PathInliner {
     static Side root(LogicalType logicalType, boolean seesThroughNamedTypes) {
       Schema root = logicalType.getRootSchema();
       return new Side(logicalType, root, Collections.emptyList(), Collections.emptyList(),
-          entryOf(root), PathKey.ofRoot(), new LinkedHashSet<>(), seesThroughNamedTypes,
+          entryOf(root), PathKey.ofRoot(), PathKey.ofRoot(), new LinkedHashSet<>(),
+          seesThroughNamedTypes,
           new HashMap<>());
     }
 
@@ -154,7 +160,8 @@ final class PathInliner {
      */
     Side descend(Schema newType, int step, List<String> steps) {
       return new Side(logicalType, newType, append(inlined, step), spell(names, pending, steps),
-          entryOf(newType), definition.child(step), inProgress, seesThroughNamedTypes,
+          entryOf(newType), definition.child(step), defaults.child(step), inProgress,
+          seesThroughNamedTypes,
           firstInlined);
     }
 
@@ -170,14 +177,14 @@ final class PathInliner {
       if (target != null && target.getType() == Schema.Type.STRUCT) {
         return null;
       }
-      List<Integer> root = definition.getTypeName() == null
+      List<Integer> root = defaults.getTypeName() == null
           ? Collections.emptyList()
-          : firstInlined.get(definition.getTypeName());
+          : firstInlined.get(defaults.getTypeName());
       if (root == null) {
         return null;
       }
       List<Integer> key = new ArrayList<>(root);
-      key.addAll(definition.getIndexPath());
+      key.addAll(defaults.getIndexPath());
       return normalise(logicalType.getDefaultValues().get(key));
     }
 
@@ -200,10 +207,10 @@ final class PathInliner {
       firstInlined.putIfAbsent(name, inlined);
       try {
         Schema named = logicalType.getNamedTypes().get(name);
-        // Where the resolver saw through the type, its members were keyed at the use site.
+        // The resolver keyed the type's members where it is used.
         body.accept(new Side(logicalType, named, inlined, names, spell(pending, entryOf(named)),
-            seesThroughNamedTypes ? definition : PathKey.ofNamedType(name), inProgress,
-            seesThroughNamedTypes, firstInlined));
+            definition, seesThroughNamedTypes ? defaults : PathKey.ofNamedType(name),
+            inProgress, seesThroughNamedTypes, firstInlined));
       } finally {
         inProgress.remove(name);
       }
