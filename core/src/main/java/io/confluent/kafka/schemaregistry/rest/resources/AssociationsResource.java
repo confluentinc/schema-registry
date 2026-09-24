@@ -429,7 +429,7 @@ public class AssociationsResource {
     } catch (AssociationBatchLimitExceededException e) {
       log.debug("Associations batchGet request rejected for exceeding a configured "
           + "limit: {}", e.getMessage());
-      throw Errors.associationBatchLimitExceededException();
+      throw Errors.associationBatchLimitExceededException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -474,7 +474,7 @@ public class AssociationsResource {
     } catch (AssociationBatchLimitExceededException e) {
       log.debug("Associations batchMutate request rejected for exceeding a configured "
           + "limit: {}", e.getMessage());
-      throw Errors.associationBatchLimitExceededException();
+      throw Errors.associationBatchLimitExceededException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Mutate associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
