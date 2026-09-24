@@ -63,6 +63,8 @@ final class AvroProvenanceRenamer {
       Collections.newSetFromMap(new IdentityHashMap<>());
   // Sink branches to append to a reader union, by the original reader union.
   private final Map<Schema, List<Schema>> sinks = new IdentityHashMap<>();
+  // Clones made inside a union, by full name, and the reader type each was renamed after.
+  private final Map<String, String> cloneTargets = new HashMap<>();
   // The writer's own names for a built record's fields and a built union's branches.
   private final Map<Schema, List<String>> writerNames = new IdentityHashMap<>();
   private int throwaway;
@@ -359,8 +361,10 @@ final class AvroProvenanceRenamer {
 
   /**
    * {@code built}, or an equal definition already built under its name. A different one under the
-   * same name is a clone: outside a union the resolver ignores record names and needs only an
-   * enum's or fixed's short name, so a clone takes a fresh namespace; inside one it cannot.
+   * same name is a clone under a fresh namespace. Outside a union the resolver ignores record
+   * names and needs only an enum's or fixed's short name. Inside one, a record branch matching no
+   * reader branch by full name is matched by structure, preferring the same short name; the
+   * verifier then confirms the branch chosen is the one the clone was renamed after.
    */
   private Schema register(Schema built, boolean inUnion) {
     final Schema existing = byName.get(built.getFullName());
@@ -372,12 +376,16 @@ final class AvroProvenanceRenamer {
         && Objects.equals(writerNames.get(existing), writerNames.get(built))) {
       return existing;
     }
-    if (inUnion) {
+    if (inUnion && built.getType() != Type.RECORD) {
       throw new ProvenanceUnavailableException(
           "Provenance would give the Avro type " + built.getFullName()
               + " two different definitions inside a union, which one schema cannot express.");
     }
-    return register(cloneAs(built, UNMATCHED + "clone_" + throwaway++), false);
+    final Schema clone = register(cloneAs(built, UNMATCHED + "clone_" + throwaway++), false);
+    if (inUnion) {
+      cloneTargets.put(clone.getFullName(), built.getFullName());
+    }
+    return clone;
   }
 
   private Schema cloneAs(Schema built, String namespace) {
@@ -515,6 +523,7 @@ final class AvroProvenanceRenamer {
       final Resolver.ReaderUnion union = (Resolver.ReaderUnion) action;
       final Schema chosen = union.reader.getTypes().get(union.firstMatch);
       final List<String> chosenAt = append(readerAt, chosen.getFullName());
+      requireIntended(union.writer, chosen);
       requirePaired(writerAt, chosenAt, chosen);
       verify(union.actualAction, writerAt, chosenAt, seen);
     }
@@ -540,11 +549,21 @@ final class AvroProvenanceRenamer {
         final Resolver.ReaderUnion reading = (Resolver.ReaderUnion) branch;
         final Schema chosen = reading.reader.getTypes().get(reading.firstMatch);
         final List<String> chosenAt = append(readerAt, chosen.getFullName());
+        requireIntended(branches.get(i), chosen);
         requirePaired(branchAt, chosenAt, chosen);
         verify(reading.actualAction, branchAt, chosenAt, seen);
       } else {
         verify(branch, branchAt, readerAt, seen);
       }
+    }
+  }
+
+  /** Fails unless a clone inside a union was matched to the reader branch it was named after. */
+  private void requireIntended(Schema written, Schema chosen) {
+    final String intended = isNamed(written) ? cloneTargets.get(written.getFullName()) : null;
+    if (intended != null && !intended.equals(chosen.getFullName())) {
+      throw new ProvenanceUnavailableException("The resolver would read the clone of "
+          + intended + " into " + chosen.getFullName());
     }
   }
 

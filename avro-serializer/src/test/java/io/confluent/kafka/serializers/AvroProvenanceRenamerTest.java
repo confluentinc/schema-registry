@@ -98,19 +98,48 @@ public class AvroProvenanceRenamerTest {
   }
 
   @Test
-  public void aRecordInsideAUnionNeedingTwoDifferentRenamesFallsBack() {
-    // One reader record A at two union branches, paired differently: A cannot be cloned there.
-    Schema a = record("A", field("x", "\"int\""));
-    Schema writer = record("R", field("u", "[\"string\"," + a + "]"),
-        field("v", "[\"string\",\"A\"]"));
-    Schema reader = record("R", field("u", "[\"string\"," + a + "]"),
-        field("v", "[\"string\",\"A\"]"));
+  public void aRecordInsideAUnionNeedingTwoDifferentRenamesIsClonedAndMatchedByStructure()
+      throws Exception {
+    // One writer record A at two union branches, paired differently: v's A is cloned under a
+    // throwaway namespace, and Avro matches a union branch by structure, preferring its short name.
+    Schema writer = record("R", field("u", "[\"string\"," + record("A", field("x", "\"int\""))
+        + "]"), field("v", "[\"string\",\"A\"]"));
+    Schema reader = record("R", field("u", "[\"string\","
+        + record("A", field("x", "\"int\"", "0")) + "]"), field("v", "[\"string\",\"A\"]"));
+    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader, mapping(
+        pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
+            p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(8, "v", "A", "x")),
+        pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
+            p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(9, "v", "A", "x"))));
+
+    Schema a = writer.getField("u").schema().getTypes().get(1);
+    GenericRecord read = decode(writer, renamed, new GenericRecordBuilder(writer)
+        .set("u", new GenericRecordBuilder(a).set("x", 5).build())
+        .set("v", new GenericRecordBuilder(a).set("x", 9).build()).build());
+    assertEquals(5, ((GenericRecord) read.get("u")).get("x"));
+    // v's x is new: it takes the default rather than the writer's 9.
+    assertEquals(0, ((GenericRecord) read.get("v")).get("x"));
+  }
+
+  @Test
+  public void aCloneTheResolverWouldMatchToAnotherBranchFallsBack() {
+    // Two reader branches share the short name A; Avro's structural match takes the last, n2.A,
+    // not the n1.A the clone was renamed after.
+    String n1 = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"n1\",\"fields\":["
+        + field("x", "\"int\"", "0") + "]}";
+    String n2 = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"n2\",\"fields\":["
+        + field("x", "\"int\"", "0") + "]}";
+    Schema writer = record("R", field("u", "[\"string\"," + n1 + "]"),
+        field("v", "[\"string\",\"n1.A\"]"));
+    Schema reader = record("R", field("u", "[\"string\"," + n1 + "]"),
+        field("v", "[\"string\",\"n1.A\"," + n2 + "]"));
     assertThrows(ProvenanceUnavailableException.class, () -> AvroProvenanceRenamer.rename(
         writer, reader, mapping(
-            pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
-                p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(8, "v", "A", "x")),
-            pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
-                p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(9, "v", "A", "x")))));
+            pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "n1.A"), p(4, "u", "n1.A", "x"),
+                p(5, "v"), p(6, "v", "string"), p(7, "v", "n1.A"), p(8, "v", "n1.A", "x")),
+            pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "n1.A"), p(4, "u", "n1.A", "x"),
+                p(5, "v"), p(6, "v", "string"), p(7, "v", "n1.A"), p(9, "v", "n1.A", "x"),
+                p(10, "v", "n2.A"), p(11, "v", "n2.A", "x")))));
   }
 
   @Test
@@ -181,13 +210,19 @@ public class AvroProvenanceRenamerTest {
     Schema a2 = writer.getField("u").schema().getTypes().get(1);
     GenericRecord value = new GenericRecordBuilder(writer)
         .set("u", new GenericRecordBuilder(a2).set("x", 7).build()).build();
+    GenericRecord read = decode(writer, renamed, value);
+    assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
+  }
+
+  // Written under writer, read through the renamed pair, as the deserializer reads it.
+  private static GenericRecord decode(Schema writer, AvroProvenanceRenamer.Renamed renamed,
+      GenericRecord value) throws Exception {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
     new GenericDatumWriter<GenericRecord>(writer).write(value, encoder);
     encoder.flush();
-    GenericRecord read = new GenericDatumReader<GenericRecord>(renamed.writer, renamed.reader)
+    return new GenericDatumReader<GenericRecord>(renamed.writer, renamed.reader)
         .read(null, DecoderFactory.get().binaryDecoder(out.toByteArray(), null));
-    assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
