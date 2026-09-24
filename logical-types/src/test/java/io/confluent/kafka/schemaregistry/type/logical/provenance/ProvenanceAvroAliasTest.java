@@ -1,0 +1,234 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.type.logical.provenance;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Provenance follows Avro's own alias semantics, as {@code avro_aliases.md} records them from
+ * Avro's decoder and compatibility checker: an alias names a writer's actual name and beats an
+ * exact match; a type continues location by location; and where Avro itself cannot say which
+ * field an old one became, the history is ambiguous.
+ */
+class ProvenanceAvroAliasTest {
+
+  private static final String I = "\"int\"";
+  private static final String S = "\"string\"";
+
+  @Test
+  void aRenamedFieldTakesTheValueAndANewFieldItsOldName() {
+    List<Map<String, Integer>> pids = pids(
+        avro(f("name", S)),
+        avro(fa("full_name", S, "name"), f("name", S)),
+        avro(fa("full_name", S, "name"), f("name", S), f("extra", I)));
+    assertThat(pids.get(1).get("full_name")).isEqualTo(pids.get(0).get("name"));
+    assertThat(pids.get(1).get("name")).isNotEqualTo(pids.get(0).get("name"));
+    // The alias kept in the next version is carried forward, not a second claim.
+    assertThat(pids.get(2).get("full_name")).isEqualTo(pids.get(1).get("full_name"));
+    assertThat(pids.get(2).get("name")).isEqualTo(pids.get(1).get("name"));
+  }
+
+  @Test
+  void whatAvroCannotResolveIsAmbiguous() {
+    // A swap (the checker throws), two fields aliasing one (the decoder takes the last), one
+    // field aliasing two present ones (a duplicate field).
+    assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("b", I, "a"), fa("a", I, "b")));
+    assertAmbiguous(avro(f("a", I)), avro(fa("b", I, "a"), fa("c", I, "a")));
+    assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("c", I, "a", "b")));
+  }
+
+  @Test
+  void anAliasNamesWhatTheWriterWasActuallyCalled() {
+    // Its own name: nothing. A name never seen: nothing. A former alias: nothing. A former
+    // canonical name, two renames back: the identity.
+    assertThat(same(pids(avro(f("a", I)), avro(fa("a", I, "a"))), "a", "a")).isTrue();
+    assertThat(same(pids(avro(f("a", I)), avro(fa("c", I, "a", "nope"))), "a", "c")).isTrue();
+    assertThat(same(pids(avro(fa("a", I, "x")), avro(fa("b", I, "x"))), "a", "b")).isFalse();
+    List<Map<String, Integer>> chain = pids(avro(f("a", I)), avro(fa("b", I, "a")),
+        avro(fa("c", I, "a")));
+    assertThat(chain.get(2).get("c")).isEqualTo(chain.get(0).get("a"));
+  }
+
+  @Test
+  void anAliasToADroppedFieldReconnectsOnANewInterval() {
+    List<Map<String, Integer>> pids = pids(avro(f("a", I)), avro(f("z", I)),
+        avro(fa("b", I, "a"), f("z", I)));
+    assertThat(pids.get(2).get("b")).isNotEqualTo(pids.get(0).get("a"));
+  }
+
+  @Test
+  void anAliasKeptWhileANewFieldTakesTheAliasedName() {
+    List<Map<String, Integer>> pids = pids(avro(fa("b", I, "a")), avro(fa("b", I, "a"), f("a", I)));
+    assertThat(pids.get(1).get("b")).isEqualTo(pids.get(0).get("b"));
+    assertThat(pids.get(1)).containsKey("a");
+    assertThat(pids.get(0)).doesNotContainKey("a");
+  }
+
+  @Test
+  void twoTypesMergedByAliasKeepEachLocation() {
+    String addr = rec("Address", f("street", S));
+    String bill = rec("BillingAddress", f("line1", S) + "," + f("zip", S));
+    String merged = rec("Address", fa("street", S, "line1"), "BillingAddress");
+    List<Map<String, Integer>> plain = pids(avro(f("shipping", addr), f("billing", bill)),
+        avro(f("shipping", merged), f("billing", "\"Address\"")));
+    assertThat(same(plain, "shipping.street", "shipping.street")).isTrue();
+    assertThat(same(plain, "billing.line1", "billing.street")).isTrue();
+
+    List<Map<String, Integer>> inUnions = pids(
+        avro(f("shipping", u(addr)), f("billing", u(bill))),
+        avro(f("shipping", u(merged)), f("billing", u("\"Address\""))));
+    assertThat(same(inUnions, "shipping.Address.street", "shipping.Address.street")).isTrue();
+    assertThat(same(inUnions, "billing.BillingAddress.line1", "billing.Address.street")).isTrue();
+  }
+
+  @Test
+  void oneTypeSplitInTwoKeepsEachLocation() {
+    String a = rec("A", f("x", I));
+    String c = rec("C", f("x", I), "A");
+    List<Map<String, Integer>> plain = pids(avro(f("u", a), f("v", "\"A\"")),
+        avro(f("u", a), f("v", c)));
+    assertThat(same(plain, "u.x", "u.x") && same(plain, "v.x", "v.x")).isTrue();
+    List<Map<String, Integer>> inUnions = pids(avro(f("u", u(a)), f("v", u("\"A\""))),
+        avro(f("u", u(a)), f("v", u(c))));
+    assertThat(same(inUnions, "u.A.x", "u.A.x") && same(inUnions, "v.A.x", "v.C.x")).isTrue();
+    // Both new types aliasing the old one: each location still has a single candidate.
+    List<Map<String, Integer>> both = pids(avro(f("u", a), f("v", "\"A\"")),
+        avro(f("u", rec("B", f("x", I), "A")), f("v", c)));
+    assertThat(same(both, "u.x", "u.x") && same(both, "v.x", "v.x")).isTrue();
+  }
+
+  @Test
+  void twoTypesSwappedByAliasesKeepEachLocation() {
+    List<Map<String, Integer>> pids = pids(
+        avro(f("u", u(rec("A", f("x", I)))), f("v", u(rec("B", f("y", I))))),
+        avro(f("u", u(rec("B", f("x", I), "A"))), f("v", u(rec("A", f("y", I), "B")))));
+    assertThat(same(pids, "u.A.x", "u.B.x") && same(pids, "v.B.y", "v.A.y")).isTrue();
+  }
+
+  @Test
+  void aTypeRenamedWhileANewTypeTakesItsNameInAUnion() {
+    String renamed = rec("A2", f("x", I), "A");
+    String reused = rec("A", f("q", S));
+    // A real union on both sides: V1 collapses [null, A], which adds no branch step.
+    List<Map<String, Integer>> pids = pids(avro(f("u", "[\"null\"," + S + "," + rec("A", f("x", I))
+            + "]")),
+        avro(f("u", "[\"null\"," + S + "," + renamed + "," + reused + "]")),
+        avro(f("u", "[\"null\"," + S + "," + renamed + "," + reused + "]"), f("extra", I)));
+    assertThat(same(pids, "u.A.x", "u.A2.x")).isTrue();
+    assertThat(pids.get(0)).doesNotContainKey("u.A.q");
+    assertThat(pids.get(2).get("u.A2.x")).isEqualTo(pids.get(1).get("u.A2.x"));
+    assertThat(pids.get(2).get("u.A.q")).isEqualTo(pids.get(1).get("u.A.q"));
+  }
+
+  @Test
+  void aTypeRenamedWithoutAnAliasOrToAnotherNamespaceIsNew() {
+    assertThat(same(pids(avro(f("u", rec("A", f("x", I)))), avro(f("u", rec("B", f("x", I))))),
+        "u.x", "u.x")).isFalse();
+    // An unqualified alias takes the aliasing type's namespace: n2.B aliased A means n2.A.
+    assertThat(same(pids(
+        avro(f("u", "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"n1\",\"fields\":["
+            + f("x", I) + "]}")),
+        avro(f("u", "{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"n2\",\"aliases\":"
+            + "[\"A\"],\"fields\":[" + f("x", I) + "]}"))), "u.x", "u.x")).isFalse();
+  }
+
+  @Test
+  void aLocationWhoseTypeChangesAndChangesBackStartsOver() {
+    String a = rec("A", f("x", I));
+    List<Map<String, Integer>> avro = pids(avro(f("w", a), f("u", "\"A\"")),
+        avro(f("w", a), f("u", rec("B", f("x", I)))), avro(f("w", a), f("u", "\"A\"")));
+    assertThat(avro.get(2).get("u.x")).isNotEqualTo(avro.get(0).get("u.x"));
+    assertThat(avro.get(2).get("w.x")).isEqualTo(avro.get(0).get("w.x"));
+
+    List<Map<String, Integer>> proto = pids(proto("A"), proto("B"), proto("A"));
+    assertThat(proto.get(2).get("u.x")).isNotEqualTo(proto.get(0).get("u.x"));
+    assertThat(proto.get(2).get("w.x")).isEqualTo(proto.get(0).get("w.x"));
+  }
+
+  // -------------------------------------------------------------------------------------------
+
+  private static void assertAmbiguous(ParsedSchema... versions) {
+    assertThatThrownBy(() -> pids(versions)).isInstanceOf(AmbiguousProvenanceException.class);
+  }
+
+  /** Whether the location spelled {@code first} in the first version continues as {@code last}. */
+  private static boolean same(List<Map<String, Integer>> pids, String first, String last) {
+    Integer before = pids.get(0).get(first);
+    assertThat(before).as(first).isNotNull();
+    return before.equals(pids.get(pids.size() - 1).get(last));
+  }
+
+  /** Every version's pids, keyed by the location's names joined with dots. */
+  private static List<Map<String, Integer>> pids(ParsedSchema... versions) {
+    List<ProvenanceHistory.Entry> entries = new ArrayList<>();
+    for (int i = 0; i < versions.length; i++) {
+      entries.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+    }
+    List<Map<String, Integer>> pids = new ArrayList<>();
+    for (ProvenanceVersion version : ProvenanceHistory.compute("s", entries,
+        Arrays.asList(versions), false).getVersions()) {
+      Map<String, Integer> byNames = new HashMap<>();
+      for (ProvenanceField field : version.getFields()) {
+        byNames.put(String.join(".", field.getNames()), field.getPid());
+      }
+      pids.add(byNames);
+    }
+    return pids;
+  }
+
+  private static AvroSchema avro(String... fields) {
+    return new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + String.join(",", fields) + "]}");
+  }
+
+  private static ProtobufSchema proto(String uType) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage R {\n  A w = 1;\n  "
+        + uType + " u = 2;\n}\nmessage A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n");
+  }
+
+  private static String u(String branch) {
+    return "[\"null\"," + branch + "]";
+  }
+
+  private static String f(String name, String type) {
+    return "{\"name\":\"" + name + "\",\"type\":" + type + "}";
+  }
+
+  private static String fa(String name, String type, String... aliases) {
+    return "{\"name\":\"" + name + "\",\"type\":" + type + ",\"aliases\":[\""
+        + String.join("\",\"", aliases) + "\"]}";
+  }
+
+  private static String rec(String name, String fields, String... aliases) {
+    return "{\"type\":\"record\",\"name\":\"" + name + "\"" + (aliases.length > 0
+        ? ",\"aliases\":[\"" + String.join("\",\"", aliases) + "\"]" : "")
+        + ",\"fields\":[" + fields + "]}";
+  }
+}

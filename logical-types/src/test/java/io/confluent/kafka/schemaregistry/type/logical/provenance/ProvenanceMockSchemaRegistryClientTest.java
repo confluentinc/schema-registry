@@ -110,10 +110,10 @@ class ProvenanceMockSchemaRegistryClientTest {
 
   @Test
   void aHistoryWhoseAliasesDetermineNoSingleIdentityIsA422() throws Exception {
-    register(record(field("a", "int")));
+    int v1 = register(record(field("a", "int")));
     int v2 = register(record("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}",
         "{\"name\":\"c\",\"type\":\"int\",\"aliases\":[\"a\"]}"));
-    assertCode(422, 42217, () -> client.getProvenanceById(SUBJECT, v2, v2, false, false, null));
+    assertCode(422, 42217, () -> client.getProvenanceById(SUBJECT, v1, v2, false, false, null));
   }
 
   @Test

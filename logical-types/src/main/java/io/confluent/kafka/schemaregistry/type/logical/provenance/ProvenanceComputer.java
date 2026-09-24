@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -52,10 +51,12 @@ import java.util.TreeSet;
  * <h2>Identity</h2>
  *
  * <p>Identity rules are format-specific and a {@code LogicalType} carries no format discriminator,
- * so {@link IdentityPolicy} stands in for one. Entities are keyed at their definition site: a named
- * type's members are walked once, under that type, rather than re-walked at every reference. That
- * is what terminates the walk on a recursive type and keeps a type shared by two fields a single
- * entity. See {@link PathKey}.
+ * so {@link IdentityPolicy} stands in for one. Named types are resolved where they are used: each
+ * use is an entity scoped by the location using it, and its identity scopes the type's members.
+ * A type merged, split or swapped by aliases therefore keeps every location's lineage, and a
+ * location whose type changes and changes back starts over rather than taking back its old ids.
+ * Under the JSON policy a named type is transparent, with no entity of its own. A recursive type
+ * has no finite set of uses, and is rejected. See {@link PathKey}.
  *
  * <p>A member's scope is its container's identity, so the shape of the root matters: the members of
  * an anonymous root schema sit in a different scope from the members of a named type. A version
@@ -79,19 +80,16 @@ import java.util.TreeSet;
  *       resolution index, and mark everything not present in this version inactive.</li>
  * </ol>
  *
- * <h2>Released names</h2>
+ * <h2>Names and aliases</h2>
  *
- * <p>Resolution reads an index built by the previous version, so before resolving a peer group it
- * has to know which of those historical names this version has let go of. Without that, a name
- * dropped in the very version another entity picks it up would still resolve to its former holder,
- * and the two would be silently merged.
- *
- * <p>The pre-pass answers it by first deciding, for each historical identity in the scope, whether
- * this version continues it — through an explicit alias, which wins, or through the canonical name
- * it was last committed under. A name is released when its identity has no continuation and was
- * active, or when the continuation no longer declares it. Comparing against the last committed
- * canonical name is what separates a genuine continuation from an entity that merely happens to
- * reuse one of the old entity's former names.
+ * <p>Under Avro rules, as Avro's own decoder applies them, the index holds canonical names only:
+ * an alias names what a writer's field or type was actually called, never one of the writer's
+ * aliases. A peer group is resolved as a whole. A peer continues the identity last committed under
+ * its own name while it is active, or the identity an alias names; an explicit alias wins, as Avro
+ * renames a writer field to the reader field aliasing it even when one of that name exists. A peer
+ * continuing itself may carry its aliases forward, but not claim another identity with a new one.
+ * Each identity has at most one continuation and each peer continues at most one identity; where
+ * Avro itself cannot say which, the history is ambiguous.
  *
  * <h2>Invariant</h2>
  *
@@ -145,9 +143,10 @@ public final class ProvenanceComputer {
    * @param versions the schema versions in chronological order
    * @param policies one policy per version, in the same order
    * @throws IllegalArgumentException if the lists differ in size, or a version is null
-   * @throws IllegalStateException if a version is internally inconsistent — a repeated path, two
-   *     entities resolving to one identity, one name claimed for two identities, an ambiguous
-   *     alias, or a name taken from a live holder
+   * @throws IllegalStateException if a version is internally inconsistent — a repeated path or
+   *     two entities resolving to one identity; an {@link AmbiguousProvenanceException} if names
+   *     and aliases determine no single identity; a {@link RecursiveTypeException} for a recursive
+   *     type
    */
   public static ProvenanceResult compute(
       List<LogicalType> versions, List<IdentityPolicy> policies) {
@@ -172,7 +171,7 @@ public final class ProvenanceComputer {
 
       Resolver resolver = new Resolver(version, policy, history);
       resolver.resolve(logicalType);
-      validate(resolver, history, version);
+      validate(resolver, version);
       byVersion.add(commit(resolver.entities, version, history));
     }
     return new ProvenanceResult(versions, policies, byVersion);
@@ -200,45 +199,16 @@ public final class ProvenanceComputer {
   // -----------------------------------------------------------------------------------------
 
   /**
-   * Rejects a version whose identity claims are self-contradictory. Everything here runs before
-   * anything is committed: the name checks because commit overwrites index mappings and would
-   * otherwise silently pick a winner, the path check because two entities sharing a key would make
-   * the version's own output ambiguous.
-   *
-   * <p>A name the pre-pass released is exempt from the live-holder check. Released means its holder
-   * either left this version or stopped declaring it, so taking it over is exactly what the
-   * algorithm intends — the holder's {@code active} flag has simply not been cleared yet, since
-   * that happens at the end of commit.
+   * Rejects a version that repeats a path. Runs before anything is committed, since two entities
+   * sharing a key would make the version's own output ambiguous. Names need no check here: the
+   * index holds canonical names alone, and arbitration gave every identity one continuation.
    */
-  private static void validate(Resolver resolver, History history, int version) {
+  private static void validate(Resolver resolver, int version) {
     Set<PathKey> claimedPaths = new HashSet<>();
-    Map<NameKey, Identity> claimedNames = new HashMap<>();
-
     for (Entity entity : resolver.entities) {
       if (!claimedPaths.add(entity.path)) {
         throw new IllegalStateException(
             "Duplicate entity path detected in schema version " + version + ": " + entity.path);
-      }
-      for (NameKey name : entity.declaredNames) {
-        Identity claimant = claimedNames.get(name);
-        if (claimant != null && !claimant.equals(entity.identity)) {
-          throw new AmbiguousProvenanceException(
-              "Conflicting mapping detected within schema at version " + version + " for: " + name);
-        }
-        claimedNames.put(name, entity.identity);
-
-        if (resolver.released.contains(name)) {
-          continue;
-        }
-        Identity indexed = history.identityIndex.get(name);
-        if (indexed != null && !indexed.equals(entity.identity)) {
-          EntityState indexedState = history.state.get(indexed);
-          if (indexedState != null && indexedState.active) {
-            throw new AmbiguousProvenanceException(
-                "Cannot overwrite active identity mapping at version " + version + " for name: "
-                    + name);
-          }
-        }
       }
     }
   }
@@ -267,11 +237,14 @@ public final class ProvenanceComputer {
         entityState.presenceStartVersion = version;
       }
       entityState.active = true;
-      if (!entity.declaredNames.isEmpty()) {
-        entityState.canonicalName =
-            new NameKey(entity.identity.getKind(), entity.scope, entity.name);
+      if (entity.nameResolved) {
+        // The canonical name alone enters the index, and its newest holder owns it. Aliases are
+        // remembered on the identity, so a continuation can carry them forward.
+        NameKey canonical = new NameKey(entity.identity.getKind(), entity.scope, entity.name);
+        entityState.canonicalName = canonical;
+        entityState.aliases = new HashSet<>(entity.aliases);
+        history.identityIndex.put(canonical, entity.identity);
       }
-      syncNames(entity, history.identityIndex, entityState);
       entityState.memberNumbers = entity.memberNumbers;
       provenance.put(entity.path,
           new Provenance(entity.identity, entityState.presenceStartVersion));
@@ -287,33 +260,6 @@ public final class ProvenanceComputer {
     return provenance;
   }
 
-  /**
-   * Updates the long-lived name resolution index for one present entity: prune the names it has
-   * stopped declaring, then register the ones it declares now.
-   *
-   * <p>An entity that disappears prunes nothing — this does not run for absent entities — so its
-   * names stay dormant and an alias can still reconnect to it, but commit has already marked it
-   * inactive, which forces a new interval either way.
-   *
-   * <p>A prune only removes a mapping this entity still owns. An entity can declare a name, vanish
-   * for several versions while another entity takes that name over, and then return through an
-   * alias — at which point its last declarations are stale, and pruning one blindly would delete
-   * the live holder's mapping and silently reset an entity that never went anywhere.
-   */
-  private static void syncNames(
-      Entity entity, Map<NameKey, Identity> identityIndex, EntityState entityState) {
-    for (NameKey declared : entityState.lastDeclaredNames) {
-      if (!entity.declaredNames.contains(declared)
-          && entity.identity.equals(identityIndex.get(declared))) {
-        identityIndex.remove(declared);
-      }
-    }
-    for (NameKey name : entity.declaredNames) {
-      identityIndex.put(name, entity.identity);
-    }
-    entityState.lastDeclaredNames = entity.declaredNames;
-  }
-
   // -----------------------------------------------------------------------------------------
   // Internal state
   // -----------------------------------------------------------------------------------------
@@ -321,16 +267,18 @@ public final class ProvenanceComputer {
   /** Everything carried from one version to the next. */
   private static final class History {
 
-    /** Identity -> presence, interval start, and the names it last declared. */
+    /** Identity -> presence, interval start, and the names it was last committed under. */
     private final Map<Identity, EntityState> state = new HashMap<>();
 
     /**
-     * Name -> identity. Long-lived: a mapping stays dormant after its entity disappears, and is
-     * pruned only when a still-present entity stops declaring the name.
+     * Canonical name -> identity. Every canonical name an identity has been committed under stays
+     * mapped to it, dormant or not, until a newer entity is committed under that name. An alias
+     * resolves through it, so an alias can name any name the writer actually used, and never one
+     * of the writer's own aliases.
      */
     private final Map<NameKey, Identity> identityIndex = new HashMap<>();
 
-    /** Identities grouped by scope, so the pre-pass need not scan the whole history. */
+    /** Identities grouped by scope, for the continuations that look beyond names. */
     private final Map<Scope, Set<Identity>> identitiesByScope = new HashMap<>();
   }
 
@@ -341,16 +289,17 @@ public final class ProvenanceComputer {
     private int presenceStartVersion;
 
     /**
-     * The names this identity declared during its most recent active interval. Retained while it is
-     * dormant so an explicit alias can reconnect to it.
-     */
-    private Set<NameKey> lastDeclaredNames = Collections.emptySet();
-
-    /**
-     * The canonical name this identity was last committed under. The pre-pass relies on it to tell
-     * a genuine canonical continuation from an entity coincidentally reusing a former alias.
+     * The canonical name this identity was last committed under. A canonical match counts only
+     * against it: an entity that merely reuses one of the identity's former names is not its
+     * continuation.
      */
     private NameKey canonicalName;
+
+    /**
+     * The aliases this identity declared when last committed. A continuation under the same name
+     * may carry them forward; they claim nothing new.
+     */
+    private Set<String> aliases = Collections.emptySet();
 
     /** A Protobuf oneof's member field numbers when last committed; null for anything else. */
     private Set<Integer> memberNumbers;
@@ -399,30 +348,32 @@ public final class ProvenanceComputer {
     }
   }
 
-  /** One resolved occurrence: what it is, where it was found, and the names it declares. */
+  /** One resolved occurrence: what it is, where it was found, and how it is named. */
   private static final class Entity {
 
     private final Identity identity;
     private final Scope scope;
     private final String name;
+    private final List<String> aliases;
+    private final boolean nameResolved;
     private final PathKey path;
-    private final Set<NameKey> declaredNames;
     private final Set<Integer> memberNumbers;
 
-    Entity(Identity identity, Scope scope, String name, PathKey path,
-        Set<NameKey> declaredNames, Set<Integer> memberNumbers) {
+    Entity(Identity identity, Scope scope, String name, List<String> aliases,
+        boolean nameResolved, PathKey path, Set<Integer> memberNumbers) {
       this.identity = identity;
       this.scope = scope;
       this.name = name;
+      this.aliases = aliases;
+      this.nameResolved = nameResolved;
       this.path = path;
-      this.declaredNames = declaredNames;
       this.memberNumbers = memberNumbers;
     }
   }
 
   /**
-   * One member of a peer group before its identity is resolved: a named type definition, a struct
-   * field, or a union branch.
+   * One member of a peer group before its identity is resolved: a struct field, a union branch,
+   * or one use of a named type.
    */
   private static final class Candidate {
 
@@ -436,8 +387,16 @@ public final class ProvenanceComputer {
     /** Derived Protobuf numbers to hand to this candidate's own children, if any. */
     private final Map<Object, Integer> childDerived;
 
+    /** Where this candidate's own members are keyed: its path, except for a named type's use. */
+    private final PathKey membersAt;
+
     Candidate(EntityKind kind, String name, List<String> aliases, Integer number,
         PathKey path, Schema body, Map<Object, Integer> childDerived) {
+      this(kind, name, aliases, number, path, body, childDerived, path);
+    }
+
+    Candidate(EntityKind kind, String name, List<String> aliases, Integer number,
+        PathKey path, Schema body, Map<Object, Integer> childDerived, PathKey membersAt) {
       this.kind = kind;
       this.name = name;
       this.aliases = aliases != null ? aliases : Collections.emptyList();
@@ -445,6 +404,7 @@ public final class ProvenanceComputer {
       this.path = path;
       this.body = body;
       this.childDerived = childDerived;
+      this.membersAt = membersAt;
     }
   }
 
@@ -467,11 +427,8 @@ public final class ProvenanceComputer {
     private final List<Entity> entities = new ArrayList<>();
     private final Set<Identity> seen = new HashSet<>();
 
-    /** Every name released in this version, across all scopes. Scope-qualified, so one set does. */
-    private final Set<NameKey> released = new HashSet<>();
-
     private Map<String, Schema> namedTypes = Collections.emptyMap();
-    /** Named types being walked through, under a policy that sees through them. */
+    /** Named types being walked through; a repeat is a recursive type. */
     private final Set<String> inlining = new HashSet<>();
 
     Resolver(int version, IdentityPolicy policy, History history) {
@@ -481,30 +438,17 @@ public final class ProvenanceComputer {
     }
 
     void resolve(LogicalType logicalType) {
-      // The root scope holds the named type definitions and, when the root schema is not just a
-      // reference, its own members. Kind keeps the two apart.
+      // Named types are resolved where they are used, so the root scope holds only the root
+      // schema's own members.
       namedTypes = logicalType.getNamedTypes();
-      List<Candidate> rootPeers = new ArrayList<>();
-      for (Map.Entry<String, Schema> entry : seesThroughNamedTypes()
-          ? Collections.<String, Schema>emptyMap().entrySet()
-          : new TreeMap<>(namedTypes).entrySet()) {
-        rootPeers.add(new Candidate(EntityKind.NAMED_TYPE, entry.getKey(),
-            entry.getValue() != null ? entry.getValue().getAliases() : null, null,
-            PathKey.ofNamedType(entry.getKey()), entry.getValue(), Collections.emptyMap()));
-      }
-
       Schema root = logicalType.getRootSchema();
       boolean rootHasMembers = root != null
           && (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.UNION);
       if (rootHasMembers) {
-        rootPeers.addAll(memberCandidates(root, PathKey.ofRoot(), Collections.emptyMap()));
-      }
-
-      processGroup(rootPeers, RootScope.INSTANCE);
-
-      if (root != null && !rootHasMembers
-          && (seesThroughNamedTypes() || root.getType() != Schema.Type.NAMED_TYPE_REF)) {
-        // A collection or primitive at the root: its members live in a stepped scope of their own.
+        processGroup(memberCandidates(root, PathKey.ofRoot(), Collections.emptyMap()),
+            RootScope.INSTANCE);
+      } else if (root != null) {
+        // A reference, collection or primitive at the root.
         processType(root, RootScope.INSTANCE, PathKey.ofRoot(), Collections.emptyMap());
       }
     }
@@ -514,26 +458,31 @@ public final class ProvenanceComputer {
       if (peers.isEmpty()) {
         return;
       }
-      Set<NameKey> releasedHere = computeReleasedNames(peers, scope);
-      released.addAll(releasedHere);
-
+      Map<Candidate, Identity> identities = resolveGroup(peers, scope);
       for (Candidate peer : peers) {
-        Identity identity = resolveIdentity(peer, scope, releasedHere, peers);
+        Identity identity = identities.get(peer);
         if (!seen.add(identity)) {
           throw new AmbiguousProvenanceException(
               "Multiple entities resolve to the same logical identity at version " + version
                   + ": " + identity + " (at " + peer.path + ")");
         }
-        entities.add(new Entity(identity, scope, peer.name, peer.path,
-            declaredNames(peer, scope), memberNumbersOf(peer)));
-        processType(peer.body, identity, peer.path, peer.childDerived);
+        entities.add(new Entity(identity, scope, peer.name, peer.aliases, isNameResolved(peer),
+            peer.path, memberNumbersOf(peer)));
+        if (isUseOfItsType(peer)) {
+          // A named Avro branch is itself the use of its type: its members follow directly.
+          String name = peer.body.getQualifiedName();
+          walkNamed(name, () -> processType(namedTypes.get(name), identity, peer.membersAt,
+              peer.childDerived));
+        } else {
+          processType(peer.body, identity, peer.membersAt, peer.childDerived);
+        }
       }
     }
 
     /**
-     * Walks a type down to the next peer group. A {@code NAMED_TYPE_REF} is a leaf here: its body
-     * is walked at its own definition, which keeps a recursive type finite and a shared type
-     * single.
+     * Walks a type down to the next peer group. A {@code NAMED_TYPE_REF} is walked where it is
+     * used: transparently under JSON, and otherwise as one use of the type, an entity scoped by
+     * the location using it, whose identity scopes the type's members.
      */
     private void processType(
         Schema schema, Scope scope, PathKey path, Map<Object, Integer> derived) {
@@ -560,25 +509,51 @@ public final class ProvenanceComputer {
           processType(schema.getValueType(),
               StepScope.step(scope, "{value}"), path.child(1), derived);
           break;
-        case NAMED_TYPE_REF:
+        case NAMED_TYPE_REF: {
+          String name = schema.getQualifiedName();
+          Schema named = namedTypes.get(name);
           if (seesThroughNamedTypes()) {
-            // Walked where it is used, as if inlined, so its members are scoped by the field
-            // referencing it and a reference changes no identity.
-            String name = schema.getQualifiedName();
-            if (!inlining.add(name)) {
-              throw new RecursiveTypeException(name);
-            }
-            try {
-              processType(namedTypes.get(name), scope, path, derived);
-            } finally {
-              inlining.remove(name);
-            }
+            // Walked as if inlined: its members are scoped by the field referencing it, so a
+            // reference changes no identity.
+            walkNamed(name, () -> processType(named, scope, path, derived));
+          } else if (named != null) {
+            walkNamed(name, () -> processGroup(Collections.singletonList(new Candidate(
+                EntityKind.NAMED_TYPE, name, typeAliases(named), null,
+                PathKey.ofTypeUse(name, path), named, Collections.emptyMap(), path)), scope));
           }
           break;
+        }
         default:
-          // Primitives and enums have no members; a named type is walked at its definition.
+          // Primitives and enums have no members.
           break;
       }
+    }
+
+    private void walkNamed(String name, Runnable walk) {
+      if (!inlining.add(name)) {
+        throw new RecursiveTypeException(name);
+      }
+      try {
+        walk.run();
+      } finally {
+        inlining.remove(name);
+      }
+    }
+
+    /** A named type's aliases, which only Avro has. */
+    private List<String> typeAliases(Schema named) {
+      return policy == IdentityPolicy.PROTOBUF || named.getAliases() == null
+          ? Collections.emptyList() : named.getAliases();
+    }
+
+    /** True for a named Avro branch, whose name and aliases are its type's. */
+    private boolean isUseOfItsType(Candidate peer) {
+      if (policy != IdentityPolicy.AVRO || peer.kind != EntityKind.BRANCH || peer.body == null
+          || peer.body.getType() != Schema.Type.NAMED_TYPE_REF) {
+        return false;
+      }
+      String typeName = peer.body.getQualifiedName();
+      return peer.name.equals(typeName) || peer.name.equals(simpleName(typeName));
     }
 
     private boolean seesThroughNamedTypes() {
@@ -615,114 +590,116 @@ public final class ProvenanceComputer {
     }
 
     // -------------------------------------------------------------------------------------
-    // The released-names pre-pass
-    // -------------------------------------------------------------------------------------
-
-    /**
-     * The historical names this version lets go of in {@code scope}, which resolution must not
-     * resolve through. See the class javadoc for why this has to happen before any peer in the
-     * group is resolved.
-     */
-    private Set<NameKey> computeReleasedNames(List<Candidate> peers, Scope scope) {
-      Map<Identity, Set<Candidate>> byCanonical = new LinkedHashMap<>();
-      Map<Identity, Set<Candidate>> byAlias = new LinkedHashMap<>();
-      collectContinuationCandidates(peers, scope, byCanonical, byAlias);
-      Map<Identity, Candidate> continuations = arbitrate(byCanonical, byAlias);
-
-      Set<NameKey> releasedHere = new LinkedHashSet<>();
-      for (Identity historical
-          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        EntityState historicalState = history.state.get(historical);
-        if (historicalState == null || historicalState.lastDeclaredNames.isEmpty()) {
-          continue;
-        }
-        Candidate continuation = continuations.get(historical);
-        // Previously active and not continued: it releases everything it still owns. Dormant and
-        // not continued: it releases nothing, so an alias can still reconnect to it.
-        Set<NameKey> dropped;
-        if (continuation == null) {
-          dropped = historicalState.active
-              ? historicalState.lastDeclaredNames : Collections.emptySet();
-        } else {
-          dropped = new LinkedHashSet<>(historicalState.lastDeclaredNames);
-          dropped.removeAll(declaredNames(continuation, scope));
-        }
-        for (NameKey previous : dropped) {
-          // Only a name still mapped to this identity is this identity's to release. Its last
-          // declarations go stale while it is dormant: another entity may have taken a name over
-          // in the meantime, and releasing that one would reset a live entity that never moved.
-          if (historical.equals(history.identityIndex.get(previous))) {
-            releasedHere.add(previous);
-          }
-        }
-      }
-      return releasedHere;
-    }
-
-    private void collectContinuationCandidates(List<Candidate> peers, Scope scope,
-        Map<Identity, Set<Candidate>> byCanonical, Map<Identity, Set<Candidate>> byAlias) {
-      for (Candidate peer : peers) {
-        if (!isNameResolved(peer)) {
-          continue;
-        }
-        NameKey canonicalKey = new NameKey(peer.kind, scope, peer.name);
-        Identity canonical = history.identityIndex.get(canonicalKey);
-        if (canonical != null) {
-          EntityState canonicalState = history.state.get(canonical);
-          // Only a name the identity was last committed under is a canonical continuation. A name
-          // it merely used to declare as an alias is a coincidental reuse.
-          if (canonicalState != null && canonicalState.active
-              && canonicalKey.equals(canonicalState.canonicalName)) {
-            byCanonical.computeIfAbsent(canonical, k -> new LinkedHashSet<>()).add(peer);
-          }
-        }
-        for (String alias : peer.aliases) {
-          Identity aliased = history.identityIndex.get(new NameKey(peer.kind, scope, alias));
-          if (aliased != null) {
-            byAlias.computeIfAbsent(aliased, k -> new LinkedHashSet<>()).add(peer);
-          }
-        }
-      }
-    }
-
-    /**
-     * Picks each historical identity's continuation. An explicit alias is a deliberate statement
-     * about lineage, so it wins; a canonical match counts only when no alias claims the identity.
-     */
-    private Map<Identity, Candidate> arbitrate(
-        Map<Identity, Set<Candidate>> byCanonical, Map<Identity, Set<Candidate>> byAlias) {
-      Set<Identity> claimed = new LinkedHashSet<>(byCanonical.keySet());
-      claimed.addAll(byAlias.keySet());
-
-      Map<Identity, Candidate> continuations = new LinkedHashMap<>();
-      for (Identity historical : claimed) {
-        Set<Candidate> aliasClaims =
-            byAlias.getOrDefault(historical, Collections.emptySet());
-        Set<Candidate> canonicalClaims =
-            byCanonical.getOrDefault(historical, Collections.emptySet());
-        Set<Candidate> winning = !aliasClaims.isEmpty() ? aliasClaims : canonicalClaims;
-        if (winning.size() > 1) {
-          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": multiple entities claim historical identity " + historical
-              + (!aliasClaims.isEmpty() ? " via aliases" : " canonically"));
-        }
-        if (winning.size() == 1) {
-          continuations.put(historical, winning.iterator().next());
-        }
-      }
-      return continuations;
-    }
-
-    // -------------------------------------------------------------------------------------
     // Identity resolution
     // -------------------------------------------------------------------------------------
 
-    private Identity resolveIdentity(Candidate peer, Scope scope, Set<NameKey> releasedHere,
-        List<Candidate> peers) {
-      if (peer.name == null) {
-        throw new IllegalArgumentException(
-            "Entity at " + peer.path + " has no name (version " + version + ")");
+    /**
+     * Resolves a whole peer group at once: whether an alias or a canonical name wins a historical
+     * identity depends on every peer in the group.
+     */
+    private Map<Candidate, Identity> resolveGroup(List<Candidate> peers, Scope scope) {
+      Map<Candidate, Identity> resolved = new IdentityHashMap<>();
+      List<Candidate> byName = new ArrayList<>();
+      for (Candidate peer : peers) {
+        if (peer.name == null) {
+          throw new IllegalArgumentException(
+              "Entity at " + peer.path + " has no name (version " + version + ")");
+        }
+        if (isNameResolved(peer)) {
+          byName.add(peer);
+        } else {
+          resolved.put(peer, resolveByFormat(peer, scope));
+        }
       }
+      arbitrate(byName, scope, resolved);
+
+      Set<Identity> taken = new HashSet<>(resolved.values());
+      for (Candidate peer : byName) {
+        if (resolved.containsKey(peer)) {
+          continue;
+        }
+        Identity promoted = policy == IdentityPolicy.AVRO && peer.kind == EntityKind.BRANCH
+            ? familyContinuation(peer, scope, peers) : null;
+        // Brand new, or a historical identity resetting. Folding the minting version into the
+        // value keeps it distinct from a live entity that previously released this name.
+        Identity identity = promoted != null && taken.add(promoted)
+            ? promoted
+            : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
+        resolved.put(peer, identity);
+      }
+      return resolved;
+    }
+
+    /**
+     * Avro rules. A peer continues the identity last committed under its own name while that is
+     * active, or the identity an alias names. An explicit alias wins: Avro renames a writer field
+     * to the reader field aliasing it even when a reader field of that name exists. A peer
+     * continuing its own identity may carry its aliases forward, but a new one naming another
+     * identity would make one entity continue two. Each identity has at most one continuation, and
+     * each peer continues at most one identity.
+     */
+    private void arbitrate(List<Candidate> peers, Scope scope, Map<Candidate, Identity> resolved) {
+      Map<Candidate, Identity> ownClaim = new IdentityHashMap<>();
+      Map<Identity, Candidate> canonicalClaimant = new HashMap<>();
+      for (Candidate peer : peers) {
+        validateAliases(peer);
+        NameKey canonicalKey = new NameKey(peer.kind, scope, peer.name);
+        Identity indexed = history.identityIndex.get(canonicalKey);
+        EntityState indexedState = indexed != null ? history.state.get(indexed) : null;
+        if (indexedState != null && indexedState.active
+            && canonicalKey.equals(indexedState.canonicalName)) {
+          if (canonicalClaimant.put(indexed, peer) != null) {
+            throw new AmbiguousProvenanceException("Two entities named " + peer.name
+                + " at version " + version + " in " + scope);
+          }
+          ownClaim.put(peer, indexed);
+        }
+      }
+
+      Map<Identity, Set<Candidate>> aliasClaimants = new LinkedHashMap<>();
+      for (Candidate peer : peers) {
+        Identity own = ownClaim.get(peer);
+        for (String alias : peer.aliases) {
+          Identity aliased = history.identityIndex.get(new NameKey(peer.kind, scope, alias));
+          if (aliased == null || aliased.equals(own)) {
+            continue;
+          }
+          if (own != null) {
+            if (history.state.get(own).aliases.contains(alias)) {
+              // Carried forward from the version that introduced it.
+              continue;
+            }
+            throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+                + version + ": " + peer.path + " continues " + own
+                + " and names another identity by a new alias: " + aliased);
+          }
+          aliasClaimants.computeIfAbsent(aliased, k -> new LinkedHashSet<>()).add(peer);
+        }
+      }
+
+      Set<Identity> claimed = new LinkedHashSet<>(canonicalClaimant.keySet());
+      claimed.addAll(aliasClaimants.keySet());
+      for (Identity historical : claimed) {
+        Set<Candidate> byAlias = aliasClaimants.getOrDefault(historical, Collections.emptySet());
+        if (byAlias.size() > 1) {
+          // Avro's decoder gives it to whichever alias is declared last; its checker, to all.
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+              + version + ": multiple entities claim historical identity " + historical
+              + " via aliases");
+        }
+        Candidate winner = byAlias.isEmpty()
+            ? canonicalClaimant.get(historical) : byAlias.iterator().next();
+        Identity earlier = resolved.put(winner, historical);
+        if (earlier != null) {
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+              + version + ": " + winner.path + " matches multiple historical identities "
+              + Arrays.asList(earlier, historical));
+        }
+      }
+    }
+
+    /** Identity where the format supplies it outright: a number, or a name that is its identity. */
+    private Identity resolveByFormat(Candidate peer, Scope scope) {
       switch (policy) {
         case JSON:
           return new Identity(peer.kind, scope, new StringIdentity(peer.name));
@@ -739,61 +716,10 @@ public final class ProvenanceComputer {
           return peer.number != null
               ? new Identity(peer.kind, scope, new IntegerIdentity(peer.number))
               : new Identity(peer.kind, scope, new StringIdentity(peer.name));
-        case AUTO:
-          if (peer.number != null) {
-            return new Identity(peer.kind, scope, new IntegerIdentity(peer.number));
-          }
-          break;
-        case AVRO:
         default:
-          break;
+          // AUTO, with a number.
+          return new Identity(peer.kind, scope, new IntegerIdentity(peer.number));
       }
-      Identity matched = matchByName(peer, scope, releasedHere);
-      if (matched == null && policy == IdentityPolicy.AVRO && peer.kind == EntityKind.BRANCH) {
-        matched = familyContinuation(peer, scope, peers);
-      }
-      // Brand new, or a historical identity resetting. Folding the minting version into the value
-      // keeps it distinct from a live entity that previously released this name.
-      return matched != null
-          ? matched
-          : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
-    }
-
-    /**
-     * Avro rules: the canonical name while it is still live, or any explicit alias; null if
-     * neither matches.
-     */
-    private Identity matchByName(Candidate peer, Scope scope, Set<NameKey> releasedHere) {
-      validateAliases(peer);
-      Set<Identity> matches = new LinkedHashSet<>();
-
-      NameKey canonicalKey = new NameKey(peer.kind, scope, peer.name);
-      if (!releasedHere.contains(canonicalKey)) {
-        Identity indexed = history.identityIndex.get(canonicalKey);
-        if (indexed != null) {
-          EntityState indexedState = history.state.get(indexed);
-          if (indexedState != null && indexedState.active) {
-            matches.add(indexed);
-          }
-        }
-      }
-      // An explicit alias may reconnect to a historical identity even when it is dormant. That is
-      // identity continuity only -- commit still restarts the interval.
-      for (String alias : peer.aliases) {
-        NameKey aliasKey = new NameKey(peer.kind, scope, alias);
-        if (!releasedHere.contains(aliasKey)) {
-          Identity aliased = history.identityIndex.get(aliasKey);
-          if (aliased != null) {
-            matches.add(aliased);
-          }
-        }
-      }
-
-      if (matches.size() > 1) {
-        throw new AmbiguousProvenanceException("Ambiguous identity resolution at version " + version
-            + ": " + peer.path + " matches multiple historical identities " + matches);
-      }
-      return matches.size() == 1 ? matches.iterator().next() : null;
     }
 
     // -------------------------------------------------------------------------------------
@@ -897,40 +823,13 @@ public final class ProvenanceComputer {
       return found != null && !seen.contains(found) ? found : null;
     }
 
+    /** Avro keeps aliases as a set, and an alias equal to the entity's own name changes nothing. */
     private void validateAliases(Candidate peer) {
-      if (peer.aliases.isEmpty()) {
-        return;
-      }
-      Set<String> seenAliases = new HashSet<>();
       for (String alias : peer.aliases) {
         if (alias == null) {
           throw new IllegalArgumentException("Null alias at " + peer.path);
         }
-        if (!seenAliases.add(alias)) {
-          throw new AmbiguousProvenanceException("Duplicate alias '" + alias + "' at " + peer.path);
-        }
-        if (alias.equals(peer.name)) {
-          throw new AmbiguousProvenanceException(
-              "Alias '" + alias + "' duplicates the canonical name at " + peer.path);
-        }
       }
-    }
-
-    /**
-     * The names an entity declares: its own, plus its aliases. Empty unless the entity resolves by
-     * name — a number or an aliasless name needs no index, and letting such an entity into it
-     * would let an unrelated name-resolved entity resolve through it.
-     */
-    private Set<NameKey> declaredNames(Candidate peer, Scope scope) {
-      if (!isNameResolved(peer)) {
-        return Collections.emptySet();
-      }
-      Set<NameKey> names = new LinkedHashSet<>();
-      names.add(new NameKey(peer.kind, scope, peer.name));
-      for (String alias : peer.aliases) {
-        names.add(new NameKey(peer.kind, scope, alias));
-      }
-      return names;
     }
 
     /** True when this entity's identity is resolved through the name index. */

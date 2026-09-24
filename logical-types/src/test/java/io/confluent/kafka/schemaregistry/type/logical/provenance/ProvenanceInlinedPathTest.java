@@ -54,7 +54,7 @@ class ProvenanceInlinedPathTest {
         path(1, 0));    // addr.city, reached through the reference
 
     assertThat(byPath.get(path(1, 0)).getLocation().getEntity())
-        .isEqualTo(result.at(0, PathKey.ofNamedType("acme.Address").child(0)));
+        .isEqualTo(result.at(0, PathKey.ofRoot().child(1).child(0)));
     // The chain locates it: the addr field, then city within it.
     assertThat(byPath.get(path(1, 0)).getLocation().getChain()).containsExactly(
         byPath.get(path(1)).getLocation().getEntity(),
@@ -62,16 +62,16 @@ class ProvenanceInlinedPathTest {
   }
 
   @Test
-  void aSharedNamedTypeIsOneEntityButTwoLocations() {
+  void aSharedNamedTypeIsAnEntityPerLocation() {
     // The single most important property for a consumer with no shared types: home.city and
-    // work.city are the same logical entity and must still be told apart.
+    // work.city must be told apart. A type is resolved where it is used, so each use is its own.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(twoAddresses()));
     Map<List<Integer>, InlinedMember> byPath = byPath(result.inlinedProvenance(0));
 
     LocatedProvenance homeCity = byPath.get(path(0, 0)).getLocation();
     LocatedProvenance workCity = byPath.get(path(1, 0)).getLocation();
 
-    assertThat(homeCity.getEntity()).isEqualTo(workCity.getEntity());
+    assertThat(homeCity.getEntity()).isNotEqualTo(workCity.getEntity());
     assertThat(homeCity).isNotEqualTo(workCity);
     assertThat(homeCity.depth()).isEqualTo(2);
   }
@@ -82,10 +82,8 @@ class ProvenanceInlinedPathTest {
     namedTypes.put("Node", Schema.createStruct(Arrays.asList(
         field("value"),
         new Field("next", Schema.createNamedTypeRef("Node"), 1))));
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        new LogicalType(Schema.createNamedTypeRef("Node"), namedTypes)));
-
-    assertThatThrownBy(() -> result.inlinedProvenance(0))
+    assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
+        new LogicalType(Schema.createNamedTypeRef("Node"), namedTypes))))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("recursive named type: Node");
   }

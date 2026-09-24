@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Where an entity sits in one version's {@link LogicalType}: an index path, rooted either at the
- * root schema or at one entry of {@link LogicalType#getNamedTypes()}.
+ * Where an entity sits in one version's {@link LogicalType}: an index path from the root schema,
+ * following every reference, or the use of a named type at one such path.
  *
  * <p>The index path follows the same convention as {@link LogicalType#getDefaultValues()} — a
  * struct field or union branch appends its index within its container, an array or multiset element
@@ -34,10 +34,9 @@ import java.util.Objects;
  * readers use to build their own default-value paths; they are not
  * {@code Schema.Field#getPosition()}, which a {@code oneof} makes unreliable.
  *
- * <p>A bare index path cannot address a member of a named type, because entities are keyed at their
- * definition site rather than inlined per use (that is what terminates the walk on a recursive
- * type and keeps a shared type a single entity). {@link #getTypeName()} supplies the missing root:
- * {@code null} for the root schema, otherwise the named type's qualified name.
+ * <p>Entities are keyed where they are used, so a member of a named type has the index path of
+ * its use. The use itself is an entity too, keyed apart by {@link #getTypeName()}: {@code null}
+ * for a member, otherwise the qualified name of the type used there.
  *
  * <p>This is a location, not an identity. It says where an entity was found in one version and is
  * only stable while nothing before it moves; {@link Provenance} is what survives across versions.
@@ -69,6 +68,14 @@ public final class PathKey {
   public static PathKey ofNamedType(String qualifiedName) {
     return new PathKey(Objects.requireNonNull(qualifiedName, "qualifiedName"),
         Collections.emptyList());
+  }
+
+  /**
+   * The use of the named type {@code qualifiedName} at {@code at} — an entity of its own, keyed
+   * apart from the member holding it.
+   */
+  public static PathKey ofTypeUse(String qualifiedName, PathKey at) {
+    return new PathKey(Objects.requireNonNull(qualifiedName, "qualifiedName"), at.indexPath);
   }
 
   /** This path extended by one step. */

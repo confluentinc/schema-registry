@@ -85,10 +85,9 @@ class ProvenanceAvroSchemaTest {
         order("{'name':'addr','type':{'type':'record','name':'Location',"
             + "'aliases':['acme.Address'],'fields':[{'name':'city','type':'string'}]}}"));
 
-    PathKey before = PathKey.ofNamedType("acme.Address").child(0);
-    PathKey after = PathKey.ofNamedType("acme.Location").child(0);
-    assertThat(result.at(1, after)).isNotNull().isEqualTo(result.at(0, before));
-    assertThat(result.correspondence(0, 1)).containsEntry(before, after);
+    PathKey city = PathKey.ofRoot().child(0).child(0);
+    assertThat(result.at(1, city)).isNotNull().isEqualTo(result.at(0, city));
+    assertThat(result.correspondence(0, 1)).containsEntry(city, city);
   }
 
   @Test
