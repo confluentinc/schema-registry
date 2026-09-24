@@ -166,6 +166,23 @@ class LogicalPolicyCheckerTest {
     assertTrue(errors.get(0).contains("cannot be represented as a logical type"), errors.toString());
   }
 
+  @Test
+  void unconvertibleNewSchemaIsRenderedAsAStructuredFindingNotABareString() {
+    // Regression test: this used to be a bare string sitting next to describeFinding's
+    // {errorType, category, description, additionalInfo} objects in the same details array,
+    // which breaks a client that parses every element as one of those objects. The loose
+    // substring check in unconvertibleNewSchemaIsRejected above would not have caught that.
+    ParsedSchema unconvertible = mock(ParsedSchema.class);
+    when(unconvertible.schemaType()).thenReturn("XML");
+    List<String> errors = LogicalPolicyChecker.check(
+        unconvertible, List.of(), CompatibilityLevel.BACKWARD);
+    assertEquals(1, errors.size());
+    assertEquals("{errorType:\"UNREPRESENTABLE_TYPE\", category:[\"FLINK\", \"ICEBERG_V2\"], "
+        + "description:\"Schema cannot be represented as a logical type: "
+        + "format=logical is not supported for schema type 'XML'\", additionalInfo:\"\"}",
+        errors.get(0));
+  }
+
   // -- merging findings across modes ---------------------------------------------------------
 
   @Test
