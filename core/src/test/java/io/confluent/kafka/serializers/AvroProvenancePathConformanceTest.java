@@ -24,22 +24,18 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The Avro renamer addresses fields by index path, so every path it looks up must be one the
- * logical-type provenance reports. Each corpus schema is walked the renamer's way, then renamed
- * against itself, which must leave no field unmatched.
+ * The Avro renamer finds locations by the names the converter records, so every location's names
+ * must lead through the native schema, and a schema renamed against itself must leave no field
+ * unmatched.
  */
 class AvroProvenancePathConformanceTest {
 
@@ -96,6 +92,24 @@ class AvroProvenancePathConformanceTest {
             "{\"name\":\"u\",\"type\":[{\"type\":\"int\",\"logicalType\":\"date\"},"
             + "{\"type\":\"fixed\",\"name\":\"D\",\"size\":8,\"logicalType\":\"decimal\","
             + "\"precision\":16,\"scale\":4}]}"),
+        // Connect maps with keys that are not strings: arrays of key/value records.
+        record("{\"name\":\"m\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\","
+            + "\"name\":\"MapEntry\",\"namespace\":\"io.confluent.connect.avro\",\"fields\":["
+            + "{\"name\":\"key\",\"type\":\"int\"},{\"name\":\"value\",\"type\":"
+            + inner("A", "x", "int") + "}]}}}"),
+        record("{\"name\":\"m\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\","
+            + "\"name\":\"E\",\"connect.internal.type\":\"MapEntry\",\"fields\":["
+            + "{\"name\":\"key\",\"type\":" + inner("K", "k", "int") + "},{\"name\":\"value\","
+            + "\"type\":\"int\"}]}}}"),
+        // A Flink multiset as an array of entries.
+        record("{\"name\":\"ms\",\"type\":{\"type\":\"array\",\"flink.type\":\"multiset\","
+            + "\"items\":{\"type\":\"record\",\"name\":\"MapEntry\","
+            + "\"namespace\":\"io.confluent.connect.avro\",\"fields\":[{\"name\":\"key\",\"type\":"
+            + inner("K", "k", "int") + "},{\"name\":\"value\",\"type\":\"int\"}]}}}"),
+        // A Variant, a leaf to the logical type.
+        record("{\"name\":\"v\",\"type\":{\"type\":\"record\",\"name\":\"Variant\","
+            + "\"namespace\":\"confluent.type\",\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
+            + "{\"name\":\"value\",\"type\":\"bytes\"}]}}"),
         // Field and type aliases, and namespaces.
         "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"n.s\",\"aliases\":[\"Old\"],"
             + "\"fields\":[{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"b\"]},"
@@ -105,21 +119,15 @@ class AvroProvenancePathConformanceTest {
 
   @ParameterizedTest
   @MethodSource("corpus")
-  void everyPathTheRenamerLooksUpIsReported(String json) {
+  void everyLocationsNamesReachAFieldOrBranch(String json) {
     Schema schema = new Schema.Parser().parse(json);
-    SchemaProvenance provenance = provenanceOf(schema);
-    Set<List<Integer>> reported = new HashSet<>();
-    for (ProvenanceField field : provenance.getVersions().get(0).getFields()) {
-      reported.add(field.getPath());
+    List<ProvenanceField> fields = provenanceOf(schema).getVersions().get(0).getFields();
+
+    assertFalse(fields.isEmpty());
+    for (ProvenanceField field : fields) {
+      assertTrue(field.getNames() != null && reaches(schema, field.getNames()),
+          field.getNames() + " at " + field.getPath());
     }
-
-    List<List<Integer>> lookedUp = new ArrayList<>();
-    walk(schema, Collections.emptyList(), lookedUp);
-
-    List<List<Integer>> missing = new ArrayList<>(lookedUp);
-    missing.removeAll(reported);
-    assertFalse(lookedUp.isEmpty());
-    assertTrue(missing.isEmpty(), "not reported: " + missing + " of " + reported);
   }
 
   @ParameterizedTest
@@ -138,56 +146,34 @@ class AvroProvenancePathConformanceTest {
   // -------------------------------------------------------------------------------------------
 
   /**
-   * The renamer's walk: a record field and a proper-union branch are looked up; an array element
-   * steps 0, a map value 1, and a nullable wrap takes no step.
+   * Whether {@code names} lead through {@code schema} as the renamer walks it: a field by name, a
+   * union branch by its type's full name, null for an array element or map value.
    */
-  private static void walk(Schema schema, List<Integer> path, List<List<Integer>> lookedUp) {
-    switch (schema.getType()) {
-      case RECORD:
-        for (Field field : schema.getFields()) {
-          List<Integer> fieldPath = append(path, field.pos());
-          lookedUp.add(fieldPath);
-          walk(field.schema(), fieldPath, lookedUp);
-        }
-        break;
-      case ARRAY:
-        walk(schema.getElementType(), append(path, 0), lookedUp);
-        break;
-      case MAP:
-        walk(schema.getValueType(), append(path, 1), lookedUp);
-        break;
-      case UNION:
-        List<Schema> branches = new ArrayList<>();
-        for (Schema branch : schema.getTypes()) {
-          if (branch.getType() != Type.NULL) {
-            branches.add(branch);
-          }
-        }
-        if (branches.size() == 1) {
-          walk(branches.get(0), path, lookedUp);
-        } else {
-          for (int i = 0; i < branches.size(); i++) {
-            List<Integer> branchPath = append(path, i);
-            lookedUp.add(branchPath);
-            walk(branches.get(i), branchPath, lookedUp);
-          }
-        }
-        break;
-      default:
-        break;
+  private static boolean reaches(Schema schema, List<String> names) {
+    Schema at = schema;
+    for (String step : names) {
+      if (at == null) {
+        return false;
+      }
+      if (step == null) {
+        at = at.getType() == Type.ARRAY ? at.getElementType()
+            : at.getType() == Type.MAP ? at.getValueType() : null;
+      } else if (at.getType() == Type.RECORD && at.getField(step) != null) {
+        at = at.getField(step).schema();
+      } else if (at.getType() == Type.UNION) {
+        at = at.getTypes().stream().filter(b -> b.getFullName().equals(step)).findFirst()
+            .orElse(null);
+      } else {
+        return false;
+      }
     }
+    return at != null;
   }
 
   private static SchemaProvenance provenanceOf(Schema schema) {
     return ProvenanceHistory.compute("s",
         Collections.singletonList(new ProvenanceHistory.Entry(1, 1, false)),
         Collections.singletonList(new AvroSchema(schema)), false);
-  }
-
-  private static List<Integer> append(List<Integer> path, int step) {
-    List<Integer> appended = new ArrayList<>(path);
-    appended.add(step);
-    return appended;
   }
 
   private static String record(String... fields) {

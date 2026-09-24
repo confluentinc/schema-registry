@@ -35,15 +35,43 @@ public final class ProvenanceMapping {
   private final Map<List<Integer>, List<Integer>> readerToWriter;
   private final Map<List<Integer>, List<Integer>> writerToReader;
   private final Map<List<Integer>, List<String>> readerNames;
+  private final Map<List<Integer>, List<String>> writerNames;
+  private final Map<List<String>, List<Integer>> readerAt;
+  private final Map<List<String>, List<Integer>> writerAt;
   private final List<List<Integer>> readerPaths;
 
-  private ProvenanceMapping(Map<List<Integer>, List<Integer>> readerToWriter,
-      Map<List<Integer>, List<Integer>> writerToReader,
-      Map<List<Integer>, List<String>> readerNames, List<List<Integer>> readerPaths) {
-    this.readerToWriter = readerToWriter;
-    this.writerToReader = writerToReader;
-    this.readerNames = readerNames;
-    this.readerPaths = readerPaths;
+  private ProvenanceMapping(ProvenanceVersion writer, ProvenanceVersion reader) {
+    Map<Integer, List<Integer>> writerByPid = new HashMap<>();
+    writerNames = new HashMap<>();
+    writerAt = new HashMap<>();
+    for (ProvenanceField field : writer.getFields()) {
+      writerByPid.put(field.getPid(), field.getPath());
+      index(field, writerNames, writerAt);
+    }
+    readerToWriter = new HashMap<>();
+    writerToReader = new HashMap<>();
+    readerNames = new HashMap<>();
+    readerAt = new HashMap<>();
+    List<List<Integer>> paths = new ArrayList<>();
+    for (ProvenanceField field : reader.getFields()) {
+      paths.add(field.getPath());
+      index(field, readerNames, readerAt);
+      List<Integer> writerPath = writerByPid.get(field.getPid());
+      if (writerPath != null) {
+        readerToWriter.put(field.getPath(), writerPath);
+        writerToReader.put(writerPath, field.getPath());
+      }
+    }
+    readerPaths = Collections.unmodifiableList(paths);
+  }
+
+  private static void index(ProvenanceField field, Map<List<Integer>, List<String>> names,
+      Map<List<String>, List<Integer>> at) {
+    if (field.getNames() != null) {
+      names.put(field.getPath(), field.getNames());
+      // The first location spelled so wins: only JSON union branches share their names.
+      at.putIfAbsent(field.getNames(), field.getPath());
+    }
   }
 
   /**
@@ -53,29 +81,8 @@ public final class ProvenanceMapping {
    * @throws ProvenanceUnavailableException if either schema id is not among the versions
    */
   public static ProvenanceMapping join(SchemaProvenance provenance, int writerId, int readerId) {
-    ProvenanceVersion writer = versionWithId(provenance, writerId);
-    ProvenanceVersion reader = versionWithId(provenance, readerId);
-    Map<Integer, List<Integer>> writerByPid = new HashMap<>();
-    for (ProvenanceField field : writer.getFields()) {
-      writerByPid.put(field.getPid(), field.getPath());
-    }
-    Map<List<Integer>, List<Integer>> readerToWriter = new HashMap<>();
-    Map<List<Integer>, List<Integer>> writerToReader = new HashMap<>();
-    Map<List<Integer>, List<String>> readerNames = new HashMap<>();
-    List<List<Integer>> readerPaths = new ArrayList<>();
-    for (ProvenanceField field : reader.getFields()) {
-      readerPaths.add(field.getPath());
-      if (field.getNames() != null) {
-        readerNames.put(field.getPath(), field.getNames());
-      }
-      List<Integer> writerPath = writerByPid.get(field.getPid());
-      if (writerPath != null) {
-        readerToWriter.put(field.getPath(), writerPath);
-        writerToReader.put(writerPath, field.getPath());
-      }
-    }
-    return new ProvenanceMapping(readerToWriter, writerToReader, readerNames,
-        Collections.unmodifiableList(readerPaths));
+    return new ProvenanceMapping(
+        versionWithId(provenance, writerId), versionWithId(provenance, readerId));
   }
 
   private static ProvenanceVersion versionWithId(SchemaProvenance provenance, int schemaId) {
@@ -114,5 +121,26 @@ public final class ProvenanceMapping {
    */
   public List<String> readerNamesOf(List<Integer> readerPath) {
     return readerNames.get(readerPath);
+  }
+
+  /**
+   * The names along {@code writerPath}, or null when the response carried none.
+   */
+  public List<String> writerNamesOf(List<Integer> writerPath) {
+    return writerNames.get(writerPath);
+  }
+
+  /**
+   * The reader location spelled {@code names}, or null if there is none.
+   */
+  public List<Integer> readerPathAt(List<String> names) {
+    return readerAt.get(names);
+  }
+
+  /**
+   * The writer location spelled {@code names}, or null if there is none.
+   */
+  public List<Integer> writerPathAt(List<String> names) {
+    return writerAt.get(names);
   }
 }

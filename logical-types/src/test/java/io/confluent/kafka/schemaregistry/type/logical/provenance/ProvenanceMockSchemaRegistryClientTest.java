@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -83,6 +84,14 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false, false, null));
     assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false, false, null));
     assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false, false, null));
+  }
+
+  @Test
+  void anyOtherComputationFailureIsA422() throws Exception {
+    // The JSON reader throws a NullPointerException on a map with no value schema.
+    int v1 = client.register(SUBJECT, new JsonSchema("{\"type\":\"object\",\"properties\":"
+        + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"));
+    assertCode(422, 42201, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, null));
   }
 
   @Test

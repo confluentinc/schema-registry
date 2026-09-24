@@ -32,6 +32,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
@@ -204,7 +206,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (readerSchema.toDescriptor(name) != null) {
         readerSchema = schemaWithName(readerSchema, name);
       }
-      readerSchema = byProvenance(subject, schemaId, schema, readerSchema, name, migrations);
+      ProtoProvenanceRenumberer.Renumbered renumbered =
+          byProvenance(subject, schemaId, schema, readerSchema, name, migrations);
+      readerSchema = renumbered != null ? renumbered.schema : readerSchema;
 
       int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
@@ -251,14 +255,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(protobufBytes, schema);
       } else {
-        Descriptor descriptor = schema.toDescriptor();
-        if (descriptor == null) {
-          throw new SerializationException("Could not find descriptor with name " + schema.name());
-        }
-        value = DynamicMessage.parseFrom(descriptor,
-            CodedInputStream.newInstance(protobufBytes.array(), start, length),
-            ProtobufSchema.EXTENSION_REGISTRY
-        );
+        value = parseDynamic(schema, protobufBytes, start, length, renumbered);
       }
 
       if (includeSchemaAndVersion) {
@@ -303,10 +300,26 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * otherwise. A file of several top-level messages pairs the writer's message with the reader's
    * by name, and a writer message the reader does not declare cannot be read into it.
    */
-  private ProtobufSchema byProvenance(String subject, SchemaId writerId, ProtobufSchema writer,
-      ProtobufSchema reader, String name, List<Migration> migrations) {
+  /**
+   * {@code bytes} parsed as {@code schema}, less any writer data a provenance renumbering left in
+   * unknown fields.
+   */
+  private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
+      int length, ProtoProvenanceRenumberer.Renumbered renumbered) throws IOException {
+    Descriptor descriptor = schema.toDescriptor();
+    if (descriptor == null) {
+      throw new SerializationException("Could not find descriptor with name " + schema.name());
+    }
+    Message value = DynamicMessage.parseFrom(descriptor,
+        CodedInputStream.newInstance(bytes.array(), start, length),
+        ProtobufSchema.EXTENSION_REGISTRY);
+    return renumbered != null && renumbered.movedAny() ? renumbered.dropMoved(value) : value;
+  }
+
+  private ProtoProvenanceRenumberer.Renumbered byProvenance(String subject, SchemaId writerId,
+      ProtobufSchema writer, ProtobufSchema reader, String name, List<Migration> migrations) {
     if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
-      return reader;
+      return null;
     }
     boolean multi = writer.toDescriptor().getFile().getMessageTypes().size() > 1
         || reader.toDescriptor().getFile().getMessageTypes().size() > 1;
@@ -314,15 +327,31 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
-    return provenanceProjector().project(subject, writerId, writer, reader, multi,
-        mapping -> ProtoProvenanceRenumberer.renumber(reader, mapping, multi))
-        .orElse(reader);
+    return provenanceProjector().project(subject, writerId, writer, reader, multi, mapping -> {
+      ProtoProvenanceRenumberer.Renumbered renumbered =
+          ProtoProvenanceRenumberer.renumber(reader, mapping, multi);
+      if (renumbered.movedAny() && (parseMethod != null || deriveType)) {
+        // A generated class parses with its compiled numbers, so a renumbering cannot reach it.
+        throw new ProvenanceUnavailableException(
+            "The reader is a generated class, which cannot be renumbered");
+      }
+      return renumbered;
+    }).orElse(null);
   }
 
-  private ProvenanceProjector<ProtobufSchema> provenanceProjector;
+  private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;
+
+  /**
+   * {@code readers} as a reader function, with any registered id a reader comes with used for
+   * provenance instead of being looked up.
+   */
+  protected Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return provenanceProjector().readerSchemas(readers);
+  }
 
   // Created on first use, once the deserializer is configured; a race builds an equivalent one.
-  private ProvenanceProjector<ProtobufSchema> provenanceProjector() {
+  private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector() {
     if (provenanceProjector == null) {
       provenanceProjector = new ProvenanceProjector<>(
           schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);

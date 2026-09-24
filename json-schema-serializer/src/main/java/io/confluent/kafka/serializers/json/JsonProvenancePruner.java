@@ -17,47 +17,116 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import org.apache.kafka.common.errors.SerializationException;
+import org.everit.json.schema.ArraySchema;
+import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.NullSchema;
+import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.ReferenceSchema;
+import org.everit.json.schema.Schema;
+import org.json.JSONObject;
 
 /**
  * Carries provenance into a JSON document by pruning it.
  *
- * <p>JSON Schema identifies a property by its name alone, so provenance cannot turn a rename into
- * a match. What it can tell is a property dropped and later re-added under its old name: the
- * reader's property is then new, and reading by name would hand it data written for the old one.
- * Every such property is removed from the document, so a reader converting by name finds nothing
- * there, as it would for any property the writer never had.
+ * <p>JSON Schema identifies a property by its name, so provenance cannot turn a rename into a
+ * match. What it can tell is a reader property whose provenance id the writer does not have — a
+ * property dropped and re-added, or one under a union reshaped across the pair — and a reader
+ * converting by name would hand it data written for another. Every such property is removed, so
+ * the reader finds nothing there; one the reader requires takes its default, or fails the record.
+ *
+ * <p>The document is walked alongside the reader's schema, as {@code JsonSchema} walks one for
+ * field transforms: a union step is the first branch the value validates against. That resolves a
+ * property two branches share, one continuing and one new; where it stays ambiguous, it is pruned.
  */
 final class JsonProvenancePruner {
 
-  private JsonProvenancePruner() {
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  private final Schema reader;
+  private final List<Target> targets;
+
+  private JsonProvenancePruner(Schema reader, List<Target> targets) {
+    this.reader = reader;
+    this.targets = targets;
+  }
+
+  /** A property to prune, spelled by its names, and every reader location spelled the same. */
+  private static final class Target {
+    final List<String> names;
+    final List<Candidate> candidates = new ArrayList<>();
+
+    Target(List<String> names) {
+      this.names = names;
+    }
+
+    boolean clashes() {
+      return candidates.stream().anyMatch(c -> c.continues);
+    }
   }
 
   /**
-   * The name paths of every reader property provenance gives no writer counterpart, outermost
-   * first, leaving out any that sits inside one already listed.
+   * One reader location at a target's names: its union branch choices, and whether it
+   * continues.
    */
-  static List<List<String>> removals(ProvenanceMapping mapping) {
-    List<List<String>> paths = new ArrayList<>();
+  private static final class Candidate {
+    final List<Integer> choices;
+    final boolean continues;
+
+    Candidate(List<Integer> choices, boolean continues) {
+      this.choices = choices;
+      this.continues = continues;
+    }
+  }
+
+  /**
+   * The plan for reading a writer's documents under {@code reader} as {@code mapping} pairs them.
+   */
+  static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader) {
+    Map<List<String>, Target> byNames = new LinkedHashMap<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (names != null && isProperty(mapping, path, names) && mapping.writerPathOf(path) == null) {
-        paths.add(names);
+      if (names != null && isProperty(mapping, path, names)) {
+        byNames.computeIfAbsent(names, Target::new).candidates.add(
+            new Candidate(branchChoices(mapping, path), mapping.writerPathOf(path) != null));
       }
     }
-    paths.sort(Comparator.comparingInt(List::size));
-    List<List<String>> outermost = new ArrayList<>();
-    for (List<String> path : paths) {
-      if (outermost.stream().noneMatch(o -> path.subList(0, Math.min(o.size(), path.size()))
-          .equals(o))) {
-        outermost.add(path);
+    List<Target> targets = new ArrayList<>();
+    for (Target target : byNames.values()) {
+      if (target.candidates.stream().anyMatch(c -> !c.continues)) {
+        targets.add(target);
       }
     }
-    return outermost;
+    // Outermost first: a property removed takes whatever lay under it along.
+    targets.sort(Comparator.comparingInt(t -> t.names.size()));
+    return new JsonProvenancePruner(reader.rawSchema(), Collections.unmodifiableList(targets));
+  }
+
+  boolean isEmpty() {
+    return targets.isEmpty();
+  }
+
+  /**
+   * Prunes {@code document} in place.
+   *
+   * @throws SerializationException if a property to prune is required and has no default
+   */
+  void prune(JsonNode document) {
+    for (Target target : targets) {
+      walk(target, reader, document, 0, new ArrayList<>(), false);
+    }
   }
 
   /**
@@ -66,45 +135,156 @@ final class JsonProvenancePruner {
    */
   private static boolean isProperty(ProvenanceMapping mapping, List<Integer> path,
       List<String> names) {
-    if (names.isEmpty() || names.get(names.size() - 1) == null) {
-      return false;
-    }
-    for (int k = 1; k < path.size(); k++) {
-      if (names.equals(mapping.readerNamesOf(path.subList(0, k)))) {
-        return false;
-      }
-    }
-    return true;
+    return !names.isEmpty() && names.get(names.size() - 1) != null
+        && !isBranch(mapping, path, names);
+  }
+
+  private static boolean isBranch(ProvenanceMapping mapping, List<Integer> path,
+      List<String> names) {
+    List<String> parent = path.size() > 1
+        ? mapping.readerNamesOf(path.subList(0, path.size() - 1)) : Collections.emptyList();
+    return names.equals(parent);
   }
 
   /**
-   * Removes every path in {@code removals} from {@code document}, in place.
+   * The branch index of every union branch on the way to {@code path}, outermost first.
    */
-  static void prune(JsonNode document, List<List<String>> removals) {
-    for (List<String> path : removals) {
-      prune(document, path, 0);
+  private static List<Integer> branchChoices(ProvenanceMapping mapping, List<Integer> path) {
+    List<Integer> choices = new ArrayList<>();
+    for (int k = 1; k <= path.size(); k++) {
+      List<Integer> prefix = path.subList(0, k);
+      List<String> names = mapping.readerNamesOf(prefix);
+      if (names != null && isBranch(mapping, prefix, names)) {
+        choices.add(prefix.get(k - 1));
+      }
     }
+    return choices;
   }
 
-  private static void prune(JsonNode node, List<String> path, int step) {
-    if (node == null) {
+  private void walk(Target target, Schema schema, JsonNode node, int step, List<Integer> choices,
+      boolean ambiguous) {
+    if (schema == null || node == null) {
       return;
     }
-    String name = path.get(step);
+    if (schema instanceof ReferenceSchema) {
+      walk(target, ((ReferenceSchema) schema).getReferredSchema(), node, step, choices, ambiguous);
+      return;
+    }
+    if (schema instanceof CombinedSchema) {
+      walkCombined(target, (CombinedSchema) schema, node, step, choices, ambiguous);
+      return;
+    }
+    String name = target.names.get(step);
     if (name == null) {
       // An unnamed step: each element of an array, or each value of an object keyed by string.
-      if (step + 1 < path.size()) {
-        node.elements().forEachRemaining(child -> prune(child, path, step + 1));
+      Schema child = schema instanceof ArraySchema
+          ? ((ArraySchema) schema).getAllItemSchema()
+          : schema instanceof ObjectSchema
+              ? ((ObjectSchema) schema).getSchemaOfAdditionalProperties() : null;
+      for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
+        walk(target, child, it.next(), step + 1, choices, ambiguous);
       }
       return;
     }
-    if (!node.isObject()) {
+    if (!(schema instanceof ObjectSchema) || !node.isObject() || !node.has(name)
+        || !((ObjectSchema) schema).getPropertySchemas().containsKey(name)) {
       return;
     }
-    if (step + 1 == path.size()) {
-      ((ObjectNode) node).remove(name);
-    } else {
-      prune(node.get(name), path, step + 1);
+    ObjectSchema object = (ObjectSchema) schema;
+    if (step + 1 < target.names.size()) {
+      walk(target, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
+          ambiguous);
+    } else if (!keeps(target, choices, ambiguous)) {
+      remove((ObjectNode) node, object, name);
+    }
+  }
+
+  private void walkCombined(Target target, CombinedSchema schema, JsonNode node, int step,
+      List<Integer> choices, boolean ambiguous) {
+    List<Schema> subschemas = new ArrayList<>(schema.getSubschemas());
+    if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
+      // The converter merges an allOf; the next step lives in whichever part declares it.
+      for (Schema part : subschemas) {
+        walk(target, part, node, step, choices, ambiguous);
+      }
+      return;
+    }
+    List<Schema> branches = new ArrayList<>();
+    for (Schema subschema : subschemas) {
+      if (!(subschema instanceof NullSchema)) {
+        branches.add(subschema);
+      }
+    }
+    if (branches.size() == 1 && branches.size() < subschemas.size()) {
+      // A nullable union, which the logical type collapses: no branch step.
+      walk(target, branches.get(0), node, step, choices, ambiguous);
+      return;
+    }
+    int chosen = -1;
+    boolean several = false;
+    for (int i = 0; i < branches.size(); i++) {
+      if (validates(branches.get(i), node)) {
+        if (chosen >= 0) {
+          several = true;
+          break;
+        }
+        chosen = i;
+      }
+    }
+    if (chosen < 0) {
+      return;
+    }
+    List<Integer> extended = new ArrayList<>(choices);
+    extended.add(chosen);
+    // oneOf takes the first valid branch as JsonSchema does; overlapping anyOf is ambiguous.
+    walk(target, branches.get(chosen), node, step, extended,
+        ambiguous || (several && schema.getCriterion() == CombinedSchema.ANY_CRITERION));
+  }
+
+  /**
+   * Whether the value may stay: exactly one location matches the branches taken, and it
+   * continues.
+   */
+  private static boolean keeps(Target target, List<Integer> choices, boolean ambiguous) {
+    if (!target.clashes() || ambiguous) {
+      return false;
+    }
+    Candidate match = null;
+    for (Candidate candidate : target.candidates) {
+      if (candidate.choices.equals(choices)) {
+        if (match != null) {
+          return false;
+        }
+        match = candidate;
+      }
+    }
+    return match != null && match.continues;
+  }
+
+  private static void remove(ObjectNode node, ObjectSchema object, String name) {
+    if (!object.getRequiredProperties().contains(name)) {
+      node.remove(name);
+      return;
+    }
+    Schema property = object.getPropertySchemas().get(name);
+    if (property == null || !property.hasDefaultValue()) {
+      throw new SerializationException("Property '" + name + "' has no counterpart in the "
+          + "writer schema, is required by the reader and declares no default. There is no value "
+          + "to read.");
+    }
+    try {
+      node.set(name, MAPPER.readTree(JSONObject.valueToString(property.getDefaultValue())));
+    } catch (IOException e) {
+      throw new SerializationException("Could not read the default of property '" + name + "'", e);
+    }
+  }
+
+  private static boolean validates(Schema schema, JsonNode node) {
+    try {
+      JsonSchema.validate(schema, node);
+      return true;
+    } catch (Exception e) {
+      return false;
     }
   }
 }

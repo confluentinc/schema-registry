@@ -1,0 +1,200 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.serializers;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
+import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Deserialization strictness in Avro: a reader location whose provenance id is new never receives
+ * the writer's value — a record branch with none fails the records containing it, and a union
+ * choice the resolver would make against provenance falls back.
+ */
+class AvroProvenanceStrictnessTest {
+
+  private static final String TOPIC = "strict";
+  private static final String SUBJECT = TOPIC + "-value";
+  private static final String A = "{\"type\":\"record\",\"name\":\"A\",\"fields\":"
+      + "[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}";
+
+  private ProvenanceMockSchemaRegistryClient client;
+
+  @BeforeEach
+  void init() {
+    client = new ProvenanceMockSchemaRegistryClient();
+  }
+
+  @Test
+  void aReAddedRecordBranchFailsOnlyTheRecordsContainingIt() throws Exception {
+    Schema v1 = record("[\"string\"," + A + "]", "v1");
+    register(v1, record("[\"string\",\"int\"]", "v2"));
+    Schema v3 = record("[\"string\"," + A + "]", "v3");
+    register(v3);
+    Schema a = v1.getField("f").schema().getTypes().get(1);
+
+    byte[] branch = write(v1, new GenericRecordBuilder(a).set("x", 5).build());
+    assertThrows(Exception.class, () -> read(v3, branch, "v1"));
+    assertEquals(5, ((GenericRecord) read(v3, branch, null).get("f")).get("x"));
+
+    assertEquals("s", read(v3, write(v1, "s"), "v1").get("f").toString());
+  }
+
+  @Test
+  void aReAddedPrimitiveBranchFallsBack() throws Exception {
+    Schema v1 = record("[\"int\",\"string\"]", "v1");
+    Schema v3 = record("[\"int\",\"string\"]", "v3");
+    register(v1, record("[\"string\",\"boolean\"]", "v2"), v3);
+    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v3));
+  }
+
+  @Test
+  void aValueWidenedIntoANewBranchFallsBack() throws Exception {
+    Schema v1 = record("\"int\"", "v1");
+    Schema v2 = record("[\"int\",\"string\"]", "v2");
+    register(v1, v2);
+    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v2));
+  }
+
+  @Test
+  void aBranchPromotedUnambiguouslyReadsItsValue() throws Exception {
+    Schema v1 = record("[\"null\",\"int\",\"string\"]", "v1");
+    Schema v2 = record("[\"null\",\"long\",\"string\"]", "v2");
+    register(v1, v2);
+    assertEquals(7L, read(v2, write(v1, 7), "v1").get("f"));
+  }
+
+  @Test
+  void aBranchPromotedTwoWaysFallsBack() throws Exception {
+    Schema v1 = record("[\"int\",\"string\"]", "v1");
+    Schema v2 = record("[\"long\",\"float\",\"string\"]", "v2");
+    register(v1, v2);
+    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v2));
+  }
+
+  @Test
+  void aConnectMapEntryValueFollowsItsProvenance() throws Exception {
+    String entry = "{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"MapEntry\","
+        + "\"namespace\":\"io.confluent.connect.avro\",\"fields\":[{\"name\":\"key\","
+        + "\"type\":\"int\"},{\"name\":\"value\",\"type\":{\"type\":\"record\",\"name\":\"V\","
+        + "\"fields\":[%s]}}]}}";
+    Schema v1 = record(String.format(entry, "{\"name\":\"x\",\"type\":\"int\"}"), "v1");
+    Schema v2 = record(String.format(entry,
+        "{\"name\":\"y\",\"type\":\"int\",\"aliases\":[\"x\"]}"), "v2");
+    register(v1, v2);
+    Schema mapEntry = v1.getField("f").schema().getElementType();
+    Schema value = mapEntry.getField("value").schema();
+    GenericRecord pair = new GenericRecordBuilder(mapEntry).set("key", 1)
+        .set("value", new GenericRecordBuilder(value).set("x", 5).build()).build();
+
+    Object read = read(v2, write(v1, new GenericData.Array<>(
+        v1.getField("f").schema(), Arrays.asList(pair))), "v1").get("f");
+    assertEquals(5, ((GenericRecord) ((GenericRecord) ((java.util.List<?>) read).get(0))
+        .get("value")).get("y"));
+  }
+
+  @Test
+  void aSuppliedReaderIdChoosesTheVersionAStructuralMatchWouldNot() throws Exception {
+    // v1 and v3 are structurally equal; note was dropped at v2, so it is a new column in v3.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}");
+    int v1Id = client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, withMetadata(v1, "v3"));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
+    // Flink's reader: its pinned v1 with other metadata merged on, registered nowhere.
+    AvroSchema merged = withMetadata(v1, "merged");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+
+    GenericRecord byStructure = (GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> merged, false).getValue();
+    GenericRecord byId = (GenericRecord) deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> ReaderSchema.of(merged, v1Id), false)
+        .getValue();
+    assertEquals("", byStructure.get("note").toString());
+    assertEquals("ada", byId.get("note").toString());
+  }
+
+  // -------------------------------------------------------------------------------------------
+
+  private static AvroSchema withMetadata(Schema schema, String value) {
+    return new AvroSchema(schema).copy(
+        new Metadata(null, Collections.singletonMap("version", value), null), null);
+  }
+
+  private void register(Schema... versions) throws Exception {
+    for (Schema version : versions) {
+      client.register(SUBJECT, new AvroSchema(version));
+    }
+  }
+
+  private AvroProvenanceRenamer.Renamed rename(Schema writer, Schema reader) throws Exception {
+    int writerId = client.getId(SUBJECT, new AvroSchema(writer));
+    int readerId = client.getId(SUBJECT, new AvroSchema(reader));
+    return AvroProvenanceRenamer.rename(writer, reader, ProvenanceMapping.join(
+        client.getProvenanceById(SUBJECT, writerId, readerId, false, false, null),
+        writerId, readerId));
+  }
+
+  private byte[] write(Schema writer, Object value) throws Exception {
+    client.register(SUBJECT, new AvroSchema(writer));
+    return new KafkaAvroSerializer(client, config(null))
+        .serialize(TOPIC, new GenericRecordBuilder(writer).set("f", value).build());
+  }
+
+  private GenericRecord read(Schema reader, byte[] bytes, String provenance) {
+    return (GenericRecord) new KafkaAvroDeserializer(client, config(provenance))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, reader).getValue();
+  }
+
+  private static Map<String, Object> config(String provenance) {
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "bogus");
+    config.put("auto.register.schemas", false);
+    config.put("use.latest.version", false);
+    if (provenance != null) {
+      config.put("provenance.algorithm", provenance);
+    }
+    return config;
+  }
+
+  private static Schema record(String fieldType, String doc) {
+    return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"doc\":\"" + doc
+        + "\",\"fields\":[{\"name\":\"f\",\"type\":" + fieldType + "}]}");
+  }
+}

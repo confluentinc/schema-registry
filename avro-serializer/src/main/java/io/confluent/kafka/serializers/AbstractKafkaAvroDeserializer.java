@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -87,6 +88,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector;
+
+  /**
+   * {@code readers} as a reader function, with any registered id a reader comes with used for
+   * provenance instead of being looked up.
+   */
+  protected Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return provenanceProjector().readerSchemas(readers);
+  }
 
   // Created on first use, once the deserializer is configured; a race builds an equivalent one.
   private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
