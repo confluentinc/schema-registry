@@ -28,11 +28,11 @@ import java.util.Objects;
 public final class ReaderSchema {
 
   private final ParsedSchema schema;
-  private final Integer registeredId;
+  private final Integer id;
 
   private ReaderSchema(ParsedSchema schema, Integer registeredId) {
     this.schema = Objects.requireNonNull(schema, "schema");
-    this.registeredId = registeredId;
+    this.id = registeredId;
   }
 
   /**
@@ -56,7 +56,7 @@ public final class ReaderSchema {
   /**
    * The schema id of the version this reader stands for, or null if the caller did not say.
    */
-  public Integer getRegisteredId() {
-    return registeredId;
+  public Integer getId() {
+    return id;
   }
 }
