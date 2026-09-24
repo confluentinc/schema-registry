@@ -57,8 +57,9 @@ final class AvroProvenanceRenamer {
 
   // Every named type built, by full name, to catch one name given two definitions.
   private final Map<String, Schema> byName = new HashMap<>();
-  // Reader records a writer record was renamed against; their field aliases must not apply.
-  private final Set<Schema> matchedReaderRecords =
+  // Reader types a writer type was renamed against; their aliases, and a record's field aliases,
+  // must not apply again.
+  private final Set<Schema> matchedReaderTypes =
       Collections.newSetFromMap(new IdentityHashMap<>());
   // Sink branches to append to a reader union, by the original reader union.
   private final Map<Schema, List<Schema>> sinks = new IdentityHashMap<>();
@@ -86,8 +87,9 @@ final class AvroProvenanceRenamer {
   /**
    * Renames {@code writer} after {@code reader} as {@code mapping} pairs them.
    *
-   * <p>The reader comes back too: the field aliases of every record provenance matched are
-   * removed, since provenance has already decided those pairings, and any sink branches are added.
+   * <p>The reader comes back too: the aliases of every type provenance matched, and a matched
+   * record's field aliases, are removed, since provenance has already decided those pairings, and
+   * any sink branches are added.
    *
    * @throws ProvenanceUnavailableException if one named type would need two definitions inside a
    *     union, or the resolver would read a writer value into a union branch provenance gives a
@@ -207,7 +209,7 @@ final class AvroProvenanceRenamer {
       List<String> readerAt, boolean inUnion) {
     final Schema target = ofType(reader, Type.RECORD);
     if (target != null) {
-      matchedReaderRecords.add(target);
+      matchedReaderTypes.add(target);
     }
     final List<Field> fields = new ArrayList<>(writer.getFields().size());
     for (Field field : writer.getFields()) {
@@ -344,8 +346,11 @@ final class AvroProvenanceRenamer {
   }
 
   private String nameAfter(Schema writer, Schema reader) {
-    return reader != null && reader.getType() == writer.getType()
-        ? reader.getFullName() : throwawayName(writer);
+    if (reader != null && reader.getType() == writer.getType()) {
+      matchedReaderTypes.add(reader);
+      return reader.getFullName();
+    }
+    return throwawayName(writer);
   }
 
   private String throwawayName(Schema writer) {
@@ -400,8 +405,10 @@ final class AvroProvenanceRenamer {
   // -------------------------------------------------------------------------------------------
 
   /**
-   * {@code reader} with the field aliases of every matched record removed and the sinks added to
-   * their unions.
+   * {@code reader} with the aliases of every matched type and the field aliases of every matched
+   * record removed, and the sinks added to their unions. Avro applies a reader's aliases to the
+   * writer before resolving; the writer already bears the reader's names, so a matched type's
+   * alias could only rename it a second time — onto another type, or into a duplicate.
    */
   private Schema readerCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema copied = copies.get(reader);
@@ -424,20 +431,41 @@ final class AvroProvenanceRenamer {
         branches.addAll(sinks.getOrDefault(reader, Collections.emptyList()));
         return Schema.createUnion(branches);
       }
+      case ENUM:
+      case FIXED: {
+        if (!matchedReaderTypes.contains(reader)) {
+          return reader;
+        }
+        final Schema copy = reader.getType() == Type.ENUM
+            ? withProps(reader, Schema.createEnum(reader.getName(), reader.getDoc(),
+                reader.getNamespace(), reader.getEnumSymbols(), reader.getEnumDefault()))
+            : fixedCopy(reader);
+        copies.put(reader, copy);
+        return copy;
+      }
       default:
-        // Enums, fixed and primitives carry no field aliases and are shared as they are.
         return reader;
     }
+  }
+
+  private static Schema fixedCopy(Schema reader) {
+    final Schema fixed = Schema.createFixed(
+        reader.getName(), reader.getDoc(), reader.getNamespace(), reader.getFixedSize());
+    final LogicalType logicalType = LogicalTypes.fromSchemaIgnoreInvalid(reader);
+    if (logicalType != null) {
+      logicalType.addToSchema(fixed);
+    }
+    return withProps(reader, fixed);
   }
 
   private Schema recordCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema record = Schema.createRecord(
         reader.getName(), reader.getDoc(), reader.getNamespace(), reader.isError());
-    for (String alias : reader.getAliases()) {
-      record.addAlias(alias);
+    final boolean matched = matchedReaderTypes.contains(reader);
+    if (!matched) {
+      reader.getAliases().forEach(record::addAlias);
     }
     copies.put(reader, record);
-    final boolean matched = matchedReaderRecords.contains(reader);
     final List<Field> fields = new ArrayList<>(reader.getFields().size());
     for (Field field : reader.getFields()) {
       final Field copy = new Field(field.name(), readerCopy(field.schema(), copies),

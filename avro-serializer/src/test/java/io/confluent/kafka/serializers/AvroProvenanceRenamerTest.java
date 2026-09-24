@@ -25,9 +25,18 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -150,6 +159,35 @@ public class AvroProvenanceRenamerTest {
             pids(p(1, "a"), p(2, "a", "x"), p(3, "b"), p(4, "b", "y")),
             pids(p(1, "a"), p(4, "a", "x"), p(3, "b"), p(2, "b", "y")))));
     assertTrue(e.getMessage(), e.getMessage().contains("different parents"));
+  }
+
+  @Test
+  public void aMatchedTypesAliasCannotRenameTheWriterAgain() throws Exception {
+    // A2 aliases A, whose name a new type took. Avro applies a reader's aliases to the writer
+    // before resolving, so left in place the alias would rename the writer's A to A2 as well.
+    String union = "[\"null\",{\"type\":\"record\",\"name\":\"A2\",\"aliases\":[\"A\"],"
+        + "\"fields\":[" + field("x", "\"int\"") + "]},{\"type\":\"record\",\"name\":\"A\","
+        + "\"fields\":[" + field("q", "\"string\"") + "]}]";
+    Schema writer = record("R", field("u", union));
+    Schema reader = record("R", field("u", union), field("extra", "\"int\"", "0"));
+    List<ProvenanceField> located = pids(p(1, "u"), p(2, "u", "A2"), p(3, "u", "A2", "x"),
+        p(4, "u", "A"), p(5, "u", "A", "q"));
+    List<ProvenanceField> readerLocated = new ArrayList<>(located);
+    readerLocated.add(p(6, "extra"));
+    AvroProvenanceRenamer.Renamed renamed =
+        AvroProvenanceRenamer.rename(writer, reader, mapping(located, readerLocated));
+
+    assertTrue(renamed.reader.getField("u").schema().getTypes().get(1).getAliases().isEmpty());
+    Schema a2 = writer.getField("u").schema().getTypes().get(1);
+    GenericRecord value = new GenericRecordBuilder(writer)
+        .set("u", new GenericRecordBuilder(a2).set("x", 7).build()).build();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<GenericRecord>(writer).write(value, encoder);
+    encoder.flush();
+    GenericRecord read = new GenericDatumReader<GenericRecord>(renamed.writer, renamed.reader)
+        .read(null, DecoderFactory.get().binaryDecoder(out.toByteArray(), null));
+    assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
