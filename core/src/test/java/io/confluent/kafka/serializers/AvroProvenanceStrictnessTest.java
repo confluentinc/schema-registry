@@ -145,6 +145,28 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
+  void aReaderFieldNamedLikeAThrowawayGetsNoOldValue() throws Exception {
+    // b is dropped and re-added; its writer field is renamed so nothing matches it, and that name
+    // must not be one the reader happens to use.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"__provenance_unmatched_1\",\"type\":\"int\",\"default\":0},"
+        + "{\"name\":\"b\",\"type\":\"int\",\"default\":0}]}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("a", 1).set("b", 2).build());
+    register(v2, v3);
+
+    GenericRecord read = read(v3, bytes, "v1");
+    assertEquals(0, read.get("__provenance_unmatched_1"));
+    assertEquals(0, read.get("b"));
+  }
+
+  @Test
   void aSuppliedReaderIdChoosesTheVersionAStructuralMatchWouldNot() throws Exception {
     // v1 and v3 are structurally equal; note was dropped at v2, so it is a new column in v3.
     Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["

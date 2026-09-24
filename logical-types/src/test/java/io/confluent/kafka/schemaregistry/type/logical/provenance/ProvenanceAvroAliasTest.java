@@ -186,6 +186,20 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
+  void aBranchNamedByAHintIsIdentifiedByItsType() {
+    // A confluent:union hint renames a branch in the logical type only; Avro finds it by type.
+    String hinted = "{\"name\":\"u\",\"type\":[\"int\",\"string\"],"
+        + "\"confluent:union\":[{\"name\":\"%s\"},{\"name\":\"%s\"}]}";
+    List<Map<String, Integer>> renamed = pids(avro(String.format(hinted, "num", "txt")),
+        avro(String.format(hinted, "number", "text")));
+    assertThat(same(renamed, "u.int", "u.int") && same(renamed, "u.string", "u.string")).isTrue();
+    // And a hinted int branch still promotes to long.
+    List<Map<String, Integer>> promoted = pids(avro(String.format(hinted, "num", "txt")),
+        avro(String.format(hinted, "num", "txt").replace("[\"int\",", "[\"long\",")));
+    assertThat(same(promoted, "u.int", "u.long")).isTrue();
+  }
+
+  @Test
   void aLocationWhoseTypeChangesAndChangesBackStartsOver() {
     String a = rec("A", f("x", I));
     List<Map<String, Integer>> avro = pids(avro(f("w", a), f("u", "\"A\"")),

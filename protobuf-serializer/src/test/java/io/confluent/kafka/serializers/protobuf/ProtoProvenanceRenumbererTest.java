@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -48,6 +49,25 @@ public class ProtoProvenanceRenumbererTest {
         () -> ProtoProvenanceRenumberer.renumber(READER, mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), p(2, "ghost"))), false));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
+  }
+
+  @Test(timeout = 2000)
+  public void aFreshNumberJumpsAnExtensionRangeToTheMaximum() {
+    // Stepping through the range number by number takes seconds.
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
+        + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 100 to max;\n}\n");
+    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader,
+        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
+    assertEquals(99, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
+  }
+
+  @Test
+  public void aFreshNumberIsNeverOneTheImplementationReserves() {
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
+        + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 20000 to max;\n}\n");
+    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader,
+        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
+    assertEquals(18_999, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,

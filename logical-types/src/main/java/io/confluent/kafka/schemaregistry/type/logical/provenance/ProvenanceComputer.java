@@ -571,13 +571,22 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * A branch's name for identity. A named Avro branch is its type's full name, as Avro finds a
-     * branch: the logical type's own name for it is shortened, and lengthened again where simple
-     * names collide, so a branch would change identity with its siblings.
+     * A branch's name for identity. An Avro branch is named as Avro finds it — a named type's full
+     * name, a primitive's type name — which the converter records as its native step. The logical
+     * type's own name for it is shortened where it can be, lengthened where simple names collide,
+     * and replaced by any hint, so a branch would change identity with its siblings or its hint.
      */
     private String branchName(UnionBranch branch) {
-      return isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())
-          ? branch.getSchema().getQualifiedName() : branch.getName();
+      if (policy == IdentityPolicy.AVRO) {
+        if (isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())) {
+          return branch.getSchema().getQualifiedName();
+        }
+        List<String> steps = branch.getNativeNames();
+        if (steps != null && steps.size() == 1 && steps.get(0) != null) {
+          return steps.get(0);
+        }
+      }
+      return branch.getName();
     }
 
     private boolean seesThroughNamedTypes() {

@@ -208,6 +208,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
       ProtoProvenanceRenumberer.Renumbered renumbered =
           byProvenance(subject, schemaId, schema, readerSchema, name, migrations);
+      // The renumbering is only for parsing: what the caller gets is in the reader's own numbers.
+      final ProtobufSchema unrenumbered = readerSchema;
       readerSchema = renumbered != null ? renumbered.schema : readerSchema;
 
       int length = buffer.remaining();
@@ -255,7 +257,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(protobufBytes, schema);
       } else {
-        value = parseDynamic(schema, protobufBytes, start, length, renumbered);
+        value = parseDynamic(schema, protobufBytes, start, length, renumbered, unrenumbered);
+      }
+      if (renumbered != null && renumbered.movedAny()) {
+        schema = unrenumbered;
       }
 
       if (includeSchemaAndVersion) {
@@ -302,10 +307,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   /**
    * {@code bytes} parsed as {@code schema}, less any writer data a provenance renumbering left in
-   * unknown fields.
+   * unknown fields, and back in {@code reader}'s own numbers. A moved field took no writer data,
+   * so nothing is lost moving back; handing over the renumbered descriptor would give the caller
+   * fields it cannot address with its own descriptor and would write them out under the wrong
+   * numbers.
    */
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
-      int length, ProtoProvenanceRenumberer.Renumbered renumbered) throws IOException {
+      int length, ProtoProvenanceRenumberer.Renumbered renumbered, ProtobufSchema reader)
+      throws IOException {
     Descriptor descriptor = schema.toDescriptor();
     if (descriptor == null) {
       throw new SerializationException("Could not find descriptor with name " + schema.name());
@@ -313,7 +322,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     Message value = DynamicMessage.parseFrom(descriptor,
         CodedInputStream.newInstance(bytes.array(), start, length),
         ProtobufSchema.EXTENSION_REGISTRY);
-    return renumbered != null && renumbered.movedAny() ? renumbered.dropMoved(value) : value;
+    if (renumbered == null || !renumbered.movedAny()) {
+      return value;
+    }
+    return DynamicMessage.parseFrom(reader.toDescriptor(),
+        renumbered.dropMoved(value).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
   }
 
   private ProtoProvenanceRenumberer.Renumbered byProvenance(String subject, SchemaId writerId,
