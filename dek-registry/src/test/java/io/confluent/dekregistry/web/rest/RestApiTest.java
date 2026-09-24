@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
@@ -204,6 +205,25 @@ public class RestApiTest extends ClusterTestHarness {
     Kek cached = client.getKek(kekName, false);
     assertFalse(cached.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", cached.getKmsProps().get("namespace"));
+  }
+
+  @Test
+  public void testTestKekResponseIsRedacted() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-test-redact";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.supersecretvaulttoken");
+    kmsProps.put("namespace", "my-namespace");
+    client.createKek(headers, kekName, "test-kms", "myid", kmsProps, null, true, false);
+
+    DekRegistryRestService restService =
+        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls());
+    Kek tested = restService.httpRequest("/dek-registry/v1/keks/" + kekName + "/test",
+        "POST", null, headers, new TypeReference<Kek>() {});
+
+    assertFalse(tested.getKmsProps().containsKey("token.id"));
+    assertEquals("my-namespace", tested.getKmsProps().get("namespace"));
   }
 
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
