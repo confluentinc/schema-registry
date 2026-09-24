@@ -93,7 +93,7 @@ blocks:
   - name: R2 Code Review
     dependencies: []
     run:
-      when: "pull_request =~ '.+' and change_in('/', {exclude: ['/.deployed-versions/']})"
+      when: "pull_request =~ '.+' and change_in('/', {exclude: ['/.deployed-versions/'], default_branch: 'master'})"
     task:
       jobs:
         - name: R2 Code Review
