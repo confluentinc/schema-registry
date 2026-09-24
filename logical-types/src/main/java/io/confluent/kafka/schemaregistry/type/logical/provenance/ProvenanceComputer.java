@@ -222,8 +222,8 @@ public final class ProvenanceComputer {
       for (NameKey name : entity.declaredNames) {
         Identity claimant = claimedNames.get(name);
         if (claimant != null && !claimant.equals(entity.identity)) {
-          throw new IllegalStateException("Conflicting mapping detected within schema at version "
-              + version + " for: " + name);
+          throw new AmbiguousProvenanceException(
+              "Conflicting mapping detected within schema at version " + version + " for: " + name);
         }
         claimedNames.put(name, entity.identity);
 
@@ -234,8 +234,9 @@ public final class ProvenanceComputer {
         if (indexed != null && !indexed.equals(entity.identity)) {
           EntityState indexedState = history.state.get(indexed);
           if (indexedState != null && indexedState.active) {
-            throw new IllegalStateException("Cannot overwrite active identity mapping at version "
-                + version + " for name: " + name);
+            throw new AmbiguousProvenanceException(
+                "Cannot overwrite active identity mapping at version " + version + " for name: "
+                    + name);
           }
         }
       }
@@ -519,7 +520,7 @@ public final class ProvenanceComputer {
       for (Candidate peer : peers) {
         Identity identity = resolveIdentity(peer, scope, releasedHere, peers);
         if (!seen.add(identity)) {
-          throw new IllegalStateException(
+          throw new AmbiguousProvenanceException(
               "Multiple entities resolve to the same logical identity at version " + version
                   + ": " + identity + " (at " + peer.path + ")");
         }
@@ -701,8 +702,8 @@ public final class ProvenanceComputer {
             byCanonical.getOrDefault(historical, Collections.emptySet());
         Set<Candidate> winning = !aliasClaims.isEmpty() ? aliasClaims : canonicalClaims;
         if (winning.size() > 1) {
-          throw new IllegalStateException("Ambiguous identity resolution at version " + version
-              + ": multiple entities claim historical identity " + historical
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+              + version + ": multiple entities claim historical identity " + historical
               + (!aliasClaims.isEmpty() ? " via aliases" : " canonically"));
         }
         if (winning.size() == 1) {
@@ -789,7 +790,7 @@ public final class ProvenanceComputer {
       }
 
       if (matches.size() > 1) {
-        throw new IllegalStateException("Ambiguous identity resolution at version " + version
+        throw new AmbiguousProvenanceException("Ambiguous identity resolution at version " + version
             + ": " + peer.path + " matches multiple historical identities " + matches);
       }
       return matches.size() == 1 ? matches.iterator().next() : null;
@@ -906,10 +907,10 @@ public final class ProvenanceComputer {
           throw new IllegalArgumentException("Null alias at " + peer.path);
         }
         if (!seenAliases.add(alias)) {
-          throw new IllegalStateException("Duplicate alias '" + alias + "' at " + peer.path);
+          throw new AmbiguousProvenanceException("Duplicate alias '" + alias + "' at " + peer.path);
         }
         if (alias.equals(peer.name)) {
-          throw new IllegalStateException(
+          throw new AmbiguousProvenanceException(
               "Alias '" + alias + "' duplicates the canonical name at " + peer.path);
         }
       }

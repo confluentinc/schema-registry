@@ -49,6 +49,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int RECURSIVE_SCHEMA = 42213;
   private static final int UNRESOLVABLE_REFERENCE = 42214;
   private static final int UNKNOWN_ALGORITHM = 42216;
+  private static final int AMBIGUOUS_PROVENANCE = 42217;
   // The registry's generic server error carries its HTTP status as its error code.
   private static final int SERVER_ERROR = 500;
 
@@ -103,6 +104,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       whole = compute(subject, range, schemas, includeMultipleMessages, version);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
+    } catch (AmbiguousProvenanceException e) {
+      throw new RestClientException(e.getMessage(), 422, AMBIGUOUS_PROVENANCE);
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
     } catch (RuntimeException e) {

@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import java.util.OptionalInt;
@@ -341,7 +342,8 @@ public class SubjectsResource {
                   + "logical form. Error code 42202 indicates an invalid version. Error code "
                   + "42213 indicates a recursive schema. Error code 42214 indicates a schema "
                   + "that could not be parsed. Error code 42215 indicates an invalid range. "
-                  + "Error code 42216 indicates an unknown algorithm.",
+                  + "Error code 42216 indicates an unknown algorithm. Error code 42217 indicates "
+                  + "a history whose names and aliases do not determine one provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
@@ -593,6 +595,8 @@ public class SubjectsResource {
           subject, provenanceEntries(history), parsed, includeMultipleMessages, algorithm);
     } catch (RecursiveTypeException e) {
       throw Errors.recursiveSchemaException(e.getMessage());
+    } catch (AmbiguousProvenanceException e) {
+      throw Errors.ambiguousProvenanceException(e.getMessage());
     } catch (ValidationException e) {
       throw Errors.invalidSchemaException(e);
     } catch (RuntimeException e) {

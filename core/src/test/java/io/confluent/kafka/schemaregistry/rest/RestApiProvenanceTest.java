@@ -219,6 +219,15 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aHistoryWhoseAliasesDetermineNoSingleIdentityHasNoProvenance() throws Exception {
+    register(SUBJECT, record(field("a", "int")));
+    register(SUBJECT, record("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}",
+        "{\"name\":\"c\",\"type\":\"int\",\"aliases\":[\"a\"]}"));
+    assertError(422, Errors.AMBIGUOUS_PROVENANCE_ERROR_CODE,
+        () -> byVersion(SUBJECT, "1", "2", false));
+  }
+
+  @Test
   public void aRecursiveSchemaHasNoProvenance() throws Exception {
     register(SUBJECT, "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
