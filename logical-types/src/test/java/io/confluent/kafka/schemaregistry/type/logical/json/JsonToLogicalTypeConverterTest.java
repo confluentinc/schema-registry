@@ -449,4 +449,54 @@ class JsonToLogicalTypeConverterTest {
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
     assertThat(lt.getName()).isEqualTo("Order");
   }
+
+  @Test
+  void aNullEnumMemberMakesTheEnumNullable() {
+    Schema p = convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[\"a\",\"b\",null]}}}").getRootSchema().getField("p").getSchema();
+
+    assertThat(p.getType()).isEqualTo(Schema.Type.ENUM);
+    assertThat(p.isNullable()).isTrue();
+    assertThat(p.getEnumValues()).extracting(Schema.EnumValue::getSymbol).containsExactly("a", "b");
+  }
+
+  @Test
+  void anEnumOfOnlyNullIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[null]}}}")).isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void aMapWithNoValueSchemaIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"))
+        .isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void malformedConverterMetadataIsRejectedByName() {
+    // Metadata of an unexpected shape is a schema the converter cannot read, named as such; a
+    // ClassCastException would reach the provenance endpoint as a 500.
+    String two = "[{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"integer\"}}}]";
+    String[] properties = {
+        "\"u\":{\"oneOf\":" + two + ",\"confluent:union\":{\"x\":1}}",
+        "\"u\":{\"oneOf\":" + two + ",\"confluent:union\":[{\"name\":1},{\"name\":2}]}",
+        "\"e\":{\"enum\":[\"A\",\"B\"],\"confluent:enum\":[\"a\"]}",
+        "\"n\":{\"type\":\"integer\",\"connect.type\":1}",
+        "\"n\":{\"type\":\"string\",\"connect.type\":null}",
+        "\"n\":{\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+            + "\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"x\"}}",
+        "\"n\":{\"type\":\"integer\",\"title\":\"org.apache.kafka.connect.data.Timestamp\","
+            + "\"connect.type\":\"int64\",\"flink.precision\":\"3\"}",
+        "\"n\":{\"type\":\"string\",\"connect.type\":\"bytes\",\"flink.maxLength\":\"5\"}",
+        "\"a\":{\"type\":\"string\",\"connect.index\":\"1\"},\"b\":{\"type\":\"string\"}",
+        "\"m\":{\"type\":\"array\",\"connect.type\":\"map\",\"items\":{\"type\":\"object\"}}"};
+    for (String property : properties) {
+      assertThatThrownBy(() -> JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+          "{\"type\":\"object\",\"properties\":{" + property + "}}")))
+          .as(property).isInstanceOf(ValidationException.class);
+    }
+  }
+
 }

@@ -35,6 +35,7 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -60,19 +61,42 @@ public class ProtoToLogicalTypeConverter {
   private static final int DEFAULT_DECIMAL_PRECISION = 10;
   private static final int DEFAULT_DECIMAL_SCALE = 0;
 
+  /**
+   * Marks the synthetic root {@link #toLogicalType(ProtobufSchema, boolean)} builds over every
+   * top-level message. Its fields carry no Protobuf field numbers, so provenance identifies them by
+   * name rather than deriving numbers from their position.
+   */
+  public static final String MULTI_MESSAGE_ROOT_PARAM = "confluent:multi-message-root";
+
   public static Schema toRootSchema(final ProtobufSchema schema) {
     return toLogicalType(schema).getRootSchema();
   }
 
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
+    return toLogicalType(schema, false);
+  }
+
+  /**
+   * As {@link #toLogicalType(ProtobufSchema)}; with {@code includeMultipleMessages}, the root is a
+   * synthetic struct with one field per top-level message, in file order, each a reference to that
+   * message and named by its fully qualified name. Every message is then a named type, the first
+   * one included, and a file declaring a single message is wrapped all the same.
+   */
+  public static LogicalType toLogicalType(
+      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+    if (includeMultipleMessages && schema.rawSchema() != null
+        && schema.rawSchema().getTypes().isEmpty()) {
+      throw new ValidationException("Protobuf file has no top-level messages");
+    }
     try {
-      return toLogicalTypeInternal(schema);
+      return toLogicalTypeInternal(schema, includeMultipleMessages);
     } catch (StackOverflowError e) {
       throw new ValidationException("Protobuf schema nests types too deeply to convert");
     }
   }
 
-  private static LogicalType toLogicalTypeInternal(final ProtobufSchema schema) {
+  private static LogicalType toLogicalTypeInternal(
+      final ProtobufSchema schema, final boolean includeMultipleMessages) {
     // Re-export-only file: the local proto has no types of its own, just
     // `import public "..."`. Detect this BEFORE toDescriptor(), because
     // toDescriptor() resolves through the public import to the imported file
@@ -102,7 +126,9 @@ public class ProtoToLogicalTypeConverter {
     // Mirrors ProtobufData's wrapper.for.raw.primitives behavior. Wrapped
     // roots are inherently nullable (the message itself can be unset).
     final FileDescriptor file = rootDescriptor.getFile();
-    Optional<Schema> unwrapped = toUnwrappedSchema(rootDescriptor);
+    Optional<Schema> unwrapped = includeMultipleMessages
+        ? Optional.empty()
+        : toUnwrappedSchema(rootDescriptor);
     if (unwrapped.isPresent()) {
       return new LogicalType(
           emptyToNull(file.getPackage()),
@@ -118,16 +144,7 @@ public class ProtoToLogicalTypeConverter {
     // each resolved external schema, so nested external types are recognized.
     // Enum-only files (no top-level messages) are skipped — the top-level
     // enum's name is already in the set from the constructor.
-    for (Map.Entry<String, String> entry :
-        schema.resolvedReferences().entrySet()) {
-      ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
-          schema.references(), schema.resolvedReferences(),
-          null, null, null, null);
-      Descriptor refDescriptor = parsedRef.toDescriptor();
-      if (refDescriptor != null) {
-        collectExternalTypeNames(refDescriptor.getFile(), ctx);
-      }
-    }
+    collectReferencedTypeNames(schema, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
       throw new ValidationException(
@@ -165,6 +182,9 @@ public class ProtoToLogicalTypeConverter {
     // field references to nested types emit NAMED_TYPE_REF instead of inlining.
     for (Descriptor topLevel : messageTypes) {
       preRegisterNestedTypes(topLevel, ctx);
+    }
+    if (includeMultipleMessages) {
+      return multiMessageLogicalType(schema, file, messageTypes, ctx);
     }
     // Build the root body and replace the placeholder.
     Schema rootBody = toLogicalTypeNested(
@@ -212,6 +232,58 @@ public class ProtoToLogicalTypeConverter {
         rootName,
         emptyToNull(file.getPackage()),
         rootSchema,
+        ctx.getNamedTypes(),
+        ctx.getExternalTypes(),
+        Map.of(),
+        schema.references(),
+        schema.resolvedReferences(),
+        ctx.getDefaultValues());
+  }
+
+  private static void collectReferencedTypeNames(
+      final ProtobufSchema schema, final ToLogicalContext<String> ctx) {
+    for (Map.Entry<String, String> entry : schema.resolvedReferences().entrySet()) {
+      ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
+          schema.references(), schema.resolvedReferences(),
+          null, null, null, null);
+      Descriptor refDescriptor = parsedRef.toDescriptor();
+      if (refDescriptor != null) {
+        collectExternalTypeNames(refDescriptor.getFile(), ctx);
+      }
+    }
+  }
+
+  /**
+   * Every top-level message a named type, built at its own index as Flink's multi-message row
+   * builds it, under a synthetic root of references in file order.
+   */
+  private static LogicalType multiMessageLogicalType(final ProtobufSchema schema,
+      final FileDescriptor file, final List<Descriptor> messageTypes,
+      final ToLogicalContext<String> ctx) {
+    for (Descriptor message : messageTypes) {
+      ctx.putNamedType(message.getFullName(), toLogicalTypeNested(false, message, ctx,
+          Collections.singletonList(message.getIndex())));
+    }
+    for (com.google.protobuf.Descriptors.EnumDescriptor enm : file.getEnumTypes()) {
+      ctx.putNamedType(enm.getFullName(), convertEnumDescriptor(enm));
+    }
+    for (Descriptor topLevel : messageTypes) {
+      buildNestedBodies(topLevel, ctx);
+    }
+    final List<Field> fields = new ArrayList<>(messageTypes.size());
+    for (Descriptor message : messageTypes) {
+      fields.add(new Field(message.getFullName(),
+          Schema.createNamedTypeRef(message.getFullName()).setNullable(true),
+          message.getIndex())
+          .setNativeNames(Collections.singletonList(message.getFullName())));
+    }
+    final Schema root = Schema.createStruct(fields)
+        .setNullable(false)
+        .setParams(Collections.singletonMap(MULTI_MESSAGE_ROOT_PARAM, true));
+    return new LogicalType(
+        null,
+        emptyToNull(file.getPackage()),
+        root,
         ctx.getNamedTypes(),
         ctx.getExternalTypes(),
         Map.of(),
@@ -494,8 +566,10 @@ public class ProtoToLogicalTypeConverter {
     for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
           oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
+      // A oneof is no step in the descriptor: its members are fields of this message.
       fields.add(new Field(oneOfDescriptor.getName(), unionSchema, index++,
-          null, false, null, null, null));
+          null, false, null, null, null)
+          .setNativeNames(Collections.emptyList()));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     // Read message-level doc/tags/params from MessageOptions
@@ -563,7 +637,8 @@ public class ProtoToLogicalTypeConverter {
         branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
       }
       branches.add(new UnionBranch(
-          fieldDescriptor.getName(), fieldSchema, description, branchParams));
+          fieldDescriptor.getName(), fieldSchema, description, branchParams)
+          .setNativeNames(Collections.singletonList(fieldDescriptor.getName())));
     }
     return Schema.createUnion(branches).setNullable(true);
   }
@@ -584,7 +659,14 @@ public class ProtoToLogicalTypeConverter {
       Meta meta = field.getOptions().getExtension(MetaProto.fieldMeta);
       String defaultStr = meta.getParamsMap().get(CommonConstants.LOGICAL_DEFAULT_PROP);
       if (defaultStr != null) {
-        defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+        try {
+          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+        } catch (IllegalArgumentException | DateTimeException e) {
+          // NumberFormatException among them: a default its type cannot read is rejected by name.
+          throw new ValidationException("Field " + field.getFullName() + " has an invalid "
+              + CommonConstants.LOGICAL_DEFAULT_PROP + " '" + defaultStr + "': " + e.getMessage(),
+              e);
+        }
         hasDefault = true;
       }
     }
@@ -670,7 +752,8 @@ public class ProtoToLogicalTypeConverter {
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
         defaultValue, hasDefault, derivedDefault, description, fieldTags,
-        effectiveParams, fieldRules);
+        effectiveParams, fieldRules)
+        .setNativeNames(Collections.singletonList(field.getName()));
   }
 
   /**
@@ -978,12 +1061,9 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final Meta fieldMeta = meta.get();
-      final int minLength = Integer.parseInt(
-          fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MIN_LENGTH, "-1"));
-      final int maxLength = Optional.ofNullable(
-              fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MAX_LENGTH, null))
-          .map(Integer::valueOf)
-          .orElse(MAX_LENGTH);
+      final int minLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MIN_LENGTH, -1);
+      final int maxLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MAX_LENGTH,
+          MAX_LENGTH);
       if (minLength > 0 && minLength == maxLength) {
         return Schema.createChar(maxLength).setNullable(isNullable);
       } else if (maxLength < MAX_LENGTH) {
@@ -997,12 +1077,9 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final Meta fieldMeta = meta.get();
-      final int minLength = Integer.parseInt(
-          fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MIN_LENGTH, "-1"));
-      final int maxLength = Optional.ofNullable(
-              fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MAX_LENGTH, null))
-          .map(Integer::valueOf)
-          .orElse(MAX_LENGTH);
+      final int minLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MIN_LENGTH, -1);
+      final int maxLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MAX_LENGTH,
+          MAX_LENGTH);
       if (minLength > 0 && minLength == maxLength) {
         return Schema.createBinary(maxLength).setNullable(isNullable);
       } else if (maxLength < MAX_LENGTH) {
@@ -1016,9 +1093,7 @@ public class ProtoToLogicalTypeConverter {
     // TimeOfDay's nanos field gives the wire type natural precision 9.
     final int defaultPrecision = 9;
     final int precision = getMeta(schema)
-        .map(m -> Integer.parseInt(
-            m.getParamsOrDefault(CommonConstants.FLINK_PRECISION_PROP,
-                String.valueOf(defaultPrecision))))
+        .map(m -> intParam(schema, m, CommonConstants.FLINK_PRECISION_PROP, defaultPrecision))
         .orElse(defaultPrecision);
     return Schema.createTime(precision).setNullable(isNullable);
   }
@@ -1055,9 +1130,7 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final int precision = meta
-          .map(m -> Integer.parseInt(
-              m.getParamsOrDefault(CommonConstants.FLINK_PRECISION_PROP,
-                  String.valueOf(defaultPrecision))))
+          .map(m -> intParam(schema, m, CommonConstants.FLINK_PRECISION_PROP, defaultPrecision))
           .orElse(defaultPrecision);
       if (CommonConstants.FLINK_TYPE_TIMESTAMP.equals(
           meta.get().getParamsOrDefault(CommonConstants.FLINK_TYPE_PROP, null))) {
@@ -1070,11 +1143,40 @@ public class ProtoToLogicalTypeConverter {
     }
   }
 
+  /**
+   * An integer param of {@code field}'s meta, or {@code otherwise}; any other value is rejected
+   * by name.
+   */
+  private static int intParam(FieldDescriptor field, Meta meta, String key, int otherwise) {
+    String value = meta.getParamsOrDefault(key, null);
+    if (value == null) {
+      return otherwise;
+    }
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+      throw new ValidationException(
+          "Field " + field.getFullName() + " has a non-integer " + key + " '" + value + "'", e);
+    }
+  }
+
   private static Optional<Meta> getMeta(final FieldDescriptor schema) {
     if (schema.getOptions().hasExtension(MetaProto.fieldMeta)) {
       return Optional.of(schema.getOptions().getExtension(MetaProto.fieldMeta));
     }
     return Optional.empty();
+  }
+
+  /**
+   * True if {@code field} holds a {@code flink.wrapped} wrapper message, which the logical type
+   * sees through to the wrapper's {@code value} field or oneof. Repeated, the wrapper is the
+   * element.
+   */
+  public static boolean isFlinkWrapped(final FieldDescriptor field) {
+    return getMeta(field)
+        .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
+        .map(Boolean::parseBoolean)
+        .orElse(false);
   }
 
   private static Schema convertRepeated(
@@ -1085,11 +1187,7 @@ public class ProtoToLogicalTypeConverter {
     if (isMapDescriptor(schema)) {
       return toMapSchema(schema, isNullableType, ctx, indexPath);
     } else {
-      final boolean isArrayElementWrapped =
-          getMeta(schema)
-              .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
-              .map(Boolean::parseBoolean)
-              .orElse(false);
+      final boolean isArrayElementWrapped = isFlinkWrapped(schema);
       final Schema arraySchema;
       if (isArrayElementWrapped) {
         // The wrapper is a single-payload struct: either a regular field named
@@ -1106,6 +1204,8 @@ public class ProtoToLogicalTypeConverter {
                 schema, ctx, false, indexPath))
             .setNullable(isNullableType);
       }
+      // A repeated field's elements are its values: no step in the descriptor.
+      arraySchema.setElementNativeNames(Collections.emptyList());
       // Proto spec: an absent repeated field is an empty list. Record that as
       // the implicit default so downstream consumers (e.g. Tableflow
       // schema-evolution compat checks) can treat "adding a new repeated
@@ -1124,11 +1224,7 @@ public class ProtoToLogicalTypeConverter {
       final FieldDescriptor descriptor,
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
-    final boolean isRepeatedWrapped =
-        getMeta(descriptor)
-            .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+    final boolean isRepeatedWrapped = isFlinkWrapped(descriptor);
     if (isRepeatedWrapped) {
       // The wrapper struct has a single payload named "value" — either a
       // regular field (RepeatedWrapper), or a oneof (OneofWrapper for wrapped
@@ -1159,7 +1255,12 @@ public class ProtoToLogicalTypeConverter {
     FieldDescriptor valueField = wrapper.findFieldByName(
         CommonConstants.FLINK_WRAPPER_FIELD_NAME);
     if (valueField != null && valueField.getRealContainingOneof() == null) {
-      return fieldToLogicalType(valueField, ctx, indexPath);
+      // The logical type sees through the wrapper; natively its payload field is a step.
+      final Schema payload = fieldToLogicalType(valueField, ctx, indexPath);
+      final List<String> entry = new ArrayList<>();
+      entry.add(valueField.getName());
+      entry.addAll(payload.getNativeEntryNames());
+      return payload.setNativeEntryNames(entry);
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
@@ -1213,8 +1314,10 @@ public class ProtoToLogicalTypeConverter {
     // is present because oneof branches flatten into the field list).
     final Schema entryStruct = toLogicalTypeNested(
         false, descriptor.getMessageType(), ctx, indexPath);
-    final Schema keyType = entryStruct.getField(CommonConstants.KEY_FIELD).getSchema();
-    final Schema valueType = entryStruct.getField(CommonConstants.VALUE_FIELD).getSchema();
+    final Field keyField = entryStruct.getField(CommonConstants.KEY_FIELD);
+    final Field valueField = entryStruct.getField(CommonConstants.VALUE_FIELD);
+    final Schema keyType = keyField.getSchema();
+    final Schema valueType = valueField.getSchema();
 
     final boolean isMultiset =
         getMeta(descriptor)
@@ -1234,9 +1337,13 @@ public class ProtoToLogicalTypeConverter {
         throw new ValidationException(
             "Unexpected value type for a MULTISET type: " + valueType);
       }
-      return Schema.createMultiset(keyType).setNullable(isNullableType);
+      return Schema.createMultiset(keyType).setNullable(isNullableType)
+          .setElementNativeNames(keyField.getNativeNames());
     } else {
-      return Schema.createMap(keyType, valueType).setNullable(isNullableType);
+      // The entry's own fields, so a oneof key contributes no step of its own.
+      return Schema.createMap(keyType, valueType).setNullable(isNullableType)
+          .setKeyNativeNames(keyField.getNativeNames())
+          .setValueNativeNames(valueField.getNativeNames());
     }
   }
 

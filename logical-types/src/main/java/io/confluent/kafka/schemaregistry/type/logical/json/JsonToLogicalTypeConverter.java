@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Collections;
@@ -49,7 +50,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -401,14 +401,19 @@ public class JsonToLogicalTypeConverter {
       return convertStringSchema((StringSchema) schema, isNullable);
     } else if (schema instanceof EnumSchema) {
       EnumSchema enumSchema = (EnumSchema) schema;
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> enumMeta =
-          (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
+      List<Map<String, Object>> enumMeta = hints(schema, "confluent:enum");
       List<?> possibleValues = enumSchema.getPossibleValuesAsList();
       List<EnumValue> values = new ArrayList<>();
       Set<String> seenSymbols = new HashSet<>();
+      boolean allowsNull = false;
       for (int i = 0; i < possibleValues.size(); i++) {
-        String symbol = possibleValues.get(i).toString();
+        Object possible = possibleValues.get(i);
+        if (possible == null || JSONObject.NULL.equals(possible)) {
+          // A null member is the idiom for a nullable enum, not a symbol.
+          allowsNull = true;
+          continue;
+        }
+        String symbol = possible.toString();
         // JSON Schema only "SHOULD" require unique enum values; tolerate
         // duplicates by keeping the first occurrence's metadata.
         if (!seenSymbols.add(symbol)) {
@@ -430,7 +435,10 @@ public class JsonToLogicalTypeConverter {
         }
         values.add(new EnumValue(symbol, doc, evParams));
       }
-      Schema result = Schema.createEnum(values).setNullable(isNullable);
+      if (values.isEmpty()) {
+        throw new ValidationException("An enum must list at least one value other than null");
+      }
+      Schema result = Schema.createEnum(values).setNullable(isNullable || allowsNull);
       result.setDoc(schema.getDescription());
       readSchemaTags(schema, result);
       readSchemaParams(schema, result);
@@ -503,7 +511,7 @@ public class JsonToLogicalTypeConverter {
 
   private static Schema convertNumberSchema(
       NumberSchema numberSchema, boolean isNullable, String title) {
-    String type = (String) numberSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+    String type = stringProp(numberSchema, CONNECT_TYPE_PROP);
     if (type == null) {
       return numberSchema.requiresInteger()
           ? Schema.create(Schema.Type.BIGINT).setNullable(isNullable)
@@ -526,16 +534,15 @@ public class JsonToLogicalTypeConverter {
         if (!CONNECT_TYPE_DECIMAL.equals(title)) {
           throw new ValidationException("Expected decimal type");
         }
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> properties =
-            (Map<String, Object>) numberSchema.getUnprocessedProperties()
-                .getOrDefault(CONNECT_PARAMETERS, Collections.emptyMap());
-        final int scale = Optional.ofNullable(properties.get(CONNECT_TYPE_DECIMAL_SCALE))
-            .map(prop -> Integer.parseInt((String) prop))
-            .orElse(DEFAULT_DECIMAL_SCALE);
-        final int precision = Optional.ofNullable(properties.get(CONNECT_TYPE_DECIMAL_PRECISION))
-            .map(prop -> Integer.parseInt((String) prop))
-            .orElse(DEFAULT_DECIMAL_PRECISION);
+        final Object parameters = numberSchema.getUnprocessedProperties()
+            .getOrDefault(CONNECT_PARAMETERS, Collections.emptyMap());
+        if (!(parameters instanceof Map)) {
+          throw new ValidationException(CONNECT_PARAMETERS + " must be an object: " + parameters);
+        }
+        final int scale = decimalParameter((Map<?, ?>) parameters, CONNECT_TYPE_DECIMAL_SCALE,
+            DEFAULT_DECIMAL_SCALE);
+        final int precision = decimalParameter((Map<?, ?>) parameters,
+            CONNECT_TYPE_DECIMAL_PRECISION, DEFAULT_DECIMAL_PRECISION);
         return Schema.createDecimal(precision, scale).setNullable(isNullable);
       default:
         throw new ValidationException("Unsupported type " + type);
@@ -568,15 +575,15 @@ public class JsonToLogicalTypeConverter {
 
   @SuppressWarnings("unchecked")
   private static int getTimestampPrecision(org.everit.json.schema.Schema schema) {
-    return (int) schema.getUnprocessedProperties().getOrDefault(FLINK_PRECISION, 3);
+    Integer precision = intProp(schema, FLINK_PRECISION);
+    return precision != null ? precision : 3;
   }
 
   private static Schema convertStringSchema(StringSchema schema, boolean isNullable) {
-    final Map<String, Object> props = schema.getUnprocessedProperties();
-    String type = (String) props.get(CONNECT_TYPE_PROP);
+    String type = stringProp(schema, CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_BYTES.equals(type)) {
-      final Integer minLength = (Integer) props.getOrDefault(FLINK_MIN_LENGTH, null);
-      final Integer maxLength = (Integer) props.getOrDefault(FLINK_MAX_LENGTH, null);
+      final Integer minLength = intProp(schema, FLINK_MIN_LENGTH);
+      final Integer maxLength = intProp(schema, FLINK_MAX_LENGTH);
       if (minLength != null && Objects.equals(minLength, maxLength)) {
         return Schema.createBinary(maxLength).setNullable(isNullable);
       } else if (maxLength != null) {
@@ -634,9 +641,7 @@ public class JsonToLogicalTypeConverter {
     }
 
     // Proper union: oneOf/anyOf with multiple non-null types
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> unionMeta = (List<Map<String, Object>>)
-        combinedSchema.getUnprocessedProperties().get("confluent:union");
+    List<Map<String, Object>> unionMeta = hints(combinedSchema, "confluent:union");
     int index = 0;
     boolean isNullableUnion = isNullable;
     final List<UnionBranch> branches = new ArrayList<>();
@@ -670,7 +675,9 @@ public class JsonToLogicalTypeConverter {
         }
         Schema branchType = convertWithCycleDetection(
             subSchema, true, ctx, appendToList(indexPath, index));
-        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));
+        // A document has no step for a union branch.
+        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams)
+            .setNativeNames(Collections.emptyList()));
         index++;
       }
     }
@@ -688,9 +695,14 @@ public class JsonToLogicalTypeConverter {
       }
       throw new ValidationException("Array schema did not specify the items type");
     }
-    String type = (String) arraySchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+    String type = stringProp(arraySchema, CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_MAP.equals(type) && allItemSchema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) allItemSchema;
+      if (!objectSchema.getPropertySchemas().containsKey(KEY_FIELD)
+          || !objectSchema.getPropertySchemas().containsKey(VALUE_FIELD)) {
+        throw new ValidationException(
+            "A map (connect.type: map) array's items must declare key and value");
+      }
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           arraySchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
@@ -701,7 +713,9 @@ public class JsonToLogicalTypeConverter {
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getPropertySchemas().get(VALUE_FIELD), false,
           ctx, appendToList(indexPath, 1));
-      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
+      // Natively an array of entries: an element, then its key or value property.
+      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
+          Arrays.asList(null, KEY_FIELD), Arrays.asList(null, VALUE_FIELD));
     } else {
       // ARRAY appends [0] for the element type, matching upstream Flink's
       // JSON convention (Avro-style). Proto's ARRAY adds no index, which is
@@ -710,28 +724,43 @@ public class JsonToLogicalTypeConverter {
       return Schema.createArray(
           convertWithCycleDetection(
               allItemSchema, false, ctx, appendToList(indexPath, 0)))
-          .setNullable(isNullable);
+          .setNullable(isNullable)
+          .setElementNativeNames(Collections.singletonList(null));
     }
   }
 
   private static Schema convertObjectSchema(
       ObjectSchema objectSchema, boolean isNullable, ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
-    String type = (String) objectSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+    String type = stringProp(objectSchema, CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_MAP.equals(type)) {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           objectSchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
+      if (objectSchema.getSchemaOfAdditionalProperties() == null) {
+        throw new ValidationException(
+            "A map (connect.type: map) must declare its values with additionalProperties");
+      }
       // MAP value at appendToList(indexPath, 1); key type read from
       // unprocessedProperties (no schema body to walk for default capture).
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getSchemaOfAdditionalProperties(), false,
           ctx, appendToList(indexPath, 1));
       final Schema keyType = readMapKeyType(objectSchema);
-      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
+      // An object keyed by string: its keys hold nothing, its values are one unnamed step.
+      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
+          Collections.emptyList(), Collections.singletonList(null));
     } else {
       return convertRowType(isNullable, ctx, objectSchema, indexPath);
     }
+  }
+
+  /** Records the native steps to a map's key and value, or to a multiset's element (its key). */
+  private static Schema withMapSteps(
+      Schema mapLike, List<String> keySteps, List<String> valueSteps) {
+    return mapLike.getType() == Schema.Type.MULTISET
+        ? mapLike.setElementNativeNames(keySteps)
+        : mapLike.setKeyNativeNames(keySteps).setValueNativeNames(valueSteps);
   }
 
   private static Schema createMapLikeType(
@@ -754,9 +783,7 @@ public class JsonToLogicalTypeConverter {
     final Comparator<Entry<String, org.everit.json.schema.Schema>> indexComparator =
         Comparator.comparing(
             e -> {
-              final Object index =
-                  e.getValue().getUnprocessedProperties().get(CONNECT_INDEX_PROP);
-              return index != null ? (Integer) index : null;
+              return intProp(e.getValue(), CONNECT_INDEX_PROP);
             },
             Comparator.nullsLast(Comparator.comparing(Function.identity())));
     final List<Entry<String, org.everit.json.schema.Schema>> sortedFields =
@@ -787,7 +814,8 @@ public class JsonToLogicalTypeConverter {
           readRules(subSchema);
       fields.add(new Field(subFieldName, fieldType, pos,
           defaultValue, hasDefault, subSchema.getDescription(),
-          fieldTags, fieldParams, fieldRules));
+          fieldTags, fieldParams, fieldRules)
+          .setNativeNames(Collections.singletonList(subFieldName)));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     structSchema.setDoc(objectSchema.getDescription());
@@ -797,11 +825,76 @@ public class JsonToLogicalTypeConverter {
     return structSchema;
   }
 
+  /** A metadata property as a string, or null; any other value is rejected by name. */
+  private static String stringProp(org.everit.json.schema.Schema schema, String name) {
+    Object value = schema.getUnprocessedProperties().get(name);
+    if (value == null || value instanceof String) {
+      return (String) value;
+    }
+    throw new ValidationException(name + " must be a string: " + value);
+  }
+
+  /** A metadata property as an integer, or null; any other value is rejected by name. */
+  private static Integer intProp(org.everit.json.schema.Schema schema, String name) {
+    Object value = schema.getUnprocessedProperties().get(name);
+    if (value == null || value instanceof Integer) {
+      return (Integer) value;
+    }
+    throw new ValidationException(name + " must be an integer: " + value);
+  }
+
+  private static int decimalParameter(Map<?, ?> parameters, String name, int otherwise) {
+    Object value = parameters.get(name);
+    if (value == null) {
+      return otherwise;
+    }
+    if (value instanceof String) {
+      try {
+        return Integer.parseInt((String) value);
+      } catch (NumberFormatException e) {
+        // Rejected below, with any other shape.
+      }
+    }
+    throw new ValidationException(CONNECT_PARAMETERS + "." + name
+        + " must be an integer as a string: " + value);
+  }
+
+  /**
+   * A {@code confluent:union} or {@code confluent:enum} hint, one object per member with a string
+   * name and doc and an object of params; any other shape is rejected by name.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> hints(org.everit.json.schema.Schema schema,
+      String name) {
+    Object value = schema.getUnprocessedProperties().get(name);
+    if (value == null) {
+      return null;
+    }
+    boolean valid = value instanceof List;
+    for (Object member : valid ? (List<?>) value : Collections.emptyList()) {
+      valid &= member instanceof Map && isHint((Map<?, ?>) member);
+    }
+    if (!valid) {
+      throw new ValidationException(name + " must be a list of member objects: " + value);
+    }
+    return (List<Map<String, Object>>) value;
+  }
+
+  private static boolean isHint(Map<?, ?> member) {
+    Object params = member.get("params");
+    return isStringOrAbsent(member.get("name")) && isStringOrAbsent(member.get("doc"))
+        && (params == null || params instanceof Map);
+  }
+
+  private static boolean isStringOrAbsent(Object value) {
+    return value == null || value instanceof String;
+  }
+
   private static Schema readMapKeyType(ObjectSchema objectSchema) {
     Map<String, Object> unprocessed = objectSchema.getUnprocessedProperties();
     Object keyLength = unprocessed.get(CommonConstants.LOGICAL_KEY_LENGTH_PROP);
     if (keyLength instanceof Integer) {
-      String keyTypeName = (String) unprocessed.get(CommonConstants.LOGICAL_KEY_TYPE_PROP);
+      String keyTypeName = stringProp(objectSchema, CommonConstants.LOGICAL_KEY_TYPE_PROP);
       if ("CHAR".equals(keyTypeName)) {
         return Schema.createChar((int) keyLength).setNullable(false);
       }
