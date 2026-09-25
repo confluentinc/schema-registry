@@ -20,13 +20,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +40,7 @@ import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -51,12 +53,16 @@ import org.json.JSONObject;
  * the reader finds nothing there; one the reader requires takes its default, or fails the record.
  *
  * <p>The document is walked alongside the reader's schema, as {@code JsonSchema} walks one for
- * field transforms: a union step is the first branch the value validates against. That resolves a
- * property two branches share, one continuing and one new; where it stays ambiguous, it is pruned.
+ * field transforms: a union step is the branch declaring the next property that the value
+ * validates against. That resolves a property two branches share, one continuing and one new;
+ * where it stays ambiguous — several such branches fit, or none does, as when the value to prune
+ * is itself what fails them — it is pruned.
  */
 final class JsonProvenancePruner {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  // As JsonSchema converts a document for everit.
+  private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
 
   private final Schema reader;
   private final List<Target> targets;
@@ -115,7 +121,7 @@ final class JsonProvenancePruner {
     List<Target> targets = new ArrayList<>();
     for (Target target : byNames.values()) {
       if (target.candidates.stream().anyMatch(c -> !c.continues)) {
-        if (!declares(target.names, raw, 0, new HashSet<>())) {
+        if (!declares(target.names, raw, 0, new IdentityHashMap<>())) {
           throw new SerializationException("Property " + target.names + " of schema id "
               + mapping.readerId() + " is not declared by the reader schema");
         }
@@ -220,8 +226,9 @@ final class JsonProvenancePruner {
    * {@code step} on, looking where {@link #walk} would.
    */
   private static boolean declares(List<String> names, Schema schema, int step,
-      Set<Map.Entry<Schema, Integer>> seen) {
-    if (schema == null || !seen.add(new AbstractMap.SimpleImmutableEntry<>(schema, step))) {
+      Map<Schema, Set<Integer>> seen) {
+    // By identity: an everit schema's hashCode walks its whole tree.
+    if (schema == null || !seen.computeIfAbsent(schema, s -> new HashSet<>()).add(step)) {
       return false;
     }
     if (schema instanceof ReferenceSchema) {
@@ -293,6 +300,11 @@ final class JsonProvenancePruner {
 
   private static void walkCombined(List<String> names, CombinedSchema schema, JsonNode node,
       int step, List<Integer> choices, boolean ambiguous, AtProperty at) {
+    String name = names.get(step);
+    if (name != null && !node.has(name)) {
+      // Every branch reaches the property as a member of this very value: nothing to prune.
+      return;
+    }
     List<Schema> subschemas = new ArrayList<>(schema.getSubschemas());
     if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
       // The converter merges an allOf; the next step lives in whichever part declares it.
@@ -312,19 +324,36 @@ final class JsonProvenancePruner {
       walk(names, branches.get(0), node, step, choices, ambiguous, at);
       return;
     }
+    // Only a branch declaring the next step can hold the property; one that does not bears on it
+    // only if no declaring branch fits, and then the property is merely an extra there.
     List<Integer> valid = new ArrayList<>();
+    List<Integer> declaring = new ArrayList<>();
+    Object validatable = validatable(node);
     for (int i = 0; i < branches.size(); i++) {
-      if (validates(branches.get(i), node)) {
-        valid.add(i);
+      if (declares(names, branches.get(i), step, new IdentityHashMap<>())) {
+        declaring.add(i);
+        if (validates(branches.get(i), validatable)) {
+          valid.add(i);
+        }
       }
     }
-    // Objects are open by default, so a value can validate against several branches. Then it is
-    // ambiguous, and every such branch is walked, so the property is reached through whichever
-    // declares it.
-    for (int i : valid) {
+    boolean fallback = false;
+    if (valid.isEmpty()) {
+      fallback = true;
+      for (int i = 0; i < branches.size() && fallback; i++) {
+        if (!declaring.contains(i) && validates(branches.get(i), validatable)) {
+          fallback = false;
+        }
+      }
+    }
+    // No branch fits, often because of the very value provenance withholds (its type changed):
+    // every declaring branch is walked, as ambiguous, so the property is pruned.
+    List<Integer> walked = fallback ? declaring : valid;
+    for (int i : walked) {
       List<Integer> extended = new ArrayList<>(choices);
       extended.add(i);
-      walk(names, branches.get(i), node, step, extended, ambiguous || valid.size() > 1, at);
+      walk(names, branches.get(i), node, step, extended,
+          ambiguous || fallback || valid.size() > 1, at);
     }
   }
 
@@ -366,9 +395,36 @@ final class JsonProvenancePruner {
     }
   }
 
-  private static boolean validates(Schema schema, JsonNode node) {
+  /**
+   * {@code node} as everit validates it, as {@code JsonSchema.validate} converts it. Converted
+   * once per union step, and never converted back: the pruner wants only whether it validates.
+   */
+  private static Object validatable(JsonNode node) {
     try {
-      JsonSchema.validate(schema, node);
+      if (node.isObject()) {
+        return ORG_JSON.treeToValue(node, JSONObject.class);
+      }
+      if (node.isArray()) {
+        return ORG_JSON.treeToValue(node, JSONArray.class);
+      }
+      if (node.isNull()) {
+        return null;
+      }
+      if (node.isBoolean()) {
+        return node.asBoolean();
+      }
+      if (node.isNumber()) {
+        return node.numberValue();
+      }
+      return node.asText();
+    } catch (IOException e) {
+      throw new SerializationException("Could not read a value to validate", e);
+    }
+  }
+
+  private static boolean validates(Schema schema, Object validatable) {
+    try {
+      schema.validate(validatable);
       return true;
     } catch (Exception e) {
       return false;

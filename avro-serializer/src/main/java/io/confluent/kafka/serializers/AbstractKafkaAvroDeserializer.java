@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -663,18 +664,26 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         Schema writerSchema = writerAvroSchema.rawSchema();
         Schema readerSchema = readerAvroSchema != null ? readerAvroSchema.rawSchema() : null;
         DatumReader<?> reader;
+        AvroProvenanceRenamer.Renamed renamed = null;
         if (!migrations.isEmpty()) {
           // if migration is required, then initially use GenericDatumReader
           reader = new GenericDatumReader<>(writerSchema, writerSchema,
               AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
         } else {
-          AvroProvenanceRenamer.Renamed renamed =
-              projectByProvenance(writerAvroSchema, readerAvroSchema);
-          reader = renamed == null
+          // A specific or reflect reader's schema comes from its class; provenance needs it too.
+          AvroSchema provenanceReader = readerAvroSchema;
+          if (provenanceReader == null && provenanceAlgorithm != null
+              && (useSpecificAvroReader || useSchemaReflection)) {
+            Schema derived =
+                AbstractKafkaAvroDeserializer.this.getReaderSchema(schemaId, writerSchema, null);
+            provenanceReader = derived != writerSchema ? new AvroSchema(derived) : null;
+          }
+          renamed = projectByProvenance(writerAvroSchema, provenanceReader);
+          AvroProvenanceRenamer.Renamed r = renamed;
+          reader = r == null
               ? getDatumReader(schemaId, writerSchema, readerSchema)
-              : datumReaderCache.get(
-                  new DatumReaderKey(schemaId, renamed.reader, renamed.writer),
-                  () -> createDatumReader(schemaId, renamed.writer, renamed.reader, renamed));
+              : datumReaderCache.get(new DatumReaderKey(schemaId, r.reader, r.writer),
+                  () -> createDatumReader(schemaId, r.writer, r.reader, r));
         }
         int length = buffer.remaining();
         Object result;
@@ -685,7 +694,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         } else {
           int start = buffer.position() + buffer.arrayOffset();
           BinaryDecoder decoder = decoderFactory.binaryDecoder(buffer.array(), start, length, null);
-          result = reader.read(null, decoder);
+          try {
+            result = reader.read(null, decoder);
+          } catch (AvroTypeException e) {
+            throw renamed != null ? renamed.explain(e) : e;
+          }
           if (avroFailOnTrailingData && !decoder.isEnd()) {
             throw new SerializationException("Trailing data found after deserializing Avro "
                 + " message for id " + schemaId);

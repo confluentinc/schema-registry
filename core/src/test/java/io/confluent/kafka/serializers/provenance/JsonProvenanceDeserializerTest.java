@@ -171,6 +171,43 @@ class JsonProvenanceDeserializerTest {
     assertEquals(9, on.get("note").asInt());
   }
 
+  @Test
+  void aReAddedPropertyWhoseOldValueNoBranchAcceptsIsPruned() throws Exception {
+    // The old value of the property to prune fits no branch; it must still not reach the new one.
+    String closed = "{\"type\": \"object\", \"properties\": {" + number("b") + "},"
+        + " \"additionalProperties\": false}";
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("a") + ", " + string("t") + "}}, " + closed + "]}");
+    JsonSchema v2 = object("\"u\": {\"oneOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("a") + "}}, " + closed + "]}");
+    JsonSchema v3 = object("\"u\": {\"oneOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("a") + ", \"t\": {\"type\": \"integer\"}}}, " + closed + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"a\": 1, \"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+    assertEquals("old", read(v3, bytes, null).get("u").get("t").asText());
+  }
+
+  @Test
+  void aBranchNotDeclaringThePropertyLeavesItUnambiguous() throws Exception {
+    // The record fits A and B; only A declares t, and there t continues.
+    String a = "{\"type\": \"object\", \"properties\": {" + number("a") + ", " + string("t")
+        + "}}";
+    String b = "{\"type\": \"object\", \"properties\": {" + number("b") + "}}";
+    String c = "{\"type\": \"object\", \"properties\": {" + number("c") + "},"
+        + " \"required\": [\"c\"]}";
+    String cWithT = "{\"type\": \"object\", \"properties\": {" + number("c") + ", "
+        + string("t") + "}, \"required\": [\"c\"]}";
+    JsonSchema v1 = object("\"u\": {\"anyOf\": [" + a + ", " + b + ", " + c + "]}");
+    JsonSchema v2 = object("\"u\": {\"anyOf\": [" + a + ", " + b + ", " + cWithT + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"a\": 1, \"t\": \"kept\"}}");
+    client.register(SUBJECT, v2);
+
+    assertEquals("kept", read(v2, bytes, "v1").get("u").get("t").asText());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

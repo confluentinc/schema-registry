@@ -240,8 +240,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         );
       }
 
+      // A dynamic reader handed a message already in its own descriptor needs no second parse.
+      boolean parsed = parseMethod == null && !deriveType && message instanceof DynamicMessage
+          && ((Message) message).getDescriptorForType() == schema.toDescriptor();
       ByteBuffer protobufBytes = buffer;
-      if (message != null) {
+      if (message != null && !parsed) {
         protobufBytes = ByteBuffer.wrap(((Message) message).toByteArray());
         length = protobufBytes.limit();
         start = 0;
@@ -257,7 +260,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(protobufBytes, schema);
       } else {
-        value = parseDynamic(schema, protobufBytes, start, length);
+        value = parsed ? message : parseDynamic(schema, protobufBytes, start, length);
       }
 
       if (includeSchemaAndVersion) {
@@ -296,12 +299,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
   }
 
-  /**
-   * With {@code provenance.algorithm}, the reader renumbered so that a field reusing a number
-   * the writer uses for something else no longer takes the writer's data; the reader itself
-   * otherwise. A file of several top-level messages pairs the writer's message with the reader's
-   * by name, and a writer message the reader does not declare cannot be read into it.
-   */
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
       int length) throws IOException {
     Descriptor descriptor = schema.toDescriptor();

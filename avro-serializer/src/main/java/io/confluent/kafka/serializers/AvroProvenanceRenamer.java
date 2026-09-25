@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Resolver;
@@ -71,6 +72,8 @@ final class AvroProvenanceRenamer {
   private final Set<String> readerTypeNames = new HashSet<>();
   // Sink branches to append to a reader union, by the original reader union.
   private final Map<Schema, List<Schema>> sinks = new IdentityHashMap<>();
+  // What each sink stands for, by its full name, for the error of a record reaching it.
+  private final Map<String, String> sinkOrigins = new HashMap<>();
   // Clones made inside a union, by full name, and the reader type each was renamed after.
   private final Map<String, String> cloneTargets = new HashMap<>();
   // The writer's own names for a built record's fields and a built union's branches.
@@ -89,11 +92,30 @@ final class AvroProvenanceRenamer {
     final Schema reader;
     // Each type of the reader copy that differs from the caller's, mapped to the caller's.
     private final Map<Schema, Schema> originals;
+    private final Map<String, String> sinkOrigins;
 
-    private Renamed(Schema writer, Schema reader, Map<Schema, Schema> originals) {
+    private Renamed(Schema writer, Schema reader, Map<Schema, Schema> originals,
+        Map<String, String> sinkOrigins) {
       this.writer = writer;
       this.reader = reader;
       this.originals = originals;
+      this.sinkOrigins = sinkOrigins;
+    }
+
+    /**
+     * {@code e} restated in the writer's own names if a record reached a sink, which Avro reports
+     * as "Found (sink), expecting (sink), missing required field (sink field)", after the fields
+     * leading to it; {@code e} otherwise.
+     */
+    RuntimeException explain(AvroTypeException e) {
+      final String message = e.getMessage();
+      final int found = message != null ? message.lastIndexOf("Found ") : -1;
+      final int end = found >= 0 ? message.indexOf(", expecting ", found) : -1;
+      final String origin = end >= 0 && message.endsWith(SINK_FIELD)
+          ? sinkOrigins.get(message.substring(found + "Found ".length(), end)) : null;
+      return origin == null ? e : new SerializationException("The record holds " + origin
+          + ", a union branch provenance pairs with none of the reader's. There is no value to "
+          + "read.", e);
     }
 
     /**
@@ -175,7 +197,8 @@ final class AvroProvenanceRenamer {
         originals.put(copy, original);
       }
     });
-    final Renamed renamed = new Renamed(renamedWriter, readerCopy, originals);
+    final Renamed renamed =
+        new Renamed(renamedWriter, readerCopy, originals, renamer.sinkOrigins);
     renamer.verify(Resolver.resolve(renamed.writer, renamed.reader),
         Collections.emptyList(), Collections.emptyList(),
         Collections.newSetFromMap(new IdentityHashMap<>()));
@@ -249,7 +272,7 @@ final class AvroProvenanceRenamer {
       final Schema branch =
           branchNamed(reader, writer.getFullName(), nonNull(reader).size() == 1);
       if (branch == null) {
-        return isNamed(writer) ? unmatchedBranch(writer, reader)
+        return isNamed(writer) ? unmatchedBranch(writer, writerAt, reader)
             : renameAt(writer, writerAt, null, readerAt, false);
       }
       return renameAt(writer, writerAt, branch, append(readerAt, branch.getFullName()), true);
@@ -331,7 +354,7 @@ final class AvroProvenanceRenamer {
             target, readerAt, branchAt, pairedAt);
         branches.add(counterpart != null
             ? renameAt(branch, branchAt, counterpart, pairedAt, true)
-            : unmatchedBranch(branch, reader));
+            : unmatchedBranch(branch, writerAt, reader));
       } else if (target == null) {
         // The branch of a nullable union the logical type collapses, against a reader that is no
         // union: it stands where the union does.
@@ -342,7 +365,7 @@ final class AvroProvenanceRenamer {
         branches.add(counterpart != null
             ? renameAt(branch, branchAt, counterpart,
                 append(readerAt, counterpart.getFullName()), true)
-            : unmatchedBranch(branch, reader));
+            : unmatchedBranch(branch, writerAt, reader));
       }
     }
     final Schema union = Schema.createUnion(branches);
@@ -354,9 +377,11 @@ final class AvroProvenanceRenamer {
    * A branch with no counterpart, renamed so nothing matches it. A record also gets a sink in the
    * reader union, so the resolver cannot match it by structure: a record containing it fails.
    */
-  private Schema unmatchedBranch(Schema branch, Schema reader) {
+  private Schema unmatchedBranch(Schema branch, List<String> writerAt, Schema reader) {
     final Schema unmatched = discard(branch);
     if (unmatched.getType() == Type.RECORD && ofType(reader, Type.UNION) != null) {
+      sinkOrigins.put(unmatched.getFullName(),
+          "a value of " + branch.getFullName() + " at writer location " + writerAt);
       final Schema sink = Schema.createRecord(unmatched.getFullName(), null, null, false);
       sink.setFields(Collections.singletonList(
           new Field(SINK_FIELD, Schema.create(Type.INT), null)));
