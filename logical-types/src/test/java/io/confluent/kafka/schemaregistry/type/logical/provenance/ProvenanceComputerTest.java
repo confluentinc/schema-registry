@@ -821,7 +821,7 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void protobufMessageRenameBreaksIdentity() {
+  void protobufRootRenameKeepsItsFields() {
     Map<String, Schema> v0 = new LinkedHashMap<>();
     v0.put("acme.User", struct(field("city")));
     Map<String, Schema> v1 = new LinkedHashMap<>();
@@ -831,10 +831,10 @@ class ProvenanceComputerTest {
         lt(Schema.createNamedTypeRef("acme.User"), v0),
         lt(Schema.createNamedTypeRef("acme.Person"), v1)), IdentityPolicy.PROTOBUF);
 
-    // Protobuf has no message alias, so a renamed message is a new message and its fields restart.
+    // The root is no location, so its name is not its fields' identity, whether the converter
+    // keeps it a reference or unwraps it; a message renamed where it is used still restarts.
     assertThat(result.at(1, PathKey.ofRoot().child(0)))
-        .isNotEqualTo(result.at(0, PathKey.ofRoot().child(0)));
-    assertThat(result.intersection(0, 1)).isEmpty();
+        .isEqualTo(result.at(0, PathKey.ofRoot().child(0)));
   }
 
   @Test
