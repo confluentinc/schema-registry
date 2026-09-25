@@ -19,12 +19,10 @@ package io.confluent.kafka.schemaregistry.client.rest;
 import static io.confluent.kafka.schemaregistry.client.rest.RestService.DEFAULT_REQUEST_PROPERTIES;
 import static java.lang.String.format;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
@@ -40,13 +38,9 @@ import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -109,12 +103,7 @@ public class AsyncRestService implements Closeable {
       new TypeReference<CompatibilityCheckResponse>() {
       };
 
-  private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static final ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
-
-  private static final String AUTHORIZATION_HEADER = "Authorization";
-  private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
-  private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
 
   private final UrlList baseUrls;
   private final Map<String, String> httpHeaders;
@@ -167,17 +156,18 @@ public class AsyncRestService implements Closeable {
         : (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource = configs == null ? null
         : (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
-    if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
+    if (RestService.isNonEmpty(basicCredentialsSource)
+        && RestService.isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(format(
           "Only one of '%s' and '%s' may be specified",
           SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
           SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE));
     }
-    this.basicAuthCredentialProvider = isNonEmpty(basicCredentialsSource)
+    this.basicAuthCredentialProvider = RestService.isNonEmpty(basicCredentialsSource)
         ? BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
             basicCredentialsSource, configs)
         : null;
-    this.bearerAuthCredentialProvider = isNonEmpty(bearerCredentialsSource)
+    this.bearerAuthCredentialProvider = RestService.isNonEmpty(bearerCredentialsSource)
         ? BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
             bearerCredentialsSource, configs)
         : null;
@@ -229,21 +219,10 @@ public class AsyncRestService implements Closeable {
       return null;
     }
     String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
-    Integer proxyPort = proxyPortVal instanceof String
-        ? Integer.valueOf((String) proxyPortVal)
-        : (Integer) proxyPortVal;
-    if (!isNonEmpty(proxyHost) || proxyPort == null || proxyPort <= 0) {
-      return null;
-    }
-    try {
-      URI uri = new URI(proxyHost);
-      String scheme = uri.getScheme() != null ? uri.getScheme() : "http";
-      String host = uri.getHost() != null ? uri.getHost() : proxyHost;
-      return new HttpHost(scheme, host, proxyPort);
-    } catch (URISyntaxException e) {
-      throw new IllegalArgumentException("Invalid proxy host: " + proxyHost);
-    }
+    Integer proxyPort = RestService.proxyPort(configs);
+    return RestService.isValidProxyConfig(proxyHost, proxyPort)
+        ? RestService.toHttpHost(proxyHost, proxyPort)
+        : null;
   }
 
   public UrlList getBaseUrls() {
@@ -445,7 +424,8 @@ public class AsyncRestService implements Closeable {
     try {
       SimpleRequestBuilder builder = SimpleRequestBuilder.create(method).setUri(requestUrl);
 
-      Map<String, String> headers = getAuthHeaders(new URL(requestUrl));
+      Map<String, String> headers = RestService.getAuthHeaders(
+          new URL(requestUrl), basicAuthCredentialProvider, bearerAuthCredentialProvider);
       headers.putAll(DEFAULT_REQUEST_PROPERTIES);
       if (httpHeaders != null) {
         headers.putAll(httpHeaders);
@@ -500,20 +480,9 @@ public class AsyncRestService implements Closeable {
       } else if (responseCode == 204) {
         return null;
       }
-      ErrorMessage errorMessage;
-      if (responseBody != null && !responseBody.isEmpty()) {
-        try {
-          errorMessage = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
-        } catch (JsonProcessingException e) {
-          errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
-              "Unable to parse error message from schema registry: '(%s)'",
-              responseBody));
-        }
-      } else {
-        errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
-      }
-      throw new RestClientException(errorMessage.getMessage(), responseCode,
-          errorMessage.getErrorCode());
+      // An empty body is treated as no body, as in RestService's Apache client path
+      throw RestService.errorResponse(
+          responseCode, RestService.isNonEmpty(responseBody) ? responseBody : null);
     } catch (IOException | RestClientException e) {
       // Checked exceptions can't escape a lambda; unwrap() strips this again
       throw new CompletionException(e);
@@ -548,42 +517,6 @@ public class AsyncRestService implements Closeable {
       e = e.getCause();
     }
     return e;
-  }
-
-  private Map<String, String> getAuthHeaders(URL url) {
-    Map<String, String> headers = new HashMap<>();
-
-    if (basicAuthCredentialProvider != null) {
-      String userInfo = basicAuthCredentialProvider.getUserInfo(url);
-      if (userInfo != null) {
-        String authHeader = Base64.getEncoder().encodeToString(
-            userInfo.getBytes(StandardCharsets.UTF_8));
-        headers.put(AUTHORIZATION_HEADER, "Basic " + authHeader);
-      }
-    }
-
-    if (bearerAuthCredentialProvider != null) {
-      String bearerToken = bearerAuthCredentialProvider.getBearerToken(url);
-      if (bearerToken != null) {
-        headers.put(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
-      }
-
-      String targetIdentityPoolId = bearerAuthCredentialProvider.getTargetIdentityPoolId();
-      if (targetIdentityPoolId != null) {
-        headers.put(TARGET_IDENTITY_POOL_ID, targetIdentityPoolId);
-      }
-
-      String targetSchemaRegistry = bearerAuthCredentialProvider.getTargetSchemaRegistry();
-      if (targetSchemaRegistry != null) {
-        headers.put(TARGET_SR_CLUSTER, targetSchemaRegistry);
-      }
-    }
-
-    return headers;
-  }
-
-  private static boolean isNonEmpty(String s) {
-    return s != null && !s.isEmpty();
   }
 
   /**
