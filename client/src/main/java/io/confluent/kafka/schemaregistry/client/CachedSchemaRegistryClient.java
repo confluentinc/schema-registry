@@ -20,6 +20,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
@@ -898,6 +899,26 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     return restService.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, lookupDeletedSchema);
+  }
+
+  /**
+   * Not cached here: the registry caches provenance per subject history, and a caller holding a
+   * mapping caches that.
+   */
+  @Override
+  public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+      throws IOException, RestClientException {
+    return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, fromId, toId, includeInterior, includeMultipleMessages, algorithm);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
+    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromVersion, toVersion, includeInterior, includeMultipleMessages, algorithm);
   }
 
   @Override
