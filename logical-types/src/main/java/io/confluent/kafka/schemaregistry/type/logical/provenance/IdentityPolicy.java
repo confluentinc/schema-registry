@@ -68,7 +68,7 @@ public enum IdentityPolicy {
   /**
    * JSON Schema rules: every entity is identified by its property name, with no alias mechanism, so
    * a rename is a drop plus an add. Identities are {@link StringIdentity} and therefore stable:
-   * reusing a name after a gap resolves to the same identity, on a new presence interval.
+   * reusing a name after a gap resolves to the same identity, on a new chain.
    */
   JSON;
 

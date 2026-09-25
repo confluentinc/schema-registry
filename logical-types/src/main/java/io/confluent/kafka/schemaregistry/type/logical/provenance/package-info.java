@@ -28,10 +28,11 @@
  * <ul>
  *   <li><b>Logical identity</b> ({@link
  *       io.confluent.kafka.schemaregistry.type.logical.provenance.Identity}) — what logical entity
- *       an occurrence represents.</li>
+ *       an occurrence represents, as far as matching it to the previous version goes.</li>
  *   <li><b>Provenance</b> ({@link
  *       io.confluent.kafka.schemaregistry.type.logical.provenance.Provenance}) — that identity
- *       together with the first version of its current continuous presence interval.</li>
+ *       together with the first version of the chain of matches between consecutive versions it
+ *       belongs to.</li>
  *   <li><b>Provenance intersection</b> ({@link
  *       io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceResult#intersection})
  *       — the members present in both schemas. Symmetric.</li>
@@ -47,16 +48,17 @@
  * address[P3]}, the members common to both are {@code {P1, P2}}. That {@code name} became
  * {@code full_name} does not enter into it: both occurrences carry {@code P1}. The same holds for a
  * Protobuf field renamed while keeping its number. And when a name is dropped and later reused by
- * an unrelated member, the two occurrences fall in different presence intervals and so never
+ * an unrelated member, no chain of matches joins the two occurrences, so they never
  * correspond — which is the case naive name matching gets wrong in the data-corrupting direction.
  *
  * <h2>Relation to column IDs</h2>
  *
  * <p>A persistent column ID is a centrally allocated identifier serving the same correspondence
  * role as provenance. Both are available from this package's output: a metastore anchoring the
- * computation at the first version can derive and persist stable column IDs from the absolute
- * provenance values, while a disconnected compute engine can compute a relative correspondence over
- * just the window it cares about and project without coordinating with anyone.
+ * computation at the first version can derive and persist stable column IDs from the provenance
+ * values, while a disconnected compute engine can compute the correspondence over just the window
+ * it cares about — which pairs its versions as the whole history does — and project without
+ * coordinating with anyone.
  *
  * @see io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceComputer
  */

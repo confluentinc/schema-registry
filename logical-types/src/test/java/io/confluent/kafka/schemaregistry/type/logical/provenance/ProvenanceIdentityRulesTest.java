@@ -196,6 +196,52 @@ class ProvenanceIdentityRulesTest {
     assertThat(pids(v, 1)).isEqualTo(pids(v, 0));
   }
 
+  @Test
+  void aNewBranchDoesNotContinueOneWhoseDiscriminatorChanged() {
+    // A's discriminator changes, so A is new; C shares A's member but is no continuation of it.
+    String x = "\"x\":{\"type\":\"number\"}";
+    String b = "{\"type\":\"object\",\"properties\":{\"y\":{\"type\":\"number\"}}}";
+    String c = "{\"type\":\"object\",\"properties\":{" + x + "}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + branch("a", x) + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + branch("z", x) + "," + b + "," + c + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 2))).isNotIn(before.values());
+    assertThat(after.get(path(0, 2, 0))).isNotIn(before.values());
+  }
+
+  @Test
+  void aBranchKeepingItsDiscriminatorContinuesOverOneAtItsPosition() {
+    // A gains w and moves; C, sharing x, takes A's old position. A keeps its discriminator.
+    String x = "\"x\":{\"type\":\"number\"}";
+    String b = "{\"type\":\"object\",\"properties\":{\"y\":{\"type\":\"number\"}}}";
+    String c = "{\"type\":\"object\",\"properties\":{" + x + "}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + branch("a", x) + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + c + "," + branch("a", x + ",\"w\":{\"type\":\"number\"}")
+            + "," + b + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(0, 0))).isNotIn(before.values());
+  }
+
+  @Test
+  void aBranchWhoseDiscriminatorChangedDoesNotContinueAPeerSharingAMember() {
+    // A's discriminator changes as P goes: A shares x with both, so it continues neither.
+    String x = "\"x\":{\"type\":\"number\"}";
+    String p = "{\"type\":\"object\",\"properties\":{" + x + "}}";
+    String b = branch("b", "\"y\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + p + "," + branch("a", x) + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + branch("z", x) + "," + b + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 0))).isNotIn(before.values());
+    assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 2)));
+  }
+
   private static String branch(String kind, String members) {
     return "{\"type\":\"object\",\"properties\":{\"kind\":{\"enum\":[\"" + kind + "\"]},"
         + members + "}}";

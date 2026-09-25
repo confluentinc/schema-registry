@@ -23,10 +23,8 @@ import java.util.Objects;
  * that minted it.
  *
  * <p>The minting version is part of the value, not decoration. A name released by a still-present
- * entity is dropped from the resolution index, so a later entity reusing that name mints a fresh
- * identity — and only the minting version keeps the two apart. It is distinct from a
- * {@link Provenance}'s presence start: the minting version distinguishes identities, the presence
- * start distinguishes lifetimes of one identity.
+ * entity, renamed by an alias, is taken by nothing, so a later entity reusing that name mints a
+ * fresh identity — and only the minting version keeps the two apart.
  */
 public final class MintedIdentity implements FormatIdentity {
 

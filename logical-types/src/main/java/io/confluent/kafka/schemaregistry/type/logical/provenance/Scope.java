@@ -33,7 +33,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
  * {@code MAP<STRUCT, STRUCT>} would put their fields in one scope and collide. The steps also stay
  * descriptive rather than collapsing to index positions ({@code []} and <code>{key}</code> are both
  * index {@code 0}) so that retyping a field from {@code ARRAY<STRUCT>} to {@code MAP<K, STRUCT>}
- * moves the inner members to a new scope and correctly starts a new presence interval.
+ * moves the inner members to a new scope and correctly starts a new chain.
  */
 public interface Scope {
 }
