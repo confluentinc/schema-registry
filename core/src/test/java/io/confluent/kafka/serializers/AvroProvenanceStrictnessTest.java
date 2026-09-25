@@ -101,6 +101,84 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
+  void aReAddedFixedBranchIsNamedInTheWritersTerms() throws Exception {
+    // A fixed or enum branch matches no reader branch at all; Avro's error names the throwaway.
+    String f1 = "{\"type\":\"fixed\",\"name\":\"F1\",\"size\":4}";
+    Schema v1 = record("[\"null\"," + f1 + ",\"string\"]", "v1");
+    register(v1, record("[\"null\",\"int\",\"string\"]", "v2"));
+    Schema v3 = record("[\"null\"," + f1 + ",\"string\"]", "v3");
+    register(v3);
+    Schema fixed = v1.getField("f").schema().getTypes().get(1);
+    byte[] bytes = write(v1, new GenericData.Fixed(fixed, new byte[4]));
+
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    assertEquals("The record holds a value of F1 at writer location [f], a union branch "
+        + "provenance pairs with none of the reader's. There is no value to read.",
+        e.getCause().getMessage());
+  }
+
+  @Test
+  void aRootRenamedIntoAnotherNamespaceKeepsItsNestedTypes() throws Exception {
+    // The nested N and the branch A inherit the root's namespace, so move with it, unaliased.
+    String fields = "[{\"name\":\"o\",\"type\":{\"type\":\"record\",\"name\":\"N\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}},"
+        + "{\"name\":\"u\",\"type\":[\"null\",\"string\"," + A + "]}]}";
+    Schema v1 = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"a.b\",\"fields\":" + fields);
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R2\","
+        + "\"namespace\":\"a.c\",\"aliases\":[\"a.b.R\"],\"fields\":" + fields);
+    register(v1, v2);
+    GenericRecord value = new GenericRecordBuilder(v1)
+        .set("o", new GenericRecordBuilder(v1.getField("o").schema()).set("x", 42).build())
+        .set("u", new GenericRecordBuilder(v1.getField("u").schema().getTypes().get(2))
+            .set("x", 5).build())
+        .build();
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
+    assertEquals(42, ((GenericRecord) read.get("o")).get("x"));
+    assertEquals(5, ((GenericRecord) read.get("u")).get("x"));
+  }
+
+  @Test
+  void aRootKeepsItsFieldsWhenATypeNamedInsideItGoes() throws Exception {
+    // As a reflect schema does, E is named inside R; dropping it must leave n its value.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"q\","
+        + "\"fields\":[{\"name\":\"n\",\"type\":\"string\"},{\"name\":\"e\",\"type\":{\"type\":"
+        + "\"enum\",\"name\":\"E\",\"namespace\":\"q.R\",\"symbols\":[\"X\",\"Y\"]}}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"q\","
+        + "\"doc\":\"v2\",\"fields\":[{\"name\":\"n\",\"type\":\"string\"}]}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    GenericRecord value = new GenericData.Record(v1);
+    value.put("n", "kept");
+    value.put("e", new GenericData.EnumSymbol(v1.getField("e").schema(), "Y"));
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
+    assertEquals("kept", read.get("n").toString());
+  }
+
+  @Test
+  void aFixedBranchMovedWithItsRootsNamespaceReads() throws Exception {
+    String fields = "[{\"name\":\"u\",\"type\":[\"null\",\"string\",{\"type\":\"fixed\","
+        + "\"name\":\"F\",\"size\":4}]}]}";
+    Schema v1 = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"a.b\",\"fields\":" + fields);
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R2\","
+        + "\"namespace\":\"a.c\",\"aliases\":[\"a.b.R\"],\"fields\":" + fields);
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    GenericRecord value = new GenericData.Record(v1);
+    value.put("u", new GenericData.Fixed(v1.getField("u").schema().getTypes().get(2),
+        new byte[] {1, 2, 3, 4}));
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
+    assertEquals(4, ((GenericData.Fixed) read.get("u")).bytes()[3]);
+  }
+
+  @Test
   void aReAddedPrimitiveBranchFallsBack() throws Exception {
     Schema v1 = record("[\"int\",\"string\"]", "v1");
     Schema v3 = record("[\"int\",\"string\"]", "v3");

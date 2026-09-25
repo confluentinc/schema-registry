@@ -272,16 +272,25 @@ public final class ProvenanceProjector<T> {
 
   private Integer structuralMatch(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    String wanted = structure(schema);
     List<Integer> versions;
     try {
       versions = client.getAllVersions(subject, true);
     } catch (UnsupportedOperationException e) {
       versions = client.getAllVersions(subject);
     }
+    Integer id = structuralMatch(subject, versions, schema, false);
+    // A schema derived from a generated class spells what its text leaves implicit — qualified
+    // type names, map entries, option order — so a Protobuf reader is also matched normalized.
+    return id == null && "PROTOBUF".equals(schema.schemaType())
+        ? structuralMatch(subject, versions, schema, true) : id;
+  }
+
+  private Integer structuralMatch(String subject, List<Integer> versions, ParsedSchema schema,
+      boolean normalized) throws IOException, RestClientException {
+    String wanted = structure(schema, normalized);
     for (int i = versions.size() - 1; i >= 0; i--) {
       int id = schemaIdOf(subject, versions.get(i));
-      if (wanted.equals(structure(client.getSchemaBySubjectAndId(subject, id)))) {
+      if (wanted.equals(structure(client.getSchemaBySubjectAndId(subject, id), normalized))) {
         return id;
       }
     }
@@ -297,9 +306,10 @@ public final class ProvenanceProjector<T> {
     }
   }
 
-  private static String structure(ParsedSchema schema) {
+  private static String structure(ParsedSchema schema, boolean normalized) {
     ParsedSchema bare = schema.copy((Metadata) null, (RuleSet) null);
-    return bare.copy(Collections.emptyMap(), bare.inlineTaggedEntities()).canonicalString();
+    bare = bare.copy(Collections.emptyMap(), bare.inlineTaggedEntities());
+    return (normalized ? bare.normalize() : bare).canonicalString();
   }
 
   static boolean isTransient(int status) {

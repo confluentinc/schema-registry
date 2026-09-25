@@ -111,7 +111,8 @@ final class AvroProvenanceRenamer {
       final String message = e.getMessage();
       final int found = message != null ? message.lastIndexOf("Found ") : -1;
       final int end = found >= 0 ? message.indexOf(", expecting ", found) : -1;
-      final String origin = end >= 0 && message.endsWith(SINK_FIELD)
+      // Only throwaway names are keys, so any error naming one is about that branch.
+      final String origin = end >= 0
           ? sinkOrigins.get(message.substring(found + "Found ".length(), end)) : null;
       return origin == null ? e : new SerializationException("The record holds " + origin
           + ", a union branch provenance pairs with none of the reader's. There is no value to "
@@ -379,10 +380,13 @@ final class AvroProvenanceRenamer {
    */
   private Schema unmatchedBranch(Schema branch, List<String> writerAt, Schema reader) {
     final Schema unmatched = discard(branch);
-    if (unmatched.getType() == Type.RECORD && ofType(reader, Type.UNION) != null) {
+    if (isNamed(unmatched) && ofType(reader, Type.UNION) != null) {
+      // An enum or fixed matches no branch at all; Avro names it as it does a sink.
       sinkOrigins.put(unmatched.getFullName(),
           "a value of " + branch.getFullName()
               + (writerAt.isEmpty() ? " at the writer's root" : " at writer location " + writerAt));
+    }
+    if (unmatched.getType() == Type.RECORD && ofType(reader, Type.UNION) != null) {
       final Schema sink = Schema.createRecord(unmatched.getFullName(), null, null, false);
       sink.setFields(Collections.singletonList(
           new Field(SINK_FIELD, Schema.create(Type.INT), null)));

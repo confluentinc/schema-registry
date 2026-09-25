@@ -250,7 +250,9 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       ctx.schemaBuilder().description(schema.getDescription().getValue());
     }
     if (schema.getDefault() != null) {
-      ctx.schemaBuilder().defaultValue(schema.getDefault().accept(new JsonValueVisitor()));
+      // A null default is JSONObject.NULL, as everit's own loader has it: null means none.
+      Object value = schema.getDefault().accept(new JsonValueVisitor());
+      ctx.schemaBuilder().defaultValue(value != null ? value : JSONObject.NULL);
     }
     Map<String, Object> unprocessed = new HashMap<>();
     if (!schema.getUnprocessedProperties().isEmpty()) {

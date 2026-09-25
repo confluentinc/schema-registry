@@ -926,6 +926,7 @@ public abstract class Schema {
     private final Map<String, Object> params;
     // Recorded by the converter; never part of equality.
     private List<String> nativeNames;
+    private List<String> nativeAliases;
 
     public UnionBranch(String name, Schema schema, String doc,
                        Map<String, Object> params) {
@@ -952,6 +953,19 @@ public abstract class Schema {
 
     public UnionBranch setNativeNames(List<String> names) {
       this.nativeNames = Collections.unmodifiableList(new ArrayList<>(names));
+      return this;
+    }
+
+    /**
+     * The native aliases of this branch's type, as full names — an Avro fixed's, which the logical
+     * type does not carry — or {@code null} if none were recorded.
+     */
+    public List<String> getNativeAliases() {
+      return nativeAliases;
+    }
+
+    public UnionBranch setNativeAliases(List<String> aliases) {
+      this.nativeAliases = Collections.unmodifiableList(new ArrayList<>(aliases));
       return this;
     }
 

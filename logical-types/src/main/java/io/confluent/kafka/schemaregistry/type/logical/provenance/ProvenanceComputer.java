@@ -106,6 +106,10 @@ public final class ProvenanceComputer {
       new HashSet<>(Arrays.asList("int", "long", "float", "double")),
       new HashSet<>(Arrays.asList("string", "bytes")));
 
+  // The native step of every Avro branch that is not a named type: a primitive's or collection's.
+  private static final Set<String> AVRO_UNNAMED = new HashSet<>(Arrays.asList(
+      "null", "boolean", "int", "long", "float", "double", "bytes", "string", "array", "map"));
+
   private ProvenanceComputer() {
   }
 
@@ -442,6 +446,19 @@ public final class ProvenanceComputer {
       // schema's own members.
       namedTypes = logicalType.getNamedTypes();
       Schema root = logicalType.getRootSchema();
+      if (policy == IdentityPolicy.AVRO && root != null
+          && root.getType() == Schema.Type.NAMED_TYPE_REF) {
+        // The converter keeps a root record as a reference while types are nested in its name; it
+        // is still the root, its members the root scope's, as when the converter unwraps it.
+        String name = root.getQualifiedName();
+        Schema body = namedTypes.get(name);
+        if (body != null && body.getType() == Schema.Type.STRUCT) {
+          walkNamed(name, () -> processGroup(
+              memberCandidates(body, PathKey.ofRoot(), Collections.emptyMap()),
+              RootScope.INSTANCE));
+          return;
+        }
+      }
       boolean rootHasMembers = root != null
           && (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.UNION);
       if (rootHasMembers) {
@@ -651,8 +668,9 @@ public final class ProvenanceComputer {
         if (resolved.containsKey(peer)) {
           continue;
         }
-        Identity promoted = policy == IdentityPolicy.AVRO && peer.kind == EntityKind.BRANCH
-            ? familyContinuation(peer, scope, peers) : null;
+        Identity promoted = policy != IdentityPolicy.AVRO ? null
+            : isNamedAvroType(peer) ? shortNameContinuation(peer, scope, peers, taken)
+            : peer.kind == EntityKind.BRANCH ? familyContinuation(peer, scope, peers) : null;
         // Brand new, or a historical identity resetting. Folding the minting version into the
         // value keeps it distinct from a live entity that previously released this name.
         Identity identity = promoted != null && taken.add(promoted)
@@ -762,7 +780,16 @@ public final class ProvenanceComputer {
     /** A named Avro branch's type aliases, as full names, so a renamed type keeps its branch. */
     private List<String> branchAliases(UnionBranch branch) {
       if (!isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())) {
-        return null;
+        // A fixed has no named type; the converter records its aliases on the branch.
+        List<String> recorded = policy == IdentityPolicy.AVRO ? branch.getNativeAliases() : null;
+        if (recorded == null) {
+          return null;
+        }
+        List<String> aliases = new ArrayList<>();
+        for (String alias : recorded) {
+          aliases.add(fullAlias(alias));
+        }
+        return aliases;
       }
       Schema named = namedTypes.get(branch.getSchema().getQualifiedName());
       return named != null ? typeAliases(named) : null;
@@ -792,6 +819,52 @@ public final class ProvenanceComputer {
         found = historical;
       }
       return found != null && !seen.contains(found) ? found : null;
+    }
+
+    /**
+     * The historical named type a named Avro type continues when neither its name nor an alias
+     * does: the one live in {@code scope} with the same short name, as Avro's checker compares
+     * names. A namespace changed without an alias — as nested types inheriting a renamed root's
+     * namespace are — then keeps its members. Null where a peer shares the short name.
+     */
+    private Identity shortNameContinuation(Candidate peer, Scope scope, List<Candidate> peers,
+        Set<Identity> taken) {
+      String shortName = shortName(peer.name);
+      if (peers.stream().filter(p -> p.kind == peer.kind && isNamedAvroType(p)
+          && shortName(p.name).equals(shortName)).count() != 1) {
+        return null;
+      }
+      Identity found = null;
+      for (Identity historical
+          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
+        if (!isLiveNamed(historical, peer.kind, shortName)) {
+          continue;
+        }
+        if (found != null) {
+          return null;
+        }
+        found = historical;
+      }
+      return found != null && !seen.contains(found) && !taken.contains(found) ? found : null;
+    }
+
+    private boolean isLiveNamed(Identity historical, EntityKind kind, String shortName) {
+      EntityState state = historical.getKind() == kind ? history.state.get(historical) : null;
+      NameKey name = state != null && state.active ? state.canonicalName : null;
+      return name != null && shortName(name.name).equals(shortName);
+    }
+
+    /**
+     * A named type's use, or a named union branch, which is its type's use. A fixed branch is a
+     * binary in the logical type; its native step, a full name rather than a type name, marks it.
+     */
+    private boolean isNamedAvroType(Candidate peer) {
+      return peer.kind == EntityKind.NAMED_TYPE || isUseOfItsType(peer)
+          || peer.kind == EntityKind.BRANCH && !AVRO_UNNAMED.contains(peer.name);
+    }
+
+    private static String shortName(String fullName) {
+      return fullName.substring(fullName.lastIndexOf('.') + 1);
     }
 
     private boolean isLiveBranchOf(Identity historical, Set<String> family) {
