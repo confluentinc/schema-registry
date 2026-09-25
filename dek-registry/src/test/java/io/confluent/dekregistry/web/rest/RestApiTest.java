@@ -167,11 +167,11 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
 
-    // An update that omits kmsProps entirely must not lose the already-cached secret.
+    // An update that doesn't resupply the secret must not re-cache the older one.
     Kek docOnlyUpdate = client.updateKek(headers, kekName, null, "doc-only-change", null);
     assertFalse(docOnlyUpdate.getKmsProps().containsKey("token.id"));
     Kek cachedAfterDocOnlyUpdate = client.getKek(kekName, false);
-    assertEquals("s.anothersecrettoken", cachedAfterDocOnlyUpdate.getKmsProps().get("token.id"));
+    assertFalse(cachedAfterDocOnlyUpdate.getKmsProps().containsKey("token.id"));
 
     // Read-modify-write: PUT the redacted map straight back plus a real doc change --
     // must not clear/corrupt the stored secret.

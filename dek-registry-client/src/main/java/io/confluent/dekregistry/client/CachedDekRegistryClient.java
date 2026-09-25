@@ -355,14 +355,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     Kek response = restService.updateKek(requestProperties, name, request);
-    // Wire response is redacted; cache the caller's secret, else the one already cached.
-    Kek cachedKek = response;
-    Kek previous = kekCache.getIfPresent(new KekId(name, false));
-    if (previous != null) {
-      cachedKek = KmsPropsRedactor.restoreWriteTimeSecrets(cachedKek, previous.getKmsProps());
-    }
+    // Wire response is redacted; cache only the secret the caller just supplied, since
+    // re-caching an older one would keep it alive past the cache TTL.
     kekCache.put(new KekId(name, false),
-        KmsPropsRedactor.restoreWriteTimeSecrets(cachedKek, kmsProps));
+        KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps));
     return response;
   }
 
