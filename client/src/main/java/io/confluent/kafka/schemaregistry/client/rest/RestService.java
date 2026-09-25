@@ -331,10 +331,7 @@ public class RestService implements Closeable, Configurable {
     }
 
     String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
-    Integer proxyPort = proxyPortVal instanceof String
-        ? Integer.valueOf((String) proxyPortVal)
-        : (Integer) proxyPortVal;
+    Integer proxyPort = proxyPort(configs);
 
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
@@ -389,12 +386,56 @@ public class RestService implements Closeable, Configurable {
     return httpClientBuilder.build();
   }
 
-  private static boolean isNonEmpty(String s) {
+  static boolean isNonEmpty(String s) {
     return s != null && !s.isEmpty();
   }
 
-  private static boolean isValidProxyConfig(String proxyHost, Integer proxyPort) {
+  static boolean isValidProxyConfig(String proxyHost, Integer proxyPort) {
     return isNonEmpty(proxyHost) && proxyPort != null && proxyPort > 0;
+  }
+
+  /**
+   * Converts an unsuccessful response to the exception it should fail with.
+   *
+   * @param responseBody the response body, or null if there was none
+   */
+  static RestClientException errorResponse(int responseCode, String responseBody) {
+    ErrorMessage errorMessage;
+    if (responseBody != null) {
+      try {
+        errorMessage = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
+      } catch (JsonProcessingException e) {
+        errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
+            "Unable to parse error message from schema registry: '(%s)'",
+            responseBody));
+      }
+    } else {
+      errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+    }
+    return new RestClientException(errorMessage.getMessage(), responseCode,
+        errorMessage.getErrorCode());
+  }
+
+  static Integer proxyPort(Map<String, ?> configs) {
+    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    return proxyPortVal instanceof String
+        ? Integer.valueOf((String) proxyPortVal)
+        : (Integer) proxyPortVal;
+  }
+
+  /**
+   * Converts a proxy host, with or without a scheme, to a proxy for the Apache HTTP clients.
+   */
+  static HttpHost toHttpHost(String proxyHost, int proxyPort) {
+    try {
+      URI uri = new URI(proxyHost);
+      String scheme = uri.getScheme() != null ? uri.getScheme() : "http";
+      // A host without a scheme parses as a relative URI, with no host part
+      String host = uri.getHost() != null ? uri.getHost() : proxyHost;
+      return new HttpHost(scheme, host, proxyPort);
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException("Invalid proxy host: " + proxyHost);
+    }
   }
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
@@ -485,24 +526,13 @@ public class RestService implements Closeable, Configurable {
         } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
           return null;
         } else {
-          ErrorMessage errorMessage;
+          String errorString = null;
           try (InputStream es = connection.getErrorStream()) {
             if (es != null) {
-              String errorString = CharStreams.toString(new InputStreamReader(es, Charsets.UTF_8));
-              try {
-                errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
-              } catch (JsonProcessingException e) {
-                errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
-                    "Unable to parse error message from schema registry: '(%s)'",
-                    errorString
-                ));
-              }
-            } else {
-              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+              errorString = CharStreams.toString(new InputStreamReader(es, Charsets.UTF_8));
             }
           }
-          throw new RestClientException(errorMessage.getMessage(), responseCode,
-              errorMessage.getErrorCode());
+          throw errorResponse(responseCode, errorString);
         }
 
       } finally {
@@ -559,7 +589,8 @@ public class RestService implements Closeable, Configurable {
 
   private void setRequestHeaders(String requestUrl, Map<String, String> requestProperties,
                                  HttpUriRequestBase request) throws MalformedURLException {
-    Map<String, String> headers = getAuthHeaders(url(requestUrl));
+    Map<String, String> headers = getAuthHeaders(
+        url(requestUrl), basicAuthCredentialProvider, bearerAuthCredentialProvider);
     headers.putAll(requestProperties);
 
     if (httpHeaders != null) {
@@ -618,25 +649,15 @@ public class RestService implements Closeable, Configurable {
         } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
           return null;
         } else {
-          ErrorMessage errorMessage;
+          String responseBody;
           try {
-            String responseBody = EntityUtils.toString(response.getEntity());
-            if (responseBody != null && !responseBody.isEmpty()) {
-              try {
-                errorMessage = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
-              } catch (JsonProcessingException e) {
-                errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
-                    "Unable to parse error message from schema registry: '(%s)'",
-                    responseBody));
-              }
-            } else {
-              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
-            }
+            responseBody = EntityUtils.toString(response.getEntity());
           } catch (ParseException e) {
-            errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error parsing response");
+            throw new RestClientException(
+                "Error parsing response", responseCode, JSON_PARSE_ERROR_CODE);
           }
-          throw new RestClientException(errorMessage.getMessage(), responseCode,
-              errorMessage.getErrorCode());
+          // Unlike with HttpURLConnection, an empty body is treated as no body
+          throw errorResponse(responseCode, isNonEmpty(responseBody) ? responseBody : null);
         }
       }
     } catch (IOException e) {
@@ -2209,38 +2230,21 @@ public class RestService implements Closeable, Configurable {
   }
 
   private void setAuthRequestHeaders(HttpURLConnection connection) {
-    if (basicAuthCredentialProvider != null) {
-      String userInfo = basicAuthCredentialProvider.getUserInfo(connection.getURL());
-      if (userInfo != null) {
-        String authHeader = Base64.getEncoder().encodeToString(
-            userInfo.getBytes(StandardCharsets.UTF_8));
-        connection.setRequestProperty(AUTHORIZATION_HEADER, "Basic " + authHeader);
-      }
-    }
-
-    if (bearerAuthCredentialProvider != null) {
-      String bearerToken = bearerAuthCredentialProvider.getBearerToken(connection.getURL());
-      if (bearerToken != null) {
-        connection.setRequestProperty(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
-      }
-
-      String targetIdentityPoolId = bearerAuthCredentialProvider.getTargetIdentityPoolId();
-      if (targetIdentityPoolId != null) {
-        connection.setRequestProperty(TARGET_IDENTITY_POOL_ID, targetIdentityPoolId);
-      }
-
-      String targetSchemaRegistry = bearerAuthCredentialProvider.getTargetSchemaRegistry();
-      if (targetSchemaRegistry != null) {
-        connection.setRequestProperty(TARGET_SR_CLUSTER, targetSchemaRegistry);
-      }
-    }
+    getAuthHeaders(connection.getURL(), basicAuthCredentialProvider, bearerAuthCredentialProvider)
+        .forEach(connection::setRequestProperty);
   }
 
-  private Map<String, String> getAuthHeaders(URL url) {
+  /**
+   * Returns the headers that authenticate a request to {@code url} with whichever of the
+   * credential providers is set, if any.
+   */
+  static Map<String, String> getAuthHeaders(URL url,
+                                            BasicAuthCredentialProvider basicProvider,
+                                            BearerAuthCredentialProvider bearerProvider) {
     Map<String, String> headers = new HashMap<>();
 
-    if (basicAuthCredentialProvider != null) {
-      String userInfo = basicAuthCredentialProvider.getUserInfo(url);
+    if (basicProvider != null) {
+      String userInfo = basicProvider.getUserInfo(url);
       if (userInfo != null) {
         String authHeader = Base64.getEncoder().encodeToString(
             userInfo.getBytes(StandardCharsets.UTF_8));
@@ -2248,18 +2252,18 @@ public class RestService implements Closeable, Configurable {
       }
     }
 
-    if (bearerAuthCredentialProvider != null) {
-      String bearerToken = bearerAuthCredentialProvider.getBearerToken(url);
+    if (bearerProvider != null) {
+      String bearerToken = bearerProvider.getBearerToken(url);
       if (bearerToken != null) {
         headers.put(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
       }
 
-      String targetIdentityPoolId = bearerAuthCredentialProvider.getTargetIdentityPoolId();
+      String targetIdentityPoolId = bearerProvider.getTargetIdentityPoolId();
       if (targetIdentityPoolId != null) {
         headers.put(TARGET_IDENTITY_POOL_ID, targetIdentityPoolId);
       }
 
-      String targetSchemaRegistry = bearerAuthCredentialProvider.getTargetSchemaRegistry();
+      String targetSchemaRegistry = bearerProvider.getTargetSchemaRegistry();
       if (targetSchemaRegistry != null) {
         headers.put(TARGET_SR_CLUSTER, targetSchemaRegistry);
       }
@@ -2291,18 +2295,8 @@ public class RestService implements Closeable, Configurable {
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
     if (this.useApacheHttpClient) {
-      try {
-        URI uri = new URI(proxyHost);
-        proxyHost = uri.getHost();
-        String scheme = uri.getScheme();
-        if (scheme == null) {
-          scheme = "http";
-        }
-        this.clientProxy = new HttpHost(scheme, proxyHost, proxyPort);
-        closeHttpClient();
-      } catch (URISyntaxException e) {
-        throw new IllegalArgumentException("Invalid proxy host: " + proxyHost);
-      }
+      this.clientProxy = toHttpHost(proxyHost, proxyPort);
+      closeHttpClient();
     }
   }
 
