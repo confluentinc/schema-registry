@@ -24,6 +24,7 @@ import org.apache.avro.Resolver;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericData;
 import org.apache.kafka.common.errors.SerializationException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -86,10 +87,63 @@ final class AvroProvenanceRenamer {
   static final class Renamed {
     final Schema writer;
     final Schema reader;
+    // Each type of the reader copy that differs from the caller's, mapped to the caller's.
+    private final Map<Schema, Schema> originals;
 
-    private Renamed(Schema writer, Schema reader) {
+    private Renamed(Schema writer, Schema reader, Map<Schema, Schema> originals) {
       this.writer = writer;
       this.reader = reader;
+      this.originals = originals;
+    }
+
+    /**
+     * {@code base}, building what it reads under the caller's own reader types rather than the
+     * reader copy's: a record carrying the copy — aliases stripped, sinks added — would not be
+     * the schema the caller registered, so could not, say, be serialized again.
+     */
+    GenericData dataFor(GenericData base) {
+      return new OriginalTypes(base, originals);
+    }
+  }
+
+  private static final class OriginalTypes extends GenericData {
+    private final Map<Schema, Schema> originals;
+
+    OriginalTypes(GenericData base, Map<Schema, Schema> originals) {
+      super(base.getClassLoader());
+      base.getConversions().forEach(this::addLogicalTypeConversion);
+      setFastReaderEnabled(base.isFastReaderEnabled());
+      this.originals = originals;
+    }
+
+    private Schema original(Schema schema) {
+      final Schema original = originals.get(schema);
+      return original != null ? original : schema;
+    }
+
+    @Override
+    public Object newRecord(Object old, Schema schema) {
+      return super.newRecord(old, original(schema));
+    }
+
+    @Override
+    public Object createEnum(String symbol, Schema schema) {
+      return super.createEnum(symbol, original(schema));
+    }
+
+    @Override
+    public Object createFixed(Object old, Schema schema) {
+      return super.createFixed(old, original(schema));
+    }
+
+    @Override
+    public Object createFixed(Object old, byte[] bytes, Schema schema) {
+      return super.createFixed(old, bytes, original(schema));
+    }
+
+    @Override
+    public Object newArray(Object old, int size, Schema schema) {
+      return super.newArray(old, size, original(schema));
     }
   }
 
@@ -113,8 +167,15 @@ final class AvroProvenanceRenamer {
     renamer.locate(reader, Collections.emptyList());
     final Schema renamedWriter = renamer.renameAt(
         writer, Collections.emptyList(), reader, Collections.emptyList(), false);
-    final Renamed renamed = new Renamed(
-        renamedWriter, renamer.readerCopy(reader, new IdentityHashMap<>()));
+    final Map<Schema, Schema> copies = new IdentityHashMap<>();
+    final Schema readerCopy = renamer.readerCopy(reader, copies);
+    final Map<Schema, Schema> originals = new IdentityHashMap<>();
+    copies.forEach((original, copy) -> {
+      if (copy != original) {
+        originals.put(copy, original);
+      }
+    });
+    final Renamed renamed = new Renamed(renamedWriter, readerCopy, originals);
     renamer.verify(Resolver.resolve(renamed.writer, renamed.reader),
         Collections.emptyList(), Collections.emptyList(),
         Collections.newSetFromMap(new IdentityHashMap<>()));
@@ -457,10 +518,18 @@ final class AvroProvenanceRenamer {
     switch (reader.getType()) {
       case RECORD:
         return recordCopy(reader, copies);
-      case ARRAY:
-        return withProps(reader, Schema.createArray(readerCopy(reader.getElementType(), copies)));
-      case MAP:
-        return withProps(reader, Schema.createMap(readerCopy(reader.getValueType(), copies)));
+      case ARRAY: {
+        final Schema array =
+            withProps(reader, Schema.createArray(readerCopy(reader.getElementType(), copies)));
+        copies.put(reader, array);
+        return array;
+      }
+      case MAP: {
+        final Schema map =
+            withProps(reader, Schema.createMap(readerCopy(reader.getValueType(), copies)));
+        copies.put(reader, map);
+        return map;
+      }
       case UNION: {
         final List<Schema> branches = new ArrayList<>(reader.getTypes().size());
         for (Schema branch : reader.getTypes()) {

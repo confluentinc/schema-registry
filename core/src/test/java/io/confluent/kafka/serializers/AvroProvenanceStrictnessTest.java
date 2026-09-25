@@ -167,6 +167,39 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
+  void aRecordReadThroughARenameCarriesTheReadersOwnSchemas() throws Exception {
+    // The renamer reads through a copy of the reader, aliases stripped and sinks added; a record
+    // carrying the copy would not be the registered reader, and could not be serialized again.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"},"
+        + "{\"name\":\"f\",\"type\":[\"string\",{\"type\":\"record\",\"name\":\"A\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}]},"
+        + "{\"name\":\"home\",\"type\":{\"type\":\"record\",\"name\":\"Home\",\"fields\":["
+        + "{\"name\":\"city\",\"type\":\"string\"}]}}]}");
+    Schema v2 = new Schema.Parser().parse(v1.toString().replace("\"A\"", "\"B\""));
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]},"
+        + "{\"name\":\"f\",\"type\":[\"string\",{\"type\":\"record\",\"name\":\"A\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}]},"
+        + "{\"name\":\"home\",\"type\":{\"type\":\"record\",\"name\":\"House\","
+        + "\"aliases\":[\"Home\"],\"fields\":[{\"name\":\"town\",\"type\":\"string\","
+        + "\"aliases\":[\"city\"]}]}}]}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    GenericRecord home = new GenericRecordBuilder(v1.getField("home").schema())
+        .set("city", "c").build();
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("name", "ada").set("f", "s").set("home", home).build());
+    register(v2, v3);
+
+    GenericRecord read = read(v3, bytes, "v1");
+    assertEquals(v3.toString(), read.getSchema().toString());
+    assertEquals(v3.getField("home").schema().toString(),
+        ((GenericRecord) read.get("home")).getSchema().toString());
+    // And so it can be written again under the registered reader.
+    new KafkaAvroSerializer(client, config(null)).serialize(TOPIC, read);
+  }
+
+  @Test
   void aSuppliedReaderIdChoosesTheVersionAStructuralMatchWouldNot() throws Exception {
     // v1 and v3 are structurally equal; note was dropped at v2, so it is a new column in v3.
     Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
