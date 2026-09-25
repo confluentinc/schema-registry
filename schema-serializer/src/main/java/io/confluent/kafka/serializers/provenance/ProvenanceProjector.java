@@ -79,7 +79,8 @@ public final class ProvenanceProjector<T> {
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
   // Readers whose registered version the caller named, by the schema handed over: by identity,
   // since equal readers may be different versions (Avro's equality ignores docs); else by equality,
-  // for a reader the deserializer copied.
+  // for a reader the deserializer copied — as the Protobuf one always does, where equal readers
+  // differ only in comments, which the registry gives one id anyway.
   private final Cache<ParsedSchema, Integer> suppliedReaderIds;
   private final Cache<ParsedSchema, Integer> suppliedReaderInstances =
       CacheBuilder.newBuilder().weakKeys().build();
@@ -117,6 +118,13 @@ public final class ProvenanceProjector<T> {
       }
       return reader.getSchema();
     };
+  }
+
+  /**
+   * Whether {@code reader} came with the registered id of the version it stands for.
+   */
+  public boolean suppliesId(ParsedSchema reader) {
+    return suppliedId(reader) != null;
   }
 
   private Integer suppliedId(ParsedSchema reader) {

@@ -192,8 +192,12 @@ public class JsonToLogicalTypeConverter {
       final org.everit.json.schema.Schema fieldSchema,
       final Schema fieldType,
       final List<Integer> fieldIndex) {
-    final org.everit.json.schema.Schema resolved = resolveReference(fieldSchema);
-    final Object rawDefault = extractDefault(resolved);
+    // A reference's own default (2019-09 and later honour one beside $ref) comes first.
+    final Object ownDefault =
+        fieldSchema instanceof ReferenceSchema && fieldSchema.hasDefaultValue()
+            ? fieldSchema.getDefaultValue() : null;
+    final Object rawDefault = ownDefault != null
+        ? ownDefault : extractDefault(resolveReference(fieldSchema));
     if (rawDefault == null || rawDefault == JSONObject.NULL) {
       return null;
     }

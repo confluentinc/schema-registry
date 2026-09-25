@@ -249,10 +249,50 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
+  void aClassSchemaFromAReaderFunctionIsTheLatestVersionItEquals() throws Exception {
+    // As the explicit class schema: a reader function handing over the class's own schema, with
+    // no registered id, reads as the latest version it equals (v3, v1 with metadata).
+    Schema v1 = Readded.getClassSchema();
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Readded\","
+        + "\"namespace\":\"io.confluent.kafka.serializers.test\",\"doc\":\"v2\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"}]}");
+    client.register(SUBJECT, new AvroSchema(v1.toString()));
+    client.register(SUBJECT, new AvroSchema(v2));
+    int v3 = client.register(SUBJECT, new AvroSchema(v1.toString())
+        .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null));
+    byte[] bytes = framedAs(v3, v1,
+        new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
+    Map<String, Object> config = config("v1");
+    config.put("specific.avro.reader", true);
+
+    Object read = new KafkaAvroDeserializer(client, config).deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> new AvroSchema(v1)).getValue();
+    assertEquals("current", ((Readded) read).getNote().toString());
+  }
+
+  @Test
   void aReAddedPrimitiveBranchFallsBack() throws Exception {
     Schema v1 = record("[\"int\",\"string\"]", "v1");
     Schema v3 = record("[\"int\",\"string\"]", "v3");
     register(v1, record("[\"string\",\"boolean\"]", "v2"), v3);
+    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v3));
+  }
+
+  @Test
+  void aBranchReAddedAtOneUseOfASharedTypeFallsBack() throws Exception {
+    // N is used at o and p; only p's u loses its string branch and gets one back, so p.u.string
+    // is new while o's continues. The one resolver action both share is checked at each.
+    String n = "{\"type\":\"record\",\"name\":\"N\",%s\"fields\":"
+        + "[{\"name\":\"u\",\"type\":[\"int\",\"string\"]}]}";
+    String n2 = "{\"type\":\"record\",\"name\":\"N2\",\"aliases\":[\"N\"],\"fields\":"
+        + "[{\"name\":\"u\",\"type\":[\"int\",\"boolean\"]}]}";
+    String r = "{\"type\":\"record\",\"name\":\"R\",\"doc\":\"%s\",\"fields\":["
+        + "{\"name\":\"o\",\"type\":%s},{\"name\":\"p\",\"type\":%s}]}";
+    Schema v1 = new Schema.Parser().parse(String.format(r, "v1", String.format(n, ""), "\"N\""));
+    Schema v2 = new Schema.Parser().parse(String.format(r, "v2", String.format(n, ""), n2));
+    Schema v3 = new Schema.Parser().parse(String.format(r, "v3",
+        String.format(n, "\"aliases\":[\"N2\"],"), "\"N\""));
+    register(v1, v2, v3);
     assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v3));
   }
 

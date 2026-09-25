@@ -101,8 +101,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   // A class's schema as a reader, built once; for provenance, marked as derived from the class.
+  // Bounded: each value holds its key, so weak keys alone would never let one go.
   private final Cache<Schema, AvroSchema> classReaders =
-      CacheBuilder.newBuilder().weakKeys().build();
+      CacheBuilder.newBuilder().weakKeys().maximumSize(DEFAULT_CACHE_CAPACITY).build();
 
   /**
    * {@code schema}, a generated or reflected class's, as a reader. Its text leaves out what a
@@ -116,17 +117,39 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   // The configured class's schema, or a generated class's own passed in, is a class reader; any
   // other schema is the caller's own text.
   private AvroSchema readerOf(Schema readerSchema) {
-    return readerSchema == null ? null
+    if (readerSchema == null) {
+      return null;
+    }
+    AvroSchema known = classReaders.getIfPresent(readerSchema);
+    return known != null ? known
         : readerSchema == specificAvroReaderSchema || isClassSchema(readerSchema)
             ? classReader(readerSchema) : new AvroSchema(readerSchema);
   }
 
+  // A reader function's class schema is a class reader too, unless its registered id came with
+  // it.
+  private AvroSchema readerOf(AvroSchema reader) {
+    if (reader == null || provenanceAlgorithm == null) {
+      return reader;
+    }
+    boolean bare = reader.metadata() == null && reader.ruleSet() == null;
+    return bare && !provenanceProjector().suppliesId(reader) && isClassSchema(reader.rawSchema())
+        ? classReader(reader.rawSchema()) : reader;
+  }
+
   private boolean isClassSchema(Schema schema) {
-    if (!useSpecificAvroReader || schema.getType() != Schema.Type.RECORD) {
+    if (schema.getType() != Schema.Type.RECORD) {
       return false;
     }
-    Class<?> type = SpecificData.get().getClass(schema);
-    return type != null && schema.equals(SpecificData.get().getSchema(type));
+    if (useSpecificAvroReader) {
+      Class<?> type = SpecificData.get().getClass(schema);
+      return type != null && schema.equals(SpecificData.get().getSchema(type));
+    }
+    if (useSchemaReflection) {
+      Class<?> type = ReflectData.get().getClass(schema);
+      return type != null && schema.equals(ReflectData.get().getSchema(type));
+    }
+    return false;
   }
 
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
@@ -156,6 +179,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected void configure(KafkaAvroDeserializerConfig config,  Class<?> type) {
     configureClientProperties(config, new AvroSchemaProvider());
+    // A projector, and the class readers it marked, belong to the configuration they were built
+    // under.
+    provenanceProjector = null;
+    classReaders.invalidateAll();
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
 
@@ -344,7 +371,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         new DeserializationContext(topic, isKey, headers, payload, includeRuleResults);
     AvroSchema schema = context.schemaForDeserialize();
     AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
-        ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
+        ? readerOf((AvroSchema) writerToReaderSchemaFunc.apply(schema))
         : specificAvroReaderSchema != null
             ? classReader(specificAvroReaderSchema)
             : null;

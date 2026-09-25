@@ -240,6 +240,10 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
         ctx = new SchemaContext(ctx.source(), subBuilder);
       }
     }
+    if (schema.getDefault() != null
+        && ctx.schemaBuilder() instanceof org.everit.json.schema.ReferenceSchema.Builder) {
+      ctx = new SchemaContext(ctx.source(), referenceWithDefault(ctx, schema));
+    }
     if (schema.getId() != null) {
       ctx.schemaBuilder().id(schema.getId().getValue());
     }
@@ -545,6 +549,27 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitReadOnlySchema(ReadOnlySchema schema) {
     // ignore readOnly
     return super.visitReadOnlySchema(schema);
+  }
+
+  /**
+   * The {@code $ref} of {@code ctx} rebuilt with the sibling {@code default} of {@code schema},
+   * which 2019-09 and later honour. everit builds a reference once, when it is registered for
+   * resolution, so a default set on its builder afterwards would be lost.
+   */
+  private org.everit.json.schema.ReferenceSchema.Builder referenceWithDefault(
+      SchemaContext ctx, CompositeSchema schema) {
+    org.everit.json.schema.ReferenceSchema built =
+        (org.everit.json.schema.ReferenceSchema) ctx.schemaBuilder().build();
+    Object value = schema.getDefault().accept(new JsonValueVisitor());
+    org.everit.json.schema.ReferenceSchema.Builder ref =
+        org.everit.json.schema.ReferenceSchema.builder()
+            .refValue(built.getReferenceValue());
+    ref.defaultValue(value != null ? value : JSONObject.NULL);
+    Schema referred = refReferred.get(built);
+    if (referred != null) {
+      offerRef(ref.build(), referred);
+    }
+    return ref;
   }
 
   @Override

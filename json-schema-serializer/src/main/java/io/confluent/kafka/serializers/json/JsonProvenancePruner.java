@@ -426,9 +426,12 @@ final class JsonProvenancePruner {
     // every declaring branch is walked, as ambiguous, so the property is pruned.
     List<Integer> walked = fallback ? declaring : valid;
     // A branch not declaring the property that fits too is another reading, where it is an extra.
+    // It is judged on the value as pruned: a closed branch rejects the property, not its absence.
     boolean extra = false;
+    Object pruned = !fallback && step == names.size() - 1 && name != null && node.isObject()
+        ? validatable(withoutProperty((ObjectNode) node, name, schema)) : validatable;
     for (int i = 0; i < branches.size() && !fallback && !extra; i++) {
-      extra = !declaring.contains(i) && validates(branches.get(i), validatable);
+      extra = !declaring.contains(i) && validates(branches.get(i), pruned);
     }
     // Only where several readings remain are they alternatives; one taken alone is the value's.
     boolean alternative = walked.size() > 1 || extra;
@@ -494,6 +497,12 @@ final class JsonProvenancePruner {
     } catch (IOException e) {
       throw new SerializationException("Could not read the default of property '" + name + "'", e);
     }
+  }
+
+  private static JsonNode withoutProperty(ObjectNode node, String name, CombinedSchema schema) {
+    ObjectNode copy = node.deepCopy();
+    copy.remove(name);
+    return schema instanceof CombinedSchemaExt ? integralDecimals(copy) : copy;
   }
 
   /**
@@ -577,7 +586,7 @@ final class JsonProvenancePruner {
     }
     if (depth == order.size()) {
       // A reading where the property is an extra requires nothing, though no reach applies.
-      return reading.containsValue(Alternative.EXTRA)
+      return reachesExtra(reading, reaches)
           || reaches.stream().anyMatch(reach -> applies(reach, reading));
     }
     Schema union = order.get(depth);
@@ -587,6 +596,24 @@ final class JsonProvenancePruner {
       reading.remove(union);
       if (found || budget[0] < 0) {
         return found;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Whether {@code reading} takes some union's extra reading and reaches that union: a reach under
+   * it agrees with the reading on every other union.
+   */
+  private static boolean reachesExtra(Map<Schema, Integer> reading, List<Reach> reaches) {
+    for (Reach reach : reaches) {
+      for (Alternative alternative : reach.alternatives) {
+        if (alternative.extra
+            && Integer.valueOf(Alternative.EXTRA).equals(reading.get(alternative.union))
+            && reach.alternatives.stream().allMatch(other -> other.union == alternative.union
+                || Integer.valueOf(other.branch).equals(reading.get(other.union)))) {
+          return true;
+        }
       }
     }
     return false;
