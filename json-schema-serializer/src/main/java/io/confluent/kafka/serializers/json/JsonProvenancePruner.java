@@ -18,11 +18,15 @@ package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BigIntegerNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.json.schema.CombinedSchemaExt;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,6 +65,7 @@ import org.json.JSONObject;
 final class JsonProvenancePruner {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final int MAX_INTEGRAL_DIGITS = 1000;
   // As JsonSchema converts a document for everit.
   private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
 
@@ -147,7 +152,7 @@ final class JsonProvenancePruner {
       walk(target.names, reader, document, 0, new ArrayList<>(), false,
           (node, object, name, choices, ambiguous) -> {
             if (!keeps(target, choices, ambiguous)) {
-              remove(node, object, name);
+              remove(node, object, name, target.names);
             }
           });
     }
@@ -328,7 +333,9 @@ final class JsonProvenancePruner {
     // only if no declaring branch fits, and then the property is merely an extra there.
     List<Integer> valid = new ArrayList<>();
     List<Integer> declaring = new ArrayList<>();
-    Object validatable = validatable(node);
+    // A union translated from 2019-09 or 2020-12, which Schema Registry validates with json-sKema.
+    Object validatable = validatable(
+        schema instanceof CombinedSchemaExt ? integralDecimals(node) : node);
     for (int i = 0; i < branches.size(); i++) {
       if (declares(names, branches.get(i), step, new IdentityHashMap<>())) {
         declaring.add(i);
@@ -377,22 +384,59 @@ final class JsonProvenancePruner {
     return match != null && match.continues;
   }
 
-  private static void remove(ObjectNode node, ObjectSchema object, String name) {
+  private static void remove(ObjectNode node, ObjectSchema object, String name,
+      List<String> names) {
     if (!object.getRequiredProperties().contains(name)) {
       node.remove(name);
       return;
     }
     Schema property = object.getPropertySchemas().get(name);
     if (property == null || !property.hasDefaultValue()) {
-      throw new SerializationException("Property '" + name + "' has no counterpart in the "
-          + "writer schema, is required by the reader and declares no default. There is no value "
-          + "to read.");
+      throw new SerializationException("Property " + names + " is new to the reader: "
+          + "provenance pairs it with nothing the writer wrote, and the reader requires it and "
+          + "declares no default. There is no value to read.");
     }
     try {
       node.set(name, MAPPER.readTree(JSONObject.valueToString(property.getDefaultValue())));
     } catch (IOException e) {
       throw new SerializationException("Could not read the default of property '" + name + "'", e);
     }
+  }
+
+  /**
+   * {@code node} with every integral decimal ({@code 1.0}, {@code 1e2}) as an integer. json-sKema
+   * counts one an integer and everit does not, and a branch everit alone rejects would leave the
+   * value to a branch validation does not choose.
+   */
+  private static JsonNode integralDecimals(JsonNode node) {
+    if (node.isFloatingPointNumber()) {
+      BigDecimal value = node.isBigDecimal() || Double.isFinite(node.doubleValue())
+          ? node.decimalValue() : null;
+      // Bounded, so a huge exponent does not become a huge integer.
+      return value != null && value.stripTrailingZeros().scale() <= 0
+          && value.precision() - value.scale() <= MAX_INTEGRAL_DIGITS
+          ? BigIntegerNode.valueOf(value.toBigInteger()) : node;
+    }
+    JsonNode copy = null;
+    if (node.isObject()) {
+      for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext(); ) {
+        Map.Entry<String, JsonNode> field = it.next();
+        JsonNode value = integralDecimals(field.getValue());
+        if (value != field.getValue()) {
+          copy = copy != null ? copy : node.deepCopy();
+          ((ObjectNode) copy).set(field.getKey(), value);
+        }
+      }
+    } else if (node.isArray()) {
+      for (int i = 0; i < node.size(); i++) {
+        JsonNode value = integralDecimals(node.get(i));
+        if (value != node.get(i)) {
+          copy = copy != null ? copy : node.deepCopy();
+          ((ArrayNode) copy).set(i, value);
+        }
+      }
+    }
+    return copy != null ? copy : node;
   }
 
   /**

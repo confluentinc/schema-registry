@@ -126,8 +126,9 @@ public final class ProvenanceProjector<T> {
     }
     // A writer named by GUID alone is keyed by it; its schema id is looked up when computed. A
     // supplied reader id is part of the question: the same schema may stand for either version.
+    // So is the reader's name: Protobuf schemas are equal whichever message of the file they name.
     List<Object> key = Arrays.asList(subject,
-        writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader,
+        writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader, reader.name(),
         includeMultipleMessages, suppliedReaderIds.getIfPresent(reader));
     Outcome<T> outcome = outcomes.getIfPresent(key);
     if (outcome == null) {

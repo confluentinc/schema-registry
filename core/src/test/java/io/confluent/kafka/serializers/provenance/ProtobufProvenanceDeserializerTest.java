@@ -30,17 +30,21 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -347,6 +351,91 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
   }
 
+  @Test
+  void aNestedMessageWrittenAsTheRecordIsRenumbered() throws Exception {
+    // A nested record type has no location of its own under the file's first message; its
+    // fields are found through the top-level messages.
+    String row = "message Row { message Inner { int32 x = 1; %s } Inner i = 1; }";
+    ProtobufSchema v1 = file(String.format(row, "string y = 2;"));
+    ProtobufSchema v2 = file(String.format(row, ""));
+    ProtobufSchema v3 = file(String.format(row, "string z = 2;"));
+    Descriptor inner = v1.toDescriptor("p.Row.Inner");
+    byte[] bytes = write(v1, DynamicMessage.newBuilder(inner)
+        .setField(inner.findFieldByName("x"), 4)
+        .setField(inner.findFieldByName("y"), "old").build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("old", get(read(v3, bytes, null), "z"));
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals(4, get(read, "x"));
+    assertEquals("", get(read, "z"));
+  }
+
+  @Test
+  void aNestedMessageOfTheSecondMessageIsRenumbered() throws Exception {
+    String box = "message Box { message Item { int32 x = 1; %s } Item i = 1; }";
+    ProtobufSchema v1 = file(ORDER, String.format(box, "string y = 2;"));
+    ProtobufSchema v2 = file(ORDER, String.format(box, ""));
+    ProtobufSchema v3 = file(ORDER, String.format(box, "string z = 2;"));
+    Descriptor item = v1.toDescriptor("p.Box.Item");
+    byte[] bytes = write(v1, DynamicMessage.newBuilder(item)
+        .setField(item.findFieldByName("x"), 4)
+        .setField(item.findFieldByName("y"), "old").build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("", get(read(v3, bytes, "v1"), "z"));
+  }
+
+  @Test
+  void eachMessageOfAFileKeepsItsOwnRenumbering() throws Exception {
+    // Records of two messages share the writer's schema id, and one deserializer caches what it
+    // made of each; Refund's number 2 is reused, Order's continues.
+    ProtobufSchema v1 = file(ORDER, "message Refund { int32 id = 1; string note = 2; }");
+    ProtobufSchema v2 = file(ORDER, "message Refund { int32 id = 1; }");
+    ProtobufSchema v3 = file(ORDER, "message Refund { int32 id = 1; string memo = 2; }");
+    Descriptor order = v1.toDescriptor("p.Order");
+    Descriptor refund = v1.toDescriptor("p.Refund");
+    byte[] anOrder = write(v1, DynamicMessage.newBuilder(order)
+        .setField(order.findFieldByName("id"), 1)
+        .setField(order.findFieldByName("item"), "kept").build());
+    byte[] aRefund = write(v1, DynamicMessage.newBuilder(refund)
+        .setField(refund.findFieldByName("id"), 2)
+        .setField(refund.findFieldByName("note"), "old").build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config("v1"));
+    for (byte[] bytes : Arrays.asList(anOrder, aRefund, anOrder)) {
+      DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
+          TOPIC, new RecordHeaders(), bytes, writer -> v3).getValue();
+      if (read.getDescriptorForType().getName().equals("Order")) {
+        assertEquals("kept", get(read, "item"));
+      } else {
+        assertEquals("", get(read, "memo"));
+      }
+    }
+  }
+
+  @Test
+  void aReadRuleLeavingARequiredFieldUnsetFailsTheRecord() throws Exception {
+    // A message no longer parsed from bytes after the rules is checked as the parse would.
+    ProtobufSchema v1 = proto2("required int32 id = 1;", "optional string s = 2;");
+    Rule clear = new Rule("clear", null, RuleKind.TRANSFORM, RuleMode.READ, ClearId.TYPE, null,
+        null, null, null, null, false);
+    ProtobufSchema reader = v1.copy(null, new RuleSet(null, Collections.singletonList(clear)));
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "s"), "x"));
+    Map<String, Object> config = config(null);
+    config.put("rule.executors", "clear");
+    config.put("rule.executors.clear.class", ClearId.class.getName());
+
+    assertThrows(SerializationException.class, () ->
+        new KafkaProtobufDeserializer<>(client, config)
+            .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> reader));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -434,5 +523,22 @@ class ProtobufProvenanceDeserializerTest {
   private static ProtobufSchema file(String... members) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("\n", members)
         + "\n");
+  }
+
+  /** A READ transform that clears the required {@code id}. */
+  public static class ClearId implements RuleExecutor {
+    static final String TYPE = "CLEAR_ID";
+
+    @Override
+    public String type() {
+      return TYPE;
+    }
+
+    @Override
+    public Object transform(RuleContext ctx, Object message) {
+      DynamicMessage m = (DynamicMessage) message;
+      return m.toBuilder().clearField(m.getDescriptorForType().findFieldByName("id"))
+          .buildPartial();
+    }
   }
 }
