@@ -472,6 +472,61 @@ class JsonProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aClosedBranchWithoutThePropertyIsAReadingOfThePrunedValue() throws Exception {
+    // B is closed and declares only a: it rejects the value while t is in it, but t pruned, the
+    // value is a B, as a record never written with t reads.
+    String b = "{\"type\": \"object\", \"properties\": {" + number("a") + "}, "
+        + "\"additionalProperties\": false}";
+    String a = "{\"type\": \"object\", \"properties\": {" + number("a") + "%s}%s}";
+    JsonSchema v1 = object("\"u\": {\"anyOf\": [" + String.format(a, ", " + string("t"), "")
+        + ", " + b + "]}");
+    JsonSchema v2 = object("\"u\": {\"anyOf\": [" + String.format(a, "", "") + ", " + b + "]}");
+    JsonSchema v3 = object("\"u\": {\"anyOf\": [" + String.format(a,
+        ", \"t\": {\"type\": \"string\", \"description\": \"v3\"}",
+        ", \"required\": [\"t\"]") + ", " + b + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"a\": 1, \"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+  }
+
+  @Test
+  void aModernDraftDefaultBesideARefStandsIn() throws Exception {
+    // 2019-09 and later honour keywords beside $ref, a default among them.
+    JsonSchema v1 = modern(number("x"), string("t"));
+    JsonSchema v2 = modern(number("x"));
+    JsonSchema v3 = new JsonSchema("{\"$schema\": "
+        + "\"https://json-schema.org/draft/2020-12/schema\", \"type\": \"object\", "
+        + "\"title\": \"Row\", \"properties\": {" + number("x") + ", \"t\": {\"$ref\": "
+        + "\"#/$defs/T\", \"default\": \"sib\"}}, \"required\": [\"t\"], "
+        + "\"$defs\": {\"T\": {\"type\": \"string\"}}}");
+    byte[] bytes = write(v1, "{\"x\": 1, \"t\": \"old\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("sib", read(v3, bytes, "v1").get("t").asText());
+  }
+
+  @Test
+  void aBranchInsertedInFrontLeavesTheOthersTheirValues() throws Exception {
+    // V1 names unhinted branches by position; C inserted in front must not hand A the ids of B,
+    // which sat at A's new position and had no x.
+    String a = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"a\"]}, "
+        + number("x") + "}}";
+    String b = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"b\"]}, "
+        + number("y") + "}}";
+    String c = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"c\"]}, "
+        + number("z") + "}}";
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [" + a + ", " + b + "]}");
+    JsonSchema v2 = object("\"u\": {\"oneOf\": [" + c + ", " + a + ", " + b + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"kind\": \"a\", \"x\": 5}}");
+    client.register(SUBJECT, v2);
+
+    assertEquals(5, read(v2, bytes, "v1").get("u").get("x").asInt());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

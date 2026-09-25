@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -83,6 +84,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
+    // A projector, and the class schemas it marked, belong to the configuration they were built
+    // under.
+    provenanceProjector = null;
+    classSchemas.clear();
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
@@ -317,25 +322,25 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (provenanceAlgorithm == null || (parseMethod == null && !deriveType)) {
       return null;
     }
+    String name = parseMethod != null ? specificProtobufClass.getName() : writer.fullName();
+    return name == null ? null
+        : classSchemas.computeIfAbsent(name, n -> Optional.ofNullable(loadClassSchema(n)))
+            .orElse(null);
+  }
+
+  private ProtobufSchema loadClassSchema(String name) {
     try {
-      Class<?> cls = parseMethod != null ? specificProtobufClass
-          : writer.fullName() != null ? Class.forName(writer.fullName()) : null;
-      return cls == null ? null : classSchemas.computeIfAbsent(cls, c -> {
-        try {
-          Message instance = (Message) c.getMethod("getDefaultInstance").invoke(null);
-          return (ProtobufSchema) provenanceProjector().derivedReader(
-              new ProtobufSchema(instance.getDescriptorForType()));
-        } catch (ReflectiveOperationException e) {
-          return null;
-        }
-      });
-    } catch (ClassNotFoundException e) {
+      Class<?> cls = parseMethod != null ? specificProtobufClass : Class.forName(name);
+      Message instance = (Message) cls.getMethod("getDefaultInstance").invoke(null);
+      return (ProtobufSchema) provenanceProjector().derivedReader(
+          new ProtobufSchema(instance.getDescriptorForType()));
+    } catch (ReflectiveOperationException e) {
       return null;
     }
   }
 
-  // Built once per class: a class's schema never changes.
-  private final Map<Class<?>, ProtobufSchema> classSchemas = new ConcurrentHashMap<>();
+  // Built once per class, by name: a class's schema never changes, nor does a class not there.
+  private final Map<String, Optional<ProtobufSchema>> classSchemas = new ConcurrentHashMap<>();
 
   /**
    * Whether a renumbered read is parsed before the domain rules: it is, except for the writer's
@@ -404,7 +409,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           + ", which the reader schema does not declare");
     }
     return provenanceProjector().project(subject, writerId, writer, reader, multi,
-        mapping -> ProtoProvenanceRenumberer.renumber(reader, mapping, multi)).orElse(null);
+        mapping -> ProtoProvenanceRenumberer.renumber(reader, writer, mapping, multi))
+        .orElse(null);
   }
 
   private volatile ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;

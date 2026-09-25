@@ -61,6 +61,8 @@ final class ProtoProvenanceRenumberer {
   private final int readerId;
   // For each message, by full name: which of its field numbers must move.
   private final Map<String, Map<Integer, Boolean>> moves = new HashMap<>();
+  // The writer's messages, by full name: a fresh number must be none the writer writes under.
+  private final Map<String, DescriptorProto> writerMessages = new HashMap<>();
 
   private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
     this.file = file;
@@ -77,11 +79,26 @@ final class ProtoProvenanceRenumberer {
    */
   static Renumbered renumber(ProtobufSchema reader, ProvenanceMapping mapping,
       boolean includeMultipleMessages) {
+    return renumber(reader, null, mapping, includeMultipleMessages);
+  }
+
+  /**
+   * As {@link #renumber(ProtobufSchema, ProvenanceMapping, boolean)}, fresh numbers also avoiding
+   * those {@code writer} writes under: data there would be parsed into the moved field, and fail
+   * the parse where it is a message.
+   */
+  static Renumbered renumber(ProtobufSchema reader, ProtobufSchema writer,
+      ProvenanceMapping mapping, boolean includeMultipleMessages) {
     // A location the walk cannot find would escape provenance without a trace.
     mapping.requireNames();
     Descriptor root = reader.toDescriptor();
     ProtoProvenanceRenumberer renumberer =
         new ProtoProvenanceRenumberer(root.getFile(), mapping.readerId());
+    if (writer != null) {
+      for (Descriptor message : writer.toDescriptor().getFile().getMessageTypes()) {
+        renumberer.collectWriter(message);
+      }
+    }
     Set<List<Integer>> moving = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
@@ -289,6 +306,13 @@ final class ProtoProvenanceRenumberer {
     }
   }
 
+  private void collectWriter(Descriptor message) {
+    writerMessages.put(message.getFullName(), message.toProto());
+    for (Descriptor nested : message.getNestedTypes()) {
+      collectWriter(nested);
+    }
+  }
+
   private void renumberMessage(DescriptorProto.Builder message, String fullName) {
     Map<Integer, Boolean> decided = moves.get(fullName);
     if (decided != null && decided.containsValue(true)) {
@@ -296,10 +320,14 @@ final class ProtoProvenanceRenumberer {
       for (FieldDescriptorProto field : message.getFieldList()) {
         taken.add(field.getNumber());
       }
+      DescriptorProto written = writerMessages.get(fullName);
+      if (written != null) {
+        written.getFieldList().forEach(field -> taken.add(field.getNumber()));
+      }
       int next = MAX_FIELD_NUMBER;
       for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
         if (Boolean.TRUE.equals(decided.get(field.getNumber()))) {
-          next = freeNumber(message, taken, next);
+          next = freeNumber(message, written, taken, next);
           taken.add(next);
           field.setNumber(next--);
         }
@@ -313,16 +341,18 @@ final class ProtoProvenanceRenumberer {
   }
 
   /**
-   * The highest number at or below {@code from} that no field takes, no extension range covers
-   * and the implementation does not reserve. An extension range is jumped over whole: one running
-   * to the maximum would otherwise be stepped through number by number.
+   * The highest number at or below {@code from} that no field takes, no extension range covers —
+   * nor the writer's extension or reserved ranges, which its data may still fill — and the
+   * implementation does not reserve. A range is jumped over whole: one running to the maximum
+   * would otherwise be stepped through number by number.
    */
-  private static int freeNumber(DescriptorProto.Builder message, Set<Integer> taken, int from) {
+  private static int freeNumber(DescriptorProto.Builder message, DescriptorProto written,
+      Set<Integer> taken, int from) {
     int number = from;
     while (number > 0) {
-      DescriptorProto.ExtensionRange range = extensionRangeHolding(message, number);
-      if (range != null) {
-        number = range.getStart() - 1;
+      int below = rangeStartHolding(message.getExtensionRangeList(), written, number);
+      if (below >= 0) {
+        number = below - 1;
       } else if (number >= FIRST_RESERVED_NUMBER && number <= LAST_RESERVED_NUMBER) {
         number = FIRST_RESERVED_NUMBER - 1;
       } else if (taken.contains(number)) {
@@ -335,13 +365,29 @@ final class ProtoProvenanceRenumberer {
         "Message " + message.getName() + " has no field number left to move a field to");
   }
 
-  private static DescriptorProto.ExtensionRange extensionRangeHolding(
-      DescriptorProto.Builder message, int number) {
-    for (DescriptorProto.ExtensionRange range : message.getExtensionRangeList()) {
+  /**
+   * The start of an extension range of the reader's, or an extension or reserved range of the
+   * writer's, holding {@code number}; -1 if none does.
+   */
+  private static int rangeStartHolding(List<DescriptorProto.ExtensionRange> extensions,
+      DescriptorProto written, int number) {
+    for (DescriptorProto.ExtensionRange range : extensions) {
       if (number >= range.getStart() && number < range.getEnd()) {
-        return range;
+        return range.getStart();
       }
     }
-    return null;
+    if (written != null) {
+      for (DescriptorProto.ExtensionRange range : written.getExtensionRangeList()) {
+        if (number >= range.getStart() && number < range.getEnd()) {
+          return range.getStart();
+        }
+      }
+      for (DescriptorProto.ReservedRange range : written.getReservedRangeList()) {
+        if (number >= range.getStart() && number < range.getEnd()) {
+          return range.getStart();
+        }
+      }
+    }
+    return -1;
   }
 }

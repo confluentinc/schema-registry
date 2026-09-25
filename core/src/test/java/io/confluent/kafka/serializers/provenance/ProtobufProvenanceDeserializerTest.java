@@ -654,6 +654,24 @@ class ProtobufProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aFreshNumberIsNoneTheWriterWritesUnder() throws Exception {
+    // c moves off b's number to a fresh one; the writer writes z there, which must not be parsed
+    // into c, a message it does not parse as.
+    String n = "message N { int32 x = 1; }";
+    ProtobufSchema v1 = file("message Row { int32 a = 1; int64 b = 2; string z = 536870911; }", n);
+    ProtobufSchema v2 = file("message Row { int32 a = 1; }", n);
+    ProtobufSchema v3 = file("message Row { int32 a = 1; N c = 2; }", n);
+    byte[] bytes = write(v1, b -> b.setField(field(b, "a"), 7).setField(field(b, "b"), 5L)
+        .setField(field(b, "z"), "zzzz"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals(7, get(read, "a"));
+    assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("c")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

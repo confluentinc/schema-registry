@@ -28,6 +28,7 @@ import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.kafka.common.errors.SerializationException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -173,9 +174,9 @@ final class AvroProvenanceRenamer {
   /**
    * Renames {@code writer} after {@code reader} as {@code mapping} pairs them.
    *
-   * <p>The reader comes back too: the aliases of every type provenance matched, and a matched
-   * record's field aliases, are removed, since provenance has already decided those pairings, and
-   * any sink branches are added.
+   * <p>The reader comes back too: the aliases of every type provenance matched or located, and
+   * such a record's field aliases, are removed, since provenance has already decided those
+   * pairings, and any sink branches are added.
    *
    * @throws ProvenanceUnavailableException if one named type would need two definitions inside a
    *     union, or the resolver would read a writer value into a union branch provenance gives a
@@ -201,8 +202,7 @@ final class AvroProvenanceRenamer {
     final Renamed renamed =
         new Renamed(renamedWriter, readerCopy, originals, renamer.sinkOrigins);
     renamer.verify(Resolver.resolve(renamed.writer, renamed.reader), renamed.writer,
-        Collections.emptyList(), Collections.emptyList(),
-        Collections.newSetFromMap(new IdentityHashMap<>()));
+        Collections.emptyList(), Collections.emptyList(), new HashSet<>());
     return renamed;
   }
 
@@ -535,7 +535,7 @@ final class AvroProvenanceRenamer {
 
   /**
    * {@code reader} with the aliases of every matched type or type at a location, and the field
-   * aliases of every matched record, removed, and the sinks added to their unions. Avro applies a
+   * aliases of every such record, removed, and the sinks added to their unions. Avro applies a
    * reader's aliases to the writer before resolving, across the whole writer; the writer already
    * bears the reader's names at every location, so such an alias could only rename a placed type
    * a second time — onto another type, into a duplicate, or into a branch with a new id.
@@ -669,8 +669,10 @@ final class AvroProvenanceRenamer {
    * {@code written}, the renamed writer at the same position.
    */
   private void verify(Resolver.Action action, Schema written, List<String> writerAt,
-      List<String> readerAt, Set<Resolver.Action> seen) {
-    if (!seen.add(action)) {
+      List<String> readerAt, Set<List<Object>> seen) {
+    // By path, not by action: a type used at two locations shares one action, and each location
+    // pairs its own branches.
+    if (!seen.add(Arrays.asList(action, writerAt))) {
       return;
     }
     if (action instanceof Resolver.RecordAdjust) {
@@ -703,7 +705,7 @@ final class AvroProvenanceRenamer {
   }
 
   private void verifyWriterUnion(Resolver.WriterUnion union, Schema written,
-      List<String> writerAt, List<String> readerAt, Set<Resolver.Action> seen) {
+      List<String> writerAt, List<String> readerAt, Set<List<Object>> seen) {
     final List<String> names = writerNames.get(written);
     final List<Schema> branches = written.getTypes();
     for (int i = 0; i < branches.size(); i++) {

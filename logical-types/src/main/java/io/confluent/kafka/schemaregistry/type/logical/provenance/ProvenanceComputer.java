@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 /**
  * Assigns a {@link Provenance} to every field, branch and named type across a sequence of
@@ -104,6 +105,9 @@ import java.util.TreeSet;
 public final class ProvenanceComputer {
 
   /** Avro's promotions, which carry an unnamed union branch's identity when unambiguous. */
+  // The name V1 gives an unhinted JSON union branch, followed by its position.
+  private static final String POSITIONAL_BRANCH = "connect_union_field_";
+
   private static final List<Set<String>> PROMOTION_FAMILIES = Arrays.asList(
       new HashSet<>(Arrays.asList("int", "long", "float", "double")),
       new HashSet<>(Arrays.asList("string", "bytes")));
@@ -252,6 +256,10 @@ public final class ProvenanceComputer {
         history.identityIndex.put(canonical, entity.identity);
       }
       entityState.memberNumbers = entity.memberNumbers;
+      if (entity.content != null) {
+        entityState.branchName = entity.name;
+        entityState.content = entity.content;
+      }
       provenance.put(entity.path,
           new Provenance(entity.identity, entityState.presenceStartVersion));
     }
@@ -310,6 +318,10 @@ public final class ProvenanceComputer {
     /** A Protobuf oneof's member field numbers when last committed; null for anything else. */
     private Set<Integer> memberNumbers;
 
+    /** A JSON union branch's name and content when last committed; null for anything else. */
+    private String branchName;
+    private Set<String> content;
+
     EntityState(int presenceStartVersion) {
       this.presenceStartVersion = presenceStartVersion;
     }
@@ -364,9 +376,10 @@ public final class ProvenanceComputer {
     private final boolean nameResolved;
     private final PathKey path;
     private final Set<Integer> memberNumbers;
+    private final Set<String> content;
 
     Entity(Identity identity, Scope scope, String name, List<String> aliases,
-        boolean nameResolved, PathKey path, Set<Integer> memberNumbers) {
+        boolean nameResolved, PathKey path, Set<Integer> memberNumbers, Set<String> content) {
       this.identity = identity;
       this.scope = scope;
       this.name = name;
@@ -374,6 +387,7 @@ public final class ProvenanceComputer {
       this.nameResolved = nameResolved;
       this.path = path;
       this.memberNumbers = memberNumbers;
+      this.content = content;
     }
   }
 
@@ -486,7 +500,7 @@ public final class ProvenanceComputer {
                   + ": " + identity + " (at " + peer.path + ")");
         }
         entities.add(new Entity(identity, scope, peer.name, peer.aliases, isNameResolved(peer),
-            peer.path, memberNumbersOf(peer)));
+            peer.path, memberNumbersOf(peer), contentOf(peer)));
         if (isUseOfItsType(peer)) {
           // A named Avro branch is itself the use of its type: its members follow directly.
           String name = peer.body.getQualifiedName();
@@ -659,10 +673,11 @@ public final class ProvenanceComputer {
         }
         if (isNameResolved(peer)) {
           byName.add(peer);
-        } else {
+        } else if (contentOf(peer) == null) {
           resolved.put(peer, resolveByFormat(peer, scope));
         }
       }
+      resolveJsonBranches(peers, scope, resolved);
       settleOneofs(peers, scope, resolved);
       arbitrate(byName, scope, resolved);
 
@@ -899,6 +914,133 @@ public final class ProvenanceComputer {
      * The live oneof in {@code scope} sharing a member number with {@code members}; null if there
      * is none, or members come from more than one.
      */
+    /**
+     * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
+     * or reordered would otherwise take another's identity. In turn: a hinted branch continues the
+     * live branch of its name; a branch continues the one live branch of the same content, where
+     * no peer shares it; one at the same position sharing a member with it and no conflicting
+     * discriminator, where content alone cannot tell or has changed; else it is new.
+     */
+    private void resolveJsonBranches(List<Candidate> peers, Scope scope,
+        Map<Candidate, Identity> resolved) {
+      List<Candidate> pending = new ArrayList<>();
+      Map<Set<String>, Integer> shared = new HashMap<>();
+      for (Candidate peer : peers) {
+        Set<String> content = contentOf(peer);
+        if (content != null) {
+          pending.add(peer);
+          shared.merge(content, 1, Integer::sum);
+        }
+      }
+      if (pending.isEmpty()) {
+        return;
+      }
+      Set<Identity> taken = new HashSet<>(resolved.values());
+      for (int phase = 0; phase < 3; phase++) {
+        for (Candidate peer : pending) {
+          if (resolved.containsKey(peer)) {
+            continue;
+          }
+          Set<String> content = contentOf(peer);
+          Identity found;
+          if (phase == 0) {
+            found = peer.name.startsWith(POSITIONAL_BRANCH)
+                ? null : liveBranch(scope, taken, state -> peer.name.equals(state.branchName));
+          } else if (phase == 1) {
+            found = shared.get(content) == 1
+                ? liveBranch(scope, taken, state -> content.equals(state.content)) : null;
+          } else {
+            found = liveBranch(scope, taken, state -> peer.name.equals(state.branchName)
+                && overlaps(content, state.content));
+          }
+          if (found != null) {
+            taken.add(found);
+            resolved.put(peer, found);
+          }
+        }
+      }
+      for (Candidate peer : pending) {
+        if (!resolved.containsKey(peer)) {
+          resolved.put(peer,
+              new Identity(peer.kind, scope, new MintedIdentity(peer.name, version)));
+        }
+      }
+    }
+
+    /**
+     * The one live, untaken JSON branch of {@code scope} that {@code test} accepts.
+     */
+    private Identity liveBranch(Scope scope, Set<Identity> taken, Predicate<EntityState> test) {
+      Identity found = null;
+      for (Identity historical
+          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
+        EntityState state = taken.contains(historical) ? null : history.state.get(historical);
+        boolean live = state != null && state.active && state.content != null;
+        if (!live || !test.test(state)) {
+          continue;
+        }
+        if (found != null) {
+          return null;
+        }
+        found = historical;
+      }
+      return found;
+    }
+
+    /**
+     * Whether two branches' contents share a member, with no discriminator of one named
+     * differently by the other.
+     */
+    private static boolean overlaps(Set<String> mine, Set<String> theirs) {
+      for (String member : mine) {
+        int value = member.indexOf('=');
+        if (value > 0 && !theirs.contains(member)) {
+          String key = member.substring(0, value + 1);
+          if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
+            return false;
+          }
+        }
+      }
+      return !Collections.disjoint(mine, theirs);
+    }
+
+    /**
+     * A JSON union branch's content: its members' names, with the value of a one-value enum
+     * (a discriminator), or its type for a branch with no members; null for anything else.
+     */
+    private Set<String> contentOf(Candidate peer) {
+      if (policy != IdentityPolicy.JSON || peer.kind != EntityKind.BRANCH) {
+        return null;
+      }
+      Schema body = resolved(peer.body);
+      if (body == null || body.getType() != Schema.Type.STRUCT) {
+        return Collections.singleton(body != null ? "#" + body.getType().name() : "#");
+      }
+      Set<String> members = new TreeSet<>();
+      for (Field field : body.getFields()) {
+        Schema type = resolved(field.getSchema());
+        members.add(isDiscriminator(type)
+            ? field.getName() + "=" + type.getEnumValues().get(0).getSymbol()
+            : field.getName());
+      }
+      return members;
+    }
+
+    private static boolean isDiscriminator(Schema type) {
+      return type != null && type.getType() == Schema.Type.ENUM
+          && type.getEnumValues().size() == 1;
+    }
+
+    private Schema resolved(Schema schema) {
+      Set<String> seenNames = new HashSet<>();
+      Schema current = schema;
+      while (current != null && current.getType() == Schema.Type.NAMED_TYPE_REF
+          && seenNames.add(current.getQualifiedName())) {
+        current = namedTypes.get(current.getQualifiedName());
+      }
+      return current;
+    }
+
     /**
      * Gives a historical oneof to one of the peers continuing it by member numbers: a oneof split
      * in two has each part share numbers with it. The part sharing the most keeps it — ties to

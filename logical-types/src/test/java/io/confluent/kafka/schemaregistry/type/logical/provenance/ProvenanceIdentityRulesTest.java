@@ -95,6 +95,67 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aJsonBranchInsertedInFrontLeavesTheOthersTheirOwn() {
+    // V1 names unhinted branches by position; inserting C in front shifts A and B, which keep
+    // their own identities by content (members and discriminator), not their positions'.
+    String a = branch("a", "\"x\":{\"type\":\"number\"}");
+    String b = branch("b", "\"y\":{\"type\":\"number\"}");
+    String c = branch("c", "\"z\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + a + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + c + "," + a + "," + b + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 1, 1))).isEqualTo(before.get(path(0, 0, 1)));
+    assertThat(after.get(path(0, 2, 1))).isEqualTo(before.get(path(0, 1, 1)));
+    assertThat(after.get(path(0, 0, 1))).isNotIn(before.values());
+  }
+
+  @Test
+  void jsonBranchesSharingMemberNamesAreToldApartByTheirDiscriminator() {
+    String a = branch("a", "\"x\":{\"type\":\"number\"}");
+    String b = branch("b", "\"x\":{\"type\":\"number\"}");
+    String c = branch("c", "\"x\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + a + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + c + "," + a + "," + b + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 1, 1))).isEqualTo(before.get(path(0, 0, 1)));
+    assertThat(after.get(path(0, 2, 1))).isEqualTo(before.get(path(0, 1, 1)));
+    assertThat(after.get(path(0, 0, 1))).isNotIn(before.values());
+  }
+
+  @Test
+  void jsonBranchesContentCannotTellApartKeepTheirPositions() {
+    String same = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + same + "," + same + "]}}", null),
+        json("{\"u\":{\"description\":\"v2\",\"oneOf\":[" + same + "," + same + "]}}",
+            null));
+    assertThat(pids(v, 1)).isEqualTo(pids(v, 0));
+  }
+
+  private static String branch(String kind, String members) {
+    return "{\"type\":\"object\",\"properties\":{\"kind\":{\"enum\":[\"" + kind + "\"]},"
+        + members + "}}";
+  }
+
+  @Test
+  void aOneofSplitInThreeContinuesInThePartHoldingTheLowestNumber() {
+    List<ProvenanceVersion> v = compute(
+        proto("oneof c { int32 a = 1; string b = 2; bool d = 3; }"),
+        proto("oneof c1 { int32 a = 1; } oneof c2 { string b = 2; } oneof c3 { bool d = 3; }"));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    // v1: c at [0], a, b, d at [0, 0..2]; v2: c1, c2, c3 at [0..2], each member at [i, 0].
+    assertThat(after.get(path(0))).isEqualTo(before.get(path(0)));
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(1))).isNotIn(before.values());
+    assertThat(after.get(path(2))).isNotIn(before.values());
+  }
+
+  @Test
   void aOneofSplitInTwoContinuesInThePartKeepingMostOfIt() {
     // Both parts share member numbers with c; the one holding the lowest keeps it, the other is
     // new, and so is the field that moved into it.
