@@ -918,8 +918,9 @@ public final class ProvenanceComputer {
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's identity. In turn: a hinted branch continues the
      * live branch of its name; a branch continues the one live branch of the same content, where
-     * no peer shares it; one at the same position sharing a member with it and no conflicting
-     * discriminator, where content alone cannot tell or has changed; else it is new.
+     * no peer shares it; the one live branch it alone shares a member with, and no conflicting
+     * discriminator, as when it moved and its members changed; one at the same position sharing a
+     * member with it, where overlap alone cannot tell; else it is new.
      */
     private void resolveJsonBranches(List<Candidate> peers, Scope scope,
         Map<Candidate, Identity> resolved) {
@@ -936,7 +937,7 @@ public final class ProvenanceComputer {
         return;
       }
       Set<Identity> taken = new HashSet<>(resolved.values());
-      for (int phase = 0; phase < 3; phase++) {
+      for (int phase = 0; phase < 4; phase++) {
         for (Candidate peer : pending) {
           if (resolved.containsKey(peer)) {
             continue;
@@ -949,6 +950,8 @@ public final class ProvenanceComputer {
           } else if (phase == 1) {
             found = shared.get(content) == 1
                 ? liveBranch(scope, taken, state -> content.equals(state.content)) : null;
+          } else if (phase == 2) {
+            found = soleOverlap(peer, pending, resolved, scope, taken);
           } else {
             found = liveBranch(scope, taken, state -> peer.name.equals(state.branchName)
                 && overlaps(content, state.content));
@@ -965,6 +968,27 @@ public final class ProvenanceComputer {
               new Identity(peer.kind, scope, new MintedIdentity(peer.name, version)));
         }
       }
+    }
+
+    /**
+     * The one live, untaken branch {@code peer}'s content overlaps, where no other unresolved peer
+     * overlaps it too: one branch sharing members with one other is its continuation, wherever it
+     * sits.
+     */
+    private Identity soleOverlap(Candidate peer, List<Candidate> pending,
+        Map<Candidate, Identity> resolved, Scope scope, Set<Identity> taken) {
+      Set<String> content = contentOf(peer);
+      Identity found = liveBranch(scope, taken, state -> overlaps(content, state.content));
+      if (found == null) {
+        return null;
+      }
+      Set<String> theirs = history.state.get(found).content;
+      for (Candidate other : pending) {
+        if (other != peer && !resolved.containsKey(other) && overlaps(contentOf(other), theirs)) {
+          return null;
+        }
+      }
+      return found;
     }
 
     /**

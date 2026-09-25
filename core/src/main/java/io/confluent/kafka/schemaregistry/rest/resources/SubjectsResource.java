@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
-import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -33,6 +32,7 @@ import java.util.Iterator;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;

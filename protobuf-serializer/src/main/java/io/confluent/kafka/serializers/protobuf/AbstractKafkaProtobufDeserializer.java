@@ -209,7 +209,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           migrations = getMigrations(subject, schema, readerSchema);
         }
       } else if (readerSchema.toDescriptor(name) != null) {
-        readerSchema = schemaWithName(readerSchema, name);
+        readerSchema = namedReader(readerSchema, name);
       }
       // With no reader configured, a generated class's schema is the reader.
       ProtobufSchema provenanceReader = readerSchema != null ? readerSchema : classSchema(schema);
@@ -367,6 +367,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private static boolean hasReadRules(ProtobufSchema schema) {
     return schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ);
+  }
+
+  // A copy naming the written message: a supplied id stands for it too.
+  private ProtobufSchema namedReader(ProtobufSchema reader, String name) {
+    ProtobufSchema named = schemaWithName(reader, name);
+    return provenanceAlgorithm == null ? named
+        : (ProtobufSchema) provenanceProjector().sameReader(reader, named);
   }
 
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,

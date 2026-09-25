@@ -17,12 +17,15 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -408,6 +411,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(PROVENANCE_ALGORITHM, Type.STRING, null,
+                EnumRecommender.in(provenanceAlgorithms()),
                 Importance.LOW, PROVENANCE_ALGORITHM_DOC)
         .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
                 Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
@@ -554,6 +558,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean useLatestVersion() {
     return this.getBoolean(USE_LATEST_VERSION);
+  }
+
+  // "none", or a released provenance algorithm version: a misspelt one fails configuration
+  // rather than quietly reading without provenance.
+  private static Object[] provenanceAlgorithms() {
+    List<Object> values = new ArrayList<>();
+    values.add("none");
+    values.addAll(Arrays.asList(ProvenanceAlgorithm.values()));
+    return values.toArray();
   }
 
   /**

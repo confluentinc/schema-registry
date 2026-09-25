@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.provenance;
+package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import java.util.Locale;
 
