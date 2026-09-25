@@ -18,11 +18,15 @@ package io.confluent.dekregistry.web.rest.resources;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
+import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.storage.AbstractDekRegistry;
+import io.confluent.dekregistry.storage.KeyEncryptionKey;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -32,12 +36,13 @@ import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Collections;
 import java.util.Map;
+import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 /**
  * Storage-layer subclasses (e.g. multi-tenant KMS validation) can throw
- * {@link InvalidKeyException} out of {@code createKekOrForward}; verifies that
- * {@link DekRegistryResource#createKek} maps it to a 422 instead of falling through to the
+ * {@link InvalidKeyException} out of {@code createKekOrForward}/{@code putKekOrForward}; verifies that
+ * {@link DekRegistryResource#createKek} and {@link DekRegistryResource#putKek} map it to a 422 instead of falling through to the
  * generic 500 handler.
  */
 public class DekRegistryResourceTest {
@@ -68,6 +73,37 @@ public class DekRegistryResourceTest {
 
     RestConstraintViolationException ex = assertThrows(RestConstraintViolationException.class,
         () -> resource.createKek(asyncResponse, headers, false, request));
+
+    assertEquals(422, ex.getStatus());
+    assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, ex.getErrorCode());
+  }
+
+  @Test
+  public void testPutKekInvalidKeyExceptionMapsTo422() throws Exception {
+    SchemaRegistryConfig config = mock(SchemaRegistryConfig.class);
+    when(config.whitelistHeaders()).thenReturn(Collections.emptyList());
+
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.config()).thenReturn(config);
+
+    AbstractDekRegistry dekRegistry = mock(AbstractDekRegistry.class);
+    TreeMap<String, String> oldProps = new TreeMap<>();
+    oldProps.put("cckId", "original-cck-id");
+    when(dekRegistry.getKek(eq("kek1"), eq(false))).thenReturn(new KeyEncryptionKey("kek1",
+        "azure-kms", "https://vault.azure.net/keys/k/1", oldProps, null, true, false));
+    when(dekRegistry.putKekOrForward(anyString(), any(UpdateKekRequest.class), any(Map.class)))
+        .thenThrow(new InvalidKeyException("cckId cannot be changed"));
+
+    DekRegistryResource resource = new DekRegistryResource(schemaRegistry, dekRegistry);
+
+    UpdateKekRequest request = new UpdateKekRequest();
+    request.setKmsProps(Collections.singletonMap("cckId", "different-cck-id"));
+
+    AsyncResponse asyncResponse = mock(AsyncResponse.class);
+    HttpHeaders headers = mock(HttpHeaders.class);
+
+    RestConstraintViolationException ex = assertThrows(RestConstraintViolationException.class,
+        () -> resource.putKek(asyncResponse, headers, "kek1", false, request));
 
     assertEquals(422, ex.getStatus());
     assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, ex.getErrorCode());

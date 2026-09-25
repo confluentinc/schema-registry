@@ -568,6 +568,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while updating key: " + e.getMessage(), e);
     }
