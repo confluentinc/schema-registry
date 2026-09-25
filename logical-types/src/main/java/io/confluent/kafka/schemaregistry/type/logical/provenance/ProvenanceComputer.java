@@ -490,8 +490,8 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Avro: by name and alias, then by short name for a named type and by promotion family for a
-     * primitive branch.
+     * Avro: by name and alias, then by short name for a named type, and for a primitive branch by
+     * its promotion family or, failing that, as Avro's own union resolution promotes it.
      */
     private void matchAvro(List<Node> peers, List<Node> previous, Map<Node, Node> matched) {
       arbitrate(peers, previous, matched);
@@ -502,7 +502,8 @@ public final class ProvenanceComputer {
           continue;
         }
         Node continued = isNamedAvroType(peer) ? shortNameContinuation(peer, peers, previous)
-            : peer.kind == Kind.BRANCH ? familyContinuation(peer, peers, previous) : null;
+            : peer.kind == Kind.BRANCH ? promotionContinuation(peer, peers, previous, taken)
+            : null;
         if (continued != null && taken.add(continued)) {
           matched.put(peer, continued);
         }
@@ -666,12 +667,53 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The previous branch an unnamed Avro branch promotes from, when the promotion is
-     * unambiguous: this union has one branch of its family, and the previous one had one.
+     * The previous branch an unnamed Avro branch promotes from: the one of its promotion family,
+     * where each union has one; else the one Avro's own resolution reads into this branch.
      */
-    private static Node familyContinuation(Node peer, List<Node> peers, List<Node> previous) {
-      return mutual(peer, peers, previous, (a, p) -> familyOf(a.name) != null
+    private static Node promotionContinuation(Node peer, List<Node> peers, List<Node> previous,
+        Set<Node> taken) {
+      Node family = mutual(peer, peers, previous, (a, p) -> familyOf(a.name) != null
           && familyOf(a.name).contains(p.name));
+      if (family != null || familyOf(peer.name) == null) {
+        return family;
+      }
+      return sole(previous, w -> !taken.contains(w) && avroReaderBranch(w, peers) == peer);
+    }
+
+    /**
+     * The branch of {@code peers} Avro reads a primitive {@code writer} branch into when none has
+     * its type: the first, in union order, its type promotes to, as
+     * {@code Resolver.ReaderUnion.firstMatchingBranch} chooses. A branch of its type continues it
+     * by name.
+     */
+    private static Node avroReaderBranch(Node writer, List<Node> peers) {
+      for (Node branch : peers) {
+        if (promotes(writer.name, branch.name)) {
+          return branch;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Avro's promotions: int to long, float or double; long to float or double; float to double;
+     * string to bytes and back.
+     */
+    private static boolean promotes(String writer, String reader) {
+      switch (writer) {
+        case "int":
+          return reader.equals("long") || reader.equals("float") || reader.equals("double");
+        case "long":
+          return reader.equals("float") || reader.equals("double");
+        case "float":
+          return reader.equals("double");
+        case "string":
+          return reader.equals("bytes");
+        case "bytes":
+          return reader.equals("string");
+        default:
+          return false;
+      }
     }
 
     /**

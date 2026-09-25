@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -379,11 +380,13 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
-  void aBranchPromotedTwoWaysFallsBack() throws Exception {
+  void aBranchPromotedTwoWaysReadsItsValue() throws Exception {
+    // The int continues the branch Avro's own resolution reads it into, so provenance applies.
     Schema v1 = record("[\"int\",\"string\"]", "v1");
     Schema v2 = record("[\"long\",\"float\",\"string\"]", "v2");
     register(v1, v2);
-    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v2));
+    assertNotNull(rename(v1, v2));
+    assertEquals(7L, read(v2, write(v1, 7), "v1").get("f"));
   }
 
   @Test
