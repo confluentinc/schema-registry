@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
@@ -70,7 +71,8 @@ public final class LogicalPolicyChecker {
     if (schemaType == null || AvroSchema.TYPE.equalsIgnoreCase(schemaType)) {
       return AvroToLogicalTypeConverter.toLogicalType((AvroSchema) parsedSchema);
     } else if (JsonSchema.TYPE.equalsIgnoreCase(schemaType)) {
-      return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) parsedSchema);
+      return JsonToLogicalTypeConverter.toLogicalType(
+          (JsonSchema) parsedSchema, LogicalTypeVersion.V1);
     } else if (ProtobufSchema.TYPE.equalsIgnoreCase(schemaType)) {
       return ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) parsedSchema);
     }
