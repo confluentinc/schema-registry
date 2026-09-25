@@ -76,8 +76,12 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   private final Cache<String, CompletableFuture<SchemaMetadata>> latestVersionCache;
   private final Cache<SubjectAndMetadata, CompletableFuture<SchemaMetadata>>
       latestWithMetadataCache;
+  // Registrations and lookups are cached apart, so that a registration never joins an in-flight
+  // lookup, which fails if the schema is new. Each reads the other's completed results.
   private final Cache<SubjectAndSchema, CompletableFuture<RegisterSchemaResponse>>
-      schemaToResponseCache;
+      registerResponseCache;
+  private final Cache<SubjectAndSchema, CompletableFuture<RegisterSchemaResponse>>
+      lookupResponseCache;
   private final Cache<SubjectAndSchema, CompletableFuture<Integer>> schemaToVersionCache;
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndInt, Long> missingIdCache;
@@ -103,7 +107,8 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     this.idToSchemaCache = newCache(cacheCapacity, -1);
     this.guidToSchemaCache = newCache(cacheCapacity, -1);
     this.versionToSchemaCache = newCache(cacheCapacity, -1);
-    this.schemaToResponseCache = newCache(cacheCapacity, -1);
+    this.registerResponseCache = newCache(cacheCapacity, -1);
+    this.lookupResponseCache = newCache(cacheCapacity, -1);
     this.schemaToVersionCache = newCache(cacheCapacity, -1);
 
     long latestTTL = SchemaRegistryClientConfig.getLatestTTL(configs);
@@ -202,7 +207,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   @Override
   public CompletableFuture<RegisterSchemaResponse> registerWithResponse(
       String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags) {
-    return cached(schemaToResponseCache, new SubjectAndSchema(subject, schema, normalize), () -> {
+    SubjectAndSchema key = new SubjectAndSchema(subject, schema, normalize);
+    // A schema that a lookup found is already registered
+    RegisterSchemaResponse lookedUp = completedValue(lookupResponseCache, key);
+    if (lookedUp != null) {
+      return CompletableFuture.completedFuture(lookedUp);
+    }
+    return cached(registerResponseCache, key, () -> {
       RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
       if (propagateSchemaTags) {
         request.setPropagateSchemaTags(true);
@@ -222,19 +233,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   public CompletableFuture<RegisterSchemaResponse> getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize) {
     SubjectAndSchema key = new SubjectAndSchema(subject, schema, normalize);
-    CompletableFuture<RegisterSchemaResponse> cachedResponse =
-        schemaToResponseCache.getIfPresent(key);
-    if (cachedResponse != null
-        && cachedResponse.isDone()
-        && !cachedResponse.isCompletedExceptionally()) {
-      Integer version = cachedResponse.join().getVersion();
-      if (version == null || version <= 0) {
-        // Look the schema up again if the cached version is not valid, as registries before
-        // CP 8.0 did not return one on registration
-        schemaToResponseCache.asMap().remove(key, cachedResponse);
-      }
+    RegisterSchemaResponse registered = completedValue(registerResponseCache, key);
+    // Look the schema up anyway if the version is not valid, as registries before CP 8.0 did not
+    // return one on registration
+    if (registered != null && registered.getVersion() != null && registered.getVersion() > 0) {
+      return CompletableFuture.completedFuture(registered);
     }
-    return cached(schemaToResponseCache, key,
+    return cached(lookupResponseCache, key,
         () -> lookUpFromRegistry(subject, schema, normalize, false)
             .thenApply(response -> {
               cacheSchemaById(subject, response);
@@ -270,7 +275,8 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     versionToSchemaCache.invalidateAll();
     latestVersionCache.invalidateAll();
     latestWithMetadataCache.invalidateAll();
-    schemaToResponseCache.invalidateAll();
+    registerResponseCache.invalidateAll();
+    lookupResponseCache.invalidateAll();
     schemaToVersionCache.invalidateAll();
     missingSchemaCache.invalidateAll();
     missingIdCache.invalidateAll();
@@ -420,6 +426,17 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     }
     // A copy, so that a caller completing or cancelling it cannot affect other callers
     return future.copy();
+  }
+
+  /**
+   * Returns the result of the cached future for {@code key}, or null if there is none or it has
+   * not completed successfully.
+   */
+  private static <K, V> V completedValue(Cache<K, CompletableFuture<V>> cache, K key) {
+    CompletableFuture<V> future = cache.getIfPresent(key);
+    return future != null && future.isDone() && !future.isCompletedExceptionally()
+        ? future.join()
+        : null;
   }
 
   /**

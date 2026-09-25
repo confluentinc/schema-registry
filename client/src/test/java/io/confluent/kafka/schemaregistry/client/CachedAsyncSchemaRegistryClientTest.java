@@ -195,6 +195,65 @@ public class CachedAsyncSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterDuringInFlightGetIdStillRegisters() throws Exception {
+    CompletableFuture<Schema> lookup = new CompletableFuture<>();
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(false)))
+        .andReturn(lookup).once();
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(completedFuture(new RegisterSchemaResponse(ID))).once();
+    replay(restService);
+
+    // The serializer flow: look the schema up, and register it if that fails
+    CompletableFuture<Integer> getId = client.getId(SUBJECT, AVRO_SCHEMA);
+    CompletableFuture<Integer> register = client.register(SUBJECT, AVRO_SCHEMA);
+    lookup.completeExceptionally(new RestClientException("Schema not found", 404, 40403));
+
+    awaitFailure(getId, RestClientException.class);
+    assertEquals(ID, (int) await(register));
+    verify(restService);
+  }
+
+  @Test
+  public void testGetIdDuringInFlightRegisterLooksUpIndependently() throws Exception {
+    CompletableFuture<RegisterSchemaResponse> registration = new CompletableFuture<>();
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(registration).once();
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(false)))
+        .andReturn(completedFuture(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD)))
+        .once();
+    replay(restService);
+
+    CompletableFuture<Integer> register = client.register(SUBJECT, AVRO_SCHEMA);
+    // Answered by its own lookup, without waiting for the registration
+    assertEquals(ID, (int) await(client.getId(SUBJECT, AVRO_SCHEMA)));
+    registration.completeExceptionally(new RestClientException("Incompatible schema", 409, 409));
+    awaitFailure(register, RestClientException.class);
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterAfterGetIdIsCacheHit() throws Exception {
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(false)))
+        .andReturn(completedFuture(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD)))
+        .once();
+    replay(restService);
+
+    assertEquals(ID, (int) await(client.getId(SUBJECT, AVRO_SCHEMA)));
+    // Already registered, so nothing is posted
+    assertEquals(ID, (int) await(client.register(SUBJECT, AVRO_SCHEMA)));
+
+    verify(restService);
+  }
+
+  @Test
   public void testParseSchemaPrefetchesReferencesWithoutBlocking() throws Exception {
     CompletableFuture<Schema> reference = new CompletableFuture<>();
     expect(restService.getVersion("inner-value", 1, true)).andReturn(reference).once();
