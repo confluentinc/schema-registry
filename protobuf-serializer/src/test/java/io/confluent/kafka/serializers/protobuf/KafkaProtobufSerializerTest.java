@@ -387,10 +387,11 @@ public class KafkaProtobufSerializerTest {
     DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor())
         .setField(schema.toDescriptor().findFieldByName("f"), "hi")
         .build();
-    byte[] bytes = protobufSerializer.serialize("canary", message);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize("canary", headers, message);
 
     SerializationException e = assertThrows(SerializationException.class,
-        () -> deriveTypeDeserializer.deserialize("canary", bytes));
+        () -> deriveTypeDeserializer.deserialize("canary", headers, bytes));
     assertTrue(e.getCause().getMessage().contains("not a valid protobuf message class"));
     assertNull(System.getProperty(STATIC_INITIALIZER_RAN_PROPERTY));
   }
