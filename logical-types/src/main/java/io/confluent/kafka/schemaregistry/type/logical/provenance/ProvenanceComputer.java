@@ -50,8 +50,11 @@ import java.util.function.Predicate;
  * version, or to none; a matched member keeps its match's id, and any other takes a new one. A
  * location is matched only among the previous version's locations under its parent's match, so
  * the parent is matched first and scopes its members; collection steps ({@code []},
- * {@code {key}}, {@code {value}}) are part of that scope. Nothing absent from the previous version
- * is ever continued, so a range of versions pairs its versions exactly as the whole history does.
+ * {@code {key}}, {@code {value}}) are part of that scope. A location whose type changes category —
+ * a leaf, struct, union, array, multiset or map becoming another — is new, with everything under
+ * it, however it was matched: no SQL {@code ALTER} expresses the change. Nothing absent from the
+ * previous version is ever continued, so a range of versions pairs its versions exactly as the
+ * whole history does.
  *
  * <p>The rules are format-specific and a {@code LogicalType} carries no format discriminator, so
  * each version comes with an {@link IdentityPolicy}. Versions of different policies match nothing:
@@ -176,6 +179,20 @@ public final class ProvenanceComputer {
     BRANCH
   }
 
+  /**
+   * What a location's type is, references resolved. A change between categories has no SQL
+   * {@code ALTER} — Iceberg allows none, and Flink reads a multiset as neither a list nor a map —
+   * so it is a drop and an add.
+   */
+  private enum Category {
+    LEAF,
+    STRUCT,
+    UNION,
+    ARRAY,
+    MULTISET,
+    MAP
+  }
+
   /** One location of one version: what it is, where it is, and what it matched. */
   private static final class Node {
 
@@ -194,6 +211,7 @@ public final class ProvenanceComputer {
 
     /** This node's member groups, keyed by the collection steps leading to each. */
     private final Map<String, List<Node>> groups = new HashMap<>();
+    private Category category;
     private Node match;
     private int id;
 
@@ -335,7 +353,16 @@ public final class ProvenanceComputer {
         return;
       }
       owner.groups.put(step, peers);
+      for (Node peer : peers) {
+        peer.category = categoryOf(peer.body);
+      }
       match(peers, owner.previous(step, peers.get(0).kind));
+      for (Node peer : peers) {
+        if (peer.match != null && peer.match.category != peer.category) {
+          // Matched, but its type changed category: it, and all under it, are new.
+          peer.match = null;
+        }
+      }
       for (Node peer : peers) {
         if (peer.kind != Kind.NAMED_TYPE) {
           members.add(peer);
@@ -391,6 +418,27 @@ public final class ProvenanceComputer {
         default:
           // Primitives and enums have no members.
           break;
+      }
+    }
+
+    private Category categoryOf(Schema schema) {
+      Schema type = resolved(schema);
+      if (type == null) {
+        return Category.LEAF;
+      }
+      switch (type.getType()) {
+        case STRUCT:
+          return Category.STRUCT;
+        case UNION:
+          return Category.UNION;
+        case ARRAY:
+          return Category.ARRAY;
+        case MULTISET:
+          return Category.MULTISET;
+        case MAP:
+          return Category.MAP;
+        default:
+          return Category.LEAF;
       }
     }
 

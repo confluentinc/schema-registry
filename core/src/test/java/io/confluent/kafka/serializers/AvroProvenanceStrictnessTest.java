@@ -364,11 +364,12 @@ class AvroProvenanceStrictnessTest {
   }
 
   @Test
-  void aValueWidenedIntoANewBranchFallsBack() throws Exception {
+  void aValueWidenedIntoAUnionIsANewColumnNotAFallback() throws Exception {
+    // A leaf becoming a union changes category, so f is new and provenance applies.
     Schema v1 = record("\"int\"", "v1");
     Schema v2 = record("[\"int\",\"string\"]", "v2");
     register(v1, v2);
-    assertThrows(ProvenanceUnavailableException.class, () -> rename(v1, v2));
+    assertNotNull(rename(v1, v2));
   }
 
   @Test
