@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 /**
@@ -58,13 +59,17 @@ import java.util.function.Predicate;
  *
  * <h2>Named types</h2>
  *
- * <p>Named types are matched where they are used: each use is a location of its own, under the
- * location using it, and it scopes the type's members. A type merged, split or swapped by aliases
- * therefore keeps every location's lineage, and each use of a shared type has its own ids. A named
- * Avro union branch is itself the use of its type. Under the JSON policy a named type is
- * transparent, as if inlined. A recursive type has no finite set of uses, and is rejected. An Avro
- * or Protobuf root that refers to its own record or message — as a converter keeps one naming
- * types inside it — is walked as the root, so the root's name never matters.
+ * <p>Named types are matched where they are used: each use — a field's, an element's, a union
+ * branch's — is a location of its own, under the location using it, and it scopes the type's
+ * members. A type merged, split or swapped by aliases therefore keeps every location's lineage,
+ * and each use of a shared type has its own ids. Under the JSON policy a named type is
+ * transparent, as if inlined. A recursive type has no finite set of uses, and is rejected. A root
+ * that refers to a named type — as a converter keeps a root record or message naming types inside
+ * it — is walked through, so the root's name never matters.
+ *
+ * <p>The walk is the same for every format; only matching a peer group differs, by one matcher per
+ * format. A match on evidence weaker than a name or number — an Avro short name or promotion
+ * family, a JSON branch's content — needs exactly one candidate on each side.
  *
  * <h2>Names and aliases</h2>
  *
@@ -311,18 +316,16 @@ public final class ProvenanceComputer {
         return root;
       }
       Where where = Where.root(schema);
-      if (policy != IdentityPolicy.JSON && schema.getType() == Schema.Type.NAMED_TYPE_REF) {
+      if (schema.getType() == Schema.Type.NAMED_TYPE_REF) {
         // The converter keeps a root record or message as a reference while types are nested in
-        // it or a peer uses it; it is still the root, its members the root's.
+        // it or a peer uses it. It is still the root, so the root's name never matters.
         String name = schema.getQualifiedName();
         Schema body = namedTypes.get(name);
-        if (body != null && body.getType() == Schema.Type.STRUCT) {
-          walkNamed(name, () -> processGroup(
-              memberNodes(body, where.through(body), Collections.emptyMap()), root, ""));
-          return root;
-        }
+        walkNamed(name, () -> processType(body, root, "", where.through(body),
+            Collections.emptyMap()));
+      } else {
+        processType(schema, root, "", where, Collections.emptyMap());
       }
-      processType(schema, root, "", where, Collections.emptyMap());
       return root;
     }
 
@@ -337,15 +340,7 @@ public final class ProvenanceComputer {
         if (peer.kind != Kind.NAMED_TYPE) {
           members.add(peer);
         }
-        if (isUseOfItsType(peer)) {
-          // A named Avro branch is itself the use of its type: its members follow directly.
-          String name = peer.body.getQualifiedName();
-          Schema named = namedTypes.get(name);
-          walkNamed(name, () -> processType(named, peer, "", peer.where.through(named),
-              peer.childDerived));
-        } else {
-          processType(peer.body, peer, "", peer.where, peer.childDerived);
-        }
+        processType(peer.body, peer, "", peer.where, peer.childDerived);
       }
     }
 
@@ -453,41 +448,26 @@ public final class ProvenanceComputer {
 
     /**
      * Matches a whole peer group at once against {@code previous}, the previous version's members
-     * of the parent's match: whether an alias or a name wins a previous location depends on every
-     * peer in the group.
+     * of the parent's match, by the rules of the version's format.
      */
     private void match(List<Node> peers, List<Node> previous) {
-      Map<Node, Node> matched = new IdentityHashMap<>();
-      List<Node> byName = new ArrayList<>();
       for (Node peer : peers) {
         if (peer.name == null) {
           throw new IllegalArgumentException(
               "Entity at " + peer.where.path + " has no name (version " + version + ")");
         }
-        if (policy == IdentityPolicy.AVRO) {
-          byName.add(peer);
-        } else if (peer.content == null) {
-          Node found = matchByFormat(peer, previous);
-          if (found != null) {
-            matched.put(peer, found);
-          }
-        }
       }
-      matchJsonBranches(peers, previous, matched);
-      settleOneofs(peers, matched);
-      arbitrate(byName, previous, matched);
-
-      Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      taken.addAll(matched.values());
-      for (Node peer : byName) {
-        if (matched.containsKey(peer)) {
-          continue;
-        }
-        Node continued = isNamedAvroType(peer) ? shortNameContinuation(peer, peers, previous)
-            : peer.kind == Kind.BRANCH ? familyContinuation(peer, peers, previous) : null;
-        if (continued != null && taken.add(continued)) {
-          matched.put(peer, continued);
-        }
+      Map<Node, Node> matched = new IdentityHashMap<>();
+      switch (policy) {
+        case AVRO:
+          matchAvro(peers, previous, matched);
+          break;
+        case PROTOBUF:
+          matchProtobuf(peers, previous, matched);
+          break;
+        default:
+          matchJson(peers, previous, matched);
+          break;
       }
       requireOneToOne(peers, matched);
       for (Node peer : peers) {
@@ -510,19 +490,78 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Where the format decides outright: a JSON name; a Protobuf field number, a message's name,
-     * or a oneof's member numbers, which a renamed oneof keeps.
+     * Avro: by name and alias, then by short name for a named type and by promotion family for a
+     * primitive branch.
      */
-    private static Node matchByFormat(Node peer, List<Node> previous) {
-      if (peer.memberNumbers != null) {
-        return sole(previous, p -> p.memberNumbers != null
-            && !Collections.disjoint(p.memberNumbers, peer.memberNumbers));
+    private void matchAvro(List<Node> peers, List<Node> previous, Map<Node, Node> matched) {
+      arbitrate(peers, previous, matched);
+      Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
+      taken.addAll(matched.values());
+      for (Node peer : peers) {
+        if (matched.containsKey(peer)) {
+          continue;
+        }
+        Node continued = isNamedAvroType(peer) ? shortNameContinuation(peer, peers, previous)
+            : peer.kind == Kind.BRANCH ? familyContinuation(peer, peers, previous) : null;
+        if (continued != null && taken.add(continued)) {
+          matched.put(peer, continued);
+        }
       }
-      if (peer.number != null) {
-        return sole(previous, p -> peer.number.equals(p.number));
+    }
+
+    /**
+     * Protobuf: a field by number, a message by name, and a oneof by its members' numbers, which a
+     * renamed oneof keeps; a oneof split in two is kept by one part.
+     */
+    private static void matchProtobuf(List<Node> peers, List<Node> previous,
+        Map<Node, Node> matched) {
+      for (Node peer : peers) {
+        Node found = peer.memberNumbers != null
+            ? sole(previous, p -> p.memberNumbers != null
+                && !Collections.disjoint(p.memberNumbers, peer.memberNumbers))
+            : peer.number != null
+            ? sole(previous, p -> peer.number.equals(p.number))
+            : sole(previous, p -> p.number == null && p.memberNumbers == null
+                && peer.name.equals(p.name));
+        if (found != null) {
+          matched.put(peer, found);
+        }
       }
-      return sole(previous, p -> p.number == null && p.memberNumbers == null
-          && peer.name.equals(p.name));
+      settleOneofs(peers, matched);
+    }
+
+    /** JSON: a property by name, and a union branch by hint, else content. */
+    private static void matchJson(List<Node> peers, List<Node> previous,
+        Map<Node, Node> matched) {
+      if (peers.get(0).kind == Kind.BRANCH) {
+        matchJsonBranches(peers, previous, matched);
+        return;
+      }
+      for (Node peer : peers) {
+        Node found = sole(previous, p -> peer.name.equals(p.name));
+        if (found != null) {
+          matched.put(peer, found);
+        }
+      }
+    }
+
+    /**
+     * The one previous location {@code related} relates {@code peer} to, where no other of
+     * {@code peers} is related to it too: a match on evidence weaker than a name or number needs
+     * exactly one candidate on each side.
+     */
+    private static Node mutual(Node peer, List<Node> peers, List<Node> previous,
+        BiPredicate<Node, Node> related) {
+      Node found = sole(previous, p -> related.test(peer, p));
+      if (found == null) {
+        return null;
+      }
+      for (Node other : peers) {
+        if (other != peer && related.test(other, found)) {
+          return null;
+        }
+      }
+      return found;
     }
 
     /**
@@ -619,15 +658,11 @@ public final class ProvenanceComputer {
      * The previous named type a named Avro type continues when neither its name nor an alias
      * does: the one with the same short name, as Avro's checker compares names. A namespace
      * changed without an alias — as nested types inheriting a renamed root's namespace are — then
-     * keeps its members. Null where a peer shares the short name.
+     * keeps its members.
      */
-    private Node shortNameContinuation(Node peer, List<Node> peers, List<Node> previous) {
-      String shortName = shortName(peer.name);
-      if (peers.stream().filter(p -> isNamedAvroType(p)
-          && shortName(p.name).equals(shortName)).count() != 1) {
-        return null;
-      }
-      return sole(previous, p -> shortName(p.name).equals(shortName));
+    private static Node shortNameContinuation(Node peer, List<Node> peers, List<Node> previous) {
+      return mutual(peer, peers, previous, (a, p) -> isNamedAvroType(a)
+          && shortName(a.name).equals(shortName(p.name)));
     }
 
     /**
@@ -635,22 +670,21 @@ public final class ProvenanceComputer {
      * unambiguous: this union has one branch of its family, and the previous one had one.
      */
     private static Node familyContinuation(Node peer, List<Node> peers, List<Node> previous) {
-      Set<String> family = familyOf(peer.name);
-      if (family == null || peer.body == null
-          || peer.body.getType() == Schema.Type.NAMED_TYPE_REF
-          || peers.stream().filter(p -> family.contains(p.name)).count() != 1) {
-        return null;
-      }
-      return sole(previous, p -> family.contains(p.name));
+      return mutual(peer, peers, previous, (a, p) -> familyOf(a.name) != null
+          && familyOf(a.name).contains(p.name));
     }
 
     /**
-     * A named type's use, or a named union branch, which is its type's use. A fixed branch is a
-     * binary in the logical type; its native step, a full name rather than a type name, marks it.
+     * A named type's use, or a union branch of a named type: a record, an enum or a fixed, whose
+     * branch the converter names by its full name rather than a type name.
      */
-    private boolean isNamedAvroType(Node peer) {
-      return peer.kind == Kind.NAMED_TYPE || isUseOfItsType(peer)
-          || peer.kind == Kind.BRANCH && !AVRO_UNNAMED.contains(peer.name);
+    private static boolean isNamedAvroType(Node peer) {
+      return peer.kind == Kind.NAMED_TYPE || peer.kind == Kind.BRANCH
+          && (isReference(peer.body) || !AVRO_UNNAMED.contains(peer.name));
+    }
+
+    private static boolean isReference(Schema schema) {
+      return schema != null && schema.getType() == Schema.Type.NAMED_TYPE_REF;
     }
 
     private static String shortName(String fullName) {
@@ -666,14 +700,9 @@ public final class ProvenanceComputer {
       return null;
     }
 
-    /** True for a named Avro branch, whose name and aliases are its type's. */
-    private boolean isUseOfItsType(Node peer) {
-      return isNamedAvroBranch(peer.kind, peer.body);
-    }
-
-    private boolean isNamedAvroBranch(Kind kind, Schema body) {
-      return policy == IdentityPolicy.AVRO && kind == Kind.BRANCH && body != null
-          && body.getType() == Schema.Type.NAMED_TYPE_REF;
+    /** True for an Avro branch holding a named type, whose name and aliases are its type's. */
+    private boolean isNamedAvroBranch(Schema body) {
+      return policy == IdentityPolicy.AVRO && isReference(body);
     }
 
     /**
@@ -684,7 +713,7 @@ public final class ProvenanceComputer {
      */
     private String branchName(UnionBranch branch) {
       if (policy == IdentityPolicy.AVRO) {
-        if (isNamedAvroBranch(Kind.BRANCH, branch.getSchema())) {
+        if (isNamedAvroBranch(branch.getSchema())) {
           return branch.getSchema().getQualifiedName();
         }
         List<String> steps = branch.getNativeNames();
@@ -697,7 +726,7 @@ public final class ProvenanceComputer {
 
     /** A named Avro branch's type aliases, as full names, so a renamed type keeps its branch. */
     private List<String> branchAliases(UnionBranch branch) {
-      if (!isNamedAvroBranch(Kind.BRANCH, branch.getSchema())) {
+      if (!isNamedAvroBranch(branch.getSchema())) {
         // A fixed has no named type; the converter records its aliases on the branch.
         List<String> recorded = policy == IdentityPolicy.AVRO ? branch.getNativeAliases() : null;
         if (recorded == null) {
@@ -804,38 +833,33 @@ public final class ProvenanceComputer {
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
-      List<Node> pending = new ArrayList<>();
-      Map<Set<String>, Integer> shared = new HashMap<>();
-      for (Node peer : peers) {
-        if (peer.content != null) {
-          pending.add(peer);
-          shared.merge(peer.content, 1, Integer::sum);
-        }
-      }
-      if (pending.isEmpty()) {
-        return;
-      }
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      taken.addAll(matched.values());
       for (int phase = 0; phase < 4; phase++) {
-        for (Node peer : pending) {
+        for (Node peer : peers) {
           if (matched.containsKey(peer)) {
             continue;
           }
-          Set<String> content = peer.content;
           Node found;
           if (phase == 0) {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
                 ? null : previousBranch(previous, taken, p -> peer.name.equals(p.name));
           } else if (phase == 1) {
-            found = shared.get(content) == 1
-                ? previousBranch(previous, taken, p -> content.equals(p.content)) : null;
+            found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
+                && a.content.equals(p.content));
           } else if (phase == 2) {
-            found = soleOverlap(peer, pending, matched, previous, taken);
+            List<Node> unresolved = new ArrayList<>();
+            for (Node other : peers) {
+              if (!matched.containsKey(other)) {
+                unresolved.add(other);
+              }
+            }
+            found = mutual(peer, unresolved, previous, (a, p) -> !taken.contains(p)
+                && overlaps(a.content, p.content)
+                && !crosses(a, p, peers, matched, previous, taken));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
-                && overlaps(content, p.content)
-                && !crosses(peer, p, pending, matched, previous, taken));
+                && overlaps(peer.content, p.content)
+                && !crosses(peer, p, peers, matched, previous, taken));
           }
           if (found != null) {
             taken.add(found);
@@ -846,33 +870,11 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The one untaken previous branch {@code peer}'s content overlaps, where no other unresolved
-     * peer overlaps it too: one branch sharing members with one other is its continuation,
-     * wherever it sits.
-     */
-    private static Node soleOverlap(Node peer, List<Node> pending, Map<Node, Node> matched,
-        List<Node> previous, Set<Node> taken) {
-      Node found = previousBranch(previous, taken, p -> overlaps(peer.content, p.content)
-          && !crosses(peer, p, pending, matched, previous, taken));
-      if (found == null) {
-        return null;
-      }
-      for (Node other : pending) {
-        if (other != peer && !matched.containsKey(other)
-            && overlaps(other.content, found.content)
-            && !crosses(other, found, pending, matched, previous, taken)) {
-          return null;
-        }
-      }
-      return found;
-    }
-
-    /**
      * The one untaken previous JSON branch that {@code test} accepts.
      */
     private static Node previousBranch(List<Node> previous, Set<Node> taken,
         Predicate<Node> test) {
-      return sole(previous, p -> !taken.contains(p) && p.content != null && test.test(p));
+      return sole(previous, p -> !taken.contains(p) && test.test(p));
     }
 
     /**
