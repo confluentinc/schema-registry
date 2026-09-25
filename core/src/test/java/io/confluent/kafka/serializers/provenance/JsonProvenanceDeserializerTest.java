@@ -247,6 +247,133 @@ class JsonProvenanceDeserializerTest {
         + "to read.", e.getCause().getMessage());
   }
 
+  @Test
+  void aPrunedPropertyRequiredByAnyAllOfPartIsRequired() throws Exception {
+    // Every allOf part applies: t, required by a part declaring nothing, takes the default
+    // another part declares.
+    String base = "{\"type\": \"object\", \"properties\": {" + number("id") + ", "
+        + "\"t\": {\"type\": \"string\", \"default\": \"dflt\"%s}}}";
+    String requiresT = "{\"required\": [\"t\"]}";
+    JsonSchema v1 = object("\"p\": {\"allOf\": [" + String.format(base, "") + ", " + requiresT
+        + "]}");
+    JsonSchema v2 = object("\"p\": {\"allOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("id") + "}}]}");
+    JsonSchema v3 = object("\"p\": {\"allOf\": ["
+        + String.format(base, ", \"description\": \"re-added\"") + ", " + requiresT + "]}");
+    byte[] bytes = write(v1, "{\"p\": {\"id\": 1, \"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+  }
+
+  @Test
+  void aPrunedPropertyRequiredByAnyAllOfPartFailsWithoutADefault() throws Exception {
+    // The part requiring t comes second; it must not matter which part is reached first.
+    String own = "{\"type\": \"object\", \"properties\": {" + string("t") + "}}";
+    String part = "{\"type\": \"object\", \"properties\": {" + number("id")
+        + ", \"t\": {\"type\": \"string\"%s}}, \"required\": [\"t\"]}";
+    JsonSchema v1 = object("\"p\": {\"allOf\": [" + own + ", " + String.format(part, "") + "]}");
+    JsonSchema v2 = object("\"p\": {\"allOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("id") + "}}]}");
+    JsonSchema v3 = object("\"p\": {\"allOf\": [" + own + ", "
+        + String.format(part, ", \"description\": \"re-added\"") + "]}");
+    byte[] bytes = write(v1, "{\"p\": {\"id\": 1, \"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    assertTrue(e.getCause().getMessage().startsWith("Property [p, t] is new to the reader"));
+  }
+
+  @Test
+  void anAmbiguousPropertyIsRequiredOnlyIfEveryBranchRequiresIt() throws Exception {
+    // The record fits A, where t continues and is required, and B, where t is new and optional:
+    // t is pruned and the record reads as a B, whichever branch comes first.
+    String a = "{\"type\": \"object\", \"properties\": {" + number("a") + ", " + string("t")
+        + "}, \"required\": [\"t\"]}";
+    String b = "{\"type\": \"object\", \"properties\": {" + number("b") + "%s}}";
+    String[] bs = {String.format(b, ", " + string("t")), String.format(b, ""),
+        String.format(b, ", \"t\": {\"type\": \"string\", \"description\": \"re-added\"}")};
+    for (boolean aFirst : new boolean[] {true, false}) {
+      init();
+      JsonSchema[] versions = new JsonSchema[3];
+      for (int i = 0; i < 3; i++) {
+        versions[i] = object("\"u\": {\"anyOf\": [" + (aFirst ? a + ", " + bs[i] : bs[i] + ", " + a)
+            + "]}");
+      }
+      byte[] bytes = write(versions[0], "{\"u\": {\"a\": 1, \"t\": \"x\"}}");
+      client.register(SUBJECT, versions[1]);
+      client.register(SUBJECT, versions[2]);
+
+      assertFalse(read(versions[2], bytes, "v1").get("u").has("t"));
+    }
+  }
+
+  @Test
+  void aPropertyRequiredByAnAllOfPartBesideAUnionIsRequired() throws Exception {
+    // P applies whichever branch of the union beside it the value takes, alone or ambiguously.
+    String p = "{\"type\": \"object\", \"properties\": {\"t\": {\"type\": \"string\", "
+        + "\"default\": \"dflt\"%s}}, \"required\": [\"t\"]}";
+    String x = "{\"type\": \"object\", \"properties\": {" + number("x") + "%s}, "
+        + "\"required\": [\"x\"]}";
+    String y = "{\"type\": \"object\", \"properties\": {" + number("y") + "}, "
+        + "\"required\": [\"y\"]}";
+    String z = "{\"type\": \"object\", \"properties\": {" + number("z") + "%s}}";
+    String t = ", " + string("t");
+    for (String other : new String[] {y, z}) {
+      init();
+      JsonSchema v1 = object("\"p\": {\"allOf\": [" + String.format(p, "") + ", {\"anyOf\": ["
+          + String.format(x, t) + ", " + String.format(other, t) + "]}]}");
+      JsonSchema v2 = object("\"p\": {\"allOf\": [{\"type\": \"object\", \"properties\": {"
+          + number("q") + "}}, {\"anyOf\": [" + String.format(x, "") + ", "
+          + String.format(other, "") + "]}]}");
+      JsonSchema v3 = object("\"p\": {\"allOf\": ["
+          + String.format(p, ", \"description\": \"v3\"") + ", {\"anyOf\": ["
+          + String.format(x, t) + ", " + String.format(other, t) + "]}]}");
+      byte[] bytes = write(v1, "{\"p\": {\"x\": 1, \"t\": \"old\"}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+    }
+  }
+
+  @Test
+  void aDefaultStandingInForAPrunedValueIsNotPrunedItself() throws Exception {
+    // o and o.t are both new; o's default holds a t of its own, which is the reader's, not old.
+    String o = "\"o\": {\"type\": \"object\", \"properties\": {" + string("t") + "}, "
+        + "\"default\": {\"t\": \"from-default\"}%s}";
+    JsonSchema v1 = object(String.format(o, ""));
+    JsonSchema v2 = object(number("q"));
+    JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", "
+        + "\"properties\": {" + String.format(o, ", \"description\": \"v3\"") + "}, "
+        + "\"required\": [\"o\"]}");
+    byte[] bytes = write(v1, "{\"o\": {\"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("from-default", read(v3, bytes, "v1").get("o").get("t").asText());
+  }
+
+  @Test
+  void aNullDefaultStandsInUnderAModernDraft() throws Exception {
+    JsonSchema v1 = modern(number("x"), string("t"));
+    JsonSchema v2 = modern(number("x"));
+    JsonSchema v3 = new JsonSchema("{\"$schema\": "
+        + "\"https://json-schema.org/draft/2020-12/schema\", "
+        + "\"type\": \"object\", \"title\": \"Row\", \"properties\": {" + number("x") + ", "
+        + "\"t\": {\"type\": [\"string\", \"null\"], \"default\": null}}, "
+        + "\"required\": [\"t\"]}");
+    byte[] bytes = write(v1, "{\"x\": 1, \"t\": \"old\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = read(v3, bytes, "v1");
+    assertTrue(read.has("t"));
+    assertTrue(read.get("t").isNull());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

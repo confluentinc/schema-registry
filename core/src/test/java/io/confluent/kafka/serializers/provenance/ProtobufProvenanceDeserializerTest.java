@@ -25,6 +25,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -35,9 +36,12 @@ import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
+import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -436,6 +440,68 @@ class ProtobufProvenanceDeserializerTest {
             .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> reader));
   }
 
+  @Test
+  void aGeneratedClassReaderGetsNoOldValue() throws Exception {
+    // A renumbered read ends in the reader's own numbers, which the class parses as any record;
+    // with no reader configured, the class's own schema is the reader.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedProto\";\n";
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message Readded {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    ProtobufSchema v2 = new ProtobufSchema(head + "message Readded {\n  int32 id = 1;\n}\n");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
+
+    assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "v1", true).getMemo());
+  }
+
+  @Test
+  void aGeneratedClassIsMatchedToTheTextItWasGeneratedFrom() throws Exception {
+    // Registered from its .proto text, not the class: the class's own schema spells the map as an
+    // entry message and message types fully qualified, so it matches only once normalized.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedMapProto\";\n";
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message ReaddedMap {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    ProtobufSchema v2 = new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n}\n");
+    ProtobufSchema v3 = new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n"
+        + "  string memo = 2;\n  map<string, int32> counts = 3;\n}\n");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("old", readClass(ReaddedMap.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(ReaddedMap.class, bytes, "v1", false).getMemo());
+  }
+
+  @Test
+  void aWriterRuleSeesARenumberedClassReadInTheWritersNumbers() throws Exception {
+    // With no reader configured the rules are the writer's; they must not reach the class's new
+    // field through the number its own field used to have.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedProto\";\n";
+    Rule mark = new Rule("mark", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
+        "name == 'note' ; value + '!'", null, null, false);
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message Readded {\n  int32 id = 1;\n  string note = 2;\n}\n")
+        .copy(null, new RuleSet(null, Collections.singletonList(mark)));
+    ProtobufSchema v2 = new ProtobufSchema(head + "message Readded {\n  int32 id = 1;\n}\n");
+    // Framed by hand: the serializer looks up the message's own schema, which has no rules.
+    DynamicMessage.Builder record = DynamicMessage.newBuilder(v1.toDescriptor());
+    record.setField(field(record, "id"), 7).setField(field(record, "note"), "old");
+    byte[] body = record.build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.register(SUBJECT, v1)).put((byte) 0).put(body).array();
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
+
+    assertEquals("old!", readClass(Readded.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -466,6 +532,16 @@ class ProtobufProvenanceDeserializerTest {
         new KafkaProtobufDeserializer<>(client, config(provenance));
     return (DynamicMessage) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> reader).getValue();
+  }
+
+  private <M extends Message> M readClass(Class<M> type, byte[] bytes, String provenance,
+      boolean latest) {
+    Map<String, Object> config = config(provenance);
+    config.put("specific.protobuf.value.type", type);
+    config.put("use.latest.version", latest);
+    KafkaProtobufDeserializer<M> deserializer = new KafkaProtobufDeserializer<>(client);
+    deserializer.configure(config, false);
+    return deserializer.deserialize(TOPIC, bytes);
   }
 
   private static DynamicMessage refund(ProtobufSchema schema, int id, int amount) {

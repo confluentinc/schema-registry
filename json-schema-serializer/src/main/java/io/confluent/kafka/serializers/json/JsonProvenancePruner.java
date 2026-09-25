@@ -66,6 +66,8 @@ final class JsonProvenancePruner {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int MAX_INTEGRAL_DIGITS = 1000;
+  // Readings of one value weighed before falling back to requiring every reach's requirement.
+  private static final int MAX_READINGS = 1024;
   // As JsonSchema converts a document for everit.
   private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
 
@@ -148,20 +150,61 @@ final class JsonProvenancePruner {
    * @throws SerializationException if a property to prune is required and has no default
    */
   void prune(JsonNode document) {
+    // A default put in place of a pruned value is the reader's own: nothing under it is pruned.
+    Set<JsonNode> defaults = Collections.newSetFromMap(new IdentityHashMap<>());
     for (Target target : targets) {
-      walk(target.names, reader, document, 0, new ArrayList<>(), false,
-          (node, object, name, choices, ambiguous) -> {
-            if (!keeps(target, choices, ambiguous)) {
-              remove(node, object, name, target.names);
+      // allOf parts and ambiguous branches reach one value more than once: decided together.
+      Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>();
+      walk(target.names, reader, document, 0, new ArrayList<>(), false, Collections.emptyList(),
+          (node, object, name, choices, ambiguous, alternatives) -> {
+            if (!defaults.contains(node) && !keeps(target, choices, ambiguous)) {
+              reached.computeIfAbsent(node, n -> new ArrayList<>())
+                  .add(new Reach(object, alternatives));
             }
           });
+      String name = target.names.get(target.names.size() - 1);
+      reached.forEach((node, reaches) -> {
+        JsonNode value = remove(node, reaches, name, target.names);
+        if (value != null) {
+          addContainers(value, defaults);
+        }
+      });
+    }
+  }
+
+  /** One object schema reaching a property, and the ambiguous union branches taken to reach it. */
+  private static final class Reach {
+    final ObjectSchema object;
+    final List<Alternative> alternatives;
+
+    Reach(ObjectSchema object, List<Alternative> alternatives) {
+      this.object = object;
+      this.alternatives = alternatives;
+    }
+  }
+
+  /** A branch of an ambiguous union step: one reading of the value among several. */
+  private static final class Alternative {
+    final Schema union;
+    final int branch;
+
+    Alternative(Schema union, int branch) {
+      this.union = union;
+      this.branch = branch;
+    }
+  }
+
+  private static void addContainers(JsonNode node, Set<JsonNode> containers) {
+    if (node.isContainerNode()) {
+      containers.add(node);
+      node.elements().forEachRemaining(child -> addContainers(child, containers));
     }
   }
 
   /** What to do at a property the walk reaches, with the union branches taken to reach it. */
   interface AtProperty {
     void accept(ObjectNode node, ObjectSchema object, String name, List<Integer> choices,
-        boolean ambiguous);
+        boolean ambiguous, List<Alternative> alternatives);
   }
 
   /**
@@ -171,7 +214,8 @@ final class JsonProvenancePruner {
   static List<Integer> branchesTaken(JsonSchema reader, JsonNode document, List<String> names) {
     List<List<Integer>> taken = new ArrayList<>();
     walk(names, reader.rawSchema(), document, 0, new ArrayList<>(), false,
-        (node, object, name, choices, ambiguous) -> taken.add(choices));
+        Collections.emptyList(),
+        (node, object, name, choices, ambiguous, alternatives) -> taken.add(choices));
     return taken.isEmpty() ? null : taken.get(0);
   }
 
@@ -265,17 +309,18 @@ final class JsonProvenancePruner {
   }
 
   private static void walk(List<String> names, Schema schema, JsonNode node, int step,
-      List<Integer> choices, boolean ambiguous, AtProperty at) {
+      List<Integer> choices, boolean ambiguous, List<Alternative> alternatives, AtProperty at) {
     if (schema == null || node == null) {
       return;
     }
     if (schema instanceof ReferenceSchema) {
       walk(names, ((ReferenceSchema) schema).getReferredSchema(), node, step, choices, ambiguous,
-          at);
+          alternatives, at);
       return;
     }
     if (schema instanceof CombinedSchema) {
-      walkCombined(names, (CombinedSchema) schema, node, step, choices, ambiguous, at);
+      walkCombined(names, (CombinedSchema) schema, node, step, choices, ambiguous, alternatives,
+          at);
       return;
     }
     String name = names.get(step);
@@ -286,25 +331,29 @@ final class JsonProvenancePruner {
           : schema instanceof ObjectSchema
               ? ((ObjectSchema) schema).getSchemaOfAdditionalProperties() : null;
       for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
-        walk(names, child, it.next(), step + 1, choices, ambiguous, at);
+        walk(names, child, it.next(), step + 1, choices, ambiguous, alternatives, at);
       }
       return;
     }
-    if (!(schema instanceof ObjectSchema) || !node.isObject() || !node.has(name)
-        || !((ObjectSchema) schema).getPropertySchemas().containsKey(name)) {
+    if (!(schema instanceof ObjectSchema) || !node.isObject() || !node.has(name)) {
       return;
     }
     ObjectSchema object = (ObjectSchema) schema;
+    boolean declared = object.getPropertySchemas().containsKey(name);
     if (step + 1 < names.size()) {
-      walk(names, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
-          ambiguous, at);
-    } else {
-      at.accept((ObjectNode) node, object, name, choices, ambiguous);
+      if (declared) {
+        walk(names, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
+            ambiguous, alternatives, at);
+      }
+    } else if (declared || object.getRequiredProperties().contains(name)) {
+      // A part that only requires the property, as allOf [Base, {required: [p]}], is reached too.
+      at.accept((ObjectNode) node, object, name, choices, ambiguous, alternatives);
     }
   }
 
   private static void walkCombined(List<String> names, CombinedSchema schema, JsonNode node,
-      int step, List<Integer> choices, boolean ambiguous, AtProperty at) {
+      int step, List<Integer> choices, boolean ambiguous, List<Alternative> alternatives,
+      AtProperty at) {
     String name = names.get(step);
     if (name != null && !node.has(name)) {
       // Every branch reaches the property as a member of this very value: nothing to prune.
@@ -314,7 +363,7 @@ final class JsonProvenancePruner {
     if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
       // The converter merges an allOf; the next step lives in whichever part declares it.
       for (Schema part : subschemas) {
-        walk(names, part, node, step, choices, ambiguous, at);
+        walk(names, part, node, step, choices, ambiguous, alternatives, at);
       }
       return;
     }
@@ -326,7 +375,7 @@ final class JsonProvenancePruner {
     }
     if (branches.size() == 1 && branches.size() < subschemas.size()) {
       // A nullable union, which the logical type collapses: no branch step.
-      walk(names, branches.get(0), node, step, choices, ambiguous, at);
+      walk(names, branches.get(0), node, step, choices, ambiguous, alternatives, at);
       return;
     }
     // Only a branch declaring the next step can hold the property; one that does not bears on it
@@ -356,11 +405,18 @@ final class JsonProvenancePruner {
     // No branch fits, often because of the very value provenance withholds (its type changed):
     // every declaring branch is walked, as ambiguous, so the property is pruned.
     List<Integer> walked = fallback ? declaring : valid;
+    // Only where several branches are walked are they alternatives; one taken alone is the value's.
+    boolean alternative = walked.size() > 1;
     for (int i : walked) {
       List<Integer> extended = new ArrayList<>(choices);
       extended.add(i);
+      List<Alternative> readings = alternatives;
+      if (alternative) {
+        readings = new ArrayList<>(alternatives);
+        readings.add(new Alternative(schema, i));
+      }
       walk(names, branches.get(i), node, step, extended,
-          ambiguous || fallback || valid.size() > 1, at);
+          ambiguous || fallback || valid.size() > 1, readings, at);
     }
   }
 
@@ -384,23 +440,91 @@ final class JsonProvenancePruner {
     return match != null && match.continues;
   }
 
-  private static void remove(ObjectNode node, ObjectSchema object, String name,
+  /**
+   * Removes {@code name} from {@code node}, reached by {@code reaches}, and returns the default
+   * put in its place, if any. Every reading of the value — one branch of each ambiguous union
+   * taken on the way — applies every reach consistent with it, and allOf parts all apply: the
+   * property is required if some applying reach requires it in every reading.
+   */
+  private static JsonNode remove(ObjectNode node, List<Reach> reaches, String name,
       List<String> names) {
-    if (!object.getRequiredProperties().contains(name)) {
-      node.remove(name);
-      return;
+    boolean declared = false;
+    Schema withDefault = null;
+    for (Reach reach : reaches) {
+      Schema property = reach.object.getPropertySchemas().get(name);
+      declared |= property != null;
+      if (withDefault == null && property != null && property.hasDefaultValue()) {
+        withDefault = property;
+      }
     }
-    Schema property = object.getPropertySchemas().get(name);
-    if (property == null || !property.hasDefaultValue()) {
+    if (!declared) {
+      // Only parts requiring it reached the property: an extra property, not a location.
+      return null;
+    }
+    node.remove(name);
+    if (!requiredInEveryReading(reaches, name)) {
+      return null;
+    }
+    if (withDefault == null) {
       throw new SerializationException("Property " + names + " is new to the reader: "
           + "provenance pairs it with nothing the writer wrote, and the reader requires it and "
           + "declares no default. There is no value to read.");
     }
     try {
-      node.set(name, MAPPER.readTree(JSONObject.valueToString(property.getDefaultValue())));
+      JsonNode value = MAPPER.readTree(JSONObject.valueToString(withDefault.getDefaultValue()));
+      node.set(name, value);
+      return value;
     } catch (IOException e) {
       throw new SerializationException("Could not read the default of property '" + name + "'", e);
     }
+  }
+
+  /**
+   * Whether every reading of the value requires {@code name}: each combination of the branches
+   * seen for each ambiguous union, over the reaches consistent with it.
+   */
+  private static boolean requiredInEveryReading(List<Reach> reaches, String name) {
+    Map<Schema, List<Integer>> unions = new IdentityHashMap<>();
+    for (Reach reach : reaches) {
+      for (Alternative alternative : reach.alternatives) {
+        List<Integer> seen = unions.computeIfAbsent(alternative.union, u -> new ArrayList<>());
+        if (!seen.contains(alternative.branch)) {
+          seen.add(alternative.branch);
+        }
+      }
+    }
+    List<Map<Schema, Integer>> readings = new ArrayList<>();
+    readings.add(new IdentityHashMap<>());
+    for (Map.Entry<Schema, List<Integer>> union : unions.entrySet()) {
+      List<Map<Schema, Integer>> next = new ArrayList<>();
+      for (Map<Schema, Integer> reading : readings) {
+        for (int branch : union.getValue()) {
+          Map<Schema, Integer> extended = new IdentityHashMap<>(reading);
+          extended.put(union.getKey(), branch);
+          next.add(extended);
+        }
+      }
+      if (next.size() > MAX_READINGS) {
+        // Too many to weigh: required only where every reach requires it.
+        return reaches.stream().allMatch(r -> r.object.getRequiredProperties().contains(name));
+      }
+      readings = next;
+    }
+    for (Map<Schema, Integer> reading : readings) {
+      boolean applies = false;
+      boolean requires = false;
+      for (Reach reach : reaches) {
+        if (reach.alternatives.stream()
+            .allMatch(a -> Integer.valueOf(a.branch).equals(reading.get(a.union)))) {
+          applies = true;
+          requires |= reach.object.getRequiredProperties().contains(name);
+        }
+      }
+      if (applies && !requires) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

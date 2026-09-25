@@ -234,6 +234,35 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
+   * A {@code confluent:union} hint as the union reads it, one object per branch with a string
+   * name and doc; any other shape is rejected by name, rather than failing on a cast.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> unionHints(Object hint) {
+    if (hint == null) {
+      return null;
+    }
+    boolean valid = hint instanceof List;
+    for (Object branch : valid ? (List<?>) hint : Collections.emptyList()) {
+      valid &= branch instanceof Map && isHint((Map<?, ?>) branch);
+    }
+    if (!valid) {
+      throw new ValidationException("confluent:union must be a list of branch objects: " + hint);
+    }
+    return (List<Map<String, Object>>) hint;
+  }
+
+  private static boolean isHint(Map<?, ?> branch) {
+    Object params = branch.get("params");
+    return isStringOrAbsent(branch.get("name")) && isStringOrAbsent(branch.get("doc"))
+        && (params == null || params instanceof Map);
+  }
+
+  private static boolean isStringOrAbsent(Object value) {
+    return value == null || value instanceof String;
+  }
+
+  /**
    * Recursively walks an Avro schema and registers every RECORD and ENUM
    * full name as an external reference. Cycle guard via visited set.
    */
@@ -585,13 +614,14 @@ public class AvroToLogicalTypeConverter {
           unionMembers.add(new UnionMember(
               memberSchema.getName(),
               memberSchema.getFullName(),
-              memberType));
+              memberType,
+              memberSchema.getType() == org.apache.avro.Schema.Type.FIXED
+                  ? memberSchema.getAliases() : Collections.emptySet()));
         }
 
         // Use branch metadata if available, otherwise fall back to type-derived names
-        @SuppressWarnings("unchecked")
         List<Map<String, Object>> unionMeta =
-            (List<Map<String, Object>>) ctx.getUnionMetadata().get("confluent:union");
+            unionHints(ctx.getUnionMetadata().get("confluent:union"));
         final Map<String, Long> simpleNameFreq =
             unionMembers.stream()
                 .collect(Collectors.groupingBy(
@@ -619,8 +649,13 @@ public class AvroToLogicalTypeConverter {
             hintParams = Schema.stripFormatNativeParams(hintParams);
           }
           // Natively a branch is found by its type's full name, which Avro keeps unique.
-          branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
-              .setNativeNames(Collections.singletonList(member.getNativeName())));
+          UnionBranch branch = new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
+              .setNativeNames(Collections.singletonList(member.getNativeName()));
+          if (!member.getAliases().isEmpty()) {
+            // A fixed's logical type is a binary, with no named type to carry its aliases.
+            branch.setNativeAliases(new ArrayList<>(member.getAliases()));
+          }
+          branches.add(branch);
         }
         return Schema.createUnion(branches).setNullable(hasNull);
       }
@@ -1019,12 +1054,19 @@ public class AvroToLogicalTypeConverter {
     // The full name as Avro spells it, which finds the branch natively.
     private final String nativeName;
     private final Schema schema;
+    // A fixed's aliases, as full names; a record's and an enum's are on their named types.
+    private final Set<String> aliases;
 
-    private UnionMember(String simpleName, String fullName, Schema schema) {
+    private UnionMember(String simpleName, String fullName, Schema schema, Set<String> aliases) {
       this.simpleName = simpleName;
       this.fullName = fullName.replace('.', '_');
       this.nativeName = fullName;
       this.schema = schema;
+      this.aliases = aliases;
+    }
+
+    public Set<String> getAliases() {
+      return aliases;
     }
 
     public String getSimpleName() {

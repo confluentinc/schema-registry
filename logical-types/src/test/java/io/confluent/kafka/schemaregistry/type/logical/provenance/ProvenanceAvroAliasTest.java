@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -160,6 +161,18 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
+  void aFixedBranchRenamedByAnAliasContinues() {
+    // A fixed has no named type in the logical type; its aliases still carry its branch.
+    String f2 = "{\"type\":\"fixed\",\"name\":\"F2\",\"size\":4}";
+    List<Map<String, Integer>> pids = pids(
+        avro(f("u", "[\"null\",{\"type\":\"fixed\",\"name\":\"F1\",\"size\":4}," + f2 + "]")),
+        avro(f("u", "[\"null\",{\"type\":\"fixed\",\"name\":\"G1\",\"size\":4,"
+            + "\"aliases\":[\"F1\"]}," + f2 + "]")));
+    assertThat(same(pids, "u.F1", "u.G1")).isTrue();
+    assertThat(same(pids, "u.F2", "u.F2")).isTrue();
+  }
+
+  @Test
   void aTypeMovedOutOfTheNullNamespaceContinuesByADottedAlias() {
     // Avro spells an alias in the null namespace ".A" when the aliasing type has a namespace.
     List<Map<String, Integer>> pids = pids(
@@ -213,6 +226,88 @@ class ProvenanceAvroAliasTest {
   }
 
   // -------------------------------------------------------------------------------------------
+
+  @Test
+  void aNestedTypeWhoseNamespaceChangesWithoutAnAliasContinues() {
+    // Renaming the root into another namespace moves the nested types inheriting it, with no
+    // alias; Avro's checker compares short names, and so does provenance where names fail.
+    String nested = "{\"name\":\"o\",\"type\":{\"type\":\"record\",\"name\":\"N\","
+        + "\"fields\":[" + f("x", I) + "]}}";
+    List<Map<String, Integer>> pids = pids(
+        new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"a.b\","
+            + "\"fields\":[" + nested + "]}"),
+        new AvroSchema("{\"type\":\"record\",\"name\":\"R2\",\"namespace\":\"a.c\","
+            + "\"aliases\":[\"a.b.R\"],\"fields\":[" + nested + "]}"));
+    assertThat(same(pids, "o.x", "o.x")).isTrue();
+  }
+
+  @Test
+  void aBranchWhoseNamespaceChangesWithoutAnAliasContinues() {
+    List<Map<String, Integer>> pids = pids(
+        avro(f("u", "[\"null\",\"string\"," + nsRec("n1", "A") + "]")),
+        avro(f("u", "[\"null\",\"string\"," + nsRec("n2", "A") + "]")));
+    assertThat(same(pids, "u.n1.A", "u.n2.A")).isTrue();
+    assertThat(same(pids, "u.n1.A.x", "u.n2.A.x")).isTrue();
+  }
+
+  @Test
+  void aShortNameSharedByTwoBranchesContinuesNeither() {
+    // n2.A continues by its name; n3.A could be n1.A only by a short name n2.A shares.
+    List<Map<String, Integer>> pids = pids(
+        avro(f("u", "[\"null\"," + nsRec("n1", "A") + "," + nsRec("n2", "A") + "]")),
+        avro(f("u", "[\"null\"," + nsRec("n3", "A") + "," + nsRec("n2", "A") + "]")));
+    assertThat(same(pids, "u.n2.A", "u.n2.A")).isTrue();
+    assertThat(same(pids, "u.n1.A", "u.n3.A")).isFalse();
+  }
+
+  @Test
+  void aTypeRenamedWithoutAnAliasStillRestarts() {
+    List<Map<String, Integer>> pids = pids(
+        avro(f("o", rec("N", f("x", I)))),
+        avro(f("o", rec("M", f("x", I)))));
+    assertThat(same(pids, "o.x", "o.x")).isFalse();
+  }
+
+  private static String nsRec(String namespace, String name) {
+    return "{\"type\":\"record\",\"name\":\"" + name + "\",\"namespace\":\"" + namespace
+        + "\",\"fields\":[" + f("x", I) + "]}";
+  }
+
+  @Test
+  void aTypeNestedInTheRootsNameLeavesTheRootsFieldsAlone() {
+    // A type named inside the root (as a reflect nested class is) keeps the root a reference in
+    // the logical type; dropping or adding one must not move the root's own fields.
+    String e = "{\"name\":\"e\",\"type\":{\"type\":\"enum\",\"name\":\"E\",\"namespace\":\"q.R\","
+        + "\"symbols\":[\"X\"]}}";
+    String n = "{\"name\":\"n\",\"type\":\"string\"}";
+    List<Map<String, Integer>> pids = pids(
+        new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"q\",\"fields\":[" + n
+            + "," + e + "]}"),
+        new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"q\",\"fields\":[" + n
+            + "]}"));
+    assertThat(same(pids, "n", "n")).isTrue();
+  }
+
+  @Test
+  void aFixedBranchWhoseNamespaceChangesWithoutAnAliasContinues() {
+    // A fixed is a binary in the logical type; its native step still carries its short name.
+    List<Map<String, Integer>> pids = pids(
+        avro("{\"name\":\"u\",\"type\":[\"null\",\"string\",{\"type\":\"fixed\",\"name\":\"F\","
+            + "\"namespace\":\"n1\",\"size\":4}]}"),
+        avro("{\"name\":\"u\",\"type\":[\"null\",\"string\",{\"type\":\"fixed\",\"name\":\"F\","
+            + "\"namespace\":\"n2\",\"size\":4}]}"));
+    assertThat(same(pids, "u.n1.F", "u.n2.F")).isTrue();
+  }
+
+  @Test
+  void aMalformedUnionHintIsRejectedByName() {
+    for (String hint : new String[] {"{\"x\":1}", "\"text\"", "[\"a\",\"b\"]",
+        "[{\"name\":1},{\"name\":2}]", "[null,null]", "[{\"name\":\"a\",\"doc\":5},{}]"}) {
+      assertThatThrownBy(() -> pids(avro("{\"name\":\"u\",\"type\":[\"int\",\"string\"],"
+          + "\"confluent:union\":" + hint + "}")))
+          .as(hint).isInstanceOf(ValidationException.class);
+    }
+  }
 
   private static void assertAmbiguous(ParsedSchema... versions) {
     assertThatThrownBy(() -> pids(versions)).isInstanceOf(AmbiguousProvenanceException.class);
