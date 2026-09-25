@@ -81,6 +81,9 @@ import org.slf4j.LoggerFactory;
  * <p>Response parsing, retries and URL failover run on the supplied {@link Executor}, never on
  * the HTTP client's I/O threads. The first attempt of each request resolves auth headers on the
  * calling thread, which may block if the configured bearer token provider needs to fetch a token.
+ *
+ * <p>The executor defaults to the common fork-join pool, which is small and shared across the JVM.
+ * Callers that chain blocking work onto the returned futures should supply their own executor.
  */
 public class AsyncRestService implements Closeable {
 
