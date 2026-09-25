@@ -202,6 +202,23 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aMessageReferencingTheRootLeavesTheRootsFieldsAlone() {
+    // The converter keeps the root a reference once a peer uses it; it is still the root.
+    ProtobufSchema alone = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nmessage Row { int32 a = 1; N n = 2; }\n"
+            + "message N { int32 q = 1; }\n");
+    ProtobufSchema referenced = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nmessage Row { int32 a = 1; N n = 2; }\n"
+            + "message N { int32 q = 1; }\nmessage Envelope { Row row = 1; }\n");
+    List<ProvenanceVersion> v = compute(alone, referenced, alone);
+    for (int version = 1; version < 3; version++) {
+      assertThat(pid(v, version, 0)).isEqualTo(pid(v, 0, 0));
+      assertThat(pid(v, version, 1)).isEqualTo(pid(v, 0, 1));
+      assertThat(pid(v, version, 1, 0)).isEqualTo(pid(v, 0, 1, 0));
+    }
+  }
+
+  @Test
   void aOneofSplitInThreeContinuesInThePartHoldingTheLowestNumber() {
     List<ProvenanceVersion> v = compute(
         proto("oneof c { int32 a = 1; string b = 2; bool d = 3; }"),

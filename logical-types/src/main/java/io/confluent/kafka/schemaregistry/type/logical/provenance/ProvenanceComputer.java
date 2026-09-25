@@ -468,10 +468,11 @@ public final class ProvenanceComputer {
       // schema's own members.
       namedTypes = logicalType.getNamedTypes();
       Schema root = logicalType.getRootSchema();
-      if (policy == IdentityPolicy.AVRO && root != null
+      if ((policy == IdentityPolicy.AVRO || policy == IdentityPolicy.PROTOBUF) && root != null
           && root.getType() == Schema.Type.NAMED_TYPE_REF) {
-        // The converter keeps a root record as a reference while types are nested in its name; it
-        // is still the root, its members the root scope's, as when the converter unwraps it.
+        // The converter keeps a root record or message as a reference while types are nested in
+        // it or a peer uses it; it is still the root, its members the root scope's, as when the
+        // converter unwraps it.
         String name = root.getQualifiedName();
         Schema body = namedTypes.get(name);
         if (body != null && body.getType() == Schema.Type.STRUCT) {
