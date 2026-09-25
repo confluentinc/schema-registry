@@ -208,9 +208,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
       ProtoProvenanceRenumberer.Renumbered renumbered =
           byProvenance(subject, schemaId, schema, readerSchema, name, migrations);
-      // The renumbering is only for parsing: what the caller gets is in the reader's own numbers.
-      final ProtobufSchema unrenumbered = readerSchema;
-      readerSchema = renumbered != null ? renumbered.schema : readerSchema;
 
       int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
@@ -222,6 +219,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
+      } else if (renumbered != null && renumbered.movedAny()) {
+        // Renumbering is for parsing alone: rules and caller see the reader's own numbers.
+        message = parseRenumbered(renumbered, readerSchema, buffer, start, length);
       }
 
       ProtobufSchema writerSchema = schema;
@@ -257,10 +257,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(protobufBytes, schema);
       } else {
-        value = parseDynamic(schema, protobufBytes, start, length, renumbered, unrenumbered);
-      }
-      if (renumbered != null && renumbered.movedAny()) {
-        schema = unrenumbered;
+        value = parseDynamic(schema, protobufBytes, start, length);
       }
 
       if (includeSchemaAndVersion) {
@@ -305,28 +302,29 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * otherwise. A file of several top-level messages pairs the writer's message with the reader's
    * by name, and a writer message the reader does not declare cannot be read into it.
    */
-  /**
-   * {@code bytes} parsed as {@code schema}, less any writer data a provenance renumbering left in
-   * unknown fields, and back in {@code reader}'s own numbers. A moved field took no writer data,
-   * so nothing is lost moving back; handing over the renumbered descriptor would give the caller
-   * fields it cannot address with its own descriptor and would write them out under the wrong
-   * numbers.
-   */
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
-      int length, ProtoProvenanceRenumberer.Renumbered renumbered, ProtobufSchema reader)
-      throws IOException {
+      int length) throws IOException {
     Descriptor descriptor = schema.toDescriptor();
     if (descriptor == null) {
       throw new SerializationException("Could not find descriptor with name " + schema.name());
     }
-    Message value = DynamicMessage.parseFrom(descriptor,
+    return DynamicMessage.parseFrom(descriptor,
         CodedInputStream.newInstance(bytes.array(), start, length),
         ProtobufSchema.EXTENSION_REGISTRY);
-    if (renumbered == null || !renumbered.movedAny()) {
-      return value;
-    }
+  }
+
+  /**
+   * {@code bytes} parsed with the renumbered reader, less the writer data the renumbering left in
+   * unknown fields, and back in {@code reader}'s own numbers. A moved field took no writer data,
+   * so nothing is lost moving back. Done before the domain rules: a value they write to a moved
+   * field must land under its own number, and a caller handed the renumbered descriptor could not
+   * address its fields with the reader's, and would write them out under the wrong numbers.
+   */
+  private static Message parseRenumbered(ProtoProvenanceRenumberer.Renumbered renumbered,
+      ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
+    Message parsed = parseDynamic(renumbered.schema, bytes, start, length);
     return DynamicMessage.parseFrom(reader.toDescriptor(),
-        renumbered.dropMoved(value).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
+        renumbered.dropMoved(parsed).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
   }
 
   private ProtoProvenanceRenumberer.Renumbered byProvenance(String subject, SchemaId writerId,

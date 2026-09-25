@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
@@ -345,6 +346,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   private DatumReader<?> createDatumReader(
       SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema) {
+    return createDatumReader(writerSchemaId, writerSchema, readerSchema, null);
+  }
+
+  /**
+   * As {@link #createDatumReader(SchemaId, Schema, Schema)}; a generic reader of a provenance
+   * rename builds its records under the caller's reader types, not the renamer's reader copy.
+   */
+  private DatumReader<?> createDatumReader(SchemaId writerSchemaId, Schema writerSchema,
+      Schema readerSchema, AvroProvenanceRenamer.Renamed renamed) {
     Schema finalReaderSchema = getReaderSchema(writerSchemaId, writerSchema, readerSchema);
     // A null writerSchema means there is no distinct writer schema (e.g. post-migration the data
     // is already in reader-schema form); read it as an identity against the reader schema.
@@ -353,7 +363,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         AvroSchemaUtils.getPrimitiveSchemas().containsValue(finalWriterSchema);
     if (writerSchemaIsPrimitive) {
       return new GenericDatumReader<>(finalWriterSchema, finalReaderSchema,
-          AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+          genericData(renamed));
     } else if (useSchemaReflection) {
       return new ReflectDatumReader<>(finalWriterSchema, finalReaderSchema,
           AvroSchemaUtils.getReflectData(
@@ -364,8 +374,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               finalReaderSchema, avroUseLogicalTypeConverters));
     } else {
       return new GenericDatumReader<>(finalWriterSchema, finalReaderSchema,
-          AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+          genericData(renamed));
     }
+  }
+
+  private GenericData genericData(AvroProvenanceRenamer.Renamed renamed) {
+    GenericData base = AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters);
+    return renamed != null ? renamed.dataFor(base) : base;
   }
 
   /**
@@ -659,7 +674,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               ? getDatumReader(schemaId, writerSchema, readerSchema)
               : datumReaderCache.get(
                   new DatumReaderKey(schemaId, renamed.reader, renamed.writer),
-                  () -> createDatumReader(schemaId, renamed.writer, renamed.reader));
+                  () -> createDatumReader(schemaId, renamed.writer, renamed.reader, renamed));
         }
         int length = buffer.remaining();
         Object result;

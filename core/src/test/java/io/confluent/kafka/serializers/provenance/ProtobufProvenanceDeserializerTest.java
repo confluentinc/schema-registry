@@ -25,6 +25,10 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
@@ -32,6 +36,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -188,6 +193,25 @@ class ProtobufProvenanceDeserializerTest {
         read.toBuilder().setField(memo, "new").build().toByteArray());
     assertEquals("new", forwarded.getField(memo));
     assertTrue(forwarded.getUnknownFields().asMap().isEmpty());
+  }
+
+  @Test
+  void aReadRuleWritingToAMovedFieldWritesUnderItsOwnNumber() throws Exception {
+    // Domain rules run once the read is back in the reader's own numbers: a value they write to a
+    // moved field would otherwise sit under the throwaway number, and be lost to unknown fields.
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    ProtobufSchema v2 = row("int32 id = 1;");
+    Rule fill = new Rule("fill", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
+        "name == 'memo' ; 'filled'", null, null, false);
+    ProtobufSchema v3 = row("int32 id = 1;", "string memo = 2;")
+        .copy(null, new RuleSet(null, Collections.singletonList(fill)));
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals("filled", read.getField(v3.toDescriptor().findFieldByName("memo")));
+    assertTrue(read.getUnknownFields().asMap().isEmpty());
   }
 
   @Test
