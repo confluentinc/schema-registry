@@ -203,6 +203,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       final JsonSchema writerSchema = schema;
+      // Pruned first: validation and the domain rules see only what the reader may, validation's
+      // defaults reach a pruned property as one never written, and a rule's value is not undone.
+      jsonNode = byProvenance(subject, schemaId, writerSchema, readerSchema, migrations, jsonNode,
+          buffer, start, length);
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
@@ -222,8 +226,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (validate && !validateBeforeDomainRules) {
         jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
-      jsonNode = byProvenance(subject, schemaId, writerSchema, readerSchema, migrations, jsonNode,
-          buffer, start, length);
 
       Object value;
       if (type != null && !Object.class.equals(type)) {
