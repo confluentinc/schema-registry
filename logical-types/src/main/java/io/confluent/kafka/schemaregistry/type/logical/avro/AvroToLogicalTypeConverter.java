@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import org.apache.avro.JsonProperties;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -94,6 +95,10 @@ public class AvroToLogicalTypeConverter {
     // named-root shape shared with the DDL visitor and the other format readers.
     final LogicalType.RootUnwrap unwrap = LogicalType.unwrapLeafNamedRoot(
         schema, ctx.getNamedTypes(), ctx.getExternalTypes(), namespace);
+    // A nullable-union root enters its record through the branch; keep that on the new root.
+    if (unwrap.getRootSchema() != schema && !schema.getNativeEntryNames().isEmpty()) {
+      unwrap.getRootSchema().setNativeEntryNames(schema.getNativeEntryNames());
+    }
     return new LogicalType(
         unwrap.getName(),
         namespace,
@@ -455,12 +460,16 @@ public class AvroToLogicalTypeConverter {
               convertWithCycleDetection(
                   elemSchema.getField(CommonConstants.VALUE_FIELD).schema(),
                   false, ctx, appendToList(indexPath, 1));
-          return createMapLikeType(isNullable, keyType, valueType, isMultisetType);
+          // Natively an array element, then the entry record's key or value field.
+          return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultisetType),
+              Arrays.asList(null, CommonConstants.KEY_FIELD),
+              Arrays.asList(null, CommonConstants.VALUE_FIELD));
         } else {
           return Schema.createArray(
               convertWithCycleDetection(
                   avroSchema.getElementType(), false, ctx, appendToList(indexPath, 0)))
-              .setNullable(isNullable);
+              .setNullable(isNullable)
+              .setElementNativeNames(Collections.singletonList(null));
         }
 
       case MAP:
@@ -468,12 +477,15 @@ public class AvroToLogicalTypeConverter {
             Objects.equals(
                 CommonConstants.FLINK_MULTISET_TYPE,
                 avroSchema.getProp(CommonConstants.FLINK_TYPE));
-        return createMapLikeType(
+        // A native map's keys have no schema to step into; its values are one unnamed step.
+        return withMapSteps(createMapLikeType(
             isNullable,
             readMapKeyType(avroSchema),
             convertWithCycleDetection(
                 avroSchema.getValueType(), false, ctx, appendToList(indexPath, 1)),
-            isMultisetType2);
+            isMultisetType2),
+            Collections.emptyList(),
+            Collections.singletonList(null));
 
       case RECORD: {
         if (isVariantRecord(avroSchema)) {
@@ -532,7 +544,8 @@ public class AvroToLogicalTypeConverter {
           List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
               readFieldRules(field);
           fields.add(new Field(field.name(), fieldType, pos++,
-              defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules));
+              defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules)
+              .setNativeNames(Collections.singletonList(field.name())));
         }
         Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
         structSchema.setDoc(avroSchema.getDoc());
@@ -552,8 +565,13 @@ public class AvroToLogicalTypeConverter {
 
         // Nullable type: union of null and one other type
         if (memberSchemas.size() == 1) {
-          return convertWithCycleDetection(
+          // The logical type collapses the union; natively its branch is still a step.
+          final Schema collapsed = convertWithCycleDetection(
               memberSchemas.get(0), hasNull, ctx, indexPath);
+          final List<String> entry = new ArrayList<>();
+          entry.add(memberSchemas.get(0).getFullName());
+          entry.addAll(collapsed.getNativeEntryNames());
+          return collapsed.setNativeEntryNames(entry);
         }
 
         // Proper union with multiple non-null types
@@ -600,7 +618,9 @@ public class AvroToLogicalTypeConverter {
           if (hintParams != null) {
             hintParams = Schema.stripFormatNativeParams(hintParams);
           }
-          branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams));
+          // Natively a branch is found by its type's full name, which Avro keeps unique.
+          branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
+              .setNativeNames(Collections.singletonList(member.getNativeName())));
         }
         return Schema.createUnion(branches).setNullable(hasNull);
       }
@@ -650,7 +670,8 @@ public class AvroToLogicalTypeConverter {
       List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
           readFieldRules(field);
       fields.add(new Field(field.name(), fieldType, pos++,
-          defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules));
+          defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules)
+          .setNativeNames(Collections.singletonList(field.name())));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(false);
     structSchema.setDoc(avroSchema.getDoc());
@@ -700,6 +721,14 @@ public class AvroToLogicalTypeConverter {
     final List<V> newList = new ArrayList<>(list);
     newList.add(value);
     return newList;
+  }
+
+  /** Records the native steps to a map's key and value, or to a multiset's element (its key). */
+  private static Schema withMapSteps(
+      Schema mapLike, List<String> keySteps, List<String> valueSteps) {
+    return mapLike.getType() == Schema.Type.MULTISET
+        ? mapLike.setElementNativeNames(keySteps)
+        : mapLike.setKeyNativeNames(keySteps).setValueNativeNames(valueSteps);
   }
 
   private static Schema createMapLikeType(
@@ -985,12 +1014,16 @@ public class AvroToLogicalTypeConverter {
 
   private static final class UnionMember {
     private final String simpleName;
+    // The branch name when simple names collide: the full name, dots made underscores.
     private final String fullName;
+    // The full name as Avro spells it, which finds the branch natively.
+    private final String nativeName;
     private final Schema schema;
 
     private UnionMember(String simpleName, String fullName, Schema schema) {
       this.simpleName = simpleName;
       this.fullName = fullName.replace('.', '_');
+      this.nativeName = fullName;
       this.schema = schema;
     }
 
@@ -1000,6 +1033,10 @@ public class AvroToLogicalTypeConverter {
 
     public String getFullName() {
       return fullName;
+    }
+
+    public String getNativeName() {
+      return nativeName;
     }
 
     public Schema getSchema() {

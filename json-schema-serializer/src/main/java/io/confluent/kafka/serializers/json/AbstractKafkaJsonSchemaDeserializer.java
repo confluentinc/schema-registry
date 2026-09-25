@@ -27,6 +27,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
@@ -200,7 +202,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         jsonNode = (JsonNode) executeMigrations(migrations, subject, topic, headers, jsonNode);
       }
 
-      JsonSchema writerSchema = schema;
+      final JsonSchema writerSchema = schema;
+      // Pruned first: validation and the domain rules see only what the reader may, validation's
+      // defaults reach a pruned property as one never written, and a rule's value is not undone.
+      jsonNode = byProvenance(subject, schemaId, writerSchema, readerSchema, migrations, jsonNode,
+          buffer, start, length);
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
@@ -390,6 +396,50 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       SchemaId schemaId, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+  }
+
+  /**
+   * With {@code provenance.algorithm}, {@code node} with every property provenance marks as new
+   * removed, parsing the payload first if nothing has yet; {@code node} unchanged otherwise.
+   */
+  private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
+      ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
+      int start, int length) throws IOException {
+    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
+      return node;
+    }
+    JsonProvenancePruner pruner = provenanceProjector()
+        .project(subject, writerId, writer, reader, false,
+            mapping -> JsonProvenancePruner.plan(mapping, (JsonSchema) reader))
+        .orElse(null);
+    if (pruner == null || pruner.isEmpty()) {
+      return node;
+    }
+    JsonNode document = node != null
+        ? node
+        : objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+    pruner.prune(document);
+    return document;
+  }
+
+  /**
+   * {@code readers} as a reader function, with any registered id a reader comes with used for
+   * provenance instead of being looked up.
+   */
+  protected Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return provenanceProjector().readerSchemas(readers);
+  }
+
+  private ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
+
+  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  private ProvenanceProjector<JsonProvenancePruner> provenanceProjector() {
+    if (provenanceProjector == null) {
+      provenanceProjector = new ProvenanceProjector<>(
+          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+    }
+    return provenanceProjector;
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(

@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_KEY_TYPE_CONFIG;
 import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG;
 import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG;
@@ -144,6 +145,16 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
       boolean includeRuleResults) {
     return deserializeWithSchemaAndVersion(
         topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  /**
+   * As {@code deserializeWithSchema} with a reader function, where each reader may carry the
+   * schema id of the registered version it stands for, used by provenance as is.
+   */
+  public GenericContainerWithVersion deserializeWithReaderSchema(
+      String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ReaderSchema> readers, boolean includeRuleResults) {
+    return deserializeWithSchema(topic, headers, bytes, readerSchemas(readers), includeRuleResults);
   }
 
   @Override
