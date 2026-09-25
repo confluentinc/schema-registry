@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import io.confluent.kafka.serializers.provenance.ReaderSchema;
+import io.confluent.kafka.serializers.test.Readded;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,7 +67,11 @@ class AvroProvenanceStrictnessTest {
     Schema a = v1.getField("f").schema().getTypes().get(1);
 
     byte[] branch = write(v1, new GenericRecordBuilder(a).set("x", 5).build());
-    assertThrows(Exception.class, () -> read(v3, branch, "v1"));
+    // Named in the writer's terms, not by the renamer's sink.
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, branch, "v1"));
+    assertEquals("The record holds a value of A at writer location [f], a union branch "
+        + "provenance pairs with none of the reader's. There is no value to read.",
+        e.getCause().getMessage());
     assertEquals(5, ((GenericRecord) read(v3, branch, null).get("f")).get("x"));
 
     assertEquals("s", read(v3, write(v1, "s"), "v1").get("f").toString());
@@ -197,6 +203,31 @@ class AvroProvenanceStrictnessTest {
         ((GenericRecord) read.get("home")).getSchema().toString());
     // And so it can be written again under the registered reader.
     new KafkaAvroSerializer(client, config(null)).serialize(TOPIC, read);
+  }
+
+  @Test
+  void aSpecificReaderWithoutATypeGetsNoOldValue() throws Exception {
+    // The reader comes from the generated class, found only when the datum reader is built;
+    // provenance must see it too, rather than skip the read.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Readded\","
+        + "\"namespace\":\"io.confluent.kafka.serializers.test\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"note\",\"type\":\"string\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Readded\","
+        + "\"namespace\":\"io.confluent.kafka.serializers.test\",\"doc\":\"v2\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"}]}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("name", "ada").set("note", "old").build());
+    register(v2, Readded.getClassSchema());
+
+    assertEquals("old", readSpecific(bytes, null).getNote().toString());
+    assertEquals("new", readSpecific(bytes, "v1").getNote().toString());
+  }
+
+  private Readded readSpecific(byte[] bytes, String provenance) {
+    Map<String, Object> config = config(provenance);
+    config.put("specific.avro.reader", true);
+    return (Readded) new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes);
   }
 
   @Test
