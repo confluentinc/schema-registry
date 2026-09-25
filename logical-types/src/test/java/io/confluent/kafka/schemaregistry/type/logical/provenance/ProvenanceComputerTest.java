@@ -570,16 +570,82 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void changingACollectionKindRestartsTheMembersInside() {
-    // ARRAY<STRUCT> and MAP<K, STRUCT> both step to index 0, but under different steps: the
-    // inner members do not match.
+  void changingACollectionKindRestartsTheFieldAndItsMembers() {
+    // ARRAY<STRUCT> to MAP<K, STRUCT> changes f's category, which no SQL ALTER expresses: f and
+    // everything under it are new.
     Pids pids = avro(
         lt(struct(new Field("f", Schema.createArray(struct(field("x"))), 0))),
         lt(struct(new Field("f", Schema.createMap(struct(field("x")),
             Schema.create(Schema.Type.INT)), 0))));
 
-    assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
+    assertThat(pids.isNew(1, 0)).isTrue();
     assertThat(pids.isNew(1, 0, 0, 0)).isTrue();
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Category changes -- no SQL ALTER, so a drop and an add
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void aLeafBecomingAUnionIsNew() {
+    Pids pids = avro(
+        lt(struct(field("f"))),
+        lt(struct(new Field("f", union("int", "string"), 0))));
+
+    assertThat(pids.isNew(1, 0)).isTrue();
+    assertThat(pids.isNew(1, 0, 0)).isTrue();
+  }
+
+  @Test
+  void aUnionNarrowedToALeafIsNew() {
+    Pids pids = avro(
+        lt(struct(new Field("f", union("int", "string"), 0))),
+        lt(struct(field("f"))));
+
+    assertThat(pids.isNew(1, 0)).isTrue();
+  }
+
+  @Test
+  void anArrayBecomingAMultisetIsNewWithItsMembers() {
+    // Both descend through the same element step, so without the category rule x would continue.
+    Pids pids = avro(
+        lt(struct(new Field("f", Schema.createArray(struct(field("x"))), 0))),
+        lt(struct(new Field("f", Schema.createMultiset(struct(field("x"))), 0))));
+
+    assertThat(pids.isNew(1, 0)).isTrue();
+    assertThat(pids.isNew(1, 0, 0, 0)).isTrue();
+  }
+
+  @Test
+  void anAliasClaimingAFieldOfAnotherCategoryLeavesItToNoOne() {
+    // b says it is the old a, and is a struct where a was a leaf: b is new, and the new a, which
+    // the alias outranks, is new too -- DROP a, ADD b, ADD a.
+    Pids pids = avro(
+        lt(struct(field("a"))),
+        lt(struct(new Field("b", struct(field("x")), 0, null, false, null, null,
+            Map.of(Schema.AVRO_ALIASES, "a")), field("a"))));
+
+    assertThat(pids.isNew(1, 0)).isTrue();
+    assertThat(pids.isNew(1, 1)).isTrue();
+  }
+
+  @Test
+  void aProtobufNumberReusedForAMessageIsNew() {
+    Pids pids = protobuf(
+        lt(struct(numbered("f", 1))),
+        lt(struct(new Field("g", struct(numbered("x", 1)), 0, null, false, null, null,
+            Map.of(Schema.PROTOBUF_FIELD_NUMBER, "1")))));
+
+    assertThat(pids.isNew(1, 0)).isTrue();
+  }
+
+  @Test
+  void aLeafPromotionIsNoCategoryChange() {
+    Pids pids = avro(
+        lt(struct(field("f"))),
+        lt(struct(new Field("f", Schema.create(Schema.Type.BIGINT), 0))));
+
+    assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -926,6 +992,15 @@ class ProvenanceComputerTest {
   private static Field numbered(String name, int number) {
     return new Field(name, Schema.create(Schema.Type.INT), 0, null, false, null, null,
         Map.of(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(number)));
+  }
+
+  private static Schema union(String... branches) {
+    List<UnionBranch> members = new ArrayList<>();
+    for (String branch : branches) {
+      members.add(new UnionBranch(branch,
+          branch.equals("int") ? Schema.create(Schema.Type.INT) : Schema.createString()));
+    }
+    return Schema.createUnion(members);
   }
 
   /** A named type body declaring Avro aliases (its previous full names). */

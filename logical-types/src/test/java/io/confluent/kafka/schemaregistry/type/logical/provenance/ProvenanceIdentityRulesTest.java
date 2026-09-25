@@ -365,6 +365,16 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aOneBranchJsonUnionUnwrappedIsANewColumn() {
+    // V1 keeps a bare one-branch oneOf as a union, so unwrapping it changes x's category, though
+    // no document changes: x is new, as the V1 columns are.
+    List<ProvenanceVersion> v = compute(
+        json("{\"x\":{\"oneOf\":[{\"type\":\"integer\"}]}}", null),
+        json("{\"x\":{\"type\":\"integer\"}}", null));
+    assertThat(pid(v, 1, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
   void aBranchDroppedAndReAddedIsNew() {
     List<ProvenanceVersion> v = compute(avro("[\"int\",\"string\"]"),
         avro("[\"string\",\"boolean\"]"), avro("[\"int\",\"string\"]", "v3"));

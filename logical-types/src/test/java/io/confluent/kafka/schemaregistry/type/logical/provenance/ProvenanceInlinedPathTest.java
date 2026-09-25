@@ -124,15 +124,14 @@ class ProvenanceInlinedPathTest {
   }
 
   @Test
-  void aRetypedCollectionRelocatesItsMembers() {
-    // ARRAY<ROW> to MAP<K, ROW>: the inner members sit under a different step, so they match
-    // nothing, while the field holding them continues.
+  void aRetypedCollectionIsNewWithItsMembers() {
+    // ARRAY<ROW> to MAP<K, ROW>: a change of category, so the field and its members are new.
     ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(
         lt(struct(arrayOf("items", struct(field("sku"))))),
         lt(struct(mapOf("items", struct(field("sku")))))), IdentityPolicy.AVRO);
 
-    assertThat(ids(report, 1).get(path(0))).isEqualTo(ids(report, 0).get(path(0)));
-    assertThat(ids(report, 1).get(path(0, 1, 0))).isNotEqualTo(ids(report, 0).get(path(0, 0, 0)));
+    assertThat(ids(report, 1).get(path(0))).isNotIn(ids(report, 0).values());
+    assertThat(ids(report, 1).get(path(0, 1, 0))).isNotIn(ids(report, 0).values());
   }
 
   @Test

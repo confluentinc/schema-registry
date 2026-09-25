@@ -155,13 +155,17 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
-  void aValueWidensIntoAUnionBranch() throws Exception {
-    assertEquals(7, sameBothWays(field("int"), field("[\"int\",\"string\"]"), 7).get("f"));
+  void aValueWidenedIntoAUnionIsANewColumn() throws Exception {
+    // A leaf becoming a union changes category, a drop and an add: Avro alone reads the value
+    // into the int branch, provenance does not, and with no default the record fails.
+    assertNewColumn(field("int"), field("[\"int\",\"string\"]"), 7, null);
+    assertNewColumn(field("int"), defaulted("[\"int\",\"string\"]", "0"), 7, 0);
   }
 
   @Test
-  void aUnionNarrowsToTheBranchItHolds() throws Exception {
-    assertEquals(7, sameBothWays(field("[\"int\",\"string\"]"), field("int"), 7).get("f"));
+  void aUnionNarrowedToTheBranchItHoldsIsANewColumn() throws Exception {
+    assertNewColumn(field("[\"int\",\"string\"]"), field("int"), 7, null);
+    assertNewColumn(field("[\"int\",\"string\"]"), defaulted("int", "0"), 7, 0);
   }
 
   @Test
@@ -366,6 +370,22 @@ class AvroProvenanceDeserializerTest {
     return on;
   }
 
+  /**
+   * Native reading keeps {@code value}; with provenance the reader's field is new, so it reads
+   * {@code expected}, its default, or fails where it has none.
+   */
+  private void assertNewColumn(Schema writer, Schema reader, Object value, Object expected)
+      throws Exception {
+    byte[] bytes = write(writer, new GenericRecordBuilder(writer).set("f", value));
+    client.register(SUBJECT, new AvroSchema(reader));
+    assertEquals(value, read(reader, bytes, null).get("f"));
+    if (expected == null) {
+      assertThrows(Exception.class, () -> read(reader, bytes, "v1"));
+    } else {
+      assertEquals(expected, read(reader, bytes, "v1").get("f"));
+    }
+  }
+
   private void failsBothWays(Schema writer, Schema reader, Object value) throws Exception {
     byte[] bytes = write(writer, new GenericRecordBuilder(writer).set("f", value));
     client.register(SUBJECT, new AvroSchema(reader));
@@ -412,6 +432,11 @@ class AvroProvenanceDeserializerTest {
   private static Schema field(String type) {
     String json = type.startsWith("{") || type.startsWith("[") ? type : "\"" + type + "\"";
     return record("{\"name\":\"f\",\"type\":" + json + "}");
+  }
+
+  private static Schema defaulted(String type, String defaultValue) {
+    String json = type.startsWith("[") ? type : "\"" + type + "\"";
+    return record("{\"name\":\"f\",\"type\":" + json + ",\"default\":" + defaultValue + "}");
   }
 
   private static Schema enumField(String symbols, String defaultSymbol) {
