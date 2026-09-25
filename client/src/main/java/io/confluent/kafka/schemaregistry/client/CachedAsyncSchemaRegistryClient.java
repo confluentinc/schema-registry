@@ -61,6 +61,10 @@ import org.slf4j.LoggerFactory;
  * registry call instead of queueing on a lock. A load that fails is evicted, so the next request
  * retries it; not-found responses are instead remembered in the missing caches, for the TTLs set
  * in {@link SchemaRegistryClientConfig}.
+ *
+ * <p>Futures that need a registry call complete on the executor of the supplied
+ * {@link AsyncRestService}, while cache hits are already complete when returned. See
+ * {@link AsyncRestService} for when to supply your own executor.
  */
 public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClient {
 
