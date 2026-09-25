@@ -25,6 +25,7 @@ import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -234,9 +235,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     request.setDeleted(deleted);
-    Kek kek = restService.createKek(requestProperties, request);
-    kekCache.put(new KekId(name, deleted), kek);
-    return kek;
+    Kek response = restService.createKek(requestProperties, request);
+    // Wire response is redacted; cache the caller's secret. No cache fallback: a cached
+    // entry may belong to a prior kek with the same name.
+    kekCache.put(new KekId(name, deleted),
+        KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps));
+    return response;
   }
 
   @Override
@@ -350,9 +354,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
-    Kek kek = restService.updateKek(requestProperties, name, request);
-    kekCache.put(new KekId(name, false), kek);
-    return kek;
+    Kek response = restService.updateKek(requestProperties, name, request);
+    // Wire response is redacted; cache only the secret the caller just supplied, since
+    // re-caching an older one would keep it alive past the cache TTL.
+    kekCache.put(new KekId(name, false),
+        KmsPropsRedactor.restoreWriteTimeSecrets(response, kmsProps));
+    return response;
   }
 
   @Override
