@@ -117,7 +117,7 @@
         <re2.version>1.8</re2.version>
         <tink.version>1.20.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>6.4.5</wire.version>
+        <wire.version>7.0.3</wire.version>
         <swagger.version>2.2.42</swagger.version>
         <io.confluent.schema-registry.version>8.5.0-0</io.confluent.schema-registry.version>
         <!-- Pin Avro to 1.12.1. Avro 1.12.2 (AVRO-4176) rejects object-wrapped named-type
