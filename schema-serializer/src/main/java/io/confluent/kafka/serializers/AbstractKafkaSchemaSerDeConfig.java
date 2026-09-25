@@ -17,12 +17,15 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -114,6 +117,22 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final boolean USE_LATEST_VERSION_DEFAULT = false;
   public static final String USE_LATEST_VERSION_DOC =
       "Specify if the Serializer should use the latest subject version for serialization";
+
+  public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
+  public static final String PROVENANCE_ALGORITHM_DOC =
+      "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
+          + "writer fields with reader fields rather than by name or field number; unset or "
+          + "'none' to pair them as usual";
+
+  public static final String PROVENANCE_CACHE_SIZE = "provenance.cache.size";
+  public static final int PROVENANCE_CACHE_SIZE_DEFAULT = 1000;
+  public static final String PROVENANCE_CACHE_SIZE_DOC =
+      "The maximum size for caches holding provenance pairings and reader schema ids";
+
+  public static final String PROVENANCE_CACHE_TTL = "provenance.cache.ttl.sec";
+  public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
+  public static final String PROVENANCE_CACHE_TTL_DOC =
+      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL";
 
   public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
   public static final String USE_LATEST_WITH_METADATA_DOC =
@@ -391,6 +410,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
+        .define(PROVENANCE_ALGORITHM, Type.STRING, null,
+                EnumRecommender.in(provenanceAlgorithms()),
+                Importance.LOW, PROVENANCE_ALGORITHM_DOC)
+        .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
+                Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
+        .define(PROVENANCE_CACHE_TTL, Type.INT, PROVENANCE_CACHE_TTL_DEFAULT,
+                Importance.LOW, PROVENANCE_CACHE_TTL_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
         .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,
@@ -532,6 +558,31 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean useLatestVersion() {
     return this.getBoolean(USE_LATEST_VERSION);
+  }
+
+  // "none", or a released provenance algorithm version: a misspelt one fails configuration
+  // rather than quietly reading without provenance.
+  private static Object[] provenanceAlgorithms() {
+    List<Object> values = new ArrayList<>();
+    values.add("none");
+    values.addAll(Arrays.asList(ProvenanceAlgorithm.values()));
+    return values.toArray();
+  }
+
+  /**
+   * The provenance algorithm version to project with, or null when provenance is off.
+   */
+  public String getProvenanceAlgorithm() {
+    String value = this.getString(PROVENANCE_ALGORITHM);
+    return value == null || value.isEmpty() || "none".equalsIgnoreCase(value) ? null : value;
+  }
+
+  public int getProvenanceCacheSize() {
+    return this.getInt(PROVENANCE_CACHE_SIZE);
+  }
+
+  public int getProvenanceCacheTtl() {
+    return this.getInt(PROVENANCE_CACHE_TTL);
   }
 
   public boolean getLatestCompatibilityStrict() {

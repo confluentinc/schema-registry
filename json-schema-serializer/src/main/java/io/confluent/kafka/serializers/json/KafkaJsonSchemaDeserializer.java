@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 
 /**
  * Generic JSON deserializer.
@@ -110,6 +111,16 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
       boolean includeRuleResults) {
     return deserializeWithSchemaAndVersion(
         topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  /**
+   * As {@code deserializeWithSchema} with a reader function, where each reader may carry the
+   * schema id of the registered version it stands for, used by provenance as is.
+   */
+  public JsonSchemaAndValue deserializeWithReaderSchema(
+      String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ReaderSchema> readers, boolean includeRuleResults) {
+    return deserializeWithSchema(topic, headers, bytes, readerSchemas(readers), includeRuleResults);
   }
 
   @Override
