@@ -217,8 +217,8 @@ final class FlinkComparison {
       if (originalField == null) {
         if (!isNullableOrDefaulted(updateField)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-              "added column is neither nullable nor defaulted, so rows written before it existed "
-                  + "have no value for it");
+              "column is required by the reader's schema but missing from the writer's schema, "
+                  + "so rows written under the writer's schema have no value for it");
         }
         continue;
       }
@@ -228,7 +228,8 @@ final class FlinkComparison {
       // present and holds null, which is exactly what a nullable column permits.
       if (isEffectivelyNullable(originalField) && !isEffectivelyNullable(updateField)) {
         add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
-            "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
+            "column is nullable in the writer's schema but NOT NULL in the reader's schema; "
+                + "rows written under the writer's schema may hold nulls");
       }
 
       validateDefaultNotRemoved(originalField, updateField, fieldPath);
@@ -282,7 +283,8 @@ final class FlinkComparison {
         originalField.hasDefault && originalField.defaultValue != null;
     if (originalHadDefault && !hasNonNullDefault(updateField)) {
       add(Rule.NON_NULLABLE_DEFAULT_REMOVED, fieldPath,
-          "NOT NULL column lost its default; rows that omitted the column have no value to read");
+          "NOT NULL column has a non-null default in the writer's schema but not in the "
+              + "reader's schema; rows that omitted the column have no value to read");
     }
   }
 
@@ -316,8 +318,8 @@ final class FlinkComparison {
       Schema original, Schema update, String path) {
     if (original.isNullable() && !update.isNullable()) {
       add(Rule.NULLABLE_TO_NON_NULLABLE, path,
-          "container child was nullable and is now NOT NULL; existing collections may hold "
-              + "nulls");
+          "container child is nullable in the writer's schema but NOT NULL in the reader's "
+              + "schema; collections written under the writer's schema may hold nulls");
     }
     compareTypes(original, update, path);
   }
