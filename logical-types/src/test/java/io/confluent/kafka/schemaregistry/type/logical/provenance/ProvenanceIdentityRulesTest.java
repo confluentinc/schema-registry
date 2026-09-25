@@ -327,10 +327,40 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
-  void aBranchWithTwoPromotionsIsNew() {
+  void aBranchWithTwoPromotionsContinuesTheOneAvroReadsItInto() {
+    // Avro reads an int into the first branch, in union order, it promotes to.
     List<ProvenanceVersion> v = compute(
         avro("[\"int\",\"string\"]"), avro("[\"long\",\"float\",\"string\"]"));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isNotIn(pids(v, 0).values());
+
+    v = compute(avro("[\"int\",\"string\"]"), avro("[\"float\",\"long\",\"string\"]"));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
+  void aBranchNarrowedWithinItsFamilyStillContinues() {
+    // Avro cannot read a long into an int, but the family rule pairs them; restarting would lose
+    // the column for no misattribution avoided.
+    List<ProvenanceVersion> v = compute(
+        avro("[\"long\",\"string\"]"), avro("[\"int\",\"string\"]"));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void twoBranchesPromotedIntoOneAreNew() {
+    List<ProvenanceVersion> v = compute(
+        avro("[\"int\",\"long\",\"string\"]"), avro("[\"double\",\"string\"]"));
     assertThat(pid(v, 1, 0, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
+  void aBranchAvroMergesIntoAContinuingBranchIsNew() {
+    // Avro reads the int into long, which continues the long: the int has no branch of its own.
+    List<ProvenanceVersion> v = compute(
+        avro("[\"int\",\"long\",\"string\"]"), avro("[\"long\",\"float\",\"string\"]"));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
     assertThat(pid(v, 1, 0, 1)).isNotIn(pids(v, 0).values());
   }
 
