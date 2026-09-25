@@ -374,6 +374,32 @@ class JsonProvenanceDeserializerTest {
     assertTrue(read.get("t").isNull());
   }
 
+  @Test
+  void aRequirementBesideManyAmbiguousUnionsIsKept() throws Exception {
+    // P applies in every reading of the value, however many the ambiguous unions beside it make:
+    // eleven make 2048, past the number weighed one by one.
+    StringBuilder unions = new StringBuilder();
+    for (int i = 0; i < 11; i++) {
+      unions.append(", {\"anyOf\": [{\"type\": \"object\", \"properties\": {")
+          .append(number("x" + i)).append("%1$s}}, {\"type\": \"object\", \"properties\": {")
+          .append(number("y" + i)).append("%1$s}}]}");
+    }
+    String p = "{\"type\": \"object\", \"properties\": {\"t\": {\"type\": \"string\", "
+        + "\"default\": \"dflt\"%s}}, \"required\": [\"t\"]}";
+    String t = ", " + string("t");
+    JsonSchema v1 = object("\"p\": {\"allOf\": [" + String.format(p, "")
+        + String.format(unions.toString(), t) + "]}");
+    JsonSchema v2 = object("\"p\": {\"allOf\": [{\"type\": \"object\", \"properties\": {"
+        + number("q") + "}}" + String.format(unions.toString(), "") + "]}");
+    JsonSchema v3 = object("\"p\": {\"allOf\": [" + String.format(p, ", \"description\": \"v3\"")
+        + String.format(unions.toString(), t) + "]}");
+    byte[] bytes = write(v1, "{\"p\": {\"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

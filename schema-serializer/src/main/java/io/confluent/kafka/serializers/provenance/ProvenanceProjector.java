@@ -71,6 +71,9 @@ public final class ProvenanceProjector<T> {
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
   // Readers whose registered version the caller named, by the schema handed over.
   private final Cache<ParsedSchema, Integer> suppliedReaderIds;
+  // Readers derived from a generated class, by identity: matched to the latest version they equal.
+  private final Cache<ParsedSchema, Boolean> derivedReaders =
+      CacheBuilder.newBuilder().weakKeys().build();
 
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
@@ -101,6 +104,16 @@ public final class ProvenanceProjector<T> {
       }
       return reader.getSchema();
     };
+  }
+
+  /**
+   * {@code reader}, marked as derived from a generated class. Its text is synthesized from the
+   * class, so it is matched to the latest version it equals once normalized, never by an exact
+   * spelling that an older version may share by accident.
+   */
+  public ParsedSchema derivedReader(ParsedSchema reader) {
+    derivedReaders.put(reader, Boolean.TRUE);
+    return reader;
   }
 
   private static <K, V> Cache<K, V> cache(int size, int ttlSec) {
@@ -163,7 +176,7 @@ public final class ProvenanceProjector<T> {
       } catch (RestClientException e) {
         // A writer id under no version of the subject: the writer's schema may still equal one.
         Integer equal = e.getErrorCode() == SCHEMA_ID_NOT_IN_SUBJECT
-            ? structuralMatch(subject, writer) : null;
+            ? structuralMatch(subject, writer, false) : null;
         if (equal == null || equal.equals(writerId)) {
           throw e;
         }
@@ -243,34 +256,45 @@ public final class ProvenanceProjector<T> {
   private Integer readerId(String subject, ParsedSchema reader)
       throws IOException, RestClientException {
     Integer supplied = suppliedReaderIds.getIfPresent(reader);
-    return supplied != null ? supplied : registeredId(subject, reader);
+    return supplied != null ? supplied : registeredId(subject, reader,
+        derivedReaders.getIfPresent(reader) != null);
+  }
+
+  private Integer registeredId(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return registeredId(subject, schema, false);
   }
 
   /**
    * The schema id {@code schema} is registered under in {@code subject}, or else the latest
-   * version it equals once metadata, rules and inline tags are set aside; null when none does.
+   * version it equals once metadata, rules and inline tags are set aside; null when none does. A
+   * {@code derived} schema skips the first: only the latest version it equals will do.
    */
-  private Integer registeredId(String subject, ParsedSchema schema)
+  private Integer registeredId(String subject, ParsedSchema schema, boolean derived)
       throws IOException, RestClientException {
-    List<Object> key = Arrays.asList(subject, schema);
+    List<Object> key = Arrays.asList(subject, schema, derived);
     Optional<Integer> cached = registeredIds.getIfPresent(key);
     if (cached != null) {
       return cached.orElse(null);
     }
-    Integer id;
-    try {
-      id = client.getId(subject, schema);
-    } catch (RestClientException e) {
-      if (e.getStatus() != 404) {
-        throw e;
+    Integer id = null;
+    if (!derived) {
+      try {
+        id = client.getId(subject, schema);
+      } catch (RestClientException e) {
+        if (e.getStatus() != 404) {
+          throw e;
+        }
       }
-      id = structuralMatch(subject, schema);
+    }
+    if (id == null) {
+      id = structuralMatch(subject, schema, derived);
     }
     registeredIds.put(key, Optional.ofNullable(id));
     return id;
   }
 
-  private Integer structuralMatch(String subject, ParsedSchema schema)
+  private Integer structuralMatch(String subject, ParsedSchema schema, boolean derived)
       throws IOException, RestClientException {
     List<Integer> versions;
     try {
@@ -278,11 +302,12 @@ public final class ProvenanceProjector<T> {
     } catch (UnsupportedOperationException e) {
       versions = client.getAllVersions(subject);
     }
-    Integer id = structuralMatch(subject, versions, schema, false);
     // A schema derived from a generated class spells what its text leaves implicit — qualified
-    // type names, map entries, option order — so a Protobuf reader is also matched normalized.
-    return id == null && "PROTOBUF".equals(schema.schemaType())
-        ? structuralMatch(subject, versions, schema, true) : id;
+    // type names, map entries, option order — so a Protobuf reader is also matched normalized;
+    // a derived one only so, in one pass, so the latest version it equals wins.
+    boolean protobuf = "PROTOBUF".equals(schema.schemaType());
+    Integer id = derived && protobuf ? null : structuralMatch(subject, versions, schema, false);
+    return id == null && protobuf ? structuralMatch(subject, versions, schema, true) : id;
   }
 
   private Integer structuralMatch(String subject, List<Integer> versions, ParsedSchema schema,
@@ -290,7 +315,10 @@ public final class ProvenanceProjector<T> {
     String wanted = structure(schema, normalized);
     for (int i = versions.size() - 1; i >= 0; i--) {
       int id = schemaIdOf(subject, versions.get(i));
-      if (wanted.equals(structure(client.getSchemaBySubjectAndId(subject, id), normalized))) {
+      ParsedSchema version = client.getSchemaBySubjectAndId(subject, id);
+      // The text leaves out what it imports: versions alike but for their references differ.
+      if (wanted.equals(structure(version, normalized))
+          && schema.references().equals(version.references())) {
         return id;
       }
     }

@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
@@ -42,6 +43,7 @@ import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -500,6 +502,86 @@ class ProtobufProvenanceDeserializerTest {
 
     assertEquals("old!", readClass(Readded.class, bytes, null, false).getMemo());
     assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+  }
+
+  @Test
+  void aWriterConditionSeesItsOwnFieldUnderAClassReader() throws Exception {
+    // With no reader configured the rules are the writer's, over the writer's own record; what the
+    // class does not pair with it is dropped only after them.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedProto\";\n";
+    Rule check = new Rule("check", null, RuleKind.CONDITION, RuleMode.READ, "CEL", null, null,
+        "message.note == 'old'", null, null, false);
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message Readded {\n  int32 id = 1;\n  string note = 2;\n}\n")
+        .copy(null, new RuleSet(null, Collections.singletonList(check)));
+    ProtobufSchema v2 = new ProtobufSchema(head + "message Readded {\n  int32 id = 1;\n}\n");
+    // Framed by hand: the serializer looks up the message's own schema, which has no rules.
+    DynamicMessage.Builder record = DynamicMessage.newBuilder(v1.toDescriptor());
+    record.setField(field(record, "id"), 7).setField(field(record, "note"), "old");
+    byte[] body = record.build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.register(SUBJECT, v1)).put((byte) 0).put(body).array();
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
+
+    assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+  }
+
+  @Test
+  void aReaderIsMatchedOnlyToAVersionWithItsReferences() throws Exception {
+    // One text importing three versions of a dependency; a reader matched by structure (rules
+    // merged on, so not by id) is the version importing what it imports.
+    String dep = "syntax = \"proto3\";\npackage d;\nmessage D {\n  int32 x = 1;\n%s}\n";
+    String[] deps = {String.format(dep, "  string y = 2;\n"), String.format(dep, ""),
+        String.format(dep, "  string z = 2;\n")};
+    String main = "syntax = \"proto3\";\npackage p;\nimport \"d.proto\";\n"
+        + "message Row {\n  int32 id = 1;\n  d.D d = 2;\n}\n";
+    List<ProtobufSchema> versions = new ArrayList<>();
+    for (int i = 0; i < deps.length; i++) {
+      client.register("dep", new ProtobufSchema(deps[i]));
+      ProtobufSchema version = new ProtobufSchema(main,
+          Collections.singletonList(new SchemaReference("d.proto", "dep", i + 1)),
+          Collections.singletonMap("d.proto", deps[i]), null, null);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    Descriptor row = versions.get(0).toDescriptor();
+    Descriptor d = row.findFieldByName("d").getMessageType();
+    byte[] body = DynamicMessage.newBuilder(row).setField(row.findFieldByName("id"), 7)
+        .setField(row.findFieldByName("d"), DynamicMessage.newBuilder(d)
+            .setField(d.findFieldByName("x"), 1).setField(d.findFieldByName("y"), "old").build())
+        .build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.getId(SUBJECT, versions.get(0))).put((byte) 0).put(body).array();
+    Rule check = new Rule("check", null, RuleKind.CONDITION, RuleMode.READ, "CEL", null, null,
+        "message.id == 7", null, null, false);
+    ProtobufSchema reader = versions.get(0)
+        .copy(null, new RuleSet(null, Collections.singletonList(check)));
+
+    DynamicMessage read = read(reader, bytes, "v1");
+    assertEquals("old",
+        ((DynamicMessage) get(read, "d")).getField(d.findFieldByName("y")));
+  }
+
+  @Test
+  void aClassReaderIsTheLatestVersionItEquals() throws Exception {
+    // v1 is spelled as the class's own descriptor (the map an entry message), so equals the class
+    // exactly; v3 re-adds memo as text. The class is the latest version it equals, normalized.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedMapProto\";\n";
+    ProtobufSchema v1 = new ProtobufSchema(ReaddedMap.getDescriptor());
+    ProtobufSchema v2 = new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n"
+        + "  map<string, int32> counts = 3;\n}\n");
+    ProtobufSchema v3 = new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n"
+        + "  string memo = 2;\n  map<string, int32> counts = 3;\n}\n");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "memo"), "old"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("old", readClass(ReaddedMap.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(ReaddedMap.class, bytes, "v1", false).getMemo());
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

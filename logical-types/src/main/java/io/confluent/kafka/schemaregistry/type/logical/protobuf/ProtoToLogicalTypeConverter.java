@@ -35,6 +35,7 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -658,7 +659,14 @@ public class ProtoToLogicalTypeConverter {
       Meta meta = field.getOptions().getExtension(MetaProto.fieldMeta);
       String defaultStr = meta.getParamsMap().get(CommonConstants.LOGICAL_DEFAULT_PROP);
       if (defaultStr != null) {
-        defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+        try {
+          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+        } catch (IllegalArgumentException | DateTimeException e) {
+          // NumberFormatException among them: a default its type cannot read is rejected by name.
+          throw new ValidationException("Field " + field.getFullName() + " has an invalid "
+              + CommonConstants.LOGICAL_DEFAULT_PROP + " '" + defaultStr + "': " + e.getMessage(),
+              e);
+        }
         hasDefault = true;
       }
     }
@@ -1053,12 +1061,9 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final Meta fieldMeta = meta.get();
-      final int minLength = Integer.parseInt(
-          fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MIN_LENGTH, "-1"));
-      final int maxLength = Optional.ofNullable(
-              fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MAX_LENGTH, null))
-          .map(Integer::valueOf)
-          .orElse(MAX_LENGTH);
+      final int minLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MIN_LENGTH, -1);
+      final int maxLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MAX_LENGTH,
+          MAX_LENGTH);
       if (minLength > 0 && minLength == maxLength) {
         return Schema.createChar(maxLength).setNullable(isNullable);
       } else if (maxLength < MAX_LENGTH) {
@@ -1072,12 +1077,9 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final Meta fieldMeta = meta.get();
-      final int minLength = Integer.parseInt(
-          fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MIN_LENGTH, "-1"));
-      final int maxLength = Optional.ofNullable(
-              fieldMeta.getParamsOrDefault(CommonConstants.FLINK_MAX_LENGTH, null))
-          .map(Integer::valueOf)
-          .orElse(MAX_LENGTH);
+      final int minLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MIN_LENGTH, -1);
+      final int maxLength = intParam(schema, fieldMeta, CommonConstants.FLINK_MAX_LENGTH,
+          MAX_LENGTH);
       if (minLength > 0 && minLength == maxLength) {
         return Schema.createBinary(maxLength).setNullable(isNullable);
       } else if (maxLength < MAX_LENGTH) {
@@ -1091,9 +1093,7 @@ public class ProtoToLogicalTypeConverter {
     // TimeOfDay's nanos field gives the wire type natural precision 9.
     final int defaultPrecision = 9;
     final int precision = getMeta(schema)
-        .map(m -> Integer.parseInt(
-            m.getParamsOrDefault(CommonConstants.FLINK_PRECISION_PROP,
-                String.valueOf(defaultPrecision))))
+        .map(m -> intParam(schema, m, CommonConstants.FLINK_PRECISION_PROP, defaultPrecision))
         .orElse(defaultPrecision);
     return Schema.createTime(precision).setNullable(isNullable);
   }
@@ -1130,9 +1130,7 @@ public class ProtoToLogicalTypeConverter {
     final Optional<Meta> meta = getMeta(schema);
     if (meta.isPresent()) {
       final int precision = meta
-          .map(m -> Integer.parseInt(
-              m.getParamsOrDefault(CommonConstants.FLINK_PRECISION_PROP,
-                  String.valueOf(defaultPrecision))))
+          .map(m -> intParam(schema, m, CommonConstants.FLINK_PRECISION_PROP, defaultPrecision))
           .orElse(defaultPrecision);
       if (CommonConstants.FLINK_TYPE_TIMESTAMP.equals(
           meta.get().getParamsOrDefault(CommonConstants.FLINK_TYPE_PROP, null))) {
@@ -1142,6 +1140,23 @@ public class ProtoToLogicalTypeConverter {
       }
     } else {
       return Schema.createTimestampLtz(defaultPrecision).setNullable(isNullable);
+    }
+  }
+
+  /**
+   * An integer param of {@code field}'s meta, or {@code otherwise}; any other value is rejected
+   * by name.
+   */
+  private static int intParam(FieldDescriptor field, Meta meta, String key, int otherwise) {
+    String value = meta.getParamsOrDefault(key, null);
+    if (value == null) {
+      return otherwise;
+    }
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+      throw new ValidationException(
+          "Field " + field.getFullName() + " has a non-integer " + key + " '" + value + "'", e);
     }
   }
 

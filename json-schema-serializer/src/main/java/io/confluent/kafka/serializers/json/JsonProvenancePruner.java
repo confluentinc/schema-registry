@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -83,13 +84,25 @@ final class JsonProvenancePruner {
   private static final class Target {
     final List<String> names;
     final List<Candidate> candidates = new ArrayList<>();
+    // Indexed once planned: a value reaches the property once per path, so look-ups add up.
+    private Map<List<Integer>, List<Candidate>> byChoices;
+    private boolean clashes;
 
     Target(List<String> names) {
       this.names = names;
     }
 
+    Target indexed() {
+      byChoices = new HashMap<>();
+      for (Candidate candidate : candidates) {
+        byChoices.computeIfAbsent(candidate.choices, c -> new ArrayList<>()).add(candidate);
+      }
+      clashes = candidates.stream().anyMatch(c -> c.continues);
+      return this;
+    }
+
     boolean clashes() {
-      return candidates.stream().anyMatch(c -> c.continues);
+      return clashes;
     }
   }
 
@@ -132,7 +145,7 @@ final class JsonProvenancePruner {
           throw new SerializationException("Property " + target.names + " of schema id "
               + mapping.readerId() + " is not declared by the reader schema");
         }
-        targets.add(target);
+        targets.add(target.indexed());
       }
     }
     // Outermost first: a property removed takes whatever lay under it along.
@@ -428,16 +441,8 @@ final class JsonProvenancePruner {
     if (!target.clashes() || ambiguous) {
       return false;
     }
-    Candidate match = null;
-    for (Candidate candidate : target.candidates) {
-      if (candidate.choices.equals(choices)) {
-        if (match != null) {
-          return false;
-        }
-        match = candidate;
-      }
-    }
-    return match != null && match.continues;
+    List<Candidate> matches = target.byChoices.get(choices);
+    return matches != null && matches.size() == 1 && matches.get(0).continues;
   }
 
   /**
@@ -484,6 +489,20 @@ final class JsonProvenancePruner {
    * seen for each ambiguous union, over the reaches consistent with it.
    */
   private static boolean requiredInEveryReading(List<Reach> reaches, String name) {
+    boolean anyRequires = false;
+    boolean allRequire = true;
+    for (Reach reach : reaches) {
+      boolean requires = reach.object.getRequiredProperties().contains(name);
+      if (requires && reach.alternatives.isEmpty()) {
+        // An allOf part or an unambiguous step applies in every reading.
+        return true;
+      }
+      anyRequires |= requires;
+      allRequire &= requires;
+    }
+    if (!anyRequires || allRequire) {
+      return anyRequires;
+    }
     Map<Schema, List<Integer>> unions = new IdentityHashMap<>();
     for (Reach reach : reaches) {
       for (Alternative alternative : reach.alternatives) {
