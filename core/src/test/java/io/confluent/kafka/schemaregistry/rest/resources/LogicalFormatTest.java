@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,6 +118,27 @@ class LogicalFormatTest {
 
     assertTrue(ddl.contains("id"));
     assertTrue(ddl.contains("name"));
+  }
+
+  @Test
+  void convertToLogicalDdlCollapsesASingletonOneofToItsMemberType() throws Exception {
+    // format=logical must keep the canonical V2 reading even though LogicalPolicyChecker.check()
+    // pins V1 for compatibility (see LogicalPolicyCheckerTest -- V1 keeps a singleton oneOf as a
+    // UNION). A caller reading this schema's logical-type representation should see the same
+    // scalar column a real V2 reader would, not a synthesized single-branch union.
+    String jsonSchemaString =
+        "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+            + "\"type\":\"object\",\"properties\":{"
+            + "\"u\":{\"oneOf\":[{\"type\":\"integer\"}]}}}";
+    Schema schema = schemaEntityFor("JSON", jsonSchemaString);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.parseSchema(schema, false, false))
+        .thenReturn(new JsonSchema(jsonSchemaString));
+
+    String ddl = LogicalFormat.convertToLogical(schemaRegistry, schema);
+
+    assertTrue(ddl.contains("u"));
+    assertFalse(ddl.toLowerCase().contains("union"), ddl);
   }
 
   @Test

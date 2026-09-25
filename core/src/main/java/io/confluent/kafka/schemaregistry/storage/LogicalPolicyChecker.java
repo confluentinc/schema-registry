@@ -62,17 +62,28 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * Converts a native parsed schema into a {@link LogicalType} by dispatching on its schema type.
+   * Converts a native parsed schema into a {@link LogicalType} by dispatching on its schema type,
+   * using the canonical {@link LogicalTypeVersion#V2} reading. This is what {@code format=logical}
+   * exposes over the REST API.
    *
    * @throws IllegalArgumentException if the schema type has no logical-type converter
    */
   public static LogicalType toLogicalType(ParsedSchema parsedSchema) {
+    return toLogicalType(parsedSchema, LogicalTypeVersion.V2);
+  }
+
+  /**
+   * As {@link #toLogicalType(ParsedSchema)}, but selects the JSON derivation edition explicitly.
+   * Avro and Protobuf have no edition concept, so {@code edition} only affects a JSON schema.
+   *
+   * @throws IllegalArgumentException if the schema type has no logical-type converter
+   */
+  private static LogicalType toLogicalType(ParsedSchema parsedSchema, LogicalTypeVersion edition) {
     String schemaType = parsedSchema.schemaType();
     if (schemaType == null || AvroSchema.TYPE.equalsIgnoreCase(schemaType)) {
       return AvroToLogicalTypeConverter.toLogicalType((AvroSchema) parsedSchema);
     } else if (JsonSchema.TYPE.equalsIgnoreCase(schemaType)) {
-      return JsonToLogicalTypeConverter.toLogicalType(
-          (JsonSchema) parsedSchema, LogicalTypeVersion.V1);
+      return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) parsedSchema, edition);
     } else if (ProtobufSchema.TYPE.equalsIgnoreCase(schemaType)) {
       return ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) parsedSchema);
     }
@@ -96,6 +107,13 @@ public final class LogicalPolicyChecker {
    * skipped rather than failing the registration -- an old version being unconvertible must not
    * block a new one (per design decision).
    *
+   * <p>Both schemas are derived under {@link LogicalTypeVersion#V1} here, matching provenance --
+   * not the {@link LogicalTypeVersion#V2} canonical reading {@link #toLogicalType(ParsedSchema)}
+   * uses for {@code format=logical}. The two editions can disagree on structural kind (a singleton
+   * JSON {@code oneOf} collapses to its member type under V2 but stays a {@code UNION} under V1),
+   * so mixing editions across the two call sites would make the same field look edited when it is
+   * not.
+   *
    * @param newSchema       the schema being registered
    * @param previousSchemas prior versions, ascending (oldest first, latest last)
    * @param level           the configured compatibility level, or {@code null} (treated as NONE)
@@ -108,7 +126,7 @@ public final class LogicalPolicyChecker {
 
     LogicalType newLogical;
     try {
-      newLogical = toLogicalType(newSchema);
+      newLogical = toLogicalType(newSchema, LogicalTypeVersion.V1);
     } catch (RuntimeException e) {
       errors.add(describeUnconvertible(e.getMessage()));
       return errors;
@@ -123,7 +141,7 @@ public final class LogicalPolicyChecker {
     for (ParsedSchemaHolder holder : toCompare) {
       LogicalType previousLogical;
       try {
-        previousLogical = toLogicalType(holder.schema());
+        previousLogical = toLogicalType(holder.schema(), LogicalTypeVersion.V1);
       } catch (RuntimeException e) {
         // Skip an unconvertible previous version rather than blocking this registration.
         log.warn("Skipping logical compatibility against a previous version that could not be "
