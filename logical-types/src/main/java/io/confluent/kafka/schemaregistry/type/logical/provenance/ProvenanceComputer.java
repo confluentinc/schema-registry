@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
-
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
@@ -39,70 +38,51 @@ import java.util.TreeSet;
 import java.util.function.Predicate;
 
 /**
- * Assigns a {@link Provenance} to every field, branch and named type across a sequence of
- * {@link LogicalType} versions, so that two versions can be put in correspondence without matching
- * on names and without an out-of-band column ID system.
+ * Allocates a provenance id to every member location across a sequence of {@link LogicalType}
+ * versions, so that two versions can be put in correspondence without matching on names and
+ * without an out-of-band column ID system.
  *
- * <p>Provenance is a chain of matches between consecutive versions. Each version is matched
- * against the one before it alone: every location is matched to at most one location of the
- * previous version, or to none, and a chain of matched locations is one provenance. A location
- * matched to nothing starts a chain, so nothing absent from the previous version is ever continued.
- * Because nothing older is consulted, a range of versions computes the same pairings as the whole
- * history does over that range.
+ * <h2>Matching</h2>
  *
- * <h2>Identity</h2>
+ * <p>Each version is matched against the one before it alone. Every location — a struct field, a
+ * union branch, or one use of a named type — is matched to at most one location of the previous
+ * version, or to none; a matched member keeps its match's id, and any other takes a new one. A
+ * location is matched only among the previous version's locations under its parent's match, so
+ * the parent is matched first and scopes its members; collection steps ({@code []},
+ * {@code {key}}, {@code {value}}) are part of that scope. Nothing absent from the previous version
+ * is ever continued, so a range of versions pairs its versions exactly as the whole history does.
  *
- * <p>An {@link Identity} is what a location is matched by: a location continues the previous
- * version's location of the same identity. Identity rules are format-specific and a
- * {@code LogicalType} carries no format discriminator, so {@link IdentityPolicy} stands in for one.
- * Named types are resolved where they are used: each use is an entity scoped by the location using
- * it, and its identity scopes the type's members. A type merged, split or swapped by aliases
- * therefore keeps every location's lineage. Under the JSON policy a named type is transparent, with
- * no entity of its own. A recursive type has no finite set of uses, and is rejected. See
- * {@link PathKey}.
+ * <p>The rules are format-specific and a {@code LogicalType} carries no format discriminator, so
+ * each version comes with an {@link IdentityPolicy}. Versions of different policies match nothing:
+ * a history that changes format starts every location afresh at the change.
  *
- * <p>A member's scope is its container's identity, so the shape of the root matters: the members of
- * an anonymous root schema sit in a different scope from the members of a named type. A version
- * that gives a previously anonymous root a name, or the reverse, therefore starts every member's
- * chain afresh — which is correct, but worth knowing before mixing LTs built by a shim (which
- * inlines everything) with LTs read from Protobuf (whose roots are named). An Avro root that refers
- * to its own record — as a converter keeps one naming types inside it — is walked as the root, so
- * the root's name never matters to Avro.
+ * <h2>Named types</h2>
  *
- * <h2>Per-version transition</h2>
- *
- * <p>Each version is an atomic transition in three phases, so the result cannot depend on the order
- * entities happen to be walked in:
- *
- * <ol>
- *   <li><b>Resolve</b> — walk the version top-down, one peer group at a time, matching every
- *       entity against the previous version. Nothing is mutated, so every entity sees the same
- *       previous version, including the parents whose identities form its scope.</li>
- *   <li><b>Validate</b> — reject a version that repeats a path.</li>
- *   <li><b>Commit</b> — continue each matched entity's chain or start one, and keep this version
- *       alone for the next to be matched against.</li>
- * </ol>
+ * <p>Named types are matched where they are used: each use is a location of its own, under the
+ * location using it, and it scopes the type's members. A type merged, split or swapped by aliases
+ * therefore keeps every location's lineage, and each use of a shared type has its own ids. A named
+ * Avro union branch is itself the use of its type. Under the JSON policy a named type is
+ * transparent, as if inlined. A recursive type has no finite set of uses, and is rejected. An Avro
+ * or Protobuf root that refers to its own record or message — as a converter keeps one naming
+ * types inside it — is walked as the root, so the root's name never matters.
  *
  * <h2>Names and aliases</h2>
  *
- * <p>Under Avro rules a peer continues the previous version's entity of its own name, or the one
- * an alias names. An alias names what the previous version called a field or type — never one of
- * its aliases, nor any older name: an alias naming only an older name continues nothing, so a
- * type renamed twice keeps its lineage by aliasing its latest name. An explicit alias wins, as Avro
- * renames a writer field to the reader field aliasing it even when one of that name exists. A peer
- * continuing itself may carry its aliases forward, but not claim another entity with a new one.
- * Each entity has at most one continuation and each peer continues at most one entity; where Avro
- * itself cannot say which, the history is ambiguous.
+ * <p>Under Avro rules, as Avro's own decoder applies them, a peer group is matched as a whole. A
+ * peer continues the previous location of its own name, or the one an alias names; an alias names
+ * what the previous version called a location, never one of its aliases nor any older name. An
+ * explicit alias wins, as Avro renames a writer field to the reader field aliasing it even when one
+ * of that name exists. A peer continuing itself may carry its aliases forward, but not claim
+ * another location with a new one. Each previous location has at most one continuation and each
+ * peer continues at most one; where Avro itself cannot say which, the history is ambiguous.
  *
- * <h2>Invariant</h2>
+ * <h2>Allocation</h2>
  *
- * <p>Two locations share a provenance exactly when a chain of matches between consecutive versions
- * joins them. A rename keeps a provenance, and a location absent from one version and back in the
- * next never does — so a name reused later cannot be mistaken for the entity that used to hold it.
+ * <p>Ids are allocated walking versions in order and, within a version, members in path order —
+ * the pre-order walk — taking the next integer for each member matched to nothing.
  */
 public final class ProvenanceComputer {
 
-  /** Avro's promotions, which carry an unnamed union branch's identity when unambiguous. */
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
   // A JSON branch's content entries: a member's path, a discriminator's value, a leaf's type.
@@ -112,6 +92,7 @@ public final class ProvenanceComputer {
   // How deep a JSON branch's content looks: enough to tell usual branches apart, and bounded.
   private static final int CONTENT_DEPTH = 3;
 
+  /** Avro's promotions, which carry an unnamed union branch's match when unambiguous. */
   private static final List<Set<String>> PROMOTION_FAMILIES = Arrays.asList(
       new HashSet<>(Arrays.asList("int", "long", "float", "double")),
       new HashSet<>(Arrays.asList("string", "bytes")));
@@ -124,55 +105,36 @@ public final class ProvenanceComputer {
   }
 
   /**
-   * A JSON definition key never reaches the data, so under the JSON policy a named type is
-   * transparent: its members are identified where it is used, as if inlined.
+   * As {@link #report(List, List)}, applying one identity policy to every version.
    */
-  static boolean seesThroughNamedTypes(IdentityPolicy policy) {
-    return policy == IdentityPolicy.JSON;
-  }
-
-  /**
-   * Computes provenance under {@link IdentityPolicy#AUTO}.
-   */
-  public static ProvenanceResult compute(List<LogicalType> versions) {
-    return compute(versions, IdentityPolicy.AUTO);
-  }
-
-  /** Computes provenance, applying one identity policy to every version. */
-  public static ProvenanceResult compute(List<LogicalType> versions, IdentityPolicy policy) {
+  public static ProvenanceReport report(List<LogicalType> versions, IdentityPolicy policy) {
     Objects.requireNonNull(versions, "versions");
     Objects.requireNonNull(policy, "policy");
-    return compute(versions, Collections.nCopies(versions.size(), policy));
+    return report(versions, Collections.nCopies(versions.size(), policy));
   }
 
   /**
-   * Computes provenance, letting each version declare its own identity policy.
-   *
-   * <p>Use this for a sequence that changes format part-way: the signal that establishes identity
-   * differs per format, and a single policy across the switch either reads Avro names positionally
-   * or ignores Protobuf numbers. Note that an entity whose identity signal changes between versions
-   * takes a new identity, and therefore a new chain, whatever the policies say — to
-   * carry correspondence across a format migration, resolve both sides by name.
+   * Every version's members with their provenance ids — the form a provenance endpoint serves.
    *
    * @param versions the schema versions in chronological order
    * @param policies one policy per version, in the same order
-   * @throws IllegalArgumentException if the lists differ in size, or a version is null
-   * @throws IllegalStateException if a version is internally inconsistent — a repeated path or
-   *     two entities resolving to one identity; an {@link AmbiguousProvenanceException} if names
-   *     and aliases determine no single identity; a {@link RecursiveTypeException} for a recursive
-   *     type
+   * @throws IllegalArgumentException if the lists differ in size, a version or policy is null, or
+   *     an entity has no name
+   * @throws AmbiguousProvenanceException if names and aliases determine no single match
+   * @throws RecursiveTypeException for a recursive type
    */
-  public static ProvenanceResult compute(
-      List<LogicalType> versions, List<IdentityPolicy> policies) {
+  public static ProvenanceReport report(List<LogicalType> versions,
+      List<IdentityPolicy> policies) {
     Objects.requireNonNull(versions, "versions");
     Objects.requireNonNull(policies, "policies");
     if (versions.size() != policies.size()) {
       throw new IllegalArgumentException("Expected one policy per version, got "
           + policies.size() + " policies for " + versions.size() + " versions");
     }
-
-    History previous = new History();
-    List<Map<PathKey, Provenance>> byVersion = new ArrayList<>(versions.size());
+    List<ProvenanceReport.Version> reported = new ArrayList<>(versions.size());
+    Node previous = null;
+    IdentityPolicy previousPolicy = null;
+    int nextId = 1;
     for (int version = 0; version < versions.size(); version++) {
       LogicalType logicalType = versions.get(version);
       if (logicalType == null) {
@@ -183,364 +145,251 @@ public final class ProvenanceComputer {
         throw new IllegalArgumentException("Null IdentityPolicy at version " + version);
       }
 
-      Resolver resolver = new Resolver(version, policy, previous);
-      resolver.resolve(logicalType);
-      validate(resolver, version);
-      History next = new History();
-      byVersion.add(commit(resolver.entities, version, previous, next));
-      previous = next;
-    }
-    return new ProvenanceResult(versions, policies, byVersion);
-  }
-
-  /**
-   * Computes provenance and packages it as a {@link ProvenanceReport} — every version's members
-   * with an id allocated per location. The form a provenance endpoint serves.
-   */
-  public static ProvenanceReport report(List<LogicalType> versions, IdentityPolicy policy) {
-    return compute(versions, policy).report();
-  }
-
-  /**
-   * As {@link #report(List, IdentityPolicy)}, with a policy per version — for a history whose
-   * versions were not all read from the same format.
-   */
-  public static ProvenanceReport report(List<LogicalType> versions,
-      List<IdentityPolicy> policies) {
-    return compute(versions, policies).report();
-  }
-
-  // -----------------------------------------------------------------------------------------
-  // Phase 2 -- Validate
-  // -----------------------------------------------------------------------------------------
-
-  /**
-   * Rejects a version that repeats a path. Runs before anything is committed, since two entities
-   * sharing a key would make the version's own output ambiguous. Names need no check here: the
-   * index holds canonical names alone, and arbitration gave every identity one continuation.
-   */
-  private static void validate(Resolver resolver, int version) {
-    Set<PathKey> claimedPaths = new HashSet<>();
-    for (Entity entity : resolver.entities) {
-      if (!claimedPaths.add(entity.path)) {
-        throw new IllegalStateException(
-            "Duplicate entity path detected in schema version " + version + ": " + entity.path);
+      Walk walk = new Walk(version, policy, logicalType);
+      Node root = walk.walk(policy == previousPolicy ? previous : null);
+      List<ProvenanceReport.Member> members = new ArrayList<>(walk.members.size());
+      for (Node member : walk.members) {
+        member.id = member.match != null ? member.match.id : nextId++;
+        members.add(new ProvenanceReport.Member(
+            member.where.path, member.where.names, member.id));
       }
+      reported.add(new ProvenanceReport.Version(version, members));
+      previous = root;
+      previousPolicy = policy;
     }
+    return new ProvenanceReport(reported, nextId - 1);
   }
 
   // -----------------------------------------------------------------------------------------
-  // Phase 3 -- Commit
+  // Locations
   // -----------------------------------------------------------------------------------------
 
-  /**
-   * Records this version as the one the next is matched against: each entity continues the chain
-   * of the previous version's entity it matched, or starts one. Nothing older is kept.
-   */
-  private static Map<PathKey, Provenance> commit(
-      List<Entity> entities, int version, History previous, History next) {
-    Map<PathKey, Provenance> provenance = new LinkedHashMap<>();
-    for (Entity entity : entities) {
-      EntityState matched = previous.state.get(entity.identity);
-      EntityState entityState =
-          new EntityState(matched != null ? matched.chainStart : version);
-      next.state.put(entity.identity, entityState);
-      next.identitiesByScope
-          .computeIfAbsent(entity.identity.getScope(), k -> new LinkedHashSet<>())
-          .add(entity.identity);
-      if (entity.nameResolved) {
-        // The canonical name alone enters the index. Aliases are remembered on the entity, so a
-        // continuation can carry them forward.
-        NameKey canonical = new NameKey(entity.identity.getKind(), entity.scope, entity.name);
-        entityState.canonicalName = canonical;
-        entityState.aliases = new HashSet<>(entity.aliases);
-        next.identityIndex.put(canonical, entity.identity);
-      }
-      entityState.memberNumbers = entity.memberNumbers;
-      if (entity.content != null) {
-        entityState.branchName = entity.name;
-        entityState.content = entity.content;
-      }
-      provenance.put(entity.path, new Provenance(entity.identity, entityState.chainStart));
-    }
-    return provenance;
+  private enum Kind {
+    /** One use of a named type at one location: an Avro record, enum or fixed, or a message. */
+    NAMED_TYPE,
+    FIELD,
+    BRANCH
   }
 
-  // -----------------------------------------------------------------------------------------
-  // Internal state
-  // -----------------------------------------------------------------------------------------
+  /** One location of one version: what it is, where it is, and what it matched. */
+  private static final class Node {
 
-  /** The previous version's entities: all the next version is matched against. */
-  private static final class History {
-
-    /** Identity -> where its chain started, and how the previous version named it. */
-    private final Map<Identity, EntityState> state = new HashMap<>();
-
-    /**
-     * Canonical name -> identity, for the previous version's name-resolved entities. An alias
-     * resolves through it, so an alias names what the previous version called a field or type,
-     * never one of its aliases nor any older name.
-     */
-    private final Map<NameKey, Identity> identityIndex = new HashMap<>();
-
-    /** Identities grouped by scope, for the continuations that look beyond names. */
-    private final Map<Scope, Set<Identity>> identitiesByScope = new HashMap<>();
-  }
-
-  /** One entity of the previous version, as the next version is matched against it. */
-  private static final class EntityState {
-
-    /** The first version of the chain of matches this entity ends. */
-    private final int chainStart;
-
-    /** The name the entity had; null unless it is name-resolved. */
-    private NameKey canonicalName;
-
-    /**
-     * The aliases the entity declared. A continuation under the same name may carry them
-     * forward; they claim nothing new.
-     */
-    private Set<String> aliases = Collections.emptySet();
-
-    /** A Protobuf oneof's member field numbers; null for anything else. */
-    private Set<Integer> memberNumbers;
-
-    /** A JSON union branch's name and content; null for anything else. */
-    private String branchName;
-    private Set<String> content;
-
-    EntityState(int chainStart) {
-      this.chainStart = chainStart;
-    }
-  }
-
-  /** A name as claimed by one kind of entity within a scope — the key of the resolution index. */
-  private static final class NameKey {
-
-    private final EntityKind kind;
-    private final Scope scope;
-    private final String name;
-    private final int hash;
-
-    NameKey(EntityKind kind, Scope scope, String name) {
-      this.kind = kind;
-      this.scope = scope;
-      this.name = name;
-      this.hash = Objects.hash(kind, scope, name);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (!(o instanceof NameKey)) {
-        return false;
-      }
-      NameKey that = (NameKey) o;
-      return hash == that.hash && kind == that.kind
-          && Objects.equals(name, that.name) && scope.equals(that.scope);
-    }
-
-    @Override
-    public int hashCode() {
-      return hash;
-    }
-
-    @Override
-    public String toString() {
-      return scope + "." + name + " (" + kind + ")";
-    }
-  }
-
-  /** One resolved occurrence: what it is, where it was found, and how it is named. */
-  private static final class Entity {
-
-    private final Identity identity;
-    private final Scope scope;
-    private final String name;
-    private final List<String> aliases;
-    private final boolean nameResolved;
-    private final PathKey path;
-    private final Set<Integer> memberNumbers;
-    private final Set<String> content;
-
-    Entity(Identity identity, Scope scope, String name, List<String> aliases,
-        boolean nameResolved, PathKey path, Set<Integer> memberNumbers, Set<String> content) {
-      this.identity = identity;
-      this.scope = scope;
-      this.name = name;
-      this.aliases = aliases;
-      this.nameResolved = nameResolved;
-      this.path = path;
-      this.memberNumbers = memberNumbers;
-      this.content = content;
-    }
-  }
-
-  /**
-   * One member of a peer group before its identity is resolved: a struct field, a union branch,
-   * or one use of a named type.
-   */
-  private static final class Candidate {
-
-    private final EntityKind kind;
+    private final Kind kind;
     private final String name;
     private final List<String> aliases;
     private final Integer number;
-    private final PathKey path;
     private final Schema body;
-
-    /** Derived Protobuf numbers to hand to this candidate's own children, if any. */
+    /** Derived Protobuf numbers to hand to this node's own members, if any. */
     private final Map<Object, Integer> childDerived;
+    private final Where where;
 
-    /** Where this candidate's own members are keyed: its path, except for a named type's use. */
-    private final PathKey membersAt;
+    /** A Protobuf oneof's member numbers, a JSON branch's content; null for anything else. */
+    private Set<Integer> memberNumbers;
+    private Set<String> content;
 
-    Candidate(EntityKind kind, String name, List<String> aliases, Integer number,
-        PathKey path, Schema body, Map<Object, Integer> childDerived) {
-      this(kind, name, aliases, number, path, body, childDerived, path);
-    }
+    /** This node's member groups, keyed by the collection steps leading to each. */
+    private final Map<String, List<Node>> groups = new HashMap<>();
+    private Node match;
+    private int id;
 
-    Candidate(EntityKind kind, String name, List<String> aliases, Integer number,
-        PathKey path, Schema body, Map<Object, Integer> childDerived, PathKey membersAt) {
+    Node(Kind kind, String name, List<String> aliases, Integer number, Schema body,
+        Map<Object, Integer> childDerived, Where where) {
       this.kind = kind;
       this.name = name;
       this.aliases = aliases != null ? aliases : Collections.emptyList();
       this.number = number;
-      this.path = path;
       this.body = body;
       this.childDerived = childDerived;
-      this.membersAt = membersAt;
+      this.where = where;
+    }
+
+    static Node root(Node previous) {
+      Node root = new Node(null, null, null, null, null, Collections.emptyMap(), null);
+      root.match = previous;
+      return root;
+    }
+
+    /**
+     * The previous version's members of this node's match at {@code step}, of one kind.
+     */
+    List<Node> previous(String step, Kind kind) {
+      List<Node> group = match != null ? match.groups.get(step) : null;
+      return group != null && group.get(0).kind == kind ? group : Collections.emptyList();
+    }
+  }
+
+  /**
+   * A position in the walk: the inlined path, the native names so far (null once an edge recorded
+   * none; see {@link Schema#getNativeEntryNames}), and the entry steps of the node we stand on,
+   * spelled only if the walk goes further.
+   */
+  private static final class Where {
+
+    private final List<Integer> path;
+    private final List<String> names;
+    private final List<String> pending;
+
+    Where(List<Integer> path, List<String> names, List<String> pending) {
+      this.path = path;
+      this.names = names;
+      this.pending = pending;
+    }
+
+    static Where root(Schema root) {
+      return new Where(Collections.emptyList(), Collections.emptyList(), entryOf(root));
+    }
+
+    /**
+     * One step down, to a member or through a collection, spelled by {@code steps}.
+     */
+    Where descend(Schema type, int step, List<String> steps) {
+      List<Integer> extended = new ArrayList<>(path.size() + 1);
+      extended.addAll(path);
+      extended.add(step);
+      return new Where(Collections.unmodifiableList(extended), spell(names, pending, steps),
+          entryOf(type));
+    }
+
+    /**
+     * Through a reference to {@code named}: no step, but the type's own entry steps.
+     */
+    Where through(Schema named) {
+      return new Where(path, names, spell(pending, Collections.emptyList(), entryOf(named)));
+    }
+
+    private static List<String> entryOf(Schema type) {
+      return type != null ? type.getNativeEntryNames() : Collections.emptyList();
+    }
+
+    /**
+     * {@code names}, then {@code pending}, then {@code steps}; null if any part is unknown.
+     */
+    private static List<String> spell(List<String> names, List<String> pending,
+        List<String> steps) {
+      if (names == null || pending == null || steps == null) {
+        return null;
+      }
+      List<String> spelled = new ArrayList<>(names.size() + pending.size() + steps.size());
+      spelled.addAll(names);
+      spelled.addAll(pending);
+      spelled.addAll(steps);
+      return Collections.unmodifiableList(spelled);
     }
   }
 
   // -----------------------------------------------------------------------------------------
-  // Phase 1 -- Resolve
+  // Walking one version
   // -----------------------------------------------------------------------------------------
 
   /**
-   * Walks one version top-down and resolves every entity's identity. Reads the {@link History} and
-   * never writes it, so the whole version is matched against the previous version as it was —
-   * including each parent identity, which is resolved before its members so that it can form their
-   * scope.
+   * Walks one version top-down, matching each peer group against the previous version's members
+   * of its parent's match. Reads the previous version and never writes it.
    */
-  private static final class Resolver {
+  private static final class Walk {
 
     private final int version;
     private final IdentityPolicy policy;
-    private final History history;
+    private final LogicalType logicalType;
+    private final Map<String, Schema> namedTypes;
 
-    private final List<Entity> entities = new ArrayList<>();
-    private final Set<Identity> seen = new HashSet<>();
-
-    private Map<String, Schema> namedTypes = Collections.emptyMap();
+    /** The members, fields and branches, in path order. */
+    private final List<Node> members = new ArrayList<>();
     /** Named types being walked through; a repeat is a recursive type. */
     private final Set<String> inlining = new HashSet<>();
 
-    Resolver(int version, IdentityPolicy policy, History history) {
+    Walk(int version, IdentityPolicy policy, LogicalType logicalType) {
       this.version = version;
       this.policy = policy;
-      this.history = history;
+      this.logicalType = logicalType;
+      this.namedTypes = logicalType.getNamedTypes();
     }
 
-    void resolve(LogicalType logicalType) {
-      // Named types are resolved where they are used, so the root scope holds only the root
-      // schema's own members.
-      namedTypes = logicalType.getNamedTypes();
-      Schema root = logicalType.getRootSchema();
-      if ((policy == IdentityPolicy.AVRO || policy == IdentityPolicy.PROTOBUF) && root != null
-          && root.getType() == Schema.Type.NAMED_TYPE_REF) {
+    Node walk(Node previous) {
+      Node root = Node.root(previous);
+      Schema schema = logicalType.getRootSchema();
+      if (schema == null) {
+        return root;
+      }
+      Where where = Where.root(schema);
+      if (policy != IdentityPolicy.JSON && schema.getType() == Schema.Type.NAMED_TYPE_REF) {
         // The converter keeps a root record or message as a reference while types are nested in
-        // it or a peer uses it; it is still the root, its members the root scope's, as when the
-        // converter unwraps it.
-        String name = root.getQualifiedName();
+        // it or a peer uses it; it is still the root, its members the root's.
+        String name = schema.getQualifiedName();
         Schema body = namedTypes.get(name);
         if (body != null && body.getType() == Schema.Type.STRUCT) {
           walkNamed(name, () -> processGroup(
-              memberCandidates(body, PathKey.ofRoot(), Collections.emptyMap()),
-              RootScope.INSTANCE));
-          return;
+              memberNodes(body, where.through(body), Collections.emptyMap()), root, ""));
+          return root;
         }
       }
-      boolean rootHasMembers = root != null
-          && (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.UNION);
-      if (rootHasMembers) {
-        processGroup(memberCandidates(root, PathKey.ofRoot(), Collections.emptyMap()),
-            RootScope.INSTANCE);
-      } else if (root != null) {
-        // A reference, collection or primitive at the root.
-        processType(root, RootScope.INSTANCE, PathKey.ofRoot(), Collections.emptyMap());
-      }
+      processType(schema, root, "", where, Collections.emptyMap());
+      return root;
     }
 
-    /** Resolves one peer group, then descends into each peer's own type. */
-    private void processGroup(List<Candidate> peers, Scope scope) {
+    /** Matches one peer group, then descends into each peer's own type. */
+    private void processGroup(List<Node> peers, Node owner, String step) {
       if (peers.isEmpty()) {
         return;
       }
-      Map<Candidate, Identity> identities = resolveGroup(peers, scope);
-      for (Candidate peer : peers) {
-        Identity identity = identities.get(peer);
-        if (!seen.add(identity)) {
-          throw new AmbiguousProvenanceException(
-              "Multiple entities resolve to the same logical identity at version " + version
-                  + ": " + identity + " (at " + peer.path + ")");
+      owner.groups.put(step, peers);
+      match(peers, owner.previous(step, peers.get(0).kind));
+      for (Node peer : peers) {
+        if (peer.kind != Kind.NAMED_TYPE) {
+          members.add(peer);
         }
-        entities.add(new Entity(identity, scope, peer.name, peer.aliases, isNameResolved(peer),
-            peer.path, memberNumbersOf(peer), contentOf(peer)));
         if (isUseOfItsType(peer)) {
           // A named Avro branch is itself the use of its type: its members follow directly.
           String name = peer.body.getQualifiedName();
-          walkNamed(name, () -> processType(namedTypes.get(name), identity, peer.membersAt,
+          Schema named = namedTypes.get(name);
+          walkNamed(name, () -> processType(named, peer, "", peer.where.through(named),
               peer.childDerived));
         } else {
-          processType(peer.body, identity, peer.membersAt, peer.childDerived);
+          processType(peer.body, peer, "", peer.where, peer.childDerived);
         }
       }
     }
 
     /**
      * Walks a type down to the next peer group. A {@code NAMED_TYPE_REF} is walked where it is
-     * used: transparently under JSON, and otherwise as one use of the type, an entity scoped by
-     * the location using it, whose identity scopes the type's members.
+     * used: transparently under JSON, and otherwise as one use of the type, a location under the
+     * one using it that scopes the type's members.
      */
-    private void processType(
-        Schema schema, Scope scope, PathKey path, Map<Object, Integer> derived) {
+    private void processType(Schema schema, Node owner, String step, Where where,
+        Map<Object, Integer> derived) {
       if (schema == null) {
         return;
       }
       switch (schema.getType()) {
         case STRUCT:
-          processGroup(memberCandidates(schema, path, Collections.emptyMap()), scope);
+          processGroup(memberNodes(schema, where, Collections.emptyMap()), owner, step);
           break;
         case UNION:
           // Branch numbers, when derived, come from the enclosing struct: a oneof's branches
           // continue that message's numbering.
-          processGroup(memberCandidates(schema, path, derived), scope);
+          processGroup(memberNodes(schema, where, derived), owner, step);
           break;
         case ARRAY:
         case MULTISET:
-          processType(schema.getElementType(),
-              StepScope.step(scope, "[]"), path.child(0), derived);
+          processType(schema.getElementType(), owner, step(step, "[]"),
+              where.descend(schema.getElementType(), 0, schema.getElementNativeNames()),
+              derived);
           break;
         case MAP:
-          processType(schema.getKeyType(),
-              StepScope.step(scope, "{key}"), path.child(0), derived);
-          processType(schema.getValueType(),
-              StepScope.step(scope, "{value}"), path.child(1), derived);
+          processType(schema.getKeyType(), owner, step(step, "{key}"),
+              where.descend(schema.getKeyType(), 0, schema.getKeyNativeNames()), derived);
+          processType(schema.getValueType(), owner, step(step, "{value}"),
+              where.descend(schema.getValueType(), 1, schema.getValueNativeNames()), derived);
           break;
         case NAMED_TYPE_REF: {
           String name = schema.getQualifiedName();
           Schema named = namedTypes.get(name);
-          if (seesThroughNamedTypes()) {
-            // Walked as if inlined: its members are scoped by the field referencing it, so a
-            // reference changes no identity.
-            walkNamed(name, () -> processType(named, scope, path, derived));
+          if (policy == IdentityPolicy.JSON) {
+            // Walked as if inlined, so a reference changes nothing.
+            walkNamed(name, () -> processType(named, owner, step, where.through(named), derived));
           } else if (named != null) {
-            walkNamed(name, () -> processGroup(Collections.singletonList(new Candidate(
-                EntityKind.NAMED_TYPE, name, typeAliases(named), null,
-                PathKey.ofTypeUse(name, path), named, Collections.emptyMap(), path)), scope));
+            walkNamed(name, () -> processGroup(Collections.singletonList(new Node(
+                Kind.NAMED_TYPE, name, typeAliases(named), null, named, Collections.emptyMap(),
+                where.through(named))), owner, step));
           }
           break;
         }
@@ -548,6 +397,10 @@ public final class ProvenanceComputer {
           // Primitives and enums have no members.
           break;
       }
+    }
+
+    private static String step(String step, String next) {
+      return step.isEmpty() ? next : step + "/" + next;
     }
 
     private void walkNamed(String name, Runnable walk) {
@@ -561,9 +414,308 @@ public final class ProvenanceComputer {
       }
     }
 
+    /**
+     * The members of a STRUCT or UNION, carrying their effective numbers. A struct derives its own
+     * numbering; a union's branches continue the enclosing struct's, since that is how a oneof is
+     * numbered.
+     */
+    private List<Node> memberNodes(Schema container, Where where,
+        Map<Object, Integer> enclosingDerived) {
+      List<Node> nodes = new ArrayList<>();
+      if (container.getType() == Schema.Type.STRUCT) {
+        Map<Object, Integer> derived = deriveNumbers(container);
+        List<Field> fields = container.getFields();
+        for (int i = 0; i < fields.size(); i++) {
+          Field field = fields.get(i);
+          nodes.add(new Node(Kind.FIELD, field.getName(), field.getAliases(),
+              numberOf(field.getFieldNumber(), field, derived), field.getSchema(), derived,
+              where.descend(field.getSchema(), i, field.getNativeNames())));
+        }
+      } else {
+        List<UnionBranch> branches = container.getBranches();
+        for (int i = 0; i < branches.size(); i++) {
+          UnionBranch branch = branches.get(i);
+          nodes.add(new Node(Kind.BRANCH, branchName(branch), branchAliases(branch),
+              numberOf(branch.getFieldNumber(), branch, enclosingDerived), branch.getSchema(),
+              enclosingDerived, where.descend(branch.getSchema(), i, branch.getNativeNames())));
+        }
+      }
+      for (Node node : nodes) {
+        node.memberNumbers = memberNumbersOf(node);
+        node.content = contentOf(node);
+      }
+      return nodes;
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Matching one peer group
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Matches a whole peer group at once against {@code previous}, the previous version's members
+     * of the parent's match: whether an alias or a name wins a previous location depends on every
+     * peer in the group.
+     */
+    private void match(List<Node> peers, List<Node> previous) {
+      Map<Node, Node> matched = new IdentityHashMap<>();
+      List<Node> byName = new ArrayList<>();
+      for (Node peer : peers) {
+        if (peer.name == null) {
+          throw new IllegalArgumentException(
+              "Entity at " + peer.where.path + " has no name (version " + version + ")");
+        }
+        if (policy == IdentityPolicy.AVRO) {
+          byName.add(peer);
+        } else if (peer.content == null) {
+          Node found = matchByFormat(peer, previous);
+          if (found != null) {
+            matched.put(peer, found);
+          }
+        }
+      }
+      matchJsonBranches(peers, previous, matched);
+      settleOneofs(peers, matched);
+      arbitrate(byName, previous, matched);
+
+      Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
+      taken.addAll(matched.values());
+      for (Node peer : byName) {
+        if (matched.containsKey(peer)) {
+          continue;
+        }
+        Node continued = isNamedAvroType(peer) ? shortNameContinuation(peer, peers, previous)
+            : peer.kind == Kind.BRANCH ? familyContinuation(peer, peers, previous) : null;
+        if (continued != null && taken.add(continued)) {
+          matched.put(peer, continued);
+        }
+      }
+      requireOneToOne(peers, matched);
+      for (Node peer : peers) {
+        peer.match = matched.get(peer);
+      }
+    }
+
+    /** Two peers of one key, or continuing one previous location, determine no single match. */
+    private void requireOneToOne(List<Node> peers, Map<Node, Node> matched) {
+      Set<Object> keys = new HashSet<>();
+      Set<Node> continued = Collections.newSetFromMap(new IdentityHashMap<>());
+      for (Node peer : peers) {
+        Node previous = matched.get(peer);
+        Object key = peer.number != null ? peer.number : peer.name;
+        if (!keys.add(key) || previous != null && !continued.add(previous)) {
+          throw new AmbiguousProvenanceException("Multiple entities resolve to the same logical "
+              + "identity at version " + version + ": " + key + " (at " + peer.where.path + ")");
+        }
+      }
+    }
+
+    /**
+     * Where the format decides outright: a JSON name; a Protobuf field number, a message's name,
+     * or a oneof's member numbers, which a renamed oneof keeps.
+     */
+    private static Node matchByFormat(Node peer, List<Node> previous) {
+      if (peer.memberNumbers != null) {
+        return sole(previous, p -> p.memberNumbers != null
+            && !Collections.disjoint(p.memberNumbers, peer.memberNumbers));
+      }
+      if (peer.number != null) {
+        return sole(previous, p -> peer.number.equals(p.number));
+      }
+      return sole(previous, p -> p.number == null && p.memberNumbers == null
+          && peer.name.equals(p.name));
+    }
+
+    /**
+     * The one previous location {@code test} accepts; null if none or several do.
+     */
+    private static Node sole(List<Node> previous, Predicate<Node> test) {
+      Node found = null;
+      for (Node p : previous) {
+        if (test.test(p)) {
+          if (found != null) {
+            return null;
+          }
+          found = p;
+        }
+      }
+      return found;
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Avro names and aliases
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Avro rules. A peer continues the previous location of its own name, or the one an alias
+     * names. An explicit alias wins: Avro renames a writer field to the reader field aliasing it
+     * even when a reader field of that name exists. A peer continuing itself may carry its aliases
+     * forward, but a new one naming another location would make one continue two. Each previous
+     * location has at most one continuation, and each peer continues at most one.
+     */
+    private void arbitrate(List<Node> peers, List<Node> previous, Map<Node, Node> matched) {
+      Map<String, Node> byPreviousName = new HashMap<>();
+      for (Node p : previous) {
+        byPreviousName.put(p.name, p);
+      }
+      Map<Node, Node> own = new IdentityHashMap<>();
+      Map<Node, Node> ownClaimant = new LinkedHashMap<>();
+      for (Node peer : peers) {
+        for (String alias : peer.aliases) {
+          if (alias == null) {
+            throw new IllegalArgumentException("Null alias at " + peer.where.path);
+          }
+        }
+        Node p = byPreviousName.get(peer.name);
+        if (p != null) {
+          if (ownClaimant.put(p, peer) != null) {
+            throw new AmbiguousProvenanceException("Two entities named " + peer.name
+                + " at version " + version + " at " + peer.where.path);
+          }
+          own.put(peer, p);
+        }
+      }
+
+      Map<Node, Set<Node>> aliasClaimants = new LinkedHashMap<>();
+      for (Node peer : peers) {
+        Node mine = own.get(peer);
+        for (String alias : peer.aliases) {
+          Node aliased = byPreviousName.get(alias);
+          if (aliased == null || aliased == mine) {
+            continue;
+          }
+          if (mine != null) {
+            if (mine.aliases.contains(alias)) {
+              // Carried forward from the version that introduced it.
+              continue;
+            }
+            throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+                + version + ": " + peer.where.path + " continues " + mine.name
+                + " and names another entity by a new alias: " + aliased.name);
+          }
+          aliasClaimants.computeIfAbsent(aliased, k -> new LinkedHashSet<>()).add(peer);
+        }
+      }
+
+      Set<Node> claimed = new LinkedHashSet<>(ownClaimant.keySet());
+      claimed.addAll(aliasClaimants.keySet());
+      for (Node p : claimed) {
+        Set<Node> byAlias = aliasClaimants.getOrDefault(p, Collections.emptySet());
+        if (byAlias.size() > 1) {
+          // Avro's decoder gives it to whichever alias is declared last; its checker, to all.
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+              + version + ": multiple entities claim " + p.name + " via aliases");
+        }
+        Node winner = byAlias.isEmpty() ? ownClaimant.get(p) : byAlias.iterator().next();
+        Node earlier = matched.put(winner, p);
+        if (earlier != null) {
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
+              + version + ": " + winner.where.path + " matches both " + earlier.name + " and "
+              + p.name);
+        }
+      }
+    }
+
+    /**
+     * The previous named type a named Avro type continues when neither its name nor an alias
+     * does: the one with the same short name, as Avro's checker compares names. A namespace
+     * changed without an alias — as nested types inheriting a renamed root's namespace are — then
+     * keeps its members. Null where a peer shares the short name.
+     */
+    private Node shortNameContinuation(Node peer, List<Node> peers, List<Node> previous) {
+      String shortName = shortName(peer.name);
+      if (peers.stream().filter(p -> isNamedAvroType(p)
+          && shortName(p.name).equals(shortName)).count() != 1) {
+        return null;
+      }
+      return sole(previous, p -> shortName(p.name).equals(shortName));
+    }
+
+    /**
+     * The previous branch an unnamed Avro branch promotes from, when the promotion is
+     * unambiguous: this union has one branch of its family, and the previous one had one.
+     */
+    private static Node familyContinuation(Node peer, List<Node> peers, List<Node> previous) {
+      Set<String> family = familyOf(peer.name);
+      if (family == null || peer.body == null
+          || peer.body.getType() == Schema.Type.NAMED_TYPE_REF
+          || peers.stream().filter(p -> family.contains(p.name)).count() != 1) {
+        return null;
+      }
+      return sole(previous, p -> family.contains(p.name));
+    }
+
+    /**
+     * A named type's use, or a named union branch, which is its type's use. A fixed branch is a
+     * binary in the logical type; its native step, a full name rather than a type name, marks it.
+     */
+    private boolean isNamedAvroType(Node peer) {
+      return peer.kind == Kind.NAMED_TYPE || isUseOfItsType(peer)
+          || peer.kind == Kind.BRANCH && !AVRO_UNNAMED.contains(peer.name);
+    }
+
+    private static String shortName(String fullName) {
+      return fullName.substring(fullName.lastIndexOf('.') + 1);
+    }
+
+    private static Set<String> familyOf(String typeName) {
+      for (Set<String> family : PROMOTION_FAMILIES) {
+        if (family.contains(typeName)) {
+          return family;
+        }
+      }
+      return null;
+    }
+
+    /** True for a named Avro branch, whose name and aliases are its type's. */
+    private boolean isUseOfItsType(Node peer) {
+      return isNamedAvroBranch(peer.kind, peer.body);
+    }
+
+    private boolean isNamedAvroBranch(Kind kind, Schema body) {
+      return policy == IdentityPolicy.AVRO && kind == Kind.BRANCH && body != null
+          && body.getType() == Schema.Type.NAMED_TYPE_REF;
+    }
+
+    /**
+     * A branch's name for matching. An Avro branch is named as Avro finds it — a named type's full
+     * name, a primitive's type name — which the converter records as its native step. The logical
+     * type's own name for it is shortened where it can be, lengthened where simple names collide,
+     * and replaced by any hint, so a branch would change match with its siblings or its hint.
+     */
+    private String branchName(UnionBranch branch) {
+      if (policy == IdentityPolicy.AVRO) {
+        if (isNamedAvroBranch(Kind.BRANCH, branch.getSchema())) {
+          return branch.getSchema().getQualifiedName();
+        }
+        List<String> steps = branch.getNativeNames();
+        if (steps != null && steps.size() == 1 && steps.get(0) != null) {
+          return steps.get(0);
+        }
+      }
+      return branch.getName();
+    }
+
+    /** A named Avro branch's type aliases, as full names, so a renamed type keeps its branch. */
+    private List<String> branchAliases(UnionBranch branch) {
+      if (!isNamedAvroBranch(Kind.BRANCH, branch.getSchema())) {
+        // A fixed has no named type; the converter records its aliases on the branch.
+        List<String> recorded = policy == IdentityPolicy.AVRO ? branch.getNativeAliases() : null;
+        if (recorded == null) {
+          return null;
+        }
+        List<String> aliases = new ArrayList<>();
+        for (String alias : recorded) {
+          aliases.add(fullAlias(alias));
+        }
+        return aliases;
+      }
+      Schema named = namedTypes.get(branch.getSchema().getQualifiedName());
+      return named != null ? typeAliases(named) : null;
+    }
+
     /** A named type's aliases, which only Avro has, as full names. */
     private List<String> typeAliases(Schema named) {
-      if (policy == IdentityPolicy.PROTOBUF || named.getAliases() == null) {
+      if (policy != IdentityPolicy.AVRO || named.getAliases() == null) {
         return Collections.emptyList();
       }
       List<String> aliases = new ArrayList<>();
@@ -581,314 +733,19 @@ public final class ProvenanceComputer {
       return alias.startsWith(".") ? alias.substring(1) : alias;
     }
 
-    /** True for a named Avro branch, whose name and aliases are its type's. */
-    private boolean isUseOfItsType(Candidate peer) {
-      return isNamedAvroBranch(peer.kind, peer.body);
-    }
-
-    private boolean isNamedAvroBranch(EntityKind kind, Schema body) {
-      return policy == IdentityPolicy.AVRO && kind == EntityKind.BRANCH && body != null
-          && body.getType() == Schema.Type.NAMED_TYPE_REF;
-    }
-
-    /**
-     * A branch's name for identity. An Avro branch is named as Avro finds it — a named type's full
-     * name, a primitive's type name — which the converter records as its native step. The logical
-     * type's own name for it is shortened where it can be, lengthened where simple names collide,
-     * and replaced by any hint, so a branch would change identity with its siblings or its hint.
-     */
-    private String branchName(UnionBranch branch) {
-      if (policy == IdentityPolicy.AVRO) {
-        if (isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())) {
-          return branch.getSchema().getQualifiedName();
-        }
-        List<String> steps = branch.getNativeNames();
-        if (steps != null && steps.size() == 1 && steps.get(0) != null) {
-          return steps.get(0);
-        }
-      }
-      return branch.getName();
-    }
-
-    private boolean seesThroughNamedTypes() {
-      return ProvenanceComputer.seesThroughNamedTypes(policy);
-    }
-
-    /**
-     * The members of a STRUCT or UNION, as candidates carrying their effective numbers. A struct
-     * derives its own numbering; a union's branches continue the enclosing struct's, since that is
-     * how a oneof is numbered.
-     */
-    private List<Candidate> memberCandidates(
-        Schema container, PathKey parentPath, Map<Object, Integer> enclosingDerived) {
-      List<Candidate> candidates = new ArrayList<>();
-      if (container.getType() == Schema.Type.STRUCT) {
-        Map<Object, Integer> derived = deriveNumbers(container);
-        List<Field> fields = container.getFields();
-        for (int i = 0; i < fields.size(); i++) {
-          Field field = fields.get(i);
-          candidates.add(new Candidate(EntityKind.FIELD, field.getName(), field.getAliases(),
-              numberOf(field.getFieldNumber(), field, derived), parentPath.child(i),
-              field.getSchema(), derived));
-        }
-      } else {
-        List<UnionBranch> branches = container.getBranches();
-        for (int i = 0; i < branches.size(); i++) {
-          UnionBranch branch = branches.get(i);
-          candidates.add(new Candidate(EntityKind.BRANCH, branchName(branch),
-              branchAliases(branch), numberOf(branch.getFieldNumber(), branch, enclosingDerived),
-              parentPath.child(i), branch.getSchema(), enclosingDerived));
-        }
-      }
-      return candidates;
-    }
-
     // -------------------------------------------------------------------------------------
-    // Identity resolution
+    // Protobuf oneofs
     // -------------------------------------------------------------------------------------
-
-    /**
-     * Resolves a whole peer group at once: whether an alias or a canonical name wins a previous
-     * entity depends on every peer in the group.
-     */
-    private Map<Candidate, Identity> resolveGroup(List<Candidate> peers, Scope scope) {
-      Map<Candidate, Identity> resolved = new IdentityHashMap<>();
-      List<Candidate> byName = new ArrayList<>();
-      for (Candidate peer : peers) {
-        if (peer.name == null) {
-          throw new IllegalArgumentException(
-              "Entity at " + peer.path + " has no name (version " + version + ")");
-        }
-        if (isNameResolved(peer)) {
-          byName.add(peer);
-        } else if (contentOf(peer) == null) {
-          resolved.put(peer, resolveByFormat(peer, scope));
-        }
-      }
-      resolveJsonBranches(peers, scope, resolved);
-      settleOneofs(peers, scope, resolved);
-      arbitrate(byName, scope, resolved);
-
-      Set<Identity> taken = new HashSet<>(resolved.values());
-      for (Candidate peer : byName) {
-        if (resolved.containsKey(peer)) {
-          continue;
-        }
-        Identity promoted = policy != IdentityPolicy.AVRO ? null
-            : isNamedAvroType(peer) ? shortNameContinuation(peer, scope, peers, taken)
-            : peer.kind == EntityKind.BRANCH ? familyContinuation(peer, scope, peers) : null;
-        // Matched to nothing. Folding the minting version into the value keeps it distinct from
-        // a previous entity that released this name.
-        Identity identity = promoted != null && taken.add(promoted)
-            ? promoted
-            : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
-        resolved.put(peer, identity);
-      }
-      return resolved;
-    }
-
-    /**
-     * Avro rules. A peer continues the previous version's entity of its own name, or the one an
-     * alias names. An explicit alias wins: Avro renames a writer field
-     * to the reader field aliasing it even when a reader field of that name exists. A peer
-     * continuing its own identity may carry its aliases forward, but a new one naming another
-     * entity would make one entity continue two. Each previous entity has at most one
-     * continuation, and each peer continues at most one.
-     */
-    private void arbitrate(List<Candidate> peers, Scope scope, Map<Candidate, Identity> resolved) {
-      Map<Candidate, Identity> ownClaim = new IdentityHashMap<>();
-      Map<Identity, Candidate> canonicalClaimant = new HashMap<>();
-      for (Candidate peer : peers) {
-        validateAliases(peer);
-        NameKey canonicalKey = new NameKey(peer.kind, scope, peer.name);
-        Identity indexed = history.identityIndex.get(canonicalKey);
-        if (indexed != null) {
-          if (canonicalClaimant.put(indexed, peer) != null) {
-            throw new AmbiguousProvenanceException("Two entities named " + peer.name
-                + " at version " + version + " in " + scope);
-          }
-          ownClaim.put(peer, indexed);
-        }
-      }
-
-      Map<Identity, Set<Candidate>> aliasClaimants = new LinkedHashMap<>();
-      for (Candidate peer : peers) {
-        Identity own = ownClaim.get(peer);
-        for (String alias : peer.aliases) {
-          Identity aliased = history.identityIndex.get(new NameKey(peer.kind, scope, alias));
-          if (aliased == null || aliased.equals(own)) {
-            continue;
-          }
-          if (own != null) {
-            if (history.state.get(own).aliases.contains(alias)) {
-              // Carried forward from the version that introduced it.
-              continue;
-            }
-            throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-                + version + ": " + peer.path + " continues " + own
-                + " and names another identity by a new alias: " + aliased);
-          }
-          aliasClaimants.computeIfAbsent(aliased, k -> new LinkedHashSet<>()).add(peer);
-        }
-      }
-
-      Set<Identity> claimed = new LinkedHashSet<>(canonicalClaimant.keySet());
-      claimed.addAll(aliasClaimants.keySet());
-      for (Identity previous : claimed) {
-        Set<Candidate> byAlias = aliasClaimants.getOrDefault(previous, Collections.emptySet());
-        if (byAlias.size() > 1) {
-          // Avro's decoder gives it to whichever alias is declared last; its checker, to all.
-          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": multiple entities claim historical identity " + previous
-              + " via aliases");
-        }
-        Candidate winner = byAlias.isEmpty()
-            ? canonicalClaimant.get(previous) : byAlias.iterator().next();
-        Identity earlier = resolved.put(winner, previous);
-        if (earlier != null) {
-          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": " + winner.path + " matches multiple historical identities "
-              + Arrays.asList(earlier, previous));
-        }
-      }
-    }
-
-    /** Identity where the format supplies it outright: a number, or a name that is its identity. */
-    private Identity resolveByFormat(Candidate peer, Scope scope) {
-      switch (policy) {
-        case JSON:
-          return new Identity(peer.kind, scope, new StringIdentity(peer.name));
-        case PROTOBUF:
-          // A message has no alias mechanism, so it follows its name. A oneof container field has
-          // no number and follows its members' numbers, so renaming it changes nothing.
-          Set<Integer> members = memberNumbersOf(peer);
-          if (members != null) {
-            Identity continued = oneofContinuation(scope, members);
-            return continued != null
-                ? continued
-                : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
-          }
-          return peer.number != null
-              ? new Identity(peer.kind, scope, new IntegerIdentity(peer.number))
-              : new Identity(peer.kind, scope, new StringIdentity(peer.name));
-        default:
-          // AUTO, with a number.
-          return new Identity(peer.kind, scope, new IntegerIdentity(peer.number));
-      }
-    }
-
-    // -------------------------------------------------------------------------------------
-    // Union branches and oneofs
-    // -------------------------------------------------------------------------------------
-
-    /** A named Avro branch's type aliases, as full names, so a renamed type keeps its branch. */
-    private List<String> branchAliases(UnionBranch branch) {
-      if (!isNamedAvroBranch(EntityKind.BRANCH, branch.getSchema())) {
-        // A fixed has no named type; the converter records its aliases on the branch.
-        List<String> recorded = policy == IdentityPolicy.AVRO ? branch.getNativeAliases() : null;
-        if (recorded == null) {
-          return null;
-        }
-        List<String> aliases = new ArrayList<>();
-        for (String alias : recorded) {
-          aliases.add(fullAlias(alias));
-        }
-        return aliases;
-      }
-      Schema named = namedTypes.get(branch.getSchema().getQualifiedName());
-      return named != null ? typeAliases(named) : null;
-    }
-
-    /**
-     * The previous branch an unnamed Avro branch promotes from, when the promotion is
-     * unambiguous: this union has one branch of its family, and the scope had one.
-     */
-    private Identity familyContinuation(Candidate peer, Scope scope, List<Candidate> peers) {
-      Set<String> family = familyOf(peer.name);
-      if (family == null || peer.body == null
-          || peer.body.getType() == Schema.Type.NAMED_TYPE_REF
-          || peers.stream().filter(p -> p.kind == EntityKind.BRANCH && family.contains(p.name))
-              .count() != 1) {
-        return null;
-      }
-      Identity found = null;
-      for (Identity previous
-          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        if (!isBranchOf(previous, family)) {
-          continue;
-        }
-        if (found != null) {
-          return null;
-        }
-        found = previous;
-      }
-      return found != null && !seen.contains(found) ? found : null;
-    }
-
-    /**
-     * The previous named type a named Avro type continues when neither its name nor an alias
-     * does: the one in {@code scope} with the same short name, as Avro's checker compares
-     * names. A namespace changed without an alias — as nested types inheriting a renamed root's
-     * namespace are — then keeps its members. Null where a peer shares the short name.
-     */
-    private Identity shortNameContinuation(Candidate peer, Scope scope, List<Candidate> peers,
-        Set<Identity> taken) {
-      String shortName = shortName(peer.name);
-      if (peers.stream().filter(p -> p.kind == peer.kind && isNamedAvroType(p)
-          && shortName(p.name).equals(shortName)).count() != 1) {
-        return null;
-      }
-      Identity found = null;
-      for (Identity previous
-          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        if (!isNamedLike(previous, peer.kind, shortName)) {
-          continue;
-        }
-        if (found != null) {
-          return null;
-        }
-        found = previous;
-      }
-      return found != null && !seen.contains(found) && !taken.contains(found) ? found : null;
-    }
-
-    private boolean isNamedLike(Identity previous, EntityKind kind, String shortName) {
-      EntityState state = previous.getKind() == kind ? history.state.get(previous) : null;
-      NameKey name = state != null ? state.canonicalName : null;
-      return name != null && shortName(name.name).equals(shortName);
-    }
-
-    /**
-     * A named type's use, or a named union branch, which is its type's use. A fixed branch is a
-     * binary in the logical type; its native step, a full name rather than a type name, marks it.
-     */
-    private boolean isNamedAvroType(Candidate peer) {
-      return peer.kind == EntityKind.NAMED_TYPE || isUseOfItsType(peer)
-          || peer.kind == EntityKind.BRANCH && !AVRO_UNNAMED.contains(peer.name);
-    }
-
-    private static String shortName(String fullName) {
-      return fullName.substring(fullName.lastIndexOf('.') + 1);
-    }
-
-    private boolean isBranchOf(Identity previous, Set<String> family) {
-      if (previous.getKind() != EntityKind.BRANCH) {
-        return false;
-      }
-      EntityState state = history.state.get(previous);
-      return state != null && state.canonicalName != null
-          && family.contains(state.canonicalName.name);
-    }
 
     /** A Protobuf oneof's member field numbers; null for anything that is not a oneof. */
-    private Set<Integer> memberNumbersOf(Candidate peer) {
-      if (policy != IdentityPolicy.PROTOBUF || peer.kind != EntityKind.FIELD
-          || peer.number != null || !isUnion(peer.body)) {
+    private Set<Integer> memberNumbersOf(Node node) {
+      if (policy != IdentityPolicy.PROTOBUF || node.kind != Kind.FIELD
+          || node.number != null || !isUnion(node.body)) {
         return null;
       }
       Set<Integer> numbers = new TreeSet<>();
-      for (UnionBranch branch : peer.body.getBranches()) {
-        Integer number = numberOf(branch.getFieldNumber(), branch, peer.childDerived);
+      for (UnionBranch branch : node.body.getBranches()) {
+        Integer number = numberOf(branch.getFieldNumber(), branch, node.childDerived);
         if (number != null) {
           numbers.add(number);
         }
@@ -897,80 +754,113 @@ public final class ProvenanceComputer {
     }
 
     /**
+     * Gives a previous oneof to one of the peers continuing it by member numbers: a oneof split in
+     * two has each part share numbers with it. The part sharing the most keeps it — ties to the
+     * one holding the lowest shared number — and the others are new.
+     */
+    private static void settleOneofs(List<Node> peers, Map<Node, Node> matched) {
+      Map<Node, Node> keeper = new IdentityHashMap<>();
+      for (Node peer : peers) {
+        Node previous = matched.get(peer);
+        if (peer.memberNumbers == null || previous == null || previous.memberNumbers == null) {
+          continue;
+        }
+        Node other = keeper.get(previous);
+        Node kept = other == null
+            || keepsOneof(peer, other, previous.memberNumbers) ? peer : other;
+        keeper.put(previous, kept);
+        if (other != null) {
+          matched.remove(kept == peer ? other : peer);
+        }
+      }
+    }
+
+    private static boolean keepsOneof(Node peer, Node other, Set<Integer> previous) {
+      Set<Integer> mine = shared(peer.memberNumbers, previous);
+      Set<Integer> theirs = shared(other.memberNumbers, previous);
+      return mine.size() != theirs.size()
+          ? mine.size() > theirs.size()
+          : Collections.min(mine) < Collections.min(theirs);
+    }
+
+    private static Set<Integer> shared(Set<Integer> members, Set<Integer> previous) {
+      Set<Integer> shared = new TreeSet<>(members);
+      shared.retainAll(previous);
+      return shared;
+    }
+
+    // -------------------------------------------------------------------------------------
+    // JSON union branches
+    // -------------------------------------------------------------------------------------
+
     /**
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
-     * or reordered would otherwise take another's identity. In turn: a hinted branch continues the
+     * or reordered would otherwise take another's place. In turn: a hinted branch continues the
      * previous branch of its name; a branch continues the one previous branch of the same content,
      * where no peer shares it; the one previous branch it alone shares a member with, and no
      * conflicting discriminator, as when it moved and its members changed; one at the same position
-     * sharing a member with it, where overlap alone cannot tell; else it is new.
+     * sharing a member with it, where overlap alone cannot tell; else it is new. None continues
+     * another across a discriminator a branch related to them has (see {@link #crosses}).
      */
-    private void resolveJsonBranches(List<Candidate> peers, Scope scope,
-        Map<Candidate, Identity> resolved) {
-      List<Candidate> pending = new ArrayList<>();
+    private static void matchJsonBranches(List<Node> peers, List<Node> previous,
+        Map<Node, Node> matched) {
+      List<Node> pending = new ArrayList<>();
       Map<Set<String>, Integer> shared = new HashMap<>();
-      for (Candidate peer : peers) {
-        Set<String> content = contentOf(peer);
-        if (content != null) {
+      for (Node peer : peers) {
+        if (peer.content != null) {
           pending.add(peer);
-          shared.merge(content, 1, Integer::sum);
+          shared.merge(peer.content, 1, Integer::sum);
         }
       }
       if (pending.isEmpty()) {
         return;
       }
-      Set<Identity> taken = new HashSet<>(resolved.values());
+      Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
+      taken.addAll(matched.values());
       for (int phase = 0; phase < 4; phase++) {
-        for (Candidate peer : pending) {
-          if (resolved.containsKey(peer)) {
+        for (Node peer : pending) {
+          if (matched.containsKey(peer)) {
             continue;
           }
-          Set<String> content = contentOf(peer);
-          Identity found;
+          Set<String> content = peer.content;
+          Node found;
           if (phase == 0) {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
-                ? null : previousBranch(scope, taken, state -> peer.name.equals(state.branchName));
+                ? null : previousBranch(previous, taken, p -> peer.name.equals(p.name));
           } else if (phase == 1) {
             found = shared.get(content) == 1
-                ? previousBranch(scope, taken, state -> content.equals(state.content)) : null;
+                ? previousBranch(previous, taken, p -> content.equals(p.content)) : null;
           } else if (phase == 2) {
-            found = soleOverlap(peer, pending, resolved, scope, taken);
+            found = soleOverlap(peer, pending, matched, previous, taken);
           } else {
-            found = previousBranch(scope, taken, state -> peer.name.equals(state.branchName)
-                && overlaps(content, state.content)
-                && !crosses(peer, content, state.content, pending, resolved, scope, taken));
+            found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
+                && overlaps(content, p.content)
+                && !crosses(peer, p, pending, matched, previous, taken));
           }
           if (found != null) {
             taken.add(found);
-            resolved.put(peer, found);
+            matched.put(peer, found);
           }
-        }
-      }
-      for (Candidate peer : pending) {
-        if (!resolved.containsKey(peer)) {
-          resolved.put(peer,
-              new Identity(peer.kind, scope, new MintedIdentity(peer.name, version)));
         }
       }
     }
 
     /**
      * The one untaken previous branch {@code peer}'s content overlaps, where no other unresolved
-     * peer overlaps it too: one branch sharing members with one other is its continuation, wherever
-     * it sits.
+     * peer overlaps it too: one branch sharing members with one other is its continuation,
+     * wherever it sits.
      */
-    private Identity soleOverlap(Candidate peer, List<Candidate> pending,
-        Map<Candidate, Identity> resolved, Scope scope, Set<Identity> taken) {
-      Set<String> content = contentOf(peer);
-      Identity found = previousBranch(scope, taken, state -> overlaps(content, state.content)
-          && !crosses(peer, content, state.content, pending, resolved, scope, taken));
+    private static Node soleOverlap(Node peer, List<Node> pending, Map<Node, Node> matched,
+        List<Node> previous, Set<Node> taken) {
+      Node found = previousBranch(previous, taken, p -> overlaps(peer.content, p.content)
+          && !crosses(peer, p, pending, matched, previous, taken));
       if (found == null) {
         return null;
       }
-      Set<String> theirs = history.state.get(found).content;
-      for (Candidate other : pending) {
-        if (other != peer && !resolved.containsKey(other) && overlaps(contentOf(other), theirs)
-            && !crosses(other, contentOf(other), theirs, pending, resolved, scope, taken)) {
+      for (Node other : pending) {
+        if (other != peer && !matched.containsKey(other)
+            && overlaps(other.content, found.content)
+            && !crosses(other, found, pending, matched, previous, taken)) {
           return null;
         }
       }
@@ -978,23 +868,49 @@ public final class ProvenanceComputer {
     }
 
     /**
+     * The one untaken previous JSON branch that {@code test} accepts.
+     */
+    private static Node previousBranch(List<Node> previous, Set<Node> taken,
+        Predicate<Node> test) {
+      return sole(previous, p -> !taken.contains(p) && p.content != null && test.test(p));
+    }
+
+    /**
+     * Whether two branches' contents share a member, with no discriminator of one named
+     * differently by the other.
+     */
+    private static boolean overlaps(Set<String> mine, Set<String> theirs) {
+      for (String entry : mine) {
+        if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
+          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
+          if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
+            return false;
+          }
+        }
+      }
+      if (mine.equals(theirs)) {
+        // Nothing tells them apart, even with no members: as alike as they can be.
+        return true;
+      }
+      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry));
+    }
+
+    /**
      * Whether a peer and a previous branch disagree on having a discriminator that another branch
      * related to them has: the peer's own, where an untaken previous branch has it, or the previous
      * branch's, where an unresolved peer has it. That branch, not this one, is the counterpart.
      */
-    private boolean crosses(Candidate peer, Set<String> mine, Set<String> theirs,
-        List<Candidate> pending, Map<Candidate, Identity> resolved, Scope scope,
-        Set<Identity> taken) {
+    private static boolean crosses(Node peer, Node candidate, List<Node> pending,
+        Map<Node, Node> matched, List<Node> previous, Set<Node> taken) {
+      Set<String> mine = peer.content;
+      Set<String> theirs = candidate.content;
       for (String key : discriminatorKeys(mine)) {
         if (discriminatorKeys(theirs).contains(key)) {
           continue;
         }
-        for (Identity previous
-            : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-          EntityState state = taken.contains(previous) ? null : history.state.get(previous);
-          boolean other = state != null && state.content != null && state.content != theirs;
-          if (other && related(mine, state.content)
-              && discriminatorKeys(state.content).contains(key)) {
+        for (Node p : previous) {
+          boolean other = p != candidate && !taken.contains(p) && p.content != null;
+          if (other && related(mine, p.content) && discriminatorKeys(p.content).contains(key)) {
             return true;
           }
         }
@@ -1003,10 +919,10 @@ public final class ProvenanceComputer {
         if (discriminatorKeys(mine).contains(key)) {
           continue;
         }
-        for (Candidate other : pending) {
-          if (other != peer && !resolved.containsKey(other)
-              && related(contentOf(other), theirs)
-              && discriminatorKeys(contentOf(other)).contains(key)) {
+        for (Node other : pending) {
+          boolean unresolved = other != peer && !matched.containsKey(other);
+          if (unresolved && related(other.content, theirs)
+              && discriminatorKeys(other.content).contains(key)) {
             return true;
           }
         }
@@ -1040,55 +956,15 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The one untaken previous JSON branch of {@code scope} that {@code test} accepts.
-     */
-    private Identity previousBranch(Scope scope, Set<Identity> taken, Predicate<EntityState> test) {
-      Identity found = null;
-      for (Identity previous
-          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        EntityState state = taken.contains(previous) ? null : history.state.get(previous);
-        boolean branch = state != null && state.content != null;
-        if (!branch || !test.test(state)) {
-          continue;
-        }
-        if (found != null) {
-          return null;
-        }
-        found = previous;
-      }
-      return found;
-    }
-
-    /**
-     * Whether two branches' contents share a member, with no discriminator of one named
-     * differently by the other.
-     */
-    private static boolean overlaps(Set<String> mine, Set<String> theirs) {
-      for (String entry : mine) {
-        if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
-          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
-          if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
-            return false;
-          }
-        }
-      }
-      if (mine.equals(theirs)) {
-        // Nothing tells them apart, even with no members: as alike as they can be.
-        return true;
-      }
-      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry));
-    }
-
-    /**
      * A JSON union branch's content: its members' names, with the value of a one-value enum
      * (a discriminator), or its type for a branch with no members; null for anything else.
      */
-    private Set<String> contentOf(Candidate peer) {
-      if (policy != IdentityPolicy.JSON || peer.kind != EntityKind.BRANCH) {
+    private Set<String> contentOf(Node node) {
+      if (policy != IdentityPolicy.JSON || node.kind != Kind.BRANCH) {
         return null;
       }
       Set<String> content = new TreeSet<>();
-      addContent(peer.body, "", 0, new HashSet<>(), content);
+      addContent(node.body, "", 0, new HashSet<>(), content);
       return content;
     }
 
@@ -1152,95 +1028,12 @@ public final class ProvenanceComputer {
       return current;
     }
 
-    /**
-     * Gives a previous oneof to one of the peers continuing it by member numbers: a oneof split
-     * in two has each part share numbers with it. The part sharing the most keeps it — ties to
-     * the one holding the lowest shared number — and the others are new.
-     */
-    private void settleOneofs(List<Candidate> peers, Scope scope,
-        Map<Candidate, Identity> resolved) {
-      Map<Identity, Candidate> keeper = new HashMap<>();
-      for (Candidate peer : peers) {
-        Identity identity = resolved.get(peer);
-        Set<Integer> members = memberNumbersOf(peer);
-        EntityState state = identity != null ? history.state.get(identity) : null;
-        if (members == null || state == null || state.memberNumbers == null) {
-          continue;
-        }
-        Candidate other = keeper.get(identity);
-        Candidate kept = other == null
-            || keepsOneof(peer, other, state.memberNumbers) ? peer : other;
-        keeper.put(identity, kept);
-        Candidate minted = other == null ? null : kept == peer ? other : peer;
-        if (minted != null) {
-          resolved.put(minted,
-              new Identity(minted.kind, scope, new MintedIdentity(minted.name, version)));
-        }
-      }
-    }
-
-    private boolean keepsOneof(Candidate peer, Candidate other, Set<Integer> historical) {
-      Set<Integer> mine = shared(memberNumbersOf(peer), historical);
-      Set<Integer> theirs = shared(memberNumbersOf(other), historical);
-      return mine.size() != theirs.size()
-          ? mine.size() > theirs.size()
-          : Collections.min(mine) < Collections.min(theirs);
-    }
-
-    private static Set<Integer> shared(Set<Integer> members, Set<Integer> historical) {
-      Set<Integer> shared = new TreeSet<>(members);
-      shared.retainAll(historical);
-      return shared;
-    }
-
-    /**
-     * The previous oneof in {@code scope} sharing a member number with {@code members}; null if
-     * there is none, or members come from more than one.
-     */
-    private Identity oneofContinuation(Scope scope, Set<Integer> members) {
-      Identity found = null;
-      for (Identity previous
-          : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        EntityState state = history.state.get(previous);
-        if (state == null || state.memberNumbers == null
-            || Collections.disjoint(state.memberNumbers, members)) {
-          continue;
-        }
-        if (found != null) {
-          return null;
-        }
-        found = previous;
-      }
-      return found != null && !seen.contains(found) ? found : null;
-    }
-
-    /** Avro keeps aliases as a set, and an alias equal to the entity's own name changes nothing. */
-    private void validateAliases(Candidate peer) {
-      for (String alias : peer.aliases) {
-        if (alias == null) {
-          throw new IllegalArgumentException("Null alias at " + peer.path);
-        }
-      }
-    }
-
-    /** True when this entity's identity is resolved through the name index. */
-    private boolean isNameResolved(Candidate peer) {
-      switch (policy) {
-        case AVRO:
-          return true;
-        case AUTO:
-          return peer.number == null;
-        default:
-          return false;
-      }
-    }
-
     // -------------------------------------------------------------------------------------
     // Protobuf number derivation
     // -------------------------------------------------------------------------------------
 
     private Integer numberOf(Integer recorded, Object member, Map<Object, Integer> derived) {
-      if (policy == IdentityPolicy.AVRO || policy == IdentityPolicy.JSON) {
+      if (policy != IdentityPolicy.PROTOBUF) {
         return null;
       }
       if (recorded != null) {
@@ -1255,8 +1048,7 @@ public final class ProvenanceComputer {
      * <p>The Protobuf reader omits numbers all-or-nothing, and precisely when the numbering was the
      * sequence the writer reproduces positionally: regular fields taking 1..n in declaration order,
      * then the oneof branches continuing it. Omission is therefore itself the information, and this
-     * mirrors that rule exactly rather than guessing. See {@link IdentityPolicy#PROTOBUF} for why
-     * it is gated on knowing the source format.
+     * mirrors that rule exactly rather than guessing.
      */
     private Map<Object, Integer> deriveNumbers(Schema struct) {
       // The multi-message root is synthetic: its fields name messages and never had numbers, so
@@ -1301,15 +1093,6 @@ public final class ProvenanceComputer {
 
     private static boolean isUnion(Schema schema) {
       return schema != null && schema.getType() == Schema.Type.UNION;
-    }
-
-    private static Set<String> familyOf(String typeName) {
-      for (Set<String> family : PROMOTION_FAMILIES) {
-        if (family.contains(typeName)) {
-          return family;
-        }
-      }
-      return null;
     }
   }
 }
