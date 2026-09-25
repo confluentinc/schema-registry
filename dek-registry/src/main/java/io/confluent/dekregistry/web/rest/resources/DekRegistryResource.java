@@ -390,6 +390,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
