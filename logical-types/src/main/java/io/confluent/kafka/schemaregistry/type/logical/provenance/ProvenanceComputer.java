@@ -107,6 +107,12 @@ public final class ProvenanceComputer {
   /** Avro's promotions, which carry an unnamed union branch's identity when unambiguous. */
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
+  // A JSON branch's content entries: a member's path, a discriminator's value, a leaf's type.
+  private static final String MEMBER = "m:";
+  private static final String DISCRIMINATOR = "d:";
+  private static final String TYPE = "t:";
+  // How deep a JSON branch's content looks: enough to tell usual branches apart, and bounded.
+  private static final int CONTENT_DEPTH = 3;
 
   private static final List<Set<String>> PROMOTION_FAMILIES = Arrays.asList(
       new HashSet<>(Arrays.asList("int", "long", "float", "double")),
@@ -1016,16 +1022,19 @@ public final class ProvenanceComputer {
      * differently by the other.
      */
     private static boolean overlaps(Set<String> mine, Set<String> theirs) {
-      for (String member : mine) {
-        int value = member.indexOf('=');
-        if (value > 0 && !theirs.contains(member)) {
-          String key = member.substring(0, value + 1);
+      for (String entry : mine) {
+        if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
+          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
           if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
             return false;
           }
         }
       }
-      return !Collections.disjoint(mine, theirs);
+      if (mine.equals(theirs)) {
+        // Nothing tells them apart, even with no members: as alike as they can be.
+        return true;
+      }
+      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry));
     }
 
     /**
@@ -1036,18 +1045,54 @@ public final class ProvenanceComputer {
       if (policy != IdentityPolicy.JSON || peer.kind != EntityKind.BRANCH) {
         return null;
       }
-      Schema body = resolved(peer.body);
-      if (body == null || body.getType() != Schema.Type.STRUCT) {
-        return Collections.singleton(body != null ? "#" + body.getType().name() : "#");
+      Set<String> content = new TreeSet<>();
+      addContent(peer.body, "", 0, new HashSet<>(), content);
+      return content;
+    }
+
+    /**
+     * The content of {@code schema} at {@code prefix}: each member's path, a one-value enum's
+     * value with it, and the type of what has no members, down to {@link #CONTENT_DEPTH} levels
+     * — so arrays of different items, or structs differing below the top, are told apart.
+     */
+    private void addContent(Schema schema, String prefix, int depth, Set<String> naming,
+        Set<String> content) {
+      Schema body = schema;
+      while (body != null && body.getType() == Schema.Type.NAMED_TYPE_REF) {
+        if (!naming.add(body.getQualifiedName())) {
+          return;
+        }
+        body = namedTypes.get(body.getQualifiedName());
       }
-      Set<String> members = new TreeSet<>();
-      for (Field field : body.getFields()) {
-        Schema type = resolved(field.getSchema());
-        members.add(isDiscriminator(type)
-            ? field.getName() + "=" + type.getEnumValues().get(0).getSymbol()
-            : field.getName());
+      if (body == null || depth > CONTENT_DEPTH) {
+        return;
       }
-      return members;
+      switch (body.getType()) {
+        case STRUCT:
+          for (Field field : body.getFields()) {
+            Schema type = resolved(field.getSchema());
+            content.add(MEMBER + prefix + field.getName());
+            if (isDiscriminator(type)) {
+              content.add(DISCRIMINATOR + prefix + field.getName() + "="
+                  + type.getEnumValues().get(0).getSymbol());
+            }
+            addContent(field.getSchema(), prefix + field.getName() + "/", depth + 1,
+                new HashSet<>(naming), content);
+          }
+          break;
+        case ARRAY:
+        case MULTISET:
+          content.add(TYPE + prefix + body.getType().name());
+          addContent(body.getElementType(), prefix + "[]/", depth + 1, naming, content);
+          break;
+        case MAP:
+          content.add(TYPE + prefix + body.getType().name());
+          addContent(body.getValueType(), prefix + "{}/", depth + 1, naming, content);
+          break;
+        default:
+          content.add(TYPE + prefix + body.getType().name());
+          break;
+      }
     }
 
     private static boolean isDiscriminator(Schema type) {

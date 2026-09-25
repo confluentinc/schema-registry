@@ -129,7 +129,9 @@ public final class ProvenanceProjector<T> {
 
   /**
    * {@code copy}, which a deserializer made of {@code reader}, standing for the same version:
-   * any id supplied with {@code reader} is {@code copy}'s too.
+   * any id supplied with {@code reader} is {@code copy}'s too. The Protobuf deserializer shares one
+   * copy among equal readers; equal Protobuf schemas are one registered version, so the id holds
+   * for each.
    */
   public ParsedSchema sameReader(ParsedSchema reader, ParsedSchema copy) {
     Integer id = suppliedId(reader);
@@ -450,7 +452,8 @@ public final class ProvenanceProjector<T> {
 
     Optional<T> get() {
       if (failure != null) {
-        throw failure;
+        // A fresh one each time: a caller may add to it, and it is shared by every record.
+        throw new SerializationException(failure.getMessage(), failure);
       }
       return Optional.ofNullable(value);
     }

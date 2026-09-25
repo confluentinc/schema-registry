@@ -34,6 +34,8 @@ public class ProvenanceAlgorithmConfigTest {
     assertEquals("v1", config("v1").getProvenanceAlgorithm());
     assertEquals("V1", config("V1").getProvenanceAlgorithm());
     assertNull(config("none").getProvenanceAlgorithm());
+    assertNull(config("None").getProvenanceAlgorithm());
+    assertNull(config("").getProvenanceAlgorithm());
     assertNull(config(null).getProvenanceAlgorithm());
   }
 

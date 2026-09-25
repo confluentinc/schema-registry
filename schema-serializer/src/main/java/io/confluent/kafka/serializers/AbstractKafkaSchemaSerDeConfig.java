@@ -25,7 +25,6 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +36,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Range;
+import org.apache.kafka.common.config.ConfigException;
 import  org.apache.kafka.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
@@ -411,7 +411,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(PROVENANCE_ALGORITHM, Type.STRING, null,
-                EnumRecommender.in(provenanceAlgorithms()),
+                PROVENANCE_ALGORITHM_VALIDATOR,
                 Importance.LOW, PROVENANCE_ALGORITHM_DOC)
         .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
                 Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
@@ -560,14 +560,33 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(USE_LATEST_VERSION);
   }
 
-  // "none", or a released provenance algorithm version: a misspelt one fails configuration
-  // rather than quietly reading without provenance.
-  private static Object[] provenanceAlgorithms() {
-    List<Object> values = new ArrayList<>();
-    values.add("none");
-    values.addAll(Arrays.asList(ProvenanceAlgorithm.values()));
-    return values.toArray();
-  }
+  // Unset, empty, "none" or a released provenance algorithm version, in any case: a misspelt one
+  // fails configuration rather than quietly reading without provenance.
+  private static final ConfigDef.Validator PROVENANCE_ALGORITHM_VALIDATOR =
+      new ConfigDef.Validator() {
+        @Override
+        public void ensureValid(String name, Object value) {
+          String algorithm = value != null ? value.toString().trim() : "";
+          if (algorithm.isEmpty() || "none".equalsIgnoreCase(algorithm)) {
+            return;
+          }
+          try {
+            ProvenanceAlgorithm.of(algorithm);
+          } catch (IllegalArgumentException e) {
+            throw new ConfigException(name, value, "Not a provenance algorithm; one of " + this);
+          }
+        }
+
+        @Override
+        public String toString() {
+          List<String> names = new ArrayList<>();
+          names.add("none");
+          for (ProvenanceAlgorithm algorithm : ProvenanceAlgorithm.values()) {
+            names.add(algorithm.getName());
+          }
+          return names.toString();
+        }
+      };
 
   /**
    * The provenance algorithm version to project with, or null when provenance is off.
