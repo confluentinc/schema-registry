@@ -381,7 +381,8 @@ final class AvroProvenanceRenamer {
     final Schema unmatched = discard(branch);
     if (unmatched.getType() == Type.RECORD && ofType(reader, Type.UNION) != null) {
       sinkOrigins.put(unmatched.getFullName(),
-          "a value of " + branch.getFullName() + " at writer location " + writerAt);
+          "a value of " + branch.getFullName()
+              + (writerAt.isEmpty() ? " at the writer's root" : " at writer location " + writerAt));
       final Schema sink = Schema.createRecord(unmatched.getFullName(), null, null, false);
       sink.setFields(Collections.singletonList(
           new Field(SINK_FIELD, Schema.create(Type.INT), null)));

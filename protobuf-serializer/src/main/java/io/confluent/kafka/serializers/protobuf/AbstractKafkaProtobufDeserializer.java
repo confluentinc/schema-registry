@@ -240,9 +240,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         );
       }
 
-      // A dynamic reader handed a message already in its own descriptor needs no second parse.
-      boolean parsed = parseMethod == null && !deriveType && message instanceof DynamicMessage
-          && ((Message) message).getDescriptorForType() == schema.toDescriptor();
+      boolean parsed = parseMethod == null && !deriveType && isParsed(message, schema);
       ByteBuffer protobufBytes = buffer;
       if (message != null && !parsed) {
         protobufBytes = ByteBuffer.wrap(((Message) message).toByteArray());
@@ -299,6 +297,17 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
   }
 
+  /**
+   * Whether {@code message} is already what a dynamic read into {@code schema} returns, so needs no
+   * second parse: in its own descriptor, and with no required field a rule left unset, which the
+   * parse would reject.
+   */
+  private static boolean isParsed(Object message, ProtobufSchema schema) {
+    return message instanceof DynamicMessage
+        && ((Message) message).getDescriptorForType() == schema.toDescriptor()
+        && ((Message) message).isInitialized();
+  }
+
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
       int length) throws IOException {
     Descriptor descriptor = schema.toDescriptor();
@@ -329,8 +338,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return null;
     }
+    // A nested message written as the record has no location of its own under the file's first
+    // message: its fields are found through the top-level messages, as with several of them.
     boolean multi = writer.toDescriptor().getFile().getMessageTypes().size() > 1
-        || reader.toDescriptor().getFile().getMessageTypes().size() > 1;
+        || reader.toDescriptor().getFile().getMessageTypes().size() > 1
+        || writer.toDescriptor().getContainingType() != null;
     if (multi && reader.toDescriptor(name) == null) {
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");

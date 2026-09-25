@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,6 +36,7 @@ import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -208,6 +210,43 @@ class JsonProvenanceDeserializerTest {
     assertEquals("kept", read(v2, bytes, "v1").get("u").get("t").asText());
   }
 
+  @Test
+  void anIntegralDecimalChoosesTheBranchValidationWould() throws Exception {
+    // Under 2020-12 json-sKema counts 1.0 an integer and everit does not: the pruner must not
+    // leave the value to the branch everit alone accepts, where t continues.
+    String a = "{\"type\": \"object\", \"properties\": {" + number("k") + ", " + string("t")
+        + "}, \"unevaluatedProperties\": false}";
+    String b = "{\"type\": \"object\", \"properties\": {\"k\": {\"type\": \"integer\"}, "
+        + string("n") + "%s}}";
+    JsonSchema v1 = modern("\"u\": {\"anyOf\": [" + a + ", "
+        + String.format(b, ", " + string("t")) + "]}");
+    JsonSchema v2 = modern("\"u\": {\"anyOf\": [" + a + ", " + String.format(b, "") + "]}");
+    JsonSchema v3 = modern("\"u\": {\"anyOf\": [" + a + ", " + String.format(b,
+        ", \"t\": {\"type\": \"string\", \"description\": \"re-added\"}") + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"k\": 1.0, \"n\": \"x\", \"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+    assertEquals("old", read(v3, bytes, null).get("u").get("t").asText());
+  }
+
+  @Test
+  void aRequiredPropertyWithNoValueIsNamedByItsPath() throws Exception {
+    JsonSchema v1 = object("\"o\": {\"type\": \"object\", \"properties\": {" + string("t") + "}}");
+    JsonSchema v2 = object("\"o\": {\"type\": \"object\", \"properties\": {}}");
+    JsonSchema v3 = object("\"o\": {\"type\": \"object\", \"properties\": {" + string("t")
+        + "}, \"required\": [\"t\"]}");
+    byte[] bytes = write(v1, "{\"o\": {\"t\": \"old\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    assertEquals("Property [o, t] is new to the reader: provenance pairs it with nothing the "
+        + "writer wrote, and the reader requires it and declares no default. There is no value "
+        + "to read.", e.getCause().getMessage());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {
@@ -243,6 +282,12 @@ class JsonProvenanceDeserializerTest {
 
   private static JsonSchema object(String... properties) {
     return new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+        + String.join(", ", properties) + "}}");
+  }
+
+  private static JsonSchema modern(String... properties) {
+    return new JsonSchema("{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", "
+        + "\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
         + String.join(", ", properties) + "}}");
   }
 }

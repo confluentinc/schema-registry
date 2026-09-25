@@ -103,7 +103,7 @@ final class ProtoProvenanceRenumberer {
     if (renumbered == root.getFile()) {
       return new Renumbered(reader, Collections.emptyMap());
     }
-    Descriptor renamedRoot = renumbered.findMessageTypeByName(root.getName());
+    Descriptor renamedRoot = messageNamed(renumbered, root.getFullName());
     ProtobufSchema schema = new ProtobufSchema(renamedRoot != null ? renamedRoot : root,
         reader.references());
     return new Renumbered((ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet()),
@@ -223,6 +223,32 @@ final class ProtoProvenanceRenumberer {
       throw new ProvenanceUnavailableException("Field " + field.getFullName()
           + " needs a new number, but its message is defined in an imported file");
     }
+  }
+
+  /**
+   * The message of {@code file} with {@code fullName}, nested or not; null if none.
+   */
+  private static Descriptor messageNamed(FileDescriptor file, String fullName) {
+    for (Descriptor message : file.getMessageTypes()) {
+      Descriptor found = messageNamed(message, fullName);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  private static Descriptor messageNamed(Descriptor message, String fullName) {
+    if (message.getFullName().equals(fullName)) {
+      return message;
+    }
+    for (Descriptor nested : message.getNestedTypes()) {
+      Descriptor found = messageNamed(nested, fullName);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
   }
 
   private Descriptor topLevel(String fullName) {

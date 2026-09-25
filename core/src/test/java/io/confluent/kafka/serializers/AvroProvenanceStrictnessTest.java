@@ -26,14 +26,19 @@ import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.test.Readded;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +80,24 @@ class AvroProvenanceStrictnessTest {
     assertEquals(5, ((GenericRecord) read(v3, branch, null).get("f")).get("x"));
 
     assertEquals("s", read(v3, write(v1, "s"), "v1").get("f").toString());
+  }
+
+  @Test
+  void aReAddedBranchOfARootUnionIsNamedAtTheRoot() throws Exception {
+    String b = "{\"type\":\"record\",\"name\":\"B\",%s\"fields\":"
+        + "[{\"name\":\"y\",\"type\":\"string\"}]}";
+    Schema v1 = new Schema.Parser().parse("[\"null\"," + A + "," + String.format(b, "") + "]");
+    Schema v3 = new Schema.Parser().parse(
+        "[\"null\"," + A + "," + String.format(b, "\"doc\":\"v3\",") + "]");
+    register(v1, new Schema.Parser().parse("[\"null\"," + A + ",\"int\"]"), v3);
+    GenericRecord value = new GenericRecordBuilder(v1.getTypes().get(2)).set("y", "old").build();
+
+    Exception e = assertThrows(SerializationException.class, () ->
+        new KafkaAvroDeserializer(client, config("v1"))
+            .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v3));
+    assertEquals("The record holds a value of B at the writer's root, a union branch "
+        + "provenance pairs with none of the reader's. There is no value to read.",
+        e.getCause().getMessage());
   }
 
   @Test
@@ -281,6 +304,17 @@ class AvroProvenanceStrictnessTest {
     client.register(SUBJECT, new AvroSchema(writer));
     return new KafkaAvroSerializer(client, config(null))
         .serialize(TOPIC, new GenericRecordBuilder(writer).set("f", value).build());
+  }
+
+  // The serializer takes a record's own schema, not a root union: framed by hand.
+  private byte[] framed(Schema writer, Object value) throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(client.getId(SUBJECT, new AvroSchema(writer))).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(writer).write(value, encoder);
+    encoder.flush();
+    return out.toByteArray();
   }
 
   private GenericRecord read(Schema reader, byte[] bytes, String provenance) {
