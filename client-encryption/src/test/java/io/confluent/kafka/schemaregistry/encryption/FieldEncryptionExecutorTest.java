@@ -2375,7 +2375,9 @@ public abstract class FieldEncryptionExecutorTest {
         registry, provenanceProps(false))
         .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
     assertEquals("alice", on.get("name").asText());
-    assertFalse(on.has("note"));
+    // Pruned before the rules, so note reads as one never written: no value, though the field
+    // transform, visiting every declared property, sets it to null.
+    assertFalse(on.hasNonNull("note"));
     assertEquals("ada", off.get("note").asText());
   }
 

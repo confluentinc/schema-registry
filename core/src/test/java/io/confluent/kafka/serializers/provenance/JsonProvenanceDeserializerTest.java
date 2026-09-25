@@ -22,12 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -127,6 +132,43 @@ class JsonProvenanceDeserializerTest {
     JsonNode on = read(v2, bytes, "v1");
     assertEquals(read(v2, bytes, null), on);
     assertTrue(on.has("name"));
+  }
+
+  @Test
+  void aReadRuleNeitherSeesNorLosesAPrunedProperty() throws Exception {
+    // The document is pruned before the domain rules: a rule's value for the re-added note is
+    // kept, and a required one's default comes first.
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    Rule fill = new Rule("fill", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
+        "name == 'note' ; 'filled'", null, null, false);
+    JsonSchema v3 = (JsonSchema) new JsonSchema("{\"type\": \"object\", \"properties\": {"
+        + number("id") + ", \"note\": {\"type\": \"string\", \"default\": \"dflt\"}},"
+        + " \"required\": [\"note\"]}")
+        .copy(null, new RuleSet(null, Collections.singletonList(fill)));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("filled", read(v3, bytes, "v1").get("note").asText());
+  }
+
+  @Test
+  void aPrunedPropertyReadsAsOneNeverWrittenUnderValidation() throws Exception {
+    // With validation on, everit fills a default for an absent property; pruning first gives a
+    // pruned one the same, and removes an old value the reader would reject.
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = object(number("id"), "\"note\": {\"type\": \"integer\", \"default\": 9}");
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    Map<String, Object> config = config("v1");
+    config.put("json.fail.invalid.schema", true);
+    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config)
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> v3).getValue();
+    assertEquals(9, on.get("note").asInt());
   }
 
   // --- Helpers -----------------------------------------------------------------------------------
