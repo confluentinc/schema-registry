@@ -22,8 +22,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
 
 /**
@@ -51,7 +53,9 @@ public final class ProvenanceMapping {
     writerNames = new HashMap<>();
     writerAt = new HashMap<>();
     List<List<Integer>> written = new ArrayList<>();
+    Set<Integer> writerPids = new HashSet<>();
     for (ProvenanceField field : writer.getFields()) {
+      requirePid(field, writerPids, writerId);
       written.add(field.getPath());
       writerByPid.put(field.getPid(), field.getPath());
       index(field, writerNames, writerAt);
@@ -62,7 +66,9 @@ public final class ProvenanceMapping {
     readerNames = new HashMap<>();
     readerAt = new HashMap<>();
     List<List<Integer>> paths = new ArrayList<>();
+    Set<Integer> readerPids = new HashSet<>();
     for (ProvenanceField field : reader.getFields()) {
+      requirePid(field, readerPids, readerId);
       paths.add(field.getPath());
       index(field, readerNames, readerAt);
       List<Integer> writerPath = writerByPid.get(field.getPid());
@@ -72,6 +78,21 @@ public final class ProvenanceMapping {
       }
     }
     readerPaths = Collections.unmodifiableList(paths);
+  }
+
+  /**
+   * Fails unless {@code field} has a pid no other location of its version has: pairing is by pid,
+   * so a missing or shared one would pair unrelated locations.
+   */
+  private static void requirePid(ProvenanceField field, Set<Integer> seen, int schemaId) {
+    if (field.getPid() == null) {
+      throw new SerializationException("Location " + field.getPath() + " of schema id "
+          + schemaId + " has no provenance id");
+    }
+    if (!seen.add(field.getPid())) {
+      throw new SerializationException("Location " + field.getPath() + " of schema id "
+          + schemaId + " shares provenance id " + field.getPid() + " with another location");
+    }
   }
 
   private static void index(ProvenanceField field, Map<List<Integer>, List<String>> names,

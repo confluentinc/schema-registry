@@ -112,6 +112,24 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aJsonBranchThatMovesAndGainsAMemberContinues() {
+    // B moves first and gains w: no branch has its content, and its position holds A's, but it
+    // alone shares a member with the old B.
+    String a = branch("a", "\"x\":{\"type\":\"number\"}");
+    String b = branch("b", "\"y\":{\"type\":\"number\"}");
+    String bw = branch("b", "\"y\":{\"type\":\"number\"},\"w\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + a + "," + b + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + bw + "," + a + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    // v2 sorts B's members: kind, w, y.
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 1)));
+    assertThat(after.get(path(0, 0, 2))).isEqualTo(before.get(path(0, 1, 1)));
+    assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 0)));
+  }
+
+  @Test
   void jsonBranchesSharingMemberNamesAreToldApartByTheirDiscriminator() {
     String a = branch("a", "\"x\":{\"type\":\"number\"}");
     String b = branch("b", "\"x\":{\"type\":\"number\"}");

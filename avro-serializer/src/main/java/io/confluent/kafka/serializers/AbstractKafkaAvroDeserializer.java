@@ -146,8 +146,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return type != null && schema.equals(SpecificData.get().getSchema(type));
     }
     if (useSchemaReflection) {
-      Class<?> type = ReflectData.get().getClass(schema);
-      return type != null && schema.equals(ReflectData.get().getSchema(type));
+      // As this deserializer reflects: allow-null makes every field nullable.
+      ReflectData reflect =
+          AvroSchemaUtils.getReflectData(avroUseLogicalTypeConverters, avroReflectionAllowNull);
+      Class<?> type = reflect.getClass(schema);
+      return type != null && schema.equals(reflect.getSchema(type));
     }
     return false;
   }

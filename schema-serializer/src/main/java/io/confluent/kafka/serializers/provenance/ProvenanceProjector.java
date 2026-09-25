@@ -77,11 +77,9 @@ public final class ProvenanceProjector<T> {
   private final Cache<List<Object>, Outcome<T>> outcomes;
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
-  // Readers whose registered version the caller named, by the schema handed over: by identity,
-  // since equal readers may be different versions (Avro's equality ignores docs); else by equality,
-  // for a reader the deserializer copied — as the Protobuf one always does, where equal readers
-  // differ only in comments, which the registry gives one id anyway.
-  private final Cache<ParsedSchema, Integer> suppliedReaderIds;
+  // Readers whose registered version the caller named, by the schema handed over, by identity:
+  // an equal reader may stand for another version (Avro's equality ignores docs), or for none.
+  // A deserializer handing over a copy says so (sameReader).
   private final Cache<ParsedSchema, Integer> suppliedReaderInstances =
       CacheBuilder.newBuilder().weakKeys().build();
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
@@ -98,7 +96,6 @@ public final class ProvenanceProjector<T> {
     this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
-    this.suppliedReaderIds = cache(cacheSize, cacheTtlSec);
   }
 
   /**
@@ -113,7 +110,6 @@ public final class ProvenanceProjector<T> {
         return null;
       }
       if (reader.getId() != null) {
-        suppliedReaderIds.put(reader.getSchema(), reader.getId());
         suppliedReaderInstances.put(reader.getSchema(), reader.getId());
       }
       return reader.getSchema();
@@ -128,8 +124,19 @@ public final class ProvenanceProjector<T> {
   }
 
   private Integer suppliedId(ParsedSchema reader) {
-    Integer id = suppliedReaderInstances.getIfPresent(reader);
-    return id != null ? id : suppliedReaderIds.getIfPresent(reader);
+    return suppliedReaderInstances.getIfPresent(reader);
+  }
+
+  /**
+   * {@code copy}, which a deserializer made of {@code reader}, standing for the same version:
+   * any id supplied with {@code reader} is {@code copy}'s too.
+   */
+  public ParsedSchema sameReader(ParsedSchema reader, ParsedSchema copy) {
+    Integer id = suppliedId(reader);
+    if (id != null && copy != reader) {
+      suppliedReaderInstances.put(copy, id);
+    }
+    return copy;
   }
 
   /**

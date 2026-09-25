@@ -499,4 +499,16 @@ class JsonToLogicalTypeConverterTest {
     }
   }
 
+
+  @Test
+  void aModernDraftDefaultBesideARefIsTheFieldsDefault() {
+    // 2019-09 and later honour a default beside $ref; it is read against the type the reference
+    // names, not the reference itself.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema("{\"$schema\":"
+        + "\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+        + "\"properties\":{\"t\":{\"$ref\":\"#/$defs/T\",\"default\":\"sib\"}},"
+        + "\"$defs\":{\"T\":{\"type\":\"string\"}}}"));
+    Schema.Field t = lt.getRootSchema().getFields().get(0);
+    assertEquals("sib", t.getDefaultValue());
+  }
 }

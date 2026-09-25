@@ -672,6 +672,43 @@ class ProtobufProvenanceDeserializerTest {
     assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("c")));
   }
 
+  @Test
+  void aWriterReservingEveryFreeNumberStillLeavesOneToMoveTo() throws Exception {
+    // The writer reserves all above 2, so writes nothing there: c moves into that range rather
+    // than the pair falling back and c reading b's value.
+    ProtobufSchema v1 = row("int32 a = 1;", "string b = 2;", "reserved 3 to max;");
+    ProtobufSchema v2 = row("int32 a = 1;");
+    ProtobufSchema v3 = row("int32 a = 1;", "string c = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "a"), 7).setField(field(b, "b"), "old"));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("old", get(read(v3, bytes, null), "c"));
+    assertEquals("", get(read(v3, bytes, "v1"), "c"));
+  }
+
+  @Test
+  void aFreshNumberAvoidsTheWriterUnderAMessageRenamedSinceIt() throws Exception {
+    // A was renamed B, so B's members are new and move; the writer's A still writes z at the top
+    // number, which must not be parsed into x, a message it does not parse as.
+    String n = "message N { int32 q = 1; }";
+    ProtobufSchema v1 = file("message Row { message A { string z = 536870911; } A n = 1; }", n);
+    ProtobufSchema v2 = file(
+        "message Row { message A { string z = 536870911; } A n = 1; int32 pad = 2; }", n);
+    ProtobufSchema v3 = file("message Row { message B { N x = 1; } B n = 1; int32 pad = 2; }", n);
+    byte[] bytes = write(v1, b -> {
+      FieldDescriptor nf = field(b, "n");
+      DynamicMessage.Builder a = DynamicMessage.newBuilder(nf.getMessageType());
+      a.setField(nf.getMessageType().findFieldByName("z"), "zzzz");
+      b.setField(nf, a.build());
+    });
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "v1"), "n");
+    assertFalse(inner.hasField(inner.getDescriptorForType().findFieldByName("x")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

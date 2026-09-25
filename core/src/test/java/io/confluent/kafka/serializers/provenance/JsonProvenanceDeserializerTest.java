@@ -527,6 +527,20 @@ class JsonProvenanceDeserializerTest {
     assertEquals(5, read(v2, bytes, "v1").get("u").get("x").asInt());
   }
 
+  @Test
+  void aBranchThatMovesAndGainsAMemberKeepsItsValues() throws Exception {
+    String a = "{\"type\": \"object\", \"properties\": {" + number("x") + "}}";
+    String b = "{\"type\": \"object\", \"properties\": {" + number("y") + "}}";
+    String bw = "{\"type\": \"object\", \"properties\": {" + number("y") + ", "
+        + number("w") + "}}";
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [" + a + ", " + b + "]}");
+    JsonSchema v2 = object("\"u\": {\"oneOf\": [" + bw + ", " + a + "]}");
+    byte[] bytes = write(v1, "{\"u\": {\"y\": 5}}");
+    client.register(SUBJECT, v2);
+
+    assertEquals(5, read(v2, bytes, "v1").get("u").get("y").asInt());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

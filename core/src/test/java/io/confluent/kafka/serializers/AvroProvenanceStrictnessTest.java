@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
@@ -33,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -40,6 +42,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.reflect.ReflectData;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
@@ -268,6 +271,69 @@ class AvroProvenanceStrictnessTest {
     Object read = new KafkaAvroDeserializer(client, config).deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> new AvroSchema(v1)).getValue();
     assertEquals("current", ((Readded) read).getNote().toString());
+  }
+
+  @Test
+  void anUnpinnedReaderDoesNotTakeTheIdOfAnEqualPinnedOne() throws Exception {
+    // One deserializer: a reader function pins the class schema to v1, then another hands the
+    // class schema over with no id. The second is a class reader, the latest version it equals.
+    Schema v1 = Readded.getClassSchema();
+    int id1 = client.register(SUBJECT, new AvroSchema(v1.toString()));
+    client.register(SUBJECT,
+        new AvroSchema(noteDropped("Readded", "io.confluent.kafka.serializers.test")));
+    int v3 = client.register(SUBJECT, metadataCopy(v1));
+    byte[] bytes = framedAs(v3, v1,
+        new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
+    Map<String, Object> config = config("v1");
+    config.put("specific.avro.reader", true);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+    Function<ParsedSchema, ParsedSchema> pinned =
+        deserializer.readerSchemas(writer -> ReaderSchema.of(new AvroSchema(v1), id1));
+
+    Object first = deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, pinned)
+        .getValue();
+    assertEquals("new", ((Readded) first).getNote().toString());
+    Object second = deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), bytes,
+        writer -> new AvroSchema(v1)).getValue();
+    assertEquals("current", ((Readded) second).getNote().toString());
+  }
+
+  /** A reflected class; its schema under allow-null makes every field nullable. */
+  public static class Reflected {
+    public String name;
+    public String note;
+  }
+
+  @Test
+  void aReflectSchemaPassedAsTheReaderUnderAllowNullIsAClassReader() throws Exception {
+    Schema v1 = ReflectData.AllowNull.get().getSchema(Reflected.class);
+    client.register(SUBJECT, new AvroSchema(v1.toString()));
+    client.register(SUBJECT, new AvroSchema(v1.toString()
+        .replaceAll(",\\{\"name\":\"note\",\"type\":\\[\"null\",\"string\"\\],"
+            + "\"default\":null\\}", "")
+        .replace("\"name\":\"Reflected\"", "\"name\":\"Reflected\",\"doc\":\"v2\"")));
+    int v3 = client.register(SUBJECT, metadataCopy(v1));
+    GenericRecord value = new GenericData.Record(v1);
+    value.put("name", "ada");
+    value.put("note", "current");
+    byte[] bytes = framedAs(v3, v1, value);
+    Map<String, Object> config = config("v1");
+    config.put("schema.reflection", true);
+    config.put("avro.reflection.allow.null", true);
+
+    Object read = new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes, v1);
+    assertEquals("current", ((Reflected) read).note);
+  }
+
+  private static Schema noteDropped(String name, String namespace) {
+    return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"" + name + "\","
+        + "\"namespace\":\"" + namespace + "\",\"doc\":\"v2\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"}]}");
+  }
+
+  private static AvroSchema metadataCopy(Schema schema) {
+    return new AvroSchema(schema.toString())
+        .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null);
   }
 
   @Test

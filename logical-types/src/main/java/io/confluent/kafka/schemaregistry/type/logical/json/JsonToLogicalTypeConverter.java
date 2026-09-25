@@ -203,7 +203,7 @@ public class JsonToLogicalTypeConverter {
     }
     try {
       final Object defaultValue =
-          JsonDefaultValueConverter.toJavaData(fieldType, rawDefault);
+          JsonDefaultValueConverter.toJavaData(named(ctx, fieldType), rawDefault);
       if (defaultValue == null) {
         return null;
       }
@@ -218,6 +218,21 @@ public class JsonToLogicalTypeConverter {
           fieldIndex, fieldType.getType(), e.getClass().getSimpleName());
       return null;
     }
+  }
+
+  /**
+   * {@code type}, a reference to a named type resolved to the type it names, as far as it has been
+   * converted, so a default can be read as a value of it.
+   */
+  private static Schema named(final ToLogicalContext<String> ctx, final Schema type) {
+    Schema current = type;
+    Set<String> seen = new HashSet<>();
+    while (current != null && current.getType() == Schema.Type.NAMED_TYPE_REF
+        && seen.add(current.getQualifiedName())
+        && ctx.getNamedTypes().get(current.getQualifiedName()) != null) {
+      current = ctx.getNamedTypes().get(current.getQualifiedName());
+    }
+    return current;
   }
 
   private static Object extractDefault(final org.everit.json.schema.Schema schema) {
