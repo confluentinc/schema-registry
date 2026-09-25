@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 
 import java.util.ArrayList;
@@ -549,7 +550,7 @@ public class AvroToLogicalTypeConverter {
             ctx.popFieldPath();
           }
 
-          Object defaultValue = field.defaultVal();
+          Object defaultValue = defaultOf(field);
           boolean hasDefault = defaultValue != null;
           if (defaultValue instanceof JsonProperties.Null) {
             defaultValue = null;
@@ -685,7 +686,7 @@ public class AvroToLogicalTypeConverter {
         ctx.popFieldPath();
       }
 
-      Object defaultValue = field.defaultVal();
+      Object defaultValue = defaultOf(field);
       boolean hasDefault = defaultValue != null;
       if (defaultValue instanceof JsonProperties.Null) {
         defaultValue = null;
@@ -780,6 +781,19 @@ public class AvroToLogicalTypeConverter {
       throw new ValidationException(name + " must be a JSON integer: " + value);
     }
     return Optional.ofNullable((Integer) value);
+  }
+
+  /**
+   * {@code field}'s default as Avro reads it. One of a JSON shape its type cannot take — accepted
+   * only from a schema registered before defaults were validated — is rejected by name.
+   */
+  private static Object defaultOf(org.apache.avro.Schema.Field field) {
+    try {
+      return field.defaultVal();
+    } catch (AvroRuntimeException e) {
+      throw new ValidationException(
+          "Field " + field.name() + " has a default its type cannot take: " + e.getMessage(), e);
+    }
   }
 
   private static <V> List<V> appendToList(final List<V> list, final V value) {

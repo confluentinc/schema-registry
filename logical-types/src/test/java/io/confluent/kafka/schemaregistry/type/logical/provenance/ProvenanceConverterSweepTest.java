@@ -70,6 +70,11 @@ class ProvenanceConverterSweepTest {
         "{\"type\":\"enum\",\"name\":\"E2\",\"symbols\":[\"A\"],\"confluent:enum\":[{\"doc\":5}]}",
         "{\"type\":\"map\",\"values\":\"int\",\"logical.key.length\":5,"
             + "\"logical.key.type\":7}",
+        // A default of a JSON shape its type cannot take, from before defaults were validated.
+        "\"bytes\",\"default\":[1]",
+        "{\"type\":\"record\",\"name\":\"In\",\"fields\":[{\"name\":\"b\",\"type\":\"int\"}]},"
+            + "\"default\":[1]",
+        "[{\"type\":\"map\",\"values\":\"int\"},\"null\"],\"default\":[1]",
         "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"n\",\"type\":[\"null\","
             + "\"N\"]}]}"}) {
       corpus.add(Arguments.of("avro " + type, new AvroSchema(

@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -59,6 +60,23 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   public ProvenanceMockSchemaRegistryClient(List<SchemaProvider> providers) {
     super(providers);
+  }
+
+  /**
+   * As the registry answers a version the subject lacks: 40402, where the base mock says 40401,
+   * the answer for a subject it lacks.
+   */
+  @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    try {
+      return super.getSchemaMetadata(subject, version, lookupDeletedSchema);
+    } catch (RestClientException e) {
+      if (e.getErrorCode() == 40401 && !getAllVersions(subject).isEmpty()) {
+        throw new RestClientException("Version " + version + " not found.", 404, 40402);
+      }
+      throw e;
+    }
   }
 
   @Override

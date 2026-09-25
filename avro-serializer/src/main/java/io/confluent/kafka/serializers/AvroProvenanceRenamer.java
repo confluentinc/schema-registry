@@ -200,7 +200,7 @@ final class AvroProvenanceRenamer {
     });
     final Renamed renamed =
         new Renamed(renamedWriter, readerCopy, originals, renamer.sinkOrigins);
-    renamer.verify(Resolver.resolve(renamed.writer, renamed.reader),
+    renamer.verify(Resolver.resolve(renamed.writer, renamed.reader), renamed.writer,
         Collections.emptyList(), Collections.emptyList(),
         Collections.newSetFromMap(new IdentityHashMap<>()));
     return renamed;
@@ -230,8 +230,8 @@ final class AvroProvenanceRenamer {
                 + missingField(error.writer, error.reader)
                 + "' of reader record "
                 + error.reader.getFullName()
-                + " has no counterpart in the writer schema and declares no "
-                + "default. There is no value to read.");
+                + " is new to the reader: provenance pairs it with nothing the writer wrote, "
+                + "and it declares no default. There is no value to read.");
       }
     } else if (action instanceof Resolver.RecordAdjust) {
       for (Resolver.Action field : ((Resolver.RecordAdjust) action).fieldActions) {
@@ -638,8 +638,8 @@ final class AvroProvenanceRenamer {
   private Schema recordCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema record = Schema.createRecord(
         reader.getName(), reader.getDoc(), reader.getNamespace(), reader.isError());
-    final boolean matched = matchedReaderTypes.contains(reader);
-    if (!stripsAliases(reader)) {
+    final boolean strips = stripsAliases(reader);
+    if (!strips) {
       reader.getAliases().forEach(record::addAlias);
     }
     copies.put(reader, record);
@@ -648,7 +648,7 @@ final class AvroProvenanceRenamer {
       final Field copy = new Field(field.name(), readerCopy(field.schema(), copies),
           field.doc(), field.defaultVal(), field.order());
       field.getObjectProps().forEach(copy::addProp);
-      if (!matched) {
+      if (!strips) {
         field.aliases().forEach(copy::addAlias);
       }
       fields.add(copy);
@@ -664,44 +664,48 @@ final class AvroProvenanceRenamer {
   /**
    * Walks the resolver's plan and falls back where it would read a writer value into a union
    * branch provenance gives a different id — a branch dropped and re-added, or a promotion into
-   * a new branch. A record branch is checked through its fields instead.
+   * a new branch. A record branch is checked through its fields instead. The plan's writer is
+   * Avro's copy with any surviving reader alias applied, so native names are read off
+   * {@code written}, the renamed writer at the same position.
    */
-  private void verify(Resolver.Action action, List<String> writerAt, List<String> readerAt,
-      Set<Resolver.Action> seen) {
+  private void verify(Resolver.Action action, Schema written, List<String> writerAt,
+      List<String> readerAt, Set<Resolver.Action> seen) {
     if (!seen.add(action)) {
       return;
     }
     if (action instanceof Resolver.RecordAdjust) {
       final Resolver.RecordAdjust record = (Resolver.RecordAdjust) action;
-      final List<String> names = writerNames.get(record.writer);
+      final List<String> names = writerNames.get(written);
       for (int i = 0; i < record.fieldActions.length; i++) {
         final Resolver.Action field = record.fieldActions[i];
         if (field instanceof Resolver.Skip) {
           continue;
         }
-        final Field written = record.writer.getFields().get(i);
-        verify(field, append(writerAt, names != null ? names.get(i) : written.name()),
-            append(readerAt, record.reader.getField(written.name()).name()), seen);
+        final Field own = written.getFields().get(i);
+        verify(field, own.schema(), append(writerAt, names != null ? names.get(i) : own.name()),
+            append(readerAt, record.reader.getField(record.writer.getFields().get(i).name())
+                .name()), seen);
       }
     } else if (action instanceof Resolver.Container) {
-      verify(((Resolver.Container) action).elementAction, append(writerAt, null),
+      verify(((Resolver.Container) action).elementAction, written.getType() == Type.ARRAY
+          ? written.getElementType() : written.getValueType(), append(writerAt, null),
           append(readerAt, null), seen);
     } else if (action instanceof Resolver.WriterUnion) {
-      verifyWriterUnion((Resolver.WriterUnion) action, writerAt, readerAt, seen);
+      verifyWriterUnion((Resolver.WriterUnion) action, written, writerAt, readerAt, seen);
     } else if (action instanceof Resolver.ReaderUnion) {
       final Resolver.ReaderUnion union = (Resolver.ReaderUnion) action;
       final Schema chosen = union.reader.getTypes().get(union.firstMatch);
       final List<String> chosenAt = append(readerAt, chosen.getFullName());
-      requireIntended(union.writer, chosen);
+      requireIntended(written, chosen);
       requirePaired(writerAt, chosenAt, chosen);
-      verify(union.actualAction, writerAt, chosenAt, seen);
+      verify(union.actualAction, written, writerAt, chosenAt, seen);
     }
   }
 
-  private void verifyWriterUnion(Resolver.WriterUnion union, List<String> writerAt,
-      List<String> readerAt, Set<Resolver.Action> seen) {
-    final List<String> names = writerNames.get(union.writer);
-    final List<Schema> branches = union.writer.getTypes();
+  private void verifyWriterUnion(Resolver.WriterUnion union, Schema written,
+      List<String> writerAt, List<String> readerAt, Set<Resolver.Action> seen) {
+    final List<String> names = writerNames.get(written);
+    final List<Schema> branches = written.getTypes();
     for (int i = 0; i < branches.size(); i++) {
       if (branches.get(i).getType() == Type.NULL) {
         continue;
@@ -713,16 +717,16 @@ final class AvroProvenanceRenamer {
         final Schema chosen = union.reader.getTypes().get(i);
         final List<String> chosenAt = append(readerAt, chosen.getFullName());
         requirePaired(branchAt, chosenAt, chosen);
-        verify(branch, branchAt, chosenAt, seen);
+        verify(branch, branches.get(i), branchAt, chosenAt, seen);
       } else if (branch instanceof Resolver.ReaderUnion) {
         final Resolver.ReaderUnion reading = (Resolver.ReaderUnion) branch;
         final Schema chosen = reading.reader.getTypes().get(reading.firstMatch);
         final List<String> chosenAt = append(readerAt, chosen.getFullName());
         requireIntended(branches.get(i), chosen);
         requirePaired(branchAt, chosenAt, chosen);
-        verify(reading.actualAction, branchAt, chosenAt, seen);
+        verify(reading.actualAction, branches.get(i), branchAt, chosenAt, seen);
       } else {
-        verify(branch, branchAt, readerAt, seen);
+        verify(branch, branches.get(i), branchAt, readerAt, seen);
       }
     }
   }

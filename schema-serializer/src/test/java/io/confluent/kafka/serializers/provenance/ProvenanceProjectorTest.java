@@ -86,6 +86,22 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void equalReadersSuppliedWithDifferentIdsKeepTheirOwn() throws Exception {
+    // Equal as schemas, as two Avro versions differing only in a doc are, but pinned to
+    // different versions: each is asked about by its own.
+    CountingClient client = new CountingClient();
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema first = projector.readerSchemas(writer -> ReaderSchema.of(
+        new AvroSchema("\"double\""), client.readerId)).apply(client.writerSchema);
+    projector.readerSchemas(writer -> ReaderSchema.of(
+        new AvroSchema("\"double\""), client.otherWriter)).apply(client.writerSchema);
+
+    projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, client.writer, (String) null),
+        client.writerSchema, first, false, mapping -> "built");
+    assertEquals(client.readerId, client.lastReaderId);
+  }
+
+  @Test
   public void aRejectedRequestFailsEveryRecordFromThatWriter() throws Exception {
     for (int[] rejection : new int[][] {{422, 42202}, {422, 42215}, {404, 40402}}) {
       CountingClient client = new CountingClient();

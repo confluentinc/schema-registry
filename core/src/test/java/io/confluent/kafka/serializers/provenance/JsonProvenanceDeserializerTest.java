@@ -400,6 +400,78 @@ class JsonProvenanceDeserializerTest {
     assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
   }
 
+  @Test
+  void aRequirementEveryReadingMakesIsKeptPastTheCap() throws Exception {
+    // Whichever branch of the first union the value takes requires t; ten more ambiguous unions,
+    // requiring nothing, make 2048 readings — past the number weighed one by one.
+    String c = "{\"type\": \"object\", \"properties\": {" + number("%1$s") + "%2$s}, "
+        + "\"required\": [\"t\"]}";
+    String t = ", \"t\": {\"type\": \"string\", \"default\": \"dflt\"%s}";
+    StringBuilder unions = new StringBuilder();
+    for (int i = 0; i < 10; i++) {
+      unions.append(", {\"anyOf\": [{\"type\": \"object\", \"properties\": {")
+          .append(number("x" + i)).append("%1$s}}, {\"type\": \"object\", \"properties\": {")
+          .append(number("y" + i)).append("%1$s}}]}");
+    }
+    String[] ts = {String.format(t, ""), "", String.format(t, ", \"description\": \"v3\"")};
+    JsonSchema[] versions = new JsonSchema[3];
+    for (int v = 0; v < 3; v++) {
+      String first = v == 1
+          ? "{\"anyOf\": [{\"type\": \"object\", \"properties\": {" + number("c") + "}}, "
+              + "{\"type\": \"object\", \"properties\": {" + number("d") + "}}]}"
+          : "{\"anyOf\": [" + String.format(c, "c", ts[v]) + ", " + String.format(c, "d", ts[v])
+              + "]}";
+      versions[v] = object("\"p\": {\"allOf\": [" + first
+          + String.format(unions.toString(), v == 1 ? "" : ", " + string("t")) + "]}");
+    }
+    byte[] bytes = write(versions[0], "{\"p\": {\"t\": \"old\"}}");
+    client.register(SUBJECT, versions[1]);
+    client.register(SUBJECT, versions[2]);
+
+    assertEquals("dflt", read(versions[2], bytes, "v1").get("p").get("t").asText());
+  }
+
+  @Test
+  void aPrunedPropertyTakesTheDefaultOfTheDefinitionItRefersTo() throws Exception {
+    JsonSchema v1 = object(number("x"), string("t"));
+    JsonSchema v2 = object(number("x"));
+    JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+        + number("x") + ", \"t\": {\"$ref\": \"#/definitions/T\"}}, \"required\": [\"t\"], "
+        + "\"definitions\": {\"T\": {\"type\": \"string\", \"default\": \"d\"}}}");
+    byte[] bytes = write(v1, "{\"x\": 1, \"t\": \"old\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals("d", read(v3, bytes, "v1").get("t").asText());
+  }
+
+  @Test
+  void aPropertyIsNotRequiredWhereABranchWithoutItFits() throws Exception {
+    // A requires t, B is open and has none: pruned, the value is a valid B, so reads. With B
+    // closed no reading lacks t, and the record fails as rule 3 has it.
+    for (boolean closed : new boolean[] {false, true}) {
+      init();
+      String b = "{\"type\": \"object\", \"properties\": {" + number("b") + "}"
+          + (closed ? ", \"additionalProperties\": false" : "") + "}";
+      String a = "{\"type\": \"object\", \"properties\": {" + number("a") + "%s}%s}";
+      JsonSchema v1 = object("\"u\": {\"anyOf\": [" + String.format(a, ", " + string("t"), "")
+          + ", " + b + "]}");
+      JsonSchema v2 = object("\"u\": {\"anyOf\": [" + String.format(a, "", "") + ", " + b + "]}");
+      JsonSchema v3 = object("\"u\": {\"anyOf\": [" + String.format(a,
+          ", \"t\": {\"type\": \"string\", \"description\": \"v3\"}",
+          ", \"required\": [\"t\"]") + ", " + b + "]}");
+      byte[] bytes = write(v1, "{\"u\": {\"a\": 1, \"t\": \"old\"}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      if (closed) {
+        assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+      } else {
+        assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+      }
+    }
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

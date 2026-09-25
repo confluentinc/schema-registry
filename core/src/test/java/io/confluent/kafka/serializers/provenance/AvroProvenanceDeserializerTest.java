@@ -23,10 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
@@ -34,11 +36,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -254,6 +260,97 @@ class AvroProvenanceDeserializerTest {
     Schema schema = record(idField(), string("name"));
     byte[] bytes = write(schema, new GenericRecordBuilder(schema).set("id", 7).set("name", "ada"));
     assertEquals("ada", read(schema, bytes, "v1").get("name").toString());
+  }
+
+  @Test
+  void aReaderMatchesAVersionImportingWhatItImports() throws Exception {
+    // A reader matched by structure imports the same schemas as the version, spelled otherwise:
+    // its references in another order, one as the latest version, one through another subject.
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    String dep = "{\"type\":\"record\",\"name\":\"Dep\",\"namespace\":\"d\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+    String oth = "{\"type\":\"record\",\"name\":\"Oth\",\"namespace\":\"e\","
+        + "\"fields\":[{\"name\":\"q\",\"type\":\"int\"}]}";
+    client.register("dep", new AvroSchema(dep));
+    client.register("dep-alias", new AvroSchema(dep));
+    client.register("oth", new AvroSchema(oth));
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("dep", dep);
+    resolved.put("oth", oth);
+    String main = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"m\",\"doc\":\"%s\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"int\"}%s,{\"name\":\"d\",\"type\":\"d.Dep\"},"
+        + "{\"name\":\"o\",\"type\":\"e.Oth\"}]}";
+    String note = ",{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\"}";
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("dep", "dep", 1),
+        new SchemaReference("oth", "oth", 1));
+    AvroSchema v1 = new AvroSchema(String.format(main, "v1", note), refs, resolved, null);
+    int id1 = client.register(SUBJECT, v1);
+    client.register(SUBJECT, new AvroSchema(String.format(main, "v2", ""), refs, resolved, null));
+    client.register(SUBJECT, new AvroSchema(String.format(main, "v3", note), refs, resolved, null));
+    GenericRecord value = new GenericData.Record(v1.rawSchema());
+    value.put("id", 7);
+    value.put("note", "old");
+    GenericRecord d = new GenericData.Record(v1.rawSchema().getField("d").schema());
+    d.put("x", 1);
+    value.put("d", d);
+    GenericRecord o = new GenericData.Record(v1.rawSchema().getField("o").schema());
+    o.put("q", 2);
+    value.put("o", o);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id1).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(v1.rawSchema()).write(value, encoder);
+    encoder.flush();
+    byte[] bytes = out.toByteArray();
+    // Metadata of its own keeps the reader from matching any version exactly.
+    Metadata metadata = new Metadata(null, Collections.singletonMap("k", "v"), null);
+    for (List<SchemaReference> spelled : Arrays.asList(
+        Arrays.asList(refs.get(1), refs.get(0)),
+        Arrays.asList(new SchemaReference("dep", "dep", -1), refs.get(1)),
+        Arrays.asList(new SchemaReference("dep", "dep-alias", 1), refs.get(1)))) {
+      AvroSchema reader = (AvroSchema) new AvroSchema(String.format(main, "v3", note), spelled,
+          resolved, null).copy(metadata, null);
+      GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+          .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> reader).getValue();
+      assertEquals("new", read.get("note").toString(), spelled.toString());
+    }
+  }
+
+  @Test
+  void aReaderLookupTheRegistryRejectsFallsBack() throws Exception {
+    // The reader's reference names a version its subject lacks: the registry's 40402 answers the
+    // lookup, not the provenance request, so the pair falls back rather than failing every record.
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    String dep = "{\"type\":\"record\",\"name\":\"Dep\",\"namespace\":\"d\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+    client.register("dep", new AvroSchema(dep));
+    String main = "{\"type\":\"record\",\"name\":\"R\",\"doc\":\"%s\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"d\",\"type\":\"d.Dep\"}]}";
+    Map<String, String> resolved = Collections.singletonMap("dep", dep);
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("dep", "dep", 1));
+    AvroSchema v1 = new AvroSchema(String.format(main, "v1"), refs, resolved, null);
+    int id1 = client.register(SUBJECT, v1);
+    client.register(SUBJECT, new AvroSchema(String.format(main, "v2"), refs, resolved, null));
+    AvroSchema reader = (AvroSchema) new AvroSchema(String.format(main, "v2"),
+        Collections.singletonList(new SchemaReference("dep", "dep", 9)), resolved, null)
+        .copy(new Metadata(null, Collections.singletonMap("k", "v"), null), null);
+    GenericRecord value = new GenericData.Record(v1.rawSchema());
+    value.put("id", 7);
+    GenericRecord d = new GenericData.Record(v1.rawSchema().getField("d").schema());
+    d.put("x", 1);
+    value.put("d", d);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id1).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(v1.rawSchema()).write(value, encoder);
+    encoder.flush();
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), out.toByteArray(), writer -> reader)
+        .getValue();
+    assertEquals(7, read.get("id"));
   }
 
   // --- Helpers -----------------------------------------------------------------------------------
