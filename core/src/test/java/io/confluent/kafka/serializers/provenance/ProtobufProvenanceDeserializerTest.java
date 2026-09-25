@@ -26,6 +26,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -707,6 +708,33 @@ class ProtobufProvenanceDeserializerTest {
 
     DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "v1"), "n");
     assertFalse(inner.hasField(inner.getDescriptorForType().findFieldByName("x")));
+  }
+
+  @Test
+  void aFreshNumberAvoidsTheWritersExtensionsUnderAMessageRenamedSinceIt() throws Exception {
+    // A was renamed B, so x moves; the writer's A keeps extension data at the top number, which
+    // must not be parsed into x, a message it does not parse as.
+    String head = "syntax = \"proto2\";\npackage p;\n";
+    String n = "message N { optional int32 q = 1; }\n";
+    ProtobufSchema v1 = new ProtobufSchema(head + "message Row { message A { optional int32 q = 1;"
+        + " optional string old = 3; extensions 100 to max; } optional A n = 1; }\n" + n);
+    ProtobufSchema v2 = new ProtobufSchema(head + "message Row { message A { optional int32 q = 1;"
+        + " extensions 100 to max; } optional A n = 1; optional int32 pad = 2; }\n" + n);
+    ProtobufSchema v3 = new ProtobufSchema(head + "message Row { message B { optional int32 q = 1;"
+        + " optional N x = 3; } optional B n = 1; optional int32 pad = 2; }\n" + n);
+    byte[] bytes = write(v1, b -> {
+      FieldDescriptor inner = field(b, "n");
+      DynamicMessage.Builder a = DynamicMessage.newBuilder(inner.getMessageType());
+      a.setField(inner.getMessageType().findFieldByName("q"), 7);
+      a.setUnknownFields(UnknownFieldSet.newBuilder().addField(536870911, UnknownFieldSet.Field
+          .newBuilder().addLengthDelimited(ByteString.copyFromUtf8("zzzz")).build()).build());
+      b.setField(inner, a.build());
+    });
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "v1"), "n");
+    assertEquals(7, inner.getField(inner.getDescriptorForType().findFieldByName("q")));
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

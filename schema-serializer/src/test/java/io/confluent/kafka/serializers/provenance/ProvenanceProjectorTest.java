@@ -117,6 +117,21 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void eachRecordFailingFromOneCachedFailureGetsItsOwnException() throws Exception {
+    // A cached failure is rethrown to every record; one instance shared by all would collect
+    // whatever each caller added to it.
+    CountingClient client = new CountingClient();
+    client.failure = new RestClientException("rejected", 422, 42202);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SerializationException first = assertThrows(SerializationException.class,
+        () -> ask(projector, client));
+    SerializationException second = assertThrows(SerializationException.class,
+        () -> ask(projector, client));
+    assertTrue(first != second);
+    assertEquals(first.getMessage(), second.getMessage());
+  }
+
+  @Test
   public void aServerErrorFailsTheRecordAndIsAskedAgain() throws Exception {
     CountingClient client = new CountingClient();
     client.failure = new RestClientException("boom", 500, 500);

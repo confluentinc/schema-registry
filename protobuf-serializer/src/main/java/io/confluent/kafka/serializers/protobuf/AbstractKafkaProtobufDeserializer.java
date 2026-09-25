@@ -85,9 +85,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     // A projector, and the class schemas it marked, belong to the configuration they were built
-    // under.
-    provenanceProjector = null;
-    classSchemas.clear();
+    // under; reset under the lock the projector is built under.
+    synchronized (this) {
+      provenanceProjector = null;
+      classSchemas.clear();
+    }
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {

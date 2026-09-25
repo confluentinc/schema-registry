@@ -183,9 +183,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected void configure(KafkaAvroDeserializerConfig config,  Class<?> type) {
     configureClientProperties(config, new AvroSchemaProvider());
     // A projector, and the class readers it marked, belong to the configuration they were built
-    // under.
-    provenanceProjector = null;
-    classReaders.invalidateAll();
+    // under; reset under the lock the projector is built under.
+    synchronized (this) {
+      provenanceProjector = null;
+      classReaders.invalidateAll();
+    }
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
 

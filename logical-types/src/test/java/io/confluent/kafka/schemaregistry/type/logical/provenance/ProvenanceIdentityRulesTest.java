@@ -145,6 +145,48 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void jsonArrayBranchesAreToldApartByTheirItems() {
+    // Both branches are arrays: their items' members tell them apart when they swap.
+    String x = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":"
+        + "{\"x\":{\"type\":\"number\"}}}}";
+    String y = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":"
+        + "{\"y\":{\"type\":\"number\"}}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + x + "," + y + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + y + "," + x + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 0, 0, 0))).isEqualTo(before.get(path(0, 1, 0, 0)));
+    assertThat(after.get(path(0, 1, 0, 0))).isEqualTo(before.get(path(0, 0, 0, 0)));
+  }
+
+  @Test
+  void jsonBranchesDifferingBelowTheTopAreToldApart() {
+    String p = "{\"type\":\"object\",\"properties\":{\"o\":{\"type\":\"object\","
+        + "\"properties\":{\"p\":{\"type\":\"number\"}}}}}";
+    String q = "{\"type\":\"object\",\"properties\":{\"o\":{\"type\":\"object\","
+        + "\"properties\":{\"q\":{\"type\":\"number\"}}}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + p + "," + q + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + q + "," + p + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 0, 0, 0))).isEqualTo(before.get(path(0, 1, 0, 0)));
+    assertThat(after.get(path(0, 1, 0, 0))).isEqualTo(before.get(path(0, 0, 0, 0)));
+  }
+
+  @Test
+  void jsonBranchesWithNoMembersKeepTheirPositions() {
+    String empty = "{\"type\":\"object\"}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + empty + "," + empty + ",{\"type\":\"string\"}]}}",
+            null),
+        json("{\"u\":{\"description\":\"v2\",\"oneOf\":[" + empty + "," + empty
+            + ",{\"type\":\"string\"}]}}", null));
+    assertThat(pids(v, 1)).isEqualTo(pids(v, 0));
+  }
+
+  @Test
   void jsonBranchesContentCannotTellApartKeepTheirPositions() {
     String same = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
     List<ProvenanceVersion> v = compute(

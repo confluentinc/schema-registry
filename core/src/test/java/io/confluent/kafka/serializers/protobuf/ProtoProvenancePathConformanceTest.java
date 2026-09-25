@@ -117,7 +117,7 @@ class ProtoProvenancePathConformanceTest {
         Arrays.<ParsedSchema>asList(writer, reader), multi);
 
     ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
-        reader, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
+        reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
 
     // Nothing under a moving field is read; a multi-message writer's record is of a message the
     // reader declares or fails, so there nothing moves at all.

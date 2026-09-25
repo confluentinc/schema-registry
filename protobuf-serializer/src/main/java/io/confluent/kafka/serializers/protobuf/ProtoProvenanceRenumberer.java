@@ -65,6 +65,8 @@ final class ProtoProvenanceRenumberer {
   private final Map<String, DescriptorProto> writerMessages = new HashMap<>();
   // Every field number of every writer message, for a reader message the writer names otherwise.
   private final Set<Integer> writerNumbers = new HashSet<>();
+  // Every extension and reserved range of every writer message, for the same.
+  private final DescriptorProto.Builder writerRanges = DescriptorProto.newBuilder();
 
   private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
     this.file = file;
@@ -73,21 +75,13 @@ final class ProtoProvenanceRenumberer {
 
   /**
    * {@code reader} with every field provenance gives no writer counterpart moved to an unused
-   * number; {@code reader} itself when there is nothing to move.
+   * number; {@code reader} itself when there is nothing to move. Fresh numbers also avoid those
+   * {@code writer}, where given, writes under: data there would be parsed into the moved field,
+   * and fail the parse where it is a message.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
    *     different numberings, or a field needing a new number belongs to an imported file
    * @throws SerializationException if a location's names are missing or not in the reader
-   */
-  static Renumbered renumber(ProtobufSchema reader, ProvenanceMapping mapping,
-      boolean includeMultipleMessages) {
-    return renumber(reader, null, mapping, includeMultipleMessages);
-  }
-
-  /**
-   * As {@link #renumber(ProtobufSchema, ProvenanceMapping, boolean)}, fresh numbers also avoiding
-   * those {@code writer} writes under: data there would be parsed into the moved field, and fail
-   * the parse where it is a message.
    */
   static Renumbered renumber(ProtobufSchema reader, ProtobufSchema writer,
       ProvenanceMapping mapping, boolean includeMultipleMessages) {
@@ -309,8 +303,11 @@ final class ProtoProvenanceRenumberer {
   }
 
   private void collectWriter(Descriptor message) {
-    writerMessages.put(message.getFullName(), message.toProto());
+    DescriptorProto proto = message.toProto();
+    writerMessages.put(message.getFullName(), proto);
     message.getFields().forEach(field -> writerNumbers.add(field.getNumber()));
+    writerRanges.addAllExtensionRange(proto.getExtensionRangeList());
+    writerRanges.addAllReservedRange(proto.getReservedRangeList());
     for (Descriptor nested : message.getNestedTypes()) {
       collectWriter(nested);
     }
@@ -327,8 +324,10 @@ final class ProtoProvenanceRenumberer {
       if (written != null) {
         written.getFieldList().forEach(field -> taken.add(field.getNumber()));
       } else {
-        // A message renamed since the writer: its data may be under any writer message's numbers.
+        // A message renamed since the writer: its data may be under any writer message's numbers,
+        // or in any of their extension ranges.
         taken.addAll(writerNumbers);
+        written = writerRanges.build();
       }
       int next = MAX_FIELD_NUMBER;
       for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
@@ -348,9 +347,11 @@ final class ProtoProvenanceRenumberer {
 
   /**
    * The highest number at or below {@code from} that no field takes, no extension range covers —
-   * nor the writer's extension or reserved ranges, which its data may still fill — and the
-   * implementation does not reserve. A range is jumped over whole: one running to the maximum
-   * would otherwise be stepped through number by number.
+   * nor the writer's extension ranges, which its data may still fill, nor, while any number is
+   * left otherwise, its reserved ranges — and the implementation does not reserve. {@code written}
+   * is the writer's message of the same name, or every writer message's ranges for one renamed
+   * since. A range is jumped over whole: one running to the maximum would otherwise be stepped
+   * through number by number.
    */
   private static int freeNumber(DescriptorProto.Builder message, DescriptorProto written,
       Set<Integer> taken, int from) {

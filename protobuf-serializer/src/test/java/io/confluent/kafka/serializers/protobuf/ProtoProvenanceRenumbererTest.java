@@ -38,7 +38,7 @@ public class ProtoProvenanceRenumbererTest {
 
   @Test
   public void aLocationWithoutNamesFailsEveryRecord() {
-    assertThrows(SerializationException.class, () -> ProtoProvenanceRenumberer.renumber(READER,
+    assertThrows(SerializationException.class, () -> ProtoProvenanceRenumberer.renumber(READER, null,
         mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, 2))), false));
   }
@@ -46,7 +46,7 @@ public class ProtoProvenanceRenumbererTest {
   @Test
   public void aLocationNotInTheReaderFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
-        () -> ProtoProvenanceRenumberer.renumber(READER, mapping(Arrays.asList(p(1, "a")),
+        () -> ProtoProvenanceRenumberer.renumber(READER, null, mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), p(2, "ghost"))), false));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
   }
@@ -56,7 +56,7 @@ public class ProtoProvenanceRenumbererTest {
     // Stepping through the range number by number takes seconds.
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
         + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 100 to max;\n}\n");
-    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader,
+    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
         mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
     assertEquals(99, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
   }
@@ -65,7 +65,7 @@ public class ProtoProvenanceRenumbererTest {
   public void aFreshNumberIsNeverOneTheImplementationReserves() {
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
         + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 20000 to max;\n}\n");
-    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader,
+    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
         mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
     assertEquals(18_999, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
   }

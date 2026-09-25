@@ -71,8 +71,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected void configure(KafkaJsonSchemaDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new JsonSchemaProvider());
-    // A projector belongs to the configuration it was built under.
-    provenanceProjector = null;
+    // A projector belongs to the configuration it was built under; reset under the lock it is
+    // built under.
+    synchronized (this) {
+      provenanceProjector = null;
+    }
     this.type = type;
 
     boolean failUnknownProperties =
