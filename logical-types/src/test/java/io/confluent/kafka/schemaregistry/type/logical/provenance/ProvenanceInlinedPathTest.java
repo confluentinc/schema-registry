@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,10 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Tests for {@link ProvenanceResult#inlinedProvenance} and {@link ProvenanceResult#report} —
- * provenance re-keyed from definition sites onto the paths a consumer walks once it has inlined
- * every named type, located by the chain of provenances rather than by the path so that two uses
- * of one shared type stay apart, and packaged with an id allocated per location.
+ * Tests for {@link ProvenanceComputer#report}: every member at the path a consumer walks once it
+ * has inlined every named type, with its native names and an id allocated per location, so that
+ * two uses of one shared type stay apart.
  */
 class ProvenanceInlinedPathTest {
 
@@ -45,35 +45,18 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void inlinesNamedTypes() {
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(nested()));
-    Map<List<Integer>, InlinedMember> byPath = byPath(result.inlinedProvenance(0));
-
-    assertThat(byPath.keySet()).containsExactly(
+    assertThat(ids(report(nested()), 0).keySet()).containsExactly(
         path(0),        // id
         path(1),        // addr
         path(1, 0));    // addr.city, reached through the reference
-
-    assertThat(byPath.get(path(1, 0)).getLocation().getEntity())
-        .isEqualTo(result.at(0, PathKey.ofRoot().child(1).child(0)));
-    // The chain locates it: the addr field, then city within it.
-    assertThat(byPath.get(path(1, 0)).getLocation().getChain()).containsExactly(
-        byPath.get(path(1)).getLocation().getEntity(),
-        byPath.get(path(1, 0)).getLocation().getEntity());
   }
 
   @Test
-  void aSharedNamedTypeIsAnEntityPerLocation() {
+  void aSharedNamedTypeIsALocationPerUse() {
     // The single most important property for a consumer with no shared types: home.city and
-    // work.city must be told apart. A type is resolved where it is used, so each use is its own.
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(twoAddresses()));
-    Map<List<Integer>, InlinedMember> byPath = byPath(result.inlinedProvenance(0));
-
-    LocatedProvenance homeCity = byPath.get(path(0, 0)).getLocation();
-    LocatedProvenance workCity = byPath.get(path(1, 0)).getLocation();
-
-    assertThat(homeCity.getEntity()).isNotEqualTo(workCity.getEntity());
-    assertThat(homeCity).isNotEqualTo(workCity);
-    assertThat(homeCity.depth()).isEqualTo(2);
+    // work.city must be told apart. A type is matched where it is used, so each use is its own.
+    Map<List<Integer>, Integer> ids = ids(report(twoAddresses()), 0);
+    assertThat(ids.get(path(0, 0))).isNotEqualTo(ids.get(path(1, 0)));
   }
 
   @Test
@@ -82,8 +65,7 @@ class ProvenanceInlinedPathTest {
     namedTypes.put("Node", Schema.createStruct(Arrays.asList(
         field("value"),
         new Field("next", Schema.createNamedTypeRef("Node"), 1))));
-    assertThatThrownBy(() -> ProvenanceComputer.compute(Arrays.asList(
-        new LogicalType(Schema.createNamedTypeRef("Node"), namedTypes))))
+    assertThatThrownBy(() -> report(new LogicalType(Schema.createNamedTypeRef("Node"), namedTypes)))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("recursive named type: Node");
   }
@@ -94,10 +76,8 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void pathsAndNamesCoverEveryStepKind() {
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(everyStep()));
-
-    assertThat(result.inlinedProvenance(0)).extracting(
-        InlinedMember::getPath, InlinedMember::getNames).containsExactly(
+    assertThat(report(everyStep()).getVersions().get(0).getMembers()).extracting(
+        ProvenanceReport.Member::getPath, ProvenanceReport.Member::getNames).containsExactly(
         tuple(path(0), names("id")),
         tuple(path(1), names("addr")),
         tuple(path(1, 0), names("addr", "acme.Address", "city")), // the entry step, then city
@@ -112,19 +92,16 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void anEdgeWithNoRecordedStepsLeavesItsNamesUnknown() {
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(lt(struct(
-        new Field("o", struct(field("a")), 0)))));
-
-    assertThat(result.inlinedProvenance(0)).extracting(InlinedMember::getNames)
-        .containsOnlyNulls();
+    assertThat(report(lt(struct(new Field("o", struct(field("a")), 0)))).getVersions().get(0)
+        .getMembers()).extracting(ProvenanceReport.Member::getNames).containsOnlyNulls();
   }
 
   @Test
   void membersComeOutInPathOrder() {
     // Lexicographic on the index sequences, which is the pre-order walk -- and the order ids are
     // allocated in, so it is part of the contract rather than an accident of the walk.
-    List<List<Integer>> paths = ProvenanceComputer.compute(Arrays.asList(everyStep()))
-        .inlinedProvenance(0).stream().map(InlinedMember::getPath).collect(Collectors.toList());
+    List<List<Integer>> paths = report(everyStep()).getVersions().get(0).getMembers().stream()
+        .map(ProvenanceReport.Member::getPath).collect(Collectors.toList());
 
     List<List<Integer>> sorted = paths.stream().sorted((a, b) -> {
       for (int i = 0; i < Math.min(a.size(), b.size()); i++) {
@@ -140,27 +117,35 @@ class ProvenanceInlinedPathTest {
   }
 
   @Test
-  void aCollectionStepDoesNotLengthenTheChain() {
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(arrayOf("items", struct(field("sku")))))));
-    Map<List<Integer>, InlinedMember> byPath = byPath(result.inlinedProvenance(0));
-
-    // items -> sku, with nothing for the element itself: a step is not an entity.
-    assertThat(byPath.get(path(0, 0, 0)).getLocation().depth()).isEqualTo(2);
-    assertThat(byPath.get(path(0, 0, 0)).getLocation().getChain().get(0))
-        .isEqualTo(byPath.get(path(0)).getLocation().getEntity());
+  void aCollectionStepIsNoMember() {
+    // items -> sku, with nothing for the element itself: a step is not a location.
+    assertThat(ids(report(lt(struct(arrayOf("items", struct(field("sku")))))), 0).keySet())
+        .containsExactly(path(0), path(0, 0, 0));
   }
 
   @Test
   void aRetypedCollectionRelocatesItsMembers() {
-    // ARRAY<ROW> to MAP<K, ROW>: the inner members move to a different scope, so they are not the
-    // same entities and their locations do not match either.
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
+    // ARRAY<ROW> to MAP<K, ROW>: the inner members sit under a different step, so they match
+    // nothing, while the field holding them continues.
+    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(
         lt(struct(arrayOf("items", struct(field("sku"))))),
-        lt(struct(mapOf("items", struct(field("sku")))))));
+        lt(struct(mapOf("items", struct(field("sku")))))), IdentityPolicy.AVRO);
 
-    assertThat(byPath(result.inlinedProvenance(1)).get(path(0, 1, 0)).getLocation())
-        .isNotEqualTo(byPath(result.inlinedProvenance(0)).get(path(0, 0, 0)).getLocation());
+    assertThat(ids(report, 1).get(path(0))).isEqualTo(ids(report, 0).get(path(0)));
+    assertThat(ids(report, 1).get(path(0, 1, 0))).isNotEqualTo(ids(report, 0).get(path(0, 0, 0)));
+  }
+
+  @Test
+  void aHistoryChangingFormatStartsEveryLocationAfresh() {
+    // Versions of different policies match nothing, whatever their names say; the versions after
+    // the change match each other again.
+    LogicalType ab = lt(struct(field("a"), field("b")));
+    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(ab, ab, ab),
+        Arrays.asList(IdentityPolicy.AVRO, IdentityPolicy.JSON, IdentityPolicy.JSON));
+
+    assertThat(ids(report, 0)).containsExactly(entryOfId(path(0), 1), entryOfId(path(1), 2));
+    assertThat(ids(report, 1)).containsExactly(entryOfId(path(0), 3), entryOfId(path(1), 4));
+    assertThat(ids(report, 2)).containsExactly(entryOfId(path(0), 3), entryOfId(path(1), 4));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -180,7 +165,7 @@ class ProvenanceInlinedPathTest {
     // A rename keeps its id, which is what lets Iceberg treat it as the same column.
     assertThat(ids(report, 1)).containsExactly(entryOfId(path(0), 1), entryOfId(path(1), 2));
     assertThat(ids(report, 2)).containsExactly(entryOfId(path(0), 1));
-    // Re-added under the same name: a new presence interval, so a new id. 2 is never reused.
+    // Re-added under the same name: absent from v2, so a new id. 2 is never reused.
     assertThat(ids(report, 3)).containsExactly(entryOfId(path(0), 1), entryOfId(path(1), 3));
 
     assertThat(report.getLastId()).isEqualTo(3);
@@ -232,40 +217,19 @@ class ProvenanceInlinedPathTest {
     assertThat(IdentityPolicy.forSchemaType("AVRO")).isEqualTo(IdentityPolicy.AVRO);
     assertThat(IdentityPolicy.forSchemaType("PROTOBUF")).isEqualTo(IdentityPolicy.PROTOBUF);
     assertThat(IdentityPolicy.forSchemaType("JSON")).isEqualTo(IdentityPolicy.JSON);
-    // Never silently falls back to AUTO and its guessing.
+    // Never guesses.
     assertThatThrownBy(() -> IdentityPolicy.forSchemaType("XML"))
         .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("XML");
     assertThatThrownBy(() -> IdentityPolicy.forSchemaType(null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
-  @Test
-  void theComputedSchemasAreRetained() {
-    LogicalType v0 = lt(struct(field("a")));
-    LogicalType v1 = lt(struct(field("a"), field("b")));
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(v0, v1));
-
-    assertThat(result.version(0)).isSameAs(v0);
-    assertThat(result.versions()).containsExactly(v0, v1);
-  }
-
-  @Test
-  void pathKeyExposesItsPosition() {
-    PathKey nested = PathKey.ofNamedType("acme.Order").child(3).child(1);
-    assertThat(nested.position()).isEqualTo(1);
-    assertThat(nested.isRoot()).isFalse();
-
-    assertThat(PathKey.ofRoot().isRoot()).isTrue();
-    assertThatThrownBy(PathKey.ofRoot()::position).isInstanceOf(IllegalStateException.class);
-  }
-
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------
 
-  private static Map<List<Integer>, InlinedMember> byPath(List<InlinedMember> members) {
-    return members.stream().collect(Collectors.toMap(
-        InlinedMember::getPath, m -> m, (a, b) -> a, LinkedHashMap::new));
+  private static ProvenanceReport report(LogicalType version) {
+    return ProvenanceComputer.report(Arrays.asList(version), IdentityPolicy.AVRO);
   }
 
   private static Map<List<Integer>, Integer> ids(ProvenanceReport report, int version) {
@@ -343,7 +307,7 @@ class ProvenanceInlinedPathTest {
   }
 
   private static Map.Entry<List<Integer>, Integer> entryOfId(List<Integer> path, int id) {
-    return new java.util.AbstractMap.SimpleEntry<>(path, id);
+    return new AbstractMap.SimpleEntry<>(path, id);
   }
 
   private static LogicalType lt(Schema root) {

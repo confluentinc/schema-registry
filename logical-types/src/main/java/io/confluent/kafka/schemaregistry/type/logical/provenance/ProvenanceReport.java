@@ -24,9 +24,9 @@ import java.util.List;
  * serves, independent of how it is serialised.
  *
  * <p>Ids are allocated by walking versions in the order supplied and, within a version, members in
- * path order, taking the next integer the first time a {@link LocatedProvenance} is seen. That
- * order is part of the contract: it determines the numbers, so two derivations over the same
- * history agree.
+ * path order, taking the next integer for each member matched to nothing in the previous version
+ * (see {@link ProvenanceComputer}). That order is part of the contract: it determines the numbers,
+ * so two derivations over the same history agree.
  *
  * <p>Versions are identified by their index in the supplied history, not by a registry version
  * number. Mapping one to the other belongs to whoever assembled the history, and keeping it out of
@@ -100,21 +100,24 @@ public final class ProvenanceReport {
     private final List<Integer> path;
     private final List<String> names;
     private final int id;
-    private final Object defaultValue;
 
-    Member(List<Integer> path, List<String> names, int id, Object defaultValue) {
+    Member(List<Integer> path, List<String> names, int id) {
       this.path = path;
       this.names = names;
       this.id = id;
-      this.defaultValue = defaultValue;
     }
 
+    /**
+     * The member's index path, every named type inlined: the Metastore's key.
+     */
     public List<Integer> getPath() {
       return path;
     }
 
     /**
-     * Informational; see {@link InlinedMember#getNames()}.
+     * The native schema's name for each step of {@link #getPath()}, with its entry steps, as the
+     * converter recorded them; null for a step with no native name, or null altogether where an
+     * edge recorded none.
      */
     public List<String> getNames() {
       return names;
@@ -125,14 +128,6 @@ public final class ProvenanceReport {
      * A rename keeps it, a drop retires it permanently, and a column re-added under an old name
      * takes a fresh one.
      */
-    /**
-     * What reading this member yields when a writer has no counterpart for it, or {@code null}
-     * where there is nothing to read. See {@link InlinedMember#getDefaultValue()}.
-     */
-    public Object getDefaultValue() {
-      return defaultValue;
-    }
-
     public int getId() {
       return id;
     }

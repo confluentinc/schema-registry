@@ -21,26 +21,8 @@
  *
  * <p>Schema evolution systems often focus on managing column IDs, but the underlying objective is
  * to determine the correct projection of a record written under one schema onto an evolved one.
- * This package computes the correspondence that projection needs, directly from the schemas.
- *
- * <h2>The four concepts</h2>
- *
- * <ul>
- *   <li><b>Logical identity</b> ({@link
- *       io.confluent.kafka.schemaregistry.type.logical.provenance.Identity}) — what logical entity
- *       an occurrence represents, as far as matching it to the previous version goes.</li>
- *   <li><b>Provenance</b> ({@link
- *       io.confluent.kafka.schemaregistry.type.logical.provenance.Provenance}) — that identity
- *       together with the first version of the chain of matches between consecutive versions it
- *       belongs to.</li>
- *   <li><b>Provenance intersection</b> ({@link
- *       io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceResult#intersection})
- *       — the members present in both schemas. Symmetric.</li>
- *   <li><b>Projection</b> — that intersection shaped by a target schema. Not implemented here;
- *       {@link
- *       io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceResult#correspondence}
- *       gives a caller the field mapping to apply it with.</li>
- * </ul>
+ * This package computes the correspondence that projection needs, directly from the schemas: a
+ * provenance id for every member location, the same id wherever a location continues another.
  *
  * <h2>Why provenance rather than names</h2>
  *
@@ -54,11 +36,10 @@
  * <h2>Relation to column IDs</h2>
  *
  * <p>A persistent column ID is a centrally allocated identifier serving the same correspondence
- * role as provenance. Both are available from this package's output: a metastore anchoring the
- * computation at the first version can derive and persist stable column IDs from the provenance
- * values, while a disconnected compute engine can compute the correspondence over just the window
- * it cares about — which pairs its versions as the whole history does — and project without
- * coordinating with anyone.
+ * role as provenance. Each version is matched against the one before it alone, so the ids over any
+ * range of versions pair them exactly as the whole history does: a metastore can derive and
+ * persist column IDs from them, while a disconnected compute engine computes the correspondence
+ * over just the window it cares about and projects without coordinating with anyone.
  *
  * @see io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceComputer
  */
