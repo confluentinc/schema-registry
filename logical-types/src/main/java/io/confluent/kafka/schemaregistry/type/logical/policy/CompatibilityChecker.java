@@ -31,8 +31,15 @@ import java.util.Set;
 /**
  * Checks whether one {@link LogicalType} can evolve into another for a given downstream consumer.
  *
- * <p>Direction is BACKWARD: the {@code update} schema must be able to read data written with the
- * {@code original} schema. All violations are collected; see {@link CompatibilityResult}.
+ * <p>{@code original} is the schema data was <b>written</b> under; {@code update} is the schema
+ * now doing the <b>reading</b>. That is the whole contract -- neither parameter means "the older
+ * one" or "the one on file." Backward compatibility calls this with (previously-registered,
+ * proposed);
+ * forward compatibility calls it with the same two schemas swapped, (proposed,
+ * previously-registered), to ask the mirror question. A message built from these parameters must
+ * therefore be worded in terms of "the writer's schema" / "the reader's schema," never "the
+ * original schema" / "the update" -- the latter reads backwards for every caller that swaps the
+ * arguments. All violations are collected; see {@link CompatibilityResult}.
  *
  * <p>{@link LogicalTypeChecker} is the entry point. This class dispatches to one implementation
  * per mode — {@link IcebergComparison} and {@link FlinkComparison} — and holds the walk primitives
@@ -64,8 +71,8 @@ final class CompatibilityChecker {
    * Compares {@code original} against {@code update} under {@code mode}.
    *
    * @param mode     which consumer's rules to apply
-   * @param original the currently registered schema
-   * @param update   the proposed schema
+   * @param original the schema data was written under (the writer's schema)
+   * @param update   the schema now reading that data (the reader's schema)
    * @return every violation found, or {@link CompatibilityResult#compatible()} if there are none
    * @throws UnsupportedOperationException if {@code mode} is not yet implemented
    */
@@ -217,7 +224,8 @@ final class CompatibilityChecker {
   }
 
   static String describeChange(Schema original, Schema update) {
-    return "type changed from " + render(original) + " to " + render(update);
+    return "type is " + render(original) + " in the writer's schema and "
+        + render(update) + " in the reader's schema";
   }
 
   /**
