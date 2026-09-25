@@ -253,6 +253,7 @@ final class IcebergComparison {
     // Guarding the whole block, not just the finding, avoids paying its O(n^2) index lookups on
     // every struct comparison while the check is off.
     int lastSeenOriginalIndex = -1;
+    String lastSeenFieldName = null;
     final List<String> originalFieldOrder = ENABLE_FIELD_REORDERED_CHECK
         ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
         : null;
@@ -267,8 +268,8 @@ final class IcebergComparison {
       if (originalField == null) {
         if (!isEffectivelyOptional(updateField, null)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-              "added field is neither nullable nor defaulted, so pre-existing rows have no "
-                  + "value for it"
+              "field is required by the reader's schema but missing from the writer's schema, "
+                  + "so rows written under the writer's schema have no value for it"
                   + (supportsColumnDefaults()
                       ? "; a non-null column default would make it readable"
                       : "; format-version 2 cannot store a column default"));
@@ -280,18 +281,27 @@ final class IcebergComparison {
       if (ENABLE_FIELD_REORDERED_CHECK) {
         // Existing fields keep their relative order. The watermark advances even on a
         // violation, so a single swap yields one finding rather than cascading.
+        //
+        // Named explicitly rather than said generically ("moved ahead of a field that preceded
+        // it"): the two fields named here are updateField (this one, at fieldPath) and
+        // lastSeenFieldName (the previous one processed) -- naming both, and which preceded
+        // which in which schema, is what keeps this correct once wording no longer gets to lean
+        // on "original"/"update" implying "old"/"new" (see CompatibilityChecker's javadoc).
         final int originalIndex = originalFieldOrder.indexOf(updateField.name);
         if (originalIndex < lastSeenOriginalIndex) {
           add(Rule.FIELD_REORDERED, fieldPath,
-              "field moved ahead of a field that preceded it in the original schema");
+              "'" + updateField.name + "' preceded '" + lastSeenFieldName
+                  + "' in the writer's schema, but now follows it in the reader's schema");
         }
         lastSeenOriginalIndex = originalIndex;
+        lastSeenFieldName = updateField.name;
       }
 
       if (isEffectivelyNullable(originalField)
           && !isEffectivelyOptional(updateField, originalField)) {
         add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
-            "field was nullable and is now non-nullable; pre-existing rows may hold nulls");
+            "field is nullable in the writer's schema but non-nullable in the reader's schema; "
+                + "rows written under the writer's schema may hold nulls");
       }
 
       compareTypes(originalField.schema, updateField.schema, fieldPath);
@@ -300,7 +310,7 @@ final class IcebergComparison {
     for (FieldView originalField : originalFields) {
       if (!updateFieldNames.contains(originalField.name)) {
         add(Rule.FIELD_DELETED, childPath(path, originalField.name),
-            "field present in the original schema is missing from the update");
+            "field present in the writer's schema is missing from the reader's schema");
       }
     }
   }
@@ -320,8 +330,8 @@ final class IcebergComparison {
       Schema original, Schema update, String path) {
     if (!erasedEquals(keyOf(original), keyOf(update))) {
       add(Rule.MAP_KEY_TYPE_MISMATCH, path,
-          "map key type changed from " + render(keyOf(original))
-              + " to " + render(keyOf(update)));
+          "map key type is " + render(keyOf(original)) + " in the writer's schema and "
+              + render(keyOf(update)) + " in the reader's schema");
     }
     compareTypes(valueOf(original), valueOf(update), path + "{}");
   }
@@ -364,9 +374,10 @@ final class IcebergComparison {
             List<String> deletedSymbols = deletedEnumSymbols(original, update);
             if (!deletedSymbols.isEmpty()) {
               add(Rule.ENUM_DELETED, path,
-                  "enum symbol(s) " + deletedSymbols + " present in the original schema are "
-                      + "missing from the update; pre-existing rows may already hold one of "
-                      + "these values, which Iceberg has no default to fall back to");
+                  "enum symbol(s) " + deletedSymbols + " present in the writer's schema are "
+                      + "missing from the reader's schema; rows written under the writer's "
+                      + "schema may already hold one of these values, which Iceberg has no "
+                      + "default to fall back to");
             }
           }
           return;

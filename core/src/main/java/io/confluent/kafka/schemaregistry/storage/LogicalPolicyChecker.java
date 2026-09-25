@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +108,7 @@ public final class LogicalPolicyChecker {
     try {
       newLogical = toLogicalType(newSchema);
     } catch (RuntimeException e) {
-      errors.add("Schema cannot be represented as a logical type: " + e.getMessage());
+      errors.add(describeUnconvertible(e.getMessage()));
       return errors;
     }
 
@@ -174,6 +175,27 @@ public final class LogicalPolicyChecker {
     for (Map.Entry<FindingKey, Map<Mode, String>> entry : byFinding.entrySet()) {
       errors.add(describeFinding(entry.getKey(), entry.getValue()));
     }
+  }
+
+  /**
+   * Renders a schema that could not be converted to a {@link LogicalType} at all, in the same
+   * {@code {errorType, category, description, additionalInfo}} shape {@link #describeFinding}
+   * produces -- a bare string here used to sit next to those objects in the same {@code details}
+   * array, breaking a client that parses every element as one of them.
+   *
+   * <p>{@code errorType} is {@link Invalidity.Rule#UNREPRESENTABLE_TYPE}: the same "consumer's type
+   * system cannot represent this at all" judgment {@link ValidityChecker} makes once a schema
+   * converts, just reached here because it never got that far. {@code category} lists every mode,
+   * since a schema that cannot become a {@link LogicalType} blocks all of them alike, not one in
+   * particular.
+   */
+  private static String describeUnconvertible(String message) {
+    String modes = Arrays.stream(MODES)
+        .map(mode -> "\"" + mode + "\"")
+        .collect(Collectors.joining(", "));
+    return "{errorType:\"" + Invalidity.Rule.UNREPRESENTABLE_TYPE + "\", category:[" + modes
+        + "], description:\"Schema cannot be represented as a logical type: " + message
+        + "\", additionalInfo:\"\"}";
   }
 
   /**
