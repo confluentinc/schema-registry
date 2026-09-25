@@ -898,35 +898,40 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Whether a peer and a previous branch disagree on having a discriminator that another branch
-     * related to them has: the peer's own, where an untaken previous branch has it, or the previous
-     * branch's, where an unresolved peer has it. That branch, not this one, is the counterpart.
+     * Whether pairing a peer with a previous branch would cross a discriminator: one of the two
+     * has a discriminator key the other lacks, and an alternative for it — another untaken previous
+     * branch for the peer, another unresolved peer for the previous branch — shares a member with
+     * it and has that key too. That alternative, not this pairing, is the counterpart.
      */
-    private static boolean crosses(Node peer, Node candidate, List<Node> pending,
+    private static boolean crosses(Node peer, Node candidate, List<Node> peers,
         Map<Node, Node> matched, List<Node> previous, Set<Node> taken) {
-      Set<String> mine = peer.content;
-      Set<String> theirs = candidate.content;
-      for (String key : discriminatorKeys(mine)) {
-        if (discriminatorKeys(theirs).contains(key)) {
-          continue;
-        }
-        for (Node p : previous) {
-          boolean other = p != candidate && !taken.contains(p) && p.content != null;
-          if (other && related(mine, p.content) && discriminatorKeys(p.content).contains(key)) {
-            return true;
-          }
+      List<Node> otherPrevious = new ArrayList<>();
+      for (Node p : previous) {
+        if (p != candidate && !taken.contains(p) && p.content != null) {
+          otherPrevious.add(p);
         }
       }
-      for (String key : discriminatorKeys(theirs)) {
-        if (discriminatorKeys(mine).contains(key)) {
-          continue;
+      List<Node> otherPeers = new ArrayList<>();
+      for (Node other : peers) {
+        if (other != peer && !matched.containsKey(other)) {
+          otherPeers.add(other);
         }
-        for (Node other : pending) {
-          boolean unresolved = other != peer && !matched.containsKey(other);
-          if (unresolved && related(other.content, theirs)
-              && discriminatorKeys(other.content).contains(key)) {
-            return true;
-          }
+      }
+      return hasCounterpart(peer, candidate, otherPrevious)
+          || hasCounterpart(candidate, peer, otherPeers);
+    }
+
+    /**
+     * Whether one of {@code alternatives} shares a member with {@code side} and has a
+     * discriminator key {@code side} has and {@code other} lacks.
+     */
+    private static boolean hasCounterpart(Node side, Node other, List<Node> alternatives) {
+      Set<String> missing = discriminatorKeys(side.content);
+      missing.removeAll(discriminatorKeys(other.content));
+      for (Node alternative : alternatives) {
+        if (related(side.content, alternative.content)
+            && !Collections.disjoint(discriminatorKeys(alternative.content), missing)) {
+          return true;
         }
       }
       return false;
