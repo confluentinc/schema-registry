@@ -19,21 +19,18 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import java.util.Objects;
 
 /**
- * An entity's {@link Identity} together with the first version of its current continuous presence
- * interval — the answer to "which lifetime of that entity is this?".
+ * An entity's {@link Identity} together with the first version of the chain of matches it belongs
+ * to — the answer to "which lifetime of that entity is this?".
  *
- * <p>An entity keeps its provenance for as long as it stays continuously present. If it disappears
- * and later reappears, the reappearance starts a new interval and so takes a new provenance, even
- * when an alias reconnects it to the same logical identity. Provenance is therefore not the version
- * an entity first ever existed in; it is the first version of its current uninterrupted lifespan.
+ * <p>Each version is matched against the one before it alone, and an entity keeps its provenance
+ * for as long as each version matches it to the previous one. An entity absent from a version
+ * starts a new chain when it returns, and so takes a new provenance, even when its identity is the
+ * same, as a Protobuf field number re-added is.
  *
  * <p>This, not {@link Identity}, is the cross-schema correspondence key. Two occurrences correspond
- * under projection exactly when their provenance values are equal, which happens exactly when they
- * belong to the same continuous presence interval of the same logical entity.
- *
- * <p><b>Values are only as global as the history they were computed from.</b> Computed from a
- * sub-history they are relative — sufficient to determine correspondence within that window and
- * nothing more. Only a run anchored at the first version yields absolute values.
+ * under projection exactly when their provenance values are equal. Since nothing before a version's
+ * predecessor is consulted, a sub-history pairs its versions exactly as the whole history does;
+ * only {@link #getPresenceStartVersion()} is relative to the first version supplied.
  */
 public final class Provenance {
 
@@ -51,8 +48,8 @@ public final class Provenance {
   }
 
   /**
-   * The index, within the supplied sequence, of the version that began this presence interval.
-   * Never later than the version this provenance was read from.
+   * The index, within the supplied sequence, of the version that began this chain. Never later
+   * than the version this provenance was read from.
    */
   public int getPresenceStartVersion() {
     return presenceStartVersion;

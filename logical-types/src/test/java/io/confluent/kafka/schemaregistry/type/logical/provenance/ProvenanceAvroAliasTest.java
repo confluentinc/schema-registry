@@ -66,19 +66,35 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
-  void anAliasNamesWhatTheWriterWasActuallyCalled() {
-    // Its own name: nothing. A name never seen: nothing. A former alias: nothing. A former
-    // canonical name, two renames back: the identity.
+  void anAliasNamesWhatThePreviousVersionCalledTheField() {
+    // Its own name: nothing. A name never seen: nothing. A former alias: nothing. A name two
+    // renames back: nothing, unless the latest name is aliased too.
     assertThat(same(pids(avro(f("a", I)), avro(fa("a", I, "a"))), "a", "a")).isTrue();
     assertThat(same(pids(avro(f("a", I)), avro(fa("c", I, "a", "nope"))), "a", "c")).isTrue();
     assertThat(same(pids(avro(fa("a", I, "x")), avro(fa("b", I, "x"))), "a", "b")).isFalse();
-    List<Map<String, Integer>> chain = pids(avro(f("a", I)), avro(fa("b", I, "a")),
+    List<Map<String, Integer>> older = pids(avro(f("a", I)), avro(fa("b", I, "a")),
         avro(fa("c", I, "a")));
-    assertThat(chain.get(2).get("c")).isEqualTo(chain.get(0).get("a"));
+    assertThat(older.get(2).get("c")).isNotEqualTo(older.get(1).get("b"));
+    List<Map<String, Integer>> latest = pids(avro(f("a", I)), avro(fa("b", I, "a")),
+        avro(fa("c", I, "a", "b")));
+    assertThat(latest.get(2).get("c")).isEqualTo(latest.get(0).get("a"));
   }
 
   @Test
-  void anAliasToADroppedFieldReconnectsOnANewInterval() {
+  void anAliasToADroppedFieldClaimsNothing() {
+    // Only the previous version is matched against, so neither is a conflict: a field continuing
+    // itself while aliasing a dropped name, and two fields aliasing one dropped name.
+    List<Map<String, Integer>> own = pids(avro(f("a", I), f("x", I)), avro(f("x", I)),
+        avro(fa("x", I, "a")));
+    assertThat(own.get(2).get("x")).isEqualTo(own.get(0).get("x"));
+    List<Map<String, Integer>> two = pids(avro(f("a", I), f("z", I)), avro(f("z", I)),
+        avro(fa("b", I, "a"), fa("c", I, "a"), f("z", I)));
+    assertThat(two.get(2).get("b")).isNotEqualTo(two.get(2).get("c"));
+    assertThat(two.get(2).values()).doesNotContain(two.get(0).get("a"));
+  }
+
+  @Test
+  void anAliasToADroppedFieldContinuesNothing() {
     List<Map<String, Integer>> pids = pids(avro(f("a", I)), avro(f("z", I)),
         avro(fa("b", I, "a"), f("z", I)));
     assertThat(pids.get(2).get("b")).isNotEqualTo(pids.get(0).get("a"));

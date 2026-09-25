@@ -25,19 +25,18 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
  * <ul>
  *   <li>{@link IntegerIdentity} — a Protobuf field number. Globally stable: renaming the field
  *       changes nothing, and reusing the number after a gap resolves to the same identity on a new
- *       presence interval.</li>
+ *       chain.</li>
  *   <li>{@link StringIdentity} — a name that is stable on its own terms, with no alias mechanism
  *       behind it: a JSON Schema property, or a Protobuf message. Reusing the name after a gap
- *       likewise resolves to the same identity on a new interval, and a rename is simply a drop
+ *       likewise resolves to the same identity on a new chain, and a rename is simply a drop
  *       plus an add.</li>
- *   <li>{@link MintedIdentity} — a name resolved through an alias index, for Avro. Because an alias
- *       can reconnect to a historical identity, and because a name released by its holder must not
- *       be implicitly inherited, the minting version is folded into the value to keep independently
- *       minted identities apart.</li>
+ *   <li>{@link MintedIdentity} — a name resolved through an alias index, for Avro. Because a name
+ *       released by its holder must not be implicitly inherited, the minting version is folded into
+ *       the value to keep independently minted identities apart.</li>
  * </ul>
  *
  * <p>Only {@link MintedIdentity} participates in the name resolution index; the other two are
- * computed directly from the entity and need no history to resolve.
+ * computed directly from the entity and need no previous version to resolve.
  */
 public interface FormatIdentity {
 }

@@ -121,7 +121,7 @@ public final class ProvenanceReport {
     }
 
     /**
-     * The provenance id: unique per <em>location</em>, stable for the life of a presence interval.
+     * The provenance id: unique per <em>location</em>, stable along a chain of matches.
      * A rename keeps it, a drop retires it permanently, and a column re-added under an old name
      * takes a fresh one.
      */

@@ -19,11 +19,11 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import java.util.Objects;
 
 /**
- * What logical schema entity an occurrence represents, independent of its current presence
- * interval — the answer to "is this historically the same entity?".
+ * What an occurrence is matched by — an occurrence continues the previous version's occurrence of
+ * the same identity.
  *
  * <p>An identity is a {@link EntityKind}, a {@link Scope} and a {@link FormatIdentity}. It is never
- * independently allocated: it is derived from the schema's structure and the history walked so far.
+ * independently allocated: it is derived from the schema's structure and the previous version.
  * All three parts matter. The kind keeps a named type and a member of the same name apart; the
  * scope keeps {@code User.name} and {@code Order.name} apart; the format identity distinguishes an
  * entity from its peers.
@@ -32,7 +32,8 @@ import java.util.Objects;
  * entity's identity.
  *
  * <p>Use {@link Provenance}, not this, as the cross-schema correspondence key. Two occurrences can
- * share an identity and still belong to different lifetimes, which must not correspond.
+ * share an identity and still belong to different chains — a Protobuf field number re-added
+ * after a gap — which must not correspond.
  */
 public final class Identity implements Scope {
 

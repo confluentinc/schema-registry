@@ -43,26 +43,28 @@ import java.util.function.Predicate;
  * {@link LogicalType} versions, so that two versions can be put in correspondence without matching
  * on names and without an out-of-band column ID system.
  *
- * <p>The sequence is the history. Because a presence interval can only be observed by seeing a
- * version in which an entity is absent, the values computed are exactly as good as the history
- * supplied: anchor at the subject's first version for absolute provenance, or hand over just the
- * window between two versions for relative provenance, which is sufficient for the pairwise
- * correspondence a compute engine needs. Values from different windows are not comparable.
+ * <p>Provenance is a chain of matches between consecutive versions. Each version is matched
+ * against the one before it alone: every location is matched to at most one location of the
+ * previous version, or to none, and a chain of matched locations is one provenance. A location
+ * matched to nothing starts a chain, so nothing absent from the previous version is ever continued.
+ * Because nothing older is consulted, a range of versions computes the same pairings as the whole
+ * history does over that range.
  *
  * <h2>Identity</h2>
  *
- * <p>Identity rules are format-specific and a {@code LogicalType} carries no format discriminator,
- * so {@link IdentityPolicy} stands in for one. Named types are resolved where they are used: each
- * use is an entity scoped by the location using it, and its identity scopes the type's members.
- * A type merged, split or swapped by aliases therefore keeps every location's lineage, and a
- * location whose type changes and changes back starts over rather than taking back its old ids.
- * Under the JSON policy a named type is transparent, with no entity of its own. A recursive type
- * has no finite set of uses, and is rejected. See {@link PathKey}.
+ * <p>An {@link Identity} is what a location is matched by: a location continues the previous
+ * version's location of the same identity. Identity rules are format-specific and a
+ * {@code LogicalType} carries no format discriminator, so {@link IdentityPolicy} stands in for one.
+ * Named types are resolved where they are used: each use is an entity scoped by the location using
+ * it, and its identity scopes the type's members. A type merged, split or swapped by aliases
+ * therefore keeps every location's lineage. Under the JSON policy a named type is transparent, with
+ * no entity of its own. A recursive type has no finite set of uses, and is rejected. See
+ * {@link PathKey}.
  *
  * <p>A member's scope is its container's identity, so the shape of the root matters: the members of
  * an anonymous root schema sit in a different scope from the members of a named type. A version
  * that gives a previously anonymous root a name, or the reverse, therefore starts every member's
- * interval afresh — which is correct, but worth knowing before mixing LTs built by a shim (which
+ * chain afresh — which is correct, but worth knowing before mixing LTs built by a shim (which
  * inlines everything) with LTs read from Protobuf (whose roots are named). An Avro root that refers
  * to its own record — as a converter keeps one naming types inside it — is walked as the root, so
  * the root's name never matters to Avro.
@@ -73,34 +75,30 @@ import java.util.function.Predicate;
  * entities happen to be walked in:
  *
  * <ol>
- *   <li><b>Resolve</b> — walk the version top-down, one peer group at a time, resolving every
- *       entity's identity against the state left by the previous version. Nothing is mutated, so
- *       every entity sees the same snapshot, including the parents whose identities form its
- *       scope.</li>
- *   <li><b>Validate</b> — reject a version that repeats a path, claims one name for two identities,
- *       or takes a name still held by a live entity.</li>
- *   <li><b>Commit</b> — start, continue or restart each entity's presence interval, update the name
- *       resolution index, and mark everything not present in this version inactive.</li>
+ *   <li><b>Resolve</b> — walk the version top-down, one peer group at a time, matching every
+ *       entity against the previous version. Nothing is mutated, so every entity sees the same
+ *       previous version, including the parents whose identities form its scope.</li>
+ *   <li><b>Validate</b> — reject a version that repeats a path.</li>
+ *   <li><b>Commit</b> — continue each matched entity's chain or start one, and keep this version
+ *       alone for the next to be matched against.</li>
  * </ol>
  *
  * <h2>Names and aliases</h2>
  *
- * <p>Under Avro rules, as Avro's own decoder applies them, the index holds canonical names only:
- * an alias names what a writer's field or type was actually called, never one of the writer's
- * aliases. A peer group is resolved as a whole. A peer continues the identity last committed under
- * its own name while it is active, or the identity an alias names; an explicit alias wins, as Avro
+ * <p>Under Avro rules a peer continues the previous version's entity of its own name, or the one
+ * an alias names. An alias names what the previous version called a field or type — never one of
+ * its aliases, nor any older name: an alias naming only an older name continues nothing, so a
+ * type renamed twice keeps its lineage by aliasing its latest name. An explicit alias wins, as Avro
  * renames a writer field to the reader field aliasing it even when one of that name exists. A peer
- * continuing itself may carry its aliases forward, but not claim another identity with a new one.
- * Each identity has at most one continuation and each peer continues at most one identity; where
- * Avro itself cannot say which, the history is ambiguous.
+ * continuing itself may carry its aliases forward, but not claim another entity with a new one.
+ * Each entity has at most one continuation and each peer continues at most one entity; where Avro
+ * itself cannot say which, the history is ambiguous.
  *
  * <h2>Invariant</h2>
  *
- * <p>A logical entity is assigned exactly one provenance value for each continuous presence
- * interval. Continuously present occurrences of one entity share a provenance (so correspondence
- * survives a rename); occurrences separated by an absence never do (so a name reused later cannot
- * be mistaken for the entity that used to hold it), whether the reappearance mints a fresh identity
- * or an alias reconnects it to the historical one.
+ * <p>Two locations share a provenance exactly when a chain of matches between consecutive versions
+ * joins them. A rename keeps a provenance, and a location absent from one version and back in the
+ * next never does — so a name reused later cannot be mistaken for the entity that used to hold it.
  */
 public final class ProvenanceComputer {
 
@@ -153,7 +151,7 @@ public final class ProvenanceComputer {
    * <p>Use this for a sequence that changes format part-way: the signal that establishes identity
    * differs per format, and a single policy across the switch either reads Avro names positionally
    * or ignores Protobuf numbers. Note that an entity whose identity signal changes between versions
-   * takes a new identity, and therefore a new presence interval, whatever the policies say — to
+   * takes a new identity, and therefore a new chain, whatever the policies say — to
    * carry correspondence across a format migration, resolve both sides by name.
    *
    * @param versions the schema versions in chronological order
@@ -173,7 +171,7 @@ public final class ProvenanceComputer {
           + policies.size() + " policies for " + versions.size() + " versions");
     }
 
-    History history = new History();
+    History previous = new History();
     List<Map<PathKey, Provenance>> byVersion = new ArrayList<>(versions.size());
     for (int version = 0; version < versions.size(); version++) {
       LogicalType logicalType = versions.get(version);
@@ -185,10 +183,12 @@ public final class ProvenanceComputer {
         throw new IllegalArgumentException("Null IdentityPolicy at version " + version);
       }
 
-      Resolver resolver = new Resolver(version, policy, history);
+      Resolver resolver = new Resolver(version, policy, previous);
       resolver.resolve(logicalType);
       validate(resolver, version);
-      byVersion.add(commit(resolver.entities, version, history));
+      History next = new History();
+      byVersion.add(commit(resolver.entities, version, previous, next));
+      previous = next;
     }
     return new ProvenanceResult(versions, policies, byVersion);
   }
@@ -233,49 +233,35 @@ public final class ProvenanceComputer {
   // Phase 3 -- Commit
   // -----------------------------------------------------------------------------------------
 
+  /**
+   * Records this version as the one the next is matched against: each entity continues the chain
+   * of the previous version's entity it matched, or starts one. Nothing older is kept.
+   */
   private static Map<PathKey, Provenance> commit(
-      List<Entity> entities, int version, History history) {
+      List<Entity> entities, int version, History previous, History next) {
     Map<PathKey, Provenance> provenance = new LinkedHashMap<>();
-    Set<Identity> present = new HashSet<>();
-
     for (Entity entity : entities) {
-      present.add(entity.identity);
-      EntityState entityState = history.state.get(entity.identity);
-      if (entityState == null) {
-        entityState = new EntityState(version);
-        history.state.put(entity.identity, entityState);
-        history.identitiesByScope
-            .computeIfAbsent(entity.identity.getScope(), k -> new LinkedHashSet<>())
-            .add(entity.identity);
-      } else if (!entityState.active) {
-        // Identity continuity without provenance continuity: this occurrence is the same logical
-        // entity, but its previous interval was broken, so a new one starts here.
-        entityState.presenceStartVersion = version;
-      }
-      entityState.active = true;
+      EntityState matched = previous.state.get(entity.identity);
+      EntityState entityState =
+          new EntityState(matched != null ? matched.chainStart : version);
+      next.state.put(entity.identity, entityState);
+      next.identitiesByScope
+          .computeIfAbsent(entity.identity.getScope(), k -> new LinkedHashSet<>())
+          .add(entity.identity);
       if (entity.nameResolved) {
-        // The canonical name alone enters the index, and its newest holder owns it. Aliases are
-        // remembered on the identity, so a continuation can carry them forward.
+        // The canonical name alone enters the index. Aliases are remembered on the entity, so a
+        // continuation can carry them forward.
         NameKey canonical = new NameKey(entity.identity.getKind(), entity.scope, entity.name);
         entityState.canonicalName = canonical;
         entityState.aliases = new HashSet<>(entity.aliases);
-        history.identityIndex.put(canonical, entity.identity);
+        next.identityIndex.put(canonical, entity.identity);
       }
       entityState.memberNumbers = entity.memberNumbers;
       if (entity.content != null) {
         entityState.branchName = entity.name;
         entityState.content = entity.content;
       }
-      provenance.put(entity.path,
-          new Provenance(entity.identity, entityState.presenceStartVersion));
-    }
-
-    // Everything absent from this version ends its interval here. A later reappearance is then
-    // forced to start a new one, whether it mints a fresh identity or an alias reconnects it.
-    for (Map.Entry<Identity, EntityState> entry : history.state.entrySet()) {
-      if (entry.getValue().active && !present.contains(entry.getKey())) {
-        entry.getValue().active = false;
-      }
+      provenance.put(entity.path, new Provenance(entity.identity, entityState.chainStart));
     }
     return provenance;
   }
@@ -284,17 +270,16 @@ public final class ProvenanceComputer {
   // Internal state
   // -----------------------------------------------------------------------------------------
 
-  /** Everything carried from one version to the next. */
+  /** The previous version's entities: all the next version is matched against. */
   private static final class History {
 
-    /** Identity -> presence, interval start, and the names it was last committed under. */
+    /** Identity -> where its chain started, and how the previous version named it. */
     private final Map<Identity, EntityState> state = new HashMap<>();
 
     /**
-     * Canonical name -> identity. Every canonical name an identity has been committed under stays
-     * mapped to it, dormant or not, until a newer entity is committed under that name. An alias
-     * resolves through it, so an alias can name any name the writer actually used, and never one
-     * of the writer's own aliases.
+     * Canonical name -> identity, for the previous version's name-resolved entities. An alias
+     * resolves through it, so an alias names what the previous version called a field or type,
+     * never one of its aliases nor any older name.
      */
     private final Map<NameKey, Identity> identityIndex = new HashMap<>();
 
@@ -302,34 +287,30 @@ public final class ProvenanceComputer {
     private final Map<Scope, Set<Identity>> identitiesByScope = new HashMap<>();
   }
 
-  /** What the algorithm remembers about one logical identity between versions. */
+  /** One entity of the previous version, as the next version is matched against it. */
   private static final class EntityState {
 
-    private boolean active = true;
-    private int presenceStartVersion;
+    /** The first version of the chain of matches this entity ends. */
+    private final int chainStart;
 
-    /**
-     * The canonical name this identity was last committed under. A canonical match counts only
-     * against it: an entity that merely reuses one of the identity's former names is not its
-     * continuation.
-     */
+    /** The name the entity had; null unless it is name-resolved. */
     private NameKey canonicalName;
 
     /**
-     * The aliases this identity declared when last committed. A continuation under the same name
-     * may carry them forward; they claim nothing new.
+     * The aliases the entity declared. A continuation under the same name may carry them
+     * forward; they claim nothing new.
      */
     private Set<String> aliases = Collections.emptySet();
 
-    /** A Protobuf oneof's member field numbers when last committed; null for anything else. */
+    /** A Protobuf oneof's member field numbers; null for anything else. */
     private Set<Integer> memberNumbers;
 
-    /** A JSON union branch's name and content when last committed; null for anything else. */
+    /** A JSON union branch's name and content; null for anything else. */
     private String branchName;
     private Set<String> content;
 
-    EntityState(int presenceStartVersion) {
-      this.presenceStartVersion = presenceStartVersion;
+    EntityState(int chainStart) {
+      this.chainStart = chainStart;
     }
   }
 
@@ -440,9 +421,9 @@ public final class ProvenanceComputer {
 
   /**
    * Walks one version top-down and resolves every entity's identity. Reads the {@link History} and
-   * never writes it, so the whole version resolves against the snapshot the previous version left
-   * — including each parent identity, which is resolved before its members so that it can form
-   * their scope.
+   * never writes it, so the whole version is matched against the previous version as it was —
+   * including each parent identity, which is resolved before its members so that it can form their
+   * scope.
    */
   private static final class Resolver {
 
@@ -667,8 +648,8 @@ public final class ProvenanceComputer {
     // -------------------------------------------------------------------------------------
 
     /**
-     * Resolves a whole peer group at once: whether an alias or a canonical name wins a historical
-     * identity depends on every peer in the group.
+     * Resolves a whole peer group at once: whether an alias or a canonical name wins a previous
+     * entity depends on every peer in the group.
      */
     private Map<Candidate, Identity> resolveGroup(List<Candidate> peers, Scope scope) {
       Map<Candidate, Identity> resolved = new IdentityHashMap<>();
@@ -696,8 +677,8 @@ public final class ProvenanceComputer {
         Identity promoted = policy != IdentityPolicy.AVRO ? null
             : isNamedAvroType(peer) ? shortNameContinuation(peer, scope, peers, taken)
             : peer.kind == EntityKind.BRANCH ? familyContinuation(peer, scope, peers) : null;
-        // Brand new, or a historical identity resetting. Folding the minting version into the
-        // value keeps it distinct from a live entity that previously released this name.
+        // Matched to nothing. Folding the minting version into the value keeps it distinct from
+        // a previous entity that released this name.
         Identity identity = promoted != null && taken.add(promoted)
             ? promoted
             : new Identity(peer.kind, scope, new MintedIdentity(peer.name, version));
@@ -707,12 +688,12 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Avro rules. A peer continues the identity last committed under its own name while that is
-     * active, or the identity an alias names. An explicit alias wins: Avro renames a writer field
+     * Avro rules. A peer continues the previous version's entity of its own name, or the one an
+     * alias names. An explicit alias wins: Avro renames a writer field
      * to the reader field aliasing it even when a reader field of that name exists. A peer
      * continuing its own identity may carry its aliases forward, but a new one naming another
-     * identity would make one entity continue two. Each identity has at most one continuation, and
-     * each peer continues at most one identity.
+     * entity would make one entity continue two. Each previous entity has at most one
+     * continuation, and each peer continues at most one.
      */
     private void arbitrate(List<Candidate> peers, Scope scope, Map<Candidate, Identity> resolved) {
       Map<Candidate, Identity> ownClaim = new IdentityHashMap<>();
@@ -721,9 +702,7 @@ public final class ProvenanceComputer {
         validateAliases(peer);
         NameKey canonicalKey = new NameKey(peer.kind, scope, peer.name);
         Identity indexed = history.identityIndex.get(canonicalKey);
-        EntityState indexedState = indexed != null ? history.state.get(indexed) : null;
-        if (indexedState != null && indexedState.active
-            && canonicalKey.equals(indexedState.canonicalName)) {
+        if (indexed != null) {
           if (canonicalClaimant.put(indexed, peer) != null) {
             throw new AmbiguousProvenanceException("Two entities named " + peer.name
                 + " at version " + version + " in " + scope);
@@ -755,21 +734,21 @@ public final class ProvenanceComputer {
 
       Set<Identity> claimed = new LinkedHashSet<>(canonicalClaimant.keySet());
       claimed.addAll(aliasClaimants.keySet());
-      for (Identity historical : claimed) {
-        Set<Candidate> byAlias = aliasClaimants.getOrDefault(historical, Collections.emptySet());
+      for (Identity previous : claimed) {
+        Set<Candidate> byAlias = aliasClaimants.getOrDefault(previous, Collections.emptySet());
         if (byAlias.size() > 1) {
           // Avro's decoder gives it to whichever alias is declared last; its checker, to all.
           throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": multiple entities claim historical identity " + historical
+              + version + ": multiple entities claim historical identity " + previous
               + " via aliases");
         }
         Candidate winner = byAlias.isEmpty()
-            ? canonicalClaimant.get(historical) : byAlias.iterator().next();
-        Identity earlier = resolved.put(winner, historical);
+            ? canonicalClaimant.get(previous) : byAlias.iterator().next();
+        Identity earlier = resolved.put(winner, previous);
         if (earlier != null) {
           throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
               + version + ": " + winner.path + " matches multiple historical identities "
-              + Arrays.asList(earlier, historical));
+              + Arrays.asList(earlier, previous));
         }
       }
     }
@@ -821,8 +800,8 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The historical branch an unnamed Avro branch promotes from, when the promotion is
-     * unambiguous: this union has one branch of its family, and the scope had one live one.
+     * The previous branch an unnamed Avro branch promotes from, when the promotion is
+     * unambiguous: this union has one branch of its family, and the scope had one.
      */
     private Identity familyContinuation(Candidate peer, Scope scope, List<Candidate> peers) {
       Set<String> family = familyOf(peer.name);
@@ -833,22 +812,22 @@ public final class ProvenanceComputer {
         return null;
       }
       Identity found = null;
-      for (Identity historical
+      for (Identity previous
           : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        if (!isLiveBranchOf(historical, family)) {
+        if (!isBranchOf(previous, family)) {
           continue;
         }
         if (found != null) {
           return null;
         }
-        found = historical;
+        found = previous;
       }
       return found != null && !seen.contains(found) ? found : null;
     }
 
     /**
-     * The historical named type a named Avro type continues when neither its name nor an alias
-     * does: the one live in {@code scope} with the same short name, as Avro's checker compares
+     * The previous named type a named Avro type continues when neither its name nor an alias
+     * does: the one in {@code scope} with the same short name, as Avro's checker compares
      * names. A namespace changed without an alias — as nested types inheriting a renamed root's
      * namespace are — then keeps its members. Null where a peer shares the short name.
      */
@@ -860,22 +839,22 @@ public final class ProvenanceComputer {
         return null;
       }
       Identity found = null;
-      for (Identity historical
+      for (Identity previous
           : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        if (!isLiveNamed(historical, peer.kind, shortName)) {
+        if (!isNamedLike(previous, peer.kind, shortName)) {
           continue;
         }
         if (found != null) {
           return null;
         }
-        found = historical;
+        found = previous;
       }
       return found != null && !seen.contains(found) && !taken.contains(found) ? found : null;
     }
 
-    private boolean isLiveNamed(Identity historical, EntityKind kind, String shortName) {
-      EntityState state = historical.getKind() == kind ? history.state.get(historical) : null;
-      NameKey name = state != null && state.active ? state.canonicalName : null;
+    private boolean isNamedLike(Identity previous, EntityKind kind, String shortName) {
+      EntityState state = previous.getKind() == kind ? history.state.get(previous) : null;
+      NameKey name = state != null ? state.canonicalName : null;
       return name != null && shortName(name.name).equals(shortName);
     }
 
@@ -892,12 +871,12 @@ public final class ProvenanceComputer {
       return fullName.substring(fullName.lastIndexOf('.') + 1);
     }
 
-    private boolean isLiveBranchOf(Identity historical, Set<String> family) {
-      if (historical.getKind() != EntityKind.BRANCH) {
+    private boolean isBranchOf(Identity previous, Set<String> family) {
+      if (previous.getKind() != EntityKind.BRANCH) {
         return false;
       }
-      EntityState state = history.state.get(historical);
-      return state != null && state.active && state.canonicalName != null
+      EntityState state = history.state.get(previous);
+      return state != null && state.canonicalName != null
           && family.contains(state.canonicalName.name);
     }
 
@@ -918,16 +897,13 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The live oneof in {@code scope} sharing a member number with {@code members}; null if there
-     * is none, or members come from more than one.
-     */
     /**
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's identity. In turn: a hinted branch continues the
-     * live branch of its name; a branch continues the one live branch of the same content, where
-     * no peer shares it; the one live branch it alone shares a member with, and no conflicting
-     * discriminator, as when it moved and its members changed; one at the same position sharing a
-     * member with it, where overlap alone cannot tell; else it is new.
+     * previous branch of its name; a branch continues the one previous branch of the same content,
+     * where no peer shares it; the one previous branch it alone shares a member with, and no
+     * conflicting discriminator, as when it moved and its members changed; one at the same position
+     * sharing a member with it, where overlap alone cannot tell; else it is new.
      */
     private void resolveJsonBranches(List<Candidate> peers, Scope scope,
         Map<Candidate, Identity> resolved) {
@@ -953,15 +929,16 @@ public final class ProvenanceComputer {
           Identity found;
           if (phase == 0) {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
-                ? null : liveBranch(scope, taken, state -> peer.name.equals(state.branchName));
+                ? null : previousBranch(scope, taken, state -> peer.name.equals(state.branchName));
           } else if (phase == 1) {
             found = shared.get(content) == 1
-                ? liveBranch(scope, taken, state -> content.equals(state.content)) : null;
+                ? previousBranch(scope, taken, state -> content.equals(state.content)) : null;
           } else if (phase == 2) {
             found = soleOverlap(peer, pending, resolved, scope, taken);
           } else {
-            found = liveBranch(scope, taken, state -> peer.name.equals(state.branchName)
-                && overlaps(content, state.content));
+            found = previousBranch(scope, taken, state -> peer.name.equals(state.branchName)
+                && overlaps(content, state.content)
+                && !crosses(peer, content, state.content, pending, resolved, scope, taken));
           }
           if (found != null) {
             taken.add(found);
@@ -978,20 +955,22 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The one live, untaken branch {@code peer}'s content overlaps, where no other unresolved peer
-     * overlaps it too: one branch sharing members with one other is its continuation, wherever it
-     * sits.
+     * The one untaken previous branch {@code peer}'s content overlaps, where no other unresolved
+     * peer overlaps it too: one branch sharing members with one other is its continuation, wherever
+     * it sits.
      */
     private Identity soleOverlap(Candidate peer, List<Candidate> pending,
         Map<Candidate, Identity> resolved, Scope scope, Set<Identity> taken) {
       Set<String> content = contentOf(peer);
-      Identity found = liveBranch(scope, taken, state -> overlaps(content, state.content));
+      Identity found = previousBranch(scope, taken, state -> overlaps(content, state.content)
+          && !crosses(peer, content, state.content, pending, resolved, scope, taken));
       if (found == null) {
         return null;
       }
       Set<String> theirs = history.state.get(found).content;
       for (Candidate other : pending) {
-        if (other != peer && !resolved.containsKey(other) && overlaps(contentOf(other), theirs)) {
+        if (other != peer && !resolved.containsKey(other) && overlaps(contentOf(other), theirs)
+            && !crosses(other, contentOf(other), theirs, pending, resolved, scope, taken)) {
           return null;
         }
       }
@@ -999,21 +978,83 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The one live, untaken JSON branch of {@code scope} that {@code test} accepts.
+     * Whether a peer and a previous branch disagree on having a discriminator that another branch
+     * related to them has: the peer's own, where an untaken previous branch has it, or the previous
+     * branch's, where an unresolved peer has it. That branch, not this one, is the counterpart.
      */
-    private Identity liveBranch(Scope scope, Set<Identity> taken, Predicate<EntityState> test) {
+    private boolean crosses(Candidate peer, Set<String> mine, Set<String> theirs,
+        List<Candidate> pending, Map<Candidate, Identity> resolved, Scope scope,
+        Set<Identity> taken) {
+      for (String key : discriminatorKeys(mine)) {
+        if (discriminatorKeys(theirs).contains(key)) {
+          continue;
+        }
+        for (Identity previous
+            : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
+          EntityState state = taken.contains(previous) ? null : history.state.get(previous);
+          boolean other = state != null && state.content != null && state.content != theirs;
+          if (other && related(mine, state.content)
+              && discriminatorKeys(state.content).contains(key)) {
+            return true;
+          }
+        }
+      }
+      for (String key : discriminatorKeys(theirs)) {
+        if (discriminatorKeys(mine).contains(key)) {
+          continue;
+        }
+        for (Candidate other : pending) {
+          if (other != peer && !resolved.containsKey(other)
+              && related(contentOf(other), theirs)
+              && discriminatorKeys(contentOf(other)).contains(key)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    /**
+     * The paths of a branch's discriminators, each as {@code d:path=}.
+     */
+    private static Set<String> discriminatorKeys(Set<String> content) {
+      Set<String> keys = new HashSet<>();
+      for (String entry : content) {
+        if (entry.startsWith(DISCRIMINATOR)) {
+          keys.add(entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1));
+        }
+      }
+      return keys;
+    }
+
+    /** Whether two branches share a member other than a discriminator, whatever their values. */
+    private static boolean related(Set<String> mine, Set<String> theirs) {
+      for (String entry : mine) {
+        String key = DISCRIMINATOR + entry.substring(MEMBER.length()) + "=";
+        if (entry.startsWith(MEMBER) && theirs.contains(entry)
+            && !discriminatorKeys(mine).contains(key) && !discriminatorKeys(theirs).contains(key)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /**
+     * The one untaken previous JSON branch of {@code scope} that {@code test} accepts.
+     */
+    private Identity previousBranch(Scope scope, Set<Identity> taken, Predicate<EntityState> test) {
       Identity found = null;
-      for (Identity historical
+      for (Identity previous
           : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        EntityState state = taken.contains(historical) ? null : history.state.get(historical);
-        boolean live = state != null && state.active && state.content != null;
-        if (!live || !test.test(state)) {
+        EntityState state = taken.contains(previous) ? null : history.state.get(previous);
+        boolean branch = state != null && state.content != null;
+        if (!branch || !test.test(state)) {
           continue;
         }
         if (found != null) {
           return null;
         }
-        found = historical;
+        found = previous;
       }
       return found;
     }
@@ -1112,7 +1153,7 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Gives a historical oneof to one of the peers continuing it by member numbers: a oneof split
+     * Gives a previous oneof to one of the peers continuing it by member numbers: a oneof split
      * in two has each part share numbers with it. The part sharing the most keeps it — ties to
      * the one holding the lowest shared number — and the others are new.
      */
@@ -1152,19 +1193,23 @@ public final class ProvenanceComputer {
       return shared;
     }
 
+    /**
+     * The previous oneof in {@code scope} sharing a member number with {@code members}; null if
+     * there is none, or members come from more than one.
+     */
     private Identity oneofContinuation(Scope scope, Set<Integer> members) {
       Identity found = null;
-      for (Identity historical
+      for (Identity previous
           : history.identitiesByScope.getOrDefault(scope, Collections.emptySet())) {
-        EntityState state = history.state.get(historical);
-        if (state == null || !state.active || state.memberNumbers == null
+        EntityState state = history.state.get(previous);
+        if (state == null || state.memberNumbers == null
             || Collections.disjoint(state.memberNumbers, members)) {
           continue;
         }
         if (found != null) {
           return null;
         }
-        found = historical;
+        found = previous;
       }
       return found != null && !seen.contains(found) ? found : null;
     }

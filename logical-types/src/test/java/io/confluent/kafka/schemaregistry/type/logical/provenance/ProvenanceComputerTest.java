@@ -109,21 +109,17 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aliasToAnAbsentFieldKeepsIdentityButNotProvenance() {
-    // The alias says full_name is historically the same entity as name; the gap at v1 says it is
-    // a different lifetime of it. Both must be true at once.
+  void anAliasToAFieldAbsentFromThePreviousVersionContinuesNothing() {
+    // An alias names what the previous version called a field. name is absent from v1, so
+    // full_name matches nothing there and starts a chain of its own.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("name"))),
         lt(struct()),
         lt(struct(field("full_name", "name")))));
 
-    assertThat(at(result, 2, 0).getIdentity()).isEqualTo(at(result, 0, 0).getIdentity());
-    assertThat(at(result, 2, 0)).isNotEqualTo(at(result, 0, 0));
-    assertThat(result.intersection(0, 2)).isEmpty();
-    // Identity and provenance are different dimensions: the identity was minted at v0 and the
-    // alias reconnects to it, while this lifetime of it only begins at v2.
-    assertThat(at(result, 2, 0).getIdentity().getIdentityOriginVersion()).isEqualTo(0);
+    assertThat(at(result, 2, 0).getIdentity().getIdentityOriginVersion()).isEqualTo(2);
     assertThat(at(result, 2, 0).getPresenceStartVersion()).isEqualTo(2);
+    assertThat(result.intersection(0, 2)).isEmpty();
   }
 
   @Test
@@ -159,24 +155,22 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void anAliasNamesAnyCanonicalNameTheIdentityHeld() {
-    // Same ladder, but v3 aliases the v0 name. An Avro alias names what a writer's field was
-    // actually called, so other reads v0's name -- and continues the identity full_name carried.
+  void anAliasNamingOnlyAnOlderNameContinuesNothing() {
+    // Same ladder, but v3 aliases the v0 name, which v2 no longer has: other matches nothing.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("name"))),
         lt(struct(field("full_name", "name"))),
         lt(struct(field("full_name"))),
         lt(struct(field("other", "name")))));
 
-    assertThat(at(result, 3, 0)).isEqualTo(at(result, 0, 0));
+    assertThat(at(result, 3, 0)).isNotEqualTo(at(result, 2, 0));
+    assertThat(at(result, 3, 0).getPresenceStartVersion()).isEqualTo(3);
   }
 
   @Test
-  void aReturningEntityDoesNotPruneANameNowHeldBySomeoneElse() {
-    // v0 a asserts the alias x.  v1 a disappears, leaving both mappings dormant.  v2 a brand-new
-    // field called x takes the name over.  v3 c reconnects to a's identity through the alias a, so
-    // a's stale assertion of x is revisited -- but x now belongs to the v2 field, and pruning it
-    // would silently reset that field at v4.
+  void aNameTakenOverAfterAGapIsUndisturbedByAnAliasToAnOlderName() {
+    // v2 x takes over a name a once aliased; v3 c aliases a, absent since v1. x keeps its chain,
+    // and c starts one.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("a", "x"))),
         lt(struct()),
@@ -187,9 +181,8 @@ class ProvenanceComputerTest {
     assertThat(at(result, 3, 0)).isEqualTo(at(result, 2, 0));
     assertThat(at(result, 4, 0)).isEqualTo(at(result, 2, 0));
     assertThat(at(result, 4, 0).getPresenceStartVersion()).isEqualTo(2);
-    // c still reconnected to a's identity, on a new interval of its own.
-    assertThat(at(result, 3, 1).getIdentity()).isEqualTo(at(result, 0, 0).getIdentity());
-    assertThat(at(result, 3, 1).getPresenceStartVersion()).isEqualTo(3);
+    assertThat(at(result, 3, 1).getIdentity().getIdentityOriginVersion()).isEqualTo(3);
+    assertThat(at(result, 4, 1)).isEqualTo(at(result, 3, 1));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -211,27 +204,10 @@ class ProvenanceComputerTest {
     assertThat(result.intersection(0, 1)).isEmpty();
   }
 
-  @Test
-  void dormantIdentityCannotReleaseANameTakenByAnotherIdentity() {
-    // The minimal form of the stale-ownership bug. a is dormant from v1 holding the stale
-    // declarations {a, x}; x is taken over at v2; at v3 c reconnects to a through the alias and
-    // drops x, which must not release the name the live field now owns. Fails without the
-    // ownership guard in the pre-pass -- x would re-mint at v3.
-    ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
-        lt(struct(field("a", "x"))),
-        lt(struct()),
-        lt(struct(field("x"))),
-        lt(struct(field("x"), field("c", "a")))));
-
-    assertThat(at(result, 3, 0)).isEqualTo(at(result, 2, 0));
-    assertThat(at(result, 3, 1).getIdentity()).isEqualTo(at(result, 0, 0).getIdentity());
-    assertThat(at(result, 3, 1).getPresenceStartVersion()).isEqualTo(3);
-  }
 
   @Test
-  void aDormantIdentityReleasesOnlyTheStaleNamesItStillOwns() {
-    // lastDeclaredNames is a set and the ownership guard runs per element: of a's stale {a, x, y},
-    // x has been taken over and must survive, y is still a's and is released.
+  void namesAFieldOnceAliasedAreNewWhenTheyReturn() {
+    // Of a's aliases {x, y}, x is taken over at v2 and keeps its chain; y at v4 matches nothing.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("a", "x", "y"))),
         lt(struct()),
@@ -241,10 +217,8 @@ class ProvenanceComputerTest {
 
     assertThat(at(result, 3, 0)).isEqualTo(at(result, 2, 0));
     assertThat(at(result, 4, 0)).isEqualTo(at(result, 2, 0));
-    assertThat(at(result, 3, 1).getIdentity()).isEqualTo(at(result, 0, 0).getIdentity());
-    // y was released and its mapping pruned, so the field called y at v4 is a new entity.
-    assertThat(at(result, 4, 1).getIdentity()).isNotEqualTo(at(result, 0, 0).getIdentity());
     assertThat(at(result, 4, 1).getIdentity().getIdentityOriginVersion()).isEqualTo(4);
+    assertThat(at(result, 4, 2)).isEqualTo(at(result, 3, 1));
   }
 
   @Test
@@ -307,19 +281,16 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aDormantAliasReconnectsAndThenReleasesTheNamesItDropped() {
-    // v2 reconnects to a through the dormant alias, which is what retaining dormant mappings is
-    // for. c declares only {c, a}, so x -- still a's -- is released and pruned, and a later field
-    // called x is a new entity rather than an echo of the original.
+  void anAliasAcrossAGapStartsAChainAndClaimsNoOtherName() {
+    // c aliases a, absent from v1, so starts a chain; x, which a once aliased, is new at v3.
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(struct(field("a", "x"))),
         lt(struct()),
         lt(struct(field("c", "a"))),
         lt(struct(field("c"), field("x")))));
 
-    assertThat(at(result, 2, 0).getIdentity()).isEqualTo(at(result, 0, 0).getIdentity());
-    assertThat(at(result, 2, 0).getPresenceStartVersion()).isEqualTo(2);
-    assertThat(at(result, 3, 1).getIdentity()).isNotEqualTo(at(result, 0, 0).getIdentity());
+    assertThat(at(result, 2, 0).getIdentity().getIdentityOriginVersion()).isEqualTo(2);
+    assertThat(at(result, 3, 0)).isEqualTo(at(result, 2, 0));
     assertThat(at(result, 3, 1).getIdentity().getIdentityOriginVersion()).isEqualTo(3);
   }
 
@@ -604,23 +575,19 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aRenamedRecordReturningAfterAGapKeepsIdentityButNotProvenance() {
+  void aRenamedRecordReturningAfterAGapIsNew() {
     ProvenanceResult result = ProvenanceComputer.compute(Arrays.asList(
         lt(Schema.createNamedTypeRef("User"), namedTypes("User", struct(field("city")))),
         lt(struct()),
         lt(Schema.createNamedTypeRef("Person"), namedTypes("Person",
             aliased(struct(field("city")), "User")))));
 
-    PathKey user = PathKey.ofNamedType("User");
     PathKey person = PathKey.ofNamedType("Person");
-    // The record's alias reconnects it to the dormant identity, on a new interval.
-    assertThat(result.at(2, person).getIdentity()).isEqualTo(result.at(0, user).getIdentity());
+    // User is absent from v1, so the record's alias matches nothing; nor does city, in its scope.
+    assertThat(result.at(2, person).getIdentity().getIdentityOriginVersion()).isEqualTo(2);
     assertThat(result.at(2, person).getPresenceStartVersion()).isEqualTo(2);
-    // city carries no alias of its own, so it mints a fresh identity even though its scope -- the
-    // record's identity -- is unchanged. Reconnection is per entity, never inherited.
     PathKey city = PathKey.ofRoot().child(0);
-    assertThat(result.at(2, city).getIdentity())
-        .isNotEqualTo(result.at(0, city).getIdentity());
+    assertThat(result.at(2, city).getPresenceStartVersion()).isEqualTo(2);
     assertThat(result.intersection(0, 2)).isEmpty();
   }
 
@@ -919,9 +886,9 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void anAliasReconnectsFromAnyDormancyDepth() {
-    // a is renamed to b, which keeps declaring the alias. Whatever the gaps, b is always the same
-    // logical entity as the original a -- and always on the interval its current run began.
+  void anAliasContinuesOnlyFromThePreviousVersion() {
+    // a is renamed to b, which keeps declaring the alias. b continues a only while every version
+    // since has it; after a gap it starts a chain of its own, which then continues.
     for (int pattern = 0; pattern < 16; pattern++) {
       List<LogicalType> history = new ArrayList<>();
       history.add(lt(struct(field("a"))));
@@ -941,10 +908,12 @@ class ProvenanceComputerTest {
           continue;
         }
         runStart = runStart < 0 ? version : runStart;
-        assertThat(current.getIdentity()).as("pattern %s, v%s", pattern, version)
-            .isEqualTo(original);
+        assertThat(current).as("pattern %s, v%s", pattern, version)
+            .isEqualTo(at(result, runStart, 0));
         assertThat(current.getPresenceStartVersion())
             .as("pattern %s, v%s", pattern, version).isEqualTo(runStart);
+        assertThat(current.getIdentity().equals(original))
+            .as("pattern %s, v%s", pattern, version).isEqualTo(runStart == 0);
       }
     }
   }

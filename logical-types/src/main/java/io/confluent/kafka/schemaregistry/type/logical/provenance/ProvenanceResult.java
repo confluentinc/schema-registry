@@ -34,7 +34,7 @@ import java.util.Set;
  * <p>Versions are addressed by their index in the sequence handed to
  * {@link ProvenanceComputer#compute}, so index {@code 0} is the first version supplied — which is
  * the first version of the whole history only when the caller anchored there. See
- * {@link Provenance} on relative versus absolute values.
+ * {@link Provenance} on why a sub-history pairs its versions as the whole history does.
  *
  * <p>The set operations run over member entities only ({@link EntityKind#isMember()}). A named
  * type's provenance establishes its members' scope and tracks the container's own lifetime, but it
