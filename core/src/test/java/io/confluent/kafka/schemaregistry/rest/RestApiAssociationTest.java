@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -51,12 +52,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -3734,12 +3730,11 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertTrue(createResponse.getAssociations().get(0).isFrozen());
 
     // The wire format omits frozen because it matches the STRONG default (true)
-    String rawJson = rawGet("/associations/resources/" + resourceId + "?resourceType=topic");
-    JsonNode root = JacksonMapper.INSTANCE.readTree(rawJson);
+    JsonNode root = rawGet("/associations/resources/" + resourceId + "?resourceType=topic");
     assertEquals(1, root.size());
     assertFalse(
         root.get(0).has("frozen"),
-        "frozen should be hidden for a default STRONG association: " + rawJson);
+        "frozen should be hidden for a default STRONG association: " + root);
 
     // The deserialized association still reports the effective frozen value
     List<Association> associations = restApp.restClient.getAssociationsByResourceId(
@@ -3895,17 +3890,11 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         latest.getSchemaTags());
   }
 
-  private String rawGet(String path) throws Exception {
-    URL url = new URL(restApp.restConnect + path);
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(10_000);
-    conn.setReadTimeout(10_000);
-    try (InputStream in = conn.getInputStream()) {
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-    } finally {
-      conn.disconnect();
-    }
+  // Reads the response as a JSON tree rather than entity classes, so absent fields stay absent.
+  // Goes through restApp.restClient so subclasses that configure auth on the client still work.
+  private JsonNode rawGet(String path) throws Exception {
+    return restApp.restClient.httpRequest(path, "GET", null,
+        RestService.DEFAULT_REQUEST_PROPERTIES, new TypeReference<JsonNode>() {});
   }
 
   private static final String ORDER_SCHEMA =
