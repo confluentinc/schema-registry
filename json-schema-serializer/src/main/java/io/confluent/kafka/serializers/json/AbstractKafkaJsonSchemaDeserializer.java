@@ -399,8 +399,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   /**
-   * With {@code provenance.algorithm}, {@code node} with every property provenance marks as new
-   * removed, parsing the payload first if nothing has yet; {@code node} unchanged otherwise.
+   * With {@code provenance.algorithm}, the payload parsed with every property provenance marks as
+   * new removed; {@code node} unchanged otherwise, as it is after migrations, which provenance
+   * does not apply to.
    */
   private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
       ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
@@ -415,9 +416,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     if (pruner == null || pruner.isEmpty()) {
       return node;
     }
-    JsonNode document = node != null
-        ? node
-        : objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+    JsonNode document = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
     pruner.prune(document);
     return document;
   }
@@ -431,15 +430,23 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return provenanceProjector().readerSchemas(readers);
   }
 
-  private ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
+  private volatile ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
 
-  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  // Created on first use, once the deserializer is configured, and only once: it holds the ids
+  // readers were supplied with and which readers a class derived.
   private ProvenanceProjector<JsonProvenancePruner> provenanceProjector() {
-    if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(
-          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+    ProvenanceProjector<JsonProvenancePruner> projector = provenanceProjector;
+    if (projector == null) {
+      synchronized (this) {
+        projector = provenanceProjector;
+        if (projector == null) {
+          projector = new ProvenanceProjector<>(
+              schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+          provenanceProjector = projector;
+        }
+      }
     }
-    return provenanceProjector;
+    return projector;
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(

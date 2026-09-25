@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
+import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
@@ -42,13 +43,20 @@ import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -582,6 +590,68 @@ class ProtobufProvenanceDeserializerTest {
 
     assertEquals("old", readClass(ReaddedMap.class, bytes, null, false).getMemo());
     assertEquals("", readClass(ReaddedMap.class, bytes, "v1", false).getMemo());
+  }
+
+  @Test
+  void aClassReaderIsNotTheTextReaderItEquals() throws Exception {
+    // One deserializer reads first with a text reader spelled as the class (v1), then with the
+    // class: the class is still the latest version it equals, whatever the text reader was.
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedMapProto\";\n";
+    ProtobufSchema v1 = new ProtobufSchema(ReaddedMap.getDescriptor());
+    int id1 = client.register(SUBJECT, v1);
+    client.register(SUBJECT, new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n"
+        + "  map<string, int32> counts = 3;\n}\n"));
+    client.register(SUBJECT, new ProtobufSchema(head + "message ReaddedMap {\n  int32 id = 1;\n"
+        + "  string memo = 2;\n  map<string, int32> counts = 3;\n}\n"));
+    DynamicMessage record = DynamicMessage.newBuilder(v1.toDescriptor())
+        .setField(v1.toDescriptor().findFieldByName("id"), 7)
+        .setField(v1.toDescriptor().findFieldByName("memo"), "old").build();
+    byte[] body = record.toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id1).put((byte) 0)
+        .put(body).array();
+    Map<String, Object> config = config("v1");
+    config.put("specific.protobuf.value.type", ReaddedMap.class);
+    KafkaProtobufDeserializer<ReaddedMap> deserializer = new KafkaProtobufDeserializer<>(client);
+    deserializer.configure(config, false);
+    ProtobufSchema text = new ProtobufSchema(ReaddedMap.getDescriptor());
+
+    assertEquals("old", ((ReaddedMap) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> text).getValue()).getMemo());
+    assertEquals("", ((ReaddedMap) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> null).getValue()).getMemo());
+  }
+
+  @Test
+  void concurrentFirstReadsShareOneProjector() throws Exception {
+    // The projector holds which readers a class derived and which ids were supplied; a second
+    // one built by a race would forget them.
+    Method projector =
+        AbstractKafkaProtobufDeserializer.class.getDeclaredMethod("provenanceProjector");
+    projector.setAccessible(true);
+    ExecutorService threads = Executors.newFixedThreadPool(16);
+    try {
+      for (int round = 0; round < 200; round++) {
+        KafkaProtobufDeserializer<DynamicMessage> deserializer =
+            new KafkaProtobufDeserializer<>(client, config("v1"));
+        CyclicBarrier start = new CyclicBarrier(16);
+        List<Future<Object>> built = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+          built.add(threads.submit(() -> {
+            start.await();
+            return projector.invoke(deserializer);
+          }));
+        }
+        Set<Object> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Future<Object> future : built) {
+          distinct.add(future.get());
+        }
+        assertEquals(1, distinct.size());
+      }
+    } finally {
+      threads.shutdownNow();
+    }
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

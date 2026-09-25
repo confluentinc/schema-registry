@@ -19,16 +19,20 @@ package io.confluent.kafka.serializers.provenance;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -44,7 +48,11 @@ import org.slf4j.LoggerFactory;
  * supplied, else the one it is registered under; a writer's is the one its record carries. Where
  * that is missing — a record naming its schema by GUID — or names no version of the subject, it
  * is looked up the same way. A schema matching no version exactly takes the latest version it
- * equals once metadata, rules and inline tags are set aside: provenance depends on structure alone.
+ * equals once metadata, rules and inline tags are set aside, importing the same schemas:
+ * provenance depends on structure alone. A Protobuf schema is also compared normalized, since a
+ * generated class spells out what its text leaves implicit. A reader derived from a generated
+ * class skips the exact lookup, as its text is synthesized: it is the latest version it equals —
+ * normalized for Protobuf, as Avro looks one up for Avro.
  *
  * <p>Failures are told apart by what asking again could change. A transient one — the registry
  * unreachable, a 5xx, 408 or 429 — fails the record and is never cached. Provenance that is
@@ -69,8 +77,12 @@ public final class ProvenanceProjector<T> {
   private final Cache<List<Object>, Outcome<T>> outcomes;
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
-  // Readers whose registered version the caller named, by the schema handed over.
+  // Readers whose registered version the caller named, by the schema handed over: by identity,
+  // since equal readers may be different versions (Avro's equality ignores docs); else by equality,
+  // for a reader the deserializer copied.
   private final Cache<ParsedSchema, Integer> suppliedReaderIds;
+  private final Cache<ParsedSchema, Integer> suppliedReaderInstances =
+      CacheBuilder.newBuilder().weakKeys().build();
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
   private final Cache<ParsedSchema, Boolean> derivedReaders =
       CacheBuilder.newBuilder().weakKeys().build();
@@ -101,15 +113,21 @@ public final class ProvenanceProjector<T> {
       }
       if (reader.getId() != null) {
         suppliedReaderIds.put(reader.getSchema(), reader.getId());
+        suppliedReaderInstances.put(reader.getSchema(), reader.getId());
       }
       return reader.getSchema();
     };
   }
 
+  private Integer suppliedId(ParsedSchema reader) {
+    Integer id = suppliedReaderInstances.getIfPresent(reader);
+    return id != null ? id : suppliedReaderIds.getIfPresent(reader);
+  }
+
   /**
    * {@code reader}, marked as derived from a generated class. Its text is synthesized from the
-   * class, so it is matched to the latest version it equals once normalized, never by an exact
-   * spelling that an older version may share by accident.
+   * class, so it is matched to the latest version it equals — normalized for Protobuf, as Avro
+   * looks one up for Avro — never by an exact spelling an older version may share by accident.
    */
   public ParsedSchema derivedReader(ParsedSchema reader) {
     derivedReaders.put(reader, Boolean.TRUE);
@@ -140,9 +158,11 @@ public final class ProvenanceProjector<T> {
     // A writer named by GUID alone is keyed by it; its schema id is looked up when computed. A
     // supplied reader id is part of the question: the same schema may stand for either version.
     // So is the reader's name: Protobuf schemas are equal whichever message of the file they name.
+    // A reader derived from a class equals its text, so which of the two it is counts too.
+    boolean derived = derivedReaders.getIfPresent(reader) != null;
     List<Object> key = Arrays.asList(subject,
         writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader, reader.name(),
-        includeMultipleMessages, suppliedReaderIds.getIfPresent(reader));
+        includeMultipleMessages, derived ? null : suppliedId(reader), derived);
     Outcome<T> outcome = outcomes.getIfPresent(key);
     if (outcome == null) {
       outcome = compute(subject, writerId, writer, reader, includeMultipleMessages, build);
@@ -157,6 +177,8 @@ public final class ProvenanceProjector<T> {
         ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
     Integer writerId = writerSchemaId.getId();
     Integer readerId = null;
+    // Whether a registry error answers the provenance request itself, not a lookup before it.
+    boolean requesting = false;
     try {
       if (writerId == null) {
         writerId = registeredId(subject, writer);
@@ -172,17 +194,21 @@ public final class ProvenanceProjector<T> {
       }
       SchemaProvenance provenance;
       try {
+        requesting = true;
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       } catch (RestClientException e) {
         // A writer id under no version of the subject: the writer's schema may still equal one.
+        requesting = false;
         Integer equal = e.getErrorCode() == SCHEMA_ID_NOT_IN_SUBJECT
             ? structuralMatch(subject, writer, false) : null;
+        requesting = true;
         if (equal == null || equal.equals(writerId)) {
           throw e;
         }
         writerId = equal;
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       }
+      requesting = false;
       if (provenance == null) {
         return Outcome.unavailable();
       }
@@ -195,7 +221,7 @@ public final class ProvenanceProjector<T> {
         throw new SerializationException(
             "Schema Registry could not serve provenance for " + written, e);
       }
-      if (isRejectedRequest(e)) {
+      if (requesting && isRejectedRequest(e)) {
         // The request is always two schema ids, well formed: a rejection of it cannot be the
         // schemas' doing.
         return failed(subject, written, new SerializationException("Schema Registry rejected "
@@ -255,9 +281,11 @@ public final class ProvenanceProjector<T> {
    */
   private Integer readerId(String subject, ParsedSchema reader)
       throws IOException, RestClientException {
-    Integer supplied = suppliedReaderIds.getIfPresent(reader);
-    return supplied != null ? supplied : registeredId(subject, reader,
-        derivedReaders.getIfPresent(reader) != null);
+    // An id supplied for an equal text reader is not the class's: it is the latest version it
+    // equals.
+    boolean derived = derivedReaders.getIfPresent(reader) != null;
+    Integer supplied = derived ? null : suppliedId(reader);
+    return supplied != null ? supplied : registeredId(subject, reader, derived);
   }
 
   private Integer registeredId(String subject, ParsedSchema schema)
@@ -306,6 +334,9 @@ public final class ProvenanceProjector<T> {
     // type names, map entries, option order — so a Protobuf reader is also matched normalized;
     // a derived one only so, in one pass, so the latest version it equals wins.
     boolean protobuf = "PROTOBUF".equals(schema.schemaType());
+    if (derived && !protobuf) {
+      return lookupMatch(subject, versions, schema);
+    }
     Integer id = derived && protobuf ? null : structuralMatch(subject, versions, schema, false);
     return id == null && protobuf ? structuralMatch(subject, versions, schema, true) : id;
   }
@@ -316,9 +347,26 @@ public final class ProvenanceProjector<T> {
     for (int i = versions.size() - 1; i >= 0; i--) {
       int id = schemaIdOf(subject, versions.get(i));
       ParsedSchema version = client.getSchemaBySubjectAndId(subject, id);
-      // The text leaves out what it imports: versions alike but for their references differ.
+      // The text leaves out what it imports: versions alike but for their imports differ.
       if (wanted.equals(structure(version, normalized))
-          && schema.references().equals(version.references())) {
+          && imports(schema).equals(imports(version))) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The latest version a class-derived {@code schema} can look up, metadata, rules and inline tags
+   * set aside: the class's text inlines what a version may reference, and leaves out what a
+   * version adds besides.
+   */
+  private Integer lookupMatch(String subject, List<Integer> versions, ParsedSchema schema)
+      throws IOException, RestClientException {
+    ParsedSchema wanted = bare(schema);
+    for (int i = versions.size() - 1; i >= 0; i--) {
+      int id = schemaIdOf(subject, versions.get(i));
+      if (wanted.canLookup(bare(client.getSchemaBySubjectAndId(subject, id)), client)) {
         return id;
       }
     }
@@ -334,10 +382,30 @@ public final class ProvenanceProjector<T> {
     }
   }
 
+  /**
+   * What {@code schema} imports, by import name: each reference's schema text, a latest version
+   * resolved, so references in another order, as {@code -1} or through another subject, match.
+   */
+  private Map<String, String> imports(ParsedSchema schema)
+      throws IOException, RestClientException {
+    Map<String, String> imports = new HashMap<>();
+    for (SchemaReference reference : schema.references()) {
+      SchemaMetadata imported = reference.getVersion() == -1
+          ? client.getLatestSchemaMetadata(reference.getSubject())
+          : client.getSchemaMetadata(reference.getSubject(), reference.getVersion());
+      imports.put(reference.getName(), imported.getSchema());
+    }
+    return imports;
+  }
+
   private static String structure(ParsedSchema schema, boolean normalized) {
-    ParsedSchema bare = schema.copy((Metadata) null, (RuleSet) null);
-    bare = bare.copy(Collections.emptyMap(), bare.inlineTaggedEntities());
+    ParsedSchema bare = bare(schema);
     return (normalized ? bare.normalize() : bare).canonicalString();
+  }
+
+  private static ParsedSchema bare(ParsedSchema schema) {
+    ParsedSchema bare = schema.copy((Metadata) null, (RuleSet) null);
+    return bare.copy(Collections.emptyMap(), bare.inlineTaggedEntities());
   }
 
   static boolean isTransient(int status) {

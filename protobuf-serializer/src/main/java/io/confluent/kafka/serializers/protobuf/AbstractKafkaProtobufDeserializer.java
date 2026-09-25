@@ -206,7 +206,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (readerSchema.toDescriptor(name) != null) {
         readerSchema = schemaWithName(readerSchema, name);
       }
-      // A generated class's schema is its own reader, whether or not one is configured.
+      // With no reader configured, a generated class's schema is the reader.
       ProtobufSchema provenanceReader = readerSchema != null ? readerSchema : classSchema(schema);
       ProtoProvenanceRenumberer.Renumbered renumbered =
           byProvenance(subject, schemaId, schema, provenanceReader, name, migrations);
@@ -407,7 +407,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         mapping -> ProtoProvenanceRenumberer.renumber(reader, mapping, multi)).orElse(null);
   }
 
-  private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;
+  private volatile ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;
 
   /**
    * {@code readers} as a reader function, with any registered id a reader comes with used for
@@ -418,13 +418,21 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     return provenanceProjector().readerSchemas(readers);
   }
 
-  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
+  // Created on first use, once the deserializer is configured, and only once: it holds the ids
+  // readers were supplied with and which readers a class derived.
   private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector() {
-    if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(
-          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+    ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector = provenanceProjector;
+    if (projector == null) {
+      synchronized (this) {
+        projector = provenanceProjector;
+        if (projector == null) {
+          projector = new ProvenanceProjector<>(
+              schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+          provenanceProjector = projector;
+        }
+      }
     }
-    return provenanceProjector;
+    return projector;
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {

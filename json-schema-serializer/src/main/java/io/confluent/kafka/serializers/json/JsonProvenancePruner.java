@@ -67,7 +67,8 @@ final class JsonProvenancePruner {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int MAX_INTEGRAL_DIGITS = 1000;
-  // Readings of one value weighed before falling back to requiring every reach's requirement.
+  // Partial readings of one value searched for one that does not require a property; past it, the
+  // property is taken as not required.
   private static final int MAX_READINGS = 1024;
   // As JsonSchema converts a document for everit.
   private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
@@ -198,12 +199,18 @@ final class JsonProvenancePruner {
 
   /** A branch of an ambiguous union step: one reading of the value among several. */
   private static final class Alternative {
+    // A reading of the union by a branch not declaring the property, where it is only an extra.
+    static final int EXTRA = -1;
+
     final Schema union;
     final int branch;
+    // Whether the union also has that reading.
+    final boolean extra;
 
-    Alternative(Schema union, int branch) {
+    Alternative(Schema union, int branch, boolean extra) {
       this.union = union;
       this.branch = branch;
+      this.extra = extra;
     }
   }
 
@@ -418,15 +425,20 @@ final class JsonProvenancePruner {
     // No branch fits, often because of the very value provenance withholds (its type changed):
     // every declaring branch is walked, as ambiguous, so the property is pruned.
     List<Integer> walked = fallback ? declaring : valid;
-    // Only where several branches are walked are they alternatives; one taken alone is the value's.
-    boolean alternative = walked.size() > 1;
+    // A branch not declaring the property that fits too is another reading, where it is an extra.
+    boolean extra = false;
+    for (int i = 0; i < branches.size() && !fallback && !extra; i++) {
+      extra = !declaring.contains(i) && validates(branches.get(i), validatable);
+    }
+    // Only where several readings remain are they alternatives; one taken alone is the value's.
+    boolean alternative = walked.size() > 1 || extra;
     for (int i : walked) {
       List<Integer> extended = new ArrayList<>(choices);
       extended.add(i);
       List<Alternative> readings = alternatives;
       if (alternative) {
         readings = new ArrayList<>(alternatives);
-        readings.add(new Alternative(schema, i));
+        readings.add(new Alternative(schema, i, extra));
       }
       walk(names, branches.get(i), node, step, extended,
           ambiguous || fallback || valid.size() > 1, readings, at);
@@ -458,8 +470,8 @@ final class JsonProvenancePruner {
     for (Reach reach : reaches) {
       Schema property = reach.object.getPropertySchemas().get(name);
       declared |= property != null;
-      if (withDefault == null && property != null && property.hasDefaultValue()) {
-        withDefault = property;
+      if (withDefault == null) {
+        withDefault = withDefault(property);
       }
     }
     if (!declared) {
@@ -485,12 +497,29 @@ final class JsonProvenancePruner {
   }
 
   /**
+   * {@code property}, or the schema it refers to, that declares a default, as the converter reads
+   * one; null if none does.
+   */
+  private static Schema withDefault(Schema property) {
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (Schema schema = property; schema != null && seen.add(schema);
+        schema = schema instanceof ReferenceSchema
+            ? ((ReferenceSchema) schema).getReferredSchema() : null) {
+      if (schema.hasDefaultValue()) {
+        return schema;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Whether every reading of the value requires {@code name}: each combination of the branches
    * seen for each ambiguous union, over the reaches consistent with it.
    */
   private static boolean requiredInEveryReading(List<Reach> reaches, String name) {
     boolean anyRequires = false;
     boolean allRequire = true;
+    boolean extras = false;
     for (Reach reach : reaches) {
       boolean requires = reach.object.getRequiredProperties().contains(name);
       if (requires && reach.alternatives.isEmpty()) {
@@ -499,8 +528,9 @@ final class JsonProvenancePruner {
       }
       anyRequires |= requires;
       allRequire &= requires;
+      extras |= reach.alternatives.stream().anyMatch(a -> a.extra);
     }
-    if (!anyRequires || allRequire) {
+    if (!anyRequires || allRequire && !extras) {
       return anyRequires;
     }
     Map<Schema, List<Integer>> unions = new IdentityHashMap<>();
@@ -510,40 +540,61 @@ final class JsonProvenancePruner {
         if (!seen.contains(alternative.branch)) {
           seen.add(alternative.branch);
         }
-      }
-    }
-    List<Map<Schema, Integer>> readings = new ArrayList<>();
-    readings.add(new IdentityHashMap<>());
-    for (Map.Entry<Schema, List<Integer>> union : unions.entrySet()) {
-      List<Map<Schema, Integer>> next = new ArrayList<>();
-      for (Map<Schema, Integer> reading : readings) {
-        for (int branch : union.getValue()) {
-          Map<Schema, Integer> extended = new IdentityHashMap<>(reading);
-          extended.put(union.getKey(), branch);
-          next.add(extended);
+        if (alternative.extra && !seen.contains(Alternative.EXTRA)) {
+          seen.add(Alternative.EXTRA);
         }
       }
-      if (next.size() > MAX_READINGS) {
-        // Too many to weigh: required only where every reach requires it.
-        return reaches.stream().allMatch(r -> r.object.getRequiredProperties().contains(name));
-      }
-      readings = next;
     }
-    for (Map<Schema, Integer> reading : readings) {
-      boolean applies = false;
-      boolean requires = false;
-      for (Reach reach : reaches) {
-        if (reach.alternatives.stream()
-            .allMatch(a -> Integer.valueOf(a.branch).equals(reading.get(a.union)))) {
-          applies = true;
-          requires |= reach.object.getRequiredProperties().contains(name);
-        }
+    // Unions a requiring reach depends on first, so a reading it settles is dropped early.
+    List<Schema> order = new ArrayList<>(unions.keySet());
+    Set<Schema> requiring = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (Reach reach : reaches) {
+      if (reach.object.getRequiredProperties().contains(name)) {
+        reach.alternatives.forEach(a -> requiring.add(a.union));
       }
-      if (applies && !requires) {
+    }
+    order.sort(Comparator.comparing(u -> !requiring.contains(u)));
+    int[] budget = {MAX_READINGS};
+    boolean witness = witness(order, 0, unions, new IdentityHashMap<>(), reaches, name, budget);
+    // Past the budget, required only where every reach requires it: none here.
+    return !witness && budget[0] >= 0;
+  }
+
+  /**
+   * Whether some completion of {@code reading} is a reading of the value no requiring reach
+   * applies in, though another does; false, with {@code budget} spent, once it runs out.
+   */
+  private static boolean witness(List<Schema> order, int depth, Map<Schema, List<Integer>> unions,
+      Map<Schema, Integer> reading, List<Reach> reaches, String name, int[] budget) {
+    if (--budget[0] < 0) {
+      return false;
+    }
+    for (Reach reach : reaches) {
+      if (reach.object.getRequiredProperties().contains(name) && applies(reach, reading)) {
+        // It applies however the rest is read.
         return false;
       }
     }
-    return true;
+    if (depth == order.size()) {
+      // A reading where the property is an extra requires nothing, though no reach applies.
+      return reading.containsValue(Alternative.EXTRA)
+          || reaches.stream().anyMatch(reach -> applies(reach, reading));
+    }
+    Schema union = order.get(depth);
+    for (int branch : unions.get(union)) {
+      reading.put(union, branch);
+      boolean found = witness(order, depth + 1, unions, reading, reaches, name, budget);
+      reading.remove(union);
+      if (found || budget[0] < 0) {
+        return found;
+      }
+    }
+    return false;
+  }
+
+  private static boolean applies(Reach reach, Map<Schema, Integer> reading) {
+    return reach.alternatives.stream()
+        .allMatch(a -> Integer.valueOf(a.branch).equals(reading.get(a.union)));
   }
 
   /**

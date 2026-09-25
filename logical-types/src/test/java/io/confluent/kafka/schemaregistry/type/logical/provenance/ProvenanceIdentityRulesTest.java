@@ -95,6 +95,22 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aOneofSplitInTwoContinuesInThePartKeepingMostOfIt() {
+    // Both parts share member numbers with c; the one holding the lowest keeps it, the other is
+    // new, and so is the field that moved into it.
+    List<ProvenanceVersion> v = compute(
+        proto("oneof c { int32 a = 1; string b = 2; }"),
+        proto("oneof c1 { int32 a = 1; } oneof c2 { string b = 2; }"));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    // v1: c at [0], a at [0, 0], b at [0, 1]; v2: c1 at [0], a at [0, 0], c2 at [1], b at [1, 0].
+    assertThat(after.get(path(0))).isEqualTo(before.get(path(0)));
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(1))).isNotIn(before.values());
+    assertThat(after.get(path(1, 0))).isNotIn(before.values());
+  }
+
+  @Test
   void aFieldMovedIntoAOneofIsNew() {
     List<ProvenanceVersion> v = compute(
         proto("oneof c { int32 a = 1; } string b = 2;"),

@@ -89,7 +89,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .build();
   }
 
-  private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector;
+  private volatile ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector;
 
   /**
    * {@code readers} as a reader function, with any registered id a reader comes with used for
@@ -100,13 +100,50 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return provenanceProjector().readerSchemas(readers);
   }
 
-  // Created on first use, once the deserializer is configured; a race builds an equivalent one.
-  private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
-    if (provenanceProjector == null) {
-      provenanceProjector = new ProvenanceProjector<>(
-          schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+  // A class's schema as a reader, built once; for provenance, marked as derived from the class.
+  private final Cache<Schema, AvroSchema> classReaders =
+      CacheBuilder.newBuilder().weakKeys().build();
+
+  /**
+   * {@code schema}, a generated or reflected class's, as a reader. Its text leaves out what a
+   * version adds besides — metadata, rules — so for provenance it is the latest version it equals.
+   */
+  private AvroSchema classReader(Schema schema) {
+    return classReaders.asMap().computeIfAbsent(schema, s -> provenanceAlgorithm == null
+        ? new AvroSchema(s) : (AvroSchema) provenanceProjector().derivedReader(new AvroSchema(s)));
+  }
+
+  // The configured class's schema, or a generated class's own passed in, is a class reader; any
+  // other schema is the caller's own text.
+  private AvroSchema readerOf(Schema readerSchema) {
+    return readerSchema == null ? null
+        : readerSchema == specificAvroReaderSchema || isClassSchema(readerSchema)
+            ? classReader(readerSchema) : new AvroSchema(readerSchema);
+  }
+
+  private boolean isClassSchema(Schema schema) {
+    if (!useSpecificAvroReader || schema.getType() != Schema.Type.RECORD) {
+      return false;
     }
-    return provenanceProjector;
+    Class<?> type = SpecificData.get().getClass(schema);
+    return type != null && schema.equals(SpecificData.get().getSchema(type));
+  }
+
+  // Created on first use, once the deserializer is configured, and only once: it holds the ids
+  // readers were supplied with and which readers a class derived.
+  private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
+    ProvenanceProjector<AvroProvenanceRenamer.Renamed> projector = provenanceProjector;
+    if (projector == null) {
+      synchronized (this) {
+        projector = provenanceProjector;
+        if (projector == null) {
+          projector = new ProvenanceProjector<>(
+              schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+          provenanceProjector = projector;
+        }
+      }
+    }
+    return projector;
   }
 
   protected void configure(KafkaAvroDeserializerConfig config) {
@@ -203,8 +240,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
-    return context.read(context.schemaFromRegistry(),
-        readerSchema != null ? new AvroSchema(readerSchema) : null);
+    return context.read(context.schemaFromRegistry(), readerOf(readerSchema));
   }
 
   private Integer schemaVersion(String topic,
@@ -273,7 +309,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       throws SerializationException, InvalidConfigurationException {
     return deserializeWithSchemaAndVersion(
         topic, isKey, headers, payload,
-        writerAvroSchema -> readerSchema != null ? new AvroSchema(readerSchema) : null);
+        writerAvroSchema -> readerOf(readerSchema));
   }
 
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
@@ -310,7 +346,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
         ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
         : specificAvroReaderSchema != null
-            ? new AvroSchema(specificAvroReaderSchema)
+            ? classReader(specificAvroReaderSchema)
             : null;
     Object result = context.read(schema, readerAvroSchema);
     readerAvroSchema = context.getReaderSchema();
@@ -637,7 +673,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     Object read(AvroSchema writerAvroSchema) {
       return read(writerAvroSchema,
-          specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
+          specificAvroReaderSchema != null ? classReader(specificAvroReaderSchema) : null);
     }
 
     Object read(AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
@@ -676,7 +712,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               && (useSpecificAvroReader || useSchemaReflection)) {
             Schema derived =
                 AbstractKafkaAvroDeserializer.this.getReaderSchema(schemaId, writerSchema, null);
-            provenanceReader = derived != writerSchema ? new AvroSchema(derived) : null;
+            provenanceReader = derived != writerSchema ? classReader(derived) : null;
           }
           renamed = projectByProvenance(writerAvroSchema, provenanceReader);
           AvroProvenanceRenamer.Renamed r = renamed;

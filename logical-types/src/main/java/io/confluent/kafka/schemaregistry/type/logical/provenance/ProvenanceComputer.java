@@ -62,7 +62,9 @@ import java.util.TreeSet;
  * an anonymous root schema sit in a different scope from the members of a named type. A version
  * that gives a previously anonymous root a name, or the reverse, therefore starts every member's
  * interval afresh — which is correct, but worth knowing before mixing LTs built by a shim (which
- * inlines everything) with LTs read from Avro or Protobuf (whose roots are named).
+ * inlines everything) with LTs read from Protobuf (whose roots are named). An Avro root that refers
+ * to its own record — as a converter keeps one naming types inside it — is walked as the root, so
+ * the root's name never matters to Avro.
  *
  * <h2>Per-version transition</h2>
  *
@@ -661,6 +663,7 @@ public final class ProvenanceComputer {
           resolved.put(peer, resolveByFormat(peer, scope));
         }
       }
+      settleOneofs(peers, scope, resolved);
       arbitrate(byName, scope, resolved);
 
       Set<Identity> taken = new HashSet<>(resolved.values());
@@ -896,6 +899,47 @@ public final class ProvenanceComputer {
      * The live oneof in {@code scope} sharing a member number with {@code members}; null if there
      * is none, or members come from more than one.
      */
+    /**
+     * Gives a historical oneof to one of the peers continuing it by member numbers: a oneof split
+     * in two has each part share numbers with it. The part sharing the most keeps it — ties to
+     * the one holding the lowest shared number — and the others are new.
+     */
+    private void settleOneofs(List<Candidate> peers, Scope scope,
+        Map<Candidate, Identity> resolved) {
+      Map<Identity, Candidate> keeper = new HashMap<>();
+      for (Candidate peer : peers) {
+        Identity identity = resolved.get(peer);
+        Set<Integer> members = memberNumbersOf(peer);
+        EntityState state = identity != null ? history.state.get(identity) : null;
+        if (members == null || state == null || state.memberNumbers == null) {
+          continue;
+        }
+        Candidate other = keeper.get(identity);
+        Candidate kept = other == null
+            || keepsOneof(peer, other, state.memberNumbers) ? peer : other;
+        keeper.put(identity, kept);
+        Candidate minted = other == null ? null : kept == peer ? other : peer;
+        if (minted != null) {
+          resolved.put(minted,
+              new Identity(minted.kind, scope, new MintedIdentity(minted.name, version)));
+        }
+      }
+    }
+
+    private boolean keepsOneof(Candidate peer, Candidate other, Set<Integer> historical) {
+      Set<Integer> mine = shared(memberNumbersOf(peer), historical);
+      Set<Integer> theirs = shared(memberNumbersOf(other), historical);
+      return mine.size() != theirs.size()
+          ? mine.size() > theirs.size()
+          : Collections.min(mine) < Collections.min(theirs);
+    }
+
+    private static Set<Integer> shared(Set<Integer> members, Set<Integer> historical) {
+      Set<Integer> shared = new TreeSet<>(members);
+      shared.retainAll(historical);
+      return shared;
+    }
+
     private Identity oneofContinuation(Scope scope, Set<Integer> members) {
       Identity found = null;
       for (Identity historical

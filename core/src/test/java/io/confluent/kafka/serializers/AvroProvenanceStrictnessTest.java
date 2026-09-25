@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -176,6 +177,75 @@ class AvroProvenanceStrictnessTest {
     GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
         .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
     assertEquals(4, ((GenericData.Fixed) read.get("u")).bytes()[3]);
+  }
+
+  @Test
+  void aClassReaderIsTheLatestVersionItEquals() throws Exception {
+    // v3 is v1's text with metadata, which a class's schema leaves out: the class is v3, the
+    // latest version it equals, not v1, which it happens to equal exactly.
+    Schema v1 = Readded.getClassSchema();
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Readded\","
+        + "\"namespace\":\"io.confluent.kafka.serializers.test\",\"doc\":\"v2\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"}]}");
+    client.register(SUBJECT, new AvroSchema(v1.toString()));
+    client.register(SUBJECT, new AvroSchema(v2));
+    int v3 = client.register(SUBJECT, new AvroSchema(v1.toString())
+        .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null));
+    byte[] bytes = framedAs(v3, v1,
+        new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
+
+    assertEquals("current", readSpecific(bytes, null).getNote().toString());
+    assertEquals("current", readSpecific(bytes, "v1").getNote().toString());
+  }
+
+  @Test
+  void aFieldAliasOnAReAddedRecordGivesItNoOldValue() throws Exception {
+    // N is re-added, its y aliasing the old x; a renamed field beside it holds a proper union.
+    // The alias must neither rename x onto y nor blind the verifier into a fallback.
+    String n = "{\"name\":\"o\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"N\","
+        + "\"fields\":[{\"name\":\"%s\",\"type\":\"int\"%s}]}],\"default\":null}";
+    String name = "{\"name\":\"name\",\"type\":[\"int\",\"string\"]}";
+    String fullName = "{\"name\":\"full_name\",\"type\":[\"int\",\"string\"],"
+        + "\"aliases\":[\"name\"]}";
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + name + "," + String.format(n, "x", "") + "]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\","
+        + "\"doc\":\"v2\",\"fields\":[" + fullName + "]}");
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\","
+        + "\"doc\":\"v3\",\"fields\":[" + fullName + ","
+        + String.format(n, "y", ",\"aliases\":[\"x\"]") + "]}");
+    register(v1, v2, v3);
+    GenericRecord value = new GenericData.Record(v1);
+    value.put("name", 5);
+    GenericRecord o = new GenericData.Record(v1.getField("o").schema().getTypes().get(1));
+    o.put("x", 42);
+    value.put("o", o);
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v3).getValue();
+    assertEquals(5, read.get("full_name"));
+    assertNull(read.get("o"));
+  }
+
+  @Test
+  void aClassSchemaPassedAsTheReaderIsTheLatestVersionItEquals() throws Exception {
+    // As a caller passing its generated class's schema does: still a class reader, so the latest
+    // version it equals (v3, v1 with metadata), not v1.
+    Schema v1 = Readded.getClassSchema();
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Readded\","
+        + "\"namespace\":\"io.confluent.kafka.serializers.test\",\"doc\":\"v2\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"}]}");
+    client.register(SUBJECT, new AvroSchema(v1.toString()));
+    client.register(SUBJECT, new AvroSchema(v2));
+    int v3 = client.register(SUBJECT, new AvroSchema(v1.toString())
+        .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null));
+    byte[] bytes = framedAs(v3, v1,
+        new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
+    Map<String, Object> config = config("v1");
+    config.put("specific.avro.reader", true);
+
+    Object read = new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes, v1);
+    assertEquals("current", ((Readded) read).getNote().toString());
   }
 
   @Test
@@ -382,6 +452,17 @@ class AvroProvenanceStrictnessTest {
     client.register(SUBJECT, new AvroSchema(writer));
     return new KafkaAvroSerializer(client, config(null))
         .serialize(TOPIC, new GenericRecordBuilder(writer).set("f", value).build());
+  }
+
+  // Framed by hand under an explicit id: the writer's text alone names v1.
+  private byte[] framedAs(int id, Schema writer, Object value) throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(writer).write(value, encoder);
+    encoder.flush();
+    return out.toByteArray();
   }
 
   // The serializer takes a record's own schema, not a root union: framed by hand.
