@@ -62,6 +62,14 @@ class ProvenanceConverterSweepTest {
             + "\"name\":\"MapEntry\",\"namespace\":\"io.confluent.connect.avro\",\"fields\":["
             + "{\"name\":\"key\",\"type\":\"int\"},{\"name\":\"value\",\"type\":\"string\"}]}}",
         "{\"type\":\"fixed\",\"name\":\"D\",\"size\":16,\"logicalType\":\"duration\"}",
+        // Annotations of the wrong JSON type: rejected by name, never a failed cast.
+        "{\"type\":\"string\",\"flink.maxLength\":\"10\"}",
+        "{\"type\":\"string\",\"flink.minLength\":true,\"flink.maxLength\":5}",
+        "{\"type\":\"bytes\",\"flink.maxLength\":10.5}",
+        "{\"type\":\"enum\",\"name\":\"E1\",\"symbols\":[\"A\"],\"confluent:enum\":[\"x\"]}",
+        "{\"type\":\"enum\",\"name\":\"E2\",\"symbols\":[\"A\"],\"confluent:enum\":[{\"doc\":5}]}",
+        "{\"type\":\"map\",\"values\":\"int\",\"logical.key.length\":5,"
+            + "\"logical.key.type\":7}",
         "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"n\",\"type\":[\"null\","
             + "\"N\"]}]}"}) {
       corpus.add(Arguments.of("avro " + type, new AvroSchema(
@@ -95,6 +103,20 @@ class ProvenanceConverterSweepTest {
       corpus.add(Arguments.of("json " + property,
           new JsonSchema(OBJ + "{\"p\":" + property + "}}")));
     }
+    for (String field : new String[] {
+        "string s = 1 " + meta("flink.maxLength", "abc") + ";",
+        "string s = 1 " + meta("flink.minLength", "abc") + ";",
+        "bytes s = 1 " + meta("flink.maxLength", "x") + ";",
+        "google.protobuf.Timestamp s = 1 " + meta("flink.precision", "abc") + ";",
+        "google.type.TimeOfDay s = 1 " + meta("flink.precision", "abc") + ";",
+        "int32 s = 1 " + meta("logical.default", "abc") + ";",
+        "bytes s = 1 " + meta("logical.default", "%%%") + ";",
+        "google.protobuf.Timestamp s = 1 " + meta("logical.default", "junk") + ";"}) {
+      corpus.add(Arguments.of("proto " + field, new ProtobufSchema("syntax = \"proto3\";\n"
+          + "package p;\nimport \"confluent/meta.proto\";\n"
+          + "import \"google/protobuf/timestamp.proto\";\nimport \"google/type/timeofday.proto\";\n"
+          + "message Row {\n  " + field + "\n}\n")));
+    }
     return corpus.stream();
   }
 
@@ -127,4 +149,10 @@ class ProvenanceConverterSweepTest {
       }
     }
   }
+
+  private static String meta(String key, String value) {
+    return "[(confluent.field_meta) = { params: [{ key: \"" + key + "\" value: \"" + value
+        + "\" }] }]";
+  }
+
 }

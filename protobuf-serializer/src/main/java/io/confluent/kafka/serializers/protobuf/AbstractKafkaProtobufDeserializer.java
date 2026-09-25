@@ -221,9 +221,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
-      } else if (renumbered != null && renumbered.movedAny()) {
-        message = parseRenumbered(renumbered, rulesReader(readerSchema, schema, provenanceReader),
-            buffer, start, length);
+      } else if (parsesRenumbered(renumbered, readerSchema, schema)) {
+        message = parseRenumbered(renumbered, provenanceReader, buffer, start, length);
       }
 
       ProtobufSchema writerSchema = schema;
@@ -324,7 +323,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       return cls == null ? null : classSchemas.computeIfAbsent(cls, c -> {
         try {
           Message instance = (Message) c.getMethod("getDefaultInstance").invoke(null);
-          return new ProtobufSchema(instance.getDescriptorForType());
+          return (ProtobufSchema) provenanceProjector().derivedReader(
+              new ProtobufSchema(instance.getDescriptorForType()));
         } catch (ReflectiveOperationException e) {
           return null;
         }
@@ -338,12 +338,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   private final Map<Class<?>, ProtobufSchema> classSchemas = new ConcurrentHashMap<>();
 
   /**
-   * The schema a renumbered read is parsed into — renumbering is for parsing alone: the reader's,
-   * or, with no reader configured and a class reading, the writer's, whose rules then run.
+   * Whether a renumbered read is parsed before the domain rules: it is, except for the writer's
+   * own rules with no reader configured, which read the writer's record; what the class does not
+   * pair with it is dropped after them.
    */
-  private static ProtobufSchema rulesReader(ProtobufSchema reader, ProtobufSchema writer,
-      ProtobufSchema provenanceReader) {
-    return reader == null && hasReadRules(writer) ? writer : provenanceReader;
+  private static boolean parsesRenumbered(ProtoProvenanceRenumberer.Renumbered renumbered,
+      ProtobufSchema reader, ProtobufSchema writer) {
+    return renumbered != null && renumbered.movedAny() && (reader != null || !hasReadRules(writer));
   }
 
   /**

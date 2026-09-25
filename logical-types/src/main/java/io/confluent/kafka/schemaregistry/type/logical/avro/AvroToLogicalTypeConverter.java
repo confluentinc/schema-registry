@@ -381,9 +381,7 @@ public class AvroToLogicalTypeConverter {
           return Schema.createBinary(avroSchema.getFixedSize()).setNullable(isNullable);
         } else {
           final int maxLength =
-              Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MAX_LENGTH))
-                  .map(i -> (Integer) i)
-                  .orElse(MAX_LENGTH);
+              intProp(avroSchema, CommonConstants.FLINK_MAX_LENGTH).orElse(MAX_LENGTH);
           if (maxLength == MAX_LENGTH) {
             return Schema.createBytes().setNullable(isNullable);
           }
@@ -422,12 +420,10 @@ public class AvroToLogicalTypeConverter {
 
       case STRING:
         final int maxLength =
-            Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MAX_LENGTH))
-                .map(i -> (Integer) i)
-                .orElse(MAX_LENGTH);
-        return Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MIN_LENGTH))
-            .filter(minLength -> (int) minLength == maxLength)
-            .map(minLength -> Schema.createChar((int) minLength).setNullable(isNullable))
+            intProp(avroSchema, CommonConstants.FLINK_MAX_LENGTH).orElse(MAX_LENGTH);
+        return intProp(avroSchema, CommonConstants.FLINK_MIN_LENGTH)
+            .filter(minLength -> minLength == maxLength)
+            .map(minLength -> Schema.createChar(minLength).setNullable(isNullable))
             .orElseGet(() -> {
               if (maxLength == MAX_LENGTH) {
                 return Schema.createString().setNullable(isNullable);
@@ -453,9 +449,7 @@ public class AvroToLogicalTypeConverter {
           return Schema.createNamedTypeRef(name).setNullable(isNullable);
         }
         List<String> symbols = avroSchema.getEnumSymbols();
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> enumMeta =
-            (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
+        List<Map<String, Object>> enumMeta = enumHints(avroSchema);
         List<EnumValue> enumValues = new ArrayList<>();
         for (int i = 0; i < symbols.size(); i++) {
           enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
@@ -716,11 +710,9 @@ public class AvroToLogicalTypeConverter {
     return structSchema;
   }
 
-  @SuppressWarnings("unchecked")
   private static Schema convertEnum(org.apache.avro.Schema avroSchema) {
     List<String> symbols = avroSchema.getEnumSymbols();
-    List<Map<String, Object>> enumMeta =
-        (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
+    List<Map<String, Object>> enumMeta = enumHints(avroSchema);
     List<EnumValue> enumValues = new ArrayList<>();
     for (int i = 0; i < symbols.size(); i++) {
       enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
@@ -750,6 +742,44 @@ public class AvroToLogicalTypeConverter {
       params = raw != null ? Schema.stripFormatNativeParams(raw) : null;
     }
     return new EnumValue(symbol, doc, params);
+  }
+
+  /**
+   * A {@code confluent:enum} hint as the enum reads it, one object per symbol with a string doc
+   * and object params; any other shape is rejected by name, rather than failing on a cast.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> enumHints(org.apache.avro.Schema avroSchema) {
+    Object hint = avroSchema.getObjectProp("confluent:enum");
+    if (hint == null) {
+      return null;
+    }
+    boolean valid = hint instanceof List;
+    for (Object entry : valid ? (List<?>) hint : Collections.emptyList()) {
+      valid &= entry instanceof Map && isEnumHint((Map<?, ?>) entry);
+    }
+    if (!valid) {
+      throw new ValidationException("confluent:enum must be a list of symbol objects: " + hint);
+    }
+    return (List<Map<String, Object>>) hint;
+  }
+
+  private static boolean isEnumHint(Map<?, ?> entry) {
+    Object doc = entry.get("doc");
+    Object params = entry.get("params");
+    return (doc == null || doc instanceof String) && (params == null || params instanceof Map);
+  }
+
+  /**
+   * An integer annotation, if present; one that is no JSON integer is rejected by name, rather
+   * than failing on a cast.
+   */
+  private static Optional<Integer> intProp(org.apache.avro.Schema avroSchema, String name) {
+    Object value = avroSchema.getObjectProp(name);
+    if (value != null && !(value instanceof Integer)) {
+      throw new ValidationException(name + " must be a JSON integer: " + value);
+    }
+    return Optional.ofNullable((Integer) value);
   }
 
   private static <V> List<V> appendToList(final List<V> list, final V value) {
@@ -901,8 +931,12 @@ public class AvroToLogicalTypeConverter {
   private static Schema readMapKeyType(org.apache.avro.Schema avroSchema) {
     Object keyLength = avroSchema.getObjectProp(CommonConstants.LOGICAL_KEY_LENGTH_PROP);
     if (keyLength instanceof Integer) {
-      String keyTypeName = (String) avroSchema.getObjectProp(
-          CommonConstants.LOGICAL_KEY_TYPE_PROP);
+      Object keyType = avroSchema.getObjectProp(CommonConstants.LOGICAL_KEY_TYPE_PROP);
+      if (keyType != null && !(keyType instanceof String)) {
+        throw new ValidationException(
+            CommonConstants.LOGICAL_KEY_TYPE_PROP + " must be a JSON string: " + keyType);
+      }
+      String keyTypeName = (String) keyType;
       if ("CHAR".equals(keyTypeName)) {
         return Schema.createChar((int) keyLength).setNullable(false);
       }
