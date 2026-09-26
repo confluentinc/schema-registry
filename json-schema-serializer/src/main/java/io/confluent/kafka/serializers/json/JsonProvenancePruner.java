@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ArraySchema;
@@ -162,17 +163,30 @@ final class JsonProvenancePruner {
       }
     }
     for (List<Integer> path : mapping.readerPaths()) {
-      // A branch of a property's own union: one step under the property, spelled as it is.
-      if (path.size() > 1 && properties.contains(path.subList(0, path.size() - 1))) {
-        List<String> names = mapping.readerNamesOf(path);
-        Target target = byNames.get(names);
-        if (target != null && isBranch(mapping, path, names)) {
-          target.branches.put(branchChoices(mapping, path),
-              new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+      // A branch of a property's own union, or of its items' or map values': under the nearest
+      // property, spelled as it is but for unnamed steps.
+      List<String> names = mapping.readerNamesOf(path);
+      if (!isBranch(mapping, path, names)) {
+        continue;
+      }
+      for (int k = path.size() - 1; k > 0; k--) {
+        List<Integer> owner = path.subList(0, k);
+        if (properties.contains(owner)) {
+          List<String> ownerNames = mapping.readerNamesOf(owner);
+          Target target = byNames.get(ownerNames);
+          if (target != null && names.size() >= ownerNames.size()
+              && names.subList(0, ownerNames.size()).equals(ownerNames)
+              && names.subList(ownerNames.size(), names.size()).stream()
+                  .allMatch(Objects::isNull)) {
+            target.branches.put(branchChoices(mapping, path),
+                new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+          }
+          break;
         }
       }
     }
-    // Writer locations spelled alike: a value may have been written as any of them.
+    // Writer locations spelled alike: a value may have been written as any of them, and read as
+    // another wherever the reader's schema or a pruned property changes which branch it fits.
     Map<List<String>, Integer> spelled = new HashMap<>();
     for (List<Integer> path : mapping.writerPaths()) {
       List<String> names = mapping.writerNamesOf(path);
@@ -238,36 +252,67 @@ final class JsonProvenancePruner {
     return true;
   }
 
-  /** The branches of a property's own union that its primitive value validates; else none. */
-  private static List<Integer> heldIn(ObjectSchema object, String name, JsonNode value) {
-    Schema schema = object.getPropertySchemas().get(name);
+  /**
+   * The union branches a property's value is held in, each as the branch indexes of the unions on
+   * the way: a primitive, or an array, in its own union's, its items' or its map values'. An
+   * object's branch is the walk's to tell.
+   */
+  private static List<List<Integer>> heldIn(ObjectSchema object, String name, JsonNode value) {
+    List<List<Integer>> held = new ArrayList<>();
+    heldIn(object.getPropertySchemas().get(name), value, Collections.emptyList(), held);
+    return held;
+  }
+
+  private static void heldIn(Schema schema, JsonNode value, List<Integer> branches,
+      List<List<Integer>> held) {
     while (schema instanceof ReferenceSchema) {
       schema = ((ReferenceSchema) schema).getReferredSchema();
     }
-    if (value == null || value.isContainerNode() || !(schema instanceof CombinedSchema)
-        || ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
-      return Collections.emptyList();
+    if (value == null) {
+      return;
     }
-    List<Schema> branches = new ArrayList<>();
-    boolean nullable = false;
-    for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
-      if (subschema instanceof NullSchema) {
-        nullable = true;
-      } else {
-        branches.add(subschema);
+    if (schema instanceof CombinedSchema
+        && ((CombinedSchema) schema).getCriterion() != CombinedSchema.ALL_CRITERION) {
+      List<Schema> options = new ArrayList<>();
+      boolean nullable = false;
+      for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+        if (subschema instanceof NullSchema) {
+          nullable = true;
+        } else {
+          options.add(subschema);
+        }
+      }
+      if (options.size() == 1 && nullable) {
+        // A nullable value, no union.
+        heldIn(options.get(0), value, branches, held);
+        return;
+      }
+      Object validatable = validatable(value);
+      for (int i = 0; i < options.size(); i++) {
+        if (validates(options.get(i), validatable)) {
+          List<Integer> in = new ArrayList<>(branches);
+          in.add(i);
+          if (!value.isObject()) {
+            held.add(in);
+          }
+          heldIn(options.get(i), value, in, held);
+        }
+      }
+    } else if (schema instanceof ArraySchema && value.isArray()) {
+      Schema items = ((ArraySchema) schema).getAllItemSchema();
+      for (JsonNode element : value) {
+        heldIn(items, element, branches, held);
+      }
+    } else if (schema instanceof ObjectSchema && value.isObject()) {
+      ObjectSchema object = (ObjectSchema) schema;
+      Iterator<Map.Entry<String, JsonNode>> fields = value.fields();
+      while (fields.hasNext()) {
+        Map.Entry<String, JsonNode> field = fields.next();
+        if (!object.getPropertySchemas().containsKey(field.getKey())) {
+          heldIn(object.getSchemaOfAdditionalProperties(), field.getValue(), branches, held);
+        }
       }
     }
-    if (branches.size() == 1 && nullable) {
-      return Collections.emptyList();
-    }
-    Object validatable = validatable(value);
-    List<Integer> held = new ArrayList<>();
-    for (int i = 0; i < branches.size(); i++) {
-      if (validates(branches.get(i), validatable)) {
-        held.add(i);
-      }
-    }
-    return held;
   }
 
   boolean isEmpty() {
@@ -282,7 +327,9 @@ final class JsonProvenancePruner {
   void prune(JsonNode document) {
     // A default put in place of a pruned value is the reader's own: nothing under it is pruned.
     Set<JsonNode> defaults = Collections.newSetFromMap(new IdentityHashMap<>());
-    Set<JsonNode> placed = Collections.newSetFromMap(new IdentityHashMap<>());
+    // Where a default was put, by object and name: Jackson shares one node for small values, so
+    // the value itself cannot tell a default from a property holding the same.
+    Map<ObjectNode, Set<String>> placed = new IdentityHashMap<>();
     // How the writer reads each property, before anything is pruned: the branches taken to it,
     // and, for a primitive under a union of its own, the branch holding it.
     Map<Target, Map<ObjectNode, Set<List<Integer>>>> written = new IdentityHashMap<>();
@@ -293,10 +340,12 @@ final class JsonProvenancePruner {
             (node, object, name, choices, ambiguous, alternatives) -> {
               Set<List<Integer>> as = readings.computeIfAbsent(node, n -> new HashSet<>());
               as.add(choices);
-              for (int branch : heldIn(object, name, node.get(name))) {
-                List<Integer> extended = new ArrayList<>(choices);
-                extended.add(branch);
-                as.add(extended);
+              if (!target.branches.isEmpty()) {
+                for (List<Integer> branches : heldIn(object, name, node.get(name))) {
+                  List<Integer> extended = new ArrayList<>(choices);
+                  extended.addAll(branches);
+                  as.add(extended);
+                }
               }
             });
         written.put(target, readings);
@@ -312,7 +361,8 @@ final class JsonProvenancePruner {
         Map<ObjectNode, Set<List<Integer>>> readings = written.get(target);
         walk(target.names, reader, document, 0, new ArrayList<>(), false,
             Collections.emptyList(), (node, object, name, choices, ambiguous, alternatives) -> {
-              if (!defaults.contains(node) && !placed.contains(node.get(name))
+              if (!defaults.contains(node)
+                  && !placed.getOrDefault(node, Collections.emptySet()).contains(name)
                   && !keeps(target, choices, ambiguous, node, object, name,
                       readings != null ? readings.get(node) : null)) {
                 reached.computeIfAbsent(node, n -> new ArrayList<>())
@@ -325,7 +375,7 @@ final class JsonProvenancePruner {
           JsonNode value = remove(e.getKey(), e.getValue(), name, target.names);
           if (value != null) {
             addContainers(value, defaults);
-            placed.add(value);
+            placed.computeIfAbsent(e.getKey(), n -> new HashSet<>()).add(name);
           }
           changed |= e.getKey().get(name) != before;
         }
@@ -623,20 +673,21 @@ final class JsonProvenancePruner {
   }
 
   /**
-   * Whether a primitive under the property's own union reads, in each branch it fits, as one
-   * continuing — and, the writer known, one it fits under the writer.
+   * Whether the value reads, in each union branch it is held in, as one continuing — and, the
+   * writer known, one it is held in under the writer. A branch no location stands for, as under a
+   * plain {@code additionalProperties}, has no provenance to follow.
    */
   private static boolean heldAsWritten(Target target, List<Integer> choices, ObjectNode node,
       ObjectSchema object, String name, Set<List<Integer>> writtenAs) {
     if (target.branches.isEmpty()) {
       return true;
     }
-    for (int branch : heldIn(object, name, node.get(name))) {
+    for (List<Integer> branches : heldIn(object, name, node.get(name))) {
       List<Integer> extended = new ArrayList<>(choices);
-      extended.add(branch);
+      extended.addAll(branches);
       Candidate held = target.branches.get(extended);
-      if (held == null || !held.continues
-          || writtenAs != null && !writtenAs.contains(held.writerChoices)) {
+      if (held != null && (!held.continues
+          || writtenAs != null && !writtenAs.contains(held.writerChoices))) {
         return false;
       }
     }

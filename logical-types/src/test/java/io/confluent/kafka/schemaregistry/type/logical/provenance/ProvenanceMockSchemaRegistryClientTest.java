@@ -148,6 +148,10 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertThat(ends.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 2, 3);
     assertThat(pids(ends.getVersions().get(2))).containsExactly(3, 2, 4);
+    // Found where deleted versions are looked up, as a structural match looks them up.
+    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3);
+    assertThat(client.getAllVersions(SUBJECT, false)).containsExactly(1, 3);
+    assertThat(client.getSchemaMetadata(SUBJECT, 2, true).getId()).isEqualTo(v1 + 1);
   }
 
   // -------------------------------------------------------------------------------------------

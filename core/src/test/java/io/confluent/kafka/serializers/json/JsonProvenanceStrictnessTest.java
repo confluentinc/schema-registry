@@ -88,7 +88,7 @@ class JsonProvenanceStrictnessTest {
         Arrays.<ParsedSchema>asList(versions), false);
     JsonNode node = MAPPER.readTree(document);
     JsonProvenancePruner.plan(ProvenanceMapping.join(provenance, 1, versions.length),
-        versions[versions.length - 1]).prune(node);
+        versions[versions.length - 1], versions[0]).prune(node);
     return node;
   }
 

@@ -99,7 +99,8 @@ public final class ProvenanceMapping {
       Map<List<String>, List<Integer>> at) {
     if (field.getNames() != null) {
       names.put(field.getPath(), field.getNames());
-      // The first location spelled so wins: only JSON union branches share their names.
+      // The first location spelled so wins: JSON union branches and Protobuf oneofs share their
+      // parents' names.
       at.putIfAbsent(field.getNames(), field.getPath());
     }
   }

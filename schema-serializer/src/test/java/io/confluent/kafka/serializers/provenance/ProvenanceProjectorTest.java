@@ -42,6 +42,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -149,7 +151,8 @@ public class ProvenanceProjectorTest {
 
   @Test
   public void aRejectedRequestFailsEveryRecordFromThatWriter() throws Exception {
-    for (int[] rejection : new int[][] {{422, 42202}, {422, 42215}, {404, 40402}}) {
+    for (int[] rejection : new int[][] {{422, 42202}, {422, 42215}, {404, 40402},
+        {422, 42216}}) {
       CountingClient client = new CountingClient();
       client.failure = new RestClientException("rejected", rejection[0], rejection[1]);
       ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
@@ -175,6 +178,18 @@ public class ProvenanceProjectorTest {
         () -> ask(projector, client));
     assertTrue(first != second);
     assertEquals(first.getMessage(), second.getMessage());
+  }
+
+  @Test
+  public void anAuthFailureFailsTheRecordAsASchemaFetchWouldAndIsAskedAgain() throws Exception {
+    // Not a fallback: a principal without access to the endpoint must not read without it.
+    CountingClient client = new CountingClient();
+    client.failure = new RestClientException("unauthorized", 401, 401);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    assertThrows(AuthenticationException.class, () -> ask(projector, client));
+    client.failure = new RestClientException("forbidden", 403, 40301);
+    assertThrows(AuthorizationException.class, () -> ask(projector, client));
+    assertEquals(2, client.asked);
   }
 
   @Test
