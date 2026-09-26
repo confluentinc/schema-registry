@@ -201,9 +201,6 @@ public final class ProvenanceProjector<T> {
     String written = writerSchemaId.getId() != null
         ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
     Integer writerId = writerSchemaId.getId();
-    Integer readerId = null;
-    // Whether a registry error answers the provenance request itself, not a lookup before it.
-    boolean requesting = false;
     try {
       if (writerId == null) {
         writerId = registeredId(subject, writer);
@@ -212,28 +209,24 @@ public final class ProvenanceProjector<T> {
               "The writer schema is not a version of subject " + subject);
         }
       }
-      readerId = readerId(subject, reader);
+      Integer readerId = readerId(subject, reader);
       if (readerId == null) {
         throw new ProvenanceUnavailableException(
             "The reader schema is not a version of subject " + subject);
       }
       SchemaProvenance provenance;
       try {
-        requesting = true;
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       } catch (RestClientException e) {
         // A writer id under no version of the subject: the writer's schema may still equal one.
-        requesting = false;
         Integer equal = e.getErrorCode() == SCHEMA_ID_NOT_IN_SUBJECT
             ? structuralMatch(subject, writer, false) : null;
-        requesting = true;
         if (equal == null || equal.equals(writerId)) {
           throw e;
         }
         writerId = equal;
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       }
-      requesting = false;
       if (provenance == null) {
         return Outcome.unavailable();
       }
@@ -245,13 +238,6 @@ public final class ProvenanceProjector<T> {
       if (isTransient(e.getStatus())) {
         throw new SerializationException(
             "Schema Registry could not serve provenance for " + written, e);
-      }
-      if (requesting && isRejectedRequest(e)) {
-        // The request is always two schema ids, well formed: a rejection of it cannot be the
-        // schemas' doing.
-        return failed(subject, written, new SerializationException("Schema Registry rejected "
-            + "the provenance request for schema ids " + writerId + " and " + readerId + ": "
-            + e.getMessage(), e));
       }
       return unavailable(subject, written, e);
     } catch (ProvenanceUnavailableException | UnsupportedOperationException e) {
@@ -273,11 +259,26 @@ public final class ProvenanceProjector<T> {
 
   /**
    * The provenance pairing two versions; null when they are one and the same.
+   *
+   * @throws SerializationException if the registry rejects the request itself — a bad version,
+   *     request or range — which, being two schema ids and well formed, cannot be the schemas'
+   *     doing: every record of the writer fails
    */
   private SchemaProvenance provenance(String subject, int writerId, int readerId,
       boolean includeMultipleMessages) throws IOException, RestClientException {
-    return writerId == readerId ? null : client.getProvenanceById(
-        subject, writerId, readerId, false, includeMultipleMessages, algorithm);
+    if (writerId == readerId) {
+      return null;
+    }
+    try {
+      return client.getProvenanceById(
+          subject, writerId, readerId, false, includeMultipleMessages, algorithm);
+    } catch (RestClientException e) {
+      if (isRejectedRequest(e)) {
+        throw new SerializationException("Schema Registry rejected the provenance request for "
+            + "schema ids " + writerId + " and " + readerId + ": " + e.getMessage(), e);
+      }
+      throw e;
+    }
   }
 
   private Outcome<T> failed(String subject, String written, SerializationException e) {
@@ -355,15 +356,20 @@ public final class ProvenanceProjector<T> {
     } catch (UnsupportedOperationException e) {
       versions = client.getAllVersions(subject);
     }
-    // A schema derived from a generated class spells what its text leaves implicit — qualified
-    // type names, map entries, option order — so a Protobuf reader is also matched normalized;
-    // a derived one only so, in one pass, so the latest version it equals wins.
     boolean protobuf = "PROTOBUF".equals(schema.schemaType());
-    if (derived && !protobuf) {
-      return lookupMatch(subject, versions, schema);
+    if (derived) {
+      // Derived from a generated class: the latest version it equals, in one pass so the latest
+      // wins — normalized for Protobuf, the one it can look up for Avro.
+      return protobuf ? structuralMatch(subject, versions, schema, true)
+          : lookupMatch(subject, versions, schema);
     }
-    Integer id = derived && protobuf ? null : structuralMatch(subject, versions, schema, false);
-    return id == null && protobuf ? structuralMatch(subject, versions, schema, true) : id;
+    Integer id = structuralMatch(subject, versions, schema, false);
+    if (id == null && protobuf) {
+      // A generated class spells out what its text leaves implicit — qualified type names, map
+      // entries, option order — so a Protobuf schema is also compared normalized.
+      id = structuralMatch(subject, versions, schema, true);
+    }
+    return id;
   }
 
   private Integer structuralMatch(String subject, List<Integer> versions, ParsedSchema schema,
