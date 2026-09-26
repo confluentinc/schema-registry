@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -81,6 +82,19 @@ public class ProvenanceProjectorTest {
       pool.shutdownNow();
     }
     assertEquals(1, client.askedAtOnce.get());
+  }
+
+  @Test
+  public void latestAsksWithoutNamingAVersion() throws Exception {
+    // So a registry answers with its own latest, whether or not it knows the name.
+    for (String latest : Arrays.asList("latest", "LATEST")) {
+      CountingClient client = new CountingClient();
+      ask(new ProvenanceProjector<>(client, latest, 10, -1), client);
+      assertNull(client.lastAlgorithm);
+    }
+    CountingClient client = new CountingClient();
+    ask(new ProvenanceProjector<>(client, "v1", 10, -1), client);
+    assertEquals("v1", client.lastAlgorithm);
   }
 
   @Test
@@ -263,6 +277,7 @@ public class ProvenanceProjectorTest {
     int asked;
     int lastWriterId;
     int lastReaderId;
+    String lastAlgorithm;
     boolean rejectsForeignWriters;
     RestClientException failure;
     SchemaProvenance provenance;
@@ -291,6 +306,7 @@ public class ProvenanceProjectorTest {
       }
       lastWriterId = fromId;
       lastReaderId = toId;
+      lastAlgorithm = algorithm;
       if (rejectsForeignWriters && !idsOf(subject).contains(fromId)) {
         throw new RestClientException("not a version", 404, 40411);
       }

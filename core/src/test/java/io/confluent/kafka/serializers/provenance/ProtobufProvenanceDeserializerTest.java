@@ -41,6 +41,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
+import io.confluent.kafka.serializers.protobuf.test.Root.ReferrerMessage;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -622,6 +623,36 @@ class ProtobufProvenanceDeserializerTest {
         TOPIC, new RecordHeaders(), bytes, writer -> text).getValue()).getMemo());
     assertEquals("", ((ReaddedMap) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> null).getValue()).getMemo());
+  }
+
+  @Test
+  void aClassImportingAnotherFileIsMatchedToTheVersionReferencingIt() throws Exception {
+    // root.proto imports ref.proto and a built-in; the class's schema has no references, so it is
+    // matched by what its descriptor imports. root_id is dropped and re-added: a new column.
+    String ref = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "message ReferencedMessage {\n  string ref_id = 1;\n  bool is_active = 2;\n}\n";
+    client.register("ref", new ProtobufSchema(ref));
+    List<Integer> ids = new ArrayList<>();
+    for (String fields : new String[] {"string root_id = 1;\n  int32 extra = 3;\n", "",
+        "string root_id = 1;\n"}) {
+      ids.add(client.register(SUBJECT, new ProtobufSchema("syntax = \"proto3\";\n"
+          + "package io.confluent.kafka.serializers.protobuf.test;\n"
+          + "import \"ref.proto\";\nimport \"confluent/meta.proto\";\n"
+          + "message ReferrerMessage {\n"
+          + "  option (.confluent.message_meta).doc = \"ReferrerMessage\";\n  " + fields
+          + "  ReferencedMessage ref = 2\n"
+          + "      [(.confluent.field_meta) = { doc: \"ReferencedMessage\" }];\n"
+          + "}\n", Collections.singletonList(new SchemaReference("ref.proto", "ref", 1)),
+          Collections.singletonMap("ref.proto", ref), null, null)));
+    }
+    Descriptor v1 = ((ProtobufSchema) client.getSchemaById(ids.get(0))).toDescriptor();
+    byte[] body = DynamicMessage.newBuilder(v1).setField(v1.findFieldByName("root_id"), "old")
+        .build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(ids.get(0))
+        .put((byte) 0).put(body).array();
+
+    assertEquals("old", readClass(ReferrerMessage.class, bytes, null, false).getRootId());
+    assertEquals("", readClass(ReferrerMessage.class, bytes, "v1", false).getRootId());
   }
 
   @Test

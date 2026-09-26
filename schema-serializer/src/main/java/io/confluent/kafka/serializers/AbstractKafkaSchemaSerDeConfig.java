@@ -121,8 +121,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
   public static final String PROVENANCE_ALGORITHM_DOC =
       "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
-          + "writer fields with reader fields rather than by name or field number; unset or "
-          + "'none' to pair them as usual";
+          + "writer fields with reader fields rather than by name or field number; 'latest' for "
+          + "whichever version Schema Registry answers with by default, which may change when it "
+          + "is upgraded; unset or 'none' to pair them as usual";
 
   public static final String PROVENANCE_CACHE_SIZE = "provenance.cache.size";
   public static final int PROVENANCE_CACHE_SIZE_DEFAULT = 1000;
@@ -560,8 +561,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(USE_LATEST_VERSION);
   }
 
-  // Unset, empty, "none" or a released provenance algorithm version, in any case: a misspelt one
-  // fails configuration rather than quietly reading without provenance.
+  // Unset, empty, "none", "latest" or a released provenance algorithm version, in any case: a
+  // misspelt one fails configuration rather than quietly reading without provenance.
   private static final ConfigDef.Validator PROVENANCE_ALGORITHM_VALIDATOR =
       new ConfigDef.Validator() {
         @Override
@@ -581,6 +582,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         public String toString() {
           List<String> names = new ArrayList<>();
           names.add("none");
+          names.add(ProvenanceAlgorithm.LATEST_NAME);
           for (ProvenanceAlgorithm algorithm : ProvenanceAlgorithm.values()) {
             names.add(algorithm.getName());
           }

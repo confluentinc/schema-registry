@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -87,15 +88,30 @@ public final class ProvenanceProjector<T> {
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
   private final Cache<ParsedSchema, Boolean> derivedReaders =
       CacheBuilder.newBuilder().weakKeys().build();
+  // What a schema imports, by import name; null to resolve its references.
+  private final Function<ParsedSchema, Map<String, String>> importsOf;
 
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
    * entries of each kind for {@code cacheTtlSec} seconds, or indefinitely when that is negative.
+   * {@code latest} names no version in the request, so the registry answers with its own latest,
+   * whether or not it knows the name.
    */
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
       int cacheTtlSec) {
+    this(client, algorithm, cacheSize, cacheTtlSec, null);
+  }
+
+  /**
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int)}, telling what a schema
+   * imports by {@code importsOf}, by import name, rather than by its references: a Protobuf
+   * generated class has none, but still its descriptor's imports.
+   */
+  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
+      int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf) {
     this.client = client;
-    this.algorithm = algorithm;
+    this.importsOf = importsOf;
+    this.algorithm = ProvenanceAlgorithm.LATEST_NAME.equalsIgnoreCase(algorithm) ? null : algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
   }
@@ -414,11 +430,15 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * What {@code schema} imports, by import name: each reference's schema text, a latest version
-   * resolved, so references in another order, as {@code -1} or through another subject, match.
+   * What {@code schema} imports, by import name: as {@code importsOf} tells, else each reference's
+   * schema text, a latest version resolved, so references in another order, as {@code -1} or
+   * through another subject, match.
    */
   private Map<String, String> imports(ParsedSchema schema)
       throws IOException, RestClientException {
+    if (importsOf != null) {
+      return importsOf.apply(schema);
+    }
     Map<String, String> imports = new HashMap<>();
     for (SchemaReference reference : schema.references()) {
       SchemaMetadata imported = reference.getVersion() == -1
