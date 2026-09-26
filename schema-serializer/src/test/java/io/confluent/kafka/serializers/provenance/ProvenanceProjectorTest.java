@@ -35,6 +35,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -49,6 +55,32 @@ public class ProvenanceProjectorTest {
     ask(projector, client);
     ask(projector, client);
     assertEquals(1, client.asked);
+  }
+
+  @Test
+  public void pairsAskedAboutAtOnceAreAskedAboutOnce() throws Exception {
+    // The first records of a pair, arriving together, share one request.
+    CountingClient client = new CountingClient();
+    client.gate = new CountDownLatch(1);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ExecutorService pool = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<?>> asks = new ArrayList<>();
+      for (int i = 0; i < 4; i++) {
+        asks.add(pool.submit(() -> {
+          ask(projector, client);
+          return null;
+        }));
+      }
+      Thread.sleep(200);
+      client.gate.countDown();
+      for (Future<?> f : asks) {
+        f.get(10, TimeUnit.SECONDS);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+    assertEquals(1, client.askedAtOnce.get());
   }
 
   @Test
@@ -234,6 +266,9 @@ public class ProvenanceProjectorTest {
     boolean rejectsForeignWriters;
     RestClientException failure;
     SchemaProvenance provenance;
+    // Holds every request until released, counting them across threads.
+    CountDownLatch gate;
+    final AtomicInteger askedAtOnce = new AtomicInteger();
 
     CountingClient() throws Exception {
       writer = register(SUBJECT, writerSchema);
@@ -246,6 +281,14 @@ public class ProvenanceProjectorTest {
         boolean includeInterior, boolean includeMultipleMessages,
         String algorithm) throws IOException, RestClientException {
       asked++;
+      askedAtOnce.incrementAndGet();
+      if (gate != null) {
+        try {
+          gate.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
       lastWriterId = fromId;
       lastReaderId = toId;
       if (rejectsForeignWriters && !idsOf(subject).contains(fromId)) {
