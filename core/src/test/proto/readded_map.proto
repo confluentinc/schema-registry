@@ -1,0 +1,10 @@
+syntax = "proto3";
+package io.confluent.kafka.serializers.protobuf.test;
+
+option java_outer_classname = "ReaddedMapProto";
+
+message ReaddedMap {
+  int32 id = 1;
+  string memo = 2;
+  map<string, int32> counts = 3;
+}
