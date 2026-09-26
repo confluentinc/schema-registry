@@ -74,10 +74,12 @@ final class JsonProvenancePruner {
   private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
 
   private final Schema reader;
+  private final Schema writer;
   private final List<Target> targets;
 
-  private JsonProvenancePruner(Schema reader, List<Target> targets) {
+  private JsonProvenancePruner(Schema reader, Schema writer, List<Target> targets) {
     this.reader = reader;
+    this.writer = writer;
     this.targets = targets;
   }
 
@@ -85,9 +87,13 @@ final class JsonProvenancePruner {
   private static final class Target {
     final List<String> names;
     final List<Candidate> candidates = new ArrayList<>();
+    // The branches of the property's own union, by branch choices: a primitive lives there.
+    final Map<List<Integer>, Candidate> branches = new HashMap<>();
     // Indexed once planned: a value reaches the property once per path, so look-ups add up.
     private Map<List<Integer>, List<Candidate>> byChoices;
     private boolean clashes;
+    // Whether some location spelled so is new; if not, only a value read as another is pruned.
+    private boolean anyNew;
 
     Target(List<String> names) {
       this.names = names;
@@ -99,6 +105,8 @@ final class JsonProvenancePruner {
         byChoices.computeIfAbsent(candidate.choices, c -> new ArrayList<>()).add(candidate);
       }
       clashes = candidates.stream().anyMatch(c -> c.continues);
+      anyNew = candidates.stream().anyMatch(c -> !c.continues)
+          || branches.values().stream().anyMatch(c -> !c.continues);
       return this;
     }
 
@@ -114,10 +122,13 @@ final class JsonProvenancePruner {
   private static final class Candidate {
     final List<Integer> choices;
     final boolean continues;
+    // The writer's branch choices to the location it continues; null if it continues none.
+    final List<Integer> writerChoices;
 
-    Candidate(List<Integer> choices, boolean continues) {
+    Candidate(List<Integer> choices, List<Integer> writerChoices) {
       this.choices = choices;
-      this.continues = continues;
+      this.continues = writerChoices != null;
+      this.writerChoices = writerChoices;
     }
   }
 
@@ -128,30 +139,135 @@ final class JsonProvenancePruner {
    *     not declared by the reader
    */
   static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader) {
+    return plan(mapping, reader, null);
+  }
+
+  /**
+   * As {@link #plan(ProvenanceMapping, JsonSchema)}; with {@code writer}, a value read at a
+   * location continuing another than it can be read as under the writer is pruned too.
+   */
+  static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader,
+      JsonSchema writer) {
     // A property the walk cannot find would keep a value provenance says is new.
     mapping.requireNames();
     Schema raw = reader.rawSchema();
     Map<List<String>, Target> byNames = new LinkedHashMap<>();
+    Set<List<Integer>> properties = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
       if (isProperty(mapping, path, names)) {
+        properties.add(path);
         byNames.computeIfAbsent(names, Target::new).candidates.add(
-            new Candidate(branchChoices(mapping, path), mapping.writerPathOf(path) != null));
+            new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+      }
+    }
+    for (List<Integer> path : mapping.readerPaths()) {
+      // A branch of a property's own union: one step under the property, spelled as it is.
+      if (path.size() > 1 && properties.contains(path.subList(0, path.size() - 1))) {
+        List<String> names = mapping.readerNamesOf(path);
+        Target target = byNames.get(names);
+        if (target != null && isBranch(mapping, path, names)) {
+          target.branches.put(branchChoices(mapping, path),
+              new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+        }
+      }
+    }
+    // Writer locations spelled alike: a value may have been written as any of them.
+    Map<List<String>, Integer> spelled = new HashMap<>();
+    for (List<Integer> path : mapping.writerPaths()) {
+      List<String> names = mapping.writerNamesOf(path);
+      if (names != null) {
+        spelled.merge(names, 1, Integer::sum);
       }
     }
     List<Target> targets = new ArrayList<>();
     for (Target target : byNames.values()) {
-      if (target.candidates.stream().anyMatch(c -> !c.continues)) {
+      target.indexed();
+      boolean shared = writer != null && spelled.getOrDefault(target.names, 0) > 1;
+      if (target.anyNew || shared) {
         if (!declares(target.names, raw, 0, new IdentityHashMap<>())) {
           throw new SerializationException("Property " + target.names + " of schema id "
               + mapping.readerId() + " is not declared by the reader schema");
         }
-        targets.add(target.indexed());
+        targets.add(target);
       }
     }
     // Outermost first: a property removed takes whatever lay under it along.
     targets.sort(Comparator.comparingInt(t -> t.names.size()));
-    return new JsonProvenancePruner(raw, Collections.unmodifiableList(targets));
+    return new JsonProvenancePruner(raw, writer != null ? writer.rawSchema() : null,
+        Collections.unmodifiableList(targets));
+  }
+
+  /**
+   * The writer's branch choices to the location {@code readerPath} continues; null if none.
+   */
+  private static List<Integer> writerChoices(ProvenanceMapping mapping, List<Integer> readerPath) {
+    List<Integer> written = mapping.writerPathOf(readerPath);
+    if (written == null) {
+      return null;
+    }
+    List<Integer> choices = new ArrayList<>();
+    for (int k = 1; k <= written.size(); k++) {
+      List<Integer> prefix = written.subList(0, k);
+      List<String> names = mapping.writerNamesOf(prefix);
+      if (names != null && isWriterBranch(mapping, prefix, names)) {
+        choices.add(prefix.get(k - 1));
+      }
+    }
+    return choices;
+  }
+
+  private static boolean isWriterBranch(ProvenanceMapping mapping, List<Integer> path,
+      List<String> names) {
+    List<String> enclosing = Collections.emptyList();
+    for (int k = path.size() - 1; k > 0; k--) {
+      List<String> n = mapping.writerNamesOf(path.subList(0, k));
+      if (n != null) {
+        enclosing = n;
+        break;
+      }
+    }
+    if (names.size() < enclosing.size() || !names.subList(0, enclosing.size()).equals(enclosing)) {
+      return false;
+    }
+    for (String step : names.subList(enclosing.size(), names.size())) {
+      if (step != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** The branches of a property's own union that its primitive value validates; else none. */
+  private static List<Integer> heldIn(ObjectSchema object, String name, JsonNode value) {
+    Schema schema = object.getPropertySchemas().get(name);
+    while (schema instanceof ReferenceSchema) {
+      schema = ((ReferenceSchema) schema).getReferredSchema();
+    }
+    if (value == null || value.isContainerNode() || !(schema instanceof CombinedSchema)
+        || ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      return Collections.emptyList();
+    }
+    List<Schema> branches = new ArrayList<>();
+    boolean nullable = false;
+    for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+      if (subschema instanceof NullSchema) {
+        nullable = true;
+      } else {
+        branches.add(subschema);
+      }
+    }
+    if (branches.size() == 1 && nullable) {
+      return Collections.emptyList();
+    }
+    Object validatable = validatable(value);
+    List<Integer> held = new ArrayList<>();
+    for (int i = 0; i < branches.size(); i++) {
+      if (validates(branches.get(i), validatable)) {
+        held.add(i);
+      }
+    }
+    return held;
   }
 
   boolean isEmpty() {
@@ -166,23 +282,54 @@ final class JsonProvenancePruner {
   void prune(JsonNode document) {
     // A default put in place of a pruned value is the reader's own: nothing under it is pruned.
     Set<JsonNode> defaults = Collections.newSetFromMap(new IdentityHashMap<>());
-    for (Target target : targets) {
-      // allOf parts and ambiguous branches reach one value more than once: decided together.
-      Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>();
-      walk(target.names, reader, document, 0, new ArrayList<>(), false, Collections.emptyList(),
-          (node, object, name, choices, ambiguous, alternatives) -> {
-            if (!defaults.contains(node) && !keeps(target, choices, ambiguous)) {
-              reached.computeIfAbsent(node, n -> new ArrayList<>())
-                  .add(new Reach(object, alternatives));
-            }
-          });
-      String name = target.names.get(target.names.size() - 1);
-      reached.forEach((node, reaches) -> {
-        JsonNode value = remove(node, reaches, name, target.names);
-        if (value != null) {
-          addContainers(value, defaults);
+    Set<JsonNode> placed = Collections.newSetFromMap(new IdentityHashMap<>());
+    // How the writer reads each property, before anything is pruned: the branches taken to it,
+    // and, for a primitive under a union of its own, the branch holding it.
+    Map<Target, Map<ObjectNode, Set<List<Integer>>>> written = new IdentityHashMap<>();
+    if (writer != null) {
+      for (Target target : targets) {
+        Map<ObjectNode, Set<List<Integer>>> readings = new IdentityHashMap<>();
+        walk(target.names, writer, document, 0, new ArrayList<>(), false, Collections.emptyList(),
+            (node, object, name, choices, ambiguous, alternatives) -> {
+              Set<List<Integer>> as = readings.computeIfAbsent(node, n -> new HashSet<>());
+              as.add(choices);
+              for (int branch : heldIn(object, name, node.get(name))) {
+                List<Integer> extended = new ArrayList<>(choices);
+                extended.add(branch);
+                as.add(extended);
+              }
+            });
+        written.put(target, readings);
+      }
+    }
+    // A property removed can change how the rest of the value reads: pruned until nothing more is.
+    boolean changed = true;
+    while (changed) {
+      changed = false;
+      for (Target target : targets) {
+        // allOf parts and ambiguous branches reach one value more than once: decided together.
+        Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>();
+        Map<ObjectNode, Set<List<Integer>>> readings = written.get(target);
+        walk(target.names, reader, document, 0, new ArrayList<>(), false,
+            Collections.emptyList(), (node, object, name, choices, ambiguous, alternatives) -> {
+              if (!defaults.contains(node) && !placed.contains(node.get(name))
+                  && !keeps(target, choices, ambiguous, node, object, name,
+                      readings != null ? readings.get(node) : null)) {
+                reached.computeIfAbsent(node, n -> new ArrayList<>())
+                    .add(new Reach(object, alternatives));
+              }
+            });
+        String name = target.names.get(target.names.size() - 1);
+        for (Map.Entry<ObjectNode, List<Reach>> e : reached.entrySet()) {
+          JsonNode before = e.getKey().get(name);
+          JsonNode value = remove(e.getKey(), e.getValue(), name, target.names);
+          if (value != null) {
+            addContainers(value, defaults);
+            placed.add(value);
+          }
+          changed |= e.getKey().get(name) != before;
         }
-      });
+      }
     }
   }
 
@@ -452,12 +599,48 @@ final class JsonProvenancePruner {
    * Whether the value may stay: exactly one location matches the branches taken, and it
    * continues.
    */
-  private static boolean keeps(Target target, List<Integer> choices, boolean ambiguous) {
-    if (!target.clashes() || ambiguous) {
+  private static boolean keeps(Target target, List<Integer> choices, boolean ambiguous,
+      ObjectNode node, ObjectSchema object, String name, Set<List<Integer>> writtenAs) {
+    List<Candidate> matches = target.byChoices.get(choices);
+    Candidate match = matches != null && matches.size() == 1 ? matches.get(0) : null;
+    boolean known = writtenAs != null && !writtenAs.isEmpty();
+    if (!target.anyNew) {
+      // Every location spelled so continues: only a value read, unambiguously, at one continuing
+      // another than it was written as is pruned.
+      if (ambiguous || match == null || !known) {
+        return true;
+      }
+      return writtenAs.contains(match.writerChoices) && heldAsWritten(target, choices, node,
+          object, name, writtenAs);
+    }
+    if (!target.clashes() || ambiguous || match == null || !match.continues) {
       return false;
     }
-    List<Candidate> matches = target.byChoices.get(choices);
-    return matches != null && matches.size() == 1 && matches.get(0).continues;
+    if (known && !writtenAs.contains(match.writerChoices)) {
+      return false;
+    }
+    return heldAsWritten(target, choices, node, object, name, known ? writtenAs : null);
+  }
+
+  /**
+   * Whether a primitive under the property's own union reads, in each branch it fits, as one
+   * continuing — and, the writer known, one it fits under the writer.
+   */
+  private static boolean heldAsWritten(Target target, List<Integer> choices, ObjectNode node,
+      ObjectSchema object, String name, Set<List<Integer>> writtenAs) {
+    if (target.branches.isEmpty()) {
+      return true;
+    }
+    for (int branch : heldIn(object, name, node.get(name))) {
+      List<Integer> extended = new ArrayList<>(choices);
+      extended.add(branch);
+      Candidate held = target.branches.get(extended);
+      if (held == null || !held.continues
+          || writtenAs != null && !writtenAs.contains(held.writerChoices)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

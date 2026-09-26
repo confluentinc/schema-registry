@@ -28,8 +28,12 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A {@link MockSchemaRegistryClient} that also answers the provenance endpoint, as the registry
@@ -37,8 +41,9 @@ import java.util.OptionalInt;
  * against it is tested against the registry's behaviour and failure modes.
  *
  * <p>It lives here rather than in the client because computing provenance needs this module, and
- * this module depends on the client. The one difference from the registry is the mock's own: it
- * forgets a soft-deleted version entirely, so a history here never holds one.
+ * this module depends on the client. A soft-deleted version stays in the history, as in the
+ * registry; the base mock numbers versions by the live ones alone, so a version registered after
+ * the latest was deleted takes its number, and replaces it here.
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
@@ -54,6 +59,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int AMBIGUOUS_PROVENANCE = 42217;
   // The registry's generic server error carries its HTTP status as its error code.
   private static final int SERVER_ERROR = 500;
+
+  // Soft-deleted versions, by subject: version to schema id. The base mock forgets them.
+  private final Map<String, Map<Integer, Integer>> softDeleted = new ConcurrentHashMap<>();
 
   public ProvenanceMockSchemaRegistryClient() {
     super();
@@ -78,6 +86,29 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       }
       throw e;
     }
+  }
+
+  @Override
+  public synchronized Integer deleteSchemaVersion(Map<String, String> requestProperties,
+      String subject, String version, boolean isPermanent) throws IOException, RestClientException {
+    Map<Integer, Integer> deleted = softDeleted.computeIfAbsent(subject, s -> new TreeMap<>());
+    int number = Integer.parseInt(version);
+    if (isPermanent && deleted.remove(number) != null) {
+      return number;
+    }
+    Integer id = null;
+    if (!isPermanent) {
+      try {
+        id = getByVersion(subject, number, false).getId();
+      } catch (RuntimeException e) {
+        // No such version: the base mock answers -1, and nothing is remembered.
+      }
+    }
+    Integer result = super.deleteSchemaVersion(requestProperties, subject, version, isPermanent);
+    if (id != null && result == number) {
+      deleted.put(number, id);
+    }
+    return result;
   }
 
   @Override
@@ -145,11 +176,21 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   private List<ProvenanceHistory.Entry> history(String subject)
       throws IOException, RestClientException {
-    List<ProvenanceHistory.Entry> history = new ArrayList<>();
-    for (int version : getAllVersions(subject)) {
-      Schema schema = getByVersion(subject, version, false);
-      history.add(new ProvenanceHistory.Entry(version, schema.getId(), false));
+    Map<Integer, ProvenanceHistory.Entry> entries = new TreeMap<>();
+    softDeleted.getOrDefault(subject, Collections.emptyMap()).forEach((version, id) ->
+        entries.put(version, new ProvenanceHistory.Entry(version, id, true)));
+    List<Integer> live;
+    try {
+      live = getAllVersions(subject);
+    } catch (RestClientException e) {
+      // Every version soft-deleted: the base mock knows none.
+      live = Collections.emptyList();
     }
+    for (int version : live) {
+      Schema schema = getByVersion(subject, version, false);
+      entries.put(version, new ProvenanceHistory.Entry(version, schema.getId(), false));
+    }
+    List<ProvenanceHistory.Entry> history = new ArrayList<>(entries.values());
     if (history.isEmpty()) {
       throw new RestClientException("Subject '" + subject + "' not found.", 404,
           SUBJECT_NOT_FOUND);

@@ -541,6 +541,37 @@ class JsonProvenanceDeserializerTest {
     assertEquals(5, read(v2, bytes, "v1").get("u").get("y").asInt());
   }
 
+  @Test
+  void aRecordOfABranchTheReaderLacksIsNotReadAsAnother() throws Exception {
+    // Pruning the discriminator a new branch shares must not leave the value an instance of a
+    // continuing branch: p was written as b's, never a's.
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [" + kinded("a", "p") + ", " + kinded("b", "p")
+        + "]}");
+    JsonSchema v2 = object("\"u\": {\"oneOf\": [" + kinded("a", "p") + ", " + kinded("c", "q")
+        + "]}");
+    byte[] ofB = write(v1, "{\"u\": {\"kind\": \"b\", \"p\": 7}}");
+    byte[] ofA = write(v1, "{\"u\": {\"kind\": \"a\", \"p\": 8}}");
+    client.register(SUBJECT, v2);
+
+    assertFalse(read(v2, ofB, "v1").get("u").has("p"));
+    assertEquals(8, read(v2, ofA, "v1").get("u").get("p").asInt());
+  }
+
+  @Test
+  void aPrimitiveInAReAddedUnionBranchIsPruned() throws Exception {
+    // The value lives in its branch: number, dropped and re-added, is new.
+    JsonSchema v1 = object("\"e\": {\"type\": [\"string\", \"number\"]}");
+    JsonSchema v2 = object("\"e\": {\"type\": [\"string\", \"boolean\"]}");
+    JsonSchema v3 = object("\"e\": {\"type\": [\"string\", \"boolean\", \"number\"]}");
+    byte[] number = write(v1, "{\"e\": 2.5}");
+    byte[] string = write(v1, "{\"e\": \"s\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, number, "v1").has("e"));
+    assertEquals("s", read(v3, string, "v1").get("e").asText());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {
@@ -572,6 +603,12 @@ class JsonProvenanceDeserializerTest {
 
   private static String string(String name) {
     return "\"" + name + "\": {\"type\": \"string\"}";
+  }
+
+  // A branch told apart by a one-value kind, holding one number property.
+  private static String kinded(String kind, String property) {
+    return "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"" + kind
+        + "\"]}, " + number(property) + "}}";
   }
 
   private static JsonSchema object(String... properties) {

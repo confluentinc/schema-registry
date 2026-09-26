@@ -98,7 +98,7 @@ final class ProtoProvenanceRenumberer {
     Set<List<Integer>> moving = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (underMovingField(path, moving, mapping)) {
+      if (renumberer.underMovingField(root, path, moving, mapping, includeMultipleMessages)) {
         // Nothing under a field that moves is ever read, so nothing under it needs a number.
         continue;
       }
@@ -106,11 +106,14 @@ final class ProtoProvenanceRenumberer {
       if (move) {
         moving.add(path);
       }
-      if (names.equals(mapping.enclosingReaderNamesOf(path))) {
+      FieldDescriptor field = renumberer.fieldAt(root, names, includeMultipleMessages);
+      if (isOneof(path, names, field, mapping)) {
         // A oneof: no step of its own, so no field to number; its members are visited as fields.
         continue;
       }
-      renumberer.visit(root, names, includeMultipleMessages, move);
+      if (field != null) {
+        renumberer.decide(field.getContainingType(), field, move);
+      }
     }
     FileDescriptor renumbered = renumberer.build();
     if (renumbered == root.getFile()) {
@@ -127,19 +130,30 @@ final class ProtoProvenanceRenumberer {
    * Whether an ancestor of {@code path} is a moving field. A oneof moving is no field: its names
    * are its parent's, and its members still need numbers of their own.
    */
-  private static boolean underMovingField(List<Integer> path, Set<List<Integer>> moving,
-      ProvenanceMapping mapping) {
+  private boolean underMovingField(Descriptor root, List<Integer> path,
+      Set<List<Integer>> moving, ProvenanceMapping mapping, boolean multi) {
     for (int k = 1; k < path.size(); k++) {
       List<Integer> ancestor = path.subList(0, k);
       if (moving.contains(ancestor)) {
         List<String> names = mapping.readerNamesOf(ancestor);
         if (names != null && !names.isEmpty()
-            && !names.equals(mapping.enclosingReaderNamesOf(ancestor))) {
+            && !isOneof(ancestor, names, fieldAt(root, names, multi), mapping)) {
           return true;
         }
       }
     }
     return false;
+  }
+
+  /**
+   * Whether the location at {@code path}, ending at {@code field}, is a oneof: its names are its
+   * parent's, or end at a map entry's {@code value}, which is no location of its own.
+   */
+  private static boolean isOneof(List<Integer> path, List<String> names, FieldDescriptor field,
+      ProvenanceMapping mapping) {
+    return names.equals(mapping.enclosingReaderNamesOf(path))
+        || field != null && field.getContainingType().getOptions().getMapEntry()
+            && field.getNumber() == 2;
   }
 
   /**
@@ -198,7 +212,10 @@ final class ProtoProvenanceRenumberer {
     return moved;
   }
 
-  private void visit(Descriptor root, List<String> names, boolean multi, boolean move) {
+  /**
+   * The field {@code names} end at; null for a message itself.
+   */
+  private FieldDescriptor fieldAt(Descriptor root, List<String> names, boolean multi) {
     int i = 0;
     Descriptor message = root;
     if (multi) {
@@ -207,7 +224,6 @@ final class ProtoProvenanceRenumberer {
     }
     // Every step is a field of the message we stand on: repeated elements and oneofs are no
     // steps, and a map entry's key and value are its fields.
-    Descriptor owner = null;
     FieldDescriptor field = null;
     for (; i < names.size(); i++) {
       if (message == null || names.get(i) == null) {
@@ -217,12 +233,9 @@ final class ProtoProvenanceRenumberer {
       if (field == null) {
         throw notInSchema(names);
       }
-      owner = message;
       message = messageOf(field);
     }
-    if (owner != null) {
-      decide(owner, field, move);
-    }
+    return field;
   }
 
   private void decide(Descriptor message, FieldDescriptor field, boolean move) {

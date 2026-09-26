@@ -51,8 +51,9 @@ import java.util.function.Predicate;
  * location is matched only among the previous version's locations under its parent's match, so
  * the parent is matched first and scopes its members; collection steps ({@code []},
  * {@code {key}}, {@code {value}}) are part of that scope. A location whose type changes category —
- * a leaf, struct, union, array, multiset or map becoming another — is new, with everything under
- * it, however it was matched: no SQL {@code ALTER} expresses the change. Nothing absent from the
+ * a leaf, struct, union, array, multiset or map becoming another, or what a collection holds
+ * doing so — is new, with everything under it, however it was matched: no SQL {@code ALTER}
+ * expresses the change. Nothing absent from the
  * previous version is ever continued, so a range of versions pairs its versions exactly as the
  * whole history does.
  *
@@ -211,7 +212,7 @@ public final class ProvenanceComputer {
 
     /** This node's member groups, keyed by the collection steps leading to each. */
     private final Map<String, List<Node>> groups = new HashMap<>();
-    private Category category;
+    private List<Category> category;
     private Node match;
     private int id;
 
@@ -358,7 +359,7 @@ public final class ProvenanceComputer {
       }
       match(peers, owner.previous(step, peers.get(0).kind));
       for (Node peer : peers) {
-        if (peer.match != null && peer.match.category != peer.category) {
+        if (peer.match != null && !peer.match.category.equals(peer.category)) {
           // Matched, but its type changed category: it, and all under it, are new.
           peer.match = null;
         }
@@ -421,8 +422,29 @@ public final class ProvenanceComputer {
       }
     }
 
-    private Category categoryOf(Schema schema) {
+    /**
+     * The category of {@code schema}, then of what each collection holds: a list of structs
+     * becoming a list of strings changes category as a struct becoming a string does.
+     */
+    private List<Category> categoryOf(Schema schema) {
+      List<Category> categories = new ArrayList<>();
+      addCategories(schema, categories);
+      return categories;
+    }
+
+    private void addCategories(Schema schema, List<Category> categories) {
       Schema type = resolved(schema);
+      Category category = category(type);
+      categories.add(category);
+      if (category == Category.ARRAY || category == Category.MULTISET) {
+        addCategories(type.getElementType(), categories);
+      } else if (category == Category.MAP) {
+        addCategories(type.getKeyType(), categories);
+        addCategories(type.getValueType(), categories);
+      }
+    }
+
+    private static Category category(Schema type) {
       if (type == null) {
         return Category.LEAF;
       }
@@ -560,23 +582,47 @@ public final class ProvenanceComputer {
 
     /**
      * Protobuf: a field by number, a message by name, and a oneof by its members' numbers, which a
-     * renamed oneof keeps; a oneof split in two is kept by one part.
+     * renamed oneof keeps; a oneof split in two is kept by one part. A oneof sharing members with
+     * several previous ones, as when two merge, then takes the one it shares the most with of
+     * those no other oneof kept.
      */
     private static void matchProtobuf(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
+      List<Node> overlapping = new ArrayList<>();
       for (Node peer : peers) {
         Node found = peer.memberNumbers != null
-            ? sole(previous, p -> p.memberNumbers != null
-                && !Collections.disjoint(p.memberNumbers, peer.memberNumbers))
+            ? sole(previous, p -> sharesMembers(p, peer))
             : peer.number != null
             ? sole(previous, p -> peer.number.equals(p.number))
             : sole(previous, p -> p.number == null && p.memberNumbers == null
                 && peer.name.equals(p.name));
         if (found != null) {
           matched.put(peer, found);
+        } else if (peer.memberNumbers != null) {
+          overlapping.add(peer);
         }
       }
       settleOneofs(peers, matched);
+      Set<Node> kept = Collections.newSetFromMap(new IdentityHashMap<>());
+      kept.addAll(matched.values());
+      for (Node peer : overlapping) {
+        Node best = null;
+        for (Node p : previous) {
+          if (!kept.contains(p) && sharesMembers(p, peer)
+              && (best == null || keepsOneof(p, best, peer.memberNumbers))) {
+            best = p;
+          }
+        }
+        if (best != null) {
+          matched.put(peer, best);
+        }
+      }
+      settleOneofs(peers, matched);
+    }
+
+    private static boolean sharesMembers(Node previous, Node peer) {
+      return previous.memberNumbers != null
+          && !Collections.disjoint(previous.memberNumbers, peer.memberNumbers);
     }
 
     /** JSON: a property by name, and a union branch by hint, else content. */
