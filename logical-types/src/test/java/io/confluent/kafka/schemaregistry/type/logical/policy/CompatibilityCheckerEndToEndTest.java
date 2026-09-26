@@ -567,6 +567,26 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void collapsingASingletonOneofToItsMemberTypeIsIncompatibleUnderV1ButNotV2() {
+    // The edit side of crossingEditionsCanAlsoChangeTheStructuralKind: rather than reading one
+    // schema under both editions, this compares two different schemas -- a singleton oneOf and
+    // its unwrapped member type -- within a single edition. V1 keeps the oneOf as a first-class
+    // UNION, so dropping the wrapper is a structural kind change. V2 already collapses a
+    // single-member oneOf with no null to the member type on read, so "before" and "after" derive
+    // identically and the edit is invisible.
+    String wrapped = "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":[{\"type\":\"integer\"}]}}}";
+    String unwrapped = "{\"type\":\"object\",\"properties\":{\"u\":{\"type\":\"integer\"}}}";
+
+    assertSingle(Mode.FLINK,
+        fromJson(wrapped, LogicalTypeVersion.V1),
+        fromJson(unwrapped, LogicalTypeVersion.V1),
+        Rule.TYPE_MISMATCH);
+    assertCompatible(Mode.FLINK,
+        fromJson(wrapped, LogicalTypeVersion.V2),
+        fromJson(unwrapped, LogicalTypeVersion.V2));
+  }
+
+  @Test
   void addingAUnionBranchIsAcceptedUnderEitherEdition() {
     // The verdict that prompted this section: adding a branch is an added nullable column, and that
     // is edition-independent because both editions keep a first-class UNION. Only the SRLT-to-Flink
