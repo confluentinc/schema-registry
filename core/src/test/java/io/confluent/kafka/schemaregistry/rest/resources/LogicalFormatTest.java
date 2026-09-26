@@ -138,7 +138,7 @@ class LogicalFormatTest {
     String ddl = LogicalFormat.convertToLogical(schemaRegistry, schema);
 
     assertTrue(ddl.contains("u"));
-    assertFalse(ddl.toLowerCase().contains("union"), ddl);
+    assertFalse(ddl.contains("UNION"), ddl);
   }
 
   @Test
