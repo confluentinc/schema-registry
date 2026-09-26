@@ -18,12 +18,15 @@ package io.confluent.kafka.schemaregistry.type.logical;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
@@ -105,6 +108,25 @@ public final class LogicalTypeConversion {
    * and then fails the visitor is a bad logical schema and must say so, rather than being left to
    * fall back to a confusing native error.
    */
+  /**
+   * Reads any registry schema into a {@link LogicalType}, dispatching on its format.
+   *
+   * <p>A convenience over the three format readers for callers that hold a {@code ParsedSchema} and
+   * do not care which it is. It covers the plain case only — use
+   * {@code JsonToLogicalTypeConverter} and friends directly when you need their options, such as
+   * V1 emission mode or an explicit reference context.
+   */
+  public static LogicalType toLogicalType(ParsedSchema schema) {
+    if (schema instanceof AvroSchema) {
+      return AvroToLogicalTypeConverter.toLogicalType((AvroSchema) schema);
+    } else if (schema instanceof ProtobufSchema) {
+      return ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema);
+    } else if (schema instanceof JsonSchema) {
+      return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema);
+    }
+    throw new ValidationException("Unsupported schema type: " + schema.schemaType());
+  }
+
   private static LogicalType toLogicalType(LogicalTypesParser.ScriptContext script) {
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();

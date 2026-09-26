@@ -27,6 +27,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
@@ -60,8 +62,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Class<T> type;
   protected String typeProperty;
   protected List<String> allowedTypePackages = Collections.singletonList("*");
-  protected boolean validate;
-  protected boolean validateBeforeDomainRules;
+  protected volatile boolean validate;
+  protected volatile boolean validateBeforeDomainRules;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -69,6 +71,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected void configure(KafkaJsonSchemaDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new JsonSchemaProvider());
+    resetProvenance();
     this.type = type;
 
     boolean failUnknownProperties =
@@ -200,7 +203,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         jsonNode = (JsonNode) executeMigrations(migrations, subject, topic, headers, jsonNode);
       }
 
-      JsonSchema writerSchema = schema;
+      final JsonSchema writerSchema = schema;
+      // Pruned first: validation and the domain rules see only what the reader may, validation's
+      // defaults reach a pruned property as one never written, and a rule's value is not undone.
+      jsonNode = byProvenance(subject, schemaId, writerSchema, readerSchema, migrations, jsonNode,
+          buffer, start, length);
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
@@ -390,6 +397,65 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       SchemaId schemaId, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
     return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+  }
+
+  /**
+   * With {@code provenance.algorithm}, the payload parsed with every property provenance marks as
+   * new removed; {@code node} unchanged otherwise, as it is after migrations, which provenance
+   * does not apply to.
+   */
+  private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
+      ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
+      int start, int length) throws IOException {
+    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
+      return node;
+    }
+    JsonProvenancePruner pruner = provenanceProjector()
+        .project(subject, writerId, writer, reader, false,
+            mapping -> JsonProvenancePruner.plan(mapping, (JsonSchema) reader))
+        .orElse(null);
+    if (pruner == null || pruner.isEmpty()) {
+      return node;
+    }
+    JsonNode document = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+    pruner.prune(document);
+    return document;
+  }
+
+  /**
+   * {@code readers} as a reader function, with any registered id a reader comes with used for
+   * provenance instead of being looked up.
+   */
+  protected Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return provenanceProjector().readerSchemas(readers);
+  }
+
+  private volatile ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
+
+  /**
+   * Forgets the projector: it belongs to the configuration it was built under. Under the lock it
+   * is built under.
+   */
+  private synchronized void resetProvenance() {
+    provenanceProjector = null;
+  }
+
+  // Created on first use, once the deserializer is configured, and only once: it holds the ids
+  // readers were supplied with and which readers a class derived.
+  private ProvenanceProjector<JsonProvenancePruner> provenanceProjector() {
+    ProvenanceProjector<JsonProvenancePruner> projector = provenanceProjector;
+    if (projector == null) {
+      synchronized (this) {
+        projector = provenanceProjector;
+        if (projector == null) {
+          projector = new ProvenanceProjector<>(
+              schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+          provenanceProjector = projector;
+        }
+      }
+    }
+    return projector;
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
