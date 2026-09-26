@@ -32,7 +32,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -41,9 +43,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * against it is tested against the registry's behaviour and failure modes.
  *
  * <p>It lives here rather than in the client because computing provenance needs this module, and
- * this module depends on the client. A soft-deleted version stays in the history, as in the
- * registry; the base mock numbers versions by the live ones alone, so a version registered after
- * the latest was deleted takes its number, and replaces it here.
+ * this module depends on the client. A soft-deleted version stays in the history, and is found
+ * when deleted versions are looked up, as in the registry. The base mock numbers versions by the
+ * live ones alone, so a version registered after the latest was deleted takes its number, and
+ * replaces it here; and a permanent delete forgets a soft-deleted version here, though the base
+ * mock still resolves its schema id.
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
@@ -81,11 +85,36 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     try {
       return super.getSchemaMetadata(subject, version, lookupDeletedSchema);
     } catch (RestClientException e) {
+      Integer deleted = lookupDeletedSchema ? softDeletedOf(subject).get(version) : null;
+      if (deleted != null) {
+        return new SchemaMetadata(new Schema(subject, version, deleted,
+            getSchemaBySubjectAndId(subject, deleted)));
+      }
       if (e.getErrorCode() == 40401 && !getAllVersions(subject).isEmpty()) {
         throw new RestClientException("Version " + version + " not found.", 404, 40402);
       }
       throw e;
     }
+  }
+
+  /**
+   * As the registry lists them: with {@code lookupDeletedSchema}, soft-deleted ones too.
+   */
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    if (!lookupDeletedSchema) {
+      return getAllVersions(subject);
+    }
+    Set<Integer> versions = new TreeSet<>(softDeletedOf(subject).keySet());
+    try {
+      versions.addAll(getAllVersions(subject));
+    } catch (RestClientException e) {
+      if (versions.isEmpty()) {
+        throw e;
+      }
+    }
+    return new ArrayList<>(versions);
   }
 
   @Override
@@ -177,7 +206,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private List<ProvenanceHistory.Entry> history(String subject)
       throws IOException, RestClientException {
     Map<Integer, ProvenanceHistory.Entry> entries = new TreeMap<>();
-    softDeleted.getOrDefault(subject, Collections.emptyMap()).forEach((version, id) ->
+    softDeletedOf(subject).forEach((version, id) ->
         entries.put(version, new ProvenanceHistory.Entry(version, id, true)));
     List<Integer> live;
     try {
@@ -196,6 +225,11 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
           SUBJECT_NOT_FOUND);
     }
     return history;
+  }
+
+  // A copy, taken under the lock deletes are made under.
+  private synchronized Map<Integer, Integer> softDeletedOf(String subject) {
+    return new TreeMap<>(softDeleted.getOrDefault(subject, Collections.emptyMap()));
   }
 
   private static int named(List<ProvenanceHistory.Entry> history, String version)

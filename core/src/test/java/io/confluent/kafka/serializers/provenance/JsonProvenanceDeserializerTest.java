@@ -572,6 +572,65 @@ class JsonProvenanceDeserializerTest {
     assertEquals("s", read(v3, string, "v1").get("e").asText());
   }
 
+  @Test
+  void aValueEqualToAPlacedDefaultIsStillPruned() throws Exception {
+    // Jackson shares one node for true: b, holding it too, must not pass for a's default.
+    String flag = "{\"type\": \"boolean\"}";
+    JsonSchema v1 = object("\"a\": " + flag, "\"b\": " + flag);
+    JsonSchema v2 = object();
+    JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": "
+        + "{\"a\": {\"type\": \"boolean\", \"default\": true}, \"b\": " + flag + "}, "
+        + "\"required\": [\"a\"]}");
+    byte[] bytes = write(v1, "{\"a\": true, \"b\": true}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = read(v3, bytes, "v1");
+    assertTrue(read.get("a").asBoolean());
+    assertFalse(read.has("b"));
+  }
+
+  @Test
+  void aPrimitiveInAReAddedItemOrValueBranchIsPruned() throws Exception {
+    // The item's union is a location of its own, as a property's is: number, re-added, is new.
+    for (String shape : new String[] {
+        "{\"type\": \"array\", \"items\": {\"type\": %s}}",
+        "{\"type\": \"object\", \"connect.type\": \"map\", "
+            + "\"additionalProperties\": {\"type\": %s}}"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      boolean array = shape.contains("items");
+      JsonSchema v1 = object("\"e\": " + String.format(shape, "[\"string\", \"number\"]"));
+      JsonSchema v2 = object("\"e\": " + String.format(shape, "[\"string\", \"boolean\"]"));
+      JsonSchema v3 = object("\"e\": "
+          + String.format(shape, "[\"string\", \"boolean\", \"number\"]"));
+      byte[] number = write(v1, array ? "{\"e\": [2.5, \"s\"]}" : "{\"e\": {\"k\": 2.5}}");
+      byte[] string = write(v1, array ? "{\"e\": [\"s\"]}" : "{\"e\": {\"k\": \"s\"}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      assertFalse(read(v3, number, "v1").has("e"), shape);
+      assertTrue(read(v3, string, "v1").has("e"), shape);
+    }
+  }
+
+  @Test
+  void aValueTheOlderReaderReadsAsAnotherBranchIsPruned() throws Exception {
+    // Written as branch 0, but e = 4.5 fits only branch 1 under v1, whose l is not the l it was
+    // written as: a name spelled in several branches is always checked.
+    String older = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k1\"]}, "
+        + "\"e\": {\"type\": \"%s\"}, " + number("l") + "}}";
+    String other = "{\"type\": \"object\", \"properties\": {" + number("l") + "%s}}";
+    JsonSchema v1 = object("\"g\": {\"oneOf\": [" + String.format(older, "integer") + ", "
+        + String.format(other, "") + "]}");
+    JsonSchema v2 = object("\"g\": {\"oneOf\": [" + String.format(older, "number") + ", "
+        + String.format(other, ", \"kind\": {\"enum\": [\"k2\"]}") + "]}");
+    client.register(SUBJECT, v1);
+    byte[] bytes = write(v2, "{\"g\": {\"kind\": \"k1\", \"e\": 4.5, \"l\": 5.5}}");
+
+    assertFalse(read(v1, bytes, "v1").get("g").has("l"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

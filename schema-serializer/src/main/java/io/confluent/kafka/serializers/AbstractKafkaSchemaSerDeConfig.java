@@ -123,17 +123,21 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
           + "writer fields with reader fields rather than by name or field number; 'latest' for "
           + "whichever version Schema Registry answers with by default, which may change when it "
-          + "is upgraded; unset or 'none' to pair them as usual";
+          + "is upgraded; unset or 'none' to pair them as usual. A version newer than this "
+          + "client knows needs a newer client; one the registry does not know fails every "
+          + "record";
 
   public static final String PROVENANCE_CACHE_SIZE = "provenance.cache.size";
   public static final int PROVENANCE_CACHE_SIZE_DEFAULT = 1000;
   public static final String PROVENANCE_CACHE_SIZE_DOC =
-      "The maximum size for caches holding provenance pairings and reader schema ids";
+      "The maximum size for caches holding provenance pairings and reader schema ids; 0 caches "
+          + "nothing, so every record asks Schema Registry and logs every fallback";
 
   public static final String PROVENANCE_CACHE_TTL = "provenance.cache.ttl.sec";
   public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
   public static final String PROVENANCE_CACHE_TTL_DOC =
-      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL";
+      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL; "
+          + "0 caches nothing, so every record asks Schema Registry and logs every fallback";
 
   public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
   public static final String USE_LATEST_WITH_METADATA_DOC =

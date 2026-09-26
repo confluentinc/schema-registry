@@ -84,6 +84,18 @@ class ProvenanceIdentityRulesTest {
         .isInstanceOf(RecursiveTypeException.class);
   }
 
+  @Test
+  void aCollectionHoldingItselfStillHasNoProvenance() {
+    // The category of what a collection holds must not follow it round: the recursion is named.
+    assertThatThrownBy(() -> compute(json("{\"x\":{\"$ref\":\"#/definitions/L\"}}",
+        "{\"L\":{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/L\"}}}")))
+        .isInstanceOf(RecursiveTypeException.class);
+    assertThatThrownBy(() -> compute(json("{\"x\":{\"$ref\":\"#/definitions/M\"}}",
+        "{\"M\":{\"type\":\"object\",\"connect.type\":\"map\","
+            + "\"additionalProperties\":{\"$ref\":\"#/definitions/M\"}}}")))
+        .isInstanceOf(RecursiveTypeException.class);
+  }
+
   // --- Protobuf: a oneof follows its members' numbers -----------------------------------------
 
   @Test
@@ -343,6 +355,20 @@ class ProvenanceIdentityRulesTest {
     assertThat(pid(v, 1, 1)).isEqualTo(pid(v, 0, 1));
     assertThat(pid(v, 1, 1, 2)).isEqualTo(pid(v, 0, 1, 0));
     assertThat(pid(v, 1, 1, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
+  void twoOneofsPickingTheSamePreviousOneLeaveTheOtherToTheLoser() {
+    // q and r each share one member with o and one with p; q keeps o (the lower number), and r
+    // takes p, which is left, rather than restarting.
+    List<ProvenanceVersion> v = compute(
+        proto("oneof o { int32 a = 1; int32 b = 2; } oneof p { int32 c = 3; int32 d = 4; }"),
+        proto("oneof q { int32 a = 1; int32 c = 3; } oneof r { int32 b = 2; int32 d = 4; }"));
+    // v1: o at [0], a, b at [0, 0..1], p at [1], c, d at [1, 0..1]; v2: q at [0], a, c at
+    // [0, 0..1], r at [1], b, d at [1, 0..1].
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 1, 1)).isEqualTo(pid(v, 0, 1));
+    assertThat(pid(v, 1, 1, 1)).isEqualTo(pid(v, 0, 1, 1));
   }
 
   // --- What a collection holds ----------------------------------------------------------------

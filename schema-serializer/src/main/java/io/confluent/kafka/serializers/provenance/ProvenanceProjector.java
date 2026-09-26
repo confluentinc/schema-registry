@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
@@ -39,6 +40,9 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +62,10 @@ import org.slf4j.LoggerFactory;
  * normalized for Protobuf, as Avro looks one up for Avro.
  *
  * <p>Failures are told apart by what asking again could change. A transient one — the registry
- * unreachable, a 5xx, 408 or 429 — fails the record and is never cached. Provenance that is
+ * unreachable, a 5xx, 408 or 429 — fails the record and is never cached, so every record asks
+ * again, even for a server failure that recurs; so does a 401 or 403, as the
+ * {@code AuthenticationException} or {@code AuthorizationException} a schema fetch gives. An
+ * algorithm the registry does not know fails every record of the pair. Provenance that is
  * unavailable for the pair — any other error, a reader that is not a version of the subject, a
  * pairing no single schema can express — is cached and warned about, and the writer is read as
  * without provenance. Anything else the build throws fails the record, and is cached so that one
@@ -203,10 +210,11 @@ public final class ProvenanceProjector<T> {
       // Loaded atomically: the first records of a pair, however many at once, ask once.
       outcome = outcomes.get(key,
           () -> compute(subject, writerId, writer, reader, includeMultipleMessages, build));
-    } catch (ExecutionException | UncheckedExecutionException e) {
-      // compute throws only a failure worth trying again, which Guava does not cache.
+    } catch (ExecutionException | UncheckedExecutionException | ExecutionError e) {
+      // compute throws only a failure worth trying again, which Guava does not cache; an Error
+      // from a build fails the record like any other failure.
       Throwable cause = e.getCause();
-      throw cause instanceof SerializationException ? (SerializationException) cause
+      throw cause instanceof KafkaException ? (KafkaException) cause
           : new SerializationException(cause.getMessage(), cause);
     }
     return outcome.get();
@@ -255,6 +263,14 @@ public final class ProvenanceProjector<T> {
         throw new SerializationException(
             "Schema Registry could not serve provenance for " + written, e);
       }
+      if (e.getStatus() == 401) {
+        throw new AuthenticationException(
+            "Not authenticated to Schema Registry for the provenance of " + written, e);
+      }
+      if (e.getStatus() == 403) {
+        throw new AuthorizationException(
+            "Not authorized by Schema Registry for the provenance of " + written, e);
+      }
       return unavailable(subject, written, e);
     } catch (ProvenanceUnavailableException | UnsupportedOperationException e) {
       return unavailable(subject, written, e);
@@ -277,8 +293,8 @@ public final class ProvenanceProjector<T> {
    * The provenance pairing two versions; null when they are one and the same.
    *
    * @throws SerializationException if the registry rejects the request itself — a bad version,
-   *     request or range — which, being two schema ids and well formed, cannot be the schemas'
-   *     doing: every record of the writer fails
+   *     request or range, which, being two schema ids and well formed, cannot be the schemas'
+   *     doing, or an algorithm it does not know: every record of the writer fails
    */
   private SchemaProvenance provenance(String subject, int writerId, int readerId,
       boolean includeMultipleMessages) throws IOException, RestClientException {
@@ -304,9 +320,13 @@ public final class ProvenanceProjector<T> {
     return Outcome.failed(e);
   }
 
-  /** A rejection of a request the projector never makes: a bad version, request or range. */
+  /**
+   * A rejection of a request the projector never makes — a bad version, request or range — or
+   * of an algorithm the registry does not know, which is the configuration's.
+   */
   private static boolean isRejectedRequest(RestClientException e) {
-    return e.getErrorCode() == 42202 || e.getErrorCode() == 42215 || e.getErrorCode() == 40402;
+    return e.getErrorCode() == 42202 || e.getErrorCode() == 42215 || e.getErrorCode() == 40402
+        || e.getErrorCode() == 42216;
   }
 
   private Outcome<T> unavailable(String subject, String written, Exception e) {

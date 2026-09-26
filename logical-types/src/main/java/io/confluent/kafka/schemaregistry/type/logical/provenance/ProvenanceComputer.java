@@ -428,19 +428,23 @@ public final class ProvenanceComputer {
      */
     private List<Category> categoryOf(Schema schema) {
       List<Category> categories = new ArrayList<>();
-      addCategories(schema, categories);
+      addCategories(schema, categories, Collections.newSetFromMap(new IdentityHashMap<>()));
       return categories;
     }
 
-    private void addCategories(Schema schema, List<Category> categories) {
+    private void addCategories(Schema schema, List<Category> categories, Set<Schema> seen) {
       Schema type = resolved(schema);
+      if (type != null && !seen.add(type)) {
+        // A collection holding itself: walkNamed reports the recursion.
+        return;
+      }
       Category category = category(type);
       categories.add(category);
       if (category == Category.ARRAY || category == Category.MULTISET) {
-        addCategories(type.getElementType(), categories);
+        addCategories(type.getElementType(), categories, seen);
       } else if (category == Category.MAP) {
-        addCategories(type.getKeyType(), categories);
-        addCategories(type.getValueType(), categories);
+        addCategories(type.getKeyType(), categories, seen);
+        addCategories(type.getValueType(), categories, seen);
       }
     }
 
@@ -603,21 +607,31 @@ public final class ProvenanceComputer {
         }
       }
       settleOneofs(peers, matched);
-      Set<Node> kept = Collections.newSetFromMap(new IdentityHashMap<>());
-      kept.addAll(matched.values());
-      for (Node peer : overlapping) {
-        Node best = null;
-        for (Node p : previous) {
-          if (!kept.contains(p) && sharesMembers(p, peer)
-              && (best == null || keepsOneof(p, best, peer.memberNumbers))) {
-            best = p;
+      // Until none is left to take: a peer losing its pick tries the next, and each round keeps
+      // one more previous oneof, so it ends.
+      boolean picked = true;
+      while (picked) {
+        picked = false;
+        Set<Node> kept = Collections.newSetFromMap(new IdentityHashMap<>());
+        kept.addAll(matched.values());
+        for (Node peer : overlapping) {
+          if (matched.containsKey(peer)) {
+            continue;
+          }
+          Node best = null;
+          for (Node p : previous) {
+            if (!kept.contains(p) && sharesMembers(p, peer)
+                && (best == null || keepsOneof(p, best, peer.memberNumbers))) {
+              best = p;
+            }
+          }
+          if (best != null) {
+            matched.put(peer, best);
+            picked = true;
           }
         }
-        if (best != null) {
-          matched.put(peer, best);
-        }
+        settleOneofs(peers, matched);
       }
-      settleOneofs(peers, matched);
     }
 
     private static boolean sharesMembers(Node previous, Node peer) {
