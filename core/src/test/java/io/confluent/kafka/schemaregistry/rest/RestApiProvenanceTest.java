@@ -306,9 +306,12 @@ public abstract class RestApiProvenanceTest {
         RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, null);
     SchemaProvenance v1 = restApp.restClient.getProvenanceById(
         RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v1");
+    SchemaProvenance named = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "latest");
 
     assertEquals("v1", latest.getAlgorithm());
     assertEquals(latest, v1);
+    assertEquals(latest, named);
   }
 
   @Test

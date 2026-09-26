@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.rules.RuleResult;
@@ -37,6 +38,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -445,13 +447,30 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       synchronized (this) {
         projector = provenanceProjector;
         if (projector == null) {
-          projector = new ProvenanceProjector<>(
-              schemaRegistry, provenanceAlgorithm, provenanceCacheSize, provenanceCacheTtlSec);
+          projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
+              provenanceCacheSize, provenanceCacheTtlSec,
+              AbstractKafkaProtobufDeserializer::imports);
           provenanceProjector = projector;
         }
       }
     }
     return projector;
+  }
+
+  /**
+   * What {@code schema} imports, transitively, by file name: each file normalized, the built-in
+   * ones left out. A generated class's schema has no references, but its descriptor's imports.
+   */
+  private static Map<String, String> imports(ParsedSchema schema) {
+    Map<String, ProtoFileElement> files = ((ProtobufSchema) schema).dependencies();
+    Map<String, String> imports = new HashMap<>();
+    for (Map.Entry<String, ProtoFileElement> file : files.entrySet()) {
+      if (!ProtobufSchema.knownTypes().contains(file.getKey())) {
+        imports.put(file.getKey(), new ProtobufSchema(file.getValue(), Collections.emptyList(),
+            files).normalize().canonicalString());
+      }
+    }
+    return imports;
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {

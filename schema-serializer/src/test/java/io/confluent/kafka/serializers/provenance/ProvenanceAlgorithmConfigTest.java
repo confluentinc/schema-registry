@@ -33,6 +33,8 @@ public class ProvenanceAlgorithmConfigTest {
   public void aKnownAlgorithmOrNoneIsAccepted() {
     assertEquals("v1", config("v1").getProvenanceAlgorithm());
     assertEquals("V1", config("V1").getProvenanceAlgorithm());
+    assertEquals("latest", config("latest").getProvenanceAlgorithm());
+    assertEquals("LATEST", config("LATEST").getProvenanceAlgorithm());
     assertNull(config("none").getProvenanceAlgorithm());
     assertNull(config("None").getProvenanceAlgorithm());
     assertNull(config("").getProvenanceAlgorithm());

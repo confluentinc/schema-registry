@@ -27,9 +27,14 @@ public enum ProvenanceAlgorithm {
   V1("v1");
 
   /**
-   * The version a request that names none is answered with.
+   * The version a request that names none, or names {@link #LATEST_NAME}, is answered with.
    */
   public static final ProvenanceAlgorithm LATEST = V1;
+
+  /**
+   * The name asking for {@link #LATEST}, whichever version that is where the question is answered.
+   */
+  public static final String LATEST_NAME = "latest";
 
   private final String name;
 
@@ -42,12 +47,13 @@ public enum ProvenanceAlgorithm {
   }
 
   /**
-   * The version called {@code name}, or {@link #LATEST} when none is named.
+   * The version called {@code name}, in any case, or {@link #LATEST} when none is named or it is
+   * {@link #LATEST_NAME}.
    *
    * @throws IllegalArgumentException if no version has that name
    */
   public static ProvenanceAlgorithm of(String name) {
-    if (name == null || name.isEmpty()) {
+    if (name == null || name.isEmpty() || LATEST_NAME.equalsIgnoreCase(name)) {
       return LATEST;
     }
     for (ProvenanceAlgorithm algorithm : values()) {
