@@ -188,16 +188,29 @@ final class JsonProvenancePruner {
     // Writer locations spelled alike: a value may have been written as any of them, and read as
     // another wherever the reader's schema or a pruned property changes which branch it fits.
     Map<List<String>, Integer> spelled = new HashMap<>();
+    Map<List<String>, List<String>> outermost = new HashMap<>();
     for (List<Integer> path : mapping.writerPaths()) {
       List<String> names = mapping.writerNamesOf(path);
       if (names != null) {
         spelled.merge(names, 1, Integer::sum);
+        List<String> union = outermostUnion(mapping, path);
+        if (union != null) {
+          outermost.merge(names, union, (a, b) -> a.size() <= b.size() ? a : b);
+        }
       }
     }
+    List<List<String>> fresh = new ArrayList<>();
+    for (Target target : byNames.values()) {
+      if (target.indexed().anyNew) {
+        fresh.add(target.names);
+      }
+    }
+    Map<List<String>, Boolean> alike = new HashMap<>();
     List<Target> targets = new ArrayList<>();
     for (Target target : byNames.values()) {
-      target.indexed();
-      boolean shared = writer != null && spelled.getOrDefault(target.names, 0) > 1;
+      boolean shared = writer != null && spelled.getOrDefault(target.names, 0) > 1
+          && !readsAsWritten(target, outermost.getOrDefault(target.names,
+              Collections.emptyList()), fresh, alike, reader, writer);
       if (target.anyNew || shared) {
         if (!declares(target.names, raw, 0, new IdentityHashMap<>())) {
           throw new SerializationException("Property " + target.names + " of schema id "
@@ -229,6 +242,53 @@ final class JsonProvenancePruner {
       }
     }
     return choices;
+  }
+
+  /**
+   * Whether a value of {@code target}'s names reads as the location it was written as without
+   * checking: each continues the location at its own branches, nothing new under the outermost
+   * union it sits in may be pruned, and that union validates every value alike on both sides.
+   */
+  private static boolean readsAsWritten(Target target, List<String> union,
+      List<List<String>> fresh, Map<List<String>, Boolean> alike, JsonSchema reader,
+      JsonSchema writer) {
+    for (Candidate candidate : target.candidates) {
+      if (!candidate.choices.equals(candidate.writerChoices)) {
+        return false;
+      }
+    }
+    if (fresh.stream().anyMatch(names -> startsWith(names, union))) {
+      return false;
+    }
+    return alike.computeIfAbsent(union, u -> {
+      JsonNode written = JsonValidationShape.of(writer.toJsonNode(), u);
+      return written != null && written.equals(JsonValidationShape.of(reader.toJsonNode(), u));
+    });
+  }
+
+  /**
+   * The names of the outermost union a writer location sits under, spelled as its branches are
+   * but for unnamed steps; null if it sits under none. A property's own branches spell its names,
+   * so its union is found from them: where no location spelled so sits under a union, the whole
+   * schema stands in.
+   */
+  private static List<String> outermostUnion(ProvenanceMapping mapping, List<Integer> path) {
+    for (int k = 1; k <= path.size(); k++) {
+      List<Integer> prefix = path.subList(0, k);
+      List<String> names = mapping.writerNamesOf(prefix);
+      if (names != null && isWriterBranch(mapping, prefix, names)) {
+        int end = names.size();
+        while (end > 0 && names.get(end - 1) == null) {
+          end--;
+        }
+        return names.subList(0, end);
+      }
+    }
+    return null;
+  }
+
+  private static boolean startsWith(List<String> names, List<String> prefix) {
+    return names.size() >= prefix.size() && names.subList(0, prefix.size()).equals(prefix);
   }
 
   private static boolean isWriterBranch(ProvenanceMapping mapping, List<Integer> path,
