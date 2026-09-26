@@ -62,8 +62,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Class<T> type;
   protected String typeProperty;
   protected List<String> allowedTypePackages = Collections.singletonList("*");
-  protected boolean validate;
-  protected boolean validateBeforeDomainRules;
+  protected volatile boolean validate;
+  protected volatile boolean validateBeforeDomainRules;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -71,11 +71,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected void configure(KafkaJsonSchemaDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new JsonSchemaProvider());
-    // A projector belongs to the configuration it was built under; reset under the lock it is
-    // built under.
-    synchronized (this) {
-      provenanceProjector = null;
-    }
+    resetProvenance();
     this.type = type;
 
     boolean failUnknownProperties =
@@ -436,6 +432,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private volatile ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
+
+  /**
+   * Forgets the projector: it belongs to the configuration it was built under. Under the lock it
+   * is built under.
+   */
+  private synchronized void resetProvenance() {
+    provenanceProjector = null;
+  }
 
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.

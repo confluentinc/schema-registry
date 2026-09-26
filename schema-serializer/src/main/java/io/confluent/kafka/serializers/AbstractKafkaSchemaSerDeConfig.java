@@ -414,9 +414,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 PROVENANCE_ALGORITHM_VALIDATOR,
                 Importance.LOW, PROVENANCE_ALGORITHM_DOC)
         .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
-                Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
+                Range.atLeast(0), Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
         .define(PROVENANCE_CACHE_TTL, Type.INT, PROVENANCE_CACHE_TTL_DEFAULT,
-                Importance.LOW, PROVENANCE_CACHE_TTL_DOC)
+                Range.atLeast(-1), Importance.LOW, PROVENANCE_CACHE_TTL_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
         .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,

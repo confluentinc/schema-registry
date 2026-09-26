@@ -68,10 +68,10 @@ import org.apache.kafka.common.header.Headers;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
-  protected boolean useSpecificAvroReader = false;
+  protected volatile boolean useSpecificAvroReader = false;
   protected Schema specificAvroReaderSchema = null;
-  protected boolean avroReflectionAllowNull = false;
-  protected boolean avroUseLogicalTypeConverters = false;
+  protected volatile boolean avroReflectionAllowNull = false;
+  protected volatile boolean avroUseLogicalTypeConverters = false;
   protected boolean avroFailOnTrailingData = false;
   private final Cache<SchemaId, Schema> readerSchemaCache;
   private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
@@ -155,6 +155,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return false;
   }
 
+  /**
+   * Forgets the projector, and the class readers it marked: they belong to the configuration they
+   * were built under. Under the lock the projector is built under.
+   */
+  private synchronized void resetProvenance() {
+    provenanceProjector = null;
+    classReaders.invalidateAll();
+  }
+
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.
   private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
@@ -182,12 +191,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected void configure(KafkaAvroDeserializerConfig config,  Class<?> type) {
     configureClientProperties(config, new AvroSchemaProvider());
-    // A projector, and the class readers it marked, belong to the configuration they were built
-    // under; reset under the lock the projector is built under.
-    synchronized (this) {
-      provenanceProjector = null;
-      classReaders.invalidateAll();
-    }
+    resetProvenance();
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
 

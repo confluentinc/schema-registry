@@ -44,6 +44,27 @@ public class ProvenanceAlgorithmConfigTest {
     assertThrows(ConfigException.class, () -> config("vI"));
   }
 
+  @Test
+  public void cacheBoundsAreCheckedAtConfiguration() {
+    // A negative size would fail only on the first record; a TTL below -1 would mean no TTL.
+    assertThrows(ConfigException.class,
+        () -> config(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_SIZE, -1));
+    assertThrows(ConfigException.class,
+        () -> config(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_TTL, -2));
+    assertEquals(0, config(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_SIZE, 0)
+        .getProvenanceCacheSize());
+    assertEquals(-1, config(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_TTL, -1)
+        .getProvenanceCacheTtl());
+  }
+
+  private static AbstractKafkaSchemaSerDeConfig config(String name, int value) {
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(name, value);
+    return new AbstractKafkaSchemaSerDeConfig(AbstractKafkaSchemaSerDeConfig.baseConfigDef(),
+        props);
+  }
+
   private static AbstractKafkaSchemaSerDeConfig config(String algorithm) {
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");

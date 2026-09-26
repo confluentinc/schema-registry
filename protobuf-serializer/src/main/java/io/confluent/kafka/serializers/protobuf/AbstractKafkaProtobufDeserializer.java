@@ -69,7 +69,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
-  protected boolean deriveType;
+  protected volatile boolean deriveType;
   private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
@@ -84,12 +84,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
-    // A projector, and the class schemas it marked, belong to the configuration they were built
-    // under; reset under the lock the projector is built under.
-    synchronized (this) {
-      provenanceProjector = null;
-      classSchemas.clear();
-    }
+    resetProvenance();
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
@@ -431,6 +426,15 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Function<ParsedSchema, ParsedSchema> readerSchemas(
       Function<ParsedSchema, ReaderSchema> readers) {
     return provenanceProjector().readerSchemas(readers);
+  }
+
+  /**
+   * Forgets the projector, and the class schemas it marked: they belong to the configuration they
+   * were built under. Under the lock the projector is built under.
+   */
+  private synchronized void resetProvenance() {
+    provenanceProjector = null;
+    classSchemas.clear();
   }
 
   // Created on first use, once the deserializer is configured, and only once: it holds the ids

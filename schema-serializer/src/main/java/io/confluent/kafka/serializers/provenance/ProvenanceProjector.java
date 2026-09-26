@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -34,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.kafka.common.errors.SerializationException;
@@ -180,10 +182,16 @@ public final class ProvenanceProjector<T> {
     List<Object> key = Arrays.asList(subject,
         writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader, reader.name(),
         includeMultipleMessages, derived ? null : suppliedId(reader), derived);
-    Outcome<T> outcome = outcomes.getIfPresent(key);
-    if (outcome == null) {
-      outcome = compute(subject, writerId, writer, reader, includeMultipleMessages, build);
-      outcomes.put(key, outcome);
+    Outcome<T> outcome;
+    try {
+      // Loaded atomically: the first records of a pair, however many at once, ask once.
+      outcome = outcomes.get(key,
+          () -> compute(subject, writerId, writer, reader, includeMultipleMessages, build));
+    } catch (ExecutionException | UncheckedExecutionException e) {
+      // compute throws only a failure worth trying again, which Guava does not cache.
+      Throwable cause = e.getCause();
+      throw cause instanceof SerializationException ? (SerializationException) cause
+          : new SerializationException(cause.getMessage(), cause);
     }
     return outcome.get();
   }
