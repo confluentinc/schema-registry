@@ -695,12 +695,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         return null;
       }
       return provenanceProjector().project(getSubject(), schemaId, writerAvroSchema,
-          readerAvroSchema, false, mapping -> {
-            AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
-                writerAvroSchema.rawSchema(), readerAvroSchema.rawSchema(), mapping);
-            AvroProvenanceRenamer.requireEveryFieldHasAValue(renamed);
-            return renamed;
-          }).orElse(null);
+          readerAvroSchema, false, mapping -> AvroProvenanceRenamer.rename(
+              writerAvroSchema.rawSchema(), readerAvroSchema.rawSchema(), mapping)).orElse(null);
     }
 
     Object read(AvroSchema writerAvroSchema) {

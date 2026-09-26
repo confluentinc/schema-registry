@@ -151,7 +151,6 @@ class AvroProvenancePathConformanceTest {
 
     assertFalse(renamed.writer.toString().contains("__provenance_unmatched_"),
         renamed.writer.toString());
-    AvroProvenanceRenamer.requireEveryFieldHasAValue(renamed);
   }
 
   // -------------------------------------------------------------------------------------------

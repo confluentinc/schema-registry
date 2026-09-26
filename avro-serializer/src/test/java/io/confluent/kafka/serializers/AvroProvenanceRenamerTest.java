@@ -76,7 +76,7 @@ public class AvroProvenanceRenamerTest {
   @Test
   public void aSharedRecordIsRenamedTheSameWayAtEverySite() {
     AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
-        shared("city"), shared("town"),
+        shared("city", null), shared("town", null),
         mapping(sites(1, 2, 3, 4, "city"), sites(1, 2, 3, 4, "town")));
 
     Schema home = renamed.writer.getField("home").schema();
@@ -88,8 +88,9 @@ public class AvroProvenanceRenamerTest {
   public void aSharedRecordNeedingTwoDifferentRenamesIsCloned() {
     // work.city has no counterpart, home.city does: one Address, two definitions. Outside a union
     // the resolver ignores record names, so the second is a clone.
+    // work.town is new, so it needs a default for there to be anything to read.
     AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
-        shared("city"), shared("town"),
+        shared("city", null), shared("town", "\"\""),
         mapping(sites(1, 2, 3, 4, "city"), sites(1, 2, 3, 5, "town")));
 
     assertEquals("town", renamed.writer.getField("home").schema().getFields().get(0).name());
@@ -146,11 +147,10 @@ public class AvroProvenanceRenamerTest {
   public void aReaderFieldWithNothingToReadIsRejectedByName() {
     Schema writer = record("R", field("id", "\"int\""));
     Schema reader = record("R", field("id", "\"int\""), field("name", "\"string\""));
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
-        writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name"))));
 
     SerializationException e = assertThrows(SerializationException.class,
-        () -> AvroProvenanceRenamer.requireEveryFieldHasAValue(renamed));
+        () -> AvroProvenanceRenamer.rename(
+            writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name")))));
     assertTrue(e.getMessage(), e.getMessage().contains("Field 'name'"));
   }
 
@@ -158,8 +158,8 @@ public class AvroProvenanceRenamerTest {
   public void aReaderFieldWithADefaultPasses() {
     Schema writer = record("R", field("id", "\"int\""));
     Schema reader = record("R", field("id", "\"int\""), field("name", "\"string\"", "\"x\""));
-    AvroProvenanceRenamer.requireEveryFieldHasAValue(AvroProvenanceRenamer.rename(
-        writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name")))));
+    AvroProvenanceRenamer.rename(
+        writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name"))));
   }
 
   @Test
@@ -261,10 +261,11 @@ public class AvroProvenanceRenamerTest {
   }
 
   // { home: Address {<field>}, work: Address }
-  private static Schema shared(String field) {
+  private static Schema shared(String field, String defaultValue) {
     return record("R",
         "{\"name\":\"home\",\"type\":{\"type\":\"record\",\"name\":\"Address\",\"fields\":["
-            + field(field, "\"string\"") + "]}}",
+            + (defaultValue != null ? field(field, "\"string\"", defaultValue)
+                : field(field, "\"string\"")) + "]}}",
         field("work", "\"Address\""));
   }
 }
