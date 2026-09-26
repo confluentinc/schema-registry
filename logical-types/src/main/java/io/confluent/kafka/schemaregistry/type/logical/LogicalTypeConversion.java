@@ -104,11 +104,6 @@ public final class LogicalTypeConversion {
   }
 
   /**
-   * Syntax decides logical-vs-native; semantics decides valid-vs-invalid. A script that parses
-   * and then fails the visitor is a bad logical schema and must say so, rather than being left to
-   * fall back to a confusing native error.
-   */
-  /**
    * Reads any registry schema into a {@link LogicalType}, dispatching on its format.
    *
    * <p>A convenience over the three format readers for callers that hold a {@code ParsedSchema} and
@@ -127,6 +122,11 @@ public final class LogicalTypeConversion {
     throw new ValidationException("Unsupported schema type: " + schema.schemaType());
   }
 
+  /**
+   * Syntax decides logical-vs-native; semantics decides valid-vs-invalid. A script that parses
+   * and then fails the visitor is a bad logical schema and must say so, rather than being left to
+   * fall back to a confusing native error.
+   */
   private static LogicalType toLogicalType(LogicalTypesParser.ScriptContext script) {
     try {
       LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
