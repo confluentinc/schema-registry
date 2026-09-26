@@ -15,9 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
+import java.util.OptionalInt;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Iterator;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
@@ -66,6 +81,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -83,6 +99,20 @@ public class SubjectsResource {
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+
+  /** Provenance ranges retained. Each holds a report over many versions, so the bound is low. */
+  private static final int MAX_CACHED_PROVENANCE_HISTORIES = 100;
+
+  /**
+   * Provenance over one requested range, keyed by the subject, the mode, and every
+   * (version, schema id) in the range, soft-deleted versions included. It is computed over the
+   * range alone — its ends and everything between — so a version outside it, however old or
+   * however broken, has no effect. Any registration or deletion inside the range changes the key,
+   * so nothing needs invalidating, and many readers asking for the same range collapse into one
+   * computation per node.
+   */
+  private final Cache<List<Object>, SchemaProvenance> provenanceCache =
+      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).build();
 
   @Inject
   public SubjectsResource(SchemaRegistry schemaRegistry) {
@@ -289,6 +319,94 @@ public class SubjectsResource {
     }
   }
 
+  @GET
+  @Path("/{subject}/provenance")
+  @DocumentedName("getProvenance")
+  @PerformanceMetric("subjects.provenance.get")
+  @Operation(summary = "Get column provenance between two versions",
+      description = "Retrieves, for each version in the range, every column's inlined path and a "
+          + "provenance id that is stable across renames. Address the range either by version, "
+          + "with fromVersion and toVersion, or by schema id, with fromId and toId.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "The provenance.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = SchemaProvenance.class))),
+          @ApiResponse(responseCode = "404",
+              description = "Not Found. Error code 40401 indicates subject not found. "
+                  + "Error code 40402 indicates version not found. Error code 40411 indicates "
+                  + "a schema id with no version under the subject.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "422",
+              description = "Unprocessable Entity. Error code 42201 indicates a schema with no "
+                  + "logical form. Error code 42202 indicates an invalid version. Error code "
+                  + "42213 indicates a recursive schema. Error code 42214 indicates a schema "
+                  + "that could not be parsed. Error code 42215 indicates an invalid range. "
+                  + "Error code 42216 indicates an unknown algorithm. Error code 42217 indicates "
+                  + "a history whose names and aliases do not determine one provenance.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  public SchemaProvenance getProvenance(
+      @Parameter(description = "Name of the subject", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "First version of the range, or \"latest\"")
+      @QueryParam("fromVersion") String fromVersion,
+      @Parameter(description = "Last version of the range, or \"latest\"")
+      @QueryParam("toVersion") String toVersion,
+      @Parameter(description = "Schema id at one end of the range")
+      @QueryParam("fromId") Integer fromId,
+      @Parameter(description = "Schema id at the other end of the range")
+      @QueryParam("toId") Integer toId,
+      @Parameter(description = "Whether to return every version in the range, not only its ends")
+      @DefaultValue("false") @QueryParam("includeInterior") boolean includeInterior,
+      @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
+          + "top-level messages; ignored for other formats")
+      @DefaultValue("false") @QueryParam("includeMultipleMessages")
+      boolean includeMultipleMessages,
+      @Parameter(description = "Version of the provenance algorithm, such as v1; the latest when "
+          + "omitted or latest")
+      @QueryParam("algorithm") String algorithm) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    boolean byVersion = fromVersion != null || toVersion != null;
+    boolean byId = fromId != null || toId != null;
+    if (byVersion == byId) {
+      throw Errors.invalidProvenanceRequestException(
+          "Name the range either by fromVersion and toVersion or by fromId and toId.");
+    }
+    if (byVersion ? fromVersion == null || toVersion == null : fromId == null || toId == null) {
+      throw Errors.invalidProvenanceRequestException("Name both ends of the range.");
+    }
+    ProvenanceAlgorithm version;
+    try {
+      version = ProvenanceAlgorithm.of(algorithm);
+    } catch (IllegalArgumentException e) {
+      throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
+    }
+
+    String errorMessage = "Error while computing provenance for subject " + subject;
+    try {
+      return byVersion
+          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior,
+              includeMultipleMessages, version)
+          : provenanceById(subject, fromId, toId, includeInterior,
+              includeMultipleMessages, version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
   @DELETE
   @DocumentedName("deleteSubject")
   @Path("/{subject}")
@@ -351,4 +469,142 @@ public class SubjectsResource {
     asyncResponse.resume(deletedVersions);
   }
 
+
+  /**
+   * The range between two versions, each a version number or {@code "latest"}.
+   */
+  private SchemaProvenance provenanceByVersion(String subject, String fromVersion, String toVersion,
+      boolean includeInterior, boolean includeMultipleMessages,
+      ProvenanceAlgorithm algorithm) throws SchemaRegistryException, InvalidVersionException {
+    List<Schema> history = nonEmptyProvenanceHistory(subject);
+    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    return provenanceOf(subject, history, versionNamed(fromVersion, entries),
+        versionNamed(toVersion, entries), includeInterior, includeMultipleMessages,
+        algorithm);
+  }
+
+  /**
+   * The range between the versions carrying two schema ids, in either order.
+   */
+  private SchemaProvenance provenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages,
+      ProvenanceAlgorithm algorithm) throws SchemaRegistryException {
+    List<Schema> history = nonEmptyProvenanceHistory(subject);
+    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
+        versionOfId(toId, subject, entries), includeInterior, includeMultipleMessages,
+        algorithm);
+  }
+
+  private List<Schema> nonEmptyProvenanceHistory(String subject) throws SchemaRegistryException {
+    List<Schema> history = provenanceHistory(subject);
+    if (history.isEmpty()) {
+      throw Errors.subjectNotFoundException(subject);
+    }
+    return history;
+  }
+
+  private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
+      boolean includeInterior, boolean includeMultipleMessages,
+      ProvenanceAlgorithm algorithm) {
+    int low = Math.min(from, to);
+    int high = Math.max(from, to);
+    List<Schema> range = history.stream()
+        .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
+        .collect(Collectors.toList());
+    // computeProvenance never returns null, so neither does the cache.
+    SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
+        provenanceKey(subject, range, includeMultipleMessages, algorithm),
+        k -> computeProvenance(subject, range, includeMultipleMessages, algorithm)));
+    return ProvenanceHistory.slice(whole, from, to, includeInterior);
+  }
+
+  /**
+   * Every version of {@code subject}, soft-deleted ones included, in version order.
+   */
+  private List<Schema> provenanceHistory(String subject) throws SchemaRegistryException {
+    List<Schema> history = new ArrayList<>();
+    Iterator<SchemaKey> keys = schemaRegistry.getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+    while (keys.hasNext()) {
+      Schema schema = schemaRegistry.get(subject, keys.next().getVersion(), true);
+      if (schema != null) {
+        history.add(schema);
+      }
+    }
+    history.sort(Comparator.comparing(Schema::getVersion));
+    return history;
+  }
+
+  private static List<ProvenanceHistory.Entry> provenanceEntries(List<Schema> history) {
+    return history.stream()
+        .map(s -> new ProvenanceHistory.Entry(
+            s.getVersion(), s.getId(), Boolean.TRUE.equals(s.getDeleted())))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * A version number or {@code "latest"}, which means the latest version not soft-deleted.
+   */
+  private static int versionNamed(String version, List<ProvenanceHistory.Entry> entries)
+      throws InvalidVersionException {
+    VersionId id = new VersionId(version);
+    OptionalInt resolved = id.isLatest()
+        ? ProvenanceHistory.latestVersion(entries)
+        : ProvenanceHistory.version(entries, id.getVersionId());
+    if (!resolved.isPresent()) {
+      throw Errors.versionNotFoundException(id.getVersionId());
+    }
+    return resolved.getAsInt();
+  }
+
+  private static int versionOfId(int id, String subject, List<ProvenanceHistory.Entry> entries) {
+    OptionalInt version = ProvenanceHistory.versionCarrying(entries, id);
+    if (!version.isPresent()) {
+      throw Errors.schemaIdNotInSubjectException(id, subject);
+    }
+    return version.getAsInt();
+  }
+
+  private static List<Object> provenanceKey(String subject, List<Schema> history,
+      boolean includeMultipleMessages, ProvenanceAlgorithm algorithm) {
+    // The mode and the algorithm are part of the key: each answers differently.
+    List<Object> key = new ArrayList<>(3 + 2 * history.size());
+    key.add(subject);
+    key.add(includeMultipleMessages);
+    key.add(algorithm);
+    for (Schema schema : history) {
+      key.add(schema.getVersion());
+      key.add(schema.getId());
+    }
+    return key;
+  }
+
+  private SchemaProvenance computeProvenance(String subject, List<Schema> history,
+      boolean includeMultipleMessages, ProvenanceAlgorithm algorithm) {
+    List<ParsedSchema> parsed = new ArrayList<>(history.size());
+    for (Schema schema : history) {
+      try {
+        parsed.add(schemaRegistry.parseSchema(schema, false, false));
+      } catch (InvalidSchemaException e) {
+        throw Errors.unresolvableReferenceException("Version " + schema.getVersion()
+            + " of subject " + subject + " could not be parsed: " + e.getMessage());
+      }
+    }
+    try {
+      return ProvenanceHistory.compute(
+          subject, provenanceEntries(history), parsed, includeMultipleMessages, algorithm);
+    } catch (RecursiveTypeException e) {
+      throw Errors.recursiveSchemaException(e.getMessage());
+    } catch (AmbiguousProvenanceException e) {
+      throw Errors.ambiguousProvenanceException(e.getMessage());
+    } catch (ValidationException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (RuntimeException e) {
+      // A failure the converters do not name is the server's own: a plain 500, retried like any
+      // other.
+      String message = "Could not compute provenance for subject " + subject;
+      log.error(message, e);
+      throw Errors.schemaRegistryException(message, e);
+    }
+  }
 }
