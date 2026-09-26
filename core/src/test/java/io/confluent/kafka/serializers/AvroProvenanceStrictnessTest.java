@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -365,11 +366,13 @@ class AvroProvenanceStrictnessTest {
 
   @Test
   void aValueWidenedIntoAUnionIsANewColumnNotAFallback() throws Exception {
-    // A leaf becoming a union changes category, so f is new and provenance applies.
+    // A leaf becoming a union changes category, so f is new: provenance applies, and with no
+    // default there is nothing to read -- not a fallback to native reading.
     Schema v1 = record("\"int\"", "v1");
     Schema v2 = record("[\"int\",\"string\"]", "v2");
     register(v1, v2);
-    assertNotNull(rename(v1, v2));
+    SerializationException e = assertThrows(SerializationException.class, () -> rename(v1, v2));
+    assertTrue(e.getMessage().contains("Field 'f'"), e.getMessage());
   }
 
   @Test

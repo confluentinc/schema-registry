@@ -61,14 +61,6 @@ final class AvroProvenanceRenamer {
 
   // Every named type built, by full name, to catch one name given two definitions.
   private final Map<String, Schema> byName = new HashMap<>();
-  // Reader types a writer type was renamed against; their aliases, and a record's field aliases,
-  // must not apply again.
-  private final Set<Schema> matchedReaderTypes =
-      Collections.newSetFromMap(new IdentityHashMap<>());
-  // Reader types at a location, paired or not. Avro applies a type alias across the whole writer,
-  // so one left on a new type could rename a writer type provenance already placed elsewhere.
-  private final Set<Schema> locatedReaderTypes =
-      Collections.newSetFromMap(new IdentityHashMap<>());
   // The reader's own type names, which no throwaway name may take.
   private final Set<String> readerTypeNames = new HashSet<>();
   // Sink branches to append to a reader union, by the original reader union.
@@ -174,13 +166,14 @@ final class AvroProvenanceRenamer {
   /**
    * Renames {@code writer} after {@code reader} as {@code mapping} pairs them.
    *
-   * <p>The reader comes back too: the aliases of every type provenance matched or located, and
-   * such a record's field aliases, are removed, since provenance has already decided those
-   * pairings, and any sink branches are added.
+   * <p>The reader comes back too, with every alias removed — provenance has already decided every
+   * pairing an alias could — and any sink branches added.
    *
    * @throws ProvenanceUnavailableException if one named type would need two definitions inside a
    *     union, or the resolver would read a writer value into a union branch provenance gives a
    *     different id
+   * @throws SerializationException if a reader field would have nothing to read: provenance pairs
+   *     it with nothing the writer wrote and it declares no default
    */
   static Renamed rename(Schema writer, Schema reader, ProvenanceMapping mapping) {
     // A location the walk cannot find would escape provenance without a trace.
@@ -188,7 +181,7 @@ final class AvroProvenanceRenamer {
     requireReachable(writer, mapping.writerPaths(), mapping::writerNamesOf, mapping.writerId());
     requireReachable(reader, mapping.readerPaths(), mapping::readerNamesOf, mapping.readerId());
     final AvroProvenanceRenamer renamer = new AvroProvenanceRenamer(mapping);
-    renamer.locate(reader, Collections.emptyList());
+    renamer.collectTypeNames(reader);
     final Schema renamedWriter = renamer.renameAt(
         writer, Collections.emptyList(), reader, Collections.emptyList(), false);
     final Map<Schema, Schema> copies = new IdentityHashMap<>();
@@ -201,8 +194,10 @@ final class AvroProvenanceRenamer {
     });
     final Renamed renamed =
         new Renamed(renamedWriter, readerCopy, originals, renamer.sinkOrigins);
-    renamer.verify(Resolver.resolve(renamed.writer, renamed.reader), renamed.writer,
-        Collections.emptyList(), Collections.emptyList(), new HashSet<>());
+    final Resolver.Action plan = Resolver.resolve(renamed.writer, renamed.reader);
+    renamer.verify(plan, renamed.writer, Collections.emptyList(), Collections.emptyList(),
+        new HashSet<>());
+    requireEveryFieldHasAValue(plan, Collections.newSetFromMap(new IdentityHashMap<>()));
     return renamed;
   }
 
@@ -211,13 +206,8 @@ final class AvroProvenanceRenamer {
    * fall back to. Avro fails that on every record; this fails it once, naming the field. A sink is
    * the exception: only the records containing its branch fail, as they come.
    */
-  static void requireEveryFieldHasAValue(Renamed renamed) {
-    check(
-        Resolver.resolve(renamed.writer, renamed.reader),
-        Collections.newSetFromMap(new IdentityHashMap<>()));
-  }
-
-  private static void check(Resolver.Action action, Set<Resolver.Action> seen) {
+  private static void requireEveryFieldHasAValue(Resolver.Action action,
+      Set<Resolver.Action> seen) {
     if (!seen.add(action)) {
       return;
     }
@@ -235,16 +225,16 @@ final class AvroProvenanceRenamer {
       }
     } else if (action instanceof Resolver.RecordAdjust) {
       for (Resolver.Action field : ((Resolver.RecordAdjust) action).fieldActions) {
-        check(field, seen);
+        requireEveryFieldHasAValue(field, seen);
       }
     } else if (action instanceof Resolver.Container) {
-      check(((Resolver.Container) action).elementAction, seen);
+      requireEveryFieldHasAValue(((Resolver.Container) action).elementAction, seen);
     } else if (action instanceof Resolver.WriterUnion) {
       for (Resolver.Action branch : ((Resolver.WriterUnion) action).actions) {
-        check(branch, seen);
+        requireEveryFieldHasAValue(branch, seen);
       }
     } else if (action instanceof Resolver.ReaderUnion) {
-      check(((Resolver.ReaderUnion) action).actualAction, seen);
+      requireEveryFieldHasAValue(((Resolver.ReaderUnion) action).actualAction, seen);
     }
   }
 
@@ -303,9 +293,6 @@ final class AvroProvenanceRenamer {
   private Schema renameRecord(Schema writer, List<String> writerAt, Schema reader,
       List<String> readerAt, boolean inUnion) {
     final Schema target = ofType(reader, Type.RECORD);
-    if (target != null) {
-      matchedReaderTypes.add(target);
-    }
     final List<Field> fields = new ArrayList<>(writer.getFields().size());
     for (Field field : writer.getFields()) {
       final List<String> fieldAt = append(writerAt, field.name());
@@ -449,7 +436,6 @@ final class AvroProvenanceRenamer {
 
   private String nameAfter(Schema writer, Schema reader) {
     if (reader != null && reader.getType() == writer.getType()) {
-      matchedReaderTypes.add(reader);
       return reader.getFullName();
     }
     return throwawayName(writer);
@@ -534,11 +520,11 @@ final class AvroProvenanceRenamer {
   // -------------------------------------------------------------------------------------------
 
   /**
-   * {@code reader} with the aliases of every matched type or type at a location, and the field
-   * aliases of every such record, removed, and the sinks added to their unions. Avro applies a
-   * reader's aliases to the writer before resolving, across the whole writer; the writer already
-   * bears the reader's names at every location, so such an alias could only rename a placed type
-   * a second time — onto another type, into a duplicate, or into a branch with a new id.
+   * {@code reader} with every alias removed, type and field alike, and the sinks added to their
+   * unions. Avro applies a reader's aliases to the writer before resolving, across the whole
+   * writer; every writer type already bears a reader name or a throwaway one, so an alias could
+   * only rename a placed type a second time — onto another type, into a duplicate, or into a
+   * branch with a new id.
    */
   private Schema readerCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema copied = copies.get(reader);
@@ -571,7 +557,7 @@ final class AvroProvenanceRenamer {
       }
       case ENUM:
       case FIXED: {
-        if (!stripsAliases(reader)) {
+        if (reader.getAliases().isEmpty()) {
           return reader;
         }
         final Schema copy = reader.getType() == Type.ENUM
@@ -587,42 +573,32 @@ final class AvroProvenanceRenamer {
   }
 
   /**
-   * Collects every named type of {@code reader} held by a location, {@code at} natively.
+   * Collects the name of every named type of {@code reader}.
    */
-  private void locate(Schema reader, List<String> at) {
-    if (isNamed(reader)) {
-      readerTypeNames.add(reader.getFullName());
-      if (mapping.readerPathAt(at) != null) {
-        locatedReaderTypes.add(reader);
-      }
+  private void collectTypeNames(Schema reader) {
+    if (isNamed(reader) && !readerTypeNames.add(reader.getFullName())) {
+      return;
     }
     switch (reader.getType()) {
       case RECORD:
         for (Field field : reader.getFields()) {
-          locate(field.schema(), append(at, field.name()));
+          collectTypeNames(field.schema());
         }
         break;
       case ARRAY:
-        locate(reader.getElementType(), append(at, null));
+        collectTypeNames(reader.getElementType());
         break;
       case MAP:
-        locate(reader.getValueType(), append(at, null));
+        collectTypeNames(reader.getValueType());
         break;
-      case UNION: {
-        // A nullable union the logical type collapses has no branch step.
-        final boolean collapsed = nonNull(reader).size() == 1;
+      case UNION:
         for (Schema branch : reader.getTypes()) {
-          locate(branch, collapsed ? at : append(at, branch.getFullName()));
+          collectTypeNames(branch);
         }
         break;
-      }
       default:
         break;
     }
-  }
-
-  private boolean stripsAliases(Schema reader) {
-    return matchedReaderTypes.contains(reader) || locatedReaderTypes.contains(reader);
   }
 
   private static Schema fixedCopy(Schema reader) {
@@ -638,19 +614,12 @@ final class AvroProvenanceRenamer {
   private Schema recordCopy(Schema reader, Map<Schema, Schema> copies) {
     final Schema record = Schema.createRecord(
         reader.getName(), reader.getDoc(), reader.getNamespace(), reader.isError());
-    final boolean strips = stripsAliases(reader);
-    if (!strips) {
-      reader.getAliases().forEach(record::addAlias);
-    }
     copies.put(reader, record);
     final List<Field> fields = new ArrayList<>(reader.getFields().size());
     for (Field field : reader.getFields()) {
       final Field copy = new Field(field.name(), readerCopy(field.schema(), copies),
           field.doc(), field.defaultVal(), field.order());
       field.getObjectProps().forEach(copy::addProp);
-      if (!strips) {
-        field.aliases().forEach(copy::addAlias);
-      }
       fields.add(copy);
     }
     record.setFields(fields);
