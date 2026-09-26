@@ -26,6 +26,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.util.internal.Accessor;
 import org.apache.kafka.common.errors.SerializationException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -617,8 +618,9 @@ final class AvroProvenanceRenamer {
     copies.put(reader, record);
     final List<Field> fields = new ArrayList<>(reader.getFields().size());
     for (Field field : reader.getFields()) {
-      final Field copy = new Field(field.name(), readerCopy(field.schema(), copies),
-          field.doc(), field.defaultVal(), field.order());
+      // The default as parsed: Avro cannot write a bytes or fixed default back from its value.
+      final Field copy = Accessor.createField(field.name(), readerCopy(field.schema(), copies),
+          field.doc(), Accessor.defaultValue(field), true, field.order());
       field.getObjectProps().forEach(copy::addProp);
       fields.add(copy);
     }

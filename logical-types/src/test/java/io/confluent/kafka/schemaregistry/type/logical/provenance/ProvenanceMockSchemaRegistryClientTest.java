@@ -136,6 +136,20 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertThat(pids(later.getVersions().get(1))).containsExactly(1, 2);
   }
 
+  @Test
+  void aSoftDeletedVersionStillDecidesTheIds() throws Exception {
+    // As in the registry: v2, soft-deleted, dropped a, so a is new at v3.
+    int v1 = register(record(field("a", "int"), field("b", "int")));
+    register(record(field("b", "int")));
+    int v3 = register(record(field("a", "int"), field("b", "int"), field("c", "int")));
+    client.deleteSchemaVersion(SUBJECT, "2", false);
+
+    SchemaProvenance ends = client.getProvenanceById(SUBJECT, v1, v3, true, false, null);
+    assertThat(ends.getVersions()).extracting(ProvenanceVersion::getVersion)
+        .containsExactly(1, 2, 3);
+    assertThat(pids(ends.getVersions().get(2))).containsExactly(3, 2, 4);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------

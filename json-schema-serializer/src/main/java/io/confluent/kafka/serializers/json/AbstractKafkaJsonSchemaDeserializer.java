@@ -412,7 +412,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
     JsonProvenancePruner pruner = provenanceProjector()
         .project(subject, writerId, writer, reader, false,
-            mapping -> JsonProvenancePruner.plan(mapping, (JsonSchema) reader))
+            mapping -> JsonProvenancePruner.plan(mapping, (JsonSchema) reader, writer))
         .orElse(null);
     if (pruner == null || pruner.isEmpty()) {
       return node;

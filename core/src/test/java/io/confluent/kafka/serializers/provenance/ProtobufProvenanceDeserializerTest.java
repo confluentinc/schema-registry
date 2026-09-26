@@ -299,6 +299,56 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReusedNumberWhoseElementsChangeCategoryIsNew() throws Exception {
+    // repeated M becoming repeated int32 under one number: the messages' bytes are no ints.
+    ProtobufSchema v1 = file("message Row {\n  repeated M x = 1;\n}",
+        "message M {\n  int32 a = 1;\n}");
+    ProtobufSchema v2 = file("message Row {\n  repeated int32 x = 1;\n}",
+        "message M {\n  int32 a = 1;\n}");
+    Descriptor row = v1.toDescriptor("p.Row");
+    Descriptor m = v1.toDescriptor("p.M");
+    byte[] body = DynamicMessage.newBuilder(row).addRepeatedField(row.findFieldByName("x"),
+        DynamicMessage.newBuilder(m).setField(m.findFieldByName("a"), 300).build()).build()
+        .toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.register(SUBJECT, v1)).put((byte) 0).put(body).array();
+    client.register(SUBJECT, v2);
+
+    assertEquals(Collections.emptyList(), get(read(v2, bytes, "v1"), "x"));
+  }
+
+  @Test
+  void aNewOneofInAMapValueKeepsTheValuesOtherFields() throws Exception {
+    // The oneof's names end at the entry's value field, which is no location: it must not move
+    // the value, and x, which continues, keeps its value.
+    ProtobufSchema v1 = row("map<string, E> es = 1;",
+        "message E { int32 x = 1; string note = 2; }");
+    ProtobufSchema v2 = row("map<string, E> es = 1;", "message E { int32 x = 1; }");
+    ProtobufSchema v3 = row("map<string, E> es = 1;",
+        "message E { int32 x = 1; oneof c { string memo = 2; } }");
+    Descriptor row = v1.toDescriptor();
+    Descriptor entry = row.findFieldByName("es").getMessageType();
+    Descriptor e = entry.findFieldByName("value").getMessageType();
+    byte[] body = DynamicMessage.newBuilder(row).addRepeatedField(row.findFieldByName("es"),
+        DynamicMessage.newBuilder(entry).setField(entry.findFieldByName("key"), "k")
+            .setField(entry.findFieldByName("value"), DynamicMessage.newBuilder(e)
+                .setField(e.findFieldByName("x"), 7).setField(e.findFieldByName("note"), "ada")
+                .build())
+            .build())
+        .build().toByteArray();
+    // Framed by hand: the serializer's own schema spells the map as an entry message.
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.register(SUBJECT, v1)).put((byte) 0).put(body).array();
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage value = (DynamicMessage) get(
+        (DynamicMessage) ((List<?>) get(read(v3, bytes, "v1"), "es")).get(0), "value");
+    assertEquals(7, get(value, "x"));
+    assertEquals("", get(value, "memo"));
+  }
+
+  @Test
   void aRequiredReaderFieldReusingANumberFailsTheRecord() throws Exception {
     ProtobufSchema v1 = proto2("required int32 id = 1;", "optional string note = 2;");
     ProtobufSchema v2 = proto2("required int32 id = 1;");

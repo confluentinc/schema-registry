@@ -307,6 +307,73 @@ class ProvenanceIdentityRulesTest {
     assertThat(after.get(path(0, 1))).isNotIn(before.values());
   }
 
+  @Test
+  void aMemberMovedBetweenOneofsLeavesTheOthersTheirPids() {
+    // p shares members with o and with its old self: it takes the one it shares most with that
+    // o did not keep. b, which moved between them, is new.
+    List<ProvenanceVersion> v = compute(
+        proto("oneof o { int32 a = 1; string b = 2; } oneof p { int32 c = 3; int32 d = 4; }"),
+        proto("oneof o { int32 a = 1; } oneof p { string b = 2; int32 c = 3; int32 d = 4; }"));
+    // v1: o at [0], a, b at [0, 0..1], p at [1], c, d at [1, 0..1]; v2: o at [0], a at [0, 0],
+    // p at [1], b, c, d at [1, 0..2].
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 1, 1)).isEqualTo(pid(v, 0, 1));
+    assertThat(pid(v, 1, 1, 0)).isNotIn(pids(v, 0).values());
+    assertThat(pid(v, 1, 1, 1)).isEqualTo(pid(v, 0, 1, 0));
+    assertThat(pid(v, 1, 1, 2)).isEqualTo(pid(v, 0, 1, 1));
+  }
+
+  @Test
+  void twoOneofsMergedContinueTheOneHoldingTheLowestNumber() {
+    List<ProvenanceVersion> v = compute(
+        proto("oneof o { int32 a = 1; } oneof p { int32 c = 3; }"),
+        proto("oneof o { int32 a = 1; int32 c = 3; }"));
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
+  void aOneofSharingSeveralNeverTakesOneAnotherContinues() {
+    // p alone continues o; q, sharing more with o, takes what is left: r.
+    List<ProvenanceVersion> v = compute(
+        proto("oneof o { int32 a = 1; int32 b = 2; int32 c = 3; } oneof r { int32 d = 4; }"),
+        proto("oneof p { int32 a = 1; } oneof q { int32 b = 2; int32 c = 3; int32 d = 4; }"));
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 1, 1)).isEqualTo(pid(v, 0, 1));
+    assertThat(pid(v, 1, 1, 2)).isEqualTo(pid(v, 0, 1, 0));
+    assertThat(pid(v, 1, 1, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  // --- What a collection holds ----------------------------------------------------------------
+
+  @Test
+  void aCollectionWhoseElementsChangeCategoryIsNew() {
+    // A list of structs becoming a list of strings has no SQL ALTER, as a struct becoming a
+    // string has none: the collection is new, in every format.
+    List<ProvenanceVersion> j = compute(
+        json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"object\","
+            + "\"properties\":{\"a\":{\"type\":\"integer\"}}}}}", null),
+        json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}", null));
+    assertThat(pid(j, 1, 0)).isNotIn(pids(j, 0).values());
+    List<ProvenanceVersion> p = compute(
+        proto("repeated M x = 1;\n  message M { int32 a = 1; }"), proto("repeated int32 x = 1;"));
+    assertThat(pid(p, 1, 0)).isNotIn(pids(p, 0).values());
+    List<ProvenanceVersion> a = compute(
+        avro("{\"type\":\"map\",\"values\":{\"type\":\"record\",\"name\":\"M\","
+            + "\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}}"),
+        avro("{\"type\":\"map\",\"values\":\"int\"}"));
+    assertThat(pid(a, 1, 0)).isNotIn(pids(a, 0).values());
+  }
+
+  @Test
+  void aCollectionWhoseElementsKeepTheirCategoryContinues() {
+    List<ProvenanceVersion> v = compute(
+        json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}", null),
+        json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}", null));
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+  }
+
   // --- Avro: union branches -------------------------------------------------------------------
 
   @Test

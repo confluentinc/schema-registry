@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -26,12 +27,15 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.BinaryEncoder;
@@ -212,6 +216,24 @@ public class AvroProvenanceRenamerTest {
         .set("u", new GenericRecordBuilder(a2).set("x", 7).build()).build();
     GenericRecord read = decode(writer, renamed, value);
     assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
+  }
+
+  @Test
+  public void bytesAndFixedDefaultsSurviveTheReaderCopy() throws Exception {
+    // Avro hands a bytes or fixed default back as a byte[], which it cannot write as a default.
+    Schema writer = record("R", field("a", "\"int\""));
+    Schema reader = record("R", field("a", "\"int\""),
+        field("d", "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":5,"
+            + "\"scale\":2}", "\"\\u0001\""),
+        field("f", "{\"type\":\"fixed\",\"name\":\"F\",\"size\":2}", "\"ab\""));
+    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader,
+        mapping(pids(p(1, "a")), pids(p(1, "a"), p(2, "d"), p(3, "f"))));
+
+    GenericRecord read = decode(writer, renamed,
+        new GenericRecordBuilder(writer).set("a", 1).build());
+    assertEquals(ByteBuffer.wrap(new byte[] {1}), read.get("d"));
+    assertArrayEquals("ab".getBytes(StandardCharsets.ISO_8859_1),
+        ((GenericFixed) read.get("f")).bytes());
   }
 
   // Written under writer, read through the renamed pair, as the deserializer reads it.
