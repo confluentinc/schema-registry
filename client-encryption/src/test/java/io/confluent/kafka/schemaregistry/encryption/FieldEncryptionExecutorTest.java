@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.CLOCK;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
@@ -24,6 +26,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -2253,6 +2256,139 @@ public abstract class FieldEncryptionExecutorTest {
     assertNull(cryptor);
     GenericRecord record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
+  }
+
+  // ---- Provenance: decryption runs against the reader's names while fields pair by history ----
+
+  private Map<String, Object> provenanceProps(boolean provenance) throws Exception {
+    Map<String, Object> props = fieldEncryptionProps.getClientProperties("mock://");
+    props.put(CLOCK, fakeClock);
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false);
+    if (provenance) {
+      props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
+    }
+    return props;
+  }
+
+  private ProvenanceMockSchemaRegistryClient provenanceRegistry() {
+    return new ProvenanceMockSchemaRegistryClient(ImmutableList.of(
+        new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
+  }
+
+  private RuleSet encryptPii() {
+    return new RuleSet(Collections.emptyList(), ImmutableList.of(new Rule("rule1", null, null,
+        null, FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null,
+        false)));
+  }
+
+  @Test
+  public void testProvenanceFollowsAnAvroRenameChainAndDecrypts() throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String tagged = ", \"confluent:tags\": [\"PII\"]";
+    AvroSchema v1 = avroRecord("{\"name\": \"name\", \"type\": \"string\"" + tagged + "}")
+        .copy(metadata, encryptPii());
+    AvroSchema v2 = avroRecord("{\"name\": \"full_name\", \"type\": \"string\", "
+        + "\"aliases\": [\"name\"]" + tagged + "}").copy(metadata, encryptPii());
+    AvroSchema v3 = avroRecord("{\"name\": \"display_name\", \"type\": \"string\", "
+        + "\"aliases\": [\"full_name\"], \"default\": \"?\"" + tagged + "}")
+        .copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    GenericRecord record = new GenericData.Record(v1.rawSchema());
+    record.put("name", "testUser");
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaAvroSerializer(registry, provenanceProps(false))
+        .serialize(topic, headers, record);
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    GenericRecord on = (GenericRecord) new KafkaAvroDeserializer(registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("testUser", on.get("display_name").toString());
+    // Without provenance display_name takes its default, which the rule then fails to decrypt.
+    assertThrows(SerializationException.class,
+        () -> new KafkaAvroDeserializer(registry, provenanceProps(false))
+            .deserializeWithSchema(topic, headers, bytes, writer -> v3));
+  }
+
+  @Test
+  public void testProvenanceKeepsAReusedProtobufNumberAwayFromTheOldDataAndDecrypts()
+      throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String header = "syntax = \"proto3\";\npackage p;\nimport \"confluent/meta.proto\";\n";
+    String name = "string name = 1 [(confluent.field_meta).tags = \"PII\"];";
+    ProtobufSchema v1 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " string note = 2; }").copy(metadata, encryptPii());
+    ProtobufSchema v2 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " }").copy(metadata, encryptPii());
+    ProtobufSchema v3 = (ProtobufSchema) new ProtobufSchema(
+        header + "message Row { " + name + " string memo = 2; }").copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    Descriptor row = v1.toDescriptor();
+    DynamicMessage message = DynamicMessage.newBuilder(row)
+        .setField(row.findFieldByName("name"), "alice")
+        .setField(row.findFieldByName("note"), "ada").build();
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaProtobufSerializer<DynamicMessage>(registry, provenanceProps(false))
+        .serialize(topic, headers, message);
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    DynamicMessage on = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    DynamicMessage off = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        registry, provenanceProps(false))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("alice", on.getField(on.getDescriptorForType().findFieldByName("name")));
+    assertEquals("", on.getField(on.getDescriptorForType().findFieldByName("memo")));
+    assertEquals("ada", off.getField(off.getDescriptorForType().findFieldByName("memo")));
+  }
+
+  @Test
+  public void testProvenancePrunesAReAddedJsonPropertyAndDecrypts() throws Exception {
+    ProvenanceMockSchemaRegistryClient registry = provenanceRegistry();
+    String subject = topic + "-value";
+    Metadata metadata = getMetadata("kek1");
+    String name = "\"name\": {\"type\": \"string\", \"confluent:tags\": [\"PII\"]}";
+    JsonSchema v1 = jsonObject(name + ", \"note\": {\"type\": \"string\"}")
+        .copy(metadata, encryptPii());
+    JsonSchema v2 = jsonObject(name).copy(metadata, encryptPii());
+    JsonSchema v3 = jsonObject(name
+        + ", \"note\": {\"type\": \"string\", \"description\": \"new\"}")
+        .copy(metadata, encryptPii());
+    registry.register(subject, v1);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = new KafkaJsonSchemaSerializer<Object>(registry, provenanceProps(false))
+        .serialize(topic, headers, JsonSchemaUtils.envelope(v1,
+            new ObjectMapper().readTree("{\"name\": \"alice\", \"note\": \"ada\"}")));
+    registry.register(subject, v2);
+    registry.register(subject, v3);
+
+    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(
+        registry, provenanceProps(true))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    JsonNode off = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(
+        registry, provenanceProps(false))
+        .deserializeWithSchema(topic, headers, bytes, writer -> v3).getValue();
+    assertEquals("alice", on.get("name").asText());
+    // Pruned before the rules, so note reads as one never written: no value, though the field
+    // transform, visiting every declared property, sets it to null.
+    assertFalse(on.hasNonNull("note"));
+    assertEquals("ada", off.get("note").asText());
+  }
+
+  private static AvroSchema avroRecord(String field) {
+    return new AvroSchema("{\"type\": \"record\", \"name\": \"User\", "
+        + "\"namespace\": \"example.avro\", \"fields\": [" + field + "]}");
+  }
+
+  private static JsonSchema jsonObject(String properties) {
+    return new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+        + properties + "}}");
   }
 
   // ---- Tests for ParsedSchemaAndValue rule results + writer info ----

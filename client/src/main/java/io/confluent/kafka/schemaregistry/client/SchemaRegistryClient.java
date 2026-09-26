@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
@@ -255,6 +256,30 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default int getVersion(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The provenance of {@code subject}'s columns between the versions carrying two schema ids —
+   * every column's inlined path and an id stable across renames — in either order. The form a
+   * deserializer uses, since a record carries a schema id and never a version.
+   * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
+   * top-level messages, so paths gain one leading step; ids from the two modes are not comparable.
+   * {@code algorithm} names the version of the provenance algorithm; null asks for the latest.
+   */
+  default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * As {@link #getProvenanceById}, between two versions, each a version number or {@code
+   * "latest"}.
+   */
+  default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
