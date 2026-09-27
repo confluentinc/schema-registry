@@ -222,6 +222,17 @@ class JsonToLogicalTypeConverterTest {
   }
 
   @Test
+  void aTypedEnumKeepsEachValuesDocAlignedPastADroppedNull() {
+    String schema = "{\"type\":[\"string\",\"null\"],\"enum\":[\"a\",null,\"b\",\"c\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"},{\"doc\":\"C\"}]}";
+    for (Schema result : new Schema[] {rootOf(schema), v1RootOf(schema)}) {
+      assertEquals(Arrays.asList("a", "b", "c"), symbolsOf(result));
+      assertEquals(Arrays.asList("A", "B", "C"), result.getEnumValues().stream()
+          .map(Schema.EnumValue::getDoc).collect(Collectors.toList()));
+    }
+  }
+
+  @Test
   void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
     String[][] cases = {
         {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},

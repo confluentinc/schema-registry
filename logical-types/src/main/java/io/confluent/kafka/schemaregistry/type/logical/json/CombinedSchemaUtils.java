@@ -34,6 +34,7 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -46,7 +47,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Utility class for handling {@link CombinedSchema} allOf simplification.
@@ -170,14 +170,34 @@ public class CombinedSchemaUtils {
     List<Object> values = valueSchema instanceof ConstSchema
         ? Collections.singletonList(((ConstSchema) valueSchema).getPermittedValue())
         : ((EnumSchema) valueSchema).getPossibleValuesAsList();
-    List<Object> nonNullValues = values.stream()
-        .filter(value -> !JSONObject.NULL.equals(value))
-        .collect(Collectors.toList());
+    // everit hangs title/description/unprocessed keywords off the synthetic allOf, not its
+    // members. confluent:enum is positional, so each null value's entry is dropped with it.
+    Map<String, Object> unprocessed = new LinkedHashMap<>(allOf.getUnprocessedProperties());
+    Object rawMeta = unprocessed.get("confluent:enum");
+    List<?> meta = rawMeta instanceof List ? (List<?>) rawMeta : null;
+    List<Object> nonNullValues = new ArrayList<>();
+    List<Object> nonNullMeta = new ArrayList<>();
+    for (int i = 0; i < values.size(); i++) {
+      if (JSONObject.NULL.equals(values.get(i))) {
+        continue;
+      }
+      nonNullValues.add(values.get(i));
+      if (meta != null && i < meta.size()) {
+        nonNullMeta.add(meta.get(i));
+      }
+    }
     if (nonNullValues.isEmpty()) {
       throw new ValidationException(NULL_ONLY_VALUES_MESSAGE);
     }
-    Schema enumSchema =
-        withMetadataOf(allOf, EnumSchema.builder().possibleValues(nonNullValues));
+    if (meta != null) {
+      unprocessed.put("confluent:enum", nonNullMeta);
+    }
+    Schema enumSchema = EnumSchema.builder()
+        .possibleValues(nonNullValues)
+        .title(allOf.getTitle())
+        .description(allOf.getDescription())
+        .unprocessedProperties(unprocessed)
+        .build();
     return typeSchema instanceof StringSchema
         ? enumSchema
         : CombinedSchema.anyOf(Arrays.asList(enumSchema, NullSchema.INSTANCE)).build();
@@ -204,15 +224,6 @@ public class CombinedSchemaUtils {
       }
     }
     return hasNull ? stringSchema : null;
-  }
-
-  // everit hangs title/description/unprocessed keywords off the synthetic allOf, not its members.
-  private static Schema withMetadataOf(CombinedSchema outer, Schema.Builder<?> builder) {
-    return builder
-        .title(outer.getTitle())
-        .description(outer.getDescription())
-        .unprocessedProperties(outer.getUnprocessedProperties())
-        .build();
   }
 
   private static Optional<IgnoredAdditionalPropertiesSchema> isExactlyOneSchemaOfTypeObject(
