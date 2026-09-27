@@ -662,6 +662,14 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void aNullableStringTypedJsonEnumAndTheOneOfNullFormEvolveIntoEachOther() {
+    assertInterchangeable("{\"type\":[\"string\",\"null\"],\"enum\":[\"a\",\"b\"]}",
+        "{\"oneOf\":[{\"type\":\"null\"},{\"enum\":[\"a\",\"b\"]}]}");
+    assertInterchangeable("{\"type\":[\"string\",\"null\"],\"const\":\"a\"}",
+        "{\"enum\":[\"a\",null]}");
+  }
+
+  @Test
   void narrowingAJsonEnumToAConstDropsTheOtherValuesInIcebergModeOnly() {
     LogicalType before = jsonField("{\"enum\":[\"x\",\"y\"]}");
     LogicalType after = jsonField("{\"const\":\"x\"}");

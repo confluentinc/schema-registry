@@ -474,8 +474,9 @@ public class JsonToLogicalTypeConverter {
   }
 
   /**
-   * Converts an {@code enum}, or a {@code const} as a one-value enum. Every value becomes a
-   * string symbol whatever its JSON type, matching old Flink, which read enums as strings.
+   * Converts an {@code enum}, or a {@code const} as a one-value enum. Every non-null value becomes
+   * a string symbol whatever its JSON type, matching old Flink, which read enums as strings; a
+   * null value makes the type nullable instead.
    */
   private static Schema convertPermittedValues(
       org.everit.json.schema.Schema schema, List<?> possibleValues, boolean isNullable) {
@@ -485,7 +486,12 @@ public class JsonToLogicalTypeConverter {
     List<EnumValue> values = new ArrayList<>();
     Set<String> seenSymbols = new HashSet<>();
     for (int i = 0; i < possibleValues.size(); i++) {
-      String symbol = String.valueOf(possibleValues.get(i));
+      Object value = possibleValues.get(i);
+      if (JSONObject.NULL.equals(value)) {
+        isNullable = true;
+        continue;
+      }
+      String symbol = String.valueOf(value);
       // JSON Schema only "SHOULD" require unique enum values; tolerate
       // duplicates by keeping the first occurrence's metadata.
       if (!seenSymbols.add(symbol)) {
@@ -506,6 +512,9 @@ public class JsonToLogicalTypeConverter {
         }
       }
       values.add(new EnumValue(symbol, doc, evParams));
+    }
+    if (values.isEmpty()) {
+      throw new ValidationException(CombinedSchemaUtils.NULL_ONLY_VALUES_MESSAGE);
     }
     Schema result = Schema.createEnum(values).setNullable(isNullable);
     result.setDoc(schema.getDescription());
