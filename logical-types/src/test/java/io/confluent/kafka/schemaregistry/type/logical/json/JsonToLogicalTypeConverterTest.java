@@ -37,6 +37,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,6 +108,149 @@ class JsonToLogicalTypeConverterTest {
     assertEquals(Schema.Type.ENUM, result.getType());
     assertEquals(3, result.getEnumValues().size());
     assertEquals("RED", result.getEnumValues().get(0).getSymbol());
+  }
+
+  private static Schema rootOf(String json) {
+    return JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(json));
+  }
+
+  private static Schema v1RootOf(String json) {
+    return JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(json), LogicalTypeVersion.V1).getRootSchema();
+  }
+
+  @Test
+  void constConvertsExactlyLikeASingleValueEnumInBothEditions() {
+    String meta = "\"description\":\"d\",\"confluent:tags\":[\"t\"],"
+        + "\"confluent:enum\":[{\"doc\":\"only\"}]";
+    Schema fromConst = rootOf("{\"const\":\"x\"," + meta + "}");
+
+    assertEquals(Schema.Type.ENUM, fromConst.getType());
+    assertEquals("x", fromConst.getEnumValues().get(0).getSymbol());
+    assertEquals("only", fromConst.getEnumValues().get(0).getDoc());
+    assertEquals("d", fromConst.getDoc());
+    assertEquals(rootOf("{\"enum\":[\"x\"]," + meta + "}"), fromConst);
+    assertEquals(v1RootOf("{\"enum\":[\"x\"]," + meta + "}"),
+        v1RootOf("{\"const\":\"x\"," + meta + "}"));
+  }
+
+  @Test
+  void everyPermittedValueBecomesAStringSymbolInBothEditions() {
+    // Old Flink read every JSON enum as a string column; V2 keeps that so the editions agree.
+    String[][] cases = {
+        {"{\"enum\":[1,2]}", "1,2"},
+        {"{\"const\":42}", "42"},
+        {"{\"const\":true}", "true"},
+    };
+    for (String[] c : cases) {
+      Schema v2 = rootOf(c[0]);
+      assertEquals(Schema.Type.ENUM, v2.getType(), c[0]);
+      assertEquals(Arrays.asList(c[1].split(",")), symbolsOf(v2), c[0]);
+      assertEquals(v2, v1RootOf(c[0]), c[0]);
+    }
+  }
+
+  private static List<String> symbolsOf(Schema enumSchema) {
+    return enumSchema.getEnumValues().stream()
+        .map(Schema.EnumValue::getSymbol)
+        .collect(Collectors.toList());
+  }
+
+  @Test
+  void aNullValueOfABareEnumMakesItNullableInsteadOfBecomingASymbol() {
+    Schema result = rootOf("{\"enum\":[\"a\",null,\"b\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"}]}");
+    assertEquals(Schema.Type.ENUM, result.getType());
+    assertEquals(Arrays.asList("a", "b"), symbolsOf(result));
+    assertEquals("B", result.getEnumValues().get(1).getDoc());
+    assertTrue(result.isNullable());
+    assertEquals(result, v1RootOf("{\"enum\":[\"a\",null,\"b\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"}]}"));
+  }
+
+  @Test
+  void aNullOnlyEnumOrConstIsRejectedInBothEditions() {
+    String[] schemas = {
+        "{\"const\":null}",
+        "{\"enum\":[null]}",
+        "{\"type\":\"string\",\"const\":null}",
+        "{\"type\":[\"string\",\"null\"],\"enum\":[null]}",
+    };
+    for (String schema : schemas) {
+      assertThatThrownBy(() -> rootOf(schema)).as(schema)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("non-null value");
+      assertThatThrownBy(() -> v1RootOf(schema)).as(schema)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("non-null value");
+    }
+  }
+
+  @Test
+  void aStringTypedConstOrEnumReadsAsTheBareOneInBothEditions() {
+    // everit wraps `type` + `const`/`enum` in a synthetic allOf and hangs the description off it.
+    String[] drafts = {"", "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","};
+    for (String draft : drafts) {
+      String typedConst = "{" + draft + "\"type\":\"string\",\"const\":\"x\",\"description\":\"d\"}";
+      assertEquals(rootOf("{\"enum\":[\"x\"],\"description\":\"d\"}"), rootOf(typedConst), draft);
+      assertEquals(rootOf(typedConst), v1RootOf(typedConst), draft);
+
+      String typedEnum = "{" + draft + "\"type\":\"string\",\"enum\":[\"a\",\"b\"]}";
+      assertEquals(rootOf("{\"enum\":[\"a\",\"b\"]}"), rootOf(typedEnum), draft);
+      assertEquals(rootOf(typedEnum), v1RootOf(typedEnum), draft);
+    }
+  }
+
+  @Test
+  void onlyTheTypeDecidesTheNullabilityOfATypedConstOrEnum() {
+    // A value must match both `type` and `enum`, so a null value is dead unless the type is null.
+    String[] drafts = {"", "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","};
+    for (String draft : drafts) {
+      Schema nullableType = rootOf(
+          "{" + draft + "\"type\":[\"string\",\"null\"],\"enum\":[\"a\",\"b\"],"
+              + "\"description\":\"d\"}");
+      assertEquals(Schema.Type.ENUM, nullableType.getType(), draft);
+      assertEquals(Arrays.asList("a", "b"), symbolsOf(nullableType), draft);
+      assertEquals("d", nullableType.getDoc(), draft);
+      assertTrue(nullableType.isNullable(), draft);
+      assertEquals(nullableType, rootOf("{" + draft
+          + "\"type\":[\"string\",\"null\"],\"enum\":[\"a\",\"b\",null],\"description\":\"d\"}"),
+          draft);
+
+      Schema stringType = rootOf("{" + draft + "\"type\":\"string\",\"enum\":[\"a\",null]}");
+      assertEquals(Arrays.asList("a"), symbolsOf(stringType), draft);
+      assertFalse(stringType.isNullable(), draft);
+    }
+  }
+
+  @Test
+  void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
+    String[][] cases = {
+        {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},
+        {"{\"type\":\"string\",\"minLength\":1,\"maxLength\":1,\"const\":\"x\"}", "CHAR", "false"},
+        {"{\"type\":[\"string\",\"null\"],\"maxLength\":5,\"enum\":[\"a\"]}", "VARCHAR", "true"},
+    };
+    for (String[] c : cases) {
+      Schema result = rootOf(c[0]);
+      assertEquals(Schema.Type.valueOf(c[1]), result.getType(), c[0]);
+      assertEquals(Boolean.parseBoolean(c[2]), result.isNullable(), c[0]);
+      assertEquals(result, v1RootOf(c[0]), c[0]);
+    }
+    assertEquals(Schema.createVarchar(5).setNullable(false),
+        rootOf("{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}"));
+  }
+
+  @Test
+  void aNonStringTypedConstOrEnumIsItsDeclaredTypeInBothEditions() {
+    String[][] cases = {
+        {"{\"type\":\"boolean\",\"const\":true}", "BOOLEAN"},
+        {"{\"type\":\"boolean\",\"enum\":[true]}", "BOOLEAN"},
+        {"{\"type\":\"integer\",\"const\":1}", "BIGINT"},
+        {"{\"type\":\"integer\",\"enum\":[1,2]}", "BIGINT"},
+        {"{\"type\":[\"integer\",\"null\"],\"enum\":[1,null]}", "BIGINT"},
+    };
+    for (String[] c : cases) {
+      assertEquals(Schema.Type.valueOf(c[1]), rootOf(c[0]).getType(), c[0]);
+      assertEquals(rootOf(c[0]), v1RootOf(c[0]), c[0]);
+    }
   }
 
   @Test
