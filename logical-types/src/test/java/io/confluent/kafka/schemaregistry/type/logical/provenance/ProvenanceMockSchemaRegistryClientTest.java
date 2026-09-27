@@ -154,6 +154,20 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertThat(client.getSchemaMetadata(SUBJECT, 2, true).getId()).isEqualTo(v1 + 1);
   }
 
+  @Test
+  void aLiveVersionTakingASoftDeletedOnesNumberIsTheOneDeleted() throws Exception {
+    // The base mock numbers the new version as the deleted latest; the registry never would.
+    register(record(field("a", "int")));
+    register(record(field("a", "int"), field("b", "int")));
+    client.deleteSchemaVersion(SUBJECT, "2", false);
+    register(record(field("a", "int"), field("c", "int")));
+    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2);
+
+    client.deleteSchemaVersion(SUBJECT, "2", true);
+    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1);
+    assertThat(client.getAllVersions(SUBJECT)).containsExactly(1);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------

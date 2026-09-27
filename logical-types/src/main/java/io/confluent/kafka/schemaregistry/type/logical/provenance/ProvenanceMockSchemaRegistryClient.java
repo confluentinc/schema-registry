@@ -122,18 +122,22 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       String subject, String version, boolean isPermanent) throws IOException, RestClientException {
     Map<Integer, Integer> deleted = softDeleted.computeIfAbsent(subject, s -> new TreeMap<>());
     int number = Integer.parseInt(version);
-    if (isPermanent && deleted.remove(number) != null) {
+    Integer id = null;
+    try {
+      id = getByVersion(subject, number, false).getId();
+    } catch (RuntimeException e) {
+      // No live version: the base mock answers -1.
+    }
+    if (id != null) {
+      // A live version the base mock numbered as a soft-deleted one replaces it.
+      deleted.remove(number);
+    } else if (isPermanent && deleted.remove(number) != null) {
       return number;
     }
-    Integer id = null;
-    if (!isPermanent) {
-      try {
-        id = getByVersion(subject, number, false).getId();
-      } catch (RuntimeException e) {
-        // No such version: the base mock answers -1, and nothing is remembered.
-      }
-    }
     Integer result = super.deleteSchemaVersion(requestProperties, subject, version, isPermanent);
+    if (isPermanent) {
+      return result;
+    }
     if (id != null && result == number) {
       deleted.put(number, id);
     }
