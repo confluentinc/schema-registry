@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.json;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import org.everit.json.schema.ArraySchema;
+import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
@@ -50,6 +51,7 @@ public class CombinedSchemaUtils {
   public static Schema simplifyAllOfSchema(CombinedSchema combinedSchema) {
     ConstSchema constSchema = null;
     EnumSchema enumSchema = null;
+    BooleanSchema booleanSchema = null;
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     CombinedSchema combinedSubschema = null;
@@ -61,6 +63,8 @@ public class CombinedSchemaUtils {
         constSchema = (ConstSchema) subSchema;
       } else if (subSchema instanceof EnumSchema) {
         enumSchema = (EnumSchema) subSchema;
+      } else if (subSchema instanceof BooleanSchema) {
+        booleanSchema = (BooleanSchema) subSchema;
       } else if (subSchema instanceof NumberSchema) {
         numberSchema = (NumberSchema) subSchema;
       } else if (subSchema instanceof StringSchema) {
@@ -83,6 +87,13 @@ public class CombinedSchemaUtils {
           .filter(Entry::getValue)
           .forEach(e -> builder.addRequiredProperty(e.getKey()));
       return builder.build();
+    } else if (isStringTypedValueConstraint(combinedSchema)) {
+      // Kept rather than reduced to the bare string, so a typed enum/const reads as a bare one.
+      return constSchema != null
+          ? withMetadataOf(combinedSchema,
+              ConstSchema.builder().permittedValue(constSchema.getPermittedValue()))
+          : withMetadataOf(combinedSchema,
+              EnumSchema.builder().possibleValues(enumSchema.getPossibleValuesAsList()));
     } else if (combinedSubschema != null) {
       return combinedSubschema;
     } else if (constSchema != null) {
@@ -90,12 +101,16 @@ public class CombinedSchemaUtils {
         return stringSchema;
       } else if (numberSchema != null) {
         return numberSchema;
+      } else if (booleanSchema != null) {
+        return booleanSchema;
       }
     } else if (enumSchema != null) {
       if (stringSchema != null) {
         return stringSchema;
       } else if (numberSchema != null) {
         return numberSchema;
+      } else if (booleanSchema != null) {
+        return booleanSchema;
       }
     } else if (stringSchema != null && stringSchema.getFormatValidator() != null) {
       if (numberSchema != null) {
@@ -118,6 +133,31 @@ public class CombinedSchemaUtils {
     }
     throw new ValidationException(
         "Unsupported criterion " + combinedSchema.getCriterion() + " for " + combinedSchema);
+  }
+
+  // True for exactly one const/enum plus one string `type` and nothing else.
+  private static boolean isStringTypedValueConstraint(CombinedSchema combinedSchema) {
+    int valueConstraints = 0;
+    int stringTypes = 0;
+    for (Schema subSchema : combinedSchema.getSubschemas()) {
+      if (subSchema instanceof ConstSchema || subSchema instanceof EnumSchema) {
+        valueConstraints++;
+      } else if (subSchema instanceof StringSchema) {
+        stringTypes++;
+      } else {
+        return false;
+      }
+    }
+    return valueConstraints == 1 && stringTypes == 1;
+  }
+
+  // everit hangs title/description/unprocessed keywords off the synthetic allOf, not its members.
+  private static Schema withMetadataOf(CombinedSchema outer, Schema.Builder<?> builder) {
+    return builder
+        .title(outer.getTitle())
+        .description(outer.getDescription())
+        .unprocessedProperties(outer.getUnprocessedProperties())
+        .build();
   }
 
   private static Optional<IgnoredAdditionalPropertiesSchema> isExactlyOneSchemaOfTypeObject(
