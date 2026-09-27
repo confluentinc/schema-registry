@@ -636,6 +636,50 @@ class CompatibilityCheckerEndToEndTest {
     assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.ENUM_DELETED, "grade");
   }
 
+  // -----------------------------------------------------------------------------------------------
+  // JSON const vs enum -- a const is a one-value enum, so evolving between them is a no-op
+  // -----------------------------------------------------------------------------------------------
+
+  private static LogicalType jsonField(String fieldSchema) {
+    return fromJson("{\"type\":\"object\",\"properties\":{\"e\":" + fieldSchema + "},"
+        + "\"required\":[\"e\"]}");
+  }
+
+  private static void assertInterchangeable(String first, String second) {
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2}) {
+      assertCompatible(mode, jsonField(first), jsonField(second));
+      assertCompatible(mode, jsonField(second), jsonField(first));
+    }
+  }
+
+  @Test
+  void aJsonConstAndTheMatchingSingleValueEnumEvolveIntoEachOther() {
+    assertInterchangeable("{\"const\":\"x\"}", "{\"enum\":[\"x\"]}");
+    assertInterchangeable("{\"type\":\"string\",\"const\":\"x\"}", "{\"enum\":[\"x\"]}");
+    assertInterchangeable("{\"const\":\"x\"}", "{\"type\":\"string\",\"enum\":[\"x\"]}");
+    assertInterchangeable("{\"const\":42}", "{\"enum\":[42]}");
+    assertInterchangeable("{\"type\":\"boolean\",\"const\":true}", "{\"type\":\"boolean\"}");
+  }
+
+  @Test
+  void narrowingAJsonEnumToAConstDropsTheOtherValuesInIcebergModeOnly() {
+    LogicalType before = jsonField("{\"enum\":[\"x\",\"y\"]}");
+    LogicalType after = jsonField("{\"const\":\"x\"}");
+
+    assertCompatible(Mode.FLINK, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.ENUM_DELETED, "e");
+  }
+
+  @Test
+  void aBareNumericJsonEnumIsAStringSoRetypingItAsIntegerIsAFinding() {
+    LogicalType before = jsonField("{\"enum\":[1,2]}");
+    LogicalType after = jsonField("{\"type\":\"integer\"}");
+
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2}) {
+      assertTrue(!rulesOf(mode, before, after).isEmpty(), mode + " expected a finding");
+    }
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Field reordering -- pinned from real schema text now that the check is disabled
   // ---------------------------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
@@ -400,41 +401,12 @@ public class JsonToLogicalTypeConverter {
     } else if (schema instanceof StringSchema) {
       return convertStringSchema((StringSchema) schema, isNullable);
     } else if (schema instanceof EnumSchema) {
-      EnumSchema enumSchema = (EnumSchema) schema;
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> enumMeta =
-          (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
-      List<?> possibleValues = enumSchema.getPossibleValuesAsList();
-      List<EnumValue> values = new ArrayList<>();
-      Set<String> seenSymbols = new HashSet<>();
-      for (int i = 0; i < possibleValues.size(); i++) {
-        String symbol = possibleValues.get(i).toString();
-        // JSON Schema only "SHOULD" require unique enum values; tolerate
-        // duplicates by keeping the first occurrence's metadata.
-        if (!seenSymbols.add(symbol)) {
-          continue;
-        }
-        String doc = null;
-        Map<String, Object> evParams = null;
-        if (enumMeta != null && i < enumMeta.size()) {
-          @SuppressWarnings("unchecked")
-          Map<String, Object> entry = enumMeta.get(i);
-          doc = (String) entry.get("doc");
-          evParams = (Map<String, Object>) entry.get("params");
-          // JSON Schema owns no enum-value-level format-native slot, so drop any key smuggled in
-          // through confluent:enum (e.g. a foreign protobuf.enum.number) rather than letting it
-          // steer Protobuf emission later — same rule the field and branch readers apply.
-          if (evParams != null) {
-            evParams = Schema.stripFormatNativeParams(evParams);
-          }
-        }
-        values.add(new EnumValue(symbol, doc, evParams));
-      }
-      Schema result = Schema.createEnum(values).setNullable(isNullable);
-      result.setDoc(schema.getDescription());
-      readSchemaTags(schema, result);
-      readSchemaParams(schema, result);
-      return result;
+      return convertPermittedValues(
+          schema, ((EnumSchema) schema).getPossibleValuesAsList(), isNullable);
+    } else if (schema instanceof ConstSchema) {
+      return convertPermittedValues(
+          schema, Collections.singletonList(((ConstSchema) schema).getPermittedValue()),
+          isNullable);
     } else if (schema instanceof CombinedSchema) {
       return convertCombinedSchema(
           (CombinedSchema) schema, isNullable, ctx, indexPath);
@@ -499,6 +471,47 @@ public class JsonToLogicalTypeConverter {
       throw new ValidationException(
           "Unsupported JSON schema type " + schema.getClass().getName());
     }
+  }
+
+  /**
+   * Converts an {@code enum}, or a {@code const} as a one-value enum. Every value becomes a
+   * string symbol whatever its JSON type, matching old Flink, which read enums as strings.
+   */
+  private static Schema convertPermittedValues(
+      org.everit.json.schema.Schema schema, List<?> possibleValues, boolean isNullable) {
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> enumMeta =
+        (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
+    List<EnumValue> values = new ArrayList<>();
+    Set<String> seenSymbols = new HashSet<>();
+    for (int i = 0; i < possibleValues.size(); i++) {
+      String symbol = String.valueOf(possibleValues.get(i));
+      // JSON Schema only "SHOULD" require unique enum values; tolerate
+      // duplicates by keeping the first occurrence's metadata.
+      if (!seenSymbols.add(symbol)) {
+        continue;
+      }
+      String doc = null;
+      Map<String, Object> evParams = null;
+      if (enumMeta != null && i < enumMeta.size()) {
+        Map<String, Object> entry = enumMeta.get(i);
+        doc = (String) entry.get("doc");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rawParams = (Map<String, Object>) entry.get("params");
+        // JSON Schema owns no enum-value-level format-native slot, so drop any key smuggled in
+        // through confluent:enum (e.g. a foreign protobuf.enum.number) rather than letting it
+        // steer Protobuf emission later — same rule the field and branch readers apply.
+        if (rawParams != null) {
+          evParams = Schema.stripFormatNativeParams(rawParams);
+        }
+      }
+      values.add(new EnumValue(symbol, doc, evParams));
+    }
+    Schema result = Schema.createEnum(values).setNullable(isNullable);
+    result.setDoc(schema.getDescription());
+    readSchemaTags(schema, result);
+    readSchemaParams(schema, result);
+    return result;
   }
 
   private static Schema convertNumberSchema(
