@@ -46,8 +46,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * this module depends on the client. A soft-deleted version stays in the history, and is found
  * when deleted versions are looked up, as in the registry. The base mock numbers versions by the
  * live ones alone, so a version registered after the latest was deleted takes its number, and
- * replaces it here; and a permanent delete forgets a soft-deleted version here, though the base
- * mock still resolves its schema id.
+ * replaces it here; a permanent delete forgets a soft-deleted version here, though the base
+ * mock still resolves its schema id; and a deleted subject, soft or not, is forgotten entirely, as
+ * the base mock forgets it and its schemas.
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
@@ -142,6 +143,20 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       deleted.put(number, id);
     }
     return result;
+  }
+
+  @Override
+  public synchronized List<Integer> deleteSubject(Map<String, String> requestProperties,
+      String subject, boolean isPermanent) throws IOException, RestClientException {
+    List<Integer> deleted = super.deleteSubject(requestProperties, subject, isPermanent);
+    softDeleted.remove(subject);
+    return deleted;
+  }
+
+  @Override
+  public synchronized void reset() {
+    super.reset();
+    softDeleted.clear();
   }
 
   @Override

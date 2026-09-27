@@ -168,6 +168,22 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertThat(client.getAllVersions(SUBJECT)).containsExactly(1);
   }
 
+  @Test
+  void aDeletedSubjectOrAResetForgetsItsSoftDeletedVersions() throws Exception {
+    // As the base mock forgets the subject and its schemas: nothing stale is left to resolve.
+    register(record(field("a", "int")));
+    register(record(field("a", "int"), field("b", "int")));
+    client.deleteSchemaVersion(SUBJECT, "1", false);
+    client.deleteSubject(SUBJECT, false);
+    assertCode(404, 40401, () -> client.getAllVersions(SUBJECT, true));
+
+    register(record(field("a", "int"), field("c", "int")));
+    register(record(field("a", "int"), field("d", "int")));
+    client.deleteSchemaVersion(SUBJECT, "1", false);
+    client.reset();
+    assertCode(404, 40401, () -> client.getAllVersions(SUBJECT, true));
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------
