@@ -247,6 +247,11 @@ class JsonToLogicalTypeConverterTest {
     }
     assertEquals(Schema.createVarchar(5).setNullable(false),
         rootOf("{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}"));
+
+    // minLength alone bounds nothing (it reads as VARCHAR(MAX)), so the enum is kept.
+    String minOnly = "{\"type\":\"string\",\"minLength\":0,\"const\":\"x\"}";
+    assertEquals(rootOf("{\"enum\":[\"x\"]}"), rootOf(minOnly));
+    assertEquals(rootOf(minOnly), v1RootOf(minOnly));
   }
 
   @Test

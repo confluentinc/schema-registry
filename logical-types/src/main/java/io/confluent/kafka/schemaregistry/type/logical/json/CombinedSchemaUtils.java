@@ -144,7 +144,7 @@ public class CombinedSchemaUtils {
   /**
    * For an allOf of exactly one {@code const}/{@code enum} and a {@code "string"} or
    * {@code ["string", "null"]} type, returns an enum of the non-null values (nullable only when
-   * the type is), so it reads like a bare enum; returns the bare type when it has a length limit,
+   * the type is), so it reads like a bare enum; returns the bare type when it has a maxLength,
    * which only VARCHAR(n)/CHAR(n) can carry. Returns null for any other allOf.
    */
   private static Schema simplifyStringTypedValues(CombinedSchema allOf) {
@@ -164,7 +164,8 @@ public class CombinedSchemaUtils {
       return null;
     }
     StringSchema stringSchema = stringMemberOf(typeSchema);
-    if (stringSchema.getMinLength() != null || stringSchema.getMaxLength() != null) {
+    // Only maxLength bounds the string (VARCHAR(n), or CHAR(n) with an equal minLength).
+    if (stringSchema.getMaxLength() != null) {
       return typeSchema;
     }
     List<Object> values = valueSchema instanceof ConstSchema
