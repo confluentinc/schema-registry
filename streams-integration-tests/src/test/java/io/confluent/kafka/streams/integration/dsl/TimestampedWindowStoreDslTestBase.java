@@ -216,8 +216,8 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
             }
         });
         streams.start();
-        assertTrue(startedLatch.await(30, TimeUnit.SECONDS), "KafkaStreams should reach RUNNING state");
         openStreams.add(streams);
+        assertTrue(startedLatch.await(30, TimeUnit.SECONDS), "KafkaStreams should reach RUNNING state");
         return streams;
     }
 
@@ -364,6 +364,7 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
                 }
             }
         }
+        assertTrue(!results.isEmpty(), "Got no records from " + topic + " within 30s");
         return results;
     }
 
