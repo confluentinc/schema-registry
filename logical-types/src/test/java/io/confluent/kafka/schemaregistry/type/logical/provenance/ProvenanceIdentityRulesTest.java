@@ -184,6 +184,86 @@ class ProvenanceIdentityRulesTest {
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
   }
 
+  // An object branch titled so, holding one number property of each name.
+  private static String titled(String title, String... numbers) {
+    StringBuilder properties = new StringBuilder();
+    for (String name : numbers) {
+      properties.append(properties.length() == 0 ? "" : ",")
+          .append("\"").append(name).append("\":{\"type\":\"number\"}");
+    }
+    return "{\"type\":\"object\"" + (title == null ? "" : ",\"title\":\"" + title + "\"")
+        + ",\"properties\":{" + properties + "}}";
+  }
+
+  @Test
+  void aTitledBranchWhoseMembersAllChangedContinuesByItsTitle() {
+    // Nothing of the content is left to tell, but the title names it.
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + titled("Card", "x") + "," + titled("Bank", "y") + "]}}",
+            null),
+        json("{\"u\":{\"oneOf\":[" + titled("Bank", "w") + "," + titled("Card", "z") + "]}}",
+            null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aTitleOnTheDefinitionABranchRefersToCounts() {
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[{\"$ref\":\"#/definitions/C\"},{\"$ref\":\"#/definitions/B\"}]}}",
+            "{\"C\":" + titled("Card", "x") + ",\"B\":" + titled("Bank", "y") + "}"),
+        json("{\"u\":{\"oneOf\":[{\"$ref\":\"#/definitions/B\"},{\"$ref\":\"#/definitions/C\"}]}}",
+            "{\"C\":" + titled("Card", "z") + ",\"B\":" + titled("Bank", "w") + "}"));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aTitleSharedOrChangedLeavesTheBranchToItsContent() {
+    // Shared by two branches, a title tells nothing; changed, it is no guard: content decides.
+    List<ProvenanceVersion> shared = compute(
+        json("{\"u\":{\"oneOf\":[" + titled("Pay", "x") + "," + titled("Pay", "y") + "]}}",
+            null),
+        json("{\"u\":{\"oneOf\":[" + titled("Pay", "y") + "," + titled("Pay", "x") + "]}}",
+            null));
+    assertThat(pid(shared, 1, 0, 0)).isEqualTo(pid(shared, 0, 0, 1));
+    List<ProvenanceVersion> renamed = compute(
+        json("{\"u\":{\"oneOf\":[" + titled("Card", "x") + "," + titled("Bank", "y") + "]}}",
+            null),
+        json("{\"u\":{\"oneOf\":[" + titled("Bank", "y") + "," + titled("CreditCard", "x")
+            + "]}}", null));
+    assertThat(pid(renamed, 1, 0, 1)).isEqualTo(pid(renamed, 0, 0, 0));
+  }
+
+  @Test
+  void aTitleNeverPairsAcrossATagOrAHint() {
+    // Same title, but the tag says another kind of record, or the hints say another branch.
+    String card = "{\"type\":\"object\",\"title\":\"Pay\",\"properties\":"
+        + "{\"kind\":{\"enum\":[\"%s\"]},\"%s\":{\"type\":\"number\"}}}";
+    List<ProvenanceVersion> tagged = compute(
+        json("{\"u\":{\"oneOf\":[" + String.format(card, "a", "x") + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + String.format(card, "b", "y") + "]}}", null));
+    assertThat(pid(tagged, 1, 0, 0)).isNotIn(pids(tagged, 0).values());
+    List<ProvenanceVersion> hinted = compute(
+        json("{\"u\":{\"oneOf\":[" + titled("Pay", "x") + "],"
+            + "\"confluent:union\":[{\"name\":\"H1\"}]}}", null),
+        json("{\"u\":{\"oneOf\":[" + titled("Pay", "y") + "],"
+            + "\"confluent:union\":[{\"name\":\"H2\"}]}}", null));
+    assertThat(pid(hinted, 1, 0, 0)).isNotIn(pids(hinted, 0).values());
+  }
+
+  @Test
+  void aConnectTypeTitleNamesNoBranch() {
+    // org.apache.kafka.connect.data.* marks a logical type, which content already records.
+    String date = "{\"type\":\"integer\",\"title\":\"org.apache.kafka.connect.data.Date\"}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + date + "," + titled(null, "x") + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + titled(null, "y") + "," + date + "]}}", null));
+    // The date branch continues by content, as before; the object branch, changed, is new.
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 0)).isNotIn(pids(v, 0).values());
+  }
+
   @Test
   void aBranchHintedOtherwiseIsNewWhateverItsContentOrTag() {
     // A hint is the branch's name, as an Avro type's is: renamed, the branch is another.
