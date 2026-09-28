@@ -28,8 +28,8 @@ public final class KeyEncryptionKeyRedactor {
   }
 
   public static KeyEncryptionKey redact(KeyEncryptionKey kek) {
-    if (kek == null) {
-      return null;
+    if (kek == null || !kek.isShared()) {
+      return kek;
     }
     KeyEncryptionKey redacted = new KeyEncryptionKey(kek.getName(), kek.getKmsType(),
         kek.getKmsKeyId(), KmsPropsRedactor.redact(kek.getKmsProps()),

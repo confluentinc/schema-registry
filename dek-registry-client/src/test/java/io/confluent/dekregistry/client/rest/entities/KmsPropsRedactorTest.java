@@ -40,6 +40,19 @@ public class KmsPropsRedactorTest {
   }
 
   @Test
+  public void testRedactKekOnlyRedactsSharedKeks() {
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.supersecrettoken");
+
+    Kek shared = new Kek("kek1", "hcvault", "key1", kmsProps, null, true, 1L, null);
+    assertFalse(KmsPropsRedactor.redact(shared).getKmsProps().containsKey("token.id"));
+
+    Kek nonShared = new Kek("kek2", "hcvault", "key1", kmsProps, null, false, 1L, null);
+    assertEquals("s.supersecrettoken",
+        KmsPropsRedactor.redact(nonShared).getKmsProps().get("token.id"));
+  }
+
+  @Test
   public void testMergeRestoresRealSecretWhenRequestOmitsKey() {
     Map<String, String> existing = new HashMap<>();
     existing.put("token.id", "s.supersecrettoken");

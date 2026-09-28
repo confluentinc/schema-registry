@@ -145,7 +145,7 @@ public class RestApiTest extends ClusterTestHarness {
     kmsProps.put("namespace", "my-namespace");
 
     Kek newKek = client.createKek(
-        headers, kekName, kmsType, kmsKeyId, kmsProps, null, false, false);
+        headers, kekName, kmsType, kmsKeyId, kmsProps, null, true, false);
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
@@ -189,7 +189,7 @@ public class RestApiTest extends ClusterTestHarness {
     String kekName = "kek-recreate";
     Map<String, String> oldProps = new HashMap<>();
     oldProps.put("token.id", "s.oldtoken");
-    client.createKek(headers, kekName, "test-kms", "myid", oldProps, null, false, false);
+    client.createKek(headers, kekName, "test-kms", "myid", oldProps, null, true, false);
 
     // Another process hard-deletes the kek, so this client's cache isn't invalidated.
     CachedDekRegistryClient otherClient = new CachedDekRegistryClient(
@@ -200,11 +200,34 @@ public class RestApiTest extends ClusterTestHarness {
 
     Map<String, String> newProps = new HashMap<>();
     newProps.put("namespace", "my-namespace");
-    client.createKek(headers, kekName, "test-kms", "myid", newProps, null, false, false);
+    client.createKek(headers, kekName, "test-kms", "myid", newProps, null, true, false);
 
     Kek cached = client.getKek(kekName, false);
     assertFalse(cached.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", cached.getKmsProps().get("namespace"));
+  }
+
+  @Test
+  public void testNonSharedKekKeepsKmsSecrets() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-non-shared";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.clienttoken");
+    kmsProps.put("namespace", "my-namespace");
+
+    // Clients of a non-shared kek call the KMS themselves, so they need its secrets.
+    Kek created = client.createKek(
+        headers, kekName, "test-kms", "myid", kmsProps, null, false, false);
+    assertEquals("s.clienttoken", created.getKmsProps().get("token.id"));
+    client.reset();
+    assertEquals("s.clienttoken", client.getKek(kekName, false).getKmsProps().get("token.id"));
+
+    // Updates keep full-replace semantics: an omitted secret is cleared.
+    Map<String, String> updatedProps = new HashMap<>();
+    updatedProps.put("namespace", "my-namespace");
+    Kek updated = client.updateKek(headers, kekName, updatedProps, null, null);
+    assertFalse(updated.getKmsProps().containsKey("token.id"));
   }
 
   @Test

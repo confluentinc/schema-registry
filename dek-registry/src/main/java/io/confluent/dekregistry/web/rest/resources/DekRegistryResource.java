@@ -339,8 +339,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
             : new TreeMap<>();
         // Preflight test should use the same properties the actual create will persist.
         KeyEncryptionKey existingKey = dekRegistry.getKek(request.getName(), true);
-        if (existingKey != null) {
-          kmsProps = KmsPropsRedactor.merge(kmsProps, existingKey.getKmsProps());
+        if (existingKey == null || existingKey.isShared()) {
+          kmsProps = KmsPropsRedactor.merge(
+              kmsProps, existingKey != null ? existingKey.getKmsProps() : null);
         }
         KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
             request.getKmsKeyId(), kmsProps, null, true, false);
@@ -514,9 +515,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
         // Preflight test should use the same properties the actual update will persist.
-        SortedMap<String, String> kmsProps = request.getKmsProps() != null
-            ? KmsPropsRedactor.merge(request.getKmsProps(), oldKek.getKmsProps())
-            : oldKek.getKmsProps();
+        SortedMap<String, String> kmsProps = request.getKmsProps() == null
+            ? oldKek.getKmsProps()
+            : oldKek.isShared()
+                ? KmsPropsRedactor.merge(request.getKmsProps(), oldKek.getKmsProps())
+                : new TreeMap<>(request.getKmsProps());
         KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
             oldKek.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(newKek);

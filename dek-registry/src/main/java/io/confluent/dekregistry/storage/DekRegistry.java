@@ -508,9 +508,11 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
-    // Restore the real secret when recreating a deleted kek; normalize a stray
-    // placeholder otherwise.
-    kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey != null ? oldKey.getKmsProps() : null);
+    // Reads of a shared kek omit its secrets; restore them when recreating one. Also
+    // normalizes a stray placeholder on a brand new kek.
+    if (oldKey == null || oldKey.isShared()) {
+      kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey != null ? oldKey.getKmsProps() : null);
+    }
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
@@ -760,9 +762,12 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? KmsPropsRedactor.merge(request.getKmsProps(), key.getKmsProps())
-        : key.getKmsProps();
+    // Reads of a shared kek omit its secrets, so an omitted secret means "unchanged".
+    SortedMap<String, String> kmsProps = request.getKmsProps() == null
+        ? key.getKmsProps()
+        : key.isShared()
+            ? KmsPropsRedactor.merge(request.getKmsProps(), key.getKmsProps())
+            : new TreeMap<>(request.getKmsProps());
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),

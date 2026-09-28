@@ -24,7 +24,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Drops KMS auth secrets from a KEK's {@code kmsProps} before it's output.
+ * Drops KMS auth secrets from a shared KEK's {@code kmsProps} before it's output. Only
+ * shared KEKs are redacted: their secrets are used solely by the server, whereas clients
+ * of a non-shared KEK call the KMS themselves and need them.
  *
  * <p>Secrets are omitted rather than replaced with a placeholder: every KMS driver falls
  * back to an ambient credential when the config key is absent, and a non-null placeholder
@@ -61,8 +63,8 @@ public final class KmsPropsRedactor {
   }
 
   public static Kek redact(Kek kek) {
-    if (kek == null) {
-      return null;
+    if (kek == null || !kek.isShared()) {
+      return kek;
     }
     return new Kek(kek.getName(), kek.getKmsType(), kek.getKmsKeyId(),
         redact(kek.getKmsProps()), kek.getDoc(), kek.isShared(),
