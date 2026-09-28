@@ -142,6 +142,47 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aTaggedBranchContinuesItsTagRatherThanAPosition() {
+    // P overlaps both Q (through x) and R (through kind), so overlap cannot tell; its tag names R,
+    // which position alone would have passed over for Q.
+    String q = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
+    String r = branch("v", "\"y\":{\"type\":\"number\"}");
+    String p = branch("v", "\"x\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aBranchHintedOtherwiseIsNewWhateverItsContentOrTag() {
+    // A hint is the branch's name, as an Avro type's is: renamed, the branch is another.
+    String n = "{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}}}";
+    String t = branch("a", "\"x\":{\"type\":\"number\"}");
+    for (String member : new String[] {n, t}) {
+      List<ProvenanceVersion> v = compute(
+          json("{\"u\":{\"oneOf\":[" + member + "],\"confluent:union\":[{\"name\":\"H1\"}]}}",
+              null),
+          json("{\"u\":{\"oneOf\":[" + member + "],\"confluent:union\":[{\"name\":\"H2\"}]}}",
+              null));
+      assertThat(pid(v, 1, 0, 0)).isNotIn(pids(v, 0).values());
+    }
+  }
+
+  @Test
+  void aHintAddedOrRemovedKeepsTheBranch() {
+    String n = "{\"type\":\"object\",\"properties\":{\"n\":{\"type\":\"number\"}}}";
+    String i = "{\"type\":\"object\",\"properties\":{\"i\":{\"type\":\"number\"}}}";
+    String plain = "{\"u\":{\"oneOf\":[" + n + "," + i + "]}}";
+    String hinted = "{\"u\":{\"oneOf\":[" + n + "," + i + "],"
+        + "\"confluent:union\":[{\"name\":\"Card\"},{}]}}";
+    for (String[] pair : new String[][] {{plain, hinted}, {hinted, plain}}) {
+      List<ProvenanceVersion> v = compute(json(pair[0], null), json(pair[1], null));
+      assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    }
+  }
+
+  @Test
   void jsonBranchesSharingMemberNamesAreToldApartByTheirDiscriminator() {
     String a = branch("a", "\"x\":{\"type\":\"number\"}");
     String b = branch("b", "\"x\":{\"type\":\"number\"}");

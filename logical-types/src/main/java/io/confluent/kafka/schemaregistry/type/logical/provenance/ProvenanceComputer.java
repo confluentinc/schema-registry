@@ -639,7 +639,7 @@ public final class ProvenanceComputer {
           && !Collections.disjoint(previous.memberNumbers, peer.memberNumbers);
     }
 
-    /** JSON: a property by name, and a union branch by hint, else content. */
+    /** JSON: a property by name, and a union branch by hint, then its discriminators, content. */
     private static void matchJson(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       if (peers.get(0).kind == Kind.BRANCH) {
@@ -975,16 +975,19 @@ public final class ProvenanceComputer {
     /**
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's place. In turn: a hinted branch continues the
-     * previous branch of its name; a branch continues the one previous branch of the same content,
-     * where no peer shares it; the one previous branch it alone shares a member with, and no
-     * conflicting discriminator, as when it moved and its members changed; one at the same position
-     * sharing a member with it, where overlap alone cannot tell; else it is new. None continues
-     * another across a discriminator a branch related to them has (see {@link #crosses}).
+     * previous branch of its name; a branch continues the one previous branch with the same
+     * top-level discriminators, where no peer has them, as a tagged union's tag names its branch;
+     * the one previous branch of the same content, where no peer shares it; the one previous branch
+     * it alone shares a member with, and no conflicting discriminator, as when it moved and its
+     * members changed; one at the same position sharing a member with it, where overlap alone
+     * cannot tell; else it is new. None continues another across a discriminator a branch related
+     * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
+     * different branches, as an Avro type renamed without an alias is.
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      for (int phase = 0; phase < 4; phase++) {
+      for (int phase = 0; phase < 5; phase++) {
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
             continue;
@@ -994,9 +997,13 @@ public final class ProvenanceComputer {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
                 ? null : previousBranch(previous, taken, p -> peer.name.equals(p.name));
           } else if (phase == 1) {
-            found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
-                && a.content.equals(p.content));
+            found = tags(peer.content).isEmpty() ? null : mutual(peer, peers, previous,
+                (a, p) -> !taken.contains(p) && tags(a.content).equals(tags(p.content))
+                    && !otherHints(a, p));
           } else if (phase == 2) {
+            found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
+                && a.content.equals(p.content) && !otherHints(a, p));
+          } else if (phase == 3) {
             List<Node> unresolved = new ArrayList<>();
             for (Node other : peers) {
               if (!matched.containsKey(other)) {
@@ -1004,7 +1011,7 @@ public final class ProvenanceComputer {
               }
             }
             found = mutual(peer, unresolved, previous, (a, p) -> !taken.contains(p)
-                && overlaps(a.content, p.content)
+                && overlaps(a.content, p.content) && !otherHints(a, p)
                 && !crosses(a, p, peers, matched, previous, taken));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
@@ -1017,6 +1024,26 @@ public final class ProvenanceComputer {
           }
         }
       }
+    }
+
+    /**
+     * A branch's own discriminators, each as {@code d:name=value}: those of its members, not of
+     * branches nested in them.
+     */
+    private static Set<String> tags(Set<String> content) {
+      Set<String> tags = new TreeSet<>();
+      for (String entry : content) {
+        if (entry.startsWith(DISCRIMINATOR) && entry.indexOf('/') < 0) {
+          tags.add(entry);
+        }
+      }
+      return tags;
+    }
+
+    /** Whether two branches are both hinted, and hinted otherwise. */
+    private static boolean otherHints(Node a, Node p) {
+      return !a.name.startsWith(POSITIONAL_BRANCH) && !p.name.startsWith(POSITIONAL_BRANCH)
+          && !a.name.equals(p.name);
     }
 
     /**
