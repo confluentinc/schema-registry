@@ -721,8 +721,16 @@ public class JsonToLogicalTypeConverter {
     return null;
   }
 
-  // The one non-null value an enum or const permits; null for anything else.
+  // The one non-null value an enum or const permits, or a nullable one, as a oneOf or anyOf of it
+  // and null, converts to a one-value enum; null for anything else.
   private static Object singleValue(org.everit.json.schema.Schema schema) {
+    if (schema instanceof CombinedSchema
+        && ((CombinedSchema) schema).getCriterion() != CombinedSchema.ALL_CRITERION) {
+      List<org.everit.json.schema.Schema> nonNull = ((CombinedSchema) schema).getSubschemas()
+          .stream().filter(subschema -> !(subschema instanceof NullSchema))
+          .collect(Collectors.toList());
+      return nonNull.size() == 1 ? singleValue(unwrap(nonNull.get(0))) : null;
+    }
     List<?> values = schema instanceof EnumSchema
         ? ((EnumSchema) schema).getPossibleValuesAsList()
         : schema instanceof ConstSchema

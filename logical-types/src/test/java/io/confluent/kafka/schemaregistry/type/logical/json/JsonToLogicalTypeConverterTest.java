@@ -415,10 +415,11 @@ class JsonToLogicalTypeConverterTest {
         "{\"type\":\"object\",\"title\":\"CardPayment\",\"properties\":"
             + "{\"kind\":{\"enum\":[\"card\"]},\"n\":{\"type\":\"string\"}}}",
         object("\"kind\":{\"const\":\"bank\"}", "\"i\":{\"type\":\"string\"}"),
-        object("\"kind\":{\"type\":\"string\",\"const\":\"cash\"}"));
-    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank", "cash");
-    assertThat(branchNamesOf(v1RootOf(json))).containsExactly(
-        "connect_union_field_0", "connect_union_field_1", "connect_union_field_2");
+        object("\"kind\":{\"type\":\"string\",\"const\":\"cash\"}"),
+        object("\"kind\":{\"type\":[\"string\",\"null\"],\"const\":\"gift\"}"));
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank", "cash", "gift");
+    assertThat(branchNamesOf(v1RootOf(json))).containsExactly("connect_union_field_0",
+        "connect_union_field_1", "connect_union_field_2", "connect_union_field_3");
   }
 
   @Test
