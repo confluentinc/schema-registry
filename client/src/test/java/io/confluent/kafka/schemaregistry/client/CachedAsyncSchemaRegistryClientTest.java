@@ -264,6 +264,53 @@ public class CachedAsyncSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterClearsRememberedMissingSchema() throws Exception {
+    client = newClient(Collections.singletonMap(
+        SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, "60"));
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(true)))
+        .andReturn(failedFuture(new RestClientException("Schema not found", 404, 40403)))
+        .andReturn(completedFuture(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD)));
+    // No version in the response, so the version has to be looked up
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(completedFuture(new RegisterSchemaResponse(ID))).once();
+    replay(restService);
+
+    awaitFailure(client.getVersion(SUBJECT, AVRO_SCHEMA), RestClientException.class);
+    await(client.register(SUBJECT, AVRO_SCHEMA));
+    assertEquals(3, (int) await(client.getVersion(SUBJECT, AVRO_SCHEMA)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testLookupFailingAfterRegisterDoesNotHideIt() throws Exception {
+    client = newClient(Collections.singletonMap(
+        SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, "60"));
+    CompletableFuture<Schema> lookup = new CompletableFuture<>();
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(true)))
+        .andReturn(lookup).once();
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(completedFuture(new RegisterSchemaResponse(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD))))
+        .once();
+    replay(restService);
+
+    CompletableFuture<Integer> getVersion = client.getVersion(SUBJECT, AVRO_SCHEMA);
+    await(client.register(SUBJECT, AVRO_SCHEMA));
+    // Remembers the schema as missing after the registration completed
+    lookup.completeExceptionally(new RestClientException("Schema not found", 404, 40403));
+    awaitFailure(getVersion, RestClientException.class);
+    assertEquals(3, (int) await(client.getVersion(SUBJECT, AVRO_SCHEMA)));
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterAfterGetIdIsCacheHit() throws Exception {
     expect(restService.lookUpSubjectVersion(
         anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(false)))

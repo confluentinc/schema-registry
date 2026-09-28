@@ -237,6 +237,8 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
       return restService.registerSchema(request, subject, normalize)
           .thenApply(response -> {
             cacheSchemaById(subject, response);
+            // An earlier lookup may have remembered the schema as missing
+            missingSchemaCache.invalidate(key);
             // A new version makes the cached latest versions stale
             latestVersionCache.invalidate(subject);
             latestWithMetadataCache.invalidateAll();
@@ -266,7 +268,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   @Override
   public CompletableFuture<Integer> getVersion(
       String subject, ParsedSchema schema, boolean normalize) {
-    return cached(schemaToVersionCache, new SubjectAndSchema(subject, schema, normalize),
+    SubjectAndSchema key = new SubjectAndSchema(subject, schema, normalize);
+    // Checked first so that a lookup that failed while the registration ran cannot hide it
+    RegisterSchemaResponse registered = completedValue(registerResponseCache, key);
+    if (registered != null && registered.getVersion() != null && registered.getVersion() > 0) {
+      return CompletableFuture.completedFuture(registered.getVersion());
+    }
+    return cached(schemaToVersionCache, key,
         () -> lookUpFromRegistry(subject, schema, normalize, true)
             .thenApply(RegisterSchemaResponse::getVersion));
   }
