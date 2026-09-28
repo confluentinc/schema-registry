@@ -333,6 +333,7 @@ abstract class TimestampedKeyValueStoreDslTestBase extends ClusterTestHarness {
                 }
             }
         }
+        assertTrue(!results.isEmpty(), "Got no records from " + topic + " within 30s");
         return results;
     }
 

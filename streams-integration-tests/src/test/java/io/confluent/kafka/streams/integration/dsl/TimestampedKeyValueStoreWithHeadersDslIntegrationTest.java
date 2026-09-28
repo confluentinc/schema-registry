@@ -2546,8 +2546,8 @@ public class TimestampedKeyValueStoreWithHeadersDslIntegrationTest extends Times
                 () -> {
                     ValueTimestampHeaders<GenericRecord> vAlice = store.get(createKey("alice"));
                     ValueTimestampHeaders<GenericRecord> vBob = store.get(createKey("bob"));
-                    return vAlice.value() != null
-                        && vBob.value() != null
+                    return vAlice != null && vAlice.value() != null
+                        && vBob != null && vBob.value() != null
                         && "bob value 2".equals(vBob.value().get("line").toString());
                 },
                 10_000,
