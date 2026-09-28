@@ -393,6 +393,92 @@ class JsonToLogicalTypeConverterTest {
     assertEquals("myBool", v2.getBranches().get(1).getName());
   }
 
+  // A oneOf of the given branches, each an object of the given properties.
+  private static String oneOf(String... branches) {
+    return "{\"oneOf\":[" + String.join(",", branches) + "]}";
+  }
+
+  private static String object(String... properties) {
+    return "{\"type\":\"object\",\"properties\":{" + String.join(",", properties) + "}}";
+  }
+
+  private static List<String> branchNamesOf(Schema union) {
+    return union.getBranches().stream().map(Schema.UnionBranch::getName)
+        .collect(Collectors.toList());
+  }
+
+  @Test
+  void aTaggedUnionsBranchesAreNamedByTheirTagsInV2() {
+    // One key, one string value per branch, as a one-value enum, a const or a typed const: the
+    // tag names the branch over its title. V1 keeps synthesizing names.
+    String json = oneOf(
+        "{\"type\":\"object\",\"title\":\"CardPayment\",\"properties\":"
+            + "{\"kind\":{\"enum\":[\"card\"]},\"n\":{\"type\":\"string\"}}}",
+        object("\"kind\":{\"const\":\"bank\"}", "\"i\":{\"type\":\"string\"}"),
+        object("\"kind\":{\"type\":\"string\",\"const\":\"cash\"}"));
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank", "cash");
+    assertThat(branchNamesOf(v1RootOf(json))).containsExactly(
+        "connect_union_field_0", "connect_union_field_1", "connect_union_field_2");
+  }
+
+  @Test
+  void aTagIsFoundThroughAReferenceOrAnAllOf() {
+    String json = "{\"oneOf\":[{\"$ref\":\"#/definitions/Card\"},"
+        + "{\"allOf\":[" + object("\"kind\":{\"const\":\"bank\"}") + ","
+        + object("\"i\":{\"type\":\"string\"}") + "]}],"
+        + "\"definitions\":{\"Card\":" + object("\"kind\":{\"const\":\"card\"}",
+            "\"n\":{\"type\":\"string\"}") + "}}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank");
+  }
+
+  @Test
+  void aHintedBranchKeepsItsHintBesideTaggedOnes() {
+    String json = "{\"oneOf\":[" + object("\"kind\":{\"const\":\"card\"}") + ","
+        + object("\"kind\":{\"const\":\"bank\"}") + "],"
+        + "\"confluent:union\":[{\"name\":\"Primary\"},{}]}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("Primary", "bank");
+  }
+
+  @Test
+  void aUnionNotCleanlyTaggedKeepsItsTitlesOrPositions() {
+    String card = "{\"type\":\"object\",\"title\":\"Card\",\"properties\":{%s}}";
+    String bank = "{\"type\":\"object\",\"properties\":{%s}}";
+    String[][] cases = {
+        // A branch with no tag.
+        {"\"kind\":{\"const\":\"card\"}", "\"i\":{\"type\":\"string\"}"},
+        // A branch with two.
+        {"\"kind\":{\"const\":\"card\"},\"sub\":{\"const\":\"x\"}",
+            "\"kind\":{\"const\":\"bank\"}"},
+        // Tags under different keys.
+        {"\"kind\":{\"const\":\"card\"}", "\"type\":{\"const\":\"bank\"}"},
+        // One value for both.
+        {"\"kind\":{\"const\":\"card\"}", "\"kind\":{\"const\":\"card\"}"},
+        // A tag that is no string.
+        {"\"kind\":{\"const\":\"card\"}", "\"kind\":{\"const\":1}"},
+    };
+    for (String[] branches : cases) {
+      String json = oneOf(String.format(card, branches[0]), String.format(bank, branches[1]));
+      assertThat(branchNamesOf(rootOf(json))).as(json)
+          .containsExactly("Card", "connect_union_field_1");
+    }
+    // A tag naming a branch as another's hint does: the union keeps its hints and titles.
+    String json = "{\"oneOf\":[" + String.format(card, "\"kind\":{\"const\":\"card\"}")
+        + "," + String.format(bank, "\"kind\":{\"const\":\"bank\"}") + "],"
+        + "\"confluent:union\":[{},{\"name\":\"card\"}]}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("Card", "card");
+  }
+
+  @Test
+  void tagNamesRoundTripThroughJson() {
+    // Written back as confluent:union hints, which the next conversion reads first.
+    String json = oneOf(object("\"kind\":{\"const\":\"card\"}", "\"n\":{\"type\":\"string\"}"),
+        object("\"kind\":{\"const\":\"bank\"}", "\"i\":{\"type\":\"string\"}"));
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(json));
+    JsonSchema out = LogicalTypeToJsonConverter.fromLogicalType(lt, "Payment");
+    assertThat(branchNamesOf(JsonToLogicalTypeConverter.toRootSchema(out)))
+        .containsExactly("card", "bank");
+  }
+
   @Test
   void testSingletonOneOfCollapsesToMemberType() {
     // oneOf:[T] is semantically equivalent to T in JSON Schema (the value
