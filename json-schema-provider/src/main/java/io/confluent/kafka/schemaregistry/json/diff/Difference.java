@@ -164,8 +164,8 @@ public class Difference {
                + "at path '" + jsonPath + "' which is missing in the %s schema";
     } else if (type == Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL
           || type == Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL) {
-      return "The %s has a closed content model and is missing a property or item present at "
-               + "path '" + jsonPath + "' in the %s schema";
+      return "The %s schema has a closed content model and is missing a property or item present "
+               + "at path '" + jsonPath + "' in the %s schema";
     } else if (type == Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
           || type == Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
       return "A property or item is missing in the %s schema but present at path '"
