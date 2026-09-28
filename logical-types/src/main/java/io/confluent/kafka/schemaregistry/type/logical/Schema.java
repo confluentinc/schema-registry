@@ -174,6 +174,11 @@ public abstract class Schema {
   private List<String> tags = Collections.emptyList();
   private Map<String, Object> params = Collections.emptyMap();
   private List<Rule> rules = Collections.emptyList();
+  // Native steps recorded by the converter that built this node; never part of equality.
+  private List<String> nativeEntryNames = Collections.emptyList();
+  private List<String> elementNativeNames;
+  private List<String> keyNativeNames;
+  private List<String> valueNativeNames;
 
   Schema(Type type) {
     this.type = type;
@@ -253,6 +258,57 @@ public abstract class Schema {
     this.rules = rules != null
         ? Collections.unmodifiableList(new ArrayList<>(rules))
         : Collections.emptyList();
+    return this;
+  }
+
+  /**
+   * The native steps from the edge holding this node into its content, recorded by the converter
+   * where the logical type hides a native level: an Avro collapsed nullable union's branch, a
+   * Protobuf wrapper's {@code value}. Empty for most nodes. A {@code null} step is an unnamed one.
+   */
+  public List<String> getNativeEntryNames() {
+    return nativeEntryNames;
+  }
+
+  public Schema setNativeEntryNames(List<String> names) {
+    this.nativeEntryNames = Collections.unmodifiableList(new ArrayList<>(names));
+    return this;
+  }
+
+  /**
+   * The native steps from this ARRAY or MULTISET to its element, or {@code null} if the converter
+   * recorded none.
+   */
+  public List<String> getElementNativeNames() {
+    return elementNativeNames;
+  }
+
+  public Schema setElementNativeNames(List<String> names) {
+    this.elementNativeNames = Collections.unmodifiableList(new ArrayList<>(names));
+    return this;
+  }
+
+  /**
+   * The native steps from this MAP to its key, or {@code null} if none were recorded.
+   */
+  public List<String> getKeyNativeNames() {
+    return keyNativeNames;
+  }
+
+  public Schema setKeyNativeNames(List<String> names) {
+    this.keyNativeNames = Collections.unmodifiableList(new ArrayList<>(names));
+    return this;
+  }
+
+  /**
+   * The native steps from this MAP to its value, or {@code null} if none were recorded.
+   */
+  public List<String> getValueNativeNames() {
+    return valueNativeNames;
+  }
+
+  public Schema setValueNativeNames(List<String> names) {
+    this.valueNativeNames = Collections.unmodifiableList(new ArrayList<>(names));
     return this;
   }
 
@@ -624,6 +680,8 @@ public abstract class Schema {
     private final List<String> tags;
     private final Map<String, Object> params;
     private final List<Rule> rules;
+    // Recorded by the converter; never part of equality.
+    private List<String> nativeNames;
 
     public Field(String name, Schema schema, int position,
                  Object defaultValue, boolean hasDefault, String doc,
@@ -663,6 +721,19 @@ public abstract class Schema {
 
     public Field(String name, Schema schema, int position) {
       this(name, schema, position, null, false, null, null, null, null);
+    }
+
+    /**
+     * The native steps from the enclosing node to this field — its name, or none for a Protobuf
+     * oneof — or {@code null} if the converter recorded none. A {@code null} step is unnamed.
+     */
+    public List<String> getNativeNames() {
+      return nativeNames;
+    }
+
+    public Field setNativeNames(List<String> names) {
+      this.nativeNames = Collections.unmodifiableList(new ArrayList<>(names));
+      return this;
     }
 
     public String getName() {
@@ -853,6 +924,9 @@ public abstract class Schema {
     private final Schema schema;
     private final String doc;
     private final Map<String, Object> params;
+    // Recorded by the converter; never part of equality.
+    private List<String> nativeNames;
+    private List<String> nativeAliases;
 
     public UnionBranch(String name, Schema schema, String doc,
                        Map<String, Object> params) {
@@ -867,6 +941,32 @@ public abstract class Schema {
 
     public UnionBranch(String name, Schema schema) {
       this(name, schema, null, null);
+    }
+
+    /**
+     * The native steps from the union to this branch — an Avro branch's type name, a Protobuf
+     * oneof member's field name, none for a JSON branch — or {@code null} if none were recorded.
+     */
+    public List<String> getNativeNames() {
+      return nativeNames;
+    }
+
+    public UnionBranch setNativeNames(List<String> names) {
+      this.nativeNames = Collections.unmodifiableList(new ArrayList<>(names));
+      return this;
+    }
+
+    /**
+     * The native aliases of this branch's type, as full names — an Avro fixed's, which the logical
+     * type does not carry — or {@code null} if none were recorded.
+     */
+    public List<String> getNativeAliases() {
+      return nativeAliases;
+    }
+
+    public UnionBranch setNativeAliases(List<String> aliases) {
+      this.nativeAliases = Collections.unmodifiableList(new ArrayList<>(aliases));
+      return this;
     }
 
     public String getName() {
