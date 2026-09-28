@@ -22,7 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -44,6 +46,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -390,6 +394,31 @@ class AvroProvenanceDeserializerTest {
     client.register(SUBJECT, new AvroSchema(reader));
     assertThrows(Exception.class, () -> read(reader, bytes, null), "without provenance");
     assertThrows(Exception.class, () -> read(reader, bytes, "v1"), "with provenance");
+  }
+
+  @Test
+  void anAuthFailureReachesTheConsumerAsASchemaFetchsWould() throws Exception {
+    // Not a record to skip: the deserializer leaves the authentication or authorization failure.
+    for (int status : new int[] {401, 403}) {
+      client = new ProvenanceMockSchemaRegistryClient() {
+        @Override
+        public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+            boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+            throws RestClientException {
+          throw new RestClientException("refused", status, status * 100 + 1);
+        }
+      };
+      serializer = new KafkaAvroSerializer(client, config(null));
+      byte[] bytes = write(record(idField(), string("note")),
+          new GenericRecordBuilder(record(idField(), string("note"))).set("id", 1)
+              .set("note", "old"));
+      Schema reader = record(idField(), string("memo"));
+      client.register(SUBJECT, new AvroSchema(reader));
+
+      Class<? extends RuntimeException> expected =
+          status == 401 ? AuthenticationException.class : AuthorizationException.class;
+      assertThrows(expected, () -> read(reader, bytes, "v1"));
+    }
   }
 
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {

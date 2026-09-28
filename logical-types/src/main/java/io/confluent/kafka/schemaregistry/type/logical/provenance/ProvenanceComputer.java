@@ -446,6 +446,10 @@ public final class ProvenanceComputer {
         addCategories(type.getKeyType(), categories, seen);
         addCategories(type.getValueType(), categories, seen);
       }
+      // Only what holds it: a type met again beside itself, as a map's key and value, is no cycle.
+      if (type != null) {
+        seen.remove(type);
+      }
     }
 
     private static Category category(Schema type) {
@@ -1033,7 +1037,9 @@ public final class ProvenanceComputer {
     private static Set<String> tags(Set<String> content) {
       Set<String> tags = new TreeSet<>();
       for (String entry : content) {
-        if (entry.startsWith(DISCRIMINATOR) && entry.indexOf('/') < 0) {
+        // A step before the value's "=": the value itself may hold a "/".
+        if (entry.startsWith(DISCRIMINATOR)
+            && entry.lastIndexOf('/', entry.indexOf('=', DISCRIMINATOR.length())) < 0) {
           tags.add(entry);
         }
       }

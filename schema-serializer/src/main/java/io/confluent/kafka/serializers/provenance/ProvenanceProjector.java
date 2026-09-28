@@ -40,7 +40,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -71,7 +70,8 @@ import org.slf4j.LoggerFactory;
  * without provenance. Anything else the build throws fails the record, and is cached so that one
  * unreadable writer costs one build rather than one per record. Cached outcomes expire after
  * {@code provenance.cache.ttl.sec} and are then worked out afresh, warning included, so a fallback
- * is not permanent.
+ * is not permanent; with no TTL, a fallback or failure lasts until the deserializer is
+ * reconfigured.
  *
  * @param <T> what the build produces
  */
@@ -190,6 +190,8 @@ public final class ProvenanceProjector<T> {
    *
    * @throws SerializationException if provenance could not be had now but might later, or the
    *     build failed
+   * @throws AuthenticationException if Schema Registry did not authenticate the request
+   * @throws AuthorizationException if Schema Registry did not authorize it
    */
   public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
       ParsedSchema reader, boolean includeMultipleMessages,
@@ -211,13 +213,28 @@ public final class ProvenanceProjector<T> {
       outcome = outcomes.get(key,
           () -> compute(subject, writerId, writer, reader, includeMultipleMessages, build));
     } catch (ExecutionException | UncheckedExecutionException | ExecutionError e) {
-      // compute throws only a failure worth trying again, which Guava does not cache; an Error
-      // from a build fails the record like any other failure.
-      Throwable cause = e.getCause();
-      throw cause instanceof KafkaException ? (KafkaException) cause
-          : new SerializationException(cause.getMessage(), cause);
+      throw fresh(e.getCause());
     }
     return outcome.get();
+  }
+
+  /**
+   * What a load that compute failed throws to the record: a fresh exception for each, as every
+   * thread waiting on the load is handed the same cause. A stack overflow, as a deep schema may
+   * cause, fails the record; any other error of the JVM is its own.
+   */
+  private static RuntimeException fresh(Throwable cause) {
+    if (cause instanceof VirtualMachineError && !(cause instanceof StackOverflowError)) {
+      throw (VirtualMachineError) cause;
+    }
+    if (cause instanceof AuthenticationException) {
+      return new AuthenticationException(cause.getMessage(), cause);
+    }
+    if (cause instanceof AuthorizationException) {
+      return new AuthorizationException(cause.getMessage(), cause);
+    }
+    return new SerializationException(cause.getMessage() != null ? cause.getMessage()
+        : "Could not project by provenance: " + cause, cause);
   }
 
   private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,

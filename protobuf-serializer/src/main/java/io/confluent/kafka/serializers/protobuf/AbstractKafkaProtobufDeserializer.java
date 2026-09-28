@@ -293,8 +293,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error deserializing Protobuf message for id " + schemaId, e);
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException(
-          "Error deserializing Protobuf message for id " + schemaId, e);
+      throw toDeserializationException(
+          e, "Error deserializing Protobuf message for id " + schemaId);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving Protobuf schema for id " + schemaId);
     } finally {

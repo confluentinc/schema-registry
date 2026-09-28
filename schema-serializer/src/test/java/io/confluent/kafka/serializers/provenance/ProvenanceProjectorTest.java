@@ -220,6 +220,26 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void aStackOverflowInABuildFailsTheRecordAndOtherErrorsOfTheJvmPass() throws Exception {
+    // A deep schema may overflow the stack: the record fails, named. An out of memory is the JVM's.
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    SerializationException e = assertThrows(SerializationException.class, () ->
+        projector.project(SUBJECT, id, client.writerSchema, client.reader, false, mapping -> {
+          throw new StackOverflowError();
+        }));
+    assertTrue(e.getMessage(), e.getMessage().contains("StackOverflowError"));
+    assertThrows(OutOfMemoryError.class, () ->
+        projector.project(SUBJECT, id, client.writerSchema, client.reader, true, mapping -> {
+          throw new OutOfMemoryError();
+        }));
+  }
+
+  @Test
   public void aWriterNamedByGuidIsAskedAboutByItsId() throws Exception {
     CountingClient client = new CountingClient();
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);

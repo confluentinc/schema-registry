@@ -236,6 +236,21 @@ public class AvroProvenanceRenamerTest {
         ((GenericFixed) read.get("f")).bytes());
   }
 
+  @Test
+  public void anInvalidDefaultNoRecordNeedsDoesNotFailTheRead() throws Exception {
+    // The registry parses without validating defaults, and native Avro fails one only when used.
+    Schema writer = record("R", field("a", "\"int\""), field("d", "\"int\""));
+    Schema reader = new Schema.Parser().setValidateDefaults(false).parse("{\"type\":\"record\","
+        + "\"name\":\"R\",\"fields\":[" + field("a", "\"int\"") + ","
+        + field("d", "\"int\"", "\"x\"") + "]}");
+    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader,
+        mapping(pids(p(1, "a"), p(2, "d")), pids(p(1, "a"), p(2, "d"))));
+
+    GenericRecord read = decode(writer, renamed,
+        new GenericRecordBuilder(writer).set("a", 1).set("d", 2).build());
+    assertEquals(2, read.get("d"));
+  }
+
   // Written under writer, read through the renamed pair, as the deserializer reads it.
   private static GenericRecord decode(Schema writer, AvroProvenanceRenamer.Renamed renamed,
       GenericRecord value) throws Exception {

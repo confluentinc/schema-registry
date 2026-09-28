@@ -71,6 +71,8 @@ final class JsonProvenancePruner {
   // Partial readings of one value searched for one that does not require a property; past it, the
   // property is taken as not required.
   private static final int MAX_READINGS = 1024;
+  // A value fitting none of a union's branches, in place of a branch index.
+  private static final int NO_BRANCH = -1;
   // As JsonSchema converts a document for everit.
   private static final ObjectMapper ORG_JSON = Jackson.newObjectMapper();
 
@@ -199,19 +201,30 @@ final class JsonProvenancePruner {
         }
       }
     }
-    List<List<String>> fresh = new ArrayList<>();
+    // What may be pruned: the new, then each spelled several times that must be checked — pruned,
+    // it too may change the branch a value under its union reads as. Until none is added.
+    Set<List<String>> pruned = new HashSet<>();
     for (Target target : byNames.values()) {
       if (target.indexed().anyNew) {
-        fresh.add(target.names);
+        pruned.add(target.names);
       }
     }
     Map<List<String>, Boolean> alike = new HashMap<>();
+    boolean added = writer != null;
+    while (added) {
+      added = false;
+      for (Target target : byNames.values()) {
+        if (!pruned.contains(target.names) && spelled.getOrDefault(target.names, 0) > 1
+            && !readsAsWritten(target, outermost.getOrDefault(target.names,
+                Collections.emptyList()), pruned, alike, reader, writer)) {
+          pruned.add(target.names);
+          added = true;
+        }
+      }
+    }
     List<Target> targets = new ArrayList<>();
     for (Target target : byNames.values()) {
-      boolean shared = writer != null && spelled.getOrDefault(target.names, 0) > 1
-          && !readsAsWritten(target, outermost.getOrDefault(target.names,
-              Collections.emptyList()), fresh, alike, reader, writer);
-      if (target.anyNew || shared) {
+      if (pruned.contains(target.names)) {
         if (!declares(target.names, raw, 0, new IdentityHashMap<>())) {
           throw new SerializationException("Property " + target.names + " of schema id "
               + mapping.readerId() + " is not declared by the reader schema");
@@ -246,11 +259,11 @@ final class JsonProvenancePruner {
 
   /**
    * Whether a value of {@code target}'s names reads as the location it was written as without
-   * checking: each continues the location at its own branches, nothing new under the outermost
-   * union it sits in may be pruned, and that union validates every value alike on both sides.
+   * checking: each continues the location at its own branches, nothing under the outermost union
+   * it sits in may be pruned, and that union validates every value alike on both sides.
    */
   private static boolean readsAsWritten(Target target, List<String> union,
-      List<List<String>> fresh, Map<List<String>, Boolean> alike, JsonSchema reader,
+      Set<List<String>> fresh, Map<List<String>, Boolean> alike, JsonSchema reader,
       JsonSchema writer) {
     for (Candidate candidate : target.candidates) {
       if (!candidate.choices.equals(candidate.writerChoices)) {
@@ -332,7 +345,12 @@ final class JsonProvenancePruner {
       return;
     }
     if (schema instanceof CombinedSchema
-        && ((CombinedSchema) schema).getCriterion() != CombinedSchema.ALL_CRITERION) {
+        && ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      // Every part applies, as the walk takes it: a union in one is the property's own.
+      for (Schema part : ((CombinedSchema) schema).getSubschemas()) {
+        heldIn(part, value, branches, held);
+      }
+    } else if (schema instanceof CombinedSchema) {
       List<Schema> options = new ArrayList<>();
       boolean nullable = false;
       for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
@@ -347,9 +365,13 @@ final class JsonProvenancePruner {
         heldIn(options.get(0), value, branches, held);
         return;
       }
-      Object validatable = validatable(value);
+      // As the walk validates it: json-sKema counts 1.0 an integer, everit does not.
+      Object validatable = validatable(
+          schema instanceof CombinedSchemaExt ? integralDecimals(value) : value);
+      boolean fits = false;
       for (int i = 0; i < options.size(); i++) {
         if (validates(options.get(i), validatable)) {
+          fits = true;
           List<Integer> in = new ArrayList<>(branches);
           in.add(i);
           if (!value.isObject()) {
@@ -357,6 +379,12 @@ final class JsonProvenancePruner {
           }
           heldIn(options.get(i), value, in, held);
         }
+      }
+      if (!fits && !value.isObject() && !value.isNull()) {
+        // In none of the branches: which it was written in decides.
+        List<Integer> none = new ArrayList<>(branches);
+        none.add(NO_BRANCH);
+        held.add(none);
       }
     } else if (schema instanceof ArraySchema && value.isArray()) {
       Schema items = ((ArraySchema) schema).getAllItemSchema();
@@ -373,6 +401,37 @@ final class JsonProvenancePruner {
         }
       }
     }
+  }
+
+  // Whether a branch of the union reached by these choices continues one the value was written
+  // in, as the writer read it.
+  private static boolean continuesWritten(Target target, List<Integer> union,
+      Set<List<Integer>> writtenAs) {
+    if (writtenAs == null) {
+      return false;
+    }
+    for (Map.Entry<List<Integer>, Candidate> branch : target.branches.entrySet()) {
+      if (isBranchOf(branch.getKey(), union) && branch.getValue().continues
+          && writtenAs.contains(branch.getValue().writerChoices)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Whether the union reached by these branch choices has a branch new to the pairing: one under
+  // a plain additionalProperties has no branches, and no provenance to follow.
+  private static boolean hasNewBranch(Target target, List<Integer> union) {
+    for (Map.Entry<List<Integer>, Candidate> branch : target.branches.entrySet()) {
+      if (isBranchOf(branch.getKey(), union) && !branch.getValue().continues) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean isBranchOf(List<Integer> branch, List<Integer> union) {
+    return branch.size() == union.size() + 1 && branch.subList(0, union.size()).equals(union);
   }
 
   boolean isEmpty() {
@@ -745,6 +804,15 @@ final class JsonProvenancePruner {
     for (List<Integer> branches : heldIn(object, name, node.get(name))) {
       List<Integer> extended = new ArrayList<>(choices);
       extended.addAll(branches);
+      if (extended.get(extended.size() - 1) == NO_BRANCH) {
+        // In none of the reader's branches: a new one may still take it, as a lenient reader
+        // counts 1.0 an integer, unless the branch it was written in continues into one.
+        List<Integer> union = extended.subList(0, extended.size() - 1);
+        if (hasNewBranch(target, union) && !continuesWritten(target, union, writtenAs)) {
+          return false;
+        }
+        continue;
+      }
       Candidate held = target.branches.get(extended);
       if (held != null && (!held.continues
           || writtenAs != null && !writtenAs.contains(held.writerChoices))) {
