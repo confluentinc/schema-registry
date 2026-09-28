@@ -29,10 +29,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,6 +49,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -267,6 +271,29 @@ public class AsyncRestServiceTest {
   }
 
   @Test
+  public void testAuthIsResolvedOnSuppliedExecutor() throws Exception {
+    registry.enqueue(200, "{\"schema\": \"\\\"string\\\"\"}");
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE, "CUSTOM");
+    configs.put(SchemaRegistryClientConfig.BEARER_AUTH_CUSTOM_PROVIDER_CLASS,
+        ThreadRecordingTokenProvider.class.getName());
+    ExecutorService executor = Executors.newSingleThreadExecutor(
+        task -> new Thread(task, "sr-executor"));
+    try {
+      restService = new AsyncRestService(new UrlList(registry.url()), configs,
+          null, null, null, executor);
+
+      await(restService.getId(1, null));
+
+      // Not the caller's thread, as fetching a token may block
+      assertEquals("sr-executor", ThreadRecordingTokenProvider.lastThread);
+      assertEquals("Bearer token", registry.onlyRequest().headers.get("Authorization"));
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   public void testRequestAfterCloseFails() throws Exception {
     restService = newRestService(Collections.emptyMap(), registry.url());
     restService.close();
@@ -315,6 +342,23 @@ public class AsyncRestServiceTest {
   private static int unusedPort() throws IOException {
     try (ServerSocket socket = new ServerSocket(0)) {
       return socket.getLocalPort();
+    }
+  }
+
+  /**
+   * Records the thread that fetches the token. Public, as the provider is created by class name.
+   */
+  public static class ThreadRecordingTokenProvider implements BearerAuthCredentialProvider {
+    static volatile String lastThread;
+
+    @Override
+    public String getBearerToken(URL url) {
+      lastThread = Thread.currentThread().getName();
+      return "token";
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
     }
   }
 

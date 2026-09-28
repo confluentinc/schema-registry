@@ -137,7 +137,7 @@ public class AsyncRestService implements Closeable {
   /**
    * Creates and starts the service.
    *
-   * @param executor  runs response parsing, retries and failover
+   * @param executor  runs auth header resolution, response parsing, retries and failover
    */
   public AsyncRestService(UrlList baseUrls,
                           Map<String, ?> configs,
@@ -363,7 +363,11 @@ public class AsyncRestService implements Closeable {
                                                String method,
                                                byte[] requestBodyData,
                                                TypeReference<T> responseFormat) {
-    return httpRequestWithFailover(0, path, method, requestBodyData, responseFormat);
+    // Started on the executor, as resolving the auth headers may fetch a token over the network
+    return CompletableFuture.supplyAsync(
+            () -> httpRequestWithFailover(0, path, method, requestBodyData, responseFormat),
+            executor)
+        .thenCompose(Function.identity());
   }
 
   private <T> CompletableFuture<T> httpRequestWithFailover(int urlAttempt,
