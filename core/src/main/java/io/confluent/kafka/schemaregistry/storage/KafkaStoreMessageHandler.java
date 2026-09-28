@@ -183,6 +183,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                                   SchemaValue schemaValue,
                                   SchemaValue oldSchemaValue) {
     final MetricsContainer metricsContainer = schemaRegistry.getMetricsContainer();
+    if (schemaValue != null && schemaValue.getCreateTimestamp() == null) {
+      schemaValue.setCreateTimestamp(oldSchemaValue != null
+          && oldSchemaValue.getCreateTimestamp() != null
+          ? oldSchemaValue.getCreateTimestamp() : schemaValue.getTimestamp());
+    }
     if (schemaValue != null) {
       // Update the maximum id seen so far
       idGenerator.schemaRegistered(schemaKey, schemaValue);

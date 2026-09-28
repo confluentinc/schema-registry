@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.SortedSet;
@@ -152,5 +155,42 @@ public class SchemaTest {
     assertThrows(UnsupportedOperationException.class, () -> metadata.getTags().get("tag1").add("value3"));
     assertThrows(UnsupportedOperationException.class, () -> metadata.getProperties().put("prop2", "value2"));
     assertThrows(UnsupportedOperationException.class, () -> metadata.getSensitive().add("sensitive2"));
+  }
+
+  @Test
+  public void testCreateTimestampJson() throws Exception {
+    Schema schema = new Schema("subject1", 1, 100);
+    schema.setSchema("{\"type\":\"string\"}");
+    schema.setTimestamp(2000L);
+    assertFalse(JacksonMapper.INSTANCE.writeValueAsString(schema).contains("createTs"));
+
+    schema.setCreateTimestamp(1000L);
+    String json = JacksonMapper.INSTANCE.writeValueAsString(schema);
+    assertTrue(json, json.contains("\"createTs\":1000"));
+    assertEquals(Long.valueOf(1000L),
+        JacksonMapper.INSTANCE.readValue(json, Schema.class).getCreateTimestamp());
+  }
+
+  @Test
+  public void testCreateTimestampIsCarriedWhereverTsIs() {
+    Schema schema = new Schema("subject1", 1, 100);
+    schema.setSchema("{\"type\":\"string\"}");
+    schema.setTimestamp(2000L);
+    schema.setCreateTimestamp(1000L);
+    Long created = 1000L;
+
+    assertEquals(created, schema.copy().getCreateTimestamp());
+    assertEquals(created, new ExtendedSchema(schema, null, null).getCreateTimestamp());
+    SchemaString schemaString = new SchemaString(schema);
+    assertEquals(created, schemaString.getCreateTimestamp());
+    assertEquals(created, schemaString.copy().getCreateTimestamp());
+    assertEquals(created, new Schema("subject1", 1, 100, schemaString).getCreateTimestamp());
+    RegisterSchemaResponse response = new RegisterSchemaResponse(schema);
+    assertEquals(created, response.getCreateTimestamp());
+    assertEquals(created, response.copy().getCreateTimestamp());
+    assertEquals(created, new Schema("subject1", response).getCreateTimestamp());
+    SchemaMetadata metadata = new SchemaMetadata(schema);
+    assertEquals(created, metadata.getCreateTimestamp());
+    assertEquals(created, new Schema("subject1", metadata).getCreateTimestamp());
   }
 }

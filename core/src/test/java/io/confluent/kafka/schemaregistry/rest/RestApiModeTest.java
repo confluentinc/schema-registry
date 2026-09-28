@@ -21,7 +21,19 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -30,6 +42,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("IntegrationTest")
@@ -1126,5 +1139,55 @@ public abstract class RestApiModeTest {
             mode,
             restApp.restClient.getMode(subject2, false).getMode(),
             "Subject2 mode should still exist");
+  }
+
+  @Test
+  public void testImportOverwriteKeepsCreateTimestamp() throws Exception {
+    String subject = "testSubject";
+    restApp.restClient.setMode("IMPORT");
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(SCHEMA_STRING);
+    request.setVersion(1);
+    request.setId(1);
+    restApp.restClient.registerSchema(request, subject, false);
+    Thread.sleep(10);
+    // Re-importing a soft-deleted version overwrites its record.
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+    restApp.restClient.registerSchema(request, subject, false);
+
+    SchemaKey key = new SchemaKey(subject, 1);
+    List<ConsumerRecord<byte[], byte[]>> records = schemaRecords(key);
+    assertEquals(2, records.size());
+    SchemaValue overwrite = (SchemaValue) new SchemaRegistrySerializer().deserializeValue(
+        key, records.get(1).value());
+    assertEquals(records.get(0).timestamp(), overwrite.getCreateTimestamp().longValue());
+    assertTrue(records.get(1).timestamp() > overwrite.getCreateTimestamp());
+    // Live again, and its ts is the re-import's.
+    assertEquals(overwrite.getCreateTimestamp(),
+        restApp.restClient.getVersion(subject, 1).getCreateTimestamp());
+  }
+
+  private List<ConsumerRecord<byte[], byte[]>> schemaRecords(SchemaKey key) throws Exception {
+    Properties props = new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG));
+    String topic = restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
+    SchemaRegistrySerializer serializer = new SchemaRegistrySerializer();
+    List<ConsumerRecord<byte[], byte[]>> matching = new ArrayList<>();
+    try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props,
+        new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+      TopicPartition partition = new TopicPartition(topic, 0);
+      consumer.assign(Collections.singletonList(partition));
+      consumer.seekToBeginning(Collections.singletonList(partition));
+      long end = consumer.endOffsets(Collections.singletonList(partition)).get(partition);
+      while (consumer.position(partition) < end) {
+        for (ConsumerRecord<byte[], byte[]> record : consumer.poll(Duration.ofMillis(500))) {
+          if (key.equals(serializer.deserializeKey(record.key()))) {
+            matching.add(record);
+          }
+        }
+      }
+    }
+    return matching;
   }
 }

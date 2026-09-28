@@ -3492,4 +3492,21 @@ public abstract class RestApiTest {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
+
+  @Test
+  public void testCreateTimestampAfterSoftDelete() throws Exception {
+    String subject = "testSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    int id = restApp.restClient.registerSchema(schema, subject);
+    Schema live = restApp.restClient.getVersion(subject, 1);
+    assertNull(live.getCreateTimestamp());
+    Thread.sleep(10);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    // A soft delete's ts is when it was deleted; createTs is when it was registered.
+    Schema deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(live.getTimestamp(), deleted.getCreateTimestamp());
+    assertTrue(deleted.getTimestamp() > deleted.getCreateTimestamp());
+    assertEquals(live.getTimestamp(), restApp.restClient.getId(id).getCreateTimestamp());
+  }
 }
