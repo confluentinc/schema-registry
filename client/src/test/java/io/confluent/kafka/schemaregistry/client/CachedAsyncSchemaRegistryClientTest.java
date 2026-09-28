@@ -146,6 +146,27 @@ public class CachedAsyncSchemaRegistryClientTest {
   }
 
   @Test
+  public void testLatestWithMetadataCachesOnlyLookupsIncludingDeleted() throws Exception {
+    Map<String, String> metadata = Collections.singletonMap("env", "prod");
+    Schema live = new Schema(SUBJECT, 1, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD);
+    Schema deleted =
+        new Schema(SUBJECT, 2, ID + 1, AvroSchema.TYPE, Collections.emptyList(), RECORD);
+    expect(restService.getLatestWithMetadata(SUBJECT, metadata, false))
+        .andReturn(completedFuture(live)).times(2);
+    expect(restService.getLatestWithMetadata(SUBJECT, metadata, true))
+        .andReturn(completedFuture(deleted)).once();
+    replay(restService);
+
+    assertEquals(1, await(client.getLatestWithMetadata(SUBJECT, metadata, false)).getVersion());
+    assertEquals(2, await(client.getLatestWithMetadata(SUBJECT, metadata, true)).getVersion());
+    assertEquals(2, await(client.getLatestWithMetadata(SUBJECT, metadata, true)).getVersion());
+    // Not answered from the entry cached for the lookup including deleted versions
+    assertEquals(1, await(client.getLatestWithMetadata(SUBJECT, metadata, false)).getVersion());
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterIsCachedAndInvalidatesLatestVersion() throws Exception {
     Schema latest = new Schema(SUBJECT, 1, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD);
     expect(restService.getLatestVersion(SUBJECT)).andReturn(completedFuture(latest)).times(2);
