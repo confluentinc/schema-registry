@@ -32,6 +32,7 @@ import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
@@ -501,14 +502,20 @@ public class DekRegistry implements Closeable {
 
     String kmsType = normalizeKmsType(request.getKmsType());
 
+    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
+    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
+
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
+    // Reads of a shared kek omit its secrets; restore them when recreating one. Also
+    // normalizes a stray placeholder on a brand new kek.
+    if (oldKey == null || oldKey.isShared()) {
+      kmsProps = KmsPropsRedactor.merge(kmsProps, oldKey != null ? oldKey.getKmsProps() : null);
+    }
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
-    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
-    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the kek is deleted
     if (oldKey != null
         && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
@@ -755,9 +762,12 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
-        : key.getKmsProps();
+    // Reads of a shared kek omit its secrets, so an omitted secret means "unchanged".
+    SortedMap<String, String> kmsProps = request.getKmsProps() == null
+        ? key.getKmsProps()
+        : key.isShared()
+            ? KmsPropsRedactor.merge(request.getKmsProps(), key.getKmsProps())
+            : new TreeMap<>(request.getKmsProps());
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
