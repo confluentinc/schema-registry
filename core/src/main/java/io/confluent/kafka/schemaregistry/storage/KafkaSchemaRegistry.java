@@ -737,8 +737,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
       }
       if (!permanentDelete) {
+        Long createTimestamp = schemaValue != null ? schemaValue.getCreateTimestamp() : null;
         schemaValue = new SchemaValue(schema);
         schemaValue.setDeleted(true);
+        schemaValue.setCreateTimestamp(createTimestamp);
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");

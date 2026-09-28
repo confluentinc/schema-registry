@@ -51,6 +51,9 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   private RuleSet ruleSet = null;
   @NotEmpty
   private boolean deleted;
+  // When the version was first registered: kept on every later write of its key, as compaction
+  // may remove the first.
+  private Long createTimestamp;
 
   @VisibleForTesting
   public SchemaValue(@JsonProperty("subject") String subject,
@@ -241,6 +244,16 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   @JsonProperty("deleted")
   public void setDeleted(boolean deleted) {
     this.deleted = deleted;
+  }
+
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
   }
 
   @Override
