@@ -91,6 +91,8 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   private final Cache<SubjectAndInt, Long> missingIdCache;
   private final Cache<String, Long> missingGuidCache;
   private final Cache<SubjectAndInt, Long> missingVersionCache;
+  // The references prefetched for the parse running on this thread, if any
+  private final ThreadLocal<Map<SubjectAndInt, Schema>> prefetchedReferences = new ThreadLocal<>();
 
   /**
    * @param restService   used for all registry calls, and closed with this client
@@ -140,9 +142,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     return cached(
         parsedSchemaCache,
         cacheKey,
-        () -> prefetchReferences(
-            schema.getSubject(), schema.getReferences(), ConcurrentHashMap.newKeySet())
-            .thenApply(ignored -> parse(schema)),
+        () -> {
+          // Held for this parse alone, as the version cache may evict them before it runs
+          Map<SubjectAndInt, Schema> prefetched = new ConcurrentHashMap<>();
+          return prefetchReferences(schema.getSubject(), schema.getReferences(),
+              ConcurrentHashMap.newKeySet(), prefetched)
+              .thenApply(ignored -> parse(schema, prefetched));
+        },
         // As in CachedSchemaRegistryClient, schemas that fail to parse are not cached
         Optional::isPresent);
   }
@@ -293,14 +299,19 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     restService.close();
   }
 
-  private Optional<ParsedSchema> parse(Schema schema) {
+  private Optional<ParsedSchema> parse(Schema schema, Map<SubjectAndInt, Schema> prefetched) {
     String schemaType = schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE;
     SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
       log.error("Invalid schema type {}", schemaType);
       return Optional.empty();
     }
-    return provider.parseSchema(schema, false, false);
+    prefetchedReferences.set(prefetched);
+    try {
+      return provider.parseSchema(schema, false, false);
+    } finally {
+      prefetchedReferences.remove();
+    }
   }
 
   private CompletableFuture<ParsedSchema> parseSchemaOrElseThrow(Schema schema) {
@@ -313,12 +324,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   }
 
   /**
-   * Loads every schema that {@code references} transitively point to into the version cache, so
+   * Loads every schema that {@code references} transitively point to into {@code prefetched}, so
    * that a provider resolving them while parsing finds them there rather than waiting on the
    * registry. Makes the same lookups as {@code AbstractSchemaProvider.resolveReferences}.
    */
   private CompletableFuture<Void> prefetchReferences(
-      String subject, List<SchemaReference> references, Set<SubjectAndInt> visited) {
+      String subject, List<SchemaReference> references, Set<SubjectAndInt> visited,
+      Map<SubjectAndInt, Schema> prefetched) {
     if (references == null || references.isEmpty()) {
       return CompletableFuture.completedFuture(null);
     }
@@ -335,7 +347,10 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
           new SubjectAndInt(refSubject.toQualifiedSubject(), reference.getVersion());
       if (visited.add(key)) {
         fetches.add(getSchemaByVersion(key.subject(), key.id(), true)
-            .thenCompose(s -> prefetchReferences(s.getSubject(), s.getReferences(), visited)));
+            .thenCompose(s -> {
+              prefetched.put(key, s);
+              return prefetchReferences(s.getSubject(), s.getReferences(), visited, prefetched);
+            }));
       }
     }
     return CompletableFuture.allOf(fetches.toArray(new CompletableFuture<?>[0]));
@@ -465,9 +480,11 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   }
 
   /**
-   * Given to schema providers to resolve references while parsing. {@link #parseSchema} fetches
-   * every reference first, so lookups here are normally cache hits; only an entry evicted in
-   * between is fetched again, blocking the parsing thread as the synchronous client would.
+   * Given to schema providers to resolve references. While {@link #parseSchema} parses, lookups
+   * are answered from the references it prefetched, so the provider never waits on the registry;
+   * waiting there could deadlock an executor with no free thread to complete the fetch. Other
+   * lookups, such as from {@link ParsedSchema} methods on a caller's thread, block as in the
+   * synchronous client.
    */
   private class PrefetchedVersionFetcher implements SchemaVersionFetcher {
 
@@ -478,6 +495,13 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
 
     @Override
     public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
+      Map<SubjectAndInt, Schema> prefetched = prefetchedReferences.get();
+      Schema schema = prefetched != null && lookupDeletedSchema
+          ? prefetched.get(new SubjectAndInt(subject, version))
+          : null;
+      if (schema != null) {
+        return schema;
+      }
       return getSchemaByVersion(subject, version, lookupDeletedSchema).join();
     }
   }

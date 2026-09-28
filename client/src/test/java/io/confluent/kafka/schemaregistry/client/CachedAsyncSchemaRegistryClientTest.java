@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,10 @@ public class CachedAsyncSchemaRegistryClientTest {
       "{\"type\":\"record\",\"name\":\"Inner\",\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}";
   private static final String OUTER =
       "{\"type\":\"record\",\"name\":\"Outer\",\"fields\":[{\"name\":\"inner\",\"type\":\"Inner\"}]}";
+  private static final String INNER2 =
+      "{\"type\":\"record\",\"name\":\"Inner2\",\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}";
+  private static final String TWO_REFS = "{\"type\":\"record\",\"name\":\"Outer\",\"fields\":["
+      + "{\"name\":\"inner\",\"type\":\"Inner\"},{\"name\":\"inner2\",\"type\":\"Inner2\"}]}";
   private static final AvroSchema AVRO_SCHEMA = new AvroSchema(RECORD);
 
   private AsyncRestService restService;
@@ -278,6 +283,28 @@ public class CachedAsyncSchemaRegistryClientTest {
 
     awaitFailure(client.parseSchema(outerSchema()), RestClientException.class);
 
+    verify(restService);
+  }
+
+  @Test
+  public void testParseSchemaResolvesReferencesEvictedAfterPrefetch() throws Exception {
+    expect(restService.getVersion("inner-value", 1, true)).andReturn(completedFuture(
+        new Schema("inner-value", 1, 10, AvroSchema.TYPE, Collections.emptyList(), INNER)))
+        .once();
+    expect(restService.getVersion("inner2-value", 1, true)).andReturn(completedFuture(
+        new Schema("inner2-value", 1, 11, AvroSchema.TYPE, Collections.emptyList(), INNER2)))
+        .once();
+    replay(restService);
+
+    // Room for one version only, so prefetching the second reference evicts the first
+    CachedAsyncSchemaRegistryClient smallClient =
+        new CachedAsyncSchemaRegistryClient(restService, 1, null, Collections.emptyMap());
+    Schema schema = new Schema(SUBJECT, null, null, AvroSchema.TYPE, Arrays.asList(
+        new SchemaReference("Inner", "inner-value", 1),
+        new SchemaReference("Inner2", "inner2-value", 1)), TWO_REFS);
+
+    assertEquals("Outer", await(smallClient.parseSchema(schema)).get().name());
+    // Neither reference is fetched again while parsing
     verify(restService);
   }
 
