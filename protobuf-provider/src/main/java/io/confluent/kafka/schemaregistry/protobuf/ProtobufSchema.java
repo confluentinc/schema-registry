@@ -2615,7 +2615,8 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Lists.newArrayList("Incompatible because of different schema type");
+      return Lists.newArrayList("{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
+              + "Incompatible because of different schema type\", additionalInfo:\"\"}");
     }
     final List<Difference> differences = SchemaDiff.compare(
         (ProtobufSchema) previousSchema, this
