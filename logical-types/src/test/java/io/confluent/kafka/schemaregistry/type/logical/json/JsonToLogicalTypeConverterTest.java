@@ -37,6 +37,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,6 +108,165 @@ class JsonToLogicalTypeConverterTest {
     assertEquals(Schema.Type.ENUM, result.getType());
     assertEquals(3, result.getEnumValues().size());
     assertEquals("RED", result.getEnumValues().get(0).getSymbol());
+  }
+
+  private static Schema rootOf(String json) {
+    return JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(json));
+  }
+
+  private static Schema v1RootOf(String json) {
+    return JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(json), LogicalTypeVersion.V1).getRootSchema();
+  }
+
+  @Test
+  void constConvertsExactlyLikeASingleValueEnumInBothEditions() {
+    String meta = "\"description\":\"d\",\"confluent:tags\":[\"t\"],"
+        + "\"confluent:enum\":[{\"doc\":\"only\"}]";
+    Schema fromConst = rootOf("{\"const\":\"x\"," + meta + "}");
+
+    assertEquals(Schema.Type.ENUM, fromConst.getType());
+    assertEquals("x", fromConst.getEnumValues().get(0).getSymbol());
+    assertEquals("only", fromConst.getEnumValues().get(0).getDoc());
+    assertEquals("d", fromConst.getDoc());
+    assertEquals(rootOf("{\"enum\":[\"x\"]," + meta + "}"), fromConst);
+    assertEquals(v1RootOf("{\"enum\":[\"x\"]," + meta + "}"),
+        v1RootOf("{\"const\":\"x\"," + meta + "}"));
+  }
+
+  @Test
+  void everyPermittedValueBecomesAStringSymbolInBothEditions() {
+    // Old Flink read every JSON enum as a string column; V2 keeps that so the editions agree.
+    String[][] cases = {
+        {"{\"enum\":[1,2]}", "1,2"},
+        {"{\"const\":42}", "42"},
+        {"{\"const\":true}", "true"},
+    };
+    for (String[] c : cases) {
+      Schema v2 = rootOf(c[0]);
+      assertEquals(Schema.Type.ENUM, v2.getType(), c[0]);
+      assertEquals(Arrays.asList(c[1].split(",")), symbolsOf(v2), c[0]);
+      assertEquals(v2, v1RootOf(c[0]), c[0]);
+    }
+  }
+
+  private static List<String> symbolsOf(Schema enumSchema) {
+    return enumSchema.getEnumValues().stream()
+        .map(Schema.EnumValue::getSymbol)
+        .collect(Collectors.toList());
+  }
+
+  @Test
+  void aNullValueOfABareEnumMakesItNullableInsteadOfBecomingASymbol() {
+    Schema result = rootOf("{\"enum\":[\"a\",null,\"b\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"}]}");
+    assertEquals(Schema.Type.ENUM, result.getType());
+    assertEquals(Arrays.asList("a", "b"), symbolsOf(result));
+    assertEquals("B", result.getEnumValues().get(1).getDoc());
+    assertTrue(result.isNullable());
+    assertEquals(result, v1RootOf("{\"enum\":[\"a\",null,\"b\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"}]}"));
+  }
+
+  @Test
+  void aNullOnlyEnumOrConstIsRejectedInBothEditions() {
+    String[] schemas = {
+        "{\"const\":null}",
+        "{\"enum\":[null]}",
+        "{\"type\":\"string\",\"const\":null}",
+        "{\"type\":[\"string\",\"null\"],\"enum\":[null]}",
+    };
+    for (String schema : schemas) {
+      assertThatThrownBy(() -> rootOf(schema)).as(schema)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("non-null value");
+      assertThatThrownBy(() -> v1RootOf(schema)).as(schema)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("non-null value");
+    }
+  }
+
+  @Test
+  void aStringTypedConstOrEnumReadsAsTheBareOneInBothEditions() {
+    // everit wraps `type` + `const`/`enum` in a synthetic allOf and hangs the description off it.
+    String[] drafts = {"", "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","};
+    for (String draft : drafts) {
+      String typedConst = "{" + draft + "\"type\":\"string\",\"const\":\"x\",\"description\":\"d\"}";
+      assertEquals(rootOf("{\"enum\":[\"x\"],\"description\":\"d\"}"), rootOf(typedConst), draft);
+      assertEquals(rootOf(typedConst), v1RootOf(typedConst), draft);
+
+      String typedEnum = "{" + draft + "\"type\":\"string\",\"enum\":[\"a\",\"b\"]}";
+      assertEquals(rootOf("{\"enum\":[\"a\",\"b\"]}"), rootOf(typedEnum), draft);
+      assertEquals(rootOf(typedEnum), v1RootOf(typedEnum), draft);
+    }
+  }
+
+  @Test
+  void onlyTheTypeDecidesTheNullabilityOfATypedConstOrEnum() {
+    // A value must match both `type` and `enum`, so a null value is dead unless the type is null.
+    String[] drafts = {"", "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","};
+    for (String draft : drafts) {
+      Schema nullableType = rootOf(
+          "{" + draft + "\"type\":[\"string\",\"null\"],\"enum\":[\"a\",\"b\"],"
+              + "\"description\":\"d\"}");
+      assertEquals(Schema.Type.ENUM, nullableType.getType(), draft);
+      assertEquals(Arrays.asList("a", "b"), symbolsOf(nullableType), draft);
+      assertEquals("d", nullableType.getDoc(), draft);
+      assertTrue(nullableType.isNullable(), draft);
+      assertEquals(nullableType, rootOf("{" + draft
+          + "\"type\":[\"string\",\"null\"],\"enum\":[\"a\",\"b\",null],\"description\":\"d\"}"),
+          draft);
+
+      Schema stringType = rootOf("{" + draft + "\"type\":\"string\",\"enum\":[\"a\",null]}");
+      assertEquals(Arrays.asList("a"), symbolsOf(stringType), draft);
+      assertFalse(stringType.isNullable(), draft);
+    }
+  }
+
+  @Test
+  void aTypedEnumKeepsEachValuesDocAlignedPastADroppedNull() {
+    String schema = "{\"type\":[\"string\",\"null\"],\"enum\":[\"a\",null,\"b\",\"c\"],"
+        + "\"confluent:enum\":[{\"doc\":\"A\"},{},{\"doc\":\"B\"},{\"doc\":\"C\"}]}";
+    for (Schema result : new Schema[] {rootOf(schema), v1RootOf(schema)}) {
+      assertEquals(Arrays.asList("a", "b", "c"), symbolsOf(result));
+      assertEquals(Arrays.asList("A", "B", "C"), result.getEnumValues().stream()
+          .map(Schema.EnumValue::getDoc).collect(Collectors.toList()));
+    }
+  }
+
+  @Test
+  void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
+    String[][] cases = {
+        {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},
+        {"{\"type\":\"string\",\"minLength\":1,\"maxLength\":1,\"const\":\"x\"}", "CHAR", "false"},
+        {"{\"type\":[\"string\",\"null\"],\"maxLength\":5,\"enum\":[\"a\"]}", "VARCHAR", "true"},
+    };
+    for (String[] c : cases) {
+      Schema result = rootOf(c[0]);
+      assertEquals(Schema.Type.valueOf(c[1]), result.getType(), c[0]);
+      assertEquals(Boolean.parseBoolean(c[2]), result.isNullable(), c[0]);
+      assertEquals(result, v1RootOf(c[0]), c[0]);
+    }
+    assertEquals(Schema.createVarchar(5).setNullable(false),
+        rootOf("{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}"));
+
+    // minLength alone bounds nothing (it reads as VARCHAR(MAX)), so the enum is kept.
+    String minOnly = "{\"type\":\"string\",\"minLength\":0,\"const\":\"x\"}";
+    assertEquals(rootOf("{\"enum\":[\"x\"]}"), rootOf(minOnly));
+    assertEquals(rootOf(minOnly), v1RootOf(minOnly));
+  }
+
+  @Test
+  void aNonStringTypedConstOrEnumIsItsDeclaredTypeInBothEditions() {
+    String[][] cases = {
+        {"{\"type\":\"boolean\",\"const\":true}", "BOOLEAN"},
+        {"{\"type\":\"boolean\",\"enum\":[true]}", "BOOLEAN"},
+        {"{\"type\":\"integer\",\"const\":1}", "BIGINT"},
+        {"{\"type\":\"integer\",\"enum\":[1,2]}", "BIGINT"},
+        {"{\"type\":[\"integer\",\"null\"],\"enum\":[1,null]}", "BIGINT"},
+    };
+    for (String[] c : cases) {
+      assertEquals(Schema.Type.valueOf(c[1]), rootOf(c[0]).getType(), c[0]);
+      assertEquals(rootOf(c[0]), v1RootOf(c[0]), c[0]);
+    }
   }
 
   @Test
@@ -230,6 +391,92 @@ class JsonToLogicalTypeConverterTest {
     assertEquals(Schema.Type.UNION, v2.getType());
     assertEquals("myString", v2.getBranches().get(0).getName());
     assertEquals("myBool", v2.getBranches().get(1).getName());
+  }
+
+  // A oneOf of the given branches, each an object of the given properties.
+  private static String oneOf(String... branches) {
+    return "{\"oneOf\":[" + String.join(",", branches) + "]}";
+  }
+
+  private static String object(String... properties) {
+    return "{\"type\":\"object\",\"properties\":{" + String.join(",", properties) + "}}";
+  }
+
+  private static List<String> branchNamesOf(Schema union) {
+    return union.getBranches().stream().map(Schema.UnionBranch::getName)
+        .collect(Collectors.toList());
+  }
+
+  @Test
+  void aTaggedUnionsBranchesAreNamedByTheirTagsInV2() {
+    // One key, one string value per branch, as a one-value enum, a const or a typed const: the
+    // tag names the branch over its title. V1 keeps synthesizing names.
+    String json = oneOf(
+        "{\"type\":\"object\",\"title\":\"CardPayment\",\"properties\":"
+            + "{\"kind\":{\"enum\":[\"card\"]},\"n\":{\"type\":\"string\"}}}",
+        object("\"kind\":{\"const\":\"bank\"}", "\"i\":{\"type\":\"string\"}"),
+        object("\"kind\":{\"type\":\"string\",\"const\":\"cash\"}"));
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank", "cash");
+    assertThat(branchNamesOf(v1RootOf(json))).containsExactly(
+        "connect_union_field_0", "connect_union_field_1", "connect_union_field_2");
+  }
+
+  @Test
+  void aTagIsFoundThroughAReferenceOrAnAllOf() {
+    String json = "{\"oneOf\":[{\"$ref\":\"#/definitions/Card\"},"
+        + "{\"allOf\":[" + object("\"kind\":{\"const\":\"bank\"}") + ","
+        + object("\"i\":{\"type\":\"string\"}") + "]}],"
+        + "\"definitions\":{\"Card\":" + object("\"kind\":{\"const\":\"card\"}",
+            "\"n\":{\"type\":\"string\"}") + "}}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("card", "bank");
+  }
+
+  @Test
+  void aHintedBranchKeepsItsHintBesideTaggedOnes() {
+    String json = "{\"oneOf\":[" + object("\"kind\":{\"const\":\"card\"}") + ","
+        + object("\"kind\":{\"const\":\"bank\"}") + "],"
+        + "\"confluent:union\":[{\"name\":\"Primary\"},{}]}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("Primary", "bank");
+  }
+
+  @Test
+  void aUnionNotCleanlyTaggedKeepsItsTitlesOrPositions() {
+    String card = "{\"type\":\"object\",\"title\":\"Card\",\"properties\":{%s}}";
+    String bank = "{\"type\":\"object\",\"properties\":{%s}}";
+    String[][] cases = {
+        // A branch with no tag.
+        {"\"kind\":{\"const\":\"card\"}", "\"i\":{\"type\":\"string\"}"},
+        // A branch with two.
+        {"\"kind\":{\"const\":\"card\"},\"sub\":{\"const\":\"x\"}",
+            "\"kind\":{\"const\":\"bank\"}"},
+        // Tags under different keys.
+        {"\"kind\":{\"const\":\"card\"}", "\"type\":{\"const\":\"bank\"}"},
+        // One value for both.
+        {"\"kind\":{\"const\":\"card\"}", "\"kind\":{\"const\":\"card\"}"},
+        // A tag that is no string.
+        {"\"kind\":{\"const\":\"card\"}", "\"kind\":{\"const\":1}"},
+    };
+    for (String[] branches : cases) {
+      String json = oneOf(String.format(card, branches[0]), String.format(bank, branches[1]));
+      assertThat(branchNamesOf(rootOf(json))).as(json)
+          .containsExactly("Card", "connect_union_field_1");
+    }
+    // A tag naming a branch as another's hint does: the union keeps its hints and titles.
+    String json = "{\"oneOf\":[" + String.format(card, "\"kind\":{\"const\":\"card\"}")
+        + "," + String.format(bank, "\"kind\":{\"const\":\"bank\"}") + "],"
+        + "\"confluent:union\":[{},{\"name\":\"card\"}]}";
+    assertThat(branchNamesOf(rootOf(json))).containsExactly("Card", "card");
+  }
+
+  @Test
+  void tagNamesRoundTripThroughJson() {
+    // Written back as confluent:union hints, which the next conversion reads first.
+    String json = oneOf(object("\"kind\":{\"const\":\"card\"}", "\"n\":{\"type\":\"string\"}"),
+        object("\"kind\":{\"const\":\"bank\"}", "\"i\":{\"type\":\"string\"}"));
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(json));
+    JsonSchema out = LogicalTypeToJsonConverter.fromLogicalType(lt, "Payment");
+    assertThat(branchNamesOf(JsonToLogicalTypeConverter.toRootSchema(out)))
+        .containsExactly("card", "bank");
   }
 
   @Test

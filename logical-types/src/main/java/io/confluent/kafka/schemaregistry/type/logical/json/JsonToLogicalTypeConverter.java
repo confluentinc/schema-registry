@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
@@ -40,8 +41,10 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Comparator;
@@ -400,41 +403,12 @@ public class JsonToLogicalTypeConverter {
     } else if (schema instanceof StringSchema) {
       return convertStringSchema((StringSchema) schema, isNullable);
     } else if (schema instanceof EnumSchema) {
-      EnumSchema enumSchema = (EnumSchema) schema;
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> enumMeta =
-          (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
-      List<?> possibleValues = enumSchema.getPossibleValuesAsList();
-      List<EnumValue> values = new ArrayList<>();
-      Set<String> seenSymbols = new HashSet<>();
-      for (int i = 0; i < possibleValues.size(); i++) {
-        String symbol = possibleValues.get(i).toString();
-        // JSON Schema only "SHOULD" require unique enum values; tolerate
-        // duplicates by keeping the first occurrence's metadata.
-        if (!seenSymbols.add(symbol)) {
-          continue;
-        }
-        String doc = null;
-        Map<String, Object> evParams = null;
-        if (enumMeta != null && i < enumMeta.size()) {
-          @SuppressWarnings("unchecked")
-          Map<String, Object> entry = enumMeta.get(i);
-          doc = (String) entry.get("doc");
-          evParams = (Map<String, Object>) entry.get("params");
-          // JSON Schema owns no enum-value-level format-native slot, so drop any key smuggled in
-          // through confluent:enum (e.g. a foreign protobuf.enum.number) rather than letting it
-          // steer Protobuf emission later — same rule the field and branch readers apply.
-          if (evParams != null) {
-            evParams = Schema.stripFormatNativeParams(evParams);
-          }
-        }
-        values.add(new EnumValue(symbol, doc, evParams));
-      }
-      Schema result = Schema.createEnum(values).setNullable(isNullable);
-      result.setDoc(schema.getDescription());
-      readSchemaTags(schema, result);
-      readSchemaParams(schema, result);
-      return result;
+      return convertPermittedValues(
+          schema, ((EnumSchema) schema).getPossibleValuesAsList(), isNullable);
+    } else if (schema instanceof ConstSchema) {
+      return convertPermittedValues(
+          schema, Collections.singletonList(((ConstSchema) schema).getPermittedValue()),
+          isNullable);
     } else if (schema instanceof CombinedSchema) {
       return convertCombinedSchema(
           (CombinedSchema) schema, isNullable, ctx, indexPath);
@@ -499,6 +473,56 @@ public class JsonToLogicalTypeConverter {
       throw new ValidationException(
           "Unsupported JSON schema type " + schema.getClass().getName());
     }
+  }
+
+  /**
+   * Converts an {@code enum}, or a {@code const} as a one-value enum. Every non-null value becomes
+   * a string symbol whatever its JSON type, matching old Flink, which read enums as strings; a
+   * null value makes the type nullable instead.
+   */
+  private static Schema convertPermittedValues(
+      org.everit.json.schema.Schema schema, List<?> possibleValues, boolean isNullable) {
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> enumMeta =
+        (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
+    List<EnumValue> values = new ArrayList<>();
+    Set<String> seenSymbols = new HashSet<>();
+    for (int i = 0; i < possibleValues.size(); i++) {
+      Object value = possibleValues.get(i);
+      if (JSONObject.NULL.equals(value)) {
+        isNullable = true;
+        continue;
+      }
+      String symbol = String.valueOf(value);
+      // JSON Schema only "SHOULD" require unique enum values; tolerate
+      // duplicates by keeping the first occurrence's metadata.
+      if (!seenSymbols.add(symbol)) {
+        continue;
+      }
+      String doc = null;
+      Map<String, Object> evParams = null;
+      if (enumMeta != null && i < enumMeta.size()) {
+        Map<String, Object> entry = enumMeta.get(i);
+        doc = (String) entry.get("doc");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rawParams = (Map<String, Object>) entry.get("params");
+        // JSON Schema owns no enum-value-level format-native slot, so drop any key smuggled in
+        // through confluent:enum (e.g. a foreign protobuf.enum.number) rather than letting it
+        // steer Protobuf emission later — same rule the field and branch readers apply.
+        if (rawParams != null) {
+          evParams = Schema.stripFormatNativeParams(rawParams);
+        }
+      }
+      values.add(new EnumValue(symbol, doc, evParams));
+    }
+    if (values.isEmpty()) {
+      throw new ValidationException(CombinedSchemaUtils.NULL_ONLY_VALUES_MESSAGE);
+    }
+    Schema result = Schema.createEnum(values).setNullable(isNullable);
+    result.setDoc(schema.getDescription());
+    readSchemaTags(schema, result);
+    readSchemaParams(schema, result);
+    return result;
   }
 
   private static Schema convertNumberSchema(
@@ -597,6 +621,122 @@ public class JsonToLogicalTypeConverter {
     }
   }
 
+  /**
+   * Each non-null branch's name, in order: its hint's; in V2, its tag's, where the union is tagged
+   * and the names so come out distinct, else its title; else its position. V1 is the
+   * Flink-byte-compat edition, which always synthesizes {@code connect_union_field_<index>} (old
+   * Flink converter ignored titles); a title or tag under V1 would rename union RowType fields.
+   */
+  private static List<String> branchNames(List<org.everit.json.schema.Schema> branches,
+      List<Map<String, Object>> unionMeta, ToLogicalContext<String> ctx) {
+    List<String> tags = ctx.isV1() ? null : tags(branches);
+    if (tags != null) {
+      List<String> tagged = branchNames(branches, unionMeta, ctx, tags);
+      if (new HashSet<>(tagged).size() == tagged.size()) {
+        return tagged;
+      }
+    }
+    return branchNames(branches, unionMeta, ctx, null);
+  }
+
+  private static List<String> branchNames(List<org.everit.json.schema.Schema> branches,
+      List<Map<String, Object>> unionMeta, ToLogicalContext<String> ctx, List<String> tags) {
+    List<String> names = new ArrayList<>(branches.size());
+    for (int index = 0; index < branches.size(); index++) {
+      Map<String, Object> hint = unionMeta != null && index < unionMeta.size()
+          ? unionMeta.get(index) : null;
+      if (hint != null && hint.get("name") != null) {
+        names.add((String) hint.get("name"));
+      } else if (tags != null) {
+        names.add(tags.get(index));
+      } else if (!ctx.isV1() && branches.get(index).getTitle() != null) {
+        names.add(branches.get(index).getTitle());
+      } else {
+        names.add(GENERALIZED_TYPE_UNION_PREFIX + index);
+      }
+    }
+    return names;
+  }
+
+  /**
+   * A tagged union's tags, in branch order: every branch has exactly one top-level property
+   * permitting one non-null value, a one-value enum or a const, all under one key, each value a
+   * distinct string. Null for any other union.
+   */
+  private static List<String> tags(List<org.everit.json.schema.Schema> branches) {
+    String key = null;
+    List<String> tags = new ArrayList<>(branches.size());
+    for (org.everit.json.schema.Schema branch : branches) {
+      Entry<String, Object> tag = tagOf(branch);
+      if (tag == null || !(tag.getValue() instanceof String) || tags.contains(tag.getValue())) {
+        return null;
+      }
+      if (key != null && !key.equals(tag.getKey())) {
+        return null;
+      }
+      key = tag.getKey();
+      tags.add((String) tag.getValue());
+    }
+    return tags;
+  }
+
+  // A branch's one top-level property permitting a single non-null value; null if none or several.
+  private static Entry<String, Object> tagOf(org.everit.json.schema.Schema branch) {
+    org.everit.json.schema.Schema object = unwrap(branch);
+    if (!(object instanceof ObjectSchema)) {
+      return null;
+    }
+    Entry<String, Object> tag = null;
+    for (Entry<String, org.everit.json.schema.Schema> property
+        : ((ObjectSchema) object).getPropertySchemas().entrySet()) {
+      Object value = singleValue(unwrap(property.getValue()));
+      if (value != null) {
+        if (tag != null) {
+          return null;
+        }
+        tag = new AbstractMap.SimpleImmutableEntry<>(property.getKey(), value);
+      }
+    }
+    return tag;
+  }
+
+  // The schema a reference or an allOf stands for, as the conversion reads it; null if it has none.
+  private static org.everit.json.schema.Schema unwrap(org.everit.json.schema.Schema schema) {
+    Set<org.everit.json.schema.Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    org.everit.json.schema.Schema current = schema;
+    while (current != null && seen.add(current)) {
+      if (current instanceof ReferenceSchema) {
+        current = ((ReferenceSchema) current).getReferredSchema();
+      } else if (current instanceof CombinedSchema
+          && ((CombinedSchema) current).getCriterion() == CombinedSchema.ALL_CRITERION) {
+        try {
+          current = CombinedSchemaUtils.simplifyAllOfSchema((CombinedSchema) current);
+        } catch (ValidationException e) {
+          return null;
+        }
+      } else {
+        return current;
+      }
+    }
+    return null;
+  }
+
+  // The one non-null value an enum or const permits; null for anything else.
+  private static Object singleValue(org.everit.json.schema.Schema schema) {
+    List<?> values = schema instanceof EnumSchema
+        ? ((EnumSchema) schema).getPossibleValuesAsList()
+        : schema instanceof ConstSchema
+            ? Collections.singletonList(((ConstSchema) schema).getPermittedValue())
+            : null;
+    if (values == null) {
+      return null;
+    }
+    List<Object> nonNull = values.stream()
+        .filter(value -> !JSONObject.NULL.equals(value))
+        .collect(Collectors.toList());
+    return nonNull.size() == 1 ? nonNull.get(0) : null;
+  }
+
   private static Schema convertCombinedSchema(
       CombinedSchema combinedSchema, boolean isNullable, ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
@@ -637,6 +777,7 @@ public class JsonToLogicalTypeConverter {
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> unionMeta = (List<Map<String, Object>>)
         combinedSchema.getUnprocessedProperties().get("confluent:union");
+    List<String> branchNames = branchNames(nonNullSubschemas, unionMeta, ctx);
     int index = 0;
     boolean isNullableUnion = isNullable;
     final List<UnionBranch> branches = new ArrayList<>();
@@ -647,18 +788,7 @@ public class JsonToLogicalTypeConverter {
       } else {
         Map<String, Object> hint = unionMeta != null && index < unionMeta.size()
             ? unionMeta.get(index) : null;
-        String branchName;
-        if (hint != null && hint.get("name") != null) {
-          branchName = (String) hint.get("name");
-        } else if (!ctx.isV1() && subSchema.getTitle() != null) {
-          // V2 prefers a subschema's title as the branch name. V1 is the
-          // Flink-byte-compat edition, which always synthesizes
-          // connect_union_field_<index> (old Flink converter ignored titles);
-          // preserving titles under V1 would rename union RowType fields.
-          branchName = subSchema.getTitle();
-        } else {
-          branchName = GENERALIZED_TYPE_UNION_PREFIX + index;
-        }
+        String branchName = branchNames.get(index);
         String branchDoc = hint != null ? (String) hint.get("doc") : null;
         @SuppressWarnings("unchecked")
         Map<String, Object> branchParams = hint != null
