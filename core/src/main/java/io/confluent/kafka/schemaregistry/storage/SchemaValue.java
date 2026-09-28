@@ -330,7 +330,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     MD5 md5 = bytes != null
         ? new MD5(bytes)
         : MD5.ofSchema(getSchema(), references, metadata, ruleSet);
-    return new Schema(
+    Schema entity = new Schema(
         getSubject(),
         getVersion(),
         getId(),
@@ -344,6 +344,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getTimestamp(),
         isDeleted()
     );
+    if (createTimestamp != null && !createTimestamp.equals(getTimestamp())) {
+      entity.setCreateTimestamp(createTimestamp);
+    }
+    return entity;
   }
 
   public Schema toHashKey() {

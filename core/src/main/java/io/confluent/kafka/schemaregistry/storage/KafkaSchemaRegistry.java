@@ -550,6 +550,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         final SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
         final SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
+        SchemaValue existingValue = (SchemaValue) lookupCache.get(schemaKey);
+        if (existingValue != null) {
+          schemaValue.setCreateTimestamp(existingValue.getCreateTimestamp());
+        }
         if (schemaId >= 0) {
           checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);

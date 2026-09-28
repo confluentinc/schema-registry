@@ -172,6 +172,18 @@ public class SchemaValuesTest {
   }
 
   @Test
+  public void testSchemaEntityHasCreateTimestampOnlyWhereItDiffersFromTs() {
+    SchemaValue value = new SchemaValue("test", 1, 1, AvroSchema.TYPE, null,
+        "{\"type\":\"string\"}", false);
+    value.setTimestamp(42L);
+    assertNull(value.toSchemaEntity().getCreateTimestamp());
+    value.setCreateTimestamp(42L);
+    assertNull(value.toSchemaEntity().getCreateTimestamp());
+    value.setTimestamp(43L);
+    assertEquals(42L, value.toSchemaEntity().getCreateTimestamp().longValue());
+  }
+
+  @Test
   public void testSchemaValueWithoutCreateTimestampReadsAsNull() throws SerializationException {
     SchemaKey key = new SchemaKey("test", 1);
     Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
