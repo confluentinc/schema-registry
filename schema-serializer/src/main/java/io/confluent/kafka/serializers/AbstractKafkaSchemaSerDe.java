@@ -136,6 +136,10 @@ public abstract class AbstractKafkaSchemaSerDe
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
+  // The provenance algorithm version deserializers project with; null when provenance is off.
+  protected String provenanceAlgorithm;
+  protected int provenanceCacheSize;
+  protected int provenanceCacheTtlSec;
   protected Map<String, String> metadata;
   protected ExecutionEnvironment executionEnv;
   protected boolean enableRuleServiceLoader;
@@ -219,6 +223,9 @@ public abstract class AbstractKafkaSchemaSerDe
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
+    provenanceAlgorithm = config.getProvenanceAlgorithm();
+    provenanceCacheSize = config.getProvenanceCacheSize();
+    provenanceCacheTtlSec = config.getProvenanceCacheTtl();
     validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();
@@ -1199,6 +1206,18 @@ public abstract class AbstractKafkaSchemaSerDe
         log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
       }
     }
+  }
+
+  /**
+   * {@code e} as a record's deserialization failure: a {@code SerializationException}, but for an
+   * authentication or authorization failure, which stays one, as a schema fetch's does.
+   */
+  protected static RuntimeException toDeserializationException(Exception e,
+      String errorMessage) {
+    if (e instanceof AuthenticationException || e instanceof AuthorizationException) {
+      return (RuntimeException) e;
+    }
+    return new SerializationException(errorMessage, e);
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
