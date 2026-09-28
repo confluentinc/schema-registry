@@ -61,13 +61,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
   protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
-  private final Cache<SchemaId, DatumWriter<Object>> datumWriterCache;
+  private final Cache<SubjectSchemaId, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
-    // Key by the schema id (SchemaId covers both the integer id and the guid, since the id may
-    // be null when the schema is identified by guid) rather than by the schema object, so that
-    // content-identical schemas reuse a single DatumWriter even when they arrive as distinct
-    // instances.
+    // Key by the subject and schema id (see SubjectSchemaId), not by the schema object, so that
+    // content-identical schemas arriving as distinct instances share a single DatumWriter.
     datumWriterCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
@@ -221,7 +219,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
                 "Unrecognized bytes object of type: " + value.getClass().getName());
           }
         } else {
-          writeDatum(baos, value, rawSchema, schemaId);
+          writeDatum(baos, value, rawSchema, subject, schemaId);
         }
         byte[] payload = baos.toByteArray();
         payload = (byte[]) executeRules(
@@ -247,12 +245,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   @SuppressWarnings("unchecked")
   private void writeDatum(
-      ByteArrayOutputStream out, Object value, Schema rawSchema, SchemaId schemaId)
-          throws ExecutionException, IOException {
+      ByteArrayOutputStream out, Object value, Schema rawSchema, String subject,
+      SchemaId schemaId) throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.get(schemaId,
+    writer = datumWriterCache.get(new SubjectSchemaId(subject, schemaId),
         () -> (DatumWriter<Object>) getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
