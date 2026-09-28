@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class SchemaValuesTest {
@@ -154,6 +155,33 @@ public class SchemaValuesTest {
 
     assertEquals(1L, schemaValue.getOffset().longValue());
     assertEquals(123L, schemaValue.getTimestamp().longValue());
+  }
+
+  @Test
+  public void testSchemaValueCreateTimestampRoundTrips() throws SerializationException {
+    SchemaKey key = new SchemaKey("test", 1);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+    SchemaValue written = new SchemaValue("test", 1, 1, AvroSchema.TYPE, null,
+        "{\"type\":\"string\"}", true);
+    written.setCreateTimestamp(42L);
+
+    SchemaValue read = (SchemaValue) serializer.deserializeValue(key,
+        serializer.serializeValue(written));
+
+    assertEquals(42L, read.getCreateTimestamp().longValue());
+  }
+
+  @Test
+  public void testSchemaValueWithoutCreateTimestampReadsAsNull() throws SerializationException {
+    SchemaKey key = new SchemaKey("test", 1);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+    // Written before createTs existed.
+    String schemaValueJson = "{\"subject\":\"test\",\"version\":1,\"id\":1,"
+        + "\"schema\":\"\\\"string\\\"\",\"deleted\":false}";
+
+    SchemaValue read = (SchemaValue) serializer.deserializeValue(key, schemaValueJson.getBytes());
+
+    assertNull(read.getCreateTimestamp());
   }
 
   @Test
