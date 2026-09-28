@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Comparator;
@@ -99,6 +100,8 @@ public class JsonToLogicalTypeConverter {
    * JSON Schema {@code default} keyword.
    */
   private static final String DEFAULT_KEYWORD = "default";
+  // The namespace of the titles marking a Connect logical type (Date, Time, Timestamp, Decimal).
+  private static final String CONNECT_DATA_PREFIX = "org.apache.kafka.connect.data.";
 
   private static final int MAX_LENGTH = Integer.MAX_VALUE;
   private static final int DEFAULT_DECIMAL_PRECISION = 38;
@@ -623,6 +626,24 @@ public class JsonToLogicalTypeConverter {
     }
   }
 
+  /**
+   * A union branch's title, or, where it has none, that of the definition it refers to; none for
+   * a title marking a Connect type, which names no branch.
+   */
+  private static String branchTitle(org.everit.json.schema.Schema branch) {
+    Set<org.everit.json.schema.Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    org.everit.json.schema.Schema current = branch;
+    while (current != null && seen.add(current)) {
+      String title = current.getTitle();
+      if (title != null) {
+        return title.startsWith(CONNECT_DATA_PREFIX) ? null : title;
+      }
+      current = current instanceof ReferenceSchema
+          ? ((ReferenceSchema) current).getReferredSchema() : null;
+    }
+    return null;
+  }
+
   private static Schema convertCombinedSchema(
       CombinedSchema combinedSchema, boolean isNullable, ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
@@ -696,7 +717,8 @@ public class JsonToLogicalTypeConverter {
             subSchema, true, ctx, appendToList(indexPath, index));
         // A document has no step for a union branch.
         branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams)
-            .setNativeNames(Collections.emptyList()));
+            .setNativeNames(Collections.emptyList())
+            .setNativeTitle(branchTitle(subSchema)));
         index++;
       }
     }

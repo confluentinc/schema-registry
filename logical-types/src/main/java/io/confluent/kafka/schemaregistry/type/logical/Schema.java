@@ -927,6 +927,7 @@ public abstract class Schema {
     // Recorded by the converter; never part of equality.
     private List<String> nativeNames;
     private List<String> nativeAliases;
+    private String nativeTitle;
 
     public UnionBranch(String name, Schema schema, String doc,
                        Map<String, Object> params) {
@@ -966,6 +967,19 @@ public abstract class Schema {
 
     public UnionBranch setNativeAliases(List<String> aliases) {
       this.nativeAliases = Collections.unmodifiableList(new ArrayList<>(aliases));
+      return this;
+    }
+
+    /**
+     * The title of this branch's JSON subschema, or of the definition it refers to, which V1 does
+     * not name it by; {@code null} if none was recorded.
+     */
+    public String getNativeTitle() {
+      return nativeTitle;
+    }
+
+    public UnionBranch setNativeTitle(String title) {
+      this.nativeTitle = title;
       return this;
     }
 

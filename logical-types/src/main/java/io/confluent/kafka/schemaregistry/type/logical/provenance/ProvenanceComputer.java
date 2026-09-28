@@ -206,9 +206,13 @@ public final class ProvenanceComputer {
     private final Map<Object, Integer> childDerived;
     private final Where where;
 
-    /** A Protobuf oneof's member numbers, a JSON branch's content; null for anything else. */
+    /**
+     * A Protobuf oneof's member numbers, a JSON branch's content and title; null for anything
+     * else.
+     */
     private Set<Integer> memberNumbers;
     private Set<String> content;
+    private String title;
 
     /** This node's member groups, keyed by the collection steps leading to each. */
     private final Map<String, List<Node>> groups = new HashMap<>();
@@ -508,9 +512,13 @@ public final class ProvenanceComputer {
         List<UnionBranch> branches = container.getBranches();
         for (int i = 0; i < branches.size(); i++) {
           UnionBranch branch = branches.get(i);
-          nodes.add(new Node(Kind.BRANCH, branchName(branch), branchAliases(branch),
+          Node node = new Node(Kind.BRANCH, branchName(branch), branchAliases(branch),
               numberOf(branch.getFieldNumber(), branch, enclosingDerived), branch.getSchema(),
-              enclosingDerived, where.descend(branch.getSchema(), i, branch.getNativeNames())));
+              enclosingDerived, where.descend(branch.getSchema(), i, branch.getNativeNames()));
+          if (policy == IdentityPolicy.JSON) {
+            node.title = branch.getNativeTitle();
+          }
+          nodes.add(node);
         }
       }
       for (Node node : nodes) {
@@ -643,7 +651,7 @@ public final class ProvenanceComputer {
           && !Collections.disjoint(previous.memberNumbers, peer.memberNumbers);
     }
 
-    /** JSON: a property by name, and a union branch by hint, then its discriminators, content. */
+    /** JSON: a property by name; a union branch by hint, discriminators, title, then content. */
     private static void matchJson(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       if (peers.get(0).kind == Kind.BRANCH) {
@@ -981,7 +989,9 @@ public final class ProvenanceComputer {
      * or reordered would otherwise take another's place. In turn: a hinted branch continues the
      * previous branch of its name; a branch continues the one previous branch with the same
      * top-level discriminators, where no peer has them, as a tagged union's tag names its branch;
-     * the one previous branch of the same content, where no peer shares it; the one previous branch
+     * the one previous branch of its title, where no peer has it and no discriminator conflicts —
+     * a title only documents in V1, so one changed only leaves the branch to the phases below; the
+     * one previous branch of the same content, where no peer shares it; the one previous branch
      * it alone shares a member with, and no conflicting discriminator, as when it moved and its
      * members changed; one at the same position sharing a member with it, where overlap alone
      * cannot tell; else it is new. None continues another across a discriminator a branch related
@@ -991,7 +1001,7 @@ public final class ProvenanceComputer {
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      for (int phase = 0; phase < 5; phase++) {
+      for (int phase = 0; phase < 6; phase++) {
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
             continue;
@@ -1005,9 +1015,13 @@ public final class ProvenanceComputer {
                 (a, p) -> !taken.contains(p) && tags(a.content).equals(tags(p.content))
                     && !otherHints(a, p));
           } else if (phase == 2) {
+            found = peer.title == null ? null : mutual(peer, peers, previous,
+                (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
+                    && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
+          } else if (phase == 3) {
             found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
                 && a.content.equals(p.content) && !otherHints(a, p));
-          } else if (phase == 3) {
+          } else if (phase == 4) {
             List<Node> unresolved = new ArrayList<>();
             for (Node other : peers) {
               if (!matched.containsKey(other)) {
@@ -1065,19 +1079,27 @@ public final class ProvenanceComputer {
      * differently by the other.
      */
     private static boolean overlaps(Set<String> mine, Set<String> theirs) {
-      for (String entry : mine) {
-        if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
-          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
-          if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
-            return false;
-          }
-        }
+      if (namesOtherwise(mine, theirs)) {
+        return false;
       }
       if (mine.equals(theirs)) {
         // Nothing tells them apart, even with no members: as alike as they can be.
         return true;
       }
       return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry));
+    }
+
+    /** Whether a discriminator of one branch is named differently by the other. */
+    private static boolean namesOtherwise(Set<String> mine, Set<String> theirs) {
+      for (String entry : mine) {
+        if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
+          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
+          if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
     /**
