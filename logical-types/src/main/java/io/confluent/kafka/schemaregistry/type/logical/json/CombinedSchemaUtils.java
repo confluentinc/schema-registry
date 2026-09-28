@@ -19,24 +19,30 @@ package io.confluent.kafka.schemaregistry.type.logical.json;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import org.everit.json.schema.ArraySchema;
+import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ObjectSchema.Builder;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
+import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -47,9 +53,14 @@ import java.util.Set;
  */
 public class CombinedSchemaUtils {
 
+  static final String NULL_ONLY_VALUES_MESSAGE =
+      "JSON Schema enum/const must permit at least one non-null value: null alone has no "
+          + "column type";
+
   public static Schema simplifyAllOfSchema(CombinedSchema combinedSchema) {
     ConstSchema constSchema = null;
     EnumSchema enumSchema = null;
+    BooleanSchema booleanSchema = null;
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     CombinedSchema combinedSubschema = null;
@@ -61,6 +72,8 @@ public class CombinedSchemaUtils {
         constSchema = (ConstSchema) subSchema;
       } else if (subSchema instanceof EnumSchema) {
         enumSchema = (EnumSchema) subSchema;
+      } else if (subSchema instanceof BooleanSchema) {
+        booleanSchema = (BooleanSchema) subSchema;
       } else if (subSchema instanceof NumberSchema) {
         numberSchema = (NumberSchema) subSchema;
       } else if (subSchema instanceof StringSchema) {
@@ -83,6 +96,10 @@ public class CombinedSchemaUtils {
           .filter(Entry::getValue)
           .forEach(e -> builder.addRequiredProperty(e.getKey()));
       return builder.build();
+    }
+    Schema stringTypedValues = simplifyStringTypedValues(combinedSchema);
+    if (stringTypedValues != null) {
+      return stringTypedValues;
     } else if (combinedSubschema != null) {
       return combinedSubschema;
     } else if (constSchema != null) {
@@ -90,12 +107,16 @@ public class CombinedSchemaUtils {
         return stringSchema;
       } else if (numberSchema != null) {
         return numberSchema;
+      } else if (booleanSchema != null) {
+        return booleanSchema;
       }
     } else if (enumSchema != null) {
       if (stringSchema != null) {
         return stringSchema;
       } else if (numberSchema != null) {
         return numberSchema;
+      } else if (booleanSchema != null) {
+        return booleanSchema;
       }
     } else if (stringSchema != null && stringSchema.getFormatValidator() != null) {
       if (numberSchema != null) {
@@ -118,6 +139,92 @@ public class CombinedSchemaUtils {
     }
     throw new ValidationException(
         "Unsupported criterion " + combinedSchema.getCriterion() + " for " + combinedSchema);
+  }
+
+  /**
+   * For an allOf of exactly one {@code const}/{@code enum} and a {@code "string"} or
+   * {@code ["string", "null"]} type, returns an enum of the non-null values (nullable only when
+   * the type is), so it reads like a bare enum; returns the bare type when it has a maxLength,
+   * which only VARCHAR(n)/CHAR(n) can carry. Returns null for any other allOf.
+   */
+  private static Schema simplifyStringTypedValues(CombinedSchema allOf) {
+    Schema valueSchema = null;
+    Schema typeSchema = null;
+    for (Schema subSchema : allOf.getSubschemas()) {
+      if ((subSchema instanceof ConstSchema || subSchema instanceof EnumSchema)
+          && valueSchema == null) {
+        valueSchema = subSchema;
+      } else if (stringMemberOf(subSchema) != null && typeSchema == null) {
+        typeSchema = subSchema;
+      } else {
+        return null;
+      }
+    }
+    if (valueSchema == null || typeSchema == null) {
+      return null;
+    }
+    StringSchema stringSchema = stringMemberOf(typeSchema);
+    // Only maxLength bounds the string (VARCHAR(n), or CHAR(n) with an equal minLength).
+    if (stringSchema.getMaxLength() != null) {
+      return typeSchema;
+    }
+    List<Object> values = valueSchema instanceof ConstSchema
+        ? Collections.singletonList(((ConstSchema) valueSchema).getPermittedValue())
+        : ((EnumSchema) valueSchema).getPossibleValuesAsList();
+    // everit hangs title/description/unprocessed keywords off the synthetic allOf, not its
+    // members. confluent:enum is positional, so each null value's entry is dropped with it.
+    Map<String, Object> unprocessed = new LinkedHashMap<>(allOf.getUnprocessedProperties());
+    Object rawMeta = unprocessed.get("confluent:enum");
+    List<?> meta = rawMeta instanceof List ? (List<?>) rawMeta : null;
+    List<Object> nonNullValues = new ArrayList<>();
+    List<Object> nonNullMeta = new ArrayList<>();
+    for (int i = 0; i < values.size(); i++) {
+      if (JSONObject.NULL.equals(values.get(i))) {
+        continue;
+      }
+      nonNullValues.add(values.get(i));
+      if (meta != null && i < meta.size()) {
+        nonNullMeta.add(meta.get(i));
+      }
+    }
+    if (nonNullValues.isEmpty()) {
+      throw new ValidationException(NULL_ONLY_VALUES_MESSAGE);
+    }
+    if (meta != null) {
+      unprocessed.put("confluent:enum", nonNullMeta);
+    }
+    Schema enumSchema = EnumSchema.builder()
+        .possibleValues(nonNullValues)
+        .title(allOf.getTitle())
+        .description(allOf.getDescription())
+        .unprocessedProperties(unprocessed)
+        .build();
+    return typeSchema instanceof StringSchema
+        ? enumSchema
+        : CombinedSchema.anyOf(Arrays.asList(enumSchema, NullSchema.INSTANCE)).build();
+  }
+
+  // The string member of a `"string"` type or a `["string", "null"]` type list, else null.
+  private static StringSchema stringMemberOf(Schema typeSchema) {
+    if (typeSchema instanceof StringSchema) {
+      return (StringSchema) typeSchema;
+    }
+    if (!(typeSchema instanceof CombinedSchema)
+        || ((CombinedSchema) typeSchema).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      return null;
+    }
+    StringSchema stringSchema = null;
+    boolean hasNull = false;
+    for (Schema member : ((CombinedSchema) typeSchema).getSubschemas()) {
+      if (member instanceof StringSchema && stringSchema == null) {
+        stringSchema = (StringSchema) member;
+      } else if (member instanceof NullSchema && !hasNull) {
+        hasNull = true;
+      } else {
+        return null;
+      }
+    }
+    return hasNull ? stringSchema : null;
   }
 
   private static Optional<IgnoredAdditionalPropertiesSchema> isExactlyOneSchemaOfTypeObject(
