@@ -209,8 +209,14 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   @Override
   public CompletableFuture<SchemaMetadata> getLatestWithMetadata(
       String subject, Map<String, String> metadata, boolean lookupDeletedSchema) {
+    // The cache key leaves out the flag, so only lookups that include deleted versions, as
+    // serializers make, are cached
+    if (!lookupDeletedSchema) {
+      return restService.getLatestWithMetadata(subject, metadata, false)
+          .thenApply(SchemaMetadata::new);
+    }
     return cached(latestWithMetadataCache, new SubjectAndMetadata(subject, metadata),
-        () -> restService.getLatestWithMetadata(subject, metadata, lookupDeletedSchema)
+        () -> restService.getLatestWithMetadata(subject, metadata, true)
             .thenApply(SchemaMetadata::new));
   }
 
