@@ -618,9 +618,10 @@ final class AvroProvenanceRenamer {
     copies.put(reader, record);
     final List<Field> fields = new ArrayList<>(reader.getFields().size());
     for (Field field : reader.getFields()) {
-      // The default as parsed: Avro cannot write a bytes or fixed default back from its value.
+      // The default as parsed, unvalidated as the reader's own parse left it: Avro cannot write a
+      // bytes or fixed default back from its value, and fails an invalid one only when used.
       final Field copy = Accessor.createField(field.name(), readerCopy(field.schema(), copies),
-          field.doc(), Accessor.defaultValue(field), true, field.order());
+          field.doc(), Accessor.defaultValue(field), false, field.order());
       field.getObjectProps().forEach(copy::addProp);
       fields.add(copy);
     }

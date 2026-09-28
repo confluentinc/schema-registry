@@ -1208,6 +1208,18 @@ public abstract class AbstractKafkaSchemaSerDe
     }
   }
 
+  /**
+   * {@code e} as a record's deserialization failure: a {@code SerializationException}, but for an
+   * authentication or authorization failure, which stays one, as a schema fetch's does.
+   */
+  protected static RuntimeException toDeserializationException(Exception e,
+      String errorMessage) {
+    if (e instanceof AuthenticationException || e instanceof AuthorizationException) {
+      return (RuntimeException) e;
+    }
+    return new SerializationException(errorMessage, e);
+  }
+
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
     int status = e.getStatus();
     if (status == 401) {

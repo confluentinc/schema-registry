@@ -819,8 +819,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             + schemaId, ex.getCause());
       } catch (RestClientException | IOException | RuntimeException e) {
         // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
-        throw new SerializationException("Error deserializing Avro message for id "
-            + schemaId, e);
+        throw toDeserializationException(e, "Error deserializing Avro message for id "
+            + schemaId);
       } finally {
         postOp(payload);
       }

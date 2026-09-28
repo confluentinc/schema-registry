@@ -630,6 +630,52 @@ class JsonProvenanceDeserializerTest {
     assertFalse(read(v1, bytes, "v1").get("g").has("l"));
   }
 
+  @Test
+  void aPrimitiveInAReAddedBranchOfAUnionUnderAllOfIsPruned() throws Exception {
+    // allOf applies its parts as the walk does: the union in one is the property's own.
+    JsonSchema v1 = object("\"e\": {\"allOf\": [{\"type\": [\"string\", \"number\"]}]}");
+    JsonSchema v2 = object("\"e\": {\"allOf\": [{\"type\": [\"string\", \"boolean\"]}]}");
+    JsonSchema v3 = object(
+        "\"e\": {\"allOf\": [{\"type\": [\"string\", \"boolean\", \"number\"]}]}");
+    byte[] number = write(v1, "{\"e\": 2.5}");
+    byte[] string = write(v1, "{\"e\": \"s\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, number, "v1").has("e"));
+    assertEquals("s", read(v3, string, "v1").get("e").asText());
+  }
+
+  @Test
+  void aPrimitiveFittingNoBranchOfTheReaderIsPruned() throws Exception {
+    // 1.0 is no integer to everit, and 2.5 fits no branch of v3: neither continues anything.
+    JsonSchema v1 = object("\"e\": {\"type\": [\"string\", \"integer\", \"number\"]}");
+    JsonSchema v2 = object("\"e\": {\"type\": [\"string\", \"boolean\"]}");
+    JsonSchema v3 = object("\"e\": {\"type\": [\"string\", \"boolean\", \"integer\"]}");
+    byte[] decimal = write(v1, "{\"e\": 1.0}");
+    byte[] fraction = write(v1, "{\"e\": 2.5}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, decimal, "v1").has("e"));
+    assertFalse(read(v3, fraction, "v1").has("e"));
+  }
+
+  @Test
+  void anIntegralDecimalInAContinuingIntegerBranchStaysUnderAModernDraft() throws Exception {
+    // json-sKema counts 1.0 an integer, and so does the pruner there: boolean is re-added
+    // beside it, but 1.0 stays in the integer branch it was written in.
+    JsonSchema v1 = modern("\"e\": {\"type\": [\"string\", \"integer\", \"boolean\"]}");
+    JsonSchema v2 = modern("\"e\": {\"type\": [\"string\", \"integer\"]}");
+    JsonSchema v3 = modern("\"e\": {\"type\": [\"string\", \"integer\", \"boolean\"]}",
+        "\"x\": {\"type\": \"number\"}");
+    byte[] bytes = write(v1, "{\"e\": 1.0}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals(1, read(v3, bytes, "v1").get("e").asInt());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

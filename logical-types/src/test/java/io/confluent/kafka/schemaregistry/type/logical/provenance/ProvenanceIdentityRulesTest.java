@@ -85,6 +85,24 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aMapWhoseKeyAndValueShareATypeIsNoCycle() {
+    // P as key and value is P beside itself: the value becoming Q changes no category, so the map
+    // and its key continue, and only the value's member is new.
+    String entries = "{\"m\":{\"type\":\"array\",\"connect.type\":\"map\",\"items\":"
+        + "{\"type\":\"object\",\"properties\":{\"key\":{\"$ref\":\"#/definitions/P\"},"
+        + "\"value\":{\"$ref\":\"#/definitions/%s\"}}}}}";
+    String definitions = "{\"P\":{\"type\":\"object\",\"properties\":"
+        + "{\"a\":{\"type\":\"integer\"}}},\"Q\":{\"type\":\"object\",\"properties\":"
+        + "{\"b\":{\"type\":\"integer\"}}}}";
+    List<ProvenanceVersion> v = compute(json(String.format(entries, "P"), definitions),
+        json(String.format(entries, "Q"), definitions));
+    // m at [0], its key's a at [0, 0, 0], its value's member at [0, 1, 0].
+    assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 1, 0, 0, 0)).isEqualTo(pid(v, 0, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
   void aCollectionHoldingItselfStillHasNoProvenance() {
     // The category of what a collection holds must not follow it round: the recursion is named.
     assertThatThrownBy(() -> compute(json("{\"x\":{\"$ref\":\"#/definitions/L\"}}",
@@ -148,6 +166,18 @@ class ProvenanceIdentityRulesTest {
     String q = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
     String r = branch("v", "\"y\":{\"type\":\"number\"}");
     String p = branch("v", "\"x\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aTagWhoseValueHoldsASlashIsStillATag() {
+    // The tag's value, not a nesting step: P continues R by its tag, not Q by position.
+    String q = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
+    String r = branch("v/1", "\"y\":{\"type\":\"number\"}");
+    String p = branch("v/1", "\"x\":{\"type\":\"number\"}");
     List<ProvenanceVersion> v = compute(
         json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
         json("{\"u\":{\"oneOf\":[" + p + "]}}", null));

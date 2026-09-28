@@ -286,7 +286,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error deserializing JSON message for id " + schemaId, e);
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException("Error deserializing JSON message for id " + schemaId, e);
+      throw toDeserializationException(e, "Error deserializing JSON message for id " + schemaId);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving JSON schema for id " + schemaId);
     } finally {

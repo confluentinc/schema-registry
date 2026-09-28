@@ -136,8 +136,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String PROVENANCE_CACHE_TTL = "provenance.cache.ttl.sec";
   public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
   public static final String PROVENANCE_CACHE_TTL_DOC =
-      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL; "
-          + "0 caches nothing, so every record asks Schema Registry and logs every fallback";
+      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL, "
+          + "which also keeps failures, such as an algorithm Schema Registry does not know, until "
+          + "the Deserializer is reconfigured; 0 caches nothing, so every record asks Schema "
+          + "Registry and logs every fallback";
 
   public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
   public static final String USE_LATEST_WITH_METADATA_DOC =
