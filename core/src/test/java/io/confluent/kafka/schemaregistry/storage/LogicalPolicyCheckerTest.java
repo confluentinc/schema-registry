@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -309,5 +310,25 @@ class LogicalPolicyCheckerTest {
         List.of(new SimpleParsedSchemaHolder(unconvertiblePrev)),
         CompatibilityLevel.BACKWARD);
     assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  // -- edition: check() must derive JSON under V1, not the format=logical V2 default -------------
+
+  @Test
+  void checkComparesJsonUnderV1SoASingletonOneofCollapseIsFlagged() {
+    // Regression test for the production path, not just the converter it calls: under the V2
+    // canonical reading (what format=logical exposes), a singleton oneOf with no null collapses
+    // to its member type, so dropping the oneOf wrapper would be invisible and this would report
+    // nothing. check() must derive JSON under V1 instead, matching provenance, where the oneOf
+    // stays a first-class UNION and the same edit is a structural kind change.
+    String wrapped = "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":[{\"type\":\"integer\"}]}}}";
+    String unwrapped = "{\"type\":\"object\",\"properties\":{\"u\":{\"type\":\"integer\"}}}";
+
+    List<String> errors = LogicalPolicyChecker.check(
+        new JsonSchema(unwrapped),
+        List.of(new SimpleParsedSchemaHolder(new JsonSchema(wrapped))),
+        CompatibilityLevel.BACKWARD);
+
+    assertTrue(errors.stream().anyMatch(e -> e.contains("TYPE_MISMATCH")), errors.toString());
   }
 }
