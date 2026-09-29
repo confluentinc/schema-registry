@@ -448,6 +448,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               .build());
       idSchemaMap.put(response.getId(), new Schema(subject, response));
     }
+    // An earlier lookup may have remembered the schema as missing. Cleared for the whole subject,
+    // as the request-based path has no parsed schema to build the key from
+    missingSchemaCache.asMap().keySet().removeIf(key -> key.subject().equals(subject));
     return response;
   }
 

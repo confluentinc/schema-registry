@@ -909,6 +909,36 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterClearsMissingSchemaCache() throws Exception {
+    int version = 7;
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), eq(false), eq(true)))
+        .andThrow(new RestClientException("Schema not found", 404, 40403))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+    // No version in the response, so the version has to be looked up
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), eq(false)))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+    replay(restService);
+    // Created after replay, so the calls the constructor makes are not recorded as expectations
+    client = new CachedSchemaRegistryClient(restService, CACHE_CAPACITY,
+        Collections.singletonMap(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L));
+
+    try {
+      client.getVersion(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals(404, rce.getStatus());
+    }
+    client.register(SUBJECT_0, AVRO_SCHEMA_0);
+    assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0));
+
+    verify(restService);
+  }
+
+  @Test
   public void testGetSchemaRegistryDeployment() throws Exception {
     List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
     SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);
