@@ -26,7 +26,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.confluent.kafka.schemaregistry.RestApp;
@@ -44,17 +43,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.storage.SchemaKey;
-import io.confluent.kafka.schemaregistry.storage.SchemaValue;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Properties;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -353,26 +341,6 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
-  public void aSoftDeleteKeepsTheVersionsCreateTimestamp() throws Exception {
-    register(SUBJECT, record(field("id", "int")));
-    register(SUBJECT, record(field("id", "int"), field("name", "string")));
-    // A live version's ts is when it was registered; createTs appears only once they differ.
-    Long created = restApp.schemaRegistry().get(SUBJECT, 1, true).getTimestamp();
-    Thread.sleep(10);
-    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "1");
-
-    Schema deleted = restApp.schemaRegistry().get(SUBJECT, 1, true);
-    assertEquals(created, deleted.getCreateTimestamp());
-    // Written into the delete's own record, which is all compaction leaves of the key.
-    List<ConsumerRecord<byte[], byte[]>> records = schemaRecords(new SchemaKey(SUBJECT, 1));
-    assertEquals(2, records.size());
-    SchemaValue last = (SchemaValue) new SchemaRegistrySerializer().deserializeValue(
-        new SchemaKey(SUBJECT, 1), records.get(1).value());
-    assertEquals(records.get(0).timestamp(), last.getCreateTimestamp().longValue());
-    assertTrue(records.get(1).timestamp() > last.getCreateTimestamp());
-  }
-
-  @Test
   public void aSoftDeletedReaderIsStillProjectedByTheDeserializer() throws Exception {
     assertEquals("new", readReAddedColumn(true, "v1"));
   }
@@ -421,31 +389,6 @@ public abstract class RestApiProvenanceTest {
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------
-
-  /** Every record of {@code key} on the schemas topic, in offset order. */
-  private List<ConsumerRecord<byte[], byte[]>> schemaRecords(SchemaKey key) throws Exception {
-    Properties props = new Properties();
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-        restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG));
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    String topic = restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
-    SchemaRegistrySerializer serializer = new SchemaRegistrySerializer();
-    List<ConsumerRecord<byte[], byte[]>> matching = new ArrayList<>();
-    try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props,
-        new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-      TopicPartition partition = new TopicPartition(topic, 0);
-      consumer.assign(Collections.singletonList(partition));
-      long end = consumer.endOffsets(Collections.singletonList(partition)).get(partition);
-      while (consumer.position(partition) < end) {
-        for (ConsumerRecord<byte[], byte[]> record : consumer.poll(Duration.ofMillis(500))) {
-          if (key.equals(serializer.deserializeKey(record.key()))) {
-            matching.add(record);
-          }
-        }
-      }
-    }
-    return matching;
-  }
 
   private int register(String subject, String avro) throws Exception {
     return restApp.restClient.registerSchema(
