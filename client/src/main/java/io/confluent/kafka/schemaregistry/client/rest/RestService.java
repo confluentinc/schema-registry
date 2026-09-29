@@ -401,13 +401,18 @@ public class RestService implements Closeable, Configurable {
   static RestClientException errorResponse(int responseCode, String responseBody) {
     ErrorMessage errorMessage;
     if (responseBody != null) {
+      ErrorMessage parsed;
       try {
-        errorMessage = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
+        parsed = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
       } catch (JsonProcessingException e) {
-        errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
-            "Unable to parse error message from schema registry: '(%s)'",
-            responseBody));
+        parsed = null;
       }
+      // Also null for a body of JSON null, which parses without error
+      errorMessage = parsed != null
+          ? parsed
+          : new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
+              "Unable to parse error message from schema registry: '(%s)'",
+              responseBody));
     } else {
       errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
     }
