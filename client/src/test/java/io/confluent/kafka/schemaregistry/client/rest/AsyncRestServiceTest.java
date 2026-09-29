@@ -155,6 +155,17 @@ public class AsyncRestServiceTest {
   }
 
   @Test
+  public void testJsonNullErrorResponse() throws Exception {
+    registry.enqueue(500, "null");
+    restService = newRestService(retries(0), registry.url());
+
+    RestClientException e = awaitFailure(restService.getId(1, null), RestClientException.class);
+
+    assertEquals(500, e.getStatus());
+    assertEquals(50005, e.getErrorCode());
+  }
+
+  @Test
   public void testRetriesRetriableErrorThenSucceeds() throws Exception {
     registry.enqueue(500, "{\"error_code\": 50001, \"message\": \"boom\"}");
     registry.enqueue(500, "{\"error_code\": 50001, \"message\": \"boom\"}");
