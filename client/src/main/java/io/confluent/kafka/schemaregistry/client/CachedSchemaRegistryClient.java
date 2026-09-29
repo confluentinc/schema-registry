@@ -840,6 +840,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
       boolean lookupDeletedSchema) throws IOException, RestClientException {
+    // The cache key leaves out the flag, so only lookups that include deleted versions, as
+    // serializers make, are cached
+    if (!lookupDeletedSchema) {
+      return new SchemaMetadata(restService.getLatestWithMetadata(subject, metadata, false));
+    }
     SubjectAndMetadata subjectAndMetadata = new SubjectAndMetadata(subject, metadata);
     SchemaMetadata schema = latestWithMetadataCache.getIfPresent(subjectAndMetadata);
     if (schema != null) {
@@ -847,7 +852,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-        = restService.getLatestWithMetadata(subject, metadata, lookupDeletedSchema);
+        = restService.getLatestWithMetadata(subject, metadata, true);
     schema = new SchemaMetadata(response);
     latestWithMetadataCache.put(subjectAndMetadata, schema);
     return schema;

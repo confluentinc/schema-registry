@@ -741,7 +741,7 @@ public class CachedSchemaRegistryClientTest {
         fakeTicker
     );
 
-    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(false)))
+    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(true)))
         .andReturn(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
                 ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0))
@@ -752,18 +752,18 @@ public class CachedSchemaRegistryClientTest {
     replay(restService);
 
     Map<String, String> metadata = ImmutableMap.of("key", "value");
-    SchemaMetadata schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    SchemaMetadata schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, true);
     assertEquals(ID_25, schemaMetadata.getId());
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
 
     // Should hit the cache
-    schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, false);
+    schemaMetadata = client.getLatestWithMetadata(SUBJECT_0, metadata, true);
     assertEquals(ID_25, schemaMetadata.getId());
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
-    assertNotNull(client.getLatestWithMetadata(SUBJECT_0, metadata, false));
+    assertNotNull(client.getLatestWithMetadata(SUBJECT_0, metadata, true));
   }
 
   @Test
@@ -934,6 +934,28 @@ public class CachedSchemaRegistryClientTest {
     }
     client.register(SUBJECT_0, AVRO_SCHEMA_0);
     assertEquals(version, client.getVersion(SUBJECT_0, AVRO_SCHEMA_0));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testLatestWithMetadataWithoutDeletedIsNotAnsweredFromCache() throws Exception {
+    // Version 2 is deleted, so only a lookup that includes deleted versions returns it
+    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(true)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 2,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+    expect(restService.getLatestWithMetadata(eq(SUBJECT_0), anyObject(), eq(false)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+    replay(restService);
+    // Created after replay, so the calls the constructor makes are not recorded as expectations
+    client = new CachedSchemaRegistryClient(restService, CACHE_CAPACITY);
+
+    Map<String, String> metadata = ImmutableMap.of("key", "value");
+    assertEquals(2, client.getLatestWithMetadata(SUBJECT_0, metadata, true).getVersion());
+    assertEquals(1, client.getLatestWithMetadata(SUBJECT_0, metadata, false).getVersion());
 
     verify(restService);
   }
