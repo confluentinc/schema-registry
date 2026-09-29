@@ -38,6 +38,7 @@ public class SchemaMetadata {
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
   private Long timestamp = null;
+  private Long createTimestamp = null;
   private Boolean deleted = null;
 
   public SchemaMetadata(int id,
@@ -72,6 +73,7 @@ public class SchemaMetadata {
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.timestamp = schema.getTimestamp();
+    this.createTimestamp = schema.getCreateTimestamp();
     this.deleted = schema.getDeleted();
   }
 
@@ -113,6 +115,10 @@ public class SchemaMetadata {
 
   public Long getTimestamp() {
     return this.timestamp;
+  }
+
+  public Long getCreateTimestamp() {
+    return this.createTimestamp;
   }
 
   public Boolean getDeleted() {

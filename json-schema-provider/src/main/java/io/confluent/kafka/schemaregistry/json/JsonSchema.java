@@ -1009,7 +1009,8 @@ public class JsonSchema implements ParsedSchema {
   public List<String> isBackwardCompatible(
       CompatibilityPolicy policy, ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Lists.newArrayList("Incompatible because of different schema type");
+      return Lists.newArrayList("{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
+              + "Incompatible because of different schema type\", additionalInfo:\"\"}");
     }
     Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
         ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
@@ -1024,7 +1025,9 @@ public class JsonSchema implements ParsedSchema {
       if (isRemoteRefBlocked(e)) {
         // mutable: the FULL compatibility check appends to the returned list
         List<String> errors = new ArrayList<>();
-        errors.add("A previous schema version contains an unsupported external reference");
+        errors.add("{errorType:\"UNSUPPORTED_EXTERNAL_REFERENCE\", description:\""
+                + "A previous schema version contains an unsupported external reference\", "
+                + "additionalInfo:\"\"}");
         return errors;
       }
       throw e;
