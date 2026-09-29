@@ -17,12 +17,14 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,8 +36,11 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Range;
+import org.apache.kafka.common.config.ConfigException;
 import  org.apache.kafka.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
+import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
@@ -114,6 +119,38 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final boolean USE_LATEST_VERSION_DEFAULT = false;
   public static final String USE_LATEST_VERSION_DOC =
       "Specify if the Serializer should use the latest subject version for serialization";
+
+  public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
+  public static final String PROVENANCE_ALGORITHM_DOC =
+      "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
+          + "writer fields with reader fields rather than by name or field number; 'latest' for "
+          + "whichever version Schema Registry answers with by default, which may change when it "
+          + "is upgraded; 'dynamic' for each schema version paired with the one before it by the "
+          + "version released when it was registered, so an upgrade never changes the pairing of "
+          + "versions registered before it; unset or 'none' to pair them as usual. A version "
+          + "newer than this "
+          + "client knows needs a newer client; one the registry does not know fails every "
+          + "record";
+
+  public static final String PROVENANCE_STRATEGY = "provenance.strategy";
+  public static final Class<?> PROVENANCE_STRATEGY_DEFAULT = ClientProvenanceStrategy.class;
+  public static final String PROVENANCE_STRATEGY_DOC =
+      "Where the Deserializer reading by provenance gets it: an implementation of "
+          + ProvenanceStrategy.class.getName() + ", by default one asking Schema Registry";
+
+  public static final String PROVENANCE_CACHE_SIZE = "provenance.cache.size";
+  public static final int PROVENANCE_CACHE_SIZE_DEFAULT = 1000;
+  public static final String PROVENANCE_CACHE_SIZE_DOC =
+      "The maximum size for caches holding provenance pairings and reader schema ids; 0 caches "
+          + "nothing, so every record asks Schema Registry and logs every fallback";
+
+  public static final String PROVENANCE_CACHE_TTL = "provenance.cache.ttl.sec";
+  public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
+  public static final String PROVENANCE_CACHE_TTL_DOC =
+      "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL, "
+          + "which also keeps failures, such as an algorithm Schema Registry does not know, until "
+          + "the Deserializer is reconfigured; 0 caches nothing, so every record asks Schema "
+          + "Registry and logs every fallback";
 
   public static final String USE_LATEST_WITH_METADATA = "use.latest.with.metadata";
   public static final String USE_LATEST_WITH_METADATA_DOC =
@@ -391,6 +428,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
+        .define(PROVENANCE_ALGORITHM, Type.STRING, null,
+                PROVENANCE_ALGORITHM_VALIDATOR,
+                Importance.LOW, PROVENANCE_ALGORITHM_DOC)
+        .define(PROVENANCE_STRATEGY, Type.CLASS, PROVENANCE_STRATEGY_DEFAULT,
+                Importance.LOW, PROVENANCE_STRATEGY_DOC)
+        .define(PROVENANCE_CACHE_SIZE, Type.INT, PROVENANCE_CACHE_SIZE_DEFAULT,
+                Range.atLeast(0), Importance.LOW, PROVENANCE_CACHE_SIZE_DOC)
+        .define(PROVENANCE_CACHE_TTL, Type.INT, PROVENANCE_CACHE_TTL_DEFAULT,
+                Range.atLeast(-1), Importance.LOW, PROVENANCE_CACHE_TTL_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
         .define(LATEST_CACHE_SIZE, Type.INT, LATEST_CACHE_SIZE_DEFAULT,
@@ -534,6 +580,53 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(USE_LATEST_VERSION);
   }
 
+  // Unset, empty, "none", "latest" or a released provenance algorithm version, in any case: a
+  // misspelt one fails configuration rather than quietly reading without provenance.
+  private static final ConfigDef.Validator PROVENANCE_ALGORITHM_VALIDATOR =
+      new ConfigDef.Validator() {
+        @Override
+        public void ensureValid(String name, Object value) {
+          String algorithm = value != null ? value.toString().trim() : "";
+          if (algorithm.isEmpty() || "none".equalsIgnoreCase(algorithm)
+              || ProvenanceAlgorithm.isDynamic(algorithm)) {
+            return;
+          }
+          try {
+            ProvenanceAlgorithm.of(algorithm);
+          } catch (IllegalArgumentException e) {
+            throw new ConfigException(name, value, "Not a provenance algorithm; one of " + this);
+          }
+        }
+
+        @Override
+        public String toString() {
+          List<String> names = new ArrayList<>();
+          names.add("none");
+          names.add(ProvenanceAlgorithm.LATEST_NAME);
+          names.add(ProvenanceAlgorithm.DYNAMIC_NAME);
+          for (ProvenanceAlgorithm algorithm : ProvenanceAlgorithm.values()) {
+            names.add(algorithm.getName());
+          }
+          return names.toString();
+        }
+      };
+
+  /**
+   * The provenance algorithm version to project with, or null when provenance is off.
+   */
+  public String getProvenanceAlgorithm() {
+    String value = this.getString(PROVENANCE_ALGORITHM);
+    return value == null || value.isEmpty() || "none".equalsIgnoreCase(value) ? null : value;
+  }
+
+  public int getProvenanceCacheSize() {
+    return this.getInt(PROVENANCE_CACHE_SIZE);
+  }
+
+  public int getProvenanceCacheTtl() {
+    return this.getInt(PROVENANCE_CACHE_TTL);
+  }
+
   public boolean getLatestCompatibilityStrict() {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
   }
@@ -573,6 +666,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public ContextNameStrategy contextNameStrategy() {
     return this.getConfiguredInstance(CONTEXT_NAME_STRATEGY, ContextNameStrategy.class);
+  }
+
+  public ProvenanceStrategy provenanceStrategy() {
+    return this.getConfiguredInstance(PROVENANCE_STRATEGY, ProvenanceStrategy.class);
   }
 
   public SubjectNameStrategy keySubjectNameStrategy() {
