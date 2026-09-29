@@ -181,6 +181,19 @@ public class AsyncRestServiceTest {
   }
 
   @Test
+  public void testHttpClientDoesNotRetryOnItsOwn() throws Exception {
+    // The HTTP client's default retry strategy would resend on a 503
+    registry.enqueue(503, "{\"error_code\": 50301, \"message\": \"unavailable\"}");
+    registry.enqueue(503, "{\"error_code\": 50301, \"message\": \"unavailable\"}");
+    restService = newRestService(retries(0), registry.url());
+
+    RestClientException e = awaitFailure(restService.getId(1, null), RestClientException.class);
+
+    assertEquals(503, e.getStatus());
+    assertEquals(1, registry.requests.size());
+  }
+
+  @Test
   public void testFailsOverToNextUrlOnConnectionError() throws Exception {
     registry.enqueue(200, "{\"schema\": \"\\\"string\\\"\"}");
     String deadUrl = "http://127.0.0.1:" + unusedPort();

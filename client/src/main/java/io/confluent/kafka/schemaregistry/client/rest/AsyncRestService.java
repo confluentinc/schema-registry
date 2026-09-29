@@ -208,6 +208,7 @@ public class AsyncRestService implements Closeable {
     }
 
     HttpAsyncClientBuilder httpClientBuilder = HttpAsyncClients.custom()
+        .disableAutomaticRetries()
         .setDefaultRequestConfig(requestConfig)
         .setConnectionManager(connectionManagerBuilder.build());
 
