@@ -18,9 +18,14 @@ package io.confluent.kafka.streams.integration.dsl;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,21 +33,44 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
@@ -54,7 +82,219 @@ import org.junit.jupiter.params.provider.ValueSource;
  * DSL integration test for {@link TimestampedKeyValueStoreWithHeaders}.
  */
 @Tag("IntegrationTest")
-public class TimestampedKeyValueStoreWithHeadersDslIntegrationTest extends TimestampedKeyValueStoreDslTestBase {
+public class TimestampedKeyValueStoreWithHeadersDslIntegrationTest extends HeadersDslTestBase {
+
+    private static final String KEY_SCHEMA_JSON =
+        "{"
+            + "\"type\":\"record\","
+            + "\"name\":\"WordKey\","
+            + "\"namespace\":\"io.confluent.kafka.streams.integration.dsl\","
+            + "\"fields\":["
+            + "  {\"name\":\"word\",\"type\":\"string\"}"
+            + "]"
+            + "}";
+
+    private static final String VALUE_SCHEMA_JSON =
+        "{"
+            + "\"type\":\"record\","
+            + "\"name\":\"TextLine\","
+            + "\"namespace\":\"io.confluent.kafka.streams.integration.dsl\","
+            + "\"fields\":["
+            + "  {\"name\":\"line\",\"type\":\"string\"}"
+            + "]"
+            + "}";
+
+    private static final String AGG_SCHEMA_JSON =
+        "{"
+            + "\"type\":\"record\","
+            + "\"name\":\"WordCount\","
+            + "\"namespace\":\"io.confluent.kafka.streams.integration.dsl\","
+            + "\"fields\":["
+            + "  {\"name\":\"word\",\"type\":\"string\"},"
+            + "  {\"name\":\"count\",\"type\":\"long\"}"
+            + "]"
+            + "}";
+
+    private static final String MAP_VALUE_SCHEMA_JSON =
+        "{"
+            + "\"type\":\"record\","
+            + "\"name\":\"MapWord\","
+            + "\"namespace\":\"io.confluent.kafka.streams.integration.dsl\","
+            + "\"fields\":["
+            + "  {\"name\":\"firstWord\",\"type\":\"string\"},"
+            + "  {\"name\":\"count\",\"type\":\"long\"}"
+            + "]"
+            + "}";
+
+    private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+    private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
+    private final Schema aggSchema = new Schema.Parser().parse(AGG_SCHEMA_JSON);
+    private final Schema mapValueSchema = new Schema.Parser().parse(MAP_VALUE_SCHEMA_JSON);
+
+    private GenericAvroSerde createKeySerde() {
+        GenericAvroSerde serde = new GenericAvroSerde();
+        Map<String, Object> config = new HashMap<>();
+        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+            HeaderSchemaIdSerializer.class.getName());
+        serde.configure(config, true);
+        return serde;
+    }
+
+    private GenericAvroSerde createValueSerde() {
+        GenericAvroSerde serde = new GenericAvroSerde();
+        Map<String, Object> config = new HashMap<>();
+        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+            HeaderSchemaIdSerializer.class.getName());
+        serde.configure(config, false);
+        return serde;
+    }
+
+    private Properties createStreamsProps(String appId, boolean cachingEnabled) {
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        props.put(StreamsConfig.STATE_DIR_CONFIG,
+            System.getProperty("java.io.tmpdir") + "/kafka-streams-" + appId + "-" + UUID.randomUUID());
+        if (cachingEnabled) {
+            props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        } else {
+            props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+            props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 0);
+        }
+        return props;
+    }
+
+    private KafkaStreams startStreamsAndAwaitRunning(
+        Topology topology, String appId, boolean cachingEnabled) throws Exception {
+        CountDownLatch startedLatch = new CountDownLatch(1);
+        KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId, cachingEnabled));
+        streams.cleanUp();
+        streams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING) {
+                startedLatch.countDown();
+            }
+        });
+        streams.start();
+        assertTrue(startedLatch.await(30, TimeUnit.SECONDS), "KafkaStreams should reach RUNNING state");
+        return streams;
+    }
+
+    private void closeStreams(KafkaStreams streams) {
+        if (streams != null) {
+            streams.close(Duration.ofSeconds(10));
+        }
+    }
+
+    @SafeVarargs
+    private final void produce(
+        String topic, KeyValue<GenericRecord, GenericRecord>... records) throws Exception {
+        try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                 new KafkaProducer<>(createProducerProps())) {
+            for (KeyValue<GenericRecord, GenericRecord> kv : records) {
+                producer.send(new ProducerRecord<>(topic, kv.key, kv.value)).get();
+            }
+            producer.flush();
+        }
+    }
+
+    private <V> ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<V>> headersStore(
+        KafkaStreams streams, String storeName) {
+        return streams.store(StoreQueryParameters.fromNameAndType(
+            storeName, new TimestampedKeyValueStoreWithHeadersType<GenericRecord, V>()));
+    }
+
+    private <V> Map<String, ConsumerRecord<GenericRecord, V>> lastRecordPerKey(
+        List<ConsumerRecord<GenericRecord, V>> records) {
+        Map<String, ConsumerRecord<GenericRecord, V>> result = new HashMap<>();
+        for (ConsumerRecord<GenericRecord, V> r : records) {
+            result.put(r.key().get("word").toString(), r);
+        }
+        return result;
+    }
+
+    private static String suffixOf(boolean cachingEnabled) {
+        return cachingEnabled ? "-cached" : "-uncached";
+    }
+
+    private <V> void assertChangelogHeaders(
+        List<ConsumerRecord<GenericRecord, V>> records,
+        String changelogTopic,
+        Set<String> expectedTombstoneKeys,
+        String context) {
+        for (ConsumerRecord<GenericRecord, V> r : records) {
+            String key = r.key().get("word").toString();
+            if (r.value() != null) {
+                assertSchemaIdHeaders(r.headers(), changelogTopic, context + " " + key);
+            } else {
+                assertTrue(expectedTombstoneKeys.contains(key),
+                    "Unexpected tombstone for key " + key + " in " + context);
+                assertKeySchemaIdHeader(r.headers(), changelogTopic,
+                    context + " tombstone for " + key);
+            }
+        }
+    }
+
+    private GenericRecord createKey(String word) {
+        GenericRecord key = new GenericData.Record(keySchema);
+        key.put("word", word);
+        return key;
+    }
+
+    private GenericRecord createTextLine(String line) {
+        GenericRecord value = new GenericData.Record(valueSchema);
+        value.put("line", line);
+        return value;
+    }
+
+    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
+        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+
+        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
+        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<GenericRecord, V> record : records) {
+                    results.add(record);
+                }
+            }
+        }
+        assertTrue(!results.isEmpty(), "Got no records from " + topic + " within 30s");
+        return results;
+    }
+
+    /**
+     * Custom QueryableStoreType for querying TimestampedKeyValueStoreWithHeaders directly
+     * without facade wrapping. This returns the full ValueTimestampHeaders wrapper.
+     */
+    private static class TimestampedKeyValueStoreWithHeadersType<K, V>
+        implements QueryableStoreType<ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>>> {
+
+        @Override
+        public boolean accepts(final StateStore stateStore) {
+            return stateStore instanceof TimestampedKeyValueStoreWithHeaders
+                && stateStore instanceof ReadOnlyKeyValueStore;
+        }
+
+        @Override
+        public ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> create(
+            final StateStoreProvider storeProvider, final String storeName) {
+            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+        }
+    }
 
     /**
      * Verifies `groupByKey()` and `count()` work correctly using headers-aware stores,
