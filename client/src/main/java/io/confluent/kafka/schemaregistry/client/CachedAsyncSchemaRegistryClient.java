@@ -62,7 +62,7 @@ import org.slf4j.LoggerFactory;
  * retries it; not-found responses are instead remembered in the missing caches, for the TTLs set
  * in {@link SchemaRegistryClientConfig}.
  *
- * <p>Futures that need a registry call complete on the executor of the supplied
+ * <p>Futures that need a registry call or a parse complete on the executor of the supplied
  * {@link AsyncRestService}, while cache hits are already complete when returned. See
  * {@link AsyncRestService} for when to supply your own executor.
  */
@@ -145,9 +145,11 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
         () -> {
           // Held for this parse alone, as the version cache may evict them before it runs
           Map<SubjectAndInt, Schema> prefetched = new ConcurrentHashMap<>();
+          // Parsed on the executor, as the prefetch is already complete when nothing needed
+          // fetching, and thenApply would then parse on the calling thread
           return prefetchReferences(schema.getSubject(), schema.getReferences(),
               ConcurrentHashMap.newKeySet(), prefetched)
-              .thenApply(ignored -> parse(schema, prefetched));
+              .thenApplyAsync(ignored -> parse(schema, prefetched), restService.getExecutor());
         },
         // As in CachedSchemaRegistryClient, schemas that fail to parse are not cached
         Optional::isPresent);
