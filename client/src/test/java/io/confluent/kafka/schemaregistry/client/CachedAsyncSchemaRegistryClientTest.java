@@ -317,6 +317,31 @@ public class CachedAsyncSchemaRegistryClientTest {
   }
 
   @Test
+  public void testLookupFailingAfterRegisterDoesNotBlockLaterLookup() throws Exception {
+    client = newClient(Collections.singletonMap(
+        SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, "60"));
+    CompletableFuture<Schema> lookup = new CompletableFuture<>();
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(true)))
+        .andReturn(lookup)
+        .andReturn(completedFuture(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD)));
+    // No version in the response, so the version has to be looked up
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(completedFuture(new RegisterSchemaResponse(ID))).once();
+    replay(restService);
+
+    CompletableFuture<Integer> getVersion = client.getVersion(SUBJECT, AVRO_SCHEMA);
+    await(client.register(SUBJECT, AVRO_SCHEMA));
+    lookup.completeExceptionally(new RestClientException("Schema not found", 404, 40403));
+    awaitFailure(getVersion, RestClientException.class);
+    assertEquals(3, (int) await(client.getVersion(SUBJECT, AVRO_SCHEMA)));
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterAfterGetIdIsCacheHit() throws Exception {
     expect(restService.lookUpSubjectVersion(
         anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false), eq(false)))
