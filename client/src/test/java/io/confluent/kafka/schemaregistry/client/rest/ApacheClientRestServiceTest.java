@@ -26,11 +26,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayInputStream;
+import java.io.OutputStream;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.lang.reflect.Field;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
@@ -60,6 +64,38 @@ import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ApacheClientRestServiceTest {
+
+  @Test
+  public void testHttpClientDoesNotRetryOnItsOwn() throws Exception {
+    // The HTTP client's default retry strategy would resend on a 503
+    AtomicInteger requests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", exchange -> {
+      requests.incrementAndGet();
+      byte[] body = "{\"error_code\": 50301, \"message\": \"unavailable\"}"
+          .getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(503, body.length);
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(body);
+      }
+    });
+    server.start();
+    // No retries by default
+    RestService restService = new RestService(
+        "http://127.0.0.1:" + server.getAddress().getPort(), false, true);
+    // The HTTP client only retries when its 1s retry interval fits within the response timeout
+    restService.setHttpReadTimeoutMs(30000);
+    try {
+      restService.getAllSubjects();
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(503, e.getStatus());
+    } finally {
+      restService.close();
+      server.stop(0);
+    }
+    assertEquals(1, requests.get());
+  }
 
   @Test
   public void testSetForwardHeader() throws Exception {

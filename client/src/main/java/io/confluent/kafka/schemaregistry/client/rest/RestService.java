@@ -363,6 +363,8 @@ public class RestService implements Closeable, Configurable {
     HttpClientBuilder httpClientBuilder = HttpClients.custom();
 
     httpClientBuilder
+        // Retries are done by the retry executor alone, so max.retries is respected
+        .disableAutomaticRetries()
         .setDefaultRequestConfig(requestConfig);
 
     PoolingHttpClientConnectionManagerBuilder connectionManagerBuilder =
