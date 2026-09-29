@@ -53,11 +53,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Cache<Integer, DatumWriter<Object>> datumWriterCache;
+  private final Cache<SubjectSchemaId, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
-    // Key by schema id, not the Schema object: schemas re-parsed from an 8.x server's responses
-    // arrive as fresh instances, so identity keying leaks a writer per call.
+    // Key by subject and schema id (see SubjectSchemaId), not the Schema object: schemas re-parsed
+    // from an 8.x server's responses arrive as fresh instances, so identity keying leaks a writer.
     datumWriterCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
@@ -169,7 +169,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
               "Unrecognized bytes object of type: " + value.getClass().getName());
         }
       } else {
-        writeDatum(out, value, rawSchema, id);
+        writeDatum(out, value, rawSchema, subject, id);
       }
       byte[] bytes = out.toByteArray();
       out.close();
@@ -190,12 +190,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   @SuppressWarnings("unchecked")
-  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema, int id)
+  private void writeDatum(
+      ByteArrayOutputStream out, Object value, Schema rawSchema, String subject, int id)
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.get(id,
+    writer = datumWriterCache.get(new SubjectSchemaId(subject, id),
         () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
