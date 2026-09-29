@@ -3270,9 +3270,18 @@ components:
           example: 1
         ts:
           type: integer
-          description: "Timestamp when the schema was created. In Confluent Cloud,\
-            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
+          description: "Timestamp when the schema version's record was last written;\
+            \ the version was registered then unless createTs is present. In Confluent\
+            \ Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
+          format: int64
+        createTs:
+          type: integer
+          description: "Timestamp when the schema version was first registered. Present\
+            \ only when it differs from ts, i.e. the version's record was rewritten,\
+            \ as by a soft delete or an import; otherwise the version was registered\
+            \ at ts. In Confluent Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
           format: int64
         deleted:
           type: boolean
@@ -3327,9 +3336,18 @@ components:
             $ref: "#/components/schemas/SchemaTags"
         ts:
           type: integer
-          description: "Timestamp when the schema was created. In Confluent Cloud,\
-            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
+          description: "Timestamp when the schema version's record was last written;\
+            \ the version was registered then unless createTs is present. In Confluent\
+            \ Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
+          format: int64
+        createTs:
+          type: integer
+          description: "Timestamp when the schema version was first registered. Present\
+            \ only when it differs from ts, i.e. the version's record was rewritten,\
+            \ as by a soft delete or an import; otherwise the version was registered\
+            \ at ts. In Confluent Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
           format: int64
         deleted:
           type: boolean
@@ -3401,9 +3419,18 @@ components:
             \ in"
         ts:
           type: integer
-          description: "Timestamp when the schema was created. In Confluent Cloud,\
-            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
+          description: "Timestamp when the schema version's record was last written;\
+            \ the version was registered then unless createTs is present. In Confluent\
+            \ Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
+          format: int64
+        createTs:
+          type: integer
+          description: "Timestamp when the schema version was first registered. Present\
+            \ only when it differs from ts, i.e. the version's record was rewritten,\
+            \ as by a soft delete or an import; otherwise the version was registered\
+            \ at ts. In Confluent Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
           format: int64
         deleted:
           type: boolean
@@ -3606,9 +3633,18 @@ components:
             $ref: "#/components/schemas/SchemaTags"
         ts:
           type: integer
-          description: "Timestamp when the schema was created. In Confluent Cloud,\
-            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
+          description: "Timestamp when the schema version's record was last written;\
+            \ the version was registered then unless createTs is present. In Confluent\
+            \ Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
+          format: int64
+        createTs:
+          type: integer
+          description: "Timestamp when the schema version was first registered. Present\
+            \ only when it differs from ts, i.e. the version's record was rewritten,\
+            \ as by a soft delete or an import; otherwise the version was registered\
+            \ at ts. In Confluent Cloud, this field is returned only if Confluent-Accept-Unknown-Properties\
+            \ header is passed in"
           format: int64
         deleted:
           type: boolean
