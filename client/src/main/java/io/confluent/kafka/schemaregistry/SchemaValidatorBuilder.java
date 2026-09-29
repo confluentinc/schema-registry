@@ -37,7 +37,8 @@ public final class SchemaValidatorBuilder {
   private static final String OLD_PREFIX = "old";
   private static final int MAX_SCHEMA_SIZE_FOR_LOGGING = 10 * 1024;
   private static final String DIFFERENT_SCHEMA_TYPE =
-      "Incompatible because of different schema type";
+      "{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
+          + "Incompatible because of different schema type\", additionalInfo:\"\"}";
 
   /**
    * Use a strategy that validates that a schema can be used to read existing

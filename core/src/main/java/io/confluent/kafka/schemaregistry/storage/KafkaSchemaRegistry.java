@@ -565,6 +565,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         final SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
         final SchemaValue schemaValue = new SchemaValue(schema, ruleSetHandler);
         metadataEncoder.encodeMetadata(schemaValue);
+        SchemaValue existingValue = (SchemaValue) lookupCache.get(schemaKey);
+        if (existingValue != null) {
+          schemaValue.setCreateTimestamp(existingValue.getCreateTimestamp());
+        }
         if (schemaId >= 0) {
           checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);
@@ -752,8 +756,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
       }
       if (!permanentDelete) {
+        Long createTimestamp = schemaValue != null ? schemaValue.getCreateTimestamp() : null;
         schemaValue = new SchemaValue(schema);
         schemaValue.setDeleted(true);
+        schemaValue.setCreateTimestamp(createTimestamp);
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");
