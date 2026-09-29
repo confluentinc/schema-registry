@@ -80,7 +80,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Shared infrastructure for DSL integration tests of {@link TimestampedWindowStoreWithHeaders}.
  */
-abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
+abstract class TimestampedWindowStoreDslTestBase extends HeadersDslTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(TimestampedWindowStoreDslTestBase.class);
 
@@ -100,10 +100,6 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
     // across the parameterized invocations and other tests in the file.
     protected final List<KafkaStreams> openStreams = new ArrayList<>();
     protected final List<GenericAvroSerde> openSerdes = new ArrayList<>();
-
-    protected TimestampedWindowStoreDslTestBase() {
-        super(1, true);
-    }
 
     @AfterEach
     public void cleanUpStreamsResources() {
@@ -126,17 +122,6 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
             }
         }
         openSerdes.clear();
-    }
-
-    protected void createTopics(String... topicNames) throws Exception {
-        Properties adminProps = new Properties();
-        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        try (AdminClient admin = AdminClient.create(adminProps)) {
-            admin.createTopics(Arrays.stream(topicNames)
-                    .map(n -> new NewTopic(n, 1, (short) 1))
-                    .collect(Collectors.toList()))
-                .all().get(30, TimeUnit.SECONDS);
-        }
     }
 
     protected GenericAvroSerde createKeySerde() {
@@ -167,17 +152,6 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
         serde.configure(config, false);
         openSerdes.add(serde);
         return serde;
-    }
-
-    protected Properties createProducerProps() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER, HeaderSchemaIdSerializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER, HeaderSchemaIdSerializer.class.getName());
-        return props;
     }
 
     protected Properties createConsumerProps(String groupId) {
@@ -274,43 +248,6 @@ abstract class TimestampedWindowStoreDslTestBase extends ClusterTestHarness {
 
     protected static String changelogTopicFor(String applicationId, String storeName) {
         return applicationId + "-" + storeName + "-changelog";
-    }
-
-    protected void assertSchemaIdHeaders(Headers headers, String topic, String context) {
-        Header keyHeader = headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keyHeader, context + ": should have __key_schema_id header");
-        assertHeaderGuidMatchesSubject(keyHeader.value(), topic + "-key", context + " key");
-
-        Header valueHeader = headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-        assertNotNull(valueHeader, context + ": should have __value_schema_id header");
-        assertHeaderGuidMatchesSubject(valueHeader.value(), topic + "-value", context + " value");
-    }
-
-    protected void assertKeySchemaIdHeader(Headers headers, String topic, String context) {
-        Header keyHeader = headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keyHeader, context + ": should have __key_schema_id header");
-        assertHeaderGuidMatchesSubject(keyHeader.value(), topic + "-key", context + " key");
-    }
-
-    // Cross-checks the schema-id header bytes against Schema Registry: decodes the GUID from
-    // the 17-byte V1 header and asserts it matches the latest registered GUID for the subject.
-    protected void assertHeaderGuidMatchesSubject(byte[] headerBytes, String subject, String context) {
-        assertEquals(17, headerBytes.length, context + ": GUID header should be 17 bytes");
-        assertEquals(SchemaId.MAGIC_BYTE_V1, headerBytes[0],
-            context + ": header should have V1 magic byte");
-
-        ByteBuffer bb = ByteBuffer.wrap(headerBytes, 1, 16);
-        UUID headerGuid = new UUID(bb.getLong(), bb.getLong());
-
-        try {
-            io.confluent.kafka.schemaregistry.client.rest.entities.Schema registered =
-                restApp.restClient.getLatestVersion(subject);
-            assertEquals(registered.getGuid(), headerGuid.toString(),
-                context + ": header GUID does not match latest registered GUID for subject " + subject);
-        } catch (Exception e) {
-            fail(context + ": failed to look up subject " + subject + " in Schema Registry: "
-                + e.getMessage());
-        }
     }
 
     protected GenericRecord createKey(String word) {
