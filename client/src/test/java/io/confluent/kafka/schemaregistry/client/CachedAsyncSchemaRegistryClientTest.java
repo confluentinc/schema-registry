@@ -292,6 +292,27 @@ public class CachedAsyncSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterClearsRememberedMissingSchemaForOtherNormalize() throws Exception {
+    client = newClient(Collections.singletonMap(
+        SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, "60"));
+    expect(restService.lookUpSubjectVersion(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(true), eq(true)))
+        .andReturn(failedFuture(new RestClientException("Schema not found", 404, 40403)))
+        .andReturn(completedFuture(
+            new Schema(SUBJECT, 3, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD)));
+    expect(restService.registerSchema(
+        anyObject(RegisterSchemaRequest.class), eq(SUBJECT), eq(false)))
+        .andReturn(completedFuture(new RegisterSchemaResponse(ID))).once();
+    replay(restService);
+
+    awaitFailure(client.getVersion(SUBJECT, AVRO_SCHEMA, true), RestClientException.class);
+    await(client.register(SUBJECT, AVRO_SCHEMA, false));
+    assertEquals(3, (int) await(client.getVersion(SUBJECT, AVRO_SCHEMA, true)));
+
+    verify(restService);
+  }
+
+  @Test
   public void testLookupFailingAfterRegisterDoesNotHideIt() throws Exception {
     client = newClient(Collections.singletonMap(
         SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, "60"));
