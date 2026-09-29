@@ -604,6 +604,28 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void anItemOrValueOfABranchContinuedAtAnotherPositionByTitleIsPruned() throws Exception {
+    // As for a property's own union: the titles pair each item or value branch with the other's.
+    String swap = "[{\"title\": \"%s\", \"type\": \"string\"}, "
+        + "{\"title\": \"%s\", \"type\": \"integer\"}]";
+    for (String shape : new String[] {
+        "{\"type\": \"array\", \"items\": {\"anyOf\": %s}}",
+        "{\"type\": \"object\", \"connect.type\": \"map\", "
+            + "\"additionalProperties\": {\"anyOf\": %s}}"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      boolean array = shape.contains("items");
+      JsonSchema v1 = object("\"e\": " + String.format(shape, String.format(swap, "A", "B")));
+      JsonSchema v2 = object("\"e\": " + String.format(shape, String.format(swap, "B", "A")));
+      byte[] bytes = write(v1, array ? "{\"e\": [\"x\"]}" : "{\"e\": {\"k\": \"x\"}}");
+      client.register(SUBJECT, v2);
+
+      assertFalse(read(v2, bytes, "v1").has("e"), shape);
+      assertTrue(read(v2, bytes, null).has("e"), shape);
+    }
+  }
+
+  @Test
   void aPrimitiveInAReAddedItemOrValueBranchIsPruned() throws Exception {
     // The item's union is a location of its own, as a property's is: number, re-added, is new.
     for (String shape : new String[] {

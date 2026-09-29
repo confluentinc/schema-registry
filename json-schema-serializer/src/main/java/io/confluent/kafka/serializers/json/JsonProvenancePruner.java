@@ -214,7 +214,8 @@ final class JsonProvenancePruner {
     while (added) {
       added = false;
       for (Target target : byNames.values()) {
-        if (!pruned.contains(target.names) && spelled.getOrDefault(target.names, 0) > 1
+        if (!pruned.contains(target.names)
+            && (spelled.getOrDefault(target.names, 0) > 1 || crossesBranch(target))
             && !readsAsWritten(target, outermost.getOrDefault(target.names,
                 Collections.emptyList()), pruned, alike, reader, writer)) {
           pruned.add(target.names);
@@ -255,6 +256,15 @@ final class JsonProvenancePruner {
       }
     }
     return choices;
+  }
+
+  /**
+   * Whether a branch of {@code target}'s items' or map values' union continues the writer's at
+   * another position: spelled once by name, the property may still read a value as another's.
+   */
+  private static boolean crossesBranch(Target target) {
+    return target.branches.values().stream()
+        .anyMatch(b -> b.continues && !b.choices.equals(b.writerChoices));
   }
 
   /**

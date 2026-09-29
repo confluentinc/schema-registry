@@ -449,12 +449,29 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         if (projector == null) {
           projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
               provenanceCacheSize, provenanceCacheTtlSec,
-              AbstractKafkaProtobufDeserializer::imports, provenanceStrategy);
+              AbstractKafkaProtobufDeserializer::imports, provenanceStrategy,
+              AbstractKafkaProtobufDeserializer::withoutFileOptions);
           provenanceProjector = projector;
         }
       }
     }
     return projector;
+  }
+
+  /**
+   * {@code schema} without its file's options: they steer only code generation, as a generated
+   * class's Java options do, and change neither the wire nor a field's identity.
+   */
+  private static ParsedSchema withoutFileOptions(ParsedSchema schema) {
+    ProtobufSchema protobuf = (ProtobufSchema) schema;
+    ProtoFileElement file = protobuf.rawSchema();
+    if (file.getOptions().isEmpty()) {
+      return schema;
+    }
+    return new ProtobufSchema(file.copy(file.getLocation(), file.getPackageName(),
+        file.getSyntax(), file.getImports(), file.getPublicImports(), file.getWeakImports(),
+        file.getTypes(), file.getServices(), file.getExtendDeclarations(),
+        Collections.emptyList()), protobuf.references(), protobuf.dependencies());
   }
 
   /**

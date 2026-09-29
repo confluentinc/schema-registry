@@ -102,6 +102,8 @@ public final class ProvenanceProjector<T> {
   private final Function<ParsedSchema, Map<String, String>> importsOf;
   // Where provenance comes from.
   private final ProvenanceStrategy strategy;
+  // A schema as compared by structure, less what its format says bears on no field.
+  private final Function<ParsedSchema, ParsedSchema> structural;
 
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
@@ -131,9 +133,21 @@ public final class ProvenanceProjector<T> {
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
       int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf,
       ProvenanceStrategy strategy) {
+    this(client, algorithm, cacheSize, cacheTtlSec, importsOf, strategy, null);
+  }
+
+  /**
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int, Function,
+   * ProvenanceStrategy)}, comparing schemas by structure as {@code structural} gives them: less
+   * what bears on no field, such as a Protobuf file's code generation options.
+   */
+  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
+      int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf,
+      ProvenanceStrategy strategy, Function<ParsedSchema, ParsedSchema> structural) {
     this.client = client;
     this.importsOf = importsOf;
     this.strategy = strategy != null ? strategy : new ClientProvenanceStrategy();
+    this.structural = structural != null ? structural : Function.identity();
     this.algorithm = ProvenanceAlgorithm.LATEST_NAME.equalsIgnoreCase(algorithm) ? null : algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
@@ -509,8 +523,8 @@ public final class ProvenanceProjector<T> {
     return imports;
   }
 
-  private static String structure(ParsedSchema schema, boolean normalized) {
-    ParsedSchema bare = bare(schema);
+  private String structure(ParsedSchema schema, boolean normalized) {
+    ParsedSchema bare = structural.apply(bare(schema));
     return (normalized ? bare.normalize() : bare).canonicalString();
   }
 
@@ -542,8 +556,9 @@ public final class ProvenanceProjector<T> {
 
     Optional<T> get() {
       if (failure != null) {
-        // A fresh one each time: a caller may add to it, and it is shared by every record.
-        throw new SerializationException(failure.getMessage(), failure);
+        // A fresh one each time: a caller may add to it, and it is shared by every record. Its
+        // cause is the failure's own, so the chain says the message once.
+        throw new SerializationException(failure.getMessage(), failure.getCause());
       }
       return Optional.ofNullable(value);
     }

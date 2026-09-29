@@ -520,6 +520,22 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aGeneratedClassIsMatchedToATextWithoutItsFileOptions() throws Exception {
+    // Registered by a producer in another language: no java_outer_classname, which steers only
+    // code generation, so the class still stands for the latest version.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n";
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message Readded {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, new ProtobufSchema(head + "message Readded {\n  int32 id = 1;\n}\n"));
+    client.register(SUBJECT, new ProtobufSchema(head
+        + "message Readded {\n  int32 id = 1;\n  string memo = 2;\n}\n"));
+
+    assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+  }
+
+  @Test
   void aGeneratedClassIsMatchedToTheTextItWasGeneratedFrom() throws Exception {
     // Registered from its .proto text, not the class: the class's own schema spells the map as an
     // entry message and message types fully qualified, so it matches only once normalized.

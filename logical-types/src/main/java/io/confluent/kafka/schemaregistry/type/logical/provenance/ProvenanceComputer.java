@@ -1034,6 +1034,13 @@ public final class ProvenanceComputer {
             found = mostShared(peer, unresolved, previous, envelope, (a, p) -> !taken.contains(p)
                 && overlapsBeyond(a.content, p.content, envelope) && !otherHints(a, p)
                 && !crosses(a, p, peers, matched, previous, taken));
+            if (found == null && previous.stream().filter(p -> !taken.contains(p)).count() == 1) {
+              // The last previous branch, and it alone relates to it: linked, if only by a member
+              // every branch had.
+              found = mutual(peer, unresolved, previous, (a, p) -> !taken.contains(p)
+                  && overlaps(a.content, p.content) && !otherHints(a, p)
+                  && !crosses(a, p, peers, matched, previous, taken));
+            }
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
                 && overlaps(peer.content, p.content)
@@ -1111,8 +1118,8 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The members every untaken previous branch has, where there are several: shared by all, they
-     * tell none of them apart.
+     * The members every untaken previous branch has, where there are several, else every previous
+     * branch had: shared by all, they tell none of them apart.
      */
     private static Set<String> envelope(List<Node> previous, Set<Node> taken) {
       Set<String> common = null;
@@ -1134,7 +1141,12 @@ public final class ProvenanceComputer {
           common.retainAll(members);
         }
       }
-      return untaken < 2 || common == null ? Collections.emptySet() : common;
+      if (untaken >= 2) {
+        return common;
+      }
+      // One left, or none: what every previous branch had still tells nothing.
+      return previous.size() < 2 || untaken == previous.size() ? Collections.emptySet()
+          : envelope(previous, Collections.emptySet());
     }
 
     /**

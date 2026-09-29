@@ -214,6 +214,29 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aMemberEveryBranchHadStillTellsNothingOnceOneBranchIsLeft() {
+    // With A paired, B is the one old branch left; m1 and m2, which every old branch had, must not
+    // hand it to the new N over B', its successor, whichever comes first.
+    String a = titled(null, "a", "id", "m1", "m2");
+    String bPrime = titled(null, "b", "id");
+    String n = titled(null, "id", "m1", "m2", "n");
+    for (boolean newFirst : new boolean[] {false, true}) {
+      List<ProvenanceVersion> v = compute(
+          json("{\"u\":{\"oneOf\":[" + a + "," + titled(null, "b", "id", "m1", "m2") + "]}}",
+              null),
+          json("{\"u\":{\"oneOf\":[" + a + "," + (newFirst ? n + "," + bPrime
+              : bPrime + "," + n) + "]}}", null));
+      Map<List<Integer>, Integer> before = pids(v, 0);
+      Map<List<Integer>, Integer> after = pids(v, 1);
+      int successor = newFirst ? 2 : 1;
+      assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 0)));
+      assertThat(after.get(path(0, successor))).isEqualTo(before.get(path(0, 1)));
+      assertThat(after.get(path(0, successor, 0))).isEqualTo(before.get(path(0, 1, 0)));
+      assertThat(after.get(path(0, 3 - successor))).isNotIn(before.values());
+    }
+  }
+
+  @Test
   void aTaggedBranchContinuesItsTagRatherThanAPosition() {
     // P overlaps both Q (through x) and R (through kind), so overlap cannot tell; its tag names R,
     // which position alone would have passed over for Q.

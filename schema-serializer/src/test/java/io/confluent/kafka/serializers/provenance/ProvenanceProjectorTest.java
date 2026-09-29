@@ -300,6 +300,8 @@ public class ProvenanceProjectorTest {
         () -> ask(projector, client));
     assertTrue(first != second);
     assertEquals(first.getMessage(), second.getMessage());
+    // Said once: the cause is the failure's own, not a copy of the record's.
+    assertTrue(first.getCause() instanceof ProvenanceRejectedException);
   }
 
   @Test
