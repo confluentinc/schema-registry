@@ -19,9 +19,8 @@ package io.confluent.kafka.serializers;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.util.Objects;
 
-// Cache key for a schema looked up by id. Ids are only unique within a context, and the server
-// may resolve an unqualified subject in any context, so the id is paired with the subject used
-// for the lookup (the same granularity as the registry client's own id cache).
+// Cache key for a schema looked up by id. Ids are only unique within a context, so the id is
+// paired with the context-qualified subject the serde resolved for the record.
 final class SubjectSchemaId {
   private final String subject;
   private final SchemaId schemaId;

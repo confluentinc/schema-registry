@@ -71,7 +71,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
 
   public AbstractKafkaAvroDeserializer() {
-    // Key by the lookup subject and writer schema id (see SubjectSchemaId), not by schema object
+    // Key by the subject and writer schema id (see SubjectSchemaId), not by schema object
     // identity, so that content-identical schemas arriving as distinct instances share an entry.
     readerSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
@@ -638,17 +638,17 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  // Cache key for datum readers. The writer dimension is the lookup subject and registry schema
-  // id (see SubjectSchemaId); the reader dimension is the reader schema content (the reader
-  // schema often has no registry id). A null writerSchemaId is a sentinel for the post-migration
-  // case where writer == reader: it keeps those entries distinct from the normal (wire-writer,
-  // reader) entries, which always carry a non-null writer id.
+  // Cache key for datum readers. The writer dimension is the subject and registry schema id (see
+  // SubjectSchemaId); the reader dimension is the reader schema content (the reader schema often
+  // has no registry id). A writer key with a null subject and null schema id is a sentinel for the
+  // post-migration case where writer == reader: it keeps those entries distinct from the normal
+  // (wire-writer, reader) entries, which always carry a non-null schema id.
   static class DatumReaderKey {
-    private final SubjectSchemaId writerSchemaId;
+    private final SubjectSchemaId writerKey;
     private final Schema readerSchema;
 
     DatumReaderKey(String subject, SchemaId writerSchemaId, Schema readerSchema) {
-      this.writerSchemaId = new SubjectSchemaId(subject, writerSchemaId);
+      this.writerKey = new SubjectSchemaId(subject, writerSchemaId);
       this.readerSchema = readerSchema;
     }
 
@@ -662,19 +662,19 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       }
       DatumReaderKey that = (DatumReaderKey) o;
       // Writer dimension compared by subject and schema id, reader dimension by schema content.
-      return Objects.equals(writerSchemaId, that.writerSchemaId)
+      return Objects.equals(writerKey, that.writerKey)
           && Objects.equals(readerSchema, that.readerSchema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(writerSchemaId, readerSchema);
+      return Objects.hash(writerKey, readerSchema);
     }
 
     @Override
     public String toString() {
       return "DatumReaderKey{"
-          + "writerSchemaId=" + writerSchemaId
+          + "writerKey=" + writerKey
           + ", readerSchema=" + readerSchema
           + '}';
     }
