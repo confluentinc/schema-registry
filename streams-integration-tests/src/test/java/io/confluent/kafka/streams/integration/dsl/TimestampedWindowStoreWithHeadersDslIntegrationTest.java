@@ -16,60 +16,348 @@
 
 package io.confluent.kafka.streams.integration.dsl;
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+
 @Tag("IntegrationTest")
-public class TimestampedWindowStoreWithHeadersDslIntegrationTest extends TimestampedWindowStoreDslTestBase {
+public class TimestampedWindowStoreWithHeadersDslIntegrationTest extends HeadersDslTestBase {
+
+    private static final Logger log = LoggerFactory.getLogger(TimestampedWindowStoreWithHeadersDslIntegrationTest.class);
+
+    private static final String KEY_SCHEMA_JSON =
+        "{\"type\":\"record\",\"name\":\"WordKey\",\"fields\":[{\"name\":\"word\",\"type\":\"string\"}]}";
+    private static final String VALUE_SCHEMA_JSON =
+        "{\"type\":\"record\",\"name\":\"TextLine\",\"fields\":[{\"name\":\"line\",\"type\":\"string\"}]}";
+    private static final String AGG_SCHEMA_JSON =
+        "{\"type\":\"record\",\"name\":\"WordCount\",\"fields\":[{\"name\":\"word\",\"type\":\"string\"},{\"name\":\"count\",\"type\":\"long\"}]}";
+
+    private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+    private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
+    private final Schema aggSchema = new Schema.Parser().parse(AGG_SCHEMA_JSON);
+
+    // Per-test resources released in @AfterEach to avoid JVM-level accumulation
+    // (RocksDB native handles, schema-registry HTTP clients, on-disk state dirs)
+    // across the parameterized invocations and other tests in the file.
+    private final List<KafkaStreams> openStreams = new ArrayList<>();
+    private final List<GenericAvroSerde> openSerdes = new ArrayList<>();
+
+    @AfterEach
+    public void cleanUpStreamsResources() {
+        for (KafkaStreams streams : openStreams) {
+            try {
+                if (streams.state() != KafkaStreams.State.NOT_RUNNING) {
+                    streams.close(Duration.ofSeconds(30));
+                }
+                streams.cleanUp();
+            } catch (Exception e) {
+                log.warn("Failed to clean up KafkaStreams instance", e);
+            }
+        }
+        openStreams.clear();
+        for (GenericAvroSerde serde : openSerdes) {
+            try {
+                serde.close();
+            } catch (Exception e) {
+                log.warn("Failed to close GenericAvroSerde", e);
+            }
+        }
+        openSerdes.clear();
+    }
+
+    private GenericAvroSerde createKeySerde() {
+        GenericAvroSerde serde = new GenericAvroSerde();
+        Map<String, Object> config = new HashMap<>();
+        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER, HeaderSchemaIdSerializer.class.getName());
+        serde.configure(config, true);
+        openSerdes.add(serde);
+        return serde;
+    }
+
+    private GenericAvroSerde createValueSerde() {
+        GenericAvroSerde serde = new GenericAvroSerde();
+        Map<String, Object> config = new HashMap<>();
+        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER, HeaderSchemaIdSerializer.class.getName());
+        serde.configure(config, false);
+        openSerdes.add(serde);
+        return serde;
+    }
+
+    private GenericAvroSerde createAggSerde() {
+        GenericAvroSerde serde = new GenericAvroSerde();
+        Map<String, Object> config = new HashMap<>();
+        config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER, HeaderSchemaIdSerializer.class.getName());
+        serde.configure(config, false);
+        openSerdes.add(serde);
+        return serde;
+    }
+
+    private Properties createConsumerProps(String groupId) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+        return props;
+    }
+
+    private KafkaStreams startStreamsAndAwaitRunning(
+        Topology topology, String appId, boolean cachingEnabled) throws Exception {
+        return startStreamsAndAwaitRunning(topology, appId, cachingEnabled, Collections.emptyMap());
+    }
+
+    private KafkaStreams startStreamsAndAwaitRunning(
+        Topology topology, String appId, boolean cachingEnabled,
+        Map<String, Object> extraProps) throws Exception {
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        if (!cachingEnabled) props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        props.putAll(extraProps);
+
+        CountDownLatch startedLatch = new CountDownLatch(1);
+        KafkaStreams streams = new KafkaStreams(topology, props);
+        streams.cleanUp();
+        streams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING) {
+                startedLatch.countDown();
+            }
+        });
+        streams.start();
+        openStreams.add(streams);
+        assertTrue(startedLatch.await(30, TimeUnit.SECONDS), "KafkaStreams should reach RUNNING state");
+        return streams;
+    }
+
+    private void closeStreams(KafkaStreams streams) {
+        if (streams != null) {
+            streams.close(Duration.ofSeconds(30));
+            streams.cleanUp();
+        }
+    }
+
+    /** Stamped key-value triple for {@link #produce(String, TimedKv...)}. */
+    private static final class TimedKv {
+        final long timestampMs;
+        final GenericRecord key;
+        final GenericRecord value;
+
+        TimedKv(long timestampMs, GenericRecord key, GenericRecord value) {
+            this.timestampMs = timestampMs;
+            this.key = key;
+            this.value = value;
+        }
+    }
+
+    private static TimedKv at(long timestampMs, GenericRecord key, GenericRecord value) {
+        return new TimedKv(timestampMs, key, value);
+    }
+
+    @SafeVarargs
+    private final void produce(String topic, TimedKv... records) throws Exception {
+        try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                 new KafkaProducer<>(createProducerProps())) {
+            for (TimedKv r : records) {
+                producer.send(new ProducerRecord<>(topic, 0, r.timestampMs, r.key, r.value)).get();
+            }
+            producer.flush();
+        }
+    }
+
+    private <V> ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<V>> windowStore(
+        KafkaStreams streams, String storeName) {
+        return streams.store(StoreQueryParameters.fromNameAndType(
+            storeName, new TimestampedWindowStoreWithHeadersType<>()));
+    }
+
+    private static String suffixOf(boolean cachingEnabled, boolean graceEnabled, String testId) {
+        return (cachingEnabled ? "-cached" : "-uncached")
+            + (graceEnabled ? "-grace" : "-nograce")
+            + "-" + testId;
+    }
+
+    private static String suffixOf(boolean cachingEnabled, String testId) {
+        return (cachingEnabled ? "-cached" : "-uncached") + "-" + testId;
+    }
+
+    private static String changelogTopicFor(String applicationId, String storeName) {
+        return applicationId + "-" + storeName + "-changelog";
+    }
+
+    private GenericRecord createKey(String word) {
+        GenericRecord r = new GenericData.Record(keySchema);
+        r.put("word", word);
+        return r;
+    }
+
+    private GenericRecord createTextLine(String line) {
+        GenericRecord r = new GenericData.Record(valueSchema);
+        r.put("line", line);
+        return r;
+    }
+
+    /** Returns the value from the first window for {@code key}, or null if absent/tombstoned. */
+    private <V> V getWindowValue(ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<V>> store,
+                                   GenericRecord key, long windowStart, long windowSizeMs) {
+        try (WindowStoreIterator<ValueTimestampHeaders<V>> it =
+                 store.fetch(key, Instant.ofEpochMilli(windowStart), Instant.ofEpochMilli(windowStart + windowSizeMs))) {
+            if (!it.hasNext()) return null;
+            ValueTimestampHeaders<V> v = it.next().value;
+            return (v == null) ? null : v.value();
+        }
+    }
+
+    private <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        String topic, String groupId, int expectedCount,
+        Class<?> keyDeserializerClass, Class<?> valueDeserializerClass) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+
+        List<ConsumerRecord<K, V>> results = new ArrayList<>();
+        try (KafkaConsumer<K, V> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+
+            for (ConsumerRecord<K, V> record : consumer.poll(Duration.ofMillis(100))) {
+                results.add(record);
+            }
+
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<K, V> record : records) {
+                    results.add(record);
+                }
+            }
+        }
+        assertTrue(!results.isEmpty(), "Got no records from " + topic + " within 30s");
+        return results;
+    }
+
+    /** Custom QueryableStoreType for a {@link TimestampedWindowStoreWithHeaders}. */
+    private static class TimestampedWindowStoreWithHeadersType<K, V>
+        implements QueryableStoreType<ReadOnlyWindowStore<K, ValueTimestampHeaders<V>>> {
+        @Override public boolean accepts(StateStore s) {
+            return s instanceof TimestampedWindowStoreWithHeaders;
+        }
+        @Override public ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> create(StateStoreProvider p, String n) {
+            return new CompositeReadOnlyWindowStore<>(p, this, n);
+        }
+    }
+
+    /**
+     * Wrapper for {@link WindowBytesStoreSupplier} that also implements
+     * {@link HeadersBytesStoreSupplier}. Needed because {@code RocksDbWindowBytesStoreSupplier}
+     * doesn't implement {@code HeadersBytesStoreSupplier} even when configured to create
+     * header-aware stores, which would otherwise cause the DSL to use the wrong builder.
+     */
+    private static class WindowStoreSupplierWithHeaders
+        implements WindowBytesStoreSupplier, HeadersBytesStoreSupplier {
+        private final WindowBytesStoreSupplier delegate;
+
+        WindowStoreSupplierWithHeaders(WindowBytesStoreSupplier delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override public String name() { return delegate.name(); }
+        @Override public WindowStore<Bytes, byte[]> get() { return delegate.get(); }
+        @Override public String metricsScope() { return delegate.metricsScope(); }
+        @Override public long segmentIntervalMs() { return delegate.segmentIntervalMs(); }
+        @Override public long windowSize() { return delegate.windowSize(); }
+        @Override public boolean retainDuplicates() { return delegate.retainDuplicates(); }
+        @Override public long retentionPeriod() { return delegate.retentionPeriod(); }
+    }
 
     // Parameter provider for cache + grace combinations
     private static Stream<Arguments> cacheAndGraceParams() {
