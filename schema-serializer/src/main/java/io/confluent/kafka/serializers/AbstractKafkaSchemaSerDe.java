@@ -228,6 +228,7 @@ public abstract class AbstractKafkaSchemaSerDe
     provenanceAlgorithm = config.getProvenanceAlgorithm();
     provenanceCacheSize = config.getProvenanceCacheSize();
     provenanceCacheTtlSec = config.getProvenanceCacheTtl();
+    closeQuietly(provenanceStrategy, "provenance strategy");
     provenanceStrategy = provenanceAlgorithm != null ? config.provenanceStrategy() : null;
     validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
@@ -1184,6 +1185,7 @@ public abstract class AbstractKafkaSchemaSerDe
   public void close() throws IOException {
     closeRuleObjects(ruleActions);
     closeRuleObjects(ruleExecutors);
+    closeQuietly(provenanceStrategy, "provenance strategy");
     if (schemaRegistry != null) {
       schemaRegistry.close();
     }

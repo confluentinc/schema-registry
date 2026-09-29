@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,6 +48,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -123,6 +126,27 @@ public class ProvenanceProjectorTest {
     assertThrows(SerializationException.class, () -> ask(projector, client));
     assertThrows(SerializationException.class, () -> ask(projector, client));
     assertEquals(2, strategy.asked);
+  }
+
+  @Test
+  public void aStrategysNaturallyTransientFailureIsRetriedNotCached() throws Exception {
+    for (RuntimeException transientFailure : Arrays.<RuntimeException>asList(
+        new UncheckedIOException(new IOException("reset")), new TimeoutException("slow"),
+        new InterruptException("stopped"))) {
+      CountingClient client = new CountingClient();
+      RecordingStrategy strategy = new RecordingStrategy();
+      strategy.failure = transientFailure;
+      ProvenanceProjector<String> projector =
+          new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+      try {
+        assertThrows(SerializationException.class, () -> ask(projector, client));
+        assertThrows(SerializationException.class, () -> ask(projector, client));
+        assertEquals(2, strategy.asked);
+      } finally {
+        // InterruptException sets the thread's flag, as a real interruption would.
+        Thread.interrupted();
+      }
+    }
   }
 
   @Test

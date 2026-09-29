@@ -156,6 +156,8 @@ public final class ProvenanceHistory {
    * its predecessor by the version effective when it was registered.
    *
    * @throws IllegalArgumentException if no version has that name
+   * @throws UnsupportedProvenanceAlgorithmException if a dynamic range's transitions fall to an
+   *     algorithm other than v1
    */
   public static SchemaProvenance compute(String subject, List<Entry> history,
       List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
@@ -163,12 +165,13 @@ public final class ProvenanceHistory {
       return compute(subject, history, schemas, includeMultipleMessages,
           ProvenanceAlgorithm.of(algorithm));
     }
-    for (Entry entry : history) {
+    // The first version is matched to no predecessor, so only the later ones name an algorithm.
+    for (Entry entry : history.subList(Math.min(1, history.size()), history.size())) {
       ProvenanceAlgorithm effective = ProvenanceAlgorithm.effectiveAt(entry.getCreateTimestamp());
       if (effective != ProvenanceAlgorithm.V1) {
-        // A history spanning two versions needs each transition matched by its own.
-        throw new UnsupportedOperationException("Provenance by " + effective
-            + " beside " + ProvenanceAlgorithm.V1 + " is not supported yet");
+        // Until each transition is matched by its own algorithm.
+        throw new UnsupportedProvenanceAlgorithmException("Dynamic provenance by "
+            + effective.getName() + " is not supported yet");
       }
     }
     SchemaProvenance provenance = compute(subject, history, schemas, includeMultipleMessages,

@@ -160,6 +160,60 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aMemberEveryBranchHasTellsNoBranchApart() {
+    // Both branches share id, so neither overlaps one old branch alone; the members beyond it
+    // pair them, where position would cross them over.
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + titled(null, "id", "a1") + ","
+            + titled(null, "id", "b1") + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + titled(null, "id", "b1", "b2") + ","
+            + titled(null, "id", "a1", "a2") + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    // Members sort by name: a1 or b1 first, id last.
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 1)));
+    assertThat(after.get(path(0, 0, 0))).isEqualTo(before.get(path(0, 1, 0)));
+    assertThat(after.get(path(0, 0, 2))).isEqualTo(before.get(path(0, 1, 1)));
+    assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(0, 1, 0))).isEqualTo(before.get(path(0, 0, 0)));
+  }
+
+  @Test
+  void aBranchHintedAnewTakesNoOldBranchThroughTheMembersItShares() {
+    // The renamed hint makes the second branch new; sharing id and e, it must not take the first
+    // branch from its successor, which dropped id.
+    String hints = ",\"confluent:union\":[{},{\"name\":\"%s\"},{}]";
+    String j = titled(null, "id", "j");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + titled(null, "e", "id") + "," + titled(null, "e", "g", "id")
+            + "," + j + "]" + String.format(hints, "H32") + "}}", null),
+        json("{\"u\":{\"oneOf\":[" + titled(null, "e") + "," + titled(null, "e", "g", "id")
+            + "," + j + "]" + String.format(hints, "H33") + "}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(0, 0, 0))).isEqualTo(before.get(path(0, 0, 0)));
+    assertThat(after.get(path(0, 1))).isNotIn(before.values());
+    assertThat(after.get(path(0, 2))).isEqualTo(before.get(path(0, 2)));
+  }
+
+  @Test
+  void aBranchLeftOnlyAMemberEveryBranchHadStillContinues() {
+    // Once A is paired, B is the one old branch left: id, though every branch had it, links it,
+    // and B moved, so its position cannot.
+    String nested = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"number\"},"
+        + "\"n\":" + titled(null, "y") + "}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + titled(null, "id", "x") + ","
+            + titled(null, "id", "y") + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + nested + "," + titled(null, "id", "x") + "]}}", null));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(0, 1)));
+    assertThat(after.get(path(0, 0, 0))).isEqualTo(before.get(path(0, 1, 0)));
+  }
+
+  @Test
   void aTaggedBranchContinuesItsTagRatherThanAPosition() {
     // P overlaps both Q (through x) and R (through kind), so overlap cannot tell; its tag names R,
     // which position alone would have passed over for Q.

@@ -33,6 +33,7 @@ import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrate
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,6 +45,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -346,6 +349,9 @@ public final class ProvenanceProjector<T> {
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);
     } catch (ProvenanceException | AuthenticationException | AuthorizationException e) {
       throw e;
+    } catch (UncheckedIOException | RetriableException | InterruptException e) {
+      // Transient by nature, whichever strategy threw it: the record fails, the next asks again.
+      throw new ProvenanceRetriableException(e.getMessage(), e);
     } catch (RuntimeException e) {
       throw new SerializationException(
           "The provenance strategy failed for " + pair + ": " + e.getMessage(), e);

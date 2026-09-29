@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /**
  * Allocates a provenance id to every member location across a sequence of {@link LogicalType}
@@ -991,8 +992,9 @@ public final class ProvenanceComputer {
      * top-level discriminators, where no peer has them, as a tagged union's tag names its branch;
      * the one previous branch of its title, where no peer has it and no discriminator conflicts —
      * a title only documents in V1, so one changed only leaves the branch to the phases below; the
-     * one previous branch of the same content, where no peer shares it; the one previous branch
-     * it alone shares a member with, and no conflicting discriminator, as when it moved and its
+     * one previous branch of the same content, where no peer shares it; the previous branch it
+     * shares strictly the most members with, and it with that one, a member every untaken
+     * previous branch has aside, and no conflicting discriminator, as when it moved and its
      * members changed; one at the same position sharing a member with it, where overlap alone
      * cannot tell; else it is new. None continues another across a discriminator a branch related
      * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
@@ -1028,8 +1030,9 @@ public final class ProvenanceComputer {
                 unresolved.add(other);
               }
             }
-            found = mutual(peer, unresolved, previous, (a, p) -> !taken.contains(p)
-                && overlaps(a.content, p.content) && !otherHints(a, p)
+            Set<String> envelope = envelope(previous, taken);
+            found = mostShared(peer, unresolved, previous, envelope, (a, p) -> !taken.contains(p)
+                && overlapsBeyond(a.content, p.content, envelope) && !otherHints(a, p)
                 && !crosses(a, p, peers, matched, previous, taken));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
@@ -1064,6 +1067,89 @@ public final class ProvenanceComputer {
     private static boolean otherHints(Node a, Node p) {
       return !a.name.startsWith(POSITIONAL_BRANCH) && !p.name.startsWith(POSITIONAL_BRANCH)
           && !a.name.equals(p.name);
+    }
+
+    /**
+     * The previous branch sharing strictly the most members with {@code peer}, where {@code peer}
+     * also shares strictly the most with it: a member every branch has tells nothing on its own.
+     */
+    private static Node mostShared(Node peer, List<Node> peers, List<Node> previous,
+        Set<String> envelope, BiPredicate<Node, Node> related) {
+      Node best = strictMax(previous,
+          p -> related.test(peer, p) ? sharedMembers(peer, p, envelope) : -1);
+      return best != null && strictMax(peers,
+          a -> related.test(a, best) ? sharedMembers(a, best, envelope) : -1) == peer
+          ? best : null;
+    }
+
+    // The one node scoring strictly highest of those scoring 0 or more; null on a tie or none.
+    private static Node strictMax(List<Node> nodes, ToIntFunction<Node> score) {
+      Node best = null;
+      int top = -1;
+      boolean tied = false;
+      for (Node n : nodes) {
+        int s = score.applyAsInt(n);
+        if (s > top) {
+          best = n;
+          top = s;
+          tied = false;
+        } else if (s == top && s >= 0) {
+          tied = true;
+        }
+      }
+      return tied ? null : best;
+    }
+
+    private static int sharedMembers(Node a, Node p, Set<String> envelope) {
+      int n = 0;
+      for (String entry : a.content) {
+        if (entry.startsWith(MEMBER) && p.content.contains(entry) && !envelope.contains(entry)) {
+          n++;
+        }
+      }
+      return n;
+    }
+
+    /**
+     * The members every untaken previous branch has, where there are several: shared by all, they
+     * tell none of them apart.
+     */
+    private static Set<String> envelope(List<Node> previous, Set<Node> taken) {
+      Set<String> common = null;
+      int untaken = 0;
+      for (Node p : previous) {
+        if (taken.contains(p)) {
+          continue;
+        }
+        untaken++;
+        Set<String> members = new HashSet<>();
+        for (String entry : p.content) {
+          if (entry.startsWith(MEMBER)) {
+            members.add(entry);
+          }
+        }
+        if (common == null) {
+          common = members;
+        } else {
+          common.retainAll(members);
+        }
+      }
+      return untaken < 2 || common == null ? Collections.emptySet() : common;
+    }
+
+    /**
+     * As {@link #overlaps}, a member of {@code envelope} not counting.
+     */
+    private static boolean overlapsBeyond(Set<String> mine, Set<String> theirs,
+        Set<String> envelope) {
+      if (namesOtherwise(mine, theirs)) {
+        return false;
+      }
+      if (mine.equals(theirs)) {
+        return true;
+      }
+      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry)
+          && !envelope.contains(entry));
     }
 
     /**

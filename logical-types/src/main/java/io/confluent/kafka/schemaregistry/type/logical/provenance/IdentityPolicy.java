@@ -49,7 +49,8 @@ public enum IdentityPolicy {
 
   /**
    * JSON Schema rules: a property follows its name, with no alias mechanism, so a rename is a drop
-   * plus an add; a union branch follows its hint, else its content.
+   * plus an add; a union branch follows its hint, then its discriminators, its title, its content,
+   * the branch it shares most members with, then its position (see {@link ProvenanceComputer}).
    */
   JSON;
 

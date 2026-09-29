@@ -205,6 +205,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (AmbiguousProvenanceException e) {
       throw new RestClientException(e.getMessage(), 422, AMBIGUOUS_PROVENANCE);
+    } catch (UnsupportedProvenanceAlgorithmException e) {
+      throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
     } catch (RuntimeException e) {

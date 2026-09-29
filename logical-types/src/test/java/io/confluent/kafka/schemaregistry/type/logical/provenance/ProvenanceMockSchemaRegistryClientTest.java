@@ -127,6 +127,21 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aDynamicRangeOverAnAlgorithmNotSupportedIsRejectedNotRetried() throws Exception {
+    // A 422 with the unknown-algorithm code, which a client stops asking about; a 500 it retries.
+    ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
+          List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
+        throw new UnsupportedProvenanceAlgorithmException("v2 beside v1");
+      }
+    };
+    int v1 = failing.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
+    assertCode(422, 42216, () -> failing.getProvenanceById(SUBJECT, v1, v1, false, false,
+        "dynamic"));
+  }
+
+  @Test
   void aHistoryWhoseAliasesDetermineNoSingleIdentityIsA422() throws Exception {
     int v1 = register(record(field("a", "int")));
     int v2 = register(record("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}",

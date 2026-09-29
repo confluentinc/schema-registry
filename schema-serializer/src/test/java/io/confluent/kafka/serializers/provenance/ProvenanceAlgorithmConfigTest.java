@@ -21,11 +21,15 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 
@@ -69,6 +73,22 @@ public class ProvenanceAlgorithmConfigTest {
   }
 
   @Test
+  public void theStrategyIsClosedWhenReconfiguredAndWhenClosed() throws Exception {
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_STRATEGY,
+        ClosingStrategy.class.getName());
+    ClosingStrategy.closed.set(0);
+    Serde serde = new Serde();
+    serde.configure(props);
+    serde.configure(props);
+    assertEquals(1, ClosingStrategy.closed.get());
+    serde.close();
+    assertEquals(2, ClosingStrategy.closed.get());
+  }
+
+  @Test
   public void cacheBoundsAreCheckedAtConfiguration() {
     // A negative size would fail only on the first record; a TTL below -1 would mean no TTL.
     assertThrows(ConfigException.class,
@@ -97,6 +117,30 @@ public class ProvenanceAlgorithmConfigTest {
     }
     return new AbstractKafkaSchemaSerDeConfig(AbstractKafkaSchemaSerDeConfig.baseConfigDef(),
         props);
+  }
+
+  /** Counts how often any instance is closed. */
+  public static class ClosingStrategy extends ClientProvenanceStrategy {
+
+    static final AtomicInteger closed = new AtomicInteger();
+
+    @Override
+    public void close() {
+      closed.incrementAndGet();
+    }
+  }
+
+  /** A serde configured as a deserializer is, against a mock registry. */
+  private static final class Serde extends AbstractKafkaSchemaSerDe {
+
+    Serde() {
+      schemaRegistry = new MockSchemaRegistryClient();
+    }
+
+    void configure(Map<String, Object> props) {
+      configureClientProperties(new AbstractKafkaSchemaSerDeConfig(
+          AbstractKafkaSchemaSerDeConfig.baseConfigDef(), props), new AvroSchemaProvider());
+    }
   }
 
   /** Remembers the configuration it was given. */

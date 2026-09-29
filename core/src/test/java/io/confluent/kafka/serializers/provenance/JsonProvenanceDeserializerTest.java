@@ -124,6 +124,20 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aValueOfABranchContinuedAtAnotherPositionByTitleIsPruned() throws Exception {
+    // Equal validation shapes, but the titles pair each branch with the other's position.
+    JsonSchema v1 = object("\"p\": {\"anyOf\": [{\"title\": \"A\", \"type\": \"string\"}, "
+        + "{\"title\": \"B\", \"type\": \"integer\"}]}");
+    JsonSchema v2 = object("\"p\": {\"anyOf\": [{\"title\": \"B\", \"type\": \"string\"}, "
+        + "{\"title\": \"A\", \"type\": \"integer\"}]}");
+    byte[] bytes = write(v1, "{\"p\": \"x\"}");
+    client.register(SUBJECT, v2);
+
+    assertFalse(read(v2, bytes, "v1").has("p"));
+    assertEquals("x", read(v2, bytes, null).get("p").asText());
+  }
+
+  @Test
   void aPropertyPresentThroughoutIsLeftAlone() throws Exception {
     JsonSchema v1 = object(number("id"), string("name"));
     JsonSchema v2 = object(number("id"), string("name"), string("extra"));

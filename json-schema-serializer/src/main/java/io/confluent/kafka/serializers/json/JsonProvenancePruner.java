@@ -259,14 +259,22 @@ final class JsonProvenancePruner {
 
   /**
    * Whether a value of {@code target}'s names reads as the location it was written as without
-   * checking: each continues the location at its own branches, nothing under the outermost union
-   * it sits in may be pruned, and that union validates every value alike on both sides.
+   * checking: each, and each branch of its own union, continues the location at its own branches,
+   * nothing under the outermost union it sits in may be pruned, and that union validates every
+   * value alike on both sides.
    */
   private static boolean readsAsWritten(Target target, List<String> union,
       Set<List<String>> fresh, Map<List<String>, Boolean> alike, JsonSchema reader,
       JsonSchema writer) {
     for (Candidate candidate : target.candidates) {
       if (!candidate.choices.equals(candidate.writerChoices)) {
+        return false;
+      }
+    }
+    // A branch may continue one at another position where the shapes agree, as a title pairs
+    // them, which the shape leaves out.
+    for (Candidate branch : target.branches.values()) {
+      if (!branch.choices.equals(branch.writerChoices)) {
         return false;
       }
     }

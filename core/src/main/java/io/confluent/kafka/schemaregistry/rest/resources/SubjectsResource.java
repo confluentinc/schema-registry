@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.UnsupportedProvenanceAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -104,12 +105,12 @@ public class SubjectsResource {
   private static final int MAX_CACHED_PROVENANCE_HISTORIES = 100;
 
   /**
-   * Provenance over one requested range, keyed by the subject, the mode, and every
-   * (version, schema id) in the range, soft-deleted versions included. It is computed over the
-   * range alone — its ends and everything between — so a version outside it, however old or
-   * however broken, has no effect. Any registration or deletion inside the range changes the key,
-   * so nothing needs invalidating, and many readers asking for the same range collapse into one
-   * computation per node.
+   * Provenance over one requested range, keyed by the subject, the mode, the algorithm, and every
+   * (version, schema id, registration time) in the range, soft-deleted versions included. It is
+   * computed over the range alone — its ends and everything between — so a version outside it,
+   * however old or however broken, has no effect. Any registration or deletion inside the range
+   * changes the key, so nothing needs invalidating, and many readers asking for the same range
+   * collapse into one computation per node.
    */
   private final Cache<List<Object>, SchemaProvenance> provenanceCache =
       Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).build();
@@ -580,7 +581,7 @@ public class SubjectsResource {
   private static List<Object> provenanceKey(String subject, List<Schema> history,
       boolean includeMultipleMessages, String algorithm) {
     // The mode and the algorithm are part of the key: each answers differently.
-    List<Object> key = new ArrayList<>(3 + 2 * history.size());
+    List<Object> key = new ArrayList<>(3 + 3 * history.size());
     key.add(subject);
     key.add(includeMultipleMessages);
     key.add(algorithm);
@@ -611,6 +612,8 @@ public class SubjectsResource {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {
       throw Errors.ambiguousProvenanceException(e.getMessage());
+    } catch (UnsupportedProvenanceAlgorithmException e) {
+      throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
     } catch (ValidationException e) {
       throw Errors.invalidSchemaException(e);
     } catch (RuntimeException e) {

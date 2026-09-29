@@ -23,6 +23,10 @@ import java.util.Locale;
  * one keeps answering exactly as it did, so a caller can move to it deliberately and back again.
  * Each is effective from when it was released: under {@link #DYNAMIC_NAME}, a version registered
  * since is matched to its predecessor by it, and one registered before by the one before it.
+ *
+ * <p>A version's registration time is persisted from the release that stores createTs on; a new
+ * algorithm must take effect only in a later release, or a soft delete written by an older
+ * registry could leave nodes disagreeing on when a version was registered.
  */
 public enum ProvenanceAlgorithm {
 

@@ -22,9 +22,13 @@ import io.confluent.kafka.serializers.provenance.ProvenanceRejectedException;
 import io.confluent.kafka.serializers.provenance.ProvenanceRetriableException;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnknownWriterException;
+import java.io.Closeable;
+import java.io.UncheckedIOException;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RetriableException;
 
 /**
  * Where a deserializer reading by provenance gets the provenance pairing a writer schema with a
@@ -36,8 +40,9 @@ import org.apache.kafka.common.errors.AuthorizationException;
  *
  * <p>What a failure is thrown as decides what the record gets:
  * <ul>
- *   <li>a {@link ProvenanceRetriableException}: the source is unreachable or overloaded; the
- *       record fails, and the next asks again;
+ *   <li>a {@link ProvenanceRetriableException}, or an {@link UncheckedIOException} or Kafka's
+ *       {@link RetriableException} or {@link InterruptException}: the source is unreachable,
+ *       overloaded or timed out; the record fails, and the next asks again;
  *   <li>an {@link AuthenticationException} or {@link AuthorizationException}: the record fails
  *       with it, and the next asks again;
  *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for an unknown
@@ -50,8 +55,18 @@ import org.apache.kafka.common.errors.AuthorizationException;
  *   <li>anything else, or a null response: the strategy broke this contract; every record of the
  *       writer fails until the outcome expires.
  * </ul>
+ *
+ * <p>A strategy is called from any thread reading a record, possibly several at once, so it must
+ * be thread-safe. It is closed when its deserializer is closed or reconfigured.
  */
-public interface ProvenanceStrategy extends Configurable {
+public interface ProvenanceStrategy extends Configurable, Closeable {
+
+  /**
+   * Releases what the strategy holds.
+   */
+  @Override
+  default void close() {
+  }
 
   /**
    * The provenance of {@code subject} between the versions carrying schema ids {@code fromId}
