@@ -239,8 +239,9 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
       return restService.registerSchema(request, subject, normalize)
           .thenApply(response -> {
             cacheSchemaById(subject, response);
-            // An earlier lookup may have remembered the schema as missing
-            missingSchemaCache.invalidate(key);
+            // An earlier lookup may have remembered the schema as missing, with either normalize
+            missingSchemaCache.invalidate(new SubjectAndSchema(subject, schema, false));
+            missingSchemaCache.invalidate(new SubjectAndSchema(subject, schema, true));
             // A new version makes the cached latest versions stale
             latestVersionCache.invalidate(subject);
             latestWithMetadataCache.invalidateAll();
