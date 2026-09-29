@@ -49,6 +49,7 @@ public class RegisterSchemaResponse {
   private RuleSet ruleSet = null;
   private String schema;
   private Long timestamp;
+  private Long createTimestamp;
   private Boolean deleted;
 
   public RegisterSchemaResponse() {
@@ -70,6 +71,7 @@ public class RegisterSchemaResponse {
     this.ruleSet = schema.getRuleSet();
     this.schema = schema.getSchema();
     this.timestamp = schema.getTimestamp();
+    this.createTimestamp = schema.getCreateTimestamp();
     this.deleted = schema.getDeleted();
   }
 
@@ -84,6 +86,7 @@ public class RegisterSchemaResponse {
     response.setRuleSet(getRuleSet());
     response.setSchema(getSchema());
     response.setTimestamp(getTimestamp());
+    response.setCreateTimestamp(getCreateTimestamp());
     response.setDeleted(getDeleted());
     return response;
   }
@@ -199,6 +202,18 @@ public class RegisterSchemaResponse {
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.CREATE_TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return this.createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
       description = Schema.DELETED_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("deleted")
   public Boolean getDeleted() {
@@ -249,6 +264,7 @@ public class RegisterSchemaResponse {
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
     buf.append("schema=").append(schema).append(",");
     buf.append("ts=").append(timestamp).append(",");
+    buf.append("createTs=").append(createTimestamp).append(",");
     buf.append("deleted=").append(deleted).append("}");
     return buf.toString();
   }

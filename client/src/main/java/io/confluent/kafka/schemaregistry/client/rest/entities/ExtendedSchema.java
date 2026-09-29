@@ -59,6 +59,7 @@ public class ExtendedSchema extends Schema {
     super(schema.getSubject(), schema.getVersion(), schema.getId(), schema.getGuid(),
         schema.getSchemaType(), schema.getReferences(), schema.getMetadata(), schema.getRuleSet(),
         schema.getSchema(), schema.getSchemaTags(), schema.getTimestamp(), schema.getDeleted());
+    setCreateTimestamp(schema.getCreateTimestamp());
     this.aliases = aliases;
     this.associations = associations;
   }

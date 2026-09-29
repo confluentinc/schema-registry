@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.CREATE_TIMESTAMP_DESC;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DELETED_DESC;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DESCRIPTION_CONDITION;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.GUID_DESC;
@@ -50,6 +51,7 @@ public class SchemaString {
   private List<SchemaTags> schemaTags;
   private Integer maxId;
   private Long timestamp;
+  private Long createTimestamp;
   private Boolean deleted;
 
   public SchemaString() {
@@ -71,6 +73,7 @@ public class SchemaString {
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
     this.timestamp = schema.getTimestamp();
+    this.createTimestamp = schema.getCreateTimestamp();
     this.deleted = schema.getDeleted();
   }
 
@@ -85,6 +88,7 @@ public class SchemaString {
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
     this.timestamp = schema.getTimestamp();
+    this.createTimestamp = schema.getCreateTimestamp();
     this.deleted = schema.getDeleted();
   }
 
@@ -101,6 +105,7 @@ public class SchemaString {
     schema.setSchemaTags(getSchemaTags());
     schema.setMaxId(getMaxId());
     schema.setTimestamp(getTimestamp());
+    schema.setCreateTimestamp(getCreateTimestamp());
     schema.setDeleted(getDeleted());
     return schema;
   }
@@ -235,6 +240,18 @@ public class SchemaString {
   @JsonProperty("ts")
   public void setTimestamp(Long timestamp) {
     this.timestamp = timestamp;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = CREATE_TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return this.createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(
