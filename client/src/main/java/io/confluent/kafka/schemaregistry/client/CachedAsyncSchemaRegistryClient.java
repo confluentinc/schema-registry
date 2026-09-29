@@ -403,10 +403,12 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
             new RegisterSchemaRequest(schema), subject, normalize, lookupDeletedSchema),
         missingSchemaCache,
         key,
-        // Not remembered while a registration is in flight or has succeeded, as the lookup may
-        // have been answered before the schema was registered
+        // Not remembered while a registration with either normalize is in flight or has
+        // succeeded, as the lookup may have been answered before the schema was registered
         e -> CachedSchemaRegistryClient.isSchemaOrSubjectNotFoundException(e)
-            && registerResponseCache.getIfPresent(key) == null)
+            && registerResponseCache.getIfPresent(key) == null
+            && registerResponseCache.getIfPresent(
+                new SubjectAndSchema(subject, schema, !normalize)) == null)
         .thenApply(RegisterSchemaResponse::new);
   }
 
