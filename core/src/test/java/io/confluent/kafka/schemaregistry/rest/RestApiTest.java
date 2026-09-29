@@ -62,6 +62,9 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
@@ -78,6 +81,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.apache.avro.Schema.Parser;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -3508,5 +3512,14 @@ public abstract class RestApiTest {
     assertEquals(live.getTimestamp(), deleted.getCreateTimestamp());
     assertTrue(deleted.getTimestamp() > deleted.getCreateTimestamp());
     assertEquals(live.getTimestamp(), restApp.restClient.getId(id).getCreateTimestamp());
+
+    // Carried by the delete's own record, all that compaction leaves of the key.
+    SchemaKey key = new SchemaKey(subject, 1);
+    List<ConsumerRecord<byte[], byte[]>> records = TestUtils.schemaRecords(restApp, key);
+    assertEquals(2, records.size());
+    SchemaValue delete = (SchemaValue) new SchemaRegistrySerializer().deserializeValue(
+        key, records.get(1).value());
+    assertEquals(records.get(0).timestamp(), delete.getCreateTimestamp().longValue());
+    assertEquals(records.get(1).timestamp(), deleted.getTimestamp().longValue());
   }
 }
