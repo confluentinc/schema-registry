@@ -38,12 +38,15 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
@@ -67,10 +70,13 @@ public class CachedAsyncSchemaRegistryClientTest {
 
   private AsyncRestService restService;
   private CachedAsyncSchemaRegistryClient client;
+  // Runs tasks on the calling thread unless a test replaces it
+  private Executor executor = Runnable::run;
 
   @Before
   public void setUp() {
     restService = createMock(AsyncRestService.class);
+    expect(restService.getExecutor()).andStubAnswer(() -> executor);
     client = newClient(Collections.emptyMap());
   }
 
@@ -373,6 +379,24 @@ public class CachedAsyncSchemaRegistryClientTest {
 
     assertEquals("Outer", await(smallClient.parseSchema(schema)).get().name());
     // Neither reference is fetched again while parsing
+    verify(restService);
+  }
+
+  @Test
+  public void testParseSchemaRunsOnExecutor() throws Exception {
+    List<Runnable> tasks = new ArrayList<>();
+    executor = tasks::add;
+    replay(restService);
+
+    Schema schema =
+        new Schema(SUBJECT, 1, ID, AvroSchema.TYPE, Collections.emptyList(), RECORD);
+    CompletableFuture<Optional<ParsedSchema>> parsed = client.parseSchema(schema);
+    // Nothing to prefetch, yet the parse is left to the executor
+    assertFalse(parsed.isDone());
+    assertEquals(1, tasks.size());
+
+    tasks.get(0).run();
+    assertEquals(AVRO_SCHEMA.canonicalString(), await(parsed).get().canonicalString());
     verify(restService);
   }
 

@@ -232,6 +232,13 @@ public class AsyncRestService implements Closeable {
     return baseUrls;
   }
 
+  /**
+   * The executor that callbacks run on, for callers to run their own work on as well.
+   */
+  public Executor getExecutor() {
+    return executor;
+  }
+
   public CompletableFuture<SchemaString> getId(int id, String subject) {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", false);
