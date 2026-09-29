@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
@@ -58,6 +59,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
@@ -87,6 +89,7 @@ import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHan
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -2034,6 +2037,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Governed by {@link SchemaRegistryConfig#SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG}, which despite
+   * its name also gates the pure-wildcard ({@code *}) subject, not just the empty-string subject.
+   */
   @Override
   public boolean allowEmptySubject() {
     return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
@@ -2510,6 +2519,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<String> errorLogs = isCompatible(qualifiedSubject,
           toSchemaWithTags(qualifiedSubject, schema), previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
+        log.warn("Rejected association schema registration for subject '{}': {}",
+            qualifiedSubject, errorLogs);
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
     }
@@ -2701,6 +2712,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
+    checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
@@ -2768,6 +2780,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
+  private void checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      return;
+    }
+    // batchSize is defined as the number of topics (resource entries) in the request; a single
+    // topic may request both a key and a value association without counting as two topics.
+    int numTopics = request.getRequests().size();
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchGet request has %d topics, exceeding the configured maximum of %d"
+              + " topics per batch when includeSchemas is true", numTopics, maxNum));
+    }
+  }
+
   private void recordAssociationBatchMetrics(
       List<AssociationResult> results,
       SchemaRegistryMetric successMetric,
@@ -2782,7 +2811,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   public AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    checkAssociationBatchLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -2923,6 +2954,94 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         metricsContainer.getAssociationBatchMutateSuccess(),
         metricsContainer.getAssociationBatchMutateFailure());
     return new AssociationBatchResponse(results);
+  }
+
+  private void checkAssociationBatchLimits(AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!config().associationBatchMutateLimitsEnabled()) {
+      return;
+    }
+
+    boolean hasInlineSchema = false;
+    for (AssociationOpRequest req : request.getRequests()) {
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (op instanceof AssociationCreateOrUpdateOp
+            && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
+          hasInlineSchema = true;
+        }
+      }
+    }
+
+    // No inline schema anywhere in the batch means no schema payload to bound, so none of the
+    // limits below apply, regardless of how many topics or associations are in the request.
+    if (!hasInlineSchema) {
+      return;
+    }
+
+    // batchSize is defined as the number of topics (resource entries) in the request, not the
+    // number of individual association ops; a single topic may carry both a key and a value
+    // association without counting as two topics.
+    List<AssociationOpRequest> reqs = request.getRequests();
+    int numTopics = reqs.size();
+    int maxNum = config().maxAssociationNumPerMutateBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has %d topics, exceeding the configured maximum"
+              + " of %d topics per batch when any association in the batch carries an inline"
+              + " schema", numTopics, maxNum));
+    }
+
+    // Check the most granular thing first: each individual association's inline schema payload
+    // (including references, metadata, etc., i.e. the whole RegisterSchemaRequest) against the
+    // per-association limit, so a violation names the exact offending association.
+    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
+    for (int i = 0; i < reqs.size(); i++) {
+      AssociationOpRequest req = reqs.get(i);
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (!(op instanceof AssociationCreateOrUpdateOp)) {
+          continue;
+        }
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        RegisterSchemaRequest schema = createOrUpdateOp.getSchema();
+        if (schema == null) {
+          continue;
+        }
+        long schemaPayloadBytes = jsonPayloadSize(schema);
+        if (schemaPayloadBytes > maxEntryBytes) {
+          throw new AssociationBatchLimitExceededException(String.format(
+              "The '%s' association's schema for resourceId '%s' (topic %d of %d in the"
+                  + " Associations batchMutate request) has a payload size of %d bytes,"
+                  + " exceeding the configured maximum of %d bytes per association schema",
+              createOrUpdateOp.getAssociationType(), req.getResourceId(), i + 1, reqs.size(),
+              schemaPayloadBytes, maxEntryBytes));
+        }
+      }
+    }
+
+    long requestPayloadBytes = jsonPayloadSize(request);
+    long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
+    if (requestPayloadBytes > maxBatchBytes) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has a payload size of %d bytes, exceeding the"
+              + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
+    }
+  }
+
+  private static long jsonPayloadSize(Object obj) {
+    try {
+      return JacksonMapper.INSTANCE.writeValueAsBytes(obj).length;
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException(
+          "Unexpected error measuring payload size of an already-deserialized object", e);
+    }
   }
 
   // --------------- Association query methods ---------------

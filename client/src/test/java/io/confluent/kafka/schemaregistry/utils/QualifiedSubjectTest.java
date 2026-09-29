@@ -215,24 +215,35 @@ public class QualifiedSubjectTest {
     assertTrue(QualifiedSubject.isValidSubject("default", "  "));
     assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL"));
     assertFalse(QualifiedSubject.isValidSubject("default", "__EMPTY"));
+    // Legacy overload defaults to allowEmptyOrWildcard=true, so "*" is still permitted
+    assertTrue(QualifiedSubject.isValidSubject("default", "*"));
   }
 
   @Test
-  public void testSubjectValidationRejectEmpty() {
-    // allowEmpty=true mirrors the legacy overload
+  public void testSubjectValidationRejectEmptyOrWildcard() {
+    // allowEmptyOrWildcard=true mirrors the legacy overload
     assertTrue(QualifiedSubject.isValidSubject("default", "foo", false, true));
     assertTrue(QualifiedSubject.isValidSubject("default", "", false, true));
     assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false, true));
+    assertTrue(QualifiedSubject.isValidSubject("default", "*", false, true));
 
-    // Legacy 3-arg overload must still allow the empty-string subject (locks the contract)
+    // Legacy 3-arg overload must still allow the empty-string and wildcard subjects
+    // (locks the contract)
     assertTrue(QualifiedSubject.isValidSubject("default", "", false));
     assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false));
+    assertTrue(QualifiedSubject.isValidSubject("default", "*", false));
 
-    // allowEmpty=false rejects the empty-string subject in every context
+    // allowEmptyOrWildcard=false rejects the empty-string and pure-wildcard subject
+    // in every context
     assertTrue(QualifiedSubject.isValidSubject("default", "foo", false, false));
     assertFalse(QualifiedSubject.isValidSubject("default", "", false, false));
     assertFalse(QualifiedSubject.isValidSubject("default", ":.ctx:", false, false));
     assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:foo", false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", "*", false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", ":.ctx:*", false, false));
+    // A subject that merely contains a wildcard character is not the pure-wildcard subject
+    assertTrue(QualifiedSubject.isValidSubject("default", "*foo", false, false));
+    assertTrue(QualifiedSubject.isValidSubject("default", "foo*", false, false));
 
     // Pre-existing rules still apply with the new flag
     assertFalse(QualifiedSubject.isValidSubject("default", null, false, false));

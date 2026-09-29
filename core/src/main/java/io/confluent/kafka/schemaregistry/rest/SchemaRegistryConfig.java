@@ -155,6 +155,21 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>leader.connect.retries</code>*
+   */
+  public static final String LEADER_CONNECT_RETRIES = "leader.connect.retries";
+  public static final int DEFAULT_LEADER_CONNECT_RETRIES = 0;
+  /**
+   * <code>leader.retries.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_WAIT_MS = "leader.retries.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_WAIT_MS = 100;
+  /**
+   * <code>leader.retries.max.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_MAX_WAIT_MS = "leader.retries.max.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_MAX_WAIT_MS = 1000;
+  /**
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
@@ -169,6 +184,42 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String ASSOCIATIONS_ENABLE = "associations.enable";
   public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
+   * <code>association.batch.mutate.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG =
+      "association.batch.mutate.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.mutate.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT = 1;
+  /**
+   * <code>association.batch.mutate.max.association.entry.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.entry.payload.bytes";
+  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_100_000;
+  /**
+   * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.batch.payload.bytes";
+  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_100_000;
+  /**
+   * <code>association.batch.get.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG =
+      "association.batch.get.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.get.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG =
+      "association.batch.get.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 1;
   /**
    * <code>mode.mutability</code>*
    */
@@ -507,6 +558,17 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String LEADER_CONNECT_RETRIES_DOC =
+      "The maximum number of times a request forwarded to the leader is retried on a transient "
+      + "connection failure (e.g. connection refused or connect timed out), such as during a "
+      + "rolling restart when the leader is briefly unreachable. Defaults to 0 (disabled); set to "
+      + "a positive value to enable retries.";
+  protected static final String LEADER_RETRIES_WAIT_MS_DOC =
+      "The initial wait, in milliseconds, before retrying a request forwarded to the leader. "
+      + "Subsequent retries back off exponentially with jitter up to " + LEADER_RETRIES_MAX_WAIT_MS
+      + ".";
+  protected static final String LEADER_RETRIES_MAX_WAIT_MS_DOC =
+      "The maximum wait, in milliseconds, between retries of a request forwarded to the leader.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
@@ -514,6 +576,41 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String ASSOCIATIONS_ENABLE_DOC =
       "If true, enable support for associations between resources and subjects.";
+  protected static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG + ", "
+      + MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG + ", and "
+      + MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchMutate API. "
+      + "When false (the default), batchMutate requests are never rejected for exceeding "
+      + "these limits.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC =
+      "Maximum number of topics (resource entries) allowed across an entire Associations "
+      + "batchMutate request when any association in the request carries an inline schema; a "
+      + "single topic may include both a key and a value association without counting as two "
+      + "topics. Not enforced when the request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC =
+      "Maximum payload size in bytes of a single association's inline schema (the whole "
+      + "RegisterSchemaRequest, including any references and metadata) in an Associations "
+      + "batchMutate request; checked independently per association, so a topic's key and "
+      + "value schemas are each measured and bounded on their own. Not enforced when the "
+      + "request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC =
+      "Maximum cumulative payload size in bytes of the entire Associations batchMutate "
+      + "request (all topics, subjects, and inline schemas combined). Not enforced when the "
+      + "request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " on the Associations "
+      + "batchGet API. When false (the default), batchGet requests are never rejected for "
+      + "exceeding this limit.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC =
+      "Maximum number of topics (resource entries) that may be queried across an entire "
+      + "Associations batchGet request (relevant only when the request's includeSchemas "
+      + "parameter is true; a request with includeSchemas=false never retrieves any schemas "
+      + "and is not subject to this limit). A single topic may request both a key and a value "
+      + "association without counting as two topics. Not enforced when "
+      + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -808,6 +905,15 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
     )
+    .define(LEADER_CONNECT_RETRIES, ConfigDef.Type.INT, DEFAULT_LEADER_CONNECT_RETRIES,
+        ConfigDef.Importance.LOW, LEADER_CONNECT_RETRIES_DOC
+    )
+    .define(LEADER_RETRIES_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_WAIT_MS_DOC
+    )
+    .define(LEADER_RETRIES_MAX_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_MAX_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_MAX_WAIT_MS_DOC
+    )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
     )
@@ -816,6 +922,30 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
         ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
+    )
+    .define(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC
+    )
+    .define(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC
+    )
+    .define(MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC
+    )
+    .define(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -1122,6 +1252,30 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public boolean enableAssociations() {
     return getBoolean(ASSOCIATIONS_ENABLE);
+  }
+
+  public boolean associationBatchMutateLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerMutateBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG);
+  }
+
+  public int maxAssociationMutateEntryPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public int maxAssociationMutateBatchPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public boolean associationBatchGetLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerGetBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG);
   }
 
   public static void main(String[] args) {
