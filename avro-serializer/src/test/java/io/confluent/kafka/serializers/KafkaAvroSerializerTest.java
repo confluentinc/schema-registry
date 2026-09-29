@@ -23,6 +23,7 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
@@ -30,12 +31,15 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -1862,10 +1866,10 @@ public class KafkaAvroSerializerTest {
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
   }
 
-  // --- Regression tests: the Avro datum writer/reader caches must be keyed by schema id /
-  // content, not by schema-object identity. They previously used identity (==) keys, so
-  // content-identical schemas arriving as distinct instances accumulated duplicate entries,
-  // leaking memory (the SpecificAvroSerializer datumWriterCache in particular).
+  // --- Regression tests: the Avro datum writer/reader caches must be keyed by subject and
+  // schema id or by content, not by schema-object identity. They previously used identity (==)
+  // keys, so content-identical schemas arriving as distinct instances accumulated duplicate
+  // entries, leaking memory (the SpecificAvroSerializer datumWriterCache in particular).
 
   @SuppressWarnings("unchecked")
   private static Cache<Object, Object> getCache(
@@ -1876,7 +1880,7 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDatumWriterCacheKeyedBySchemaId() throws Exception {
+  public void testDatumWriterCacheKeyedBySubjectAndSchemaId() throws Exception {
     // auto.register=false keeps the caller-provided schema instance (the getId branch does not
     // replace it), so distinct-but-equal instances reach the datumWriterCache key. With the
     // previous identity keys this produced one cache entry per instance.
@@ -1904,7 +1908,7 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDatumReaderCacheKeyedBySchemaId() throws Exception {
+  public void testDatumReaderCacheKeyedBySubjectAndSchemaId() throws Exception {
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, createUserRecord());
     for (int i = 0; i < 5; i++) {
@@ -1924,11 +1928,12 @@ public class KafkaAvroSerializerTest {
     assertTrue(readerA != readerB);
     SchemaId writerId = new SchemaId(AvroSchema.TYPE, 1, (String) null);
     SchemaId writerIdCopy = new SchemaId(AvroSchema.TYPE, 1, (String) null);
+    String subject = topic + "-value";
 
     AbstractKafkaAvroDeserializer.DatumReaderKey key1 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerId, readerA);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerId, readerA);
     AbstractKafkaAvroDeserializer.DatumReaderKey key2 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerIdCopy, readerB);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerIdCopy, readerB);
     // Same writer id + content-equal reader schema => equal key (unequal under identity keys).
     assertEquals(key1, key2);
     assertEquals(key1.hashCode(), key2.hashCode());
@@ -1936,34 +1941,156 @@ public class KafkaAvroSerializerTest {
     // The common no-explicit-reader case (null reader schema) keys consistently.
     assertEquals(
         new AbstractKafkaAvroDeserializer.DatumReaderKey(
-            new SchemaId(AvroSchema.TYPE, 7, (String) null), null),
+            subject, new SchemaId(AvroSchema.TYPE, 7, (String) null), null),
         new AbstractKafkaAvroDeserializer.DatumReaderKey(
-            new SchemaId(AvroSchema.TYPE, 7, (String) null), null));
+            subject, new SchemaId(AvroSchema.TYPE, 7, (String) null), null));
 
     // A schema identified by guid (id == null) keys consistently too.
     String guid = "12345678-1234-1234-1234-123456789abc";
     assertEquals(
         new AbstractKafkaAvroDeserializer.DatumReaderKey(
-            new SchemaId(AvroSchema.TYPE, null, guid), readerA),
+            subject, new SchemaId(AvroSchema.TYPE, null, guid), readerA),
         new AbstractKafkaAvroDeserializer.DatumReaderKey(
-            new SchemaId(AvroSchema.TYPE, null, guid), readerB));
+            subject, new SchemaId(AvroSchema.TYPE, null, guid), readerB));
 
     // Different writer id => different key.
     assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
-        new SchemaId(AvroSchema.TYPE, 2, (String) null), readerA));
+        subject, new SchemaId(AvroSchema.TYPE, 2, (String) null), readerA));
+    // Same writer id under a different subject (e.g. another context) => different key.
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        ":.replica:" + subject, writerId, readerA));
     // Different reader content => different key.
     assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
-        writerId, createExtendUserSchema()));
+        subject, writerId, createExtendUserSchema()));
 
     // Post-migration sentinel: a null writer id never collides with a normal entry that has a
     // non-null writer id for the same reader schema -- this is what prevents cache poisoning.
     assertNotEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerId, readerA));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerId, readerA));
     // Two post-migration entries (null writer id) with content-equal reader schemas collapse.
     assertEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerB));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerB));
+  }
+
+  // --- Regression tests: schema ids are only unique within a context, so the same id in two
+  // contexts must not share a cached datum reader, reader schema or datum writer.
+
+  public static class ReplicaContextNameStrategy implements ContextNameStrategy {
+    @Override
+    public String contextName(String topic) {
+      return topic.startsWith("replica-") ? ".replica" : null;
+    }
+  }
+
+  private static Properties createReplicaContextConfig() {
+    Properties props = new Properties();
+    props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
+        ReplicaContextNameStrategy.class.getName());
+    return props;
+  }
+
+  private static IndexedRecord createEventRecord() {
+    Schema schema = new Schema.Parser().parse(
+        "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"Event\","
+            + "\"fields\": [{\"name\": \"count\", \"type\": \"int\"},"
+            + "{\"name\": \"label\", \"type\": \"string\"}]}");
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("count", 42);
+    record.put("label", "testEvent");
+    return record;
+  }
+
+  private static int schemaIdOf(byte[] bytes) {
+    return ByteBuffer.wrap(bytes, 1, 4).getInt();
+  }
+
+  @Test
+  public void testDatumReaderCacheSeparatesContexts() throws Exception {
+    SchemaRegistryClient registry = new MockSchemaRegistryClient();
+    Properties props = createReplicaContextConfig();
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    RecordHeaders headers = new RecordHeaders();
+    String replicaTopic = "replica-" + topic;
+    IndexedRecord user = createUserRecord();
+    IndexedRecord event = createEventRecord();
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] eventBytes = serializer.serialize(replicaTopic, headers, event);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(eventBytes));
+
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+    assertEquals(event, deserializer.deserialize(replicaTopic, headers, eventBytes));
+
+    deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(event, deserializer.deserialize(replicaTopic, headers, eventBytes));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+  }
+
+  @Test
+  public void testReaderSchemaCacheSeparatesContexts() throws Exception {
+    SchemaRegistryClient registry = new MockSchemaRegistryClient();
+    Properties props = createReplicaContextConfig();
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    RecordHeaders headers = new RecordHeaders();
+    String replicaTopic = "replica-" + topic;
+    User user = User.newBuilder().setName("testUser").build();
+    Grant grant = Grant.newBuilder().setGrant("testGrant").build();
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] grantBytes = serializer.serialize(replicaTopic, headers, grant);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(grantBytes));
+
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+    assertEquals(grant, deserializer.deserialize(replicaTopic, headers, grantBytes));
+
+    deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(grant, deserializer.deserialize(replicaTopic, headers, grantBytes));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+  }
+
+  @Test
+  public void testDatumWriterCacheSeparatesContexts() throws Exception {
+    // Returns only the id on register, like a server without guids; with a guid the schema
+    // id alone would already tell the two schemas apart.
+    SchemaRegistryClient registry = new MockSchemaRegistryClient() {
+      @Override
+      public RegisterSchemaResponse registerWithResponse(
+          String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
+          throws IOException, RestClientException {
+        return new RegisterSchemaResponse(
+            super.registerWithResponse(subject, schema, normalize, propagateSchemaTags).getId());
+      }
+    };
+    Properties props = createReplicaContextConfig();
+    RecordHeaders headers = new RecordHeaders();
+    String replicaTopic = "replica-" + topic;
+    IndexedRecord user = createUserRecord();
+    IndexedRecord event = createEventRecord();
+
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] eventBytes = serializer.serialize(replicaTopic, headers, event);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(eventBytes));
+    // A fresh deserializer per read keeps the deserializer caches out of this test.
+    assertEquals(user, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(topic, headers, userBytes));
+    assertEquals(event, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(replicaTopic, headers, eventBytes));
+
+    serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    eventBytes = serializer.serialize(replicaTopic, headers, event);
+    userBytes = serializer.serialize(topic, headers, user);
+    assertEquals(event, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(replicaTopic, headers, eventBytes));
+    assertEquals(user, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(topic, headers, userBytes));
   }
 
   static class EventWithInstant {
