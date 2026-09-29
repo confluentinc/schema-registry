@@ -199,7 +199,8 @@ public class AsyncRestService implements Closeable {
                     SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs)))
                 .build());
 
-    if (sslContext != null) {
+    // Either may be null, in which case the builder falls back to the default for it
+    if (sslContext != null || hostnameVerifier != null) {
       connectionManagerBuilder.setTlsStrategy(ClientTlsStrategyBuilder.create()
           .setSslContext(sslContext)
           .setHostnameVerifier(hostnameVerifier)
