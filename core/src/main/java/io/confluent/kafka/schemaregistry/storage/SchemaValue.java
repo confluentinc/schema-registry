@@ -51,6 +51,9 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   private RuleSet ruleSet = null;
   @NotEmpty
   private boolean deleted;
+  // When the version was first registered: kept on every later write of its key, as compaction
+  // may remove the first.
+  private Long createTimestamp;
 
   @VisibleForTesting
   public SchemaValue(@JsonProperty("subject") String subject,
@@ -243,6 +246,16 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     this.deleted = deleted;
   }
 
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -317,7 +330,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     MD5 md5 = bytes != null
         ? new MD5(bytes)
         : MD5.ofSchema(getSchema(), references, metadata, ruleSet);
-    return new Schema(
+    Schema entity = new Schema(
         getSubject(),
         getVersion(),
         getId(),
@@ -331,6 +344,10 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         getTimestamp(),
         isDeleted()
     );
+    if (createTimestamp != null && !createTimestamp.equals(getTimestamp())) {
+      entity.setCreateTimestamp(createTimestamp);
+    }
+    return entity;
   }
 
   public Schema toHashKey() {
