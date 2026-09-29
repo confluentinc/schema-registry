@@ -24,7 +24,12 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.FieldElement;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.OptionElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.rules.RuleResult;
@@ -46,6 +51,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -450,7 +456,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
               provenanceCacheSize, provenanceCacheTtlSec,
               AbstractKafkaProtobufDeserializer::imports, provenanceStrategy,
-              AbstractKafkaProtobufDeserializer::withoutFileOptions);
+              AbstractKafkaProtobufDeserializer::withoutOptions);
           provenanceProjector = projector;
         }
       }
@@ -459,19 +465,60 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   /**
-   * {@code schema} without its file's options: they steer only code generation, as a generated
-   * class's Java options do, and change neither the wire nor a field's identity.
+   * {@code schema} without its options, at every level, nor the import only they need: they steer
+   * code generation and documentation, and change neither a field's identity nor how it is parsed.
+   * A map entry's is kept, as normalizing recognizes a map by it.
    */
-  private static ParsedSchema withoutFileOptions(ParsedSchema schema) {
+  private static ParsedSchema withoutOptions(ParsedSchema schema) {
     ProtobufSchema protobuf = (ProtobufSchema) schema;
-    ProtoFileElement file = protobuf.rawSchema();
-    if (file.getOptions().isEmpty()) {
-      return schema;
+    return new ProtobufSchema(withoutOptions(protobuf.rawSchema()), protobuf.references(),
+        protobuf.dependencies());
+  }
+
+  private static ProtoFileElement withoutOptions(ProtoFileElement file) {
+    return file.copy(file.getLocation(), file.getPackageName(), file.getSyntax(),
+        withoutMeta(file.getImports()), withoutMeta(file.getPublicImports()),
+        file.getWeakImports(), file.getTypes().stream()
+            .map(AbstractKafkaProtobufDeserializer::withoutOptions).collect(Collectors.toList()),
+        file.getServices(), file.getExtendDeclarations(), Collections.emptyList());
+  }
+
+  private static TypeElement withoutOptions(TypeElement type) {
+    if (type instanceof MessageElement) {
+      MessageElement m = (MessageElement) type;
+      return m.copy(m.getLocation(), m.getName(), m.getDocumentation(), m.getNestedTypes().stream()
+              .map(AbstractKafkaProtobufDeserializer::withoutOptions).collect(Collectors.toList()),
+          mapEntryOnly(m.getOptions()), m.getReserveds(), fieldsWithoutOptions(m.getFields()),
+          m.getOneOfs().stream().map(o -> o.copy(o.getName(), o.getDocumentation(),
+              fieldsWithoutOptions(o.getFields()), o.getGroups(), Collections.emptyList(),
+              o.getLocation())).collect(Collectors.toList()),
+          m.getExtensions(), m.getGroups(), m.getExtendDeclarations());
     }
-    return new ProtobufSchema(file.copy(file.getLocation(), file.getPackageName(),
-        file.getSyntax(), file.getImports(), file.getPublicImports(), file.getWeakImports(),
-        file.getTypes(), file.getServices(), file.getExtendDeclarations(),
-        Collections.emptyList()), protobuf.references(), protobuf.dependencies());
+    if (type instanceof EnumElement) {
+      EnumElement e = (EnumElement) type;
+      return e.copy(e.getLocation(), e.getName(), e.getDocumentation(), Collections.emptyList(),
+          e.getConstants().stream().map(c -> c.copy(c.getLocation(), c.getName(), c.getTag(),
+              c.getDocumentation(), Collections.emptyList())).collect(Collectors.toList()),
+          e.getReserveds());
+    }
+    return type;
+  }
+
+  // The imports less Confluent's meta.proto, which declares only options.
+  private static List<String> withoutMeta(List<String> imports) {
+    return imports.stream().filter(i -> !ProtobufSchema.CFLT_META_LOCATION.equals(i))
+        .collect(Collectors.toList());
+  }
+
+  private static List<OptionElement> mapEntryOnly(List<OptionElement> options) {
+    return options.stream().filter(o -> "map_entry".equals(o.getName()))
+        .collect(Collectors.toList());
+  }
+
+  private static List<FieldElement> fieldsWithoutOptions(List<FieldElement> fields) {
+    return fields.stream().map(f -> f.copy(f.getLocation(), f.getLabel(), f.getType(),
+        f.getName(), f.getDefaultValue(), null, f.getTag(), f.getDocumentation(),
+        Collections.emptyList())).collect(Collectors.toList());
   }
 
   /**
@@ -483,8 +530,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     Map<String, String> imports = new HashMap<>();
     for (Map.Entry<String, ProtoFileElement> file : files.entrySet()) {
       if (!ProtobufSchema.knownTypes().contains(file.getKey())) {
-        imports.put(file.getKey(), new ProtobufSchema(file.getValue(), Collections.emptyList(),
-            files).normalize().canonicalString());
+        imports.put(file.getKey(), new ProtobufSchema(withoutOptions(file.getValue()),
+            Collections.emptyList(), files).normalize().canonicalString());
       }
     }
     return imports;

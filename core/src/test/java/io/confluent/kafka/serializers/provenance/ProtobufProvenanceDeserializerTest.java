@@ -520,6 +520,19 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderWithOptionsNoVersionHasIsMatchedByStructure() throws Exception {
+    // Message and field options only document or steer code generation: the reader is still v3.
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, row("int32 id = 1;"));
+    client.register(SUBJECT, row("int32 id = 1;", "string memo = 2;"));
+    ProtobufSchema reader = row("option deprecated = true;", "int32 id = 1;",
+        "string memo = 2 [deprecated = true, json_name = \"MEMO\"];");
+
+    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+  }
+
+  @Test
   void aGeneratedClassIsMatchedToATextWithoutItsFileOptions() throws Exception {
     // Registered by a producer in another language: no java_outer_classname, which steers only
     // code generation, so the class still stands for the latest version.
