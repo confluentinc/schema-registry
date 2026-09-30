@@ -457,13 +457,10 @@ public final class ProvenanceProjector<T> {
       if (!schema.schemaType().equals(type)) {
         continue;
       }
-      Optional<LogicalType> version;
-      try {
-        version = logicalTypeOf(client.getSchemaBySubjectAndId(subject, metadata.getId()));
-      } catch (RuntimeException e) {
-        // A version this client cannot parse stands for no reader, as one with no logical form.
-        version = Optional.empty();
-      }
+      // Only its own format's versions are fetched, so a failure is the lookup's own: it fails
+      // the lookup rather than let the scan settle on an older version the reader may not be.
+      Optional<LogicalType> version =
+          logicalTypeOf(client.getSchemaBySubjectAndId(subject, metadata.getId()));
       if (version.isPresent() && wanted.get().equivalent(schemaType, version.get())) {
         return metadata.getId();
       }

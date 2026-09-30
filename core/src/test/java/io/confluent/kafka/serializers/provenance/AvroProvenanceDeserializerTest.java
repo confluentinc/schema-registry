@@ -51,6 +51,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -425,6 +426,33 @@ class AvroProvenanceDeserializerTest {
         "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\",\"doc\":\"again\"}");
 
     assertEquals("DEF", read(reader, bytes, "v1").get("x").toString());
+  }
+
+  @Test
+  void aFailureFetchingAVersionFailsTheLookupRatherThanSettlingOnAnOlderOne() throws Exception {
+    // v3 cannot be fetched now, as when a token endpoint is down: the reader, v3 but for a doc,
+    // is not taken for v1, the writer's own version, where x would keep its old value.
+    int[] v3 = {-1};
+    client = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+          throws IOException, RestClientException {
+        if (id == v3[0]) {
+          throw new IllegalStateException("token endpoint unreachable");
+        }
+        return super.getSchemaBySubjectAndId(subject, id);
+      }
+    };
+    serializer = new KafkaAvroSerializer(client, config(null));
+    Schema v1 = record(idField(), string("x"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("x", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    v3[0] = client.register(SUBJECT, new AvroSchema(record(idField(),
+        "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\"}")));
+    Schema reader = record(idField(),
+        "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\",\"doc\":\"again\"}");
+
+    assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
   }
 
   @Test

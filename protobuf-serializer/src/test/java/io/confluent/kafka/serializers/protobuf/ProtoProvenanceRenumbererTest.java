@@ -92,6 +92,26 @@ public class ProtoProvenanceRenumbererTest {
         mapping(both, both), true).schema);
   }
 
+  @Test
+  public void aNestedRecordMessageReachedThroughAOneofOrAMapValueHasProvenance() {
+    String file = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 id = 1;\n%s"
+        + "  message Inner {\n    string memo = 1;\n  }\n}\n";
+    String[][] uses = {
+        {"  oneof k {\n    Inner i = 2;\n  }\n", "i"},
+        {"  map<string, Inner> m = 2;\n", "m"}};
+    for (String[] use : uses) {
+      ProtobufSchema writer = new ProtobufSchema(String.format(file, use[0]));
+      ProtobufSchema reader = new ProtobufSchema(writer.toDescriptor("p.A.Inner"));
+      List<ProvenanceField> locations = "i".equals(use[1])
+          ? Arrays.asList(p(1, "p.A", "id"), p(2, "p.A"), p(3, "p.A", "i"),
+              p(4, "p.A", "i", "memo"))
+          : Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "m"),
+              p(3, "p.A", "m", "value", "memo"));
+      assertEquals(use[1], reader, ProtoProvenanceRenumberer.renumber(reader, writer,
+          mapping(locations, locations), true).schema);
+    }
+  }
+
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
       List<ProvenanceField> reader) {
     return ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(

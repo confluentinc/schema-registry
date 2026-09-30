@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHisto
 import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -105,7 +106,9 @@ public class SubjectsResource {
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
   /** Provenance ranges retained. Each holds a report over many versions, so the bound is low. */
-  private static final int MAX_CACHED_PROVENANCE_HISTORIES = 100;
+  // Locations the provenance cache holds across its ranges: one range may hold far more than
+  // another, so they are weighed, not counted.
+  private static final long MAX_CACHED_PROVENANCE_LOCATIONS = 1_000_000L;
 
   /**
    * Provenance over one requested range, keyed by the subject, the mode, the algorithm, and every
@@ -114,10 +117,13 @@ public class SubjectsResource {
    * however old or however broken, has no effect. Any registration or deletion inside the range
    * changes the key, so nothing needs invalidating, and many readers asking for the same range
    * collapse into one computation per node. Asynchronous, so that a long computation holds no
-   * lock other keys wait on; it still runs on the thread of the request that started it.
+   * lock other keys wait on; it still runs on the thread of the request that started it. Weighed
+   * by the locations each range holds.
    */
-  private final AsyncCache<List<Object>, Computed> provenanceCache =
-      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).buildAsync();
+  private final AsyncCache<List<Object>, Computed> provenanceCache = Caffeine.newBuilder()
+      .maximumWeight(MAX_CACHED_PROVENANCE_LOCATIONS)
+      .weigher((List<Object> key, Computed computed) -> computed.locations())
+      .buildAsync();
 
   @Inject
   public SubjectsResource(SchemaRegistry schemaRegistry) {
@@ -660,6 +666,17 @@ public class SubjectsResource {
     private Computed(SchemaProvenance provenance, RuntimeException failure) {
       this.provenance = provenance;
       this.failure = failure;
+    }
+
+    // Its weight in the cache: the locations of every version, at least one.
+    private int locations() {
+      int locations = 1;
+      if (provenance != null) {
+        for (ProvenanceVersion version : provenance.getVersions()) {
+          locations += version.getFields().size();
+        }
+      }
+      return locations;
     }
   }
 }

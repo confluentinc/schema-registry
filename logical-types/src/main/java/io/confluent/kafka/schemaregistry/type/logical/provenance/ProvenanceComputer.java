@@ -97,6 +97,9 @@ public final class ProvenanceComputer {
   /** The most locations one version may have; past it, the history has no provenance. */
   public static final int MAX_LOCATIONS = 100_000;
 
+  /** The most locations a whole report may hold, as every version's are kept at once. */
+  public static final int MAX_REPORT_LOCATIONS = 500_000;
+
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
   // A JSON branch's content entries: a member's path, a discriminator's value, a leaf's type.
@@ -136,7 +139,8 @@ public final class ProvenanceComputer {
    *     null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
-   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}
+   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or the
+   *     history more than {@link #MAX_REPORT_LOCATIONS}
    */
   public static ProvenanceReport report(List<SchemaType> schemaTypes,
       List<LogicalType> versions) {
@@ -150,6 +154,7 @@ public final class ProvenanceComputer {
     Node previous = null;
     SchemaType previousSchemaType = null;
     int nextId = 1;
+    int locations = 0;
     for (int version = 0; version < versions.size(); version++) {
       LogicalType logicalType = versions.get(version);
       if (logicalType == null) {
@@ -161,7 +166,11 @@ public final class ProvenanceComputer {
       }
 
       Walk walk = new Walk(version, schemaType, logicalType);
-      Node root = walk.walk(schemaType == previousSchemaType ? previous : null);
+      final Node root = walk.walk(schemaType == previousSchemaType ? previous : null);
+      locations += walk.members.size();
+      if (locations > MAX_REPORT_LOCATIONS) {
+        throw new TooManyLocationsException(MAX_REPORT_LOCATIONS);
+      }
       List<ProvenanceReport.Member> members = new ArrayList<>(walk.members.size());
       for (Node member : walk.members) {
         member.id = member.match != null ? member.match.id : nextId++;

@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -169,7 +170,9 @@ public final class ProvenanceHistory {
     List<Integer> ids = new ArrayList<>(history.size());
     List<Integer> versions = new ArrayList<>(history.size());
     for (SchemaMetadata entry : history) {
-      schemaTypes.add(SchemaType.of(entry.getSchemaType()));
+      // Schema Registry leaves an Avro schema's type unset.
+      schemaTypes.add(SchemaType.of(
+          entry.getSchemaType() != null ? entry.getSchemaType() : AvroSchema.TYPE));
       ids.add(entry.getId());
       versions.add(entry.getVersion());
     }
@@ -178,6 +181,9 @@ public final class ProvenanceHistory {
       report = ProvenanceComputer.report(schemaTypes, logicalTypes);
     } catch (AmbiguousProvenanceException e) {
       // The computer counts versions from 0 within the history; a caller knows them by number.
+      int index = e.version();
+      throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
+    } catch (TooManyLocationsException e) {
       int index = e.version();
       throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
     }

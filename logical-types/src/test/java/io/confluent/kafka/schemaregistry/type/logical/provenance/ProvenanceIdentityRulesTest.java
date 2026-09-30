@@ -305,10 +305,37 @@ class ProvenanceIdentityRulesTest {
   @Test
   void aVersionWithTooManyLocationsHasNoProvenance() {
     // M_i uses M_i+1 twice, so each level doubles the locations: past the limit, no provenance.
-    ProtobufSchema doubling = new ProtobufSchema(doublingMessages(16));
-    assertThatThrownBy(() -> compute(doubling))
+    // The message names the version by its number.
+    String doubling = doublingMessages(16);
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
+        new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), doubling)),
+        ProvenanceHistory.logicalTypesOf(
+            Collections.singletonList(new ProtobufSchema(doubling)), false)))
         .isInstanceOf(TooManyLocationsException.class)
-        .hasMessageContaining("more than " + ProvenanceComputer.MAX_LOCATIONS);
+        .hasMessageContaining("Version 7 has more than " + ProvenanceComputer.MAX_LOCATIONS);
+  }
+
+  @Test
+  void aHistoryWithTooManyLocationsHasNoProvenance() {
+    // Each version is under the limit, but every version's locations are kept at once.
+    ProtobufSchema large = new ProtobufSchema(doublingMessages(15));
+    ParsedSchema[] versions = new ParsedSchema[6];
+    Arrays.fill(versions, large);
+    assertThatThrownBy(() -> compute(versions))
+        .isInstanceOf(TooManyLocationsException.class)
+        .hasMessageContaining("The history has more than "
+            + ProvenanceComputer.MAX_REPORT_LOCATIONS);
+  }
+
+  @Test
+  void aVersionWithNoSchemaTypeIsAvro() {
+    // As Schema Registry leaves an Avro schema's type unset.
+    AvroSchema avro = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+    assertThat(ProvenanceHistory.compute("s", Collections.singletonList(
+        new SchemaMetadata(1, 1, null, Collections.emptyList(), avro.canonicalString())),
+        ProvenanceHistory.logicalTypesOf(Collections.singletonList(avro), false))
+        .getVersions().get(0).getFields()).hasSize(1);
   }
 
   @Test
