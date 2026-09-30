@@ -67,8 +67,7 @@ final class LogicalTypeEquivalence {
     if (a == null || b == null) {
       return a == b;
     }
-    if (a.isNullable() != b.isNullable() || !nativeSteps(a).equals(nativeSteps(b))
-        || !identityParams(a.getParams(), b.getParams())) {
+    if (a.isNullable() != b.isNullable()) {
       return false;
     }
     // A named type that is only a reference, as a JSON def of just a $ref, stands for the one it
@@ -81,9 +80,17 @@ final class LogicalTypeEquivalence {
       // compared, at the reference's nullability.
       Schema x = refA ? mine.get(ra.getQualifiedName()) : ra;
       Schema y = refA ? rb : theirs.get(rb.getQualifiedName());
-      return x != null && y != null && x.getType() == y.getType() && bodies(x, y);
+      if (x == null || y == null || x.getType() != y.getType()) {
+        return false;
+      }
+      // The body stands where the reference did, so its native steps and params are compared.
+      return sameNode(x, y) && bodies(x, y);
     }
-    return ra.getType() == rb.getType() && bodies(ra, rb);
+    return sameNode(a, b) && ra.getType() == rb.getType() && bodies(ra, rb);
+  }
+
+  private static boolean sameNode(Schema a, Schema b) {
+    return nativeSteps(a).equals(nativeSteps(b)) && identityParams(a.getParams(), b.getParams());
   }
 
   // The last reference of a chain of named types each only referring to the next.
@@ -191,9 +198,11 @@ final class LogicalTypeEquivalence {
     }
     List<Schema.EnumValue> xs = sorted(a, Schema.EnumValue::getSymbol);
     List<Schema.EnumValue> ys = sorted(b, Schema.EnumValue::getSymbol);
+    Map<Schema.EnumValue, Integer> numbersA = enumNumbers(a);
+    Map<Schema.EnumValue, Integer> numbersB = enumNumbers(b);
     for (int i = 0; i < xs.size(); i++) {
       if (!xs.get(i).getSymbol().equals(ys.get(i).getSymbol())
-          || !Objects.equals(enumNumber(xs.get(i), a), enumNumber(ys.get(i), b))
+          || !Objects.equals(numbersA.get(xs.get(i)), numbersB.get(ys.get(i)))
           || !identityParams(xs.get(i).getParams(), ys.get(i).getParams())) {
         return false;
       }
@@ -256,13 +265,16 @@ final class LogicalTypeEquivalence {
     return recorded != null ? recorded : implied.get(member);
   }
 
-  // An enum recording no number is numbered from 0 in declaration order.
-  private Integer enumNumber(Schema.EnumValue value, List<Schema.EnumValue> values) {
-    if (schemaType != SchemaType.PROTOBUF) {
-      return null;
+  // Each Protobuf symbol's number: recorded, or its position when the enum records none.
+  private Map<Schema.EnumValue, Integer> enumNumbers(List<Schema.EnumValue> values) {
+    Map<Schema.EnumValue, Integer> numbers = new IdentityHashMap<>();
+    if (schemaType == SchemaType.PROTOBUF) {
+      boolean recordsAny = values.stream().anyMatch(v -> v.getEnumNumber() != null);
+      for (int i = 0; i < values.size(); i++) {
+        numbers.put(values.get(i), recordsAny ? values.get(i).getEnumNumber() : i);
+      }
     }
-    boolean recordsAny = values.stream().anyMatch(v -> v.getEnumNumber() != null);
-    return recordsAny ? value.getEnumNumber() : values.indexOf(value);
+    return numbers;
   }
 
   private static boolean isUnion(Schema schema) {

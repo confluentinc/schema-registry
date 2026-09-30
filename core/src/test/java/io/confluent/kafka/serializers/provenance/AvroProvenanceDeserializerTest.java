@@ -20,16 +20,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
@@ -394,6 +397,34 @@ class AvroProvenanceDeserializerTest {
     client.register(SUBJECT, new AvroSchema(reader));
     assertThrows(Exception.class, () -> read(reader, bytes, null), "without provenance");
     assertThrows(Exception.class, () -> read(reader, bytes, "v1"), "with provenance");
+  }
+
+  @Test
+  void aSubjectWhoseLatestVersionIsAnotherFormatStillFindsTheReadersVersion() throws Exception {
+    // This client parses Avro alone, as a deserializer's does: the JSON v4 is skipped unparsed.
+    int[] jsonId = {-1};
+    client = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+          throws IOException, RestClientException {
+        if (id == jsonId[0]) {
+          throw new IllegalArgumentException("Invalid schema type JSON");
+        }
+        return super.getSchemaBySubjectAndId(subject, id);
+      }
+    };
+    serializer = new KafkaAvroSerializer(client, config(null));
+    Schema v1 = record(idField(), string("x"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("x", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    client.register(SUBJECT, new AvroSchema(record(idField(),
+        "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\"}")));
+    jsonId[0] = client.register(SUBJECT, new JsonSchema("{\"type\":\"object\"}"));
+    // v3 but for a doc, so found by structure rather than by its text.
+    Schema reader = record(idField(),
+        "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\",\"doc\":\"again\"}");
+
+    assertEquals("DEF", read(reader, bytes, "v1").get("x").toString());
   }
 
   @Test

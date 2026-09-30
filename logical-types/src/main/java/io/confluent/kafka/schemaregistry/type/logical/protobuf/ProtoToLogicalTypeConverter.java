@@ -76,9 +76,10 @@ public class ProtoToLogicalTypeConverter {
 
   /**
    * The field numbers a struct implies by recording none: this converter omits them
-   * all-or-nothing, precisely when regular fields take 1..n in declaration order and the oneof
-   * members continue it. Keyed by field and branch, by identity; empty when any number is
-   * recorded, and for the multi-message root, whose fields name messages and never had numbers.
+   * all-or-nothing, precisely when regular fields take 1..n in declaration order, the oneof
+   * members continue it, and no regular field holds a wrapped union. Keyed by field and branch, by
+   * identity; empty when any number is recorded, and for the multi-message root, whose fields name
+   * messages and never had numbers.
    */
   public static Map<Object, Integer> impliedFieldNumbers(Schema struct) {
     if (recordsAnyNumber(struct)

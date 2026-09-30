@@ -42,6 +42,7 @@ public enum SchemaType {
    * sequence the writer reproduces positionally, so the regular fields take 1..n in declaration
    * order and the {@code oneof} branches continue the sequence. A {@code oneof} container field
    * itself never has a number, and follows its members' numbers, so renaming it changes nothing.
+   * A Flink wrapper's union is numbered on its own, and always records its branches' numbers.
    *
    * <p>Only sound for a Protobuf-derived sequence. Applied to an Avro one it would make identity
    * positional, and a legal field reorder would put two unrelated fields in correspondence.

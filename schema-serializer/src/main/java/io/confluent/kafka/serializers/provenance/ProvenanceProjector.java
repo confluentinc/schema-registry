@@ -21,6 +21,8 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -55,11 +57,13 @@ import org.slf4j.LoggerFactory;
  * <p>Provenance pairs registered versions by schema id. A reader's id is the one its caller
  * supplied, else the one it is registered under; a writer's is the one its record carries. Where
  * that is missing — a record naming its schema by GUID — or names no version of the subject, it
- * is looked up the same way. A schema matching no version exactly takes the latest version whose
- * logical type is equivalent to its own ({@link LogicalType#equivalent}): provenance depends on
- * the data alone, not on docs, options, metadata, rules or how references are spelled. A reader
+ * is looked up the same way. A schema matching no version exactly takes the latest version of its
+ * own schema type whose logical type is equivalent to its own under that type's rules
+ * ({@link LogicalType#equivalent}): provenance depends on the data alone, not on docs, options,
+ * metadata, rules, the order members are declared in, or how references are spelled. A reader
  * derived from a generated class skips the exact lookup, as its text is synthesized: it is the
- * latest version equivalent to it.
+ * latest version equivalent to it. A writer read by a reader of its own version asks nothing of
+ * the registry.
  *
  * <p>Provenance comes from a {@link ProvenanceStrategy}, by default Schema Registry, whose failures
  * are typed as its contract says. Failures are told apart by what asking again could change. A
@@ -447,14 +451,21 @@ public final class ProvenanceProjector<T> {
       versions = client.getAllVersions(subject);
     }
     for (int i = versions.size() - 1; i >= 0; i--) {
-      int id = schemaIdOf(subject, versions.get(i));
-      ParsedSchema registered = client.getSchemaBySubjectAndId(subject, id);
-      if (!schema.schemaType().equals(registered.schemaType())) {
+      SchemaMetadata metadata = metadataOf(subject, versions.get(i));
+      // Another format's version is skipped unparsed: this client may have no provider for it.
+      String type = metadata.getSchemaType() != null ? metadata.getSchemaType() : AvroSchema.TYPE;
+      if (!schema.schemaType().equals(type)) {
         continue;
       }
-      Optional<LogicalType> version = logicalTypeOf(registered);
+      Optional<LogicalType> version;
+      try {
+        version = logicalTypeOf(client.getSchemaBySubjectAndId(subject, metadata.getId()));
+      } catch (RuntimeException e) {
+        // A version this client cannot parse stands for no reader, as one with no logical form.
+        version = Optional.empty();
+      }
       if (version.isPresent() && wanted.get().equivalent(schemaType, version.get())) {
-        return id;
+        return metadata.getId();
       }
     }
     return null;
@@ -479,11 +490,12 @@ public final class ProvenanceProjector<T> {
   }
 
   // A soft-deleted version is still a version: old records and pinned readers use them.
-  private int schemaIdOf(String subject, int version) throws IOException, RestClientException {
+  private SchemaMetadata metadataOf(String subject, int version)
+      throws IOException, RestClientException {
     try {
-      return client.getSchemaMetadata(subject, version, true).getId();
+      return client.getSchemaMetadata(subject, version, true);
     } catch (UnsupportedOperationException e) {
-      return client.getSchemaMetadata(subject, version).getId();
+      return client.getSchemaMetadata(subject, version);
     }
   }
 

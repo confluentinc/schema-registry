@@ -20,6 +20,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.SchemaType.AVRO;
 import static io.confluent.kafka.schemaregistry.type.logical.SchemaType.JSON;
 import static io.confluent.kafka.schemaregistry.type.logical.SchemaType.PROTOBUF;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -28,6 +29,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 /** What {@link LogicalType#equivalent} counts as the same data, and what only documents it. */
@@ -183,6 +185,28 @@ class LogicalTypeEquivalenceTest {
   }
 
   @Test
+  void aJsonRefToAnArrayOrMapIsEquivalentToTheSameBodyInline() {
+    String array = "{\"type\":\"array\",\"items\":{\"type\":\"string\"}}";
+    String objectMap = "{\"type\":\"object\",\"connect.type\":\"map\","
+        + "\"additionalProperties\":{\"type\":\"string\"}}";
+    String arrayMap = "{\"type\":\"array\",\"connect.type\":\"map\",\"items\":{\"type\":\"object\","
+        + "\"properties\":{\"key\":{\"type\":\"string\"},\"value\":{\"type\":\"string\"}}}}";
+    for (String body : Arrays.asList(array, objectMap, arrayMap)) {
+      assertThat(json(byRef(body)).equivalent(JSON, json(inline(body)))).as(body).isTrue();
+      assertThat(json(inline(body)).equivalent(JSON, json(byRef(body)))).as(body).isTrue();
+    }
+    // The two map encodings are read differently, so they stay apart.
+    assertThat(json(byRef(objectMap)).equivalent(JSON, json(inline(arrayMap)))).isFalse();
+  }
+
+  @Test
+  void aSchemaTypeIsRequired() {
+    LogicalType plain = proto("int32 id = 1;", "");
+    assertThatThrownBy(() -> plain.equivalent(null, plain))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
   void aJsonDefThatOnlyReferencesAnotherStandsForIt() {
     String e = "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"string\"}}}";
     String chain = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
@@ -215,6 +239,16 @@ class LogicalTypeEquivalenceTest {
         .equivalent(AVRO, avro(field("i", String.format(inner, aliased), null)))).isFalse();
     assertThat(avro(field("f", String.format(fixed, ""), "null"))
         .equivalent(AVRO, avro(field("f", String.format(fixed, aliased), "null")))).isFalse();
+  }
+
+  // A root whose property d refers to the def D with the given body, or holds that body inline.
+  private static String byRef(String body) {
+    return "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":" + body + "}}";
+  }
+
+  private static String inline(String body) {
+    return "{\"type\":\"object\",\"properties\":{\"d\":" + body + "}}";
   }
 
   private static String field(String name, String type, String defaultValue) {
