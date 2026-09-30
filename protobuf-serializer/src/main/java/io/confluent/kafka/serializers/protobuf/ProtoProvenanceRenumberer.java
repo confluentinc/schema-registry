@@ -80,7 +80,8 @@ final class ProtoProvenanceRenumberer {
    * and fail the parse where it is a message.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
-   *     different numberings, or a field needing a new number belongs to an imported file
+   *     different numberings, a field needing a new number belongs to an imported file, or the
+   *     record's message is a nested one no location reaches
    * @throws SerializationException if a location's names are missing or not in the reader
    */
   static Renumbered renumber(ProtobufSchema reader, ProtobufSchema writer,
@@ -96,6 +97,7 @@ final class ProtoProvenanceRenumberer {
       }
     }
     Set<List<Integer>> moving = new HashSet<>();
+    boolean reached = false;
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
       if (renumberer.underMovingField(root, path, moving, mapping, includeMultipleMessages)) {
@@ -107,6 +109,9 @@ final class ProtoProvenanceRenumberer {
         moving.add(path);
       }
       FieldDescriptor field = renumberer.fieldAt(root, names, includeMultipleMessages);
+      if (field != null && field.getContainingType().getFullName().equals(root.getFullName())) {
+        reached = true;
+      }
       if (isOneof(path, names, field, mapping)) {
         // A oneof: no step of its own, so no field to number; its members are visited as fields.
         continue;
@@ -114,6 +119,13 @@ final class ProtoProvenanceRenumberer {
       if (field != null) {
         renumberer.decide(field.getContainingType(), field, move);
       }
+    }
+    boolean nested = includeMultipleMessages && root.getContainingType() != null;
+    if (nested && !root.getFields().isEmpty() && !reached) {
+      // Locations start at the file's top-level messages: a nested message reaches them only
+      // through a field using it, and read directly it would escape provenance silently.
+      throw new ProvenanceUnavailableException("The record's message " + root.getFullName()
+          + " is nested, and no location of the subject's provenance reaches it");
     }
     FileDescriptor renumbered = renumberer.build();
     if (renumbered == root.getFile()) {

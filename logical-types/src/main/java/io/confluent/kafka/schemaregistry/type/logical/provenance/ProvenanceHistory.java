@@ -112,6 +112,7 @@ public final class ProvenanceHistory {
    * @throws RecursiveTypeException if a version's schema refers to itself
    * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
    *     identity per location
+   * @throws TooManyLocationsException if a version has more locations than provenance computes
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
       List<LogicalType> logicalTypes) {
@@ -172,8 +173,15 @@ public final class ProvenanceHistory {
       ids.add(entry.getId());
       versions.add(entry.getVersion());
     }
-    SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
-        subject, ProvenanceComputer.report(schemaTypes, logicalTypes), ids, versions);
+    ProvenanceReport report;
+    try {
+      report = ProvenanceComputer.report(schemaTypes, logicalTypes);
+    } catch (AmbiguousProvenanceException e) {
+      // The computer counts versions from 0 within the history; a caller knows them by number.
+      int index = e.version();
+      throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
+    }
+    SchemaProvenance encoded = SchemaProvenanceEncoder.encode(subject, report, ids, versions);
     encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
     return encoded;
   }

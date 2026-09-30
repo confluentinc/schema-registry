@@ -303,6 +303,42 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aVersionWithTooManyLocationsHasNoProvenance() {
+    // M_i uses M_i+1 twice, so each level doubles the locations: past the limit, no provenance.
+    ProtobufSchema doubling = new ProtobufSchema(doublingMessages(16));
+    assertThatThrownBy(() -> compute(doubling))
+        .isInstanceOf(TooManyLocationsException.class)
+        .hasMessageContaining("more than " + ProvenanceComputer.MAX_LOCATIONS);
+  }
+
+  @Test
+  void anAmbiguousHistoryNamesTheVersionByItsNumber() {
+    // Versions 5 and 6: the computer counts them 0 and 1, the message names 6.
+    String a = "{\"type\":\"record\",\"name\":\"R\",\"fields\":[%s]}";
+    List<ParsedSchema> versions = Arrays.asList(
+        new AvroSchema(String.format(a, "{\"name\":\"a\",\"type\":\"int\"}")),
+        new AvroSchema(String.format(a, "{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]},"
+            + "{\"name\":\"c\",\"type\":\"int\",\"aliases\":[\"a\"]}")));
+    List<SchemaMetadata> history = Arrays.asList(
+        new SchemaMetadata(15, 5, "AVRO", Collections.emptyList(), ""),
+        new SchemaMetadata(16, 6, "AVRO", Collections.emptyList(), ""));
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.logicalTypesOf(versions, false)))
+        .isInstanceOf(AmbiguousProvenanceException.class)
+        .hasMessageContaining("version 6");
+  }
+
+  // Messages M_0 to M_n, each but the last holding two fields of the next.
+  private static String doublingMessages(int n) {
+    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < n; i++) {
+      file.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
+          .append(i + 1).append(" b = 2;\n}\n");
+    }
+    return file.append("message M").append(n).append(" {\n  int32 id = 1;\n}\n").toString();
+  }
+
+  @Test
   void aWrappersBranchesFollowTheirNumbersWhenFlinkReordersThem() {
     // Flink re-emits a reordered union numbering its wrapper positionally: b takes a's number.
     List<ProvenanceVersion> v = compute(flinkRow("a", "b"), flinkRow("b", "a"));

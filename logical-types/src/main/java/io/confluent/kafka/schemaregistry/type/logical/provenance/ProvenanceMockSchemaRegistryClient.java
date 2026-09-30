@@ -63,6 +63,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int UNRESOLVABLE_REFERENCE = 42214;
   private static final int UNKNOWN_ALGORITHM = 42216;
   private static final int AMBIGUOUS_PROVENANCE = 42217;
+  private static final int PROVENANCE_TOO_LARGE = 42218;
   // The registry's generic server error carries its HTTP status as its error code.
   private static final int SERVER_ERROR = 500;
 
@@ -207,6 +208,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (AmbiguousProvenanceException e) {
       throw new RestClientException(e.getMessage(), 422, AMBIGUOUS_PROVENANCE);
+    } catch (TooManyLocationsException e) {
+      throw new RestClientException(e.getMessage(), 422, PROVENANCE_TOO_LARGE);
     } catch (UnsupportedProvenanceAlgorithmException e) {
       throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
     } catch (ValidationException e) {

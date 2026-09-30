@@ -25,7 +25,30 @@ public class AmbiguousProvenanceException extends IllegalStateException {
 
   private static final long serialVersionUID = 1L;
 
+  // The version it names, or -1, and the message around it: the computer counts versions from 0,
+  // and a caller knowing them by number names the version again with withVersion.
+  private final int version;
+  private final String before;
+  private final String after;
+
   public AmbiguousProvenanceException(String message) {
-    super(message);
+    this(message, -1, "");
+  }
+
+  AmbiguousProvenanceException(String before, int version, String after) {
+    super(before + (version >= 0 ? String.valueOf(version) : "") + after);
+    this.version = version;
+    this.before = before;
+    this.after = after;
+  }
+
+  // The version it names, as its thrower counted it; -1 if none.
+  int version() {
+    return version;
+  }
+
+  // As this, naming the version number instead.
+  AmbiguousProvenanceException withVersion(int number) {
+    return version < 0 ? this : new AmbiguousProvenanceException(before, number, after);
   }
 }

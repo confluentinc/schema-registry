@@ -691,6 +691,28 @@ class ProtobufProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aVersionWithTooManyLocationsIsReadWithoutProvenance() throws Exception {
+    // M0 reaches M16 by two fields at each level: too many locations, so no provenance, and the
+    // record reads as written, memo and all, where computing it would exhaust the registry.
+    byte[] bytes = write(doubling("string note = 3;"), b -> b.setField(field(b, "note"), "old"));
+    client.register(SUBJECT, doubling(""));
+    client.register(SUBJECT, doubling("string memo = 3;"));
+
+    assertEquals("old", get(read(doubling("string memo = 3;"), bytes, "v1"), "memo"));
+  }
+
+  // M0, holding two fields of M1 and the given member, through M16, each holding two of the next.
+  private static ProtobufSchema doubling(String member) {
+    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 16; i++) {
+      file.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
+          .append(i + 1).append(" b = 2;\n").append(i == 0 ? "  " + member + "\n" : "")
+          .append("}\n");
+    }
+    return new ProtobufSchema(file.append("message M16 {\n  int32 id = 1;\n}\n").toString());
+  }
+
   // A v1 record with note "old", then v2 dropping note and v3 adding memo at its number.
   private byte[] readdedMemo() throws Exception {
     byte[] bytes = write(row("int32 id = 1;", "string note = 2;"),

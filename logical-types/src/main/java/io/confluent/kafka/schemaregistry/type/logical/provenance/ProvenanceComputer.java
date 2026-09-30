@@ -94,6 +94,9 @@ import java.util.function.ToIntFunction;
  */
 public final class ProvenanceComputer {
 
+  /** The most locations one version may have; past it, the history has no provenance. */
+  public static final int MAX_LOCATIONS = 100_000;
+
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
   // A JSON branch's content entries: a member's path, a discriminator's value, a leaf's type.
@@ -133,6 +136,7 @@ public final class ProvenanceComputer {
    *     null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
+   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}
    */
   public static ProvenanceReport report(List<SchemaType> schemaTypes,
       List<LogicalType> versions) {
@@ -373,6 +377,10 @@ public final class ProvenanceComputer {
       for (Node peer : peers) {
         if (peer.kind != Kind.NAMED_TYPE) {
           members.add(peer);
+          // Each use of a shared type is a location, so they can multiply with depth.
+          if (members.size() > MAX_LOCATIONS) {
+            throw new TooManyLocationsException(version, MAX_LOCATIONS);
+          }
         }
         processType(peer.body, peer, "", peer.where, peer.childDerived);
       }
@@ -572,7 +580,7 @@ public final class ProvenanceComputer {
         Object key = peer.number != null ? peer.number : peer.name;
         if (!keys.add(key) || previous != null && !continued.add(previous)) {
           throw new AmbiguousProvenanceException("Multiple entities resolve to the same logical "
-              + "identity at version " + version + ": " + key + " (at " + peer.where.path + ")");
+              + "identity at version ", version, ": " + key + " (at " + peer.where.path + ")");
         }
       }
     }
@@ -731,7 +739,7 @@ public final class ProvenanceComputer {
         if (p != null) {
           if (ownClaimant.put(p, peer) != null) {
             throw new AmbiguousProvenanceException("Two entities named " + peer.name
-                + " at version " + version + " at " + peer.where.path);
+                + " at version ", version, " at " + peer.where.path);
           }
           own.put(peer, p);
         }
@@ -750,8 +758,8 @@ public final class ProvenanceComputer {
               // Carried forward from the version that introduced it.
               continue;
             }
-            throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-                + version + ": " + peer.where.path + " continues " + mine.name
+            throw new AmbiguousProvenanceException("Ambiguous identity resolution at version ",
+                version, ": " + peer.where.path + " continues " + mine.name
                 + " and names another entity by a new alias: " + aliased.name);
           }
           aliasClaimants.computeIfAbsent(aliased, k -> new LinkedHashSet<>()).add(peer);
@@ -764,14 +772,14 @@ public final class ProvenanceComputer {
         Set<Node> byAlias = aliasClaimants.getOrDefault(p, Collections.emptySet());
         if (byAlias.size() > 1) {
           // Avro's decoder gives it to whichever alias is declared last; its checker, to all.
-          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": multiple entities claim " + p.name + " via aliases");
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version ",
+              version, ": multiple entities claim " + p.name + " via aliases");
         }
         Node winner = byAlias.isEmpty() ? ownClaimant.get(p) : byAlias.iterator().next();
         Node earlier = matched.put(winner, p);
         if (earlier != null) {
-          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version "
-              + version + ": " + winner.where.path + " matches both " + earlier.name + " and "
+          throw new AmbiguousProvenanceException("Ambiguous identity resolution at version ",
+              version, ": " + winner.where.path + " matches both " + earlier.name + " and "
               + p.name);
         }
       }

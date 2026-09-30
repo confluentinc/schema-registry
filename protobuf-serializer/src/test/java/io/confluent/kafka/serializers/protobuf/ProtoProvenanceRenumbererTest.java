@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.kafka.common.errors.SerializationException;
@@ -68,6 +69,27 @@ public class ProtoProvenanceRenumbererTest {
     ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
         mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
     assertEquals(18_999, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
+  }
+
+  @Test
+  public void aNestedRecordMessageNoLocationReachesHasNoProvenance() {
+    // Locations start at the file's top-level messages: A.Inner, used by no field, has none, so
+    // a record of it is read without provenance rather than silently as written.
+    String file = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 id = 1;\n%s"
+        + "  message Inner {\n    string memo = 1;\n  }\n}\n";
+    ProtobufSchema unused = new ProtobufSchema(String.format(file, ""));
+    ProtobufSchema reader = new ProtobufSchema(unused.toDescriptor("p.A.Inner"));
+    assertThrows(ProvenanceUnavailableException.class, () -> ProtoProvenanceRenumberer.renumber(
+        reader, unused, mapping(Arrays.asList(p(1, "p.A", "id")),
+            Arrays.asList(p(1, "p.A", "id"))), true));
+
+    // Used by a field, it is reached through it.
+    ProtobufSchema used = new ProtobufSchema(String.format(file, "  Inner inner = 2;\n"));
+    ProtobufSchema usedReader = new ProtobufSchema(used.toDescriptor("p.A.Inner"));
+    List<ProvenanceField> both = Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "inner"),
+        p(3, "p.A", "inner", "memo"));
+    assertEquals(usedReader, ProtoProvenanceRenumberer.renumber(usedReader, used,
+        mapping(both, both), true).schema);
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,

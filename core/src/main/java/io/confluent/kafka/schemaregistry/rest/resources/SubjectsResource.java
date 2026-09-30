@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.TooManyLocationsException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.UnsupportedProvenanceAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -347,7 +348,8 @@ public class SubjectsResource {
                   + "42213 indicates a recursive schema. Error code 42214 indicates a schema "
                   + "that could not be parsed. Error code 42215 indicates an invalid range. "
                   + "Error code 42216 indicates an unknown algorithm. Error code 42217 indicates "
-                  + "a history whose names and aliases do not determine one provenance.",
+                  + "a history whose names and aliases do not determine one provenance. Error "
+                  + "code 42218 indicates a version with too many locations to compute.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
@@ -635,6 +637,8 @@ public class SubjectsResource {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {
       throw Errors.ambiguousProvenanceException(e.getMessage());
+    } catch (TooManyLocationsException e) {
+      throw Errors.provenanceTooLargeException(e.getMessage());
     } catch (UnsupportedProvenanceAlgorithmException e) {
       throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
     } catch (ValidationException e) {
