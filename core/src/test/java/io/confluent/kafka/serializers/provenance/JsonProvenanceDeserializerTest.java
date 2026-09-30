@@ -138,6 +138,20 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderDifferingOnlyInDescriptionsIsMatchedByStructure() throws Exception {
+    // No version has its description; it has v3's structure, the latest with it: note is new.
+    JsonSchema v1 = object(number("id"), string("note"));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, object(number("id")));
+    client.register(SUBJECT, object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"new\"}"));
+    JsonSchema reader = object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"again\"}");
+
+    assertFalse(read(reader, bytes, "v1").has("note"));
+  }
+
+  @Test
   void aPropertyPresentThroughoutIsLeftAlone() throws Exception {
     JsonSchema v1 = object(number("id"), string("name"));
     JsonSchema v2 = object(number("id"), string("name"), string("extra"));

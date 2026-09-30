@@ -20,11 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -79,12 +81,12 @@ class JsonProvenanceStrictnessTest {
 
   /** {@code document}, written under the first version, pruned for reading under the last. */
   private static JsonNode prune(String document, JsonSchema... versions) throws Exception {
-    List<ProvenanceHistory.Entry> history = new ArrayList<>();
+    List<SchemaMetadata> history = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
-      history.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      history.add(new SchemaMetadata(i + 1, i + 1, "JSON", Collections.emptyList(), ""));
     }
     SchemaProvenance provenance = ProvenanceHistory.compute("s", history,
-        Arrays.<ParsedSchema>asList(versions), false);
+        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), false));
     JsonNode node = MAPPER.readTree(document);
     JsonProvenancePruner.plan(ProvenanceMapping.join(provenance, 1, versions.length),
         versions[versions.length - 1], versions[0]).prune(node);

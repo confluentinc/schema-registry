@@ -421,6 +421,20 @@ class AvroProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aReaderDifferingOnlyInDocsIsMatchedByStructure() throws Exception {
+    // No version has its docs, but it has v3's structure: note, re-added there, is new.
+    Schema v1 = record(idField(), string("note"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("note", "ada"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    client.register(SUBJECT, new AvroSchema(record(idField(),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\"}")));
+    Schema reader = record(idField(),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\",\"doc\":\"again\"}");
+
+    assertEquals("new", read(reader, bytes, "v1").get("note").toString());
+  }
+
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
     client.register(SUBJECT, new AvroSchema(writer));
     return serializer.serialize(TOPIC, record.build());

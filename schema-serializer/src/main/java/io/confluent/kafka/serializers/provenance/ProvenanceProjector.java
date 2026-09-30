@@ -21,24 +21,19 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -58,12 +53,11 @@ import org.slf4j.LoggerFactory;
  * <p>Provenance pairs registered versions by schema id. A reader's id is the one its caller
  * supplied, else the one it is registered under; a writer's is the one its record carries. Where
  * that is missing — a record naming its schema by GUID — or names no version of the subject, it
- * is looked up the same way. A schema matching no version exactly takes the latest version it
- * equals once metadata, rules and inline tags are set aside, importing the same schemas:
- * provenance depends on structure alone. A Protobuf schema is also compared normalized, since a
- * generated class spells out what its text leaves implicit. A reader derived from a generated
- * class skips the exact lookup, as its text is synthesized: it is the latest version it equals —
- * normalized for Protobuf, as Avro looks one up for Avro.
+ * is looked up the same way. A schema matching no version exactly takes the latest version whose
+ * logical type is equivalent to its own ({@link LogicalType#equivalent}): provenance depends on
+ * the data alone, not on docs, options, metadata, rules or how references are spelled. A reader
+ * derived from a generated class skips the exact lookup, as its text is synthesized: it is the
+ * latest version equivalent to it.
  *
  * <p>Provenance comes from a {@link ProvenanceStrategy}, by default Schema Registry, whose failures
  * are typed as its contract says. Failures are told apart by what asking again could change. A
@@ -98,12 +92,12 @@ public final class ProvenanceProjector<T> {
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
   private final Cache<ParsedSchema, Boolean> derivedReaders =
       CacheBuilder.newBuilder().weakKeys().build();
-  // What a schema imports, by import name; null to resolve its references.
-  private final Function<ParsedSchema, Map<String, String>> importsOf;
   // Where provenance comes from.
   private final ProvenanceStrategy strategy;
-  // A schema as compared by structure, less what its format says bears on no field.
-  private final Function<ParsedSchema, ParsedSchema> structural;
+  // Schemas' logical types, by identity, as compared to find the version a schema stands for;
+  // empty for one with no logical form.
+  private final Cache<ParsedSchema, Optional<LogicalType>> logicalTypes =
+      CacheBuilder.newBuilder().weakKeys().build();
 
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
@@ -117,37 +111,13 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int)}, telling what a schema
-   * imports by {@code importsOf}, by import name, rather than by its references: a Protobuf
-   * generated class has none, but still its descriptor's imports.
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int)}, getting provenance
+   * from {@code strategy} rather than from Schema Registry.
    */
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf) {
-    this(client, algorithm, cacheSize, cacheTtlSec, importsOf, new ClientProvenanceStrategy());
-  }
-
-  /**
-   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int, Function)}, getting
-   * provenance from {@code strategy} rather than from Schema Registry.
-   */
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf,
-      ProvenanceStrategy strategy) {
-    this(client, algorithm, cacheSize, cacheTtlSec, importsOf, strategy, null);
-  }
-
-  /**
-   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int, Function,
-   * ProvenanceStrategy)}, comparing schemas by structure as {@code structural} gives them: less
-   * what bears on no field, such as a Protobuf file's code generation options.
-   */
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec, Function<ParsedSchema, Map<String, String>> importsOf,
-      ProvenanceStrategy strategy, Function<ParsedSchema, ParsedSchema> structural) {
+      int cacheTtlSec, ProvenanceStrategy strategy) {
     this.client = client;
-    this.importsOf = importsOf;
     this.strategy = strategy != null ? strategy : new ClientProvenanceStrategy();
-    this.structural = structural != null ? structural : Function.identity();
     this.algorithm = ProvenanceAlgorithm.LATEST_NAME.equalsIgnoreCase(algorithm) ? null : algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
@@ -263,8 +233,11 @@ public final class ProvenanceProjector<T> {
     if (cause instanceof AuthorizationException) {
       return new AuthorizationException(cause.getMessage(), cause);
     }
+    // A failure of our own lends its cause, so the chain says the message once.
+    Throwable under = cause instanceof SerializationException && cause.getCause() != null
+        ? cause.getCause() : cause;
     return new SerializationException(cause.getMessage() != null ? cause.getMessage()
-        : "Could not project by provenance: " + cause, cause);
+        : "Could not project by provenance: " + cause, under);
   }
 
   private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,
@@ -290,7 +263,7 @@ public final class ProvenanceProjector<T> {
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       } catch (ProvenanceUnknownWriterException e) {
         // A writer id under no version of the subject: the writer's schema may still equal one.
-        Integer equal = structuralMatch(subject, writer, false);
+        Integer equal = structuralMatch(subject, writer);
         if (equal == null || equal.equals(writerId)) {
           throw e;
         }
@@ -432,45 +405,33 @@ public final class ProvenanceProjector<T> {
       }
     }
     if (id == null) {
-      id = structuralMatch(subject, schema, derived);
+      id = structuralMatch(subject, schema);
     }
     registeredIds.put(key, Optional.ofNullable(id));
     return id;
   }
 
-  private Integer structuralMatch(String subject, ParsedSchema schema, boolean derived)
+  /**
+   * The latest version of {@code subject} whose logical type is equivalent to {@code schema}'s: the
+   * same data, whatever docs, options, services or other annotations either spells out, and
+   * whatever it imports or inlines. Null when none is, or {@code schema} has no logical form.
+   */
+  private Integer structuralMatch(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
+    Optional<LogicalType> wanted = logicalTypeOf(schema);
+    if (!wanted.isPresent()) {
+      return null;
+    }
     List<Integer> versions;
     try {
       versions = client.getAllVersions(subject, true);
     } catch (UnsupportedOperationException e) {
       versions = client.getAllVersions(subject);
     }
-    boolean protobuf = "PROTOBUF".equals(schema.schemaType());
-    if (derived) {
-      // Derived from a generated class: the latest version it equals, in one pass so the latest
-      // wins — normalized for Protobuf, the one it can look up for Avro.
-      return protobuf ? structuralMatch(subject, versions, schema, true)
-          : lookupMatch(subject, versions, schema);
-    }
-    Integer id = structuralMatch(subject, versions, schema, false);
-    if (id == null && protobuf) {
-      // A generated class spells out what its text leaves implicit — qualified type names, map
-      // entries, option order — so a Protobuf schema is also compared normalized.
-      id = structuralMatch(subject, versions, schema, true);
-    }
-    return id;
-  }
-
-  private Integer structuralMatch(String subject, List<Integer> versions, ParsedSchema schema,
-      boolean normalized) throws IOException, RestClientException {
-    String wanted = structure(schema, normalized);
     for (int i = versions.size() - 1; i >= 0; i--) {
       int id = schemaIdOf(subject, versions.get(i));
-      ParsedSchema version = client.getSchemaBySubjectAndId(subject, id);
-      // The text leaves out what it imports: versions alike but for their imports differ.
-      if (wanted.equals(structure(version, normalized))
-          && imports(schema).equals(imports(version))) {
+      Optional<LogicalType> version = logicalTypeOf(client.getSchemaBySubjectAndId(subject, id));
+      if (version.isPresent() && wanted.get().equivalent(version.get())) {
         return id;
       }
     }
@@ -478,20 +439,21 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * The latest version a class-derived {@code schema} can look up, metadata, rules and inline tags
-   * set aside: the class's text inlines what a version may reference, and leaves out what a
-   * version adds besides.
+   * {@code schema}'s logical type as provenance computes it; a Protobuf file's over all its
+   * top-level messages, as a version stands for the whole file whichever message a reader names.
    */
-  private Integer lookupMatch(String subject, List<Integer> versions, ParsedSchema schema)
-      throws IOException, RestClientException {
-    ParsedSchema wanted = bare(schema);
-    for (int i = versions.size() - 1; i >= 0; i--) {
-      int id = schemaIdOf(subject, versions.get(i));
-      if (wanted.canLookup(bare(client.getSchemaBySubjectAndId(subject, id)), client)) {
-        return id;
+  private Optional<LogicalType> logicalTypeOf(ParsedSchema schema) {
+    Optional<LogicalType> known = logicalTypes.getIfPresent(schema);
+    if (known == null) {
+      try {
+        known = Optional.of(ProvenanceHistory.logicalTypeOf(schema, true));
+      } catch (RuntimeException e) {
+        // No logical form, so no provenance either: it stands for no version.
+        known = Optional.empty();
       }
+      logicalTypes.put(schema, known);
     }
-    return null;
+    return known;
   }
 
   // A soft-deleted version is still a version: old records and pinned readers use them.
@@ -501,36 +463,6 @@ public final class ProvenanceProjector<T> {
     } catch (UnsupportedOperationException e) {
       return client.getSchemaMetadata(subject, version).getId();
     }
-  }
-
-  /**
-   * What {@code schema} imports, by import name: as {@code importsOf} tells, else each reference's
-   * schema text, a latest version resolved, so references in another order, as {@code -1} or
-   * through another subject, match.
-   */
-  private Map<String, String> imports(ParsedSchema schema)
-      throws IOException, RestClientException {
-    if (importsOf != null) {
-      return importsOf.apply(schema);
-    }
-    Map<String, String> imports = new HashMap<>();
-    for (SchemaReference reference : schema.references()) {
-      SchemaMetadata imported = reference.getVersion() == -1
-          ? client.getLatestSchemaMetadata(reference.getSubject())
-          : client.getSchemaMetadata(reference.getSubject(), reference.getVersion());
-      imports.put(reference.getName(), imported.getSchema());
-    }
-    return imports;
-  }
-
-  private String structure(ParsedSchema schema, boolean normalized) {
-    ParsedSchema bare = structural.apply(bare(schema));
-    return (normalized ? bare.normalize() : bare).canonicalString();
-  }
-
-  private static ParsedSchema bare(ParsedSchema schema) {
-    ParsedSchema bare = schema.copy((Metadata) null, (RuleSet) null);
-    return bare.copy(Collections.emptyMap(), bare.inlineTaggedEntities());
   }
 
   private static final class Outcome<T> {
@@ -557,8 +489,9 @@ public final class ProvenanceProjector<T> {
     Optional<T> get() {
       if (failure != null) {
         // A fresh one each time: a caller may add to it, and it is shared by every record. Its
-        // cause is the failure's own, so the chain says the message once.
-        throw new SerializationException(failure.getMessage(), failure.getCause());
+        // cause is the failure's own, so the chain says the message once; one without is kept.
+        throw new SerializationException(failure.getMessage(),
+            failure.getCause() != null ? failure.getCause() : failure);
       }
       return Optional.ofNullable(value);
     }

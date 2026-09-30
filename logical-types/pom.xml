@@ -101,7 +101,7 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-rules</artifactId>
+            <artifactId>kafka-schema-rules-builtin</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
     </dependencies>

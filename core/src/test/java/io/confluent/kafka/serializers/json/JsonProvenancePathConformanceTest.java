@@ -20,12 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import java.util.Collections;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
@@ -123,15 +125,19 @@ class JsonProvenancePathConformanceTest {
       String document, String expected) throws Exception {
     JsonSchema v1 = new JsonSchema(String.format(template, property));
     JsonSchema v2 = new JsonSchema(String.format(template, ""));
-    List<ProvenanceHistory.Entry> history = Arrays.asList(new ProvenanceHistory.Entry(1, 1, false),
-        new ProvenanceHistory.Entry(2, 2, false), new ProvenanceHistory.Entry(3, 3, false));
+    List<SchemaMetadata> history = Arrays.asList(
+        new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), ""),
+        new SchemaMetadata(2, 2, "JSON", Collections.emptyList(), ""),
+        new SchemaMetadata(3, 3, "JSON", Collections.emptyList(), ""));
     List<ParsedSchema> schemas = Arrays.asList(v1, v2, v1);
     if (expected == null) {
       assertThrows(ValidationException.class,
-          () -> ProvenanceHistory.compute("s", history, schemas, false));
+          () -> ProvenanceHistory.compute("s", history,
+              ProvenanceHistory.logicalTypesOf(schemas, false)));
       return;
     }
-    SchemaProvenance provenance = ProvenanceHistory.compute("s", history, schemas, false);
+    SchemaProvenance provenance = ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.logicalTypesOf(schemas, false));
     JsonNode read = MAPPER.readTree(document);
 
     JsonProvenancePruner.plan(ProvenanceMapping.join(provenance, 1, 3), v1, v1).prune(read);

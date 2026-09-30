@@ -989,14 +989,16 @@ public final class ProvenanceComputer {
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's place. In turn: a hinted branch continues the
      * previous branch of its name; a branch continues the one previous branch with the same
-     * top-level discriminators, where no peer has them, as a tagged union's tag names its branch;
-     * the one previous branch of its title, where no peer has it and no discriminator conflicts —
-     * a title only documents in V1, so one changed only leaves the branch to the phases below; the
-     * one previous branch of the same content, where no peer shares it; the previous branch it
-     * shares strictly the most members with, and it with that one, a member every untaken
-     * previous branch has aside, and no conflicting discriminator, as when it moved and its
-     * members changed; one at the same position sharing a member with it, where overlap alone
-     * cannot tell; else it is new. None continues another across a discriminator a branch related
+     * top-level discriminators, where no unpaired peer has them, as a tagged union's tag names
+     * its branch; the one previous branch of its title, where no unpaired peer has it and no
+     * discriminator conflicts — a title only documents in V1, so one changed only leaves the
+     * branch to the phases below; the one previous branch of the same content, where no unpaired
+     * peer shares it; the previous branch it shares strictly the most members with, and it with
+     * that one, a member every untaken previous branch has (or, with one left, every previous
+     * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
+     * discriminator, as when it moved and its members changed, repeated while it pairs any; one
+     * at the same position sharing a member with it, where overlap alone cannot tell; else it is
+     * new. None continues another across a discriminator a branch related
      * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
      * different branches, as an Avro type renamed without an alias is.
      */
@@ -1004,6 +1006,7 @@ public final class ProvenanceComputer {
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
       for (int phase = 0; phase < 6; phase++) {
+        boolean progressed = false;
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
             continue;
@@ -1013,23 +1016,20 @@ public final class ProvenanceComputer {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
                 ? null : previousBranch(previous, taken, p -> peer.name.equals(p.name));
           } else if (phase == 1) {
-            found = tags(peer.content).isEmpty() ? null : mutual(peer, peers, previous,
+            found = tags(peer.content).isEmpty() ? null : mutual(peer,
+                unresolved(peers, matched), previous,
                 (a, p) -> !taken.contains(p) && tags(a.content).equals(tags(p.content))
                     && !otherHints(a, p));
           } else if (phase == 2) {
-            found = peer.title == null ? null : mutual(peer, peers, previous,
+            found = peer.title == null ? null : mutual(peer, unresolved(peers, matched),
+                previous,
                 (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
                     && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
           } else if (phase == 3) {
-            found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
-                && a.content.equals(p.content) && !otherHints(a, p));
+            found = mutual(peer, unresolved(peers, matched), previous,
+                (a, p) -> !taken.contains(p) && a.content.equals(p.content) && !otherHints(a, p));
           } else if (phase == 4) {
-            List<Node> unresolved = new ArrayList<>();
-            for (Node other : peers) {
-              if (!matched.containsKey(other)) {
-                unresolved.add(other);
-              }
-            }
+            List<Node> unresolved = unresolved(peers, matched);
             Set<String> envelope = envelope(previous, taken);
             found = mostShared(peer, unresolved, previous, envelope, (a, p) -> !taken.contains(p)
                 && overlapsBeyond(a.content, p.content, envelope) && !otherHints(a, p)
@@ -1049,9 +1049,26 @@ public final class ProvenanceComputer {
           if (found != null) {
             taken.add(found);
             matched.put(peer, found);
+            progressed = true;
           }
         }
+        if (phase == 4 && progressed) {
+          // A pairing made here may settle a peer passed over before it, as when it leaves one
+          // previous branch: until none is made.
+          phase--;
+        }
       }
+    }
+
+    // The peers not yet paired: one paired already cannot take another previous branch.
+    private static List<Node> unresolved(List<Node> peers, Map<Node, Node> matched) {
+      List<Node> unresolved = new ArrayList<>();
+      for (Node peer : peers) {
+        if (!matched.containsKey(peer)) {
+          unresolved.add(peer);
+        }
+      }
+      return unresolved;
     }
 
     /**

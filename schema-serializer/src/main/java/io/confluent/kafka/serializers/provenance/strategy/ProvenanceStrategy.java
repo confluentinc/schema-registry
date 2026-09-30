@@ -57,7 +57,8 @@ import org.apache.kafka.common.errors.RetriableException;
  * </ul>
  *
  * <p>A strategy is called from any thread reading a record, possibly several at once, so it must
- * be thread-safe. It is closed when its deserializer is closed or reconfigured.
+ * be thread-safe. It is closed when its deserializer is closed or reconfigured: a record being
+ * read while its deserializer is reconfigured may find it closed, and fail.
  */
 public interface ProvenanceStrategy extends Configurable, Closeable {
 

@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -83,8 +84,9 @@ class ProtoProvenancePathConformanceTest {
   void everyLocationsNamesReachAFieldOfTheDescriptor(
       String label, ProtobufSchema reader, boolean multi) {
     ProvenanceVersion version = ProvenanceHistory.compute("s",
-        Arrays.asList(new ProvenanceHistory.Entry(1, 1, false)),
-        Arrays.<ParsedSchema>asList(reader), multi).getVersions().get(0);
+        Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), "")),
+        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(reader), multi))
+        .getVersions().get(0);
     Map<List<Integer>, List<String>> names = new HashMap<>();
     version.getFields().forEach(f -> names.put(f.getPath(), f.getNames()));
 
@@ -111,9 +113,9 @@ class ProtoProvenancePathConformanceTest {
       String label, ProtobufSchema reader, boolean multi) {
     ProtobufSchema writer = new ProtobufSchema("syntax = \"proto3\";\nmessage Nothing {}\n");
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
-        Arrays.asList(new ProvenanceHistory.Entry(1, 1, false),
-            new ProvenanceHistory.Entry(2, 2, false)),
-        Arrays.<ParsedSchema>asList(writer, reader), multi);
+        Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), ""),
+            new SchemaMetadata(2, 2, "PROTOBUF", Collections.emptyList(), "")),
+        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(writer, reader), multi));
 
     ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
         reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;

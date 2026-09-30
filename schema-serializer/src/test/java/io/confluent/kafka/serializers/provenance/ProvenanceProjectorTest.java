@@ -109,7 +109,7 @@ public class ProvenanceProjectorTest {
   public void aStrategyIsAskedInsteadOfTheClient() throws Exception {
     CountingClient client = new CountingClient();
     RecordingStrategy strategy = new RecordingStrategy();
-    ask(new ProvenanceProjector<>(client, "dynamic", 10, -1, null, strategy), client);
+    ask(new ProvenanceProjector<>(client, "dynamic", 10, -1, strategy), client);
     assertEquals(0, client.asked);
     assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false, false, "dynamic"),
         strategy.lastRequest);
@@ -122,7 +122,7 @@ public class ProvenanceProjectorTest {
     RecordingStrategy strategy = new RecordingStrategy();
     strategy.failure = new ProvenanceRetriableException("down");
     ProvenanceProjector<String> projector =
-        new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
     assertThrows(SerializationException.class, () -> ask(projector, client));
     assertThrows(SerializationException.class, () -> ask(projector, client));
     assertEquals(2, strategy.asked);
@@ -137,7 +137,7 @@ public class ProvenanceProjectorTest {
       RecordingStrategy strategy = new RecordingStrategy();
       strategy.failure = transientFailure;
       ProvenanceProjector<String> projector =
-          new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+          new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
       try {
         assertThrows(SerializationException.class, () -> ask(projector, client));
         assertThrows(SerializationException.class, () -> ask(projector, client));
@@ -150,12 +150,36 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void eachFailureSaysItsMessageOnceAndKeepsWhereItArose() throws Exception {
+    // A cached failure with no cause of its own, then an uncached one wrapping a retriable cause.
+    CountingClient client = new CountingClient();
+    RecordingStrategy strategy = new RecordingStrategy();
+    strategy.returnsNull = true;
+    ProvenanceProjector<String> cached =
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
+    assertThrows(SerializationException.class, () -> ask(cached, client));
+    SerializationException none = assertThrows(SerializationException.class,
+        () -> ask(cached, client));
+    assertTrue(none.getCause() instanceof SerializationException);
+    assertEquals(none.getMessage(), none.getCause().getMessage());
+    assertNull(none.getCause().getCause());
+
+    strategy.returnsNull = false;
+    strategy.failure = new ProvenanceRetriableException("down");
+    ProvenanceProjector<String> uncached =
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
+    SerializationException retried = assertThrows(SerializationException.class,
+        () -> ask(uncached, client));
+    assertTrue(retried.getCause() instanceof ProvenanceRetriableException);
+  }
+
+  @Test
   public void aStrategysRejectionFailsEveryRecordFromThatWriter() throws Exception {
     CountingClient client = new CountingClient();
     RecordingStrategy strategy = new RecordingStrategy();
     strategy.failure = new ProvenanceRejectedException("unknown algorithm");
     ProvenanceProjector<String> projector =
-        new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
     for (int record = 0; record < 2; record++) {
       SerializationException e = assertThrows(SerializationException.class,
           () -> ask(projector, client));
@@ -169,7 +193,7 @@ public class ProvenanceProjectorTest {
     CountingClient client = new CountingClient();
     RecordingStrategy strategy = new RecordingStrategy();
     ProvenanceProjector<String> projector =
-        new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
     ask(projector, client);
     ask(projector, client);
     assertEquals(1, strategy.asked);
@@ -181,7 +205,7 @@ public class ProvenanceProjectorTest {
     CountingClient client = new CountingClient();
     RecordingStrategy strategy = new RecordingStrategy();
     ProvenanceProjector<String> projector =
-        new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
     strategy.failure = new AuthenticationException("who");
     assertThrows(AuthenticationException.class, () -> ask(projector, client));
     strategy.failure = new AuthorizationException("no");
@@ -198,7 +222,7 @@ public class ProvenanceProjectorTest {
       strategy.failure = broken;
       strategy.returnsNull = broken == null;
       ProvenanceProjector<String> projector =
-          new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+          new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
       assertThrows(SerializationException.class, () -> ask(projector, client));
       assertThrows(SerializationException.class, () -> ask(projector, client));
       assertEquals(1, strategy.asked);
@@ -214,7 +238,7 @@ public class ProvenanceProjectorTest {
         new Metadata(null, Collections.singletonMap("owner", "x"), null), null);
     int foreign = client.register("other-value", withMetadata);
     ProvenanceProjector<String> projector =
-        new ProvenanceProjector<>(client, "v1", 10, -1, null, strategy);
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
     projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, foreign, (String) null),
         withMetadata, client.reader, false, m -> "built");
     assertEquals(2, strategy.asked);

@@ -54,6 +54,12 @@
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Once through logical-types, which now needs only the CEL built-ins. -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-rules</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-rules</artifactId>

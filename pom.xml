@@ -49,6 +49,7 @@
         <module>schema-types</module>
         <module>client</module>
         <module>schema-serializer</module>
+        <module>schema-rules-builtin</module>
         <module>schema-rules</module>
         <module>avro-types</module>
         <module>avro-serializer</module>

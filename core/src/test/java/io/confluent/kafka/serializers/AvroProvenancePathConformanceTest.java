@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -181,8 +183,9 @@ class AvroProvenancePathConformanceTest {
 
   private static SchemaProvenance provenanceOf(Schema schema) {
     return ProvenanceHistory.compute("s",
-        Collections.singletonList(new ProvenanceHistory.Entry(1, 1, false)),
-        Collections.singletonList(new AvroSchema(schema)), false);
+        Collections.singletonList(new SchemaMetadata(1, 1, "AVRO", Collections.emptyList(), "")),
+        ProvenanceHistory.logicalTypesOf(
+            Collections.<ParsedSchema>singletonList(new AvroSchema(schema)), false));
   }
 
   private static String record(String... fields) {

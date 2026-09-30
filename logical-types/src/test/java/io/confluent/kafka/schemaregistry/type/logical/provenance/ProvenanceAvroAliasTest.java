@@ -19,12 +19,14 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -338,13 +340,13 @@ class ProvenanceAvroAliasTest {
 
   /** Every version's pids, keyed by the location's names joined with dots. */
   private static List<Map<String, Integer>> pids(ParsedSchema... versions) {
-    List<ProvenanceHistory.Entry> entries = new ArrayList<>();
+    List<SchemaMetadata> entries = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
-      entries.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      entries.add(new SchemaMetadata(i + 1, i + 1, "AVRO", Collections.emptyList(), ""));
     }
     List<Map<String, Integer>> pids = new ArrayList<>();
     for (ProvenanceVersion version : ProvenanceHistory.compute("s", entries,
-        Arrays.asList(versions), false).getVersions()) {
+        ProvenanceHistory.logicalTypesOf(Arrays.asList(versions), false)).getVersions()) {
       Map<String, Integer> byNames = new HashMap<>();
       for (ProvenanceField field : version.getFields()) {
         byNames.put(String.join(".", field.getNames()), field.getPid());

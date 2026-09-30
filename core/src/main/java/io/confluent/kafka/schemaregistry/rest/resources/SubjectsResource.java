@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
@@ -481,7 +482,7 @@ public class SubjectsResource {
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws SchemaRegistryException, InvalidVersionException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    List<SchemaMetadata> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionNamed(fromVersion, entries),
         versionNamed(toVersion, entries), includeInterior, includeMultipleMessages,
         algorithm);
@@ -494,7 +495,7 @@ public class SubjectsResource {
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws SchemaRegistryException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    List<SchemaMetadata> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
         versionOfId(toId, subject, entries), includeInterior, includeMultipleMessages,
         algorithm);
@@ -539,26 +540,16 @@ public class SubjectsResource {
     return history;
   }
 
-  private static List<ProvenanceHistory.Entry> provenanceEntries(List<Schema> history) {
+  private static List<SchemaMetadata> provenanceEntries(List<Schema> history) {
     return history.stream()
-        .map(s -> new ProvenanceHistory.Entry(s.getVersion(), s.getId(),
-            Boolean.TRUE.equals(s.getDeleted()), registeredAt(s)))
+        .map(SchemaMetadata::new)
         .collect(Collectors.toList());
-  }
-
-  /**
-   * When {@code schema}'s version was registered: its createTs, present only where that differs
-   * from ts, else its ts.
-   */
-  private static Long registeredAt(Schema schema) {
-    return schema.getCreateTimestamp() != null
-        ? schema.getCreateTimestamp() : schema.getTimestamp();
   }
 
   /**
    * A version number or {@code "latest"}, which means the latest version not soft-deleted.
    */
-  private static int versionNamed(String version, List<ProvenanceHistory.Entry> entries)
+  private static int versionNamed(String version, List<SchemaMetadata> entries)
       throws InvalidVersionException {
     VersionId id = new VersionId(version);
     OptionalInt resolved = id.isLatest()
@@ -570,7 +561,7 @@ public class SubjectsResource {
     return resolved.getAsInt();
   }
 
-  private static int versionOfId(int id, String subject, List<ProvenanceHistory.Entry> entries) {
+  private static int versionOfId(int id, String subject, List<SchemaMetadata> entries) {
     OptionalInt version = ProvenanceHistory.versionCarrying(entries, id);
     if (!version.isPresent()) {
       throw Errors.schemaIdNotInSubjectException(id, subject);
@@ -589,7 +580,7 @@ public class SubjectsResource {
       key.add(schema.getVersion());
       key.add(schema.getId());
       // Under dynamic, when a version was registered decides the algorithm that matches it.
-      key.add(registeredAt(schema));
+      key.add(ProvenanceHistory.registeredAt(new SchemaMetadata(schema)));
     }
     return key;
   }
@@ -606,8 +597,8 @@ public class SubjectsResource {
       }
     }
     try {
-      return ProvenanceHistory.compute(
-          subject, provenanceEntries(history), parsed, includeMultipleMessages, algorithm);
+      return ProvenanceHistory.compute(subject, provenanceEntries(history),
+          ProvenanceHistory.logicalTypesOf(parsed, includeMultipleMessages), algorithm);
     } catch (RecursiveTypeException e) {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {

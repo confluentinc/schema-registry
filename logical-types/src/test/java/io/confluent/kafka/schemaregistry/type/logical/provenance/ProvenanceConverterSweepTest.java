@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
@@ -131,8 +132,10 @@ class ProvenanceConverterSweepTest {
     List<ProvenanceField> fields;
     try {
       fields = ProvenanceHistory.compute("s",
-          Collections.singletonList(new ProvenanceHistory.Entry(1, 1, false)),
-          Collections.singletonList(schema)).getVersions().get(0).getFields();
+          Collections.singletonList(new SchemaMetadata(1, 1, schema.schemaType(),
+              Collections.emptyList(), "")),
+          ProvenanceHistory.logicalTypesOf(Collections.singletonList(schema), false))
+          .getVersions().get(0).getFields();
     } catch (ValidationException | RecursiveTypeException e) {
       return;
     }

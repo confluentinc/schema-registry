@@ -638,6 +638,16 @@ public class LogicalType {
     return defaultValues;
   }
 
+  /**
+   * Whether {@code other} describes the same data: the same types, nullability, names, positions,
+   * enum symbols and named types, the same native steps and titles its converter recorded, and the
+   * same field numbers, enum numbers and aliases. Unlike {@link #equals}, docs, tags, rules,
+   * defaults and every other param are ignored: they document the data, and do not change it.
+   */
+  public boolean equivalent(LogicalType other) {
+    return other != null && LogicalTypeEquivalence.equivalent(this, other);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

@@ -39,6 +39,11 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-rules-builtin</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
             <artifactId>kafka-protobuf-types</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>

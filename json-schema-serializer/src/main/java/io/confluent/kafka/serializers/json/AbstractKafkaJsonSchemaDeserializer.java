@@ -450,7 +450,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         projector = provenanceProjector;
         if (projector == null) {
           projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
-              provenanceCacheSize, provenanceCacheTtlSec, null, provenanceStrategy);
+              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy);
           provenanceProjector = projector;
         }
       }

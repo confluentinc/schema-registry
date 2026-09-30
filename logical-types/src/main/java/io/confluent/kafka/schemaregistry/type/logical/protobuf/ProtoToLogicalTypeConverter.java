@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.Edition;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
@@ -246,6 +247,12 @@ public class ProtoToLogicalTypeConverter {
       ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
           schema.references(), schema.resolvedReferences(),
           null, null, null, null);
+      ProtoFileElement file = parsedRef.rawSchema();
+      if (file.getTypes().isEmpty() && file.getPublicImports().isEmpty()) {
+        // Declares no type and re-exports none, as a file of only options: nothing to collect.
+        // One re-exporting another resolves to it, as ProtobufSchema resolves such a file.
+        continue;
+      }
       Descriptor refDescriptor = parsedRef.toDescriptor();
       if (refDescriptor != null) {
         collectExternalTypeNames(refDescriptor.getFile(), ctx);
