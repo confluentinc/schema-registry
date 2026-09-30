@@ -437,6 +437,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     classSchemas.clear();
   }
 
+  @Override
+  protected boolean readsByProvenance() {
+    return true;
+  }
+
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.
   private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector() {

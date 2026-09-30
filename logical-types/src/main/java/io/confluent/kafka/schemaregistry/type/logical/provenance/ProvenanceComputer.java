@@ -1079,8 +1079,7 @@ public final class ProvenanceComputer {
       Set<String> tags = new TreeSet<>();
       for (String entry : content) {
         // A step before the value's "=": the value itself may hold a "/".
-        if (entry.startsWith(DISCRIMINATOR)
-            && entry.lastIndexOf('/', entry.indexOf('=', DISCRIMINATOR.length())) < 0) {
+        if (entry.startsWith(DISCRIMINATOR) && unescaped(entry, '/', keyEnd(entry)) < 0) {
           tags.add(entry);
         }
       }
@@ -1208,7 +1207,7 @@ public final class ProvenanceComputer {
     private static boolean namesOtherwise(Set<String> mine, Set<String> theirs) {
       for (String entry : mine) {
         if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
-          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
+          String key = entry.substring(0, keyEnd(entry) + 1);
           if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
             return true;
           }
@@ -1264,10 +1263,34 @@ public final class ProvenanceComputer {
       Set<String> keys = new HashSet<>();
       for (String entry : content) {
         if (entry.startsWith(DISCRIMINATOR)) {
-          keys.add(entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1));
+          keys.add(entry.substring(0, keyEnd(entry) + 1));
         }
       }
       return keys;
+    }
+
+    // A member name as a content step, escaped so that none reads as a path's structure.
+    private static String contentStep(String name) {
+      return name.replace("\\", "\\\\").replace("/", "\\/").replace("=", "\\=")
+          .replace("[", "\\[").replace("{", "\\{");
+    }
+
+    // Where a discriminator's path ends: its first unescaped "=".
+    private static int keyEnd(String entry) {
+      return unescaped(entry, '=', entry.length());
+    }
+
+    // The first unescaped c in a content entry's path, before end; -1 if none.
+    private static int unescaped(String entry, char c, int end) {
+      for (int i = DISCRIMINATOR.length(); i < end; i++) {
+        char at = entry.charAt(i);
+        if (at == '\\') {
+          i++;
+        } else if (at == c) {
+          return i;
+        }
+      }
+      return -1;
     }
 
     /** Whether two branches share a member other than a discriminator, whatever their values. */
@@ -1316,13 +1339,12 @@ public final class ProvenanceComputer {
         case STRUCT:
           for (Field field : body.getFields()) {
             Schema type = resolved(field.getSchema());
-            content.add(MEMBER + prefix + field.getName());
+            String path = prefix + contentStep(field.getName());
+            content.add(MEMBER + path);
             if (isDiscriminator(type)) {
-              content.add(DISCRIMINATOR + prefix + field.getName() + "="
-                  + type.getEnumValues().get(0).getSymbol());
+              content.add(DISCRIMINATOR + path + "=" + type.getEnumValues().get(0).getSymbol());
             }
-            addContent(field.getSchema(), prefix + field.getName() + "/", depth + 1,
-                new HashSet<>(naming), content);
+            addContent(field.getSchema(), path + "/", depth + 1, new HashSet<>(naming), content);
           }
           break;
         case ARRAY:

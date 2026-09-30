@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import org.junit.jupiter.api.Test;
 
 /** What {@link LogicalType#equivalent} counts as the same data, and what only documents it. */
@@ -86,6 +87,56 @@ class LogicalTypeEquivalenceTest {
     assertThat(plain.equivalent(proto("int32 id = 1;\n  string memo = 3;", ""))).isFalse();
   }
 
+  @Test
+  void aJsonRootsTitleAndNamespaceAreIgnoredButBranchHintsCount() {
+    String row = "{\"type\":\"object\",%s\"properties\":{\"u\":{\"oneOf\":["
+        + "{\"type\":\"string\"},{\"type\":\"integer\"}]%s}}}";
+    LogicalType plain = json(String.format(row, "", ""));
+    assertThat(plain.equivalent(json(String.format(row, "\"title\":\"Row\",", "")))).isTrue();
+    assertThat(plain.equivalent(json(String.format(row, "\"confluent:namespace\":\"n\",", ""))))
+        .isTrue();
+    assertThat(plain.equivalent(json(String.format(row, "",
+        ",\"confluent:union\":[{\"name\":\"s\"},{}]")))).isFalse();
+  }
+
+  @Test
+  void aProtobufFilesMessageOrderIsIgnoredButItsRootIsNot() {
+    String a = "message A {\n  int32 x = 1;\n}\n";
+    String b = "message B {\n  string y = 1;\n}\n";
+    LogicalType ab = multi(file(a + b));
+    assertThat(ab.equivalent(multi(file(b + a)))).isTrue();
+    assertThat(ab.equivalent(lt(file(a + b)))).isFalse();
+  }
+
+  @Test
+  void protobufMembersOutOfNumberOrderAreEquivalentOnlyOnceNormalized() {
+    // Declared in number order, numbers are implied by position; otherwise they are recorded.
+    ProtobufSchema reordered = file("message Row {\n  string memo = 2;\n  int32 id = 1;\n}\n");
+    LogicalType plain = proto("int32 id = 1;\n  string memo = 2;", "");
+    assertThat(plain.equivalent(lt(reordered))).isFalse();
+    assertThat(plain.equivalent(lt(reordered.normalize()))).isTrue();
+  }
+
+  @Test
+  void protobufEnumNumbersCount() {
+    String e = "enum E {\n  A = 0;\n  B = %d;\n}\nmessage Row {\n  E e = 1;\n}\n";
+    assertThat(lt(file(String.format(e, 1))).equivalent(lt(file(String.format(e, 2)))))
+        .isFalse();
+  }
+
+  @Test
+  void aliasesOfNestedAvroTypesCount() {
+    String inner = "{\"type\":\"record\",\"name\":\"In\"%s,\"fields\":["
+        + "{\"name\":\"v\",\"type\":\"int\"}]}";
+    // A branch of a proper union: a lone fixed is a binary, which carries no aliases.
+    String fixed = "[\"null\",{\"type\":\"fixed\",\"name\":\"F\",\"size\":4%s},\"int\"]";
+    String aliased = ",\"aliases\":[\"Old\"]";
+    assertThat(avro(field("i", String.format(inner, ""), null))
+        .equivalent(avro(field("i", String.format(inner, aliased), null)))).isFalse();
+    assertThat(avro(field("f", String.format(fixed, ""), "null"))
+        .equivalent(avro(field("f", String.format(fixed, aliased), "null")))).isFalse();
+  }
+
   private static String field(String name, String type, String defaultValue) {
     return "{\"name\":\"" + name + "\",\"type\":" + type
         + (defaultValue != null ? ",\"default\":" + defaultValue : "") + "}";
@@ -102,6 +153,14 @@ class LogicalTypeEquivalenceTest {
   private static LogicalType proto(String members, String trailer) {
     return lt(new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage Row {\n  " + members
         + "\n}\n" + trailer));
+  }
+
+  private static ProtobufSchema file(String body) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + body);
+  }
+
+  private static LogicalType multi(ProtobufSchema schema) {
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, true);
   }
 
   private static LogicalType lt(ParsedSchema schema) {

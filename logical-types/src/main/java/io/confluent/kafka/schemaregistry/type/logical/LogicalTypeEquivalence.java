@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,11 +46,11 @@ final class LogicalTypeEquivalence {
     this.theirs = theirs;
   }
 
+  // The root's own name and namespace (a JSON title, a Protobuf package) are never read by
+  // provenance; named types are still compared by qualified name.
   static boolean equivalent(LogicalType a, LogicalType b) {
-    return Objects.equals(a.getName(), b.getName())
-        && Objects.equals(a.getNamespace(), b.getNamespace())
-        && new LogicalTypeEquivalence(a.getNamedTypes(), b.getNamedTypes())
-            .schemas(a.getRootSchema(), b.getRootSchema());
+    return new LogicalTypeEquivalence(a.getNamedTypes(), b.getNamedTypes())
+        .schemas(a.getRootSchema(), b.getRootSchema());
   }
 
   private boolean schemas(Schema a, Schema b) {
@@ -63,7 +65,10 @@ final class LogicalTypeEquivalence {
     }
     switch (a.getType()) {
       case STRUCT:
-        return fields(a.getFields(), b.getFields());
+        // A multi-message root's fields name the file's messages; their order carries no data.
+        return isMultiMessageRoot(a)
+            ? fields(byName(a.getFields()), byName(b.getFields()), false)
+            : fields(a.getFields(), b.getFields(), true);
       case ENUM:
         return enumValues(a.getEnumValues(), b.getEnumValues());
       case UNION:
@@ -92,15 +97,16 @@ final class LogicalTypeEquivalence {
     }
   }
 
-  private boolean fields(List<Schema.Field> a, List<Schema.Field> b) {
+  private boolean fields(List<Schema.Field> a, List<Schema.Field> b, boolean positions) {
     if (a.size() != b.size()) {
       return false;
     }
     for (int i = 0; i < a.size(); i++) {
       Schema.Field x = a.get(i);
       Schema.Field y = b.get(i);
-      boolean same = Arrays.asList(x.getName(), x.getPosition(), x.getNativeNames())
-          .equals(Arrays.asList(y.getName(), y.getPosition(), y.getNativeNames()));
+      boolean same = Objects.equals(x.getName(), y.getName())
+          && (!positions || x.getPosition() == y.getPosition())
+          && Objects.equals(x.getNativeNames(), y.getNativeNames());
       if (!same || !identityParams(x.getParams(), y.getParams())
           || !schemas(x.getSchema(), y.getSchema())) {
         return false;
@@ -155,6 +161,17 @@ final class LogicalTypeEquivalence {
       return true;
     }
     return schemas(x, y);
+  }
+
+  private static boolean isMultiMessageRoot(Schema struct) {
+    return Boolean.TRUE.equals(
+        struct.getParams().get(ProtoToLogicalTypeConverter.MULTI_MESSAGE_ROOT_PARAM));
+  }
+
+  private static List<Schema.Field> byName(List<Schema.Field> fields) {
+    List<Schema.Field> sorted = new ArrayList<>(fields);
+    sorted.sort(Comparator.comparing(Schema.Field::getName));
+    return sorted;
   }
 
   // The native steps its converter recorded into and below the node.

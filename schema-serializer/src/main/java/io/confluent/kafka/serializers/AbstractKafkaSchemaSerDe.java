@@ -227,7 +227,8 @@ public abstract class AbstractKafkaSchemaSerDe
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
-    provenanceAlgorithm = config.getProvenanceAlgorithm();
+    // Only a deserializer reads by provenance: a serializer sharing its config ignores it.
+    provenanceAlgorithm = readsByProvenance() ? config.getProvenanceAlgorithm() : null;
     if (provenanceAlgorithm != null) {
       requireLogicalTypes();
     }
@@ -1206,6 +1207,13 @@ public abstract class AbstractKafkaSchemaSerDe
       }
     }
 
+  }
+
+  /**
+   * Whether this serde reads by provenance when {@code provenance.algorithm} is set.
+   */
+  protected boolean readsByProvenance() {
+    return false;
   }
 
   // Reading by provenance compares schemas as logical types, which a separate artifact provides.

@@ -109,6 +109,8 @@ public final class ProvenanceHistory {
    *     identity rules it is matched by
    * @param logicalTypes each version's logical type, in the same order as {@code history}
    * @throws RecursiveTypeException if a version's schema refers to itself
+   * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
+   *     identity per location
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
       List<LogicalType> logicalTypes) {

@@ -297,6 +297,33 @@ class ProvenanceIdentityRulesTest {
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
   }
 
+  @Test
+  void aTagWhoseNameHoldsASlashIsStillATag() {
+    // A name, not a nesting step: P continues R by its tag, not Q by position.
+    String q = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
+    String tag = "\"a/b\":{\"enum\":[\"v\"]},";
+    String r = "{\"type\":\"object\",\"properties\":{" + tag + "\"y\":{\"type\":\"number\"}}}";
+    String p = "{\"type\":\"object\",\"properties\":{" + tag + "\"x\":{\"type\":\"number\"}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aRenamedTagWhoseNameHoldsAnEqualsSignStillContinues() {
+    // k=1 renamed k=2 is a tag renamed, as k to kx would be; its members carry the branch.
+    String moved = "{\"type\":\"object\",\"properties\":{\"q\":{\"const\":\"y\"},"
+        + "\"c\":{\"type\":\"integer\"}}}";
+    String kept = "{\"type\":\"object\",\"properties\":{\"%s\":{\"const\":\"x\"},"
+        + "\"a\":{\"type\":\"string\"},\"s\":{\"type\":\"string\"}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + String.format(kept, "k=1") + "," + moved + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + moved + "," + String.format(kept, "k=2") + "]}}", null));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
   // An object branch titled so, holding one number property of each name.
   private static String titled(String title, String... numbers) {
     StringBuilder properties = new StringBuilder();

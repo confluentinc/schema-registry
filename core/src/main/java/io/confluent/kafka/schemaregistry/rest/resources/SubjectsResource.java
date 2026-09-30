@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import java.util.OptionalInt;
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -83,7 +83,8 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -111,10 +112,11 @@ public class SubjectsResource {
    * computed over the range alone — its ends and everything between — so a version outside it,
    * however old or however broken, has no effect. Any registration or deletion inside the range
    * changes the key, so nothing needs invalidating, and many readers asking for the same range
-   * collapse into one computation per node.
+   * collapse into one computation per node. Asynchronous, so that a long computation holds no
+   * lock other keys wait on; it still runs on the thread of the request that started it.
    */
-  private final Cache<List<Object>, SchemaProvenance> provenanceCache =
-      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).build();
+  private final AsyncCache<List<Object>, SchemaProvenance> provenanceCache =
+      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).buildAsync();
 
   @Inject
   public SubjectsResource(SchemaRegistry schemaRegistry) {
@@ -517,10 +519,30 @@ public class SubjectsResource {
     List<Schema> range = history.stream()
         .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
         .collect(Collectors.toList());
-    // computeProvenance never returns null, so neither does the cache.
-    SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
-        provenanceKey(subject, range, includeMultipleMessages, algorithm),
-        k -> computeProvenance(subject, range, includeMultipleMessages, algorithm)));
+    List<Object> key = provenanceKey(subject, range, includeMultipleMessages, algorithm);
+    CompletableFuture<SchemaProvenance> mine = new CompletableFuture<>();
+    CompletableFuture<SchemaProvenance> pending = provenanceCache.asMap().putIfAbsent(key, mine);
+    if (pending == null) {
+      // A failed computation leaves the cache, and each request waiting on it fails alike.
+      try {
+        mine.complete(computeProvenance(subject, range, includeMultipleMessages, algorithm));
+      } catch (RuntimeException | Error e) {
+        mine.completeExceptionally(e);
+      }
+      pending = mine;
+    }
+    SchemaProvenance whole;
+    try {
+      whole = pending.join();
+    } catch (CompletionException e) {
+      if (e.getCause() instanceof RuntimeException) {
+        throw (RuntimeException) e.getCause();
+      }
+      if (e.getCause() instanceof Error) {
+        throw (Error) e.getCause();
+      }
+      throw e;
+    }
     return ProvenanceHistory.slice(whole, from, to, includeInterior);
   }
 

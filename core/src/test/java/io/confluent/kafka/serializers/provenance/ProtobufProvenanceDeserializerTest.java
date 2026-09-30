@@ -561,6 +561,27 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals("", get(read(reader, bytes, "v1"), "memo"));
   }
 
+  @Test
+  void aReaderDeclaringMembersOutOfNumberOrderIsMatchedByStructure() throws Exception {
+    // Declaration order is no identity, as normalization shows: the reader is still v3.
+    assertEquals("", get(read(row("string memo = 2;", "int32 id = 1;"), readdedMemo(), "v1"),
+        "memo"));
+
+    client = new ProvenanceMockSchemaRegistryClient();
+    serializer = new KafkaProtobufSerializer<>(client, config(null));
+    String oneof = "oneof k {\n    %s\n  }";
+    byte[] bytes = write(
+        row("int32 id = 1;", String.format(oneof, "string note = 2; int32 n = 3;")),
+        b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, row("int32 id = 1;", String.format(oneof, "int32 n = 3;")));
+    client.register(SUBJECT,
+        row("int32 id = 1;", String.format(oneof, "string memo = 2; int32 n = 3;")));
+    DynamicMessage read = read(
+        row("int32 id = 1;", String.format(oneof, "int32 n = 3; string memo = 2;")), bytes, "v1");
+    assertEquals("", get(read, "memo"));
+    assertEquals(7, get(read, "id"));
+  }
+
   private static final String OPTIONS = "syntax = \"proto3\";\npackage o;\n"
       + "import \"google/protobuf/descriptor.proto\";\n"
       + "extend google.protobuf.FieldOptions {\n  string label = 50001;\n}\n";

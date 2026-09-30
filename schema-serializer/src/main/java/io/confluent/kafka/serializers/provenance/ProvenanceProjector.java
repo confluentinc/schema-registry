@@ -85,7 +85,7 @@ public final class ProvenanceProjector<T> {
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
   // Readers whose registered version the caller named, by the schema handed over, by identity:
-  // an equal reader may stand for another version (Avro's equality ignores docs), or for none.
+  // an equal reader may stand for another version, or for none.
   // A deserializer handing over a copy says so (sameReader).
   private final Cache<ParsedSchema, Integer> suppliedReaderInstances =
       CacheBuilder.newBuilder().weakKeys().build();
@@ -168,8 +168,8 @@ public final class ProvenanceProjector<T> {
 
   /**
    * {@code reader}, marked as derived from a generated class. Its text is synthesized from the
-   * class, so it is matched to the latest version it equals — normalized for Protobuf, as Avro
-   * looks one up for Avro — never by an exact spelling an older version may share by accident.
+   * class, so it is matched to the latest version whose logical type is equivalent to it, never
+   * by an exact spelling an older version may share by accident.
    */
   public ParsedSchema derivedReader(ParsedSchema reader) {
     derivedReaders.put(reader, Boolean.TRUE);
@@ -384,7 +384,7 @@ public final class ProvenanceProjector<T> {
 
   /**
    * The schema id {@code schema} is registered under in {@code subject}, or else the latest
-   * version it equals once metadata, rules and inline tags are set aside; null when none does. A
+   * version whose logical type is equivalent to its own; null when none is. A
    * {@code derived} schema skips the first: only the latest version it equals will do.
    */
   private Integer registeredId(String subject, ParsedSchema schema, boolean derived)
@@ -441,12 +441,15 @@ public final class ProvenanceProjector<T> {
   /**
    * {@code schema}'s logical type as provenance computes it; a Protobuf file's over all its
    * top-level messages, as a version stands for the whole file whichever message a reader names.
+   * A Protobuf file is normalized first: the order its members are declared in is no identity.
    */
   private Optional<LogicalType> logicalTypeOf(ParsedSchema schema) {
     Optional<LogicalType> known = logicalTypes.getIfPresent(schema);
     if (known == null) {
       try {
-        known = Optional.of(ProvenanceHistory.logicalTypeOf(schema, true));
+        ParsedSchema compared =
+            "PROTOBUF".equals(schema.schemaType()) ? schema.normalize() : schema;
+        known = Optional.of(ProvenanceHistory.logicalTypeOf(compared, true));
       } catch (RuntimeException e) {
         // No logical form, so no provenance either: it stands for no version.
         known = Optional.empty();
