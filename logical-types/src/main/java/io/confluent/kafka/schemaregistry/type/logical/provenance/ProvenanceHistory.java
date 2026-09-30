@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
@@ -163,16 +164,16 @@ public final class ProvenanceHistory {
 
   private static SchemaProvenance computeV1(String subject, List<SchemaMetadata> history,
       List<LogicalType> logicalTypes) {
-    List<IdentityPolicy> policies = new ArrayList<>(history.size());
+    List<SchemaType> schemaTypes = new ArrayList<>(history.size());
     List<Integer> ids = new ArrayList<>(history.size());
     List<Integer> versions = new ArrayList<>(history.size());
     for (SchemaMetadata entry : history) {
-      policies.add(IdentityPolicy.forSchemaType(entry.getSchemaType()));
+      schemaTypes.add(SchemaType.of(entry.getSchemaType()));
       ids.add(entry.getId());
       versions.add(entry.getVersion());
     }
     SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
-        subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions);
+        subject, ProvenanceComputer.report(schemaTypes, logicalTypes), ids, versions);
     encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
     return encoded;
   }

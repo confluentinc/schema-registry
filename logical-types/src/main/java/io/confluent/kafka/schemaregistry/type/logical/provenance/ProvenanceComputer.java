@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
@@ -59,15 +60,15 @@ import java.util.function.ToIntFunction;
  * whole history does.
  *
  * <p>The rules are format-specific and a {@code LogicalType} carries no format discriminator, so
- * each version comes with an {@link IdentityPolicy}. Versions of different policies match nothing:
- * a history that changes format starts every location afresh at the change.
+ * each version comes with its {@link SchemaType}. Versions of different schema types match
+ * nothing: a history that changes format starts every location afresh at the change.
  *
  * <h2>Named types</h2>
  *
  * <p>Named types are matched where they are used: each use — a field's, an element's, a union
  * branch's — is a location of its own, under the location using it, and it scopes the type's
  * members. A type merged, split or swapped by aliases therefore keeps every location's lineage,
- * and each use of a shared type has its own ids. Under the JSON policy a named type is
+ * and each use of a shared type has its own ids. Under JSON's rules a named type is
  * transparent, as if inlined. A recursive type has no finite set of uses, and is rejected. A root
  * that refers to a named type — as a converter keeps a root record or message naming types inside
  * it — is walked through, so the root's name never matters.
@@ -115,48 +116,48 @@ public final class ProvenanceComputer {
   }
 
   /**
-   * As {@link #report(List, List)}, applying one identity policy to every version.
+   * As {@link #report(List, List)}, every version of the one schema type.
    */
-  public static ProvenanceReport report(List<LogicalType> versions, IdentityPolicy policy) {
+  public static ProvenanceReport report(SchemaType schemaType, List<LogicalType> versions) {
+    Objects.requireNonNull(schemaType, "schemaType");
     Objects.requireNonNull(versions, "versions");
-    Objects.requireNonNull(policy, "policy");
-    return report(versions, Collections.nCopies(versions.size(), policy));
+    return report(Collections.nCopies(versions.size(), schemaType), versions);
   }
 
   /**
    * Every version's members with their provenance ids — the form a provenance endpoint serves.
    *
+   * @param schemaTypes each version's schema type, in the same order as {@code versions}
    * @param versions the schema versions in chronological order
-   * @param policies one policy per version, in the same order
-   * @throws IllegalArgumentException if the lists differ in size, a version or policy is null, or
-   *     an entity has no name
+   * @throws IllegalArgumentException if the lists differ in size, a version or schema type is
+   *     null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
    */
-  public static ProvenanceReport report(List<LogicalType> versions,
-      List<IdentityPolicy> policies) {
+  public static ProvenanceReport report(List<SchemaType> schemaTypes,
+      List<LogicalType> versions) {
+    Objects.requireNonNull(schemaTypes, "schemaTypes");
     Objects.requireNonNull(versions, "versions");
-    Objects.requireNonNull(policies, "policies");
-    if (versions.size() != policies.size()) {
-      throw new IllegalArgumentException("Expected one policy per version, got "
-          + policies.size() + " policies for " + versions.size() + " versions");
+    if (versions.size() != schemaTypes.size()) {
+      throw new IllegalArgumentException("Expected one schema type per version, got "
+          + schemaTypes.size() + " schema types for " + versions.size() + " versions");
     }
     List<ProvenanceReport.Version> reported = new ArrayList<>(versions.size());
     Node previous = null;
-    IdentityPolicy previousPolicy = null;
+    SchemaType previousSchemaType = null;
     int nextId = 1;
     for (int version = 0; version < versions.size(); version++) {
       LogicalType logicalType = versions.get(version);
       if (logicalType == null) {
         throw new IllegalArgumentException("Null LogicalType at version " + version);
       }
-      IdentityPolicy policy = policies.get(version);
-      if (policy == null) {
-        throw new IllegalArgumentException("Null IdentityPolicy at version " + version);
+      SchemaType schemaType = schemaTypes.get(version);
+      if (schemaType == null) {
+        throw new IllegalArgumentException("Null SchemaType at version " + version);
       }
 
-      Walk walk = new Walk(version, policy, logicalType);
-      Node root = walk.walk(policy == previousPolicy ? previous : null);
+      Walk walk = new Walk(version, schemaType, logicalType);
+      Node root = walk.walk(schemaType == previousSchemaType ? previous : null);
       List<ProvenanceReport.Member> members = new ArrayList<>(walk.members.size());
       for (Node member : walk.members) {
         member.id = member.match != null ? member.match.id : nextId++;
@@ -165,7 +166,7 @@ public final class ProvenanceComputer {
       }
       reported.add(new ProvenanceReport.Version(version, members));
       previous = root;
-      previousPolicy = policy;
+      previousSchemaType = schemaType;
     }
     return new ProvenanceReport(reported, nextId - 1);
   }
@@ -317,7 +318,7 @@ public final class ProvenanceComputer {
   private static final class Walk {
 
     private final int version;
-    private final IdentityPolicy policy;
+    private final SchemaType schemaType;
     private final LogicalType logicalType;
     private final Map<String, Schema> namedTypes;
 
@@ -326,9 +327,9 @@ public final class ProvenanceComputer {
     /** Named types being walked through; a repeat is a recursive type. */
     private final Set<String> inlining = new HashSet<>();
 
-    Walk(int version, IdentityPolicy policy, LogicalType logicalType) {
+    Walk(int version, SchemaType schemaType, LogicalType logicalType) {
       this.version = version;
-      this.policy = policy;
+      this.schemaType = schemaType;
       this.logicalType = logicalType;
       this.namedTypes = logicalType.getNamedTypes();
     }
@@ -411,7 +412,7 @@ public final class ProvenanceComputer {
         case NAMED_TYPE_REF: {
           String name = schema.getQualifiedName();
           Schema named = namedTypes.get(name);
-          if (policy == IdentityPolicy.JSON) {
+          if (schemaType == SchemaType.JSON) {
             // Walked as if inlined, so a reference changes nothing.
             walkNamed(name, () -> processType(named, owner, step, where.through(named), derived));
           } else if (named != null) {
@@ -516,7 +517,7 @@ public final class ProvenanceComputer {
           Node node = new Node(Kind.BRANCH, branchName(branch), branchAliases(branch),
               numberOf(branch.getFieldNumber(), branch, enclosingDerived), branch.getSchema(),
               enclosingDerived, where.descend(branch.getSchema(), i, branch.getNativeNames()));
-          if (policy == IdentityPolicy.JSON) {
+          if (schemaType == SchemaType.JSON) {
             node.title = branch.getNativeTitle();
           }
           nodes.add(node);
@@ -545,7 +546,7 @@ public final class ProvenanceComputer {
         }
       }
       Map<Node, Node> matched = new IdentityHashMap<>();
-      switch (policy) {
+      switch (schemaType) {
         case AVRO:
           matchAvro(peers, previous, matched);
           break;
@@ -865,7 +866,7 @@ public final class ProvenanceComputer {
 
     /** True for an Avro branch holding a named type, whose name and aliases are its type's. */
     private boolean isNamedAvroBranch(Schema body) {
-      return policy == IdentityPolicy.AVRO && isReference(body);
+      return schemaType == SchemaType.AVRO && isReference(body);
     }
 
     /**
@@ -875,7 +876,7 @@ public final class ProvenanceComputer {
      * and replaced by any hint, so a branch would change match with its siblings or its hint.
      */
     private String branchName(UnionBranch branch) {
-      if (policy == IdentityPolicy.AVRO) {
+      if (schemaType == SchemaType.AVRO) {
         if (isNamedAvroBranch(branch.getSchema())) {
           return branch.getSchema().getQualifiedName();
         }
@@ -891,7 +892,7 @@ public final class ProvenanceComputer {
     private List<String> branchAliases(UnionBranch branch) {
       if (!isNamedAvroBranch(branch.getSchema())) {
         // A fixed has no named type; the converter records its aliases on the branch.
-        List<String> recorded = policy == IdentityPolicy.AVRO ? branch.getNativeAliases() : null;
+        List<String> recorded = schemaType == SchemaType.AVRO ? branch.getNativeAliases() : null;
         if (recorded == null) {
           return null;
         }
@@ -907,7 +908,7 @@ public final class ProvenanceComputer {
 
     /** A named type's aliases, which only Avro has, as full names. */
     private List<String> typeAliases(Schema named) {
-      if (policy != IdentityPolicy.AVRO || named.getAliases() == null) {
+      if (schemaType != SchemaType.AVRO || named.getAliases() == null) {
         return Collections.emptyList();
       }
       List<String> aliases = new ArrayList<>();
@@ -931,7 +932,7 @@ public final class ProvenanceComputer {
 
     /** A Protobuf oneof's member field numbers; null for anything that is not a oneof. */
     private Set<Integer> memberNumbersOf(Node node) {
-      if (policy != IdentityPolicy.PROTOBUF || node.kind != Kind.FIELD
+      if (schemaType != SchemaType.PROTOBUF || node.kind != Kind.FIELD
           || node.number != null || !isUnion(node.body)) {
         return null;
       }
@@ -1310,7 +1311,7 @@ public final class ProvenanceComputer {
      * (a discriminator), or its type for a branch with no members; null for anything else.
      */
     private Set<String> contentOf(Node node) {
-      if (policy != IdentityPolicy.JSON || node.kind != Kind.BRANCH) {
+      if (schemaType != SchemaType.JSON || node.kind != Kind.BRANCH) {
         return null;
       }
       Set<String> content = new TreeSet<>();
@@ -1382,7 +1383,7 @@ public final class ProvenanceComputer {
     // -------------------------------------------------------------------------------------
 
     private Integer numberOf(Integer recorded, Object member, Map<Object, Integer> derived) {
-      if (policy != IdentityPolicy.PROTOBUF) {
+      if (schemaType != SchemaType.PROTOBUF) {
         return null;
       }
       if (recorded != null) {
@@ -1397,7 +1398,7 @@ public final class ProvenanceComputer {
      * information, so this mirrors that rule exactly rather than guessing.
      */
     private Map<Object, Integer> deriveNumbers(Schema struct) {
-      return policy == IdentityPolicy.PROTOBUF
+      return schemaType == SchemaType.PROTOBUF
           ? ProtoToLogicalTypeConverter.impliedFieldNumbers(struct) : Collections.emptyMap();
     }
 

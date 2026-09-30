@@ -26,7 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorith
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
@@ -439,7 +439,7 @@ public final class ProvenanceProjector<T> {
     if (!wanted.isPresent()) {
       return null;
     }
-    IdentityPolicy policy = IdentityPolicy.forSchemaType(schema.schemaType());
+    SchemaType schemaType = SchemaType.of(schema.schemaType());
     List<Integer> versions;
     try {
       versions = client.getAllVersions(subject, true);
@@ -453,7 +453,7 @@ public final class ProvenanceProjector<T> {
         continue;
       }
       Optional<LogicalType> version = logicalTypeOf(registered);
-      if (version.isPresent() && wanted.get().equivalent(version.get(), policy)) {
+      if (version.isPresent() && wanted.get().equivalent(schemaType, version.get())) {
         return id;
       }
     }

@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.provenance;
+package io.confluent.kafka.schemaregistry.type.logical;
 
-import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceComputer;
 
 /**
- * Which rules match a location to the previous version's, standing in for the source format.
+ * A registry schema type, and the rules by which it identifies a location: how two versions'
+ * locations are matched, and which members two logical types pair.
  *
  * <p>The rules are format-specific, but a {@link LogicalType} carries no format discriminator, so
- * the caller states the format of each version.
+ * the caller states the schema type of each.
  */
-public enum IdentityPolicy {
+public enum SchemaType {
 
   /**
    * Avro rules: a location matches by name, with aliases naming what the previous version called
@@ -55,13 +56,13 @@ public enum IdentityPolicy {
   JSON;
 
   /**
-   * The policy for a registry schema type — {@code AVRO}, {@code PROTOBUF} or {@code JSON}, as
+   * The schema type named {@code AVRO}, {@code PROTOBUF} or {@code JSON}, as
    * {@code ParsedSchema.schemaType()} reports it.
    *
    * <p>Unknown types throw rather than defaulting, because silently guessing is exactly what this
    * avoids.
    */
-  public static IdentityPolicy forSchemaType(String schemaType) {
+  public static SchemaType of(String schemaType) {
     if (schemaType == null) {
       throw new IllegalArgumentException("No schema type given");
     }

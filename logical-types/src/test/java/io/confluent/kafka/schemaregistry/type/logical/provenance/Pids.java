@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,8 +47,8 @@ final class Pids {
     return new Pids(report);
   }
 
-  static Pids of(List<LogicalType> versions, IdentityPolicy policy) {
-    return new Pids(ProvenanceComputer.report(versions, policy));
+  static Pids of(SchemaType schemaType, List<LogicalType> versions) {
+    return new Pids(ProvenanceComputer.report(schemaType, versions));
   }
 
   /**

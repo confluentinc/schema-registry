@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -73,9 +74,8 @@ class SchemaProvenanceEncoderTest {
   private static SchemaProvenance encode(
       java.util.List<Integer> schemaIds, java.util.List<Integer> versions) {
     return SchemaProvenanceEncoder.encode("s",
-        ProvenanceComputer.report(Arrays.asList(
-            LogicalTypeConversion.toLogicalType(V1), LogicalTypeConversion.toLogicalType(V2)),
-            IdentityPolicy.AVRO),
+        ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(
+            LogicalTypeConversion.toLogicalType(V1), LogicalTypeConversion.toLogicalType(V2))),
         schemaIds, versions);
   }
 }

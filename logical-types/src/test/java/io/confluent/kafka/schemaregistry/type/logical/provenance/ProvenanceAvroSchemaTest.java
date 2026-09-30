@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -113,7 +114,7 @@ class ProvenanceAvroSchemaTest {
       history.add(AvroToLogicalTypeConverter.toLogicalType(
           new AvroSchema(schema.replace('\'', '"'))));
     }
-    return Pids.of(history, IdentityPolicy.AVRO);
+    return Pids.of(SchemaType.AVRO, history);
   }
 
   /** An {@code acme.Order} record wrapping the given field declarations. */

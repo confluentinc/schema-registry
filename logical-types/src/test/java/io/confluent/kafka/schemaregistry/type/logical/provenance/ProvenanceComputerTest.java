@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -649,7 +650,7 @@ class ProvenanceComputerTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Identity policy
+  // Schema types
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -660,10 +661,10 @@ class ProvenanceComputerTest {
         lt(struct(field("name"), field("age"))),
         lt(struct(field("full_name"), field("age"))));
 
-    Pids pids = Pids.of(versions, IdentityPolicy.PROTOBUF);
+    Pids pids = Pids.of(SchemaType.PROTOBUF, versions);
     assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
     assertThat(pids.at(1, 1)).isEqualTo(pids.at(0, 1));
-    assertThat(Pids.of(versions, IdentityPolicy.AVRO).isNew(1, 0)).isTrue();
+    assertThat(Pids.of(SchemaType.AVRO, versions).isNew(1, 0)).isTrue();
   }
 
   @Test
@@ -706,20 +707,18 @@ class ProvenanceComputerTest {
 
   @Test
   void anAvroVersionRecordingNumbersStillMatchesByName() {
-    Pids pids = Pids.of(ProvenanceComputer.report(
-        Arrays.asList(lt(struct(field("name"))), lt(struct(numbered("name", 1)))),
-        Arrays.asList(IdentityPolicy.AVRO, IdentityPolicy.AVRO)));
+    Pids pids = Pids.of(ProvenanceComputer.report(Arrays.asList(SchemaType.AVRO, SchemaType.AVRO),
+        Arrays.asList(lt(struct(field("name"))), lt(struct(numbered("name", 1))))));
 
     assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
   }
 
   @Test
-  void policiesMustMatchVersions() {
+  void schemaTypesMustMatchVersions() {
     assertThatThrownBy(() -> ProvenanceComputer.report(
-        Arrays.asList(lt(struct(field("name")))),
-        Arrays.asList(IdentityPolicy.AVRO, IdentityPolicy.AVRO)))
+        Arrays.asList(SchemaType.AVRO, SchemaType.AVRO), Arrays.asList(lt(struct(field("name"))))))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("one policy per version");
+        .hasMessageContaining("one schema type per version");
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -752,8 +751,8 @@ class ProvenanceComputerTest {
     List<LogicalType> versions = Arrays.asList(
         lt(struct(field("name"))), lt(struct()), lt(struct(field("name"))));
 
-    for (IdentityPolicy policy : IdentityPolicy.values()) {
-      assertThat(Pids.of(versions, policy).isNew(2, 0)).as("%s", policy).isTrue();
+    for (SchemaType schemaType : SchemaType.values()) {
+      assertThat(Pids.of(schemaType, versions).isNew(2, 0)).as("%s", schemaType).isTrue();
     }
   }
 
@@ -913,7 +912,7 @@ class ProvenanceComputerTest {
 
   @Test
   void anEmptySequenceReportsNothing() {
-    assertThat(ProvenanceComputer.report(new ArrayList<>(), IdentityPolicy.AVRO).getVersions())
+    assertThat(ProvenanceComputer.report(SchemaType.AVRO, new ArrayList<>()).getVersions())
         .isEmpty();
   }
 
@@ -922,15 +921,15 @@ class ProvenanceComputerTest {
   // ---------------------------------------------------------------------------------------------
 
   private static Pids avro(LogicalType... versions) {
-    return Pids.of(Arrays.asList(versions), IdentityPolicy.AVRO);
+    return Pids.of(SchemaType.AVRO, Arrays.asList(versions));
   }
 
   private static Pids avro(List<LogicalType> versions) {
-    return Pids.of(versions, IdentityPolicy.AVRO);
+    return Pids.of(SchemaType.AVRO, versions);
   }
 
   private static Pids protobuf(LogicalType... versions) {
-    return Pids.of(Arrays.asList(versions), IdentityPolicy.PROTOBUF);
+    return Pids.of(SchemaType.PROTOBUF, Arrays.asList(versions));
   }
 
   private static List<Integer> path(Integer... steps) {

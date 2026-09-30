@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
-import io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,7 +31,7 @@ import java.util.function.Function;
 
 /**
  * Whether two logical types describe the same data:
- * {@link LogicalType#equivalent(LogicalType, IdentityPolicy)}.
+ * {@link LogicalType#equivalent(SchemaType, LogicalType)}.
  */
 final class LogicalTypeEquivalence {
 
@@ -41,7 +40,7 @@ final class LogicalTypeEquivalence {
   private static final List<String> IDENTITY_PARAMS = Arrays.asList(
       Schema.AVRO_ALIASES, ProtoToLogicalTypeConverter.MULTI_MESSAGE_ROOT_PARAM);
 
-  private final IdentityPolicy policy;
+  private final SchemaType schemaType;
   private final Map<String, Schema> mine;
   private final Map<String, Schema> theirs;
   // Named type pairs already being compared: a recursive type is equivalent where it recurs.
@@ -50,17 +49,17 @@ final class LogicalTypeEquivalence {
   // union, as a Flink wrapper's, is numbered on its own, so its recorded numbers are compared.
   private final Set<Schema> oneofs = Collections.newSetFromMap(new IdentityHashMap<>());
 
-  private LogicalTypeEquivalence(IdentityPolicy policy, Map<String, Schema> mine,
+  private LogicalTypeEquivalence(SchemaType schemaType, Map<String, Schema> mine,
       Map<String, Schema> theirs) {
-    this.policy = policy;
+    this.schemaType = schemaType;
     this.mine = mine;
     this.theirs = theirs;
   }
 
   // The root's own name and namespace (a JSON title, a Protobuf package) are never read by
   // provenance; named types are still compared by qualified name.
-  static boolean equivalent(LogicalType a, LogicalType b, IdentityPolicy policy) {
-    return new LogicalTypeEquivalence(policy, a.getNamedTypes(), b.getNamedTypes())
+  static boolean equivalent(SchemaType schemaType, LogicalType a, LogicalType b) {
+    return new LogicalTypeEquivalence(schemaType, a.getNamedTypes(), b.getNamedTypes())
         .schemas(a.getRootSchema(), b.getRootSchema());
   }
 
@@ -155,7 +154,7 @@ final class LogicalTypeEquivalence {
           || !oneofNumbers(x.getSchema(), y.getSchema(), impliedA, impliedB)) {
         return false;
       }
-      if (policy == IdentityPolicy.PROTOBUF && isUnion(x.getSchema())) {
+      if (schemaType == SchemaType.PROTOBUF && isUnion(x.getSchema())) {
         oneofs.add(x.getSchema());
       }
       if (!schemas(x.getSchema(), y.getSchema())) {
@@ -168,7 +167,7 @@ final class LogicalTypeEquivalence {
   // A oneof's members are numbered in the enclosing message's sequence.
   private boolean oneofNumbers(Schema a, Schema b, Map<Object, Integer> impliedA,
       Map<Object, Integer> impliedB) {
-    if (policy != IdentityPolicy.PROTOBUF || !isUnion(a) || !isUnion(b)) {
+    if (schemaType != SchemaType.PROTOBUF || !isUnion(a) || !isUnion(b)) {
       return true;
     }
     if (a.getBranches().size() != b.getBranches().size()) {
@@ -209,10 +208,10 @@ final class LogicalTypeEquivalence {
     if (a.size() != b.size()) {
       return false;
     }
-    boolean ownNumbers = policy == IdentityPolicy.PROTOBUF && !oneofs.contains(union);
-    List<Schema.UnionBranch> xs = policy == IdentityPolicy.JSON
+    boolean ownNumbers = schemaType == SchemaType.PROTOBUF && !oneofs.contains(union);
+    List<Schema.UnionBranch> xs = schemaType == SchemaType.JSON
         ? a : sorted(a, Schema.UnionBranch::getName);
-    List<Schema.UnionBranch> ys = policy == IdentityPolicy.JSON
+    List<Schema.UnionBranch> ys = schemaType == SchemaType.JSON
         ? b : sorted(b, Schema.UnionBranch::getName);
     for (int i = 0; i < xs.size(); i++) {
       Schema.UnionBranch x = xs.get(i);
@@ -249,7 +248,7 @@ final class LogicalTypeEquivalence {
   }
 
   private Map<Object, Integer> impliedNumbers(Schema struct) {
-    return policy == IdentityPolicy.PROTOBUF
+    return schemaType == SchemaType.PROTOBUF
         ? ProtoToLogicalTypeConverter.impliedFieldNumbers(struct) : Map.of();
   }
 
@@ -259,7 +258,7 @@ final class LogicalTypeEquivalence {
 
   // An enum recording no number is numbered from 0 in declaration order.
   private Integer enumNumber(Schema.EnumValue value, List<Schema.EnumValue> values) {
-    if (policy != IdentityPolicy.PROTOBUF) {
+    if (schemaType != SchemaType.PROTOBUF) {
       return null;
     }
     boolean recordsAny = values.stream().anyMatch(v -> v.getEnumNumber() != null);

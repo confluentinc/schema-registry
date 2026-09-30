@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
@@ -126,9 +127,9 @@ class ProvenanceInlinedPathTest {
   @Test
   void aRetypedCollectionIsNewWithItsMembers() {
     // ARRAY<ROW> to MAP<K, ROW>: a change of category, so the field and its members are new.
-    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(
+    ProvenanceReport report = ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(
         lt(struct(arrayOf("items", struct(field("sku"))))),
-        lt(struct(mapOf("items", struct(field("sku")))))), IdentityPolicy.AVRO);
+        lt(struct(mapOf("items", struct(field("sku")))))));
 
     assertThat(ids(report, 1).get(path(0))).isNotIn(ids(report, 0).values());
     assertThat(ids(report, 1).get(path(0, 1, 0))).isNotIn(ids(report, 0).values());
@@ -136,11 +137,12 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void aHistoryChangingFormatStartsEveryLocationAfresh() {
-    // Versions of different policies match nothing, whatever their names say; the versions after
-    // the change match each other again.
+    // Versions of different schema types match nothing, whatever their names say; the versions
+    // after the change match each other again.
     LogicalType ab = lt(struct(field("a"), field("b")));
-    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(ab, ab, ab),
-        Arrays.asList(IdentityPolicy.AVRO, IdentityPolicy.JSON, IdentityPolicy.JSON));
+    ProvenanceReport report = ProvenanceComputer.report(
+        Arrays.asList(SchemaType.AVRO, SchemaType.JSON, SchemaType.JSON),
+        Arrays.asList(ab, ab, ab));
 
     assertThat(ids(report, 0)).containsExactly(entryOfId(path(0), 1), entryOfId(path(1), 2));
     assertThat(ids(report, 1)).containsExactly(entryOfId(path(0), 3), entryOfId(path(1), 4));
@@ -153,12 +155,12 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void reportDerivesIcebergStyleIds() {
-    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(
+    ProvenanceReport report = ProvenanceComputer.report(// re-add
+        SchemaType.AVRO, Arrays.asList(
         lt(struct(field("id"), field("name"))),
         lt(struct(field("id"), field("full_name", "name"))),   // rename
         lt(struct(field("id"))),                               // drop
-        lt(struct(field("id"), field("full_name")))),          // re-add
-        IdentityPolicy.AVRO);
+        lt(struct(field("id"), field("full_name")))));
 
     assertThat(ids(report, 0)).containsExactly(entryOfId(path(0), 1), entryOfId(path(1), 2));
     // A rename keeps its id, which is what lets Iceberg treat it as the same column.
@@ -177,7 +179,7 @@ class ProvenanceInlinedPathTest {
     // One definition-level rename, two inlined locations, each keeping its own id. Allocating per
     // entity instead would give home.city and work.city the same id and let a consumer pair them.
     ProvenanceReport report = ProvenanceComputer.report(
-        Arrays.asList(twoAddresses(), twoAddressesRenamed()), IdentityPolicy.AVRO);
+        SchemaType.AVRO, Arrays.asList(twoAddresses(), twoAddressesRenamed()));
 
     assertThat(ids(report, 0)).containsExactly(
         entryOfId(path(0), 1), entryOfId(path(0, 0), 2), entryOfId(path(0, 1), 3),
@@ -192,7 +194,7 @@ class ProvenanceInlinedPathTest {
   @Test
   void reportCarriesNamesAlongsideIds() {
     ProvenanceReport report = ProvenanceComputer.report(
-        Arrays.asList(twoAddresses()), IdentityPolicy.AVRO);
+        SchemaType.AVRO, Arrays.asList(twoAddresses()));
 
     assertThat(report.getVersions().get(0).getMembers()).extracting(
         ProvenanceReport.Member::getNames, ProvenanceReport.Member::getId).contains(
@@ -202,7 +204,7 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void anEmptyHistoryReportsNothing() {
-    ProvenanceReport report = ProvenanceComputer.report(Arrays.asList(), IdentityPolicy.AVRO);
+    ProvenanceReport report = ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList());
     assertThat(report.getVersions()).isEmpty();
     assertThat(report.getLastId()).isZero();
   }
@@ -213,13 +215,13 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void schemaTypeSelectsThePolicy() {
-    assertThat(IdentityPolicy.forSchemaType("AVRO")).isEqualTo(IdentityPolicy.AVRO);
-    assertThat(IdentityPolicy.forSchemaType("PROTOBUF")).isEqualTo(IdentityPolicy.PROTOBUF);
-    assertThat(IdentityPolicy.forSchemaType("JSON")).isEqualTo(IdentityPolicy.JSON);
+    assertThat(SchemaType.of("AVRO")).isEqualTo(SchemaType.AVRO);
+    assertThat(SchemaType.of("PROTOBUF")).isEqualTo(SchemaType.PROTOBUF);
+    assertThat(SchemaType.of("JSON")).isEqualTo(SchemaType.JSON);
     // Never guesses.
-    assertThatThrownBy(() -> IdentityPolicy.forSchemaType("XML"))
+    assertThatThrownBy(() -> SchemaType.of("XML"))
         .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("XML");
-    assertThatThrownBy(() -> IdentityPolicy.forSchemaType(null))
+    assertThatThrownBy(() -> SchemaType.of(null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -228,7 +230,7 @@ class ProvenanceInlinedPathTest {
   // -------------------------------------------------------------------------------------------
 
   private static ProvenanceReport report(LogicalType version) {
-    return ProvenanceComputer.report(Arrays.asList(version), IdentityPolicy.AVRO);
+    return ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(version));
   }
 
   private static Map<List<Integer>, Integer> ids(ProvenanceReport report, int version) {
