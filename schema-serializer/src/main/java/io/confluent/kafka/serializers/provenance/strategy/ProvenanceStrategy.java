@@ -47,9 +47,9 @@ import org.apache.kafka.common.errors.RetriableException;
  *       with it, and the next asks again;
  *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for an unknown
  *       algorithm; every record of the writer fails until the outcome expires;
- *   <li>a {@link ProvenanceUnknownWriterException}: the writer's schema id is no version of the
- *       subject; the writer is matched to one by structure, through the deserializer's client,
- *       and asked about again;
+ *   <li>a {@link ProvenanceUnknownWriterException}: a schema id asked about, most often the
+ *       writer's, is no version of the subject; the writer is matched to one by structure,
+ *       through the deserializer's client, and asked about again, or else read without it;
  *   <li>a {@link ProvenanceUnavailableException}: no provenance for the pair; the writer is read
  *       without it, with one warning, until the outcome expires;
  *   <li>anything else, or a null response: the strategy broke this contract; every record of the
@@ -57,7 +57,8 @@ import org.apache.kafka.common.errors.RetriableException;
  * </ul>
  *
  * <p>A strategy is called from any thread reading a record, possibly several at once, so it must
- * be thread-safe. It is closed when its deserializer is closed or reconfigured.
+ * be thread-safe. It is closed when its deserializer is closed or reconfigured: a record being
+ * read while its deserializer is reconfigured may find it closed, and fail.
  */
 public interface ProvenanceStrategy extends Configurable, Closeable {
 

@@ -17,8 +17,9 @@
 package io.confluent.kafka.serializers.provenance;
 
 /**
- * The writer's schema id is no version of the subject: the writer is matched to one by structure,
- * and provenance asked for again.
+ * A schema id asked about is no version of the subject — the writer's, or a supplied reader's, as
+ * the registry does not say which: the writer is matched to one by structure and provenance asked
+ * for again, or else read without it.
  */
 public class ProvenanceUnknownWriterException extends ProvenanceException {
 

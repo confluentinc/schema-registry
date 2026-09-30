@@ -80,12 +80,27 @@ public class ProvenanceAlgorithmConfigTest {
     props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_STRATEGY,
         ClosingStrategy.class.getName());
     ClosingStrategy.closed.set(0);
-    Serde serde = new Serde();
+    Serde serde = new Serde(true);
     serde.configure(props);
     serde.configure(props);
     assertEquals(1, ClosingStrategy.closed.get());
     serde.close();
     assertEquals(2, ClosingStrategy.closed.get());
+  }
+
+  @Test
+  public void aSerdeNotReadingByProvenanceBuildsNoStrategy() {
+    // A serializer sharing a deserializer's config: no strategy, and the algorithm is off.
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_STRATEGY,
+        ClosingStrategy.class.getName());
+    ClosingStrategy.created.set(0);
+    Serde serde = new Serde(false);
+    serde.configure(props);
+    assertEquals(0, ClosingStrategy.created.get());
+    assertNull(serde.algorithm());
   }
 
   @Test
@@ -119,10 +134,15 @@ public class ProvenanceAlgorithmConfigTest {
         props);
   }
 
-  /** Counts how often any instance is closed. */
+  /** Counts how often any instance is created and closed. */
   public static class ClosingStrategy extends ClientProvenanceStrategy {
 
+    static final AtomicInteger created = new AtomicInteger();
     static final AtomicInteger closed = new AtomicInteger();
+
+    public ClosingStrategy() {
+      created.incrementAndGet();
+    }
 
     @Override
     public void close() {
@@ -130,11 +150,23 @@ public class ProvenanceAlgorithmConfigTest {
     }
   }
 
-  /** A serde configured as a deserializer is, against a mock registry. */
+  /** A serde configured as a deserializer, or a serializer, is, against a mock registry. */
   private static final class Serde extends AbstractKafkaSchemaSerDe {
 
-    Serde() {
+    private final boolean reads;
+
+    Serde(boolean reads) {
+      this.reads = reads;
       schemaRegistry = new MockSchemaRegistryClient();
+    }
+
+    @Override
+    protected boolean readsByProvenance() {
+      return reads;
+    }
+
+    String algorithm() {
+      return provenanceAlgorithm;
     }
 
     void configure(Map<String, Object> props) {

@@ -989,14 +989,16 @@ public final class ProvenanceComputer {
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's place. In turn: a hinted branch continues the
      * previous branch of its name; a branch continues the one previous branch with the same
-     * top-level discriminators, where no peer has them, as a tagged union's tag names its branch;
-     * the one previous branch of its title, where no peer has it and no discriminator conflicts —
-     * a title only documents in V1, so one changed only leaves the branch to the phases below; the
-     * one previous branch of the same content, where no peer shares it; the previous branch it
-     * shares strictly the most members with, and it with that one, a member every untaken
-     * previous branch has aside, and no conflicting discriminator, as when it moved and its
-     * members changed; one at the same position sharing a member with it, where overlap alone
-     * cannot tell; else it is new. None continues another across a discriminator a branch related
+     * top-level discriminators, where no unpaired peer has them, as a tagged union's tag names
+     * its branch; the one previous branch of its title, where no unpaired peer has it and no
+     * discriminator conflicts — a title only documents in V1, so one changed only leaves the
+     * branch to the phases below; the one previous branch of the same content, where no unpaired
+     * peer shares it; the previous branch it shares strictly the most members with, and it with
+     * that one, a member every untaken previous branch has (or, with one left, every previous
+     * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
+     * discriminator, as when it moved and its members changed, repeated while it pairs any; one
+     * at the same position sharing a member with it, where overlap alone cannot tell; else it is
+     * new. None continues another across a discriminator a branch related
      * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
      * different branches, as an Avro type renamed without an alias is.
      */
@@ -1004,6 +1006,7 @@ public final class ProvenanceComputer {
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
       for (int phase = 0; phase < 6; phase++) {
+        boolean progressed = false;
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
             continue;
@@ -1013,23 +1016,20 @@ public final class ProvenanceComputer {
             found = peer.name.startsWith(POSITIONAL_BRANCH)
                 ? null : previousBranch(previous, taken, p -> peer.name.equals(p.name));
           } else if (phase == 1) {
-            found = tags(peer.content).isEmpty() ? null : mutual(peer, peers, previous,
+            found = tags(peer.content).isEmpty() ? null : mutual(peer,
+                unresolved(peers, matched), previous,
                 (a, p) -> !taken.contains(p) && tags(a.content).equals(tags(p.content))
                     && !otherHints(a, p));
           } else if (phase == 2) {
-            found = peer.title == null ? null : mutual(peer, peers, previous,
+            found = peer.title == null ? null : mutual(peer, unresolved(peers, matched),
+                previous,
                 (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
                     && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
           } else if (phase == 3) {
-            found = mutual(peer, peers, previous, (a, p) -> !taken.contains(p)
-                && a.content.equals(p.content) && !otherHints(a, p));
+            found = mutual(peer, unresolved(peers, matched), previous,
+                (a, p) -> !taken.contains(p) && a.content.equals(p.content) && !otherHints(a, p));
           } else if (phase == 4) {
-            List<Node> unresolved = new ArrayList<>();
-            for (Node other : peers) {
-              if (!matched.containsKey(other)) {
-                unresolved.add(other);
-              }
-            }
+            List<Node> unresolved = unresolved(peers, matched);
             Set<String> envelope = envelope(previous, taken);
             found = mostShared(peer, unresolved, previous, envelope, (a, p) -> !taken.contains(p)
                 && overlapsBeyond(a.content, p.content, envelope) && !otherHints(a, p)
@@ -1049,9 +1049,26 @@ public final class ProvenanceComputer {
           if (found != null) {
             taken.add(found);
             matched.put(peer, found);
+            progressed = true;
           }
         }
+        if (phase == 4 && progressed) {
+          // A pairing made here may settle a peer passed over before it, as when it leaves one
+          // previous branch: until none is made.
+          phase--;
+        }
       }
+    }
+
+    // The peers not yet paired: one paired already cannot take another previous branch.
+    private static List<Node> unresolved(List<Node> peers, Map<Node, Node> matched) {
+      List<Node> unresolved = new ArrayList<>();
+      for (Node peer : peers) {
+        if (!matched.containsKey(peer)) {
+          unresolved.add(peer);
+        }
+      }
+      return unresolved;
     }
 
     /**
@@ -1062,8 +1079,7 @@ public final class ProvenanceComputer {
       Set<String> tags = new TreeSet<>();
       for (String entry : content) {
         // A step before the value's "=": the value itself may hold a "/".
-        if (entry.startsWith(DISCRIMINATOR)
-            && entry.lastIndexOf('/', entry.indexOf('=', DISCRIMINATOR.length())) < 0) {
+        if (entry.startsWith(DISCRIMINATOR) && unescaped(entry, '/', keyEnd(entry)) < 0) {
           tags.add(entry);
         }
       }
@@ -1191,7 +1207,7 @@ public final class ProvenanceComputer {
     private static boolean namesOtherwise(Set<String> mine, Set<String> theirs) {
       for (String entry : mine) {
         if (entry.startsWith(DISCRIMINATOR) && !theirs.contains(entry)) {
-          String key = entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1);
+          String key = entry.substring(0, keyEnd(entry) + 1);
           if (theirs.stream().anyMatch(other -> other.startsWith(key))) {
             return true;
           }
@@ -1247,10 +1263,34 @@ public final class ProvenanceComputer {
       Set<String> keys = new HashSet<>();
       for (String entry : content) {
         if (entry.startsWith(DISCRIMINATOR)) {
-          keys.add(entry.substring(0, entry.indexOf('=', DISCRIMINATOR.length()) + 1));
+          keys.add(entry.substring(0, keyEnd(entry) + 1));
         }
       }
       return keys;
+    }
+
+    // A member name as a content step, escaped so that none reads as a path's structure.
+    private static String contentStep(String name) {
+      return name.replace("\\", "\\\\").replace("/", "\\/").replace("=", "\\=")
+          .replace("[", "\\[").replace("{", "\\{");
+    }
+
+    // Where a discriminator's path ends: its first unescaped "=".
+    private static int keyEnd(String entry) {
+      return unescaped(entry, '=', entry.length());
+    }
+
+    // The first unescaped c in a content entry's path, before end; -1 if none.
+    private static int unescaped(String entry, char c, int end) {
+      for (int i = DISCRIMINATOR.length(); i < end; i++) {
+        char at = entry.charAt(i);
+        if (at == '\\') {
+          i++;
+        } else if (at == c) {
+          return i;
+        }
+      }
+      return -1;
     }
 
     /** Whether two branches share a member other than a discriminator, whatever their values. */
@@ -1299,13 +1339,12 @@ public final class ProvenanceComputer {
         case STRUCT:
           for (Field field : body.getFields()) {
             Schema type = resolved(field.getSchema());
-            content.add(MEMBER + prefix + field.getName());
+            String path = prefix + contentStep(field.getName());
+            content.add(MEMBER + path);
             if (isDiscriminator(type)) {
-              content.add(DISCRIMINATOR + prefix + field.getName() + "="
-                  + type.getEnumValues().get(0).getSymbol());
+              content.add(DISCRIMINATOR + path + "=" + type.getEnumValues().get(0).getSymbol());
             }
-            addContent(field.getSchema(), prefix + field.getName() + "/", depth + 1,
-                new HashSet<>(naming), content);
+            addContent(field.getSchema(), path + "/", depth + 1, new HashSet<>(naming), content);
           }
           break;
         case ARRAY:
@@ -1353,52 +1392,13 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Reconstructs the field numbers of a struct that records none.
-     *
-     * <p>The Protobuf reader omits numbers all-or-nothing, and precisely when the numbering was the
-     * sequence the writer reproduces positionally: regular fields taking 1..n in declaration order,
-     * then the oneof branches continuing it. Omission is therefore itself the information, and this
-     * mirrors that rule exactly rather than guessing.
+     * The field numbers of a struct that records none, as the Protobuf converter implies them
+     * ({@link ProtoToLogicalTypeConverter#impliedFieldNumbers}). Omission is itself the
+     * information, so this mirrors that rule exactly rather than guessing.
      */
     private Map<Object, Integer> deriveNumbers(Schema struct) {
-      // The multi-message root is synthetic: its fields name messages and never had numbers, so
-      // they follow their names and reordering the file's messages leaves every id in place.
-      if (policy != IdentityPolicy.PROTOBUF || recordsAnyNumber(struct)
-          || Boolean.TRUE.equals(
-              struct.getParams().get(ProtoToLogicalTypeConverter.MULTI_MESSAGE_ROOT_PARAM))) {
-        return Collections.emptyMap();
-      }
-      Map<Object, Integer> derived = new IdentityHashMap<>();
-      int number = 1;
-      for (Field field : struct.getFields()) {
-        if (!isUnion(field.getSchema())) {
-          derived.put(field, number++);
-        }
-      }
-      for (Field field : struct.getFields()) {
-        if (isUnion(field.getSchema())) {
-          for (UnionBranch branch : field.getSchema().getBranches()) {
-            derived.put(branch, number++);
-          }
-        }
-      }
-      return derived;
-    }
-
-    private static boolean recordsAnyNumber(Schema struct) {
-      for (Field field : struct.getFields()) {
-        if (field.getFieldNumber() != null) {
-          return true;
-        }
-        if (isUnion(field.getSchema())) {
-          for (UnionBranch branch : field.getSchema().getBranches()) {
-            if (branch.getFieldNumber() != null) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
+      return policy == IdentityPolicy.PROTOBUF
+          ? ProtoToLogicalTypeConverter.impliedFieldNumbers(struct) : Collections.emptyMap();
     }
 
     private static boolean isUnion(Schema schema) {

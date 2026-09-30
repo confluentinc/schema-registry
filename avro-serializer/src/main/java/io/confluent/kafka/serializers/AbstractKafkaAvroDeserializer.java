@@ -162,6 +162,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     classReaders.invalidateAll();
   }
 
+  @Override
+  protected boolean readsByProvenance() {
+    return true;
+  }
+
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.
   private ProvenanceProjector<AvroProvenanceRenamer.Renamed> provenanceProjector() {
@@ -171,7 +176,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         projector = provenanceProjector;
         if (projector == null) {
           projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
-              provenanceCacheSize, provenanceCacheTtlSec, null, provenanceStrategy);
+              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy);
           provenanceProjector = projector;
         }
       }

@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import java.util.OptionalInt;
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
@@ -82,7 +83,8 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -110,10 +112,11 @@ public class SubjectsResource {
    * computed over the range alone — its ends and everything between — so a version outside it,
    * however old or however broken, has no effect. Any registration or deletion inside the range
    * changes the key, so nothing needs invalidating, and many readers asking for the same range
-   * collapse into one computation per node.
+   * collapse into one computation per node. Asynchronous, so that a long computation holds no
+   * lock other keys wait on; it still runs on the thread of the request that started it.
    */
-  private final Cache<List<Object>, SchemaProvenance> provenanceCache =
-      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).build();
+  private final AsyncCache<List<Object>, Computed> provenanceCache =
+      Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).buildAsync();
 
   @Inject
   public SubjectsResource(SchemaRegistry schemaRegistry) {
@@ -481,7 +484,7 @@ public class SubjectsResource {
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws SchemaRegistryException, InvalidVersionException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    List<SchemaMetadata> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionNamed(fromVersion, entries),
         versionNamed(toVersion, entries), includeInterior, includeMultipleMessages,
         algorithm);
@@ -494,7 +497,7 @@ public class SubjectsResource {
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws SchemaRegistryException {
     List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<ProvenanceHistory.Entry> entries = provenanceEntries(history);
+    List<SchemaMetadata> entries = provenanceEntries(history);
     return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
         versionOfId(toId, subject, entries), includeInterior, includeMultipleMessages,
         algorithm);
@@ -516,11 +519,41 @@ public class SubjectsResource {
     List<Schema> range = history.stream()
         .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
         .collect(Collectors.toList());
-    // computeProvenance never returns null, so neither does the cache.
-    SchemaProvenance whole = Objects.requireNonNull(provenanceCache.get(
-        provenanceKey(subject, range, includeMultipleMessages, algorithm),
-        k -> computeProvenance(subject, range, includeMultipleMessages, algorithm)));
-    return ProvenanceHistory.slice(whole, from, to, includeInterior);
+    List<Object> key = provenanceKey(subject, range, includeMultipleMessages, algorithm);
+    CompletableFuture<Computed> mine = new CompletableFuture<>();
+    CompletableFuture<Computed> pending = provenanceCache.asMap().putIfAbsent(key, mine);
+    if (pending == null) {
+      // A failure completes the entry too, as the cache logs one that fails, then leaves it;
+      // each request already waiting on it fails alike.
+      Computed computed;
+      try {
+        computed = new Computed(
+            computeProvenance(subject, range, includeMultipleMessages, algorithm), null);
+      } catch (RuntimeException e) {
+        computed = new Computed(null, e);
+      } catch (Error e) {
+        mine.completeExceptionally(e);
+        throw e;
+      }
+      mine.complete(computed);
+      if (computed.failure != null) {
+        provenanceCache.asMap().remove(key, mine);
+      }
+      pending = mine;
+    }
+    Computed computed;
+    try {
+      computed = pending.join();
+    } catch (CompletionException e) {
+      if (e.getCause() instanceof Error) {
+        throw (Error) e.getCause();
+      }
+      throw e;
+    }
+    if (computed.failure != null) {
+      throw computed.failure;
+    }
+    return ProvenanceHistory.slice(computed.provenance, from, to, includeInterior);
   }
 
   /**
@@ -539,26 +572,16 @@ public class SubjectsResource {
     return history;
   }
 
-  private static List<ProvenanceHistory.Entry> provenanceEntries(List<Schema> history) {
+  private static List<SchemaMetadata> provenanceEntries(List<Schema> history) {
     return history.stream()
-        .map(s -> new ProvenanceHistory.Entry(s.getVersion(), s.getId(),
-            Boolean.TRUE.equals(s.getDeleted()), registeredAt(s)))
+        .map(SchemaMetadata::new)
         .collect(Collectors.toList());
-  }
-
-  /**
-   * When {@code schema}'s version was registered: its createTs, present only where that differs
-   * from ts, else its ts.
-   */
-  private static Long registeredAt(Schema schema) {
-    return schema.getCreateTimestamp() != null
-        ? schema.getCreateTimestamp() : schema.getTimestamp();
   }
 
   /**
    * A version number or {@code "latest"}, which means the latest version not soft-deleted.
    */
-  private static int versionNamed(String version, List<ProvenanceHistory.Entry> entries)
+  private static int versionNamed(String version, List<SchemaMetadata> entries)
       throws InvalidVersionException {
     VersionId id = new VersionId(version);
     OptionalInt resolved = id.isLatest()
@@ -570,7 +593,7 @@ public class SubjectsResource {
     return resolved.getAsInt();
   }
 
-  private static int versionOfId(int id, String subject, List<ProvenanceHistory.Entry> entries) {
+  private static int versionOfId(int id, String subject, List<SchemaMetadata> entries) {
     OptionalInt version = ProvenanceHistory.versionCarrying(entries, id);
     if (!version.isPresent()) {
       throw Errors.schemaIdNotInSubjectException(id, subject);
@@ -589,7 +612,7 @@ public class SubjectsResource {
       key.add(schema.getVersion());
       key.add(schema.getId());
       // Under dynamic, when a version was registered decides the algorithm that matches it.
-      key.add(registeredAt(schema));
+      key.add(ProvenanceHistory.registeredAt(new SchemaMetadata(schema)));
     }
     return key;
   }
@@ -606,8 +629,8 @@ public class SubjectsResource {
       }
     }
     try {
-      return ProvenanceHistory.compute(
-          subject, provenanceEntries(history), parsed, includeMultipleMessages, algorithm);
+      return ProvenanceHistory.compute(subject, provenanceEntries(history),
+          ProvenanceHistory.logicalTypesOf(parsed, includeMultipleMessages), algorithm);
     } catch (RecursiveTypeException e) {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {
@@ -622,6 +645,17 @@ public class SubjectsResource {
       String message = "Could not compute provenance for subject " + subject;
       log.error(message, e);
       throw Errors.schemaRegistryException(message, e);
+    }
+  }
+
+  // A range's provenance, or why it has none.
+  private static final class Computed {
+    private final SchemaProvenance provenance;
+    private final RuntimeException failure;
+
+    private Computed(SchemaProvenance provenance, RuntimeException failure) {
+      this.provenance = provenance;
+      this.failure = failure;
     }
   }
 }

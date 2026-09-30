@@ -141,6 +141,8 @@ public abstract class AbstractKafkaSchemaSerDe
   protected String provenanceAlgorithm;
   protected int provenanceCacheSize;
   protected ProvenanceStrategy provenanceStrategy;
+  private static final String LOGICAL_TYPE_CLASS =
+      "io.confluent.kafka.schemaregistry.type.logical.LogicalType";
   protected int provenanceCacheTtlSec;
   protected Map<String, String> metadata;
   protected ExecutionEnvironment executionEnv;
@@ -225,7 +227,11 @@ public abstract class AbstractKafkaSchemaSerDe
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
-    provenanceAlgorithm = config.getProvenanceAlgorithm();
+    // Only a deserializer reads by provenance: a serializer sharing its config ignores it.
+    provenanceAlgorithm = readsByProvenance() ? config.getProvenanceAlgorithm() : null;
+    if (provenanceAlgorithm != null) {
+      requireLogicalTypes();
+    }
     provenanceCacheSize = config.getProvenanceCacheSize();
     provenanceCacheTtlSec = config.getProvenanceCacheTtl();
     closeQuietly(provenanceStrategy, "provenance strategy");
@@ -1201,6 +1207,23 @@ public abstract class AbstractKafkaSchemaSerDe
       }
     }
 
+  }
+
+  /**
+   * Whether this serde reads by provenance when {@code provenance.algorithm} is set.
+   */
+  protected boolean readsByProvenance() {
+    return false;
+  }
+
+  // Reading by provenance compares schemas as logical types, which a separate artifact provides.
+  private static void requireLogicalTypes() {
+    try {
+      Class.forName(LOGICAL_TYPE_CLASS, false, AbstractKafkaSchemaSerDe.class.getClassLoader());
+    } catch (ClassNotFoundException | LinkageError e) {
+      throw new ConfigException(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM
+          + " requires kafka-schema-registry-logical-types on the classpath");
+    }
   }
 
   private static void closeQuietly(AutoCloseable closeable, String name) {

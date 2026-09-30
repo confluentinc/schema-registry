@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -26,6 +27,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -97,7 +99,8 @@ class ProvenanceMultiMessageTest {
   void withoutTheFlagOnlyTheFirstMessageIsRoot() {
     List<ParsedSchema> schemas = Arrays.asList(proto(ORDER, REFUND, LINE));
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
-        Arrays.asList(new ProvenanceHistory.Entry(1, 1, false)), schemas, false);
+        Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), "")),
+        ProvenanceHistory.logicalTypesOf(schemas, false));
 
     assertThat(pids(provenance.getVersions().get(0)).keySet())
         .contains(path(0), path(1), path(2), path(2, 0))
@@ -107,11 +110,13 @@ class ProvenanceMultiMessageTest {
   // -------------------------------------------------------------------------------------------
 
   private static List<ProvenanceVersion> compute(ProtobufSchema... versions) {
-    List<ProvenanceHistory.Entry> history = new ArrayList<>();
+    List<SchemaMetadata> history = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
-      history.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      history.add(new SchemaMetadata(i + 1, i + 1, "PROTOBUF", Collections.emptyList(), ""));
     }
-    return ProvenanceHistory.compute("s", history, Arrays.asList(versions), true).getVersions();
+    return ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), true))
+        .getVersions();
   }
 
   private static Map<List<Integer>, Integer> pids(ProvenanceVersion version) {

@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -72,8 +73,8 @@ class JsonProvenanceBranchNumberingTest {
       List<String> names, String document, List<Integer> expected) throws Exception {
     JsonSchema reader = new JsonSchema(schema);
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
-        Collections.singletonList(new ProvenanceHistory.Entry(1, 1, false)),
-        Collections.<ParsedSchema>singletonList(reader), false);
+        Collections.singletonList(new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), "")),
+        ProvenanceHistory.logicalTypesOf(Collections.<ParsedSchema>singletonList(reader), false));
     ProvenanceField location = provenance.getVersions().get(0).getFields().stream()
         .filter(f -> names.equals(f.getNames())).findFirst().orElse(null);
     assertNotNull(location, "no location spelled " + names);

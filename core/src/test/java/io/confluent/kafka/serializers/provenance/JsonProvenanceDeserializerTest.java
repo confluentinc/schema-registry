@@ -138,6 +138,40 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderDifferingOnlyInDescriptionsIsMatchedByStructure() throws Exception {
+    // No version has its description; it has v3's structure, the latest with it: note is new.
+    JsonSchema v1 = object(number("id"), string("note"));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, object(number("id")));
+    client.register(SUBJECT, object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"new\"}"));
+    JsonSchema reader = object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"again\"}");
+
+    assertFalse(read(reader, bytes, "v1").has("note"));
+  }
+
+  @Test
+  void aReaderInliningWhatAVersionReferencesIsMatchedByStructure() throws Exception {
+    // D inline is the same location as D by $ref: the reader is still v3, where f is new.
+    String d = "{\"type\": \"object\", \"properties\": {\"k\": {\"type\": \"string\"}}}";
+    String byRef = "{\"type\": \"object\", \"properties\": "
+        + "{\"d\": {\"$ref\": \"#/definitions/D\"}%s}, \"definitions\": {\"D\": " + d + "}}";
+    String f = ", \"f\": {\"type\": \"string\"}";
+    byte[] bytes = write(new JsonSchema(String.format(byRef, f)),
+        "{\"d\": {\"k\": \"K\"}, \"f\": \"old\"}");
+    String g = ", \"g\": {\"type\": \"string\"}";
+    client.register(SUBJECT, new JsonSchema(String.format(byRef, "")));
+    client.register(SUBJECT, new JsonSchema(String.format(byRef, f + g)));
+    JsonSchema reader = new JsonSchema(
+        "{\"type\": \"object\", \"properties\": {\"d\": " + d + f + g + "}}");
+
+    JsonNode read = read(reader, bytes, "v1");
+    assertFalse(read.has("f"));
+    assertEquals("K", read.get("d").get("k").asText());
+  }
+
+  @Test
   void aPropertyPresentThroughoutIsLeftAlone() throws Exception {
     JsonSchema v1 = object(number("id"), string("name"));
     JsonSchema v2 = object(number("id"), string("name"), string("extra"));

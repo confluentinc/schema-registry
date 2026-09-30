@@ -16,11 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -111,12 +113,13 @@ class ProvenanceHistorySweepTest {
   @ParameterizedTest(name = "{0}")
   @MethodSource("histories")
   void provenanceIsComputedOrTheHistoryIsRejectedByName(String label, List<ParsedSchema> versions) {
-    List<ProvenanceHistory.Entry> entries = new ArrayList<>();
+    List<SchemaMetadata> entries = new ArrayList<>();
     for (int i = 0; i < versions.size(); i++) {
-      entries.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      entries.add(new SchemaMetadata(i + 1, i + 1, versions.get(i).schemaType(),
+          Collections.emptyList(), ""));
     }
     try {
-      ProvenanceHistory.compute("s", entries, versions, false);
+      ProvenanceHistory.compute("s", entries, ProvenanceHistory.logicalTypesOf(versions, false));
     } catch (ValidationException | RecursiveTypeException | AmbiguousProvenanceException e) {
       // Rejected by name: the registry answers 422, and the reader falls back.
     }

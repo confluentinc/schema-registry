@@ -18,9 +18,12 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,11 +59,12 @@ class ProvenanceEditionTest {
   }
 
   private static SchemaProvenance compute(JsonSchema... versions) {
-    List<ProvenanceHistory.Entry> history = new ArrayList<>();
+    List<SchemaMetadata> history = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
-      history.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      history.add(new SchemaMetadata(i + 1, i + 1, "JSON", Collections.emptyList(), ""));
     }
-    return ProvenanceHistory.compute("s", history, Arrays.asList(versions));
+    return ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), false));
   }
 
   private static List<List<Integer>> paths(SchemaProvenance provenance, int version) {

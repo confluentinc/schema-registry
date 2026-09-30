@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.protobuf.test.Root.ReferrerMessage;
@@ -51,6 +52,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -530,6 +532,143 @@ class ProtobufProvenanceDeserializerTest {
         "string memo = 2 [deprecated = true, json_name = \"MEMO\"];");
 
     assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+  }
+
+  @Test
+  void aReaderWithAServiceOrItsOwnOptionsNoVersionHasIsMatchedByStructure() throws Exception {
+    // A service holds no data, and an option extension only declares an option: still v3.
+    String head = "syntax = \"proto3\";\npackage p;\n";
+    String row = "message Row {\n  int32 id = 1;\n  string memo = 2%s;\n}\n";
+    for (String reader : new String[] {
+        head + String.format(row, "") + "service S {\n  rpc Get(Row) returns (Row);\n}\n",
+        head + "import \"google/protobuf/descriptor.proto\";\n"
+            + "extend google.protobuf.FieldOptions {\n  string label = 50001;\n}\n"
+            + String.format(row, " [(label) = \"x\"]")}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaProtobufSerializer<>(client, config(null));
+      assertEquals("", get(read(new ProtobufSchema(reader), readdedMemo(), "v1"), "memo"),
+          reader);
+    }
+  }
+
+  @Test
+  void aSubjectHoldingAnotherFormatStillFindsItsProtobufVersion() throws Exception {
+    // The latest version is Avro: compared first, and simply not the reader.
+    byte[] bytes = readdedMemo();
+    client.register(SUBJECT, new AvroSchema("{\"type\":\"record\",\"name\":\"Row\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}"));
+    ProtobufSchema reader = row("int32 id = 1;", "string memo = 2 [deprecated = true];");
+    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+  }
+
+  @Test
+  void aReaderDeclaringMembersOutOfNumberOrderIsMatchedByStructure() throws Exception {
+    // Members are paired by number, not declaration order: the reader is still v3.
+    assertEquals("", get(read(row("string memo = 2;", "int32 id = 1;"), readdedMemo(), "v1"),
+        "memo"));
+
+    client = new ProvenanceMockSchemaRegistryClient();
+    serializer = new KafkaProtobufSerializer<>(client, config(null));
+    String oneof = "oneof k {\n    %s\n  }";
+    byte[] bytes = write(
+        row("int32 id = 1;", String.format(oneof, "string note = 2; int32 n = 3;")),
+        b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, row("int32 id = 1;", String.format(oneof, "int32 n = 3;")));
+    client.register(SUBJECT,
+        row("int32 id = 1;", String.format(oneof, "string memo = 2; int32 n = 3;")));
+    DynamicMessage read = read(
+        row("int32 id = 1;", String.format(oneof, "int32 n = 3; string memo = 2;")), bytes, "v1");
+    assertEquals("", get(read, "memo"));
+    assertEquals(7, get(read, "id"));
+  }
+
+  private static final String OPTIONS = "syntax = \"proto3\";\npackage o;\n"
+      + "import \"google/protobuf/descriptor.proto\";\n"
+      + "extend google.protobuf.FieldOptions {\n  string label = 50001;\n}\n";
+
+  @Test
+  void aReaderImportingAFileOfOnlyOptionsIsMatchedByStructure() throws Exception {
+    // The option file declares no type; the reader is still v3, which imports nothing.
+    byte[] bytes = readdedMemo();
+    client.register("opts", new ProtobufSchema(OPTIONS));
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"opts.proto\";\nmessage Row {\n  int32 id = 1;\n"
+        + "  string memo = 2 [(o.label) = \"x\"];\n}\n",
+        Collections.singletonList(new SchemaReference("opts.proto", "opts", 1)),
+        Collections.singletonMap("opts.proto", OPTIONS), null, null);
+    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+  }
+
+  @Test
+  void versionsImportingAFileOfOnlyOptionsOrOnlyPublicImportsHaveProvenance() throws Exception {
+    // Every version imports it: an option file, or wrap.proto, empty but for a public import of
+    // leaf.proto, directly or through wrap1.proto, empty but for its own.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string id = 1;\n}\n";
+    String wrap1 = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    String wrap2 = "syntax = \"proto3\";\npackage com;\nimport public \"wrap1.proto\";\n";
+    for (int levels = 0; levels <= 2; levels++) {
+      boolean reExport = levels > 0;
+      client = new ProvenanceMockSchemaRegistryClient();
+      List<SchemaReference> references = new ArrayList<>();
+      Map<String, String> resolved = new LinkedHashMap<>();
+      String head;
+      String foo;
+      if (reExport) {
+        client.register("leaf", new ProtobufSchema(leaf));
+        List<SchemaReference> below = new ArrayList<>();
+        Map<String, String> belowResolved = new LinkedHashMap<>();
+        if (levels == 2) {
+          client.register("wrap1", new ProtobufSchema(wrap1,
+              Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+              Collections.singletonMap("leaf.proto", leaf), null, null));
+          below.add(new SchemaReference("wrap1.proto", "wrap1", 1));
+          belowResolved.put("wrap1.proto", wrap1);
+        }
+        below.add(new SchemaReference("leaf.proto", "leaf", 1));
+        belowResolved.put("leaf.proto", leaf);
+        String wrap = levels == 2 ? wrap2 : wrap1;
+        client.register("wrap", new ProtobufSchema(wrap, below, belowResolved, null, null));
+        references.add(new SchemaReference("wrap.proto", "wrap", 1));
+        references.addAll(below);
+        resolved.put("wrap.proto", wrap);
+        resolved.putAll(belowResolved);
+        head = "import \"wrap.proto\";\n";
+        foo = "  com.Foo foo = 3;\n";
+      } else {
+        client.register("opts", new ProtobufSchema(OPTIONS));
+        references.add(new SchemaReference("opts.proto", "opts", 1));
+        resolved.put("opts.proto", OPTIONS);
+        head = "import \"opts.proto\";\n";
+        foo = "";
+      }
+      String memo = reExport ? "  string memo = 2;\n" : "  string memo = 2 [(o.label) = \"x\"];\n";
+      List<ProtobufSchema> versions = new ArrayList<>();
+      for (String members : new String[] {"  string note = 2;\n", "", memo}) {
+        ProtobufSchema version = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + head
+            + "message Row {\n  int32 id = 1;\n" + members + foo + "}\n",
+            references, resolved, null, null);
+        client.register(SUBJECT, version);
+        versions.add(version);
+      }
+      Descriptor row = versions.get(0).toDescriptor();
+      byte[] body = DynamicMessage.newBuilder(row).setField(row.findFieldByName("id"), 7)
+          .setField(row.findFieldByName("note"), "old").build().toByteArray();
+      byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
+          .putInt(client.getId(SUBJECT, versions.get(0))).put((byte) 0).put(body).array();
+
+      DynamicMessage read = read(versions.get(2), bytes, "v1");
+      assertEquals("", get(read, "memo"), "levels " + levels);
+      assertEquals(7, get(read, "id"), "levels " + levels);
+    }
+  }
+
+  // A v1 record with note "old", then v2 dropping note and v3 adding memo at its number.
+  private byte[] readdedMemo() throws Exception {
+    byte[] bytes = write(row("int32 id = 1;", "string note = 2;"),
+        b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "old"));
+    client.register(SUBJECT, row("int32 id = 1;"));
+    client.register(SUBJECT, row("int32 id = 1;", "string memo = 2;"));
+    return bytes;
   }
 
   @Test

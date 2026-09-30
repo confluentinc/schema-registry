@@ -41,6 +41,10 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.junit.jupiter.api.Tag;
@@ -232,8 +236,33 @@ public abstract class RestApiProvenanceTest {
   public void aRecursiveSchemaHasNoProvenance() throws Exception {
     register(SUBJECT, "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
-    assertError(422, Errors.RECURSIVE_SCHEMA_ERROR_CODE,
-        () -> byVersion(SUBJECT, "1", "1", false));
+    // Asked again, as the failure is not cached, and never logged by the cache holding it.
+    List<LogRecord> logged = new CopyOnWriteArrayList<>();
+    Handler handler = new Handler() {
+      @Override
+      public void publish(LogRecord record) {
+        logged.add(record);
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() {
+      }
+    };
+    Logger caffeine = Logger.getLogger("com.github.benmanes.caffeine");
+    caffeine.addHandler(handler);
+    try {
+      for (int i = 0; i < 2; i++) {
+        assertError(422, Errors.RECURSIVE_SCHEMA_ERROR_CODE,
+            () -> byVersion(SUBJECT, "1", "1", false));
+      }
+    } finally {
+      caffeine.removeHandler(handler);
+    }
+    assertEquals(Collections.emptyList(), logged);
   }
 
   @Test

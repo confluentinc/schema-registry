@@ -16,7 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -117,8 +118,8 @@ class ProvenanceMockSchemaRegistryClientTest {
   void anUnexpectedComputationFailureIsAServerError() throws Exception {
     ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
       @Override
-      protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
-          List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
+      protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
+          List<LogicalType> logicalTypes, String algorithm) {
         throw new NullPointerException("unexpected");
       }
     };
@@ -131,8 +132,8 @@ class ProvenanceMockSchemaRegistryClientTest {
     // A 422 with the unknown-algorithm code, which a client stops asking about; a 500 it retries.
     ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
       @Override
-      protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
-          List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
+      protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
+          List<LogicalType> logicalTypes, String algorithm) {
         throw new UnsupportedProvenanceAlgorithmException("v2 beside v1");
       }
     };

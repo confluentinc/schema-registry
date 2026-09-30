@@ -421,6 +421,47 @@ class AvroProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aReaderDifferingOnlyInDocsIsMatchedByStructure() throws Exception {
+    // No version has its docs, but it has v3's structure: note, re-added there, is new.
+    Schema v1 = record(idField(), string("note"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("note", "ada"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    client.register(SUBJECT, new AvroSchema(record(idField(),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\"}")));
+    Schema reader = record(idField(),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\",\"doc\":\"again\"}");
+
+    assertEquals("new", read(reader, bytes, "v1").get("note").toString());
+  }
+
+  @Test
+  void aReaderDeclaringFieldsSymbolsOrBranchesInAnotherOrderIsMatchedByStructure()
+      throws Exception {
+    // Avro finds each by name, so each reader is still v3: note, re-added there, is new.
+    String e = "{\"name\":\"e\",\"type\":{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[%s]}}";
+    String u = "{\"name\":\"u\",\"type\":[%s]}";
+    String ab = String.format(e, "\"A\",\"B\"");
+    String intString = String.format(u, "\"int\",\"string\"");
+    String note = "{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\"}";
+    Schema v1 = record(idField(), ab, intString, string("note"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7)
+        .set("e", new GenericData.EnumSymbol(v1.getField("e").schema(), "B")).set("u", 3)
+        .set("note", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField(), ab, intString)));
+    client.register(SUBJECT, new AvroSchema(record(idField(), ab, intString, note)));
+
+    for (Schema reader : new Schema[] {
+        record(note, intString, ab, idField()),
+        record(idField(), String.format(e, "\"B\",\"A\""), intString, note),
+        record(idField(), ab, String.format(u, "\"string\",\"int\""), note)}) {
+      GenericRecord read = read(reader, bytes, "v1");
+      assertEquals("new", read.get("note").toString(), reader.toString());
+      assertEquals(3, read.get("u"), reader.toString());
+      assertEquals("B", read.get("e").toString(), reader.toString());
+    }
+  }
+
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
     client.register(SUBJECT, new AvroSchema(writer));
     return serializer.serialize(TOPIC, record.build());

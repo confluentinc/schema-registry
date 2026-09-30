@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -49,52 +50,26 @@ public final class ProvenanceHistory {
   private ProvenanceHistory() {
   }
 
-  /** One version of a subject's history, in version order. */
-  public static final class Entry {
+  /**
+   * When {@code version} was registered, in epoch millis: its {@code createTs} where the registry
+   * recorded one apart from its {@code ts} (a rewritten record, as after a soft delete), else its
+   * {@code ts}; null where neither is known.
+   */
+  public static Long registeredAt(SchemaMetadata version) {
+    return version.getCreateTimestamp() != null
+        ? version.getCreateTimestamp() : version.getTimestamp();
+  }
 
-    private final int version;
-    private final int schemaId;
-    private final boolean deleted;
-    private final Long createTimestamp;
-
-    public Entry(int version, int schemaId, boolean deleted) {
-      this(version, schemaId, deleted, null);
-    }
-
-    /**
-     * As {@link #Entry(int, int, boolean)}, registered at {@code createTimestamp}, in epoch millis;
-     * null where unknown.
-     */
-    public Entry(int version, int schemaId, boolean deleted, Long createTimestamp) {
-      this.version = version;
-      this.schemaId = schemaId;
-      this.deleted = deleted;
-      this.createTimestamp = createTimestamp;
-    }
-
-    public int getVersion() {
-      return version;
-    }
-
-    public int getSchemaId() {
-      return schemaId;
-    }
-
-    public boolean isDeleted() {
-      return deleted;
-    }
-
-    public Long getCreateTimestamp() {
-      return createTimestamp;
-    }
+  private static boolean isDeleted(SchemaMetadata version) {
+    return Boolean.TRUE.equals(version.getDeleted());
   }
 
   /**
    * The latest version not soft-deleted, as {@code "latest"} means everywhere else.
    */
-  public static OptionalInt latestVersion(List<Entry> history) {
+  public static OptionalInt latestVersion(List<SchemaMetadata> history) {
     for (int i = history.size() - 1; i >= 0; i--) {
-      if (!history.get(i).isDeleted()) {
+      if (!isDeleted(history.get(i))) {
         return OptionalInt.of(history.get(i).getVersion());
       }
     }
@@ -104,8 +79,8 @@ public final class ProvenanceHistory {
   /**
    * {@code version} if the history holds it.
    */
-  public static OptionalInt version(List<Entry> history, int version) {
-    for (Entry entry : history) {
+  public static OptionalInt version(List<SchemaMetadata> history, int version) {
+    for (SchemaMetadata entry : history) {
       if (entry.getVersion() == version) {
         return OptionalInt.of(version);
       }
@@ -117,9 +92,9 @@ public final class ProvenanceHistory {
    * The version carrying schema id {@code schemaId}. A schema re-registered after a soft delete
    * can sit under more than one version; the latest is taken.
    */
-  public static OptionalInt versionCarrying(List<Entry> history, int schemaId) {
+  public static OptionalInt versionCarrying(List<SchemaMetadata> history, int schemaId) {
     for (int i = history.size() - 1; i >= 0; i--) {
-      if (history.get(i).getSchemaId() == schemaId) {
+      if (history.get(i).getId() == schemaId) {
         return OptionalInt.of(history.get(i).getVersion());
       }
     }
@@ -127,85 +102,74 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The whole history's provenance, from each version's parsed schema.
+   * The whole history's provenance, from each version's logical type, as {@link #logicalTypesOf}
+   * gives them.
    *
-   * @param schemas each version's schema, in the same order as {@code history}
+   * @param history the subject's versions, in version order; each one's schema type decides the
+   *     identity rules it is matched by
+   * @param logicalTypes each version's logical type, in the same order as {@code history}
    * @throws RecursiveTypeException if a version's schema refers to itself
-   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a version's
-   *     schema has no logical form
+   * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
+   *     identity per location
    */
-  public static SchemaProvenance compute(String subject, List<Entry> history,
-      List<ParsedSchema> schemas) {
-    return compute(subject, history, schemas, false);
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<LogicalType> logicalTypes) {
+    return compute(subject, history, logicalTypes, ProvenanceAlgorithm.LATEST);
   }
 
   /**
-   * As {@link #compute(String, List, List)}; with {@code includeMultipleMessages}, each Protobuf
-   * version is rooted at a synthetic struct over all its top-level messages. Other formats have
-   * one root regardless, and ignore it.
-   */
-  public static SchemaProvenance compute(String subject, List<Entry> history,
-      List<ParsedSchema> schemas, boolean includeMultipleMessages) {
-    return compute(subject, history, schemas, includeMultipleMessages, ProvenanceAlgorithm.LATEST);
-  }
-
-  /**
-   * As {@link #compute(String, List, List, boolean, ProvenanceAlgorithm)}, by the version named
+   * As {@link #compute(String, List, List, ProvenanceAlgorithm)}, by the version named
    * {@code algorithm}: a version's name, {@link ProvenanceAlgorithm#LATEST_NAME} or none for the
    * latest, or {@link ProvenanceAlgorithm#DYNAMIC_NAME}, under which each version is matched to
-   * its predecessor by the version effective when it was registered.
+   * its predecessor by the version effective when it was registered. A version of the algorithm
+   * changes the matching rules, never the logical type's edition, which is the Metastore's.
    *
    * @throws IllegalArgumentException if no version has that name
    * @throws UnsupportedProvenanceAlgorithmException if a dynamic range's transitions fall to an
    *     algorithm other than v1
    */
-  public static SchemaProvenance compute(String subject, List<Entry> history,
-      List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<LogicalType> logicalTypes, String algorithm) {
     if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
-      return compute(subject, history, schemas, includeMultipleMessages,
-          ProvenanceAlgorithm.of(algorithm));
+      return compute(subject, history, logicalTypes, ProvenanceAlgorithm.of(algorithm));
     }
     // The first version is matched to no predecessor, so only the later ones name an algorithm.
-    for (Entry entry : history.subList(Math.min(1, history.size()), history.size())) {
-      ProvenanceAlgorithm effective = ProvenanceAlgorithm.effectiveAt(entry.getCreateTimestamp());
+    for (SchemaMetadata entry : history.subList(Math.min(1, history.size()), history.size())) {
+      ProvenanceAlgorithm effective = ProvenanceAlgorithm.effectiveAt(registeredAt(entry));
       if (effective != ProvenanceAlgorithm.V1) {
         // Until each transition is matched by its own algorithm.
         throw new UnsupportedProvenanceAlgorithmException("Dynamic provenance by "
             + effective.getName() + " is not supported yet");
       }
     }
-    SchemaProvenance provenance = compute(subject, history, schemas, includeMultipleMessages,
-        ProvenanceAlgorithm.V1);
+    SchemaProvenance provenance = compute(subject, history, logicalTypes, ProvenanceAlgorithm.V1);
     provenance.setAlgorithm(ProvenanceAlgorithm.DYNAMIC_NAME);
     return provenance;
   }
 
   /**
-   * As {@link #compute(String, List, List, boolean)}, by the named version of the algorithm, which
-   * the result records.
+   * As {@link #compute(String, List, List)}, by the named version of the algorithm, which the
+   * result records.
    */
-  public static SchemaProvenance compute(String subject, List<Entry> history,
-      List<ParsedSchema> schemas, boolean includeMultipleMessages, ProvenanceAlgorithm algorithm) {
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<LogicalType> logicalTypes, ProvenanceAlgorithm algorithm) {
     switch (algorithm) {
       case V1:
-        return computeV1(subject, history, schemas, includeMultipleMessages);
+        return computeV1(subject, history, logicalTypes);
       default:
         throw new IllegalArgumentException("Unsupported provenance algorithm " + algorithm);
     }
   }
 
-  private static SchemaProvenance computeV1(String subject, List<Entry> history,
-      List<ParsedSchema> schemas, boolean includeMultipleMessages) {
-    List<LogicalType> logicalTypes = new ArrayList<>(history.size());
+  private static SchemaProvenance computeV1(String subject, List<SchemaMetadata> history,
+      List<LogicalType> logicalTypes) {
     List<IdentityPolicy> policies = new ArrayList<>(history.size());
     List<Integer> ids = new ArrayList<>(history.size());
     List<Integer> versions = new ArrayList<>(history.size());
-    for (int i = 0; i < history.size(); i++) {
-      ParsedSchema schema = schemas.get(i);
-      logicalTypes.add(logicalTypeOf(schema, includeMultipleMessages));
-      policies.add(IdentityPolicy.forSchemaType(schema.schemaType()));
-      ids.add(history.get(i).getSchemaId());
-      versions.add(history.get(i).getVersion());
+    for (SchemaMetadata entry : history) {
+      policies.add(IdentityPolicy.forSchemaType(entry.getSchemaType()));
+      ids.add(entry.getId());
+      versions.add(entry.getVersion());
     }
     SchemaProvenance encoded = SchemaProvenanceEncoder.encode(
         subject, ProvenanceComputer.report(logicalTypes, policies), ids, versions);
@@ -214,11 +178,27 @@ public final class ProvenanceHistory {
   }
 
   /**
+   * Each of {@code schemas} as {@link #logicalTypeOf} converts it.
+   *
+   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
+   *     logical form
+   */
+  public static List<LogicalType> logicalTypesOf(List<ParsedSchema> schemas,
+      boolean includeMultipleMessages) {
+    List<LogicalType> logicalTypes = new ArrayList<>(schemas.size());
+    for (ParsedSchema schema : schemas) {
+      logicalTypes.add(logicalTypeOf(schema, includeMultipleMessages));
+    }
+    return logicalTypes;
+  }
+
+  /**
    * The logical type provenance is computed on: edition V1, the one the Metastore's columns follow.
    * Only the JSON reader differs by edition, keeping a bare one-branch union and naming union
-   * branches by position.
+   * branches by position. With {@code includeMultipleMessages}, a Protobuf schema is rooted at a
+   * synthetic struct over all its top-level messages; other formats have one root regardless.
    */
-  private static LogicalType logicalTypeOf(ParsedSchema schema, boolean includeMultipleMessages) {
+  public static LogicalType logicalTypeOf(ParsedSchema schema, boolean includeMultipleMessages) {
     if (schema instanceof JsonSchema) {
       return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
@@ -231,7 +211,7 @@ public final class ProvenanceHistory {
    * The part of {@code history} a range covers: every version from the lower end to the higher,
    * soft-deleted ones included, in version order. Provenance is computed over exactly this.
    */
-  public static List<Entry> range(List<Entry> history, int from, int to) {
+  public static List<SchemaMetadata> range(List<SchemaMetadata> history, int from, int to) {
     int low = Math.min(from, to);
     int high = Math.max(from, to);
     return history.stream()

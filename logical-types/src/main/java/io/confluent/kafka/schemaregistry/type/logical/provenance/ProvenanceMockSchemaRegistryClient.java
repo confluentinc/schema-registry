@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorith
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import java.io.IOException;
@@ -163,7 +164,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws IOException, RestClientException {
-    List<ProvenanceHistory.Entry> history = history(subject);
+    List<SchemaMetadata> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
         includeInterior, includeMultipleMessages, algorithm);
@@ -173,12 +174,12 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
-    List<ProvenanceHistory.Entry> history = history(subject);
+    List<SchemaMetadata> history = history(subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
         includeInterior, includeMultipleMessages, algorithm);
   }
 
-  private SchemaProvenance provenance(String subject, List<ProvenanceHistory.Entry> history,
+  private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
       int from, int to, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
@@ -188,11 +189,11 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
       }
     }
-    List<ProvenanceHistory.Entry> range = ProvenanceHistory.range(history, from, to);
+    List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
     List<ParsedSchema> schemas = new ArrayList<>(range.size());
-    for (ProvenanceHistory.Entry entry : range) {
+    for (SchemaMetadata entry : range) {
       try {
-        schemas.add(getSchemaBySubjectAndId(subject, entry.getSchemaId()));
+        schemas.add(getSchemaBySubjectAndId(subject, entry.getId()));
       } catch (RuntimeException e) {
         throw new RestClientException("Version " + entry.getVersion() + " of subject " + subject
             + " could not be parsed: " + e.getMessage(), 422, UNRESOLVABLE_REFERENCE);
@@ -200,7 +201,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = compute(subject, range, schemas, includeMultipleMessages, algorithm);
+      whole = compute(subject, range, ProvenanceHistory.logicalTypesOf(schemas,
+          includeMultipleMessages), algorithm);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (AmbiguousProvenanceException e) {
@@ -220,16 +222,21 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
    * The provenance of {@code range}, as the registry computes it; overridable so a test can make
    * the computation fail.
    */
-  protected SchemaProvenance compute(String subject, List<ProvenanceHistory.Entry> range,
-      List<ParsedSchema> schemas, boolean includeMultipleMessages, String algorithm) {
-    return ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages, algorithm);
+  protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
+      List<LogicalType> logicalTypes, String algorithm) {
+    return ProvenanceHistory.compute(subject, range, logicalTypes, algorithm);
   }
 
-  private List<ProvenanceHistory.Entry> history(String subject)
+  private List<SchemaMetadata> history(String subject)
       throws IOException, RestClientException {
-    Map<Integer, ProvenanceHistory.Entry> entries = new TreeMap<>();
-    softDeletedOf(subject).forEach((version, id) ->
-        entries.put(version, new ProvenanceHistory.Entry(version, id, true)));
+    Map<Integer, SchemaMetadata> entries = new TreeMap<>();
+    for (Map.Entry<Integer, Integer> deleted : softDeletedOf(subject).entrySet()) {
+      int id = deleted.getValue();
+      Schema schema = new Schema(subject, deleted.getKey(), id,
+          getSchemaBySubjectAndId(subject, id));
+      schema.setDeleted(true);
+      entries.put(deleted.getKey(), new SchemaMetadata(schema));
+    }
     List<Integer> live;
     try {
       live = getAllVersions(subject);
@@ -239,9 +246,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     for (int version : live) {
       Schema schema = getByVersion(subject, version, false);
-      entries.put(version, new ProvenanceHistory.Entry(version, schema.getId(), false));
+      entries.put(version, new SchemaMetadata(schema));
     }
-    List<ProvenanceHistory.Entry> history = new ArrayList<>(entries.values());
+    List<SchemaMetadata> history = new ArrayList<>(entries.values());
     if (history.isEmpty()) {
       throw new RestClientException("Subject '" + subject + "' not found.", 404,
           SUBJECT_NOT_FOUND);
@@ -254,7 +261,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     return new TreeMap<>(softDeleted.getOrDefault(subject, Collections.emptyMap()));
   }
 
-  private static int named(List<ProvenanceHistory.Entry> history, String version)
+  private static int named(List<SchemaMetadata> history, String version)
       throws RestClientException {
     OptionalInt resolved;
     if ("latest".equalsIgnoreCase(version) || "-1".equals(version)) {
@@ -276,7 +283,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     return resolved.getAsInt();
   }
 
-  private static int carrying(List<ProvenanceHistory.Entry> history, int schemaId,
+  private static int carrying(List<SchemaMetadata> history, int schemaId,
       String subject) throws RestClientException {
     OptionalInt version = ProvenanceHistory.versionCarrying(history, schemaId);
     if (!version.isPresent()) {

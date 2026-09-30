@@ -19,12 +19,14 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -237,6 +239,40 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aBranchPassedOverBeforeAPairingLeavesOneOldBranchStillContinues() {
+    // Seen first, {x} ties on the envelope x; once {w,x,z} takes P2, P1 is the one left, whichever
+    // order the two come in.
+    String p1 = titled(null, "x", "y");
+    String p2 = titled(null, "x", "z");
+    for (boolean lastFirst : new boolean[] {false, true}) {
+      String x = titled(null, "x");
+      String wxz = titled(null, "w", "x", "z");
+      List<ProvenanceVersion> v = compute(
+          json("{\"u\":{\"oneOf\":[" + p1 + "," + p2 + "]}}", null),
+          json("{\"u\":{\"oneOf\":[" + titled(null, "n") + ","
+              + (lastFirst ? wxz + "," + x : x + "," + wxz) + "]}}", null));
+      Map<List<Integer>, Integer> before = pids(v, 0);
+      Map<List<Integer>, Integer> after = pids(v, 1);
+      assertThat(after.get(path(0, lastFirst ? 2 : 1))).isEqualTo(before.get(path(0, 0)));
+      assertThat(after.get(path(0, lastFirst ? 1 : 2))).isEqualTo(before.get(path(0, 1)));
+    }
+  }
+
+  @Test
+  void aBranchPairedByItsHintBlocksNoOtherBranchsTag() {
+    // H, paired by its hint, shares R's tag; Q, moved, still continues R by that tag.
+    String h = branch("k1", "\"a\":{\"type\":\"number\"}");
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + h + "," + branch("k1", "\"b\":{\"type\":\"number\"}")
+            + "," + branch("k3", "\"t\":{\"type\":\"number\"}") + "],"
+            + "\"confluent:union\":[{\"name\":\"H\"},{},{}]}}", null),
+        json("{\"u\":{\"oneOf\":[" + branch("k1", "\"c\":{\"type\":\"number\"}") + ","
+            + h + "],\"confluent:union\":[{},{\"name\":\"H\"}]}}", null));
+    assertThat(pids(v, 1).get(path(0, 0))).isEqualTo(pids(v, 0).get(path(0, 1)));
+    assertThat(pids(v, 1).get(path(0, 1))).isEqualTo(pids(v, 0).get(path(0, 0)));
+  }
+
+  @Test
   void aTaggedBranchContinuesItsTagRatherThanAPosition() {
     // P overlaps both Q (through x) and R (through kind), so overlap cannot tell; its tag names R,
     // which position alone would have passed over for Q.
@@ -258,6 +294,33 @@ class ProvenanceIdentityRulesTest {
     List<ProvenanceVersion> v = compute(
         json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
         json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aTagWhoseNameHoldsASlashIsStillATag() {
+    // A name, not a nesting step: P continues R by its tag, not Q by position.
+    String q = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"}}}";
+    String tag = "\"a/b\":{\"enum\":[\"v\"]},";
+    String r = "{\"type\":\"object\",\"properties\":{" + tag + "\"y\":{\"type\":\"number\"}}}";
+    String p = "{\"type\":\"object\",\"properties\":{" + tag + "\"x\":{\"type\":\"number\"}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aRenamedTagWhoseNameHoldsAnEqualsSignStillContinues() {
+    // k=1 renamed k=2 is a tag renamed, as k to kx would be; its members carry the branch.
+    String moved = "{\"type\":\"object\",\"properties\":{\"q\":{\"const\":\"y\"},"
+        + "\"c\":{\"type\":\"integer\"}}}";
+    String kept = "{\"type\":\"object\",\"properties\":{\"%s\":{\"const\":\"x\"},"
+        + "\"a\":{\"type\":\"string\"},\"s\":{\"type\":\"string\"}}}";
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[" + String.format(kept, "k=1") + "," + moved + "]}}", null),
+        json("{\"u\":{\"oneOf\":[" + moved + "," + String.format(kept, "k=2") + "]}}", null));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
   }
 
@@ -705,11 +768,13 @@ class ProvenanceIdentityRulesTest {
   // -------------------------------------------------------------------------------------------
 
   private static List<ProvenanceVersion> compute(ParsedSchema... versions) {
-    List<ProvenanceHistory.Entry> history = new ArrayList<>();
+    List<SchemaMetadata> history = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
-      history.add(new ProvenanceHistory.Entry(i + 1, i + 1, false));
+      history.add(new SchemaMetadata(i + 1, i + 1, versions[i].schemaType(),
+          Collections.emptyList(), ""));
     }
-    return ProvenanceHistory.compute("s", history, Arrays.asList(versions)).getVersions();
+    return ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.logicalTypesOf(Arrays.asList(versions), false)).getVersions();
   }
 
   private static Map<List<Integer>, Integer> pids(List<ProvenanceVersion> versions, int version) {
