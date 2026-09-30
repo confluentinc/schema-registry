@@ -19,12 +19,15 @@ package io.confluent.kafka.schemaregistry.type.logical.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -35,6 +38,7 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.StringSchema;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -42,6 +46,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsonToLogicalTypeConverterTest {
@@ -758,5 +763,23 @@ class JsonToLogicalTypeConverterTest {
         + "\"$defs\":{\"T\":{\"type\":\"string\"}}}"));
     Schema.Field t = lt.getRootSchema().getFields().get(0);
     assertEquals("sib", t.getDefaultValue());
+  }
+
+  @Test
+  void aDefinitionReferringOnlyToItselfConvertsWithoutLooping() {
+    // D refers only to itself, directly or through Q: a recursive type, so no provenance.
+    String direct = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    String indirect = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/Q\"},"
+        + "\"Q\":{\"$ref\":\"#/definitions/D\"}}}";
+    for (String schema : Arrays.asList(direct, indirect)) {
+      LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+          JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(schema), LogicalTypeVersion.V1));
+      assertThat(lt.getNamedTypes()).isNotEmpty();
+      assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
+          new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), schema)),
+          Collections.singletonList(lt))).isInstanceOf(RecursiveTypeException.class);
+    }
   }
 }

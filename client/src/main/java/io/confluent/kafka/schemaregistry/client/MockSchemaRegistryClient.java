@@ -757,8 +757,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
+      // A lookup finds what was registered; it never replaces it with the schema it was asked
+      // about, which may carry a version or metadata of its own.
+      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
+      parsedSchemaCache.asMap().putIfAbsent(contentCacheKey(schemaEntity), schema);
       return schemaResponse;
     }
   }

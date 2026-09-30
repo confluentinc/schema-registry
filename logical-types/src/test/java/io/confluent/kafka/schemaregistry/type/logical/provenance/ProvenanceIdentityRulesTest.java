@@ -26,6 +26,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -295,6 +300,76 @@ class ProvenanceIdentityRulesTest {
         json("{\"u\":{\"oneOf\":[" + q + "," + r + "]}}", null),
         json("{\"u\":{\"oneOf\":[" + p + "]}}", null));
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aWrappersBranchesFollowTheirNumbersWhenFlinkReordersThem() {
+    // Flink re-emits a reordered union numbering its wrapper positionally: b takes a's number.
+    List<ProvenanceVersion> v = compute(flinkRow("a", "b"), flinkRow("b", "a"));
+    assertThat(pidByNames(v, 1, "us", "b")).isEqualTo(pidByNames(v, 0, "us", "a"));
+    assertThat(pidByNames(v, 1, "us", "a")).isEqualTo(pidByNames(v, 0, "us", "b"));
+  }
+
+  @Test
+  void aWrapperReorderedWithItsNumbersContinues() {
+    List<ProvenanceVersion> v = compute(
+        wrappedArray("string a = 1;\n      string b = 2;"),
+        wrappedArray("string b = 2;\n      string a = 1;"));
+    assertThat(pidByNames(v, 1, "us", "a")).isEqualTo(pidByNames(v, 0, "us", "a"));
+    assertThat(pidByNames(v, 1, "us", "b")).isEqualTo(pidByNames(v, 0, "us", "b"));
+  }
+
+  @Test
+  void aSingularWrappedUnionFieldKeepsItsWrappersNumbers() {
+    // u is field 2 of Row; a and b are fields 1 and 2 of its wrapper, not 2 and 3 of Row.
+    String uw = "  message UW {\n    oneof value {\n      string a = 1;\n      string b = 2;\n"
+        + "    }\n  }";
+    List<ProvenanceVersion> v = compute(
+        wrappedProto("  int32 id = 1;\n  UW u = 2" + WRAPPED + ";\n" + uw),
+        wrappedProto("  int32 id = 1;\n  UW u = 2" + WRAPPED + ";\n  string x = 3;\n" + uw));
+    assertThat(pidByNames(v, 1, "u", "a")).isEqualTo(pidByNames(v, 0, "u", "a"));
+    assertThat(pidByNames(v, 1, "u", "b")).isEqualTo(pidByNames(v, 0, "u", "b"));
+  }
+
+  private static final String WRAPPED =
+      " [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", value: \"true\"}]}]";
+
+  private static ProtobufSchema wrappedProto(String members) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\nmessage Row {\n" + members + "\n}\n");
+  }
+
+  // Row holding an array of unions, its wrapper's branches declared as given.
+  private static ProtobufSchema wrappedArray(String branches) {
+    return wrappedProto("  int32 id = 1;\n  repeated UW us = 2" + WRAPPED + ";\n"
+        + "  message UW {\n    oneof value {\n      " + branches + "\n    }\n  }");
+  }
+
+  // Row as Flink writes it: an id and an array of a union of the given string branches.
+  private static ProtobufSchema flinkRow(String... branches) {
+    List<UnionBranch> union = new ArrayList<>();
+    for (String branch : branches) {
+      union.add(new UnionBranch(branch, Schema.createString().setNullable(true)));
+    }
+    Schema row = Schema.createStruct(Arrays.asList(
+        new Field("id", Schema.create(Schema.Type.INT).setNullable(false), 0),
+        new Field("us", Schema.createArray(Schema.createUnion(union).setNullable(true))
+            .setNullable(false), 1))).setNullable(false);
+    return LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(row), "Row");
+  }
+
+  // The pid of the location whose native names end with the given ones.
+  private static Integer pidByNames(List<ProvenanceVersion> versions, int version,
+      String... names) {
+    List<String> suffix = Arrays.asList(names);
+    for (ProvenanceField field : versions.get(version).getFields()) {
+      List<String> own = field.getNames();
+      if (own.size() >= suffix.size()
+          && own.subList(own.size() - suffix.size(), own.size()).equals(suffix)) {
+        return field.getPid();
+      }
+    }
+    throw new AssertionError("No location " + suffix + " in version " + version);
   }
 
   @Test

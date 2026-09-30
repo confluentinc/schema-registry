@@ -701,6 +701,22 @@ class ProtoToLogicalTypeConverterTest {
     assertTrue(lt.getExternalTypes().contains("com.Foo"));
   }
 
+  @Test
+  void aWrappedUnionsBranchNumbersAreRecordedEvenInSequence() {
+    // The wrapper's own sequence is gone from the logical type, so its numbers are recorded.
+    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\nmessage Row {\n  int32 id = 1;\n"
+        + "  repeated UW us = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
+        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      string a = 1;\n"
+        + "      string b = 2;\n    }\n  }\n}\n");
+
+    Schema us = rowOf(ProtoToLogicalTypeConverter.toLogicalType(proto)).getFields().get(1)
+        .getSchema().getElementType();
+
+    assertEquals(Arrays.asList(1, 2), Arrays.asList(us.getBranches().get(0).getFieldNumber(),
+        us.getBranches().get(1).getFieldNumber()));
+  }
+
   private static Schema rowOf(LogicalType lt) {
     Schema root = lt.getRootSchema();
     return root.getType() == Schema.Type.NAMED_TYPE_REF

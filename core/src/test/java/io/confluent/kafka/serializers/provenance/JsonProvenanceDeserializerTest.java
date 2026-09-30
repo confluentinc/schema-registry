@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -32,6 +33,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -193,6 +195,20 @@ class JsonProvenanceDeserializerTest {
       assertFalse(read.has("f"), reader);
       assertEquals("K", read.get("d").get("k").asText(), reader);
     }
+  }
+
+  @Test
+  void aVersionWithADefinitionReferringOnlyToItselfIsReadWithoutProvenance() throws Exception {
+    // D refers only to itself: v2, and a reader of it, have no provenance, and read as written.
+    String a = "\"a\": {\"type\": \"string\"}";
+    byte[] bytes = write(object(a), "{\"a\": \"A\"}");
+    JsonSchema v2 = new JsonSchema("{\"type\": \"object\", \"properties\": {" + a + ", "
+        + "\"d\": {\"$ref\": \"#/definitions/D\"}}, "
+        + "\"definitions\": {\"D\": {\"$ref\": \"#/definitions/D\"}}}");
+    client.register(SUBJECT, v2);
+
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(v2, bytes, "v1"));
+    assertEquals("A", read.get("a").asText());
   }
 
   @Test

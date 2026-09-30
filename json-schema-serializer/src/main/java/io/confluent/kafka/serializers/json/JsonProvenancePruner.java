@@ -356,7 +356,9 @@ final class JsonProvenancePruner {
 
   private static void heldIn(Schema schema, JsonNode value, List<Integer> branches,
       List<List<Integer>> held) {
-    while (schema instanceof ReferenceSchema) {
+    // A definition that only refers to itself, however indirectly, holds nothing.
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    while (schema instanceof ReferenceSchema && seen.add(schema)) {
       schema = ((ReferenceSchema) schema).getReferredSchema();
     }
     if (value == null) {

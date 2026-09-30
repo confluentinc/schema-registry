@@ -480,6 +480,24 @@ class AvroProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void withTheLatestVersionARecordOfTheLatestStillReads() throws Exception {
+    // The latest, carrying its version, is looked up as the reader: the client keeps what it
+    // registered, so a record of the latest still finds its version.
+    Schema v1 = record(idField(), string("x"));
+    byte[] old = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("x", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    Schema v3 = record(idField(), "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\"}");
+    byte[] latest = write(v3, new GenericRecordBuilder(v3).set("id", 8).set("x", "new"));
+    Map<String, Object> config = config("v1");
+    config.put("use.latest.version", true);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+
+    assertEquals("DEF", ((GenericRecord) deserializer.deserialize(TOPIC, old)).get("x").toString());
+    assertEquals("new",
+        ((GenericRecord) deserializer.deserialize(TOPIC, latest)).get("x").toString());
+  }
+
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
     client.register(SUBJECT, new AvroSchema(writer));
     return serializer.serialize(TOPIC, record.build());

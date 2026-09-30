@@ -259,8 +259,10 @@ public class JsonToLogicalTypeConverter {
    */
   private static org.everit.json.schema.Schema resolveReference(
       org.everit.json.schema.Schema schema) {
+    // A definition that only refers to itself, however indirectly, resolves to no schema.
+    Set<org.everit.json.schema.Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     org.everit.json.schema.Schema current = schema;
-    while (current instanceof ReferenceSchema) {
+    while (current instanceof ReferenceSchema && seen.add(current)) {
       org.everit.json.schema.Schema referred =
           ((ReferenceSchema) current).getReferredSchema();
       if (referred == null) {

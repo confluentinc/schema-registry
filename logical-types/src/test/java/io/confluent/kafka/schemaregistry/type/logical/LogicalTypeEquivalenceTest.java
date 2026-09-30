@@ -178,6 +178,8 @@ class LogicalTypeEquivalenceTest {
     // A Flink wrapper's oneof is numbered on its own, not in its message's sequence.
     assertThat(multi(wrapped(1, 2)).equivalent(multi(wrapped(2, 1)), PROTOBUF)).isFalse();
     assertThat(multi(wrapped(1, 2)).equivalent(multi(wrapped(1, 2)), PROTOBUF)).isTrue();
+    // Declaration order is no identity inside a wrapper either.
+    assertThat(multi(wrapped(1, 2)).equivalent(multi(wrappedReversed(1, 2)), PROTOBUF)).isTrue();
   }
 
   @Test
@@ -239,10 +241,19 @@ class LogicalTypeEquivalenceTest {
 
   // Row holding an array of unions, its Flink wrapper's branches a and b numbered as given.
   private static ProtobufSchema wrapped(int a, int b) {
+    return wrapper("string a = " + a + ";\n      string b = " + b + ";");
+  }
+
+  // As wrapped, with b declared first.
+  private static ProtobufSchema wrappedReversed(int a, int b) {
+    return wrapper("string b = " + b + ";\n      string a = " + a + ";");
+  }
+
+  private static ProtobufSchema wrapper(String branches) {
     return file("import \"confluent/meta.proto\";\nmessage Row {\n  int32 id = 1;\n"
         + "  repeated UW us = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
-        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      string a = " + a + ";\n"
-        + "      string b = " + b + ";\n    }\n  }\n}\n");
+        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      " + branches + "\n"
+        + "    }\n  }\n}\n");
   }
 
   private static LogicalType multi(ProtobufSchema schema) {

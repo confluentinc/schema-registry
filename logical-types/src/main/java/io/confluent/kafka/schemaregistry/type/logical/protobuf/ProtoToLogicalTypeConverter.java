@@ -674,7 +674,9 @@ public class ProtoToLogicalTypeConverter {
       if (f.getRealContainingOneof() != null) {
         continue;
       }
-      if (f.getNumber() != expected++) {
+      // A wrapped union in a regular field reads as a oneof whose members would continue this
+      // message's numbering; they are the wrapper's own, so the numbers are recorded instead.
+      if (f.getNumber() != expected++ || wrapsUnion(f)) {
         return false;
       }
     }
@@ -686,6 +688,18 @@ public class ProtoToLogicalTypeConverter {
       }
     }
     return true;
+  }
+
+  // A singular field holding a flink.wrapped wrapper whose payload is a oneof.
+  private static boolean wrapsUnion(FieldDescriptor field) {
+    if (field.isRepeated() || field.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+        || !isFlinkWrapped(field)) {
+      return false;
+    }
+    Descriptor wrapper = field.getMessageType();
+    return wrapper.findFieldByName(CommonConstants.FLINK_WRAPPER_FIELD_NAME) == null
+        && wrapper.getRealOneofs().stream()
+            .anyMatch(o -> CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(o.getName()));
   }
 
   private static Schema toLogicalTypeOneof(
@@ -1340,12 +1354,10 @@ public class ProtoToLogicalTypeConverter {
     }
     for (OneofDescriptor oneof : wrapper.getRealOneofs()) {
       if (CommonConstants.FLINK_WRAPPER_FIELD_NAME.equals(oneof.getName())) {
-        // Apply the same all-or-nothing decision to the wrapper descriptor: a writer-produced
-        // wrapper numbers its branches sequentially (so nothing is recorded), but a wrapped UNION
-        // whose branches carry non-sequential numbers must record them, or the writer — which does
-        // honor branch numbers when re-synthesizing the wrapper via fromStructType — would renumber
-        // them positionally on the next round trip.
-        return toLogicalTypeOneof(oneof, ctx, indexPath, !messageNumbersAreSequential(wrapper));
+        // The union stands where the wrapper did, apart from the wrapper's own sequence, so its
+        // numbers are recorded whatever that sequence: a branch is found by its number. The writer
+        // honors them when it re-synthesizes the wrapper.
+        return toLogicalTypeOneof(oneof, ctx, indexPath, true);
       }
     }
     throw new ValidationException(

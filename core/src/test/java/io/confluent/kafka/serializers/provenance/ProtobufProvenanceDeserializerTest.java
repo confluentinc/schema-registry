@@ -585,7 +585,7 @@ class ProtobufProvenanceDeserializerTest {
   @Test
   void anOlderReaderDifferingOnlyInAWrappedUnionsNumbersIsNotTakenForTheLatest() throws Exception {
     // v2 renumbers the wrapper's branches and v3 adds an option. The reader, v1 spelled
-    // otherwise, is v1: v2's a is not its b.
+    // otherwise, is v1, not v3: its b is number 1, v2's a, so it reads v2's a.
     client.register(SUBJECT, wrapped("", 2, 1));
     byte[] bytes = write(wrapped("", 1, 2), b -> {
       FieldDescriptor us = field(b, "us");
@@ -599,7 +599,7 @@ class ProtobufProvenanceDeserializerTest {
     DynamicMessage read = read(wrapped(option, 2, 1), bytes, "v1");
     DynamicMessage element = (DynamicMessage) ((List<?>) get(read, "us")).get(0);
     assertEquals(7, get(read, "id"));
-    assertFalse(element.hasField(element.getDescriptorForType().findFieldByName("b")));
+    assertEquals("old", get(element, "b"));
   }
 
   // Row holding an array of unions, its Flink wrapper's branches a and b numbered as given.
