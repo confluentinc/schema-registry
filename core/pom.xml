@@ -54,12 +54,6 @@
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Once through logical-types, which now needs only the CEL built-ins. -->
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-rules</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-rules</artifactId>
@@ -478,6 +472,11 @@
                     <java>
                         <excludes>
                             <exclude>src/test/java/io/confluent/kafka/serializers/protobuf/test/*.java</exclude>
+                            <!-- Moved from schema-rules, whose Apache license header they keep. -->
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/RuleServiceLoaderTest.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/jsonata/JsonataExecutorTest.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelExecutorTest.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/cel/CelValidator*SerializerTest.java</exclude>
                         </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/ccl-header.txt</file>

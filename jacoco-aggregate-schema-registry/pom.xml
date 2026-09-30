@@ -48,11 +48,6 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-rules-builtin</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-logical-types</artifactId>
             <version>${project.version}</version>
         </dependency>
