@@ -115,7 +115,7 @@ public class SubjectsResource {
    * collapse into one computation per node. Asynchronous, so that a long computation holds no
    * lock other keys wait on; it still runs on the thread of the request that started it.
    */
-  private final AsyncCache<List<Object>, SchemaProvenance> provenanceCache =
+  private final AsyncCache<List<Object>, Computed> provenanceCache =
       Caffeine.newBuilder().maximumSize(MAX_CACHED_PROVENANCE_HISTORIES).buildAsync();
 
   @Inject
@@ -520,30 +520,40 @@ public class SubjectsResource {
         .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
         .collect(Collectors.toList());
     List<Object> key = provenanceKey(subject, range, includeMultipleMessages, algorithm);
-    CompletableFuture<SchemaProvenance> mine = new CompletableFuture<>();
-    CompletableFuture<SchemaProvenance> pending = provenanceCache.asMap().putIfAbsent(key, mine);
+    CompletableFuture<Computed> mine = new CompletableFuture<>();
+    CompletableFuture<Computed> pending = provenanceCache.asMap().putIfAbsent(key, mine);
     if (pending == null) {
-      // A failed computation leaves the cache, and each request waiting on it fails alike.
+      // A failure completes the entry too, as the cache logs one that fails, then leaves it;
+      // each request already waiting on it fails alike.
+      Computed computed;
       try {
-        mine.complete(computeProvenance(subject, range, includeMultipleMessages, algorithm));
-      } catch (RuntimeException | Error e) {
+        computed = new Computed(
+            computeProvenance(subject, range, includeMultipleMessages, algorithm), null);
+      } catch (RuntimeException e) {
+        computed = new Computed(null, e);
+      } catch (Error e) {
         mine.completeExceptionally(e);
+        throw e;
+      }
+      mine.complete(computed);
+      if (computed.failure != null) {
+        provenanceCache.asMap().remove(key, mine);
       }
       pending = mine;
     }
-    SchemaProvenance whole;
+    Computed computed;
     try {
-      whole = pending.join();
+      computed = pending.join();
     } catch (CompletionException e) {
-      if (e.getCause() instanceof RuntimeException) {
-        throw (RuntimeException) e.getCause();
-      }
       if (e.getCause() instanceof Error) {
         throw (Error) e.getCause();
       }
       throw e;
     }
-    return ProvenanceHistory.slice(whole, from, to, includeInterior);
+    if (computed.failure != null) {
+      throw computed.failure;
+    }
+    return ProvenanceHistory.slice(computed.provenance, from, to, includeInterior);
   }
 
   /**
@@ -635,6 +645,17 @@ public class SubjectsResource {
       String message = "Could not compute provenance for subject " + subject;
       log.error(message, e);
       throw Errors.schemaRegistryException(message, e);
+    }
+  }
+
+  // A range's provenance, or why it has none.
+  private static final class Computed {
+    private final SchemaProvenance provenance;
+    private final RuntimeException failure;
+
+    private Computed(SchemaProvenance provenance, RuntimeException failure) {
+      this.provenance = provenance;
+      this.failure = failure;
     }
   }
 }

@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.Edition;
-import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
@@ -37,13 +36,19 @@ import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 
 import java.time.DateTimeException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -68,6 +73,54 @@ public class ProtoToLogicalTypeConverter {
    * name rather than deriving numbers from their position.
    */
   public static final String MULTI_MESSAGE_ROOT_PARAM = "confluent:multi-message-root";
+
+  /**
+   * The field numbers a struct implies by recording none: this converter omits them
+   * all-or-nothing, precisely when regular fields take 1..n in declaration order and the oneof
+   * members continue it. Keyed by field and branch, by identity; empty when any number is
+   * recorded, and for the multi-message root, whose fields name messages and never had numbers.
+   */
+  public static Map<Object, Integer> impliedFieldNumbers(Schema struct) {
+    if (recordsAnyNumber(struct)
+        || Boolean.TRUE.equals(struct.getParams().get(MULTI_MESSAGE_ROOT_PARAM))) {
+      return Collections.emptyMap();
+    }
+    Map<Object, Integer> implied = new IdentityHashMap<>();
+    int number = 1;
+    for (Field field : struct.getFields()) {
+      if (!isUnion(field.getSchema())) {
+        implied.put(field, number++);
+      }
+    }
+    for (Field field : struct.getFields()) {
+      if (isUnion(field.getSchema())) {
+        for (UnionBranch branch : field.getSchema().getBranches()) {
+          implied.put(branch, number++);
+        }
+      }
+    }
+    return implied;
+  }
+
+  private static boolean recordsAnyNumber(Schema struct) {
+    for (Field field : struct.getFields()) {
+      if (field.getFieldNumber() != null) {
+        return true;
+      }
+      if (isUnion(field.getSchema())) {
+        for (UnionBranch branch : field.getSchema().getBranches()) {
+          if (branch.getFieldNumber() != null) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  private static boolean isUnion(Schema schema) {
+    return schema != null && schema.getType() == Schema.Type.UNION;
+  }
 
   public static Schema toRootSchema(final ProtobufSchema schema) {
     return toLogicalType(schema).getRootSchema();
@@ -145,7 +198,7 @@ public class ProtoToLogicalTypeConverter {
     // each resolved external schema, so nested external types are recognized.
     // Enum-only files (no top-level messages) are skipped — the top-level
     // enum's name is already in the set from the constructor.
-    collectReferencedTypeNames(schema, ctx);
+    collectReferencedTypeNames(schema, file, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
       throw new ValidationException(
@@ -241,21 +294,37 @@ public class ProtoToLogicalTypeConverter {
         ctx.getDefaultValues());
   }
 
-  private static void collectReferencedTypeNames(
-      final ProtobufSchema schema, final ToLogicalContext<String> ctx) {
-    for (Map.Entry<String, String> entry : schema.resolvedReferences().entrySet()) {
-      ProtobufSchema parsedRef = new ProtobufSchema(entry.getValue(),
-          schema.references(), schema.resolvedReferences(),
-          null, null, null, null);
-      ProtoFileElement file = parsedRef.rawSchema();
-      if (file.getTypes().isEmpty() && file.getPublicImports().isEmpty()) {
-        // Declares no type and re-exports none, as a file of only options: nothing to collect.
-        // One re-exporting another resolves to it, as ProtobufSchema resolves such a file.
-        continue;
+  private static void collectReferencedTypeNames(final ProtobufSchema schema,
+      final FileDescriptor root, final ToLogicalContext<String> ctx) {
+    // Each referenced file as the root's descriptor resolved it, not re-parsed on its own: a file
+    // that only re-exports is followed however deep its public imports go.
+    Map<String, FileDescriptor> imported = new HashMap<>();
+    Deque<FileDescriptor> pending = new ArrayDeque<>(root.getDependencies());
+    while (!pending.isEmpty()) {
+      FileDescriptor dependency = pending.pop();
+      if (imported.putIfAbsent(dependency.getName(), dependency) == null) {
+        pending.addAll(dependency.getDependencies());
       }
-      Descriptor refDescriptor = parsedRef.toDescriptor();
-      if (refDescriptor != null) {
-        collectExternalTypeNames(refDescriptor.getFile(), ctx);
+    }
+    for (String name : schema.resolvedReferences().keySet()) {
+      FileDescriptor dependency = imported.get(name);
+      if (dependency != null) {
+        collectFileTypeNames(dependency, new HashSet<>(), ctx);
+      }
+    }
+  }
+
+  // A file's types. One of only enums or only options adds none; one of only public imports adds
+  // those of the files it re-exports.
+  private static void collectFileTypeNames(FileDescriptor file, Set<String> seen,
+      ToLogicalContext<String> ctx) {
+    if (!file.getMessageTypes().isEmpty()) {
+      collectExternalTypeNames(file, ctx);
+    } else if (file.getEnumTypes().isEmpty()) {
+      for (FileDescriptor exported : file.getPublicDependencies()) {
+        if (seen.add(exported.getName())) {
+          collectFileTypeNames(exported, seen, ctx);
+        }
       }
     }
   }

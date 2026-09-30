@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorith
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
@@ -412,9 +413,11 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * The latest version of {@code subject} whose logical type is equivalent to {@code schema}'s: the
-   * same data, whatever docs, options, services or other annotations either spells out, and
-   * whatever it imports or inlines. Null when none is, or {@code schema} has no logical form.
+   * The latest version of {@code subject} of {@code schema}'s type whose logical type is
+   * equivalent to {@code schema}'s under that format's rules: the same data, whatever docs,
+   * options, services or other annotations either spells out, in whatever order it declares its
+   * members, and whatever it imports or inlines. Null when none is, or {@code schema} has no
+   * logical form.
    */
   private Integer structuralMatch(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
@@ -422,6 +425,7 @@ public final class ProvenanceProjector<T> {
     if (!wanted.isPresent()) {
       return null;
     }
+    IdentityPolicy policy = IdentityPolicy.forSchemaType(schema.schemaType());
     List<Integer> versions;
     try {
       versions = client.getAllVersions(subject, true);
@@ -430,8 +434,12 @@ public final class ProvenanceProjector<T> {
     }
     for (int i = versions.size() - 1; i >= 0; i--) {
       int id = schemaIdOf(subject, versions.get(i));
-      Optional<LogicalType> version = logicalTypeOf(client.getSchemaBySubjectAndId(subject, id));
-      if (version.isPresent() && wanted.get().equivalent(version.get())) {
+      ParsedSchema registered = client.getSchemaBySubjectAndId(subject, id);
+      if (!schema.schemaType().equals(registered.schemaType())) {
+        continue;
+      }
+      Optional<LogicalType> version = logicalTypeOf(registered);
+      if (version.isPresent() && wanted.get().equivalent(version.get(), policy)) {
         return id;
       }
     }
@@ -441,15 +449,12 @@ public final class ProvenanceProjector<T> {
   /**
    * {@code schema}'s logical type as provenance computes it; a Protobuf file's over all its
    * top-level messages, as a version stands for the whole file whichever message a reader names.
-   * A Protobuf file is normalized first: the order its members are declared in is no identity.
    */
   private Optional<LogicalType> logicalTypeOf(ParsedSchema schema) {
     Optional<LogicalType> known = logicalTypes.getIfPresent(schema);
     if (known == null) {
       try {
-        ParsedSchema compared =
-            "PROTOBUF".equals(schema.schemaType()) ? schema.normalize() : schema;
-        known = Optional.of(ProvenanceHistory.logicalTypeOf(compared, true));
+        known = Optional.of(ProvenanceHistory.logicalTypeOf(schema, true));
       } catch (RuntimeException e) {
         // No logical form, so no provenance either: it stands for no version.
         known = Optional.empty();

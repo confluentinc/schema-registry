@@ -563,7 +563,7 @@ class ProtobufProvenanceDeserializerTest {
 
   @Test
   void aReaderDeclaringMembersOutOfNumberOrderIsMatchedByStructure() throws Exception {
-    // Declaration order is no identity, as normalization shows: the reader is still v3.
+    // Members are paired by number, not declaration order: the reader is still v3.
     assertEquals("", get(read(row("string memo = 2;", "int32 id = 1;"), readdedMemo(), "v1"),
         "memo"));
 
@@ -600,11 +600,14 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void versionsImportingAFileOfOnlyOptionsOrOnlyAPublicImportHaveProvenance() throws Exception {
-    // Every version imports it: an option file, or wrap.proto, empty but for a public import.
+  void versionsImportingAFileOfOnlyOptionsOrOnlyPublicImportsHaveProvenance() throws Exception {
+    // Every version imports it: an option file, or wrap.proto, empty but for a public import of
+    // leaf.proto, directly or through wrap1.proto, empty but for its own.
     String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string id = 1;\n}\n";
-    String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
-    for (boolean reExport : new boolean[] {false, true}) {
+    String wrap1 = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    String wrap2 = "syntax = \"proto3\";\npackage com;\nimport public \"wrap1.proto\";\n";
+    for (int levels = 0; levels <= 2; levels++) {
+      boolean reExport = levels > 0;
       client = new ProvenanceMockSchemaRegistryClient();
       List<SchemaReference> references = new ArrayList<>();
       Map<String, String> resolved = new LinkedHashMap<>();
@@ -612,13 +615,23 @@ class ProtobufProvenanceDeserializerTest {
       String foo;
       if (reExport) {
         client.register("leaf", new ProtobufSchema(leaf));
-        client.register("wrap", new ProtobufSchema(wrap,
-            Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
-            Collections.singletonMap("leaf.proto", leaf), null, null));
+        List<SchemaReference> below = new ArrayList<>();
+        Map<String, String> belowResolved = new LinkedHashMap<>();
+        if (levels == 2) {
+          client.register("wrap1", new ProtobufSchema(wrap1,
+              Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+              Collections.singletonMap("leaf.proto", leaf), null, null));
+          below.add(new SchemaReference("wrap1.proto", "wrap1", 1));
+          belowResolved.put("wrap1.proto", wrap1);
+        }
+        below.add(new SchemaReference("leaf.proto", "leaf", 1));
+        belowResolved.put("leaf.proto", leaf);
+        String wrap = levels == 2 ? wrap2 : wrap1;
+        client.register("wrap", new ProtobufSchema(wrap, below, belowResolved, null, null));
         references.add(new SchemaReference("wrap.proto", "wrap", 1));
-        references.add(new SchemaReference("leaf.proto", "leaf", 1));
+        references.addAll(below);
         resolved.put("wrap.proto", wrap);
-        resolved.put("leaf.proto", leaf);
+        resolved.putAll(belowResolved);
         head = "import \"wrap.proto\";\n";
         foo = "  com.Foo foo = 3;\n";
       } else {
@@ -644,8 +657,8 @@ class ProtobufProvenanceDeserializerTest {
           .putInt(client.getId(SUBJECT, versions.get(0))).put((byte) 0).put(body).array();
 
       DynamicMessage read = read(versions.get(2), bytes, "v1");
-      assertEquals("", get(read, "memo"), head);
-      assertEquals(7, get(read, "id"), head);
+      assertEquals("", get(read, "memo"), "levels " + levels);
+      assertEquals(7, get(read, "id"), "levels " + levels);
     }
   }
 

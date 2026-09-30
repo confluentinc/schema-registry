@@ -1392,52 +1392,13 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * Reconstructs the field numbers of a struct that records none.
-     *
-     * <p>The Protobuf reader omits numbers all-or-nothing, and precisely when the numbering was the
-     * sequence the writer reproduces positionally: regular fields taking 1..n in declaration order,
-     * then the oneof branches continuing it. Omission is therefore itself the information, and this
-     * mirrors that rule exactly rather than guessing.
+     * The field numbers of a struct that records none, as the Protobuf converter implies them
+     * ({@link ProtoToLogicalTypeConverter#impliedFieldNumbers}). Omission is itself the
+     * information, so this mirrors that rule exactly rather than guessing.
      */
     private Map<Object, Integer> deriveNumbers(Schema struct) {
-      // The multi-message root is synthetic: its fields name messages and never had numbers, so
-      // they follow their names and reordering the file's messages leaves every id in place.
-      if (policy != IdentityPolicy.PROTOBUF || recordsAnyNumber(struct)
-          || Boolean.TRUE.equals(
-              struct.getParams().get(ProtoToLogicalTypeConverter.MULTI_MESSAGE_ROOT_PARAM))) {
-        return Collections.emptyMap();
-      }
-      Map<Object, Integer> derived = new IdentityHashMap<>();
-      int number = 1;
-      for (Field field : struct.getFields()) {
-        if (!isUnion(field.getSchema())) {
-          derived.put(field, number++);
-        }
-      }
-      for (Field field : struct.getFields()) {
-        if (isUnion(field.getSchema())) {
-          for (UnionBranch branch : field.getSchema().getBranches()) {
-            derived.put(branch, number++);
-          }
-        }
-      }
-      return derived;
-    }
-
-    private static boolean recordsAnyNumber(Schema struct) {
-      for (Field field : struct.getFields()) {
-        if (field.getFieldNumber() != null) {
-          return true;
-        }
-        if (isUnion(field.getSchema())) {
-          for (UnionBranch branch : field.getSchema().getBranches()) {
-            if (branch.getFieldNumber() != null) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
+      return policy == IdentityPolicy.PROTOBUF
+          ? ProtoToLogicalTypeConverter.impliedFieldNumbers(struct) : Collections.emptyMap();
     }
 
     private static boolean isUnion(Schema schema) {

@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type.logical;
 
+import static io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy.AVRO;
+import static io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy.JSON;
+import static io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy.PROTOBUF;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -34,17 +37,17 @@ class LogicalTypeEquivalenceTest {
   void avroDocsDefaultsAndCustomPropertiesAreIgnored() {
     assertThat(avro(field("a", "\"int\"", null))
         .equivalent(avro("{\"name\":\"a\",\"type\":\"int\",\"doc\":\"the a\",\"default\":7,"
-            + "\"connect.name\":\"x\"}"))).isTrue();
+            + "\"connect.name\":\"x\"}"), AVRO)).isTrue();
   }
 
   @Test
   void avroNamesAliasesTypesAndNullabilityCount() {
     LogicalType a = avro(field("a", "\"int\"", null));
-    assertThat(a.equivalent(avro(field("b", "\"int\"", null)))).isFalse();
-    assertThat(a.equivalent(avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"z\"]}")))
+    assertThat(a.equivalent(avro(field("b", "\"int\"", null)), AVRO)).isFalse();
+    assertThat(a.equivalent(avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"z\"]}"), AVRO))
         .isFalse();
-    assertThat(a.equivalent(avro(field("a", "\"long\"", null)))).isFalse();
-    assertThat(a.equivalent(avro(field("a", "[\"null\",\"int\"]", "null")))).isFalse();
+    assertThat(a.equivalent(avro(field("a", "\"long\"", null)), AVRO)).isFalse();
+    assertThat(a.equivalent(avro(field("a", "[\"null\",\"int\"]", "null")), AVRO)).isFalse();
   }
 
   @Test
@@ -52,7 +55,7 @@ class LogicalTypeEquivalenceTest {
     String decimal = "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":9,"
         + "\"scale\":%d}";
     assertThat(avro(field("d", String.format(decimal, 2), null))
-        .equivalent(avro(field("d", String.format(decimal, 4), null)))).isFalse();
+        .equivalent(avro(field("d", String.format(decimal, 4), null)), AVRO)).isFalse();
   }
 
   @Test
@@ -61,10 +64,10 @@ class LogicalTypeEquivalenceTest {
         + "\"type\":[\"null\",\"Node\"],\"default\":null}%s]}";
     assertThat(lt(new AvroSchema(String.format(node, "")))
         .equivalent(lt(new AvroSchema(String.format(node, "").replace("\"Node\",\"fields\"",
-            "\"Node\",\"doc\":\"a node\",\"fields\""))))).isTrue();
+            "\"Node\",\"doc\":\"a node\",\"fields\""))), AVRO)).isTrue();
     assertThat(lt(new AvroSchema(String.format(node, "")))
         .equivalent(lt(new AvroSchema(String.format(node,
-            ",{\"name\":\"v\",\"type\":\"int\"}"))))).isFalse();
+            ",{\"name\":\"v\",\"type\":\"int\"}"))), AVRO)).isFalse();
   }
 
   @Test
@@ -73,9 +76,10 @@ class LogicalTypeEquivalenceTest {
         + "{\"type\":\"object\",%s\"properties\":{\"k\":{\"const\":\"%s\"}}},"
         + "{\"type\":\"string\"}]}}}";
     LogicalType plain = json(String.format(u, "", "a"));
-    assertThat(plain.equivalent(json(String.format(u, "\"description\":\"d\",", "a")))).isTrue();
-    assertThat(plain.equivalent(json(String.format(u, "\"title\":\"T\",", "a")))).isFalse();
-    assertThat(plain.equivalent(json(String.format(u, "", "b")))).isFalse();
+    assertThat(plain.equivalent(json(String.format(u, "\"description\":\"d\",", "a")), JSON))
+        .isTrue();
+    assertThat(plain.equivalent(json(String.format(u, "\"title\":\"T\",", "a")), JSON)).isFalse();
+    assertThat(plain.equivalent(json(String.format(u, "", "b")), JSON)).isFalse();
   }
 
   @Test
@@ -83,8 +87,9 @@ class LogicalTypeEquivalenceTest {
     LogicalType plain = proto("int32 id = 1;\n  string memo = 2;", "");
     assertThat(plain.equivalent(proto("option deprecated = true;\n  int32 id = 1;\n"
         + "  string memo = 2 [deprecated = true, json_name = \"MEMO\"];",
-        "service S {\n  rpc Get(Row) returns (Row);\n}\n"))).isTrue();
-    assertThat(plain.equivalent(proto("int32 id = 1;\n  string memo = 3;", ""))).isFalse();
+        "service S {\n  rpc Get(Row) returns (Row);\n}\n"), PROTOBUF)).isTrue();
+    assertThat(plain.equivalent(proto("int32 id = 1;\n  string memo = 3;", ""), PROTOBUF))
+        .isFalse();
   }
 
   @Test
@@ -92,11 +97,11 @@ class LogicalTypeEquivalenceTest {
     String row = "{\"type\":\"object\",%s\"properties\":{\"u\":{\"oneOf\":["
         + "{\"type\":\"string\"},{\"type\":\"integer\"}]%s}}}";
     LogicalType plain = json(String.format(row, "", ""));
-    assertThat(plain.equivalent(json(String.format(row, "\"title\":\"Row\",", "")))).isTrue();
-    assertThat(plain.equivalent(json(String.format(row, "\"confluent:namespace\":\"n\",", ""))))
-        .isTrue();
+    assertThat(plain.equivalent(json(String.format(row, "\"title\":\"Row\",", "")), JSON)).isTrue();
+    assertThat(plain.equivalent(
+        json(String.format(row, "\"confluent:namespace\":\"n\",", "")), JSON)).isTrue();
     assertThat(plain.equivalent(json(String.format(row, "",
-        ",\"confluent:union\":[{\"name\":\"s\"},{}]")))).isFalse();
+        ",\"confluent:union\":[{\"name\":\"s\"},{}]")), JSON)).isFalse();
   }
 
   @Test
@@ -104,23 +109,74 @@ class LogicalTypeEquivalenceTest {
     String a = "message A {\n  int32 x = 1;\n}\n";
     String b = "message B {\n  string y = 1;\n}\n";
     LogicalType ab = multi(file(a + b));
-    assertThat(ab.equivalent(multi(file(b + a)))).isTrue();
-    assertThat(ab.equivalent(lt(file(a + b)))).isFalse();
+    assertThat(ab.equivalent(multi(file(b + a)), PROTOBUF)).isTrue();
+    assertThat(ab.equivalent(lt(file(a + b)), PROTOBUF)).isFalse();
   }
 
   @Test
-  void protobufMembersOutOfNumberOrderAreEquivalentOnlyOnceNormalized() {
+  void protobufMembersArePairedByNameAndNumberInAnyOrder() {
     // Declared in number order, numbers are implied by position; otherwise they are recorded.
-    ProtobufSchema reordered = file("message Row {\n  string memo = 2;\n  int32 id = 1;\n}\n");
-    LogicalType plain = proto("int32 id = 1;\n  string memo = 2;", "");
-    assertThat(plain.equivalent(lt(reordered))).isFalse();
-    assertThat(plain.equivalent(lt(reordered.normalize()))).isTrue();
+    LogicalType plain = proto("int32 id = 1;\n  string memo = 2;\n  oneof k {\n    int32 n = 3;\n"
+        + "    string s = 4;\n  }", "");
+    assertThat(plain.equivalent(proto("oneof k {\n    string s = 4;\n    int32 n = 3;\n  }\n"
+        + "  string memo = 2;\n  int32 id = 1;", ""), PROTOBUF)).isTrue();
+    // The same names in the same order, numbered otherwise: each number is data.
+    assertThat(plain.equivalent(proto("int32 id = 2;\n  string memo = 1;\n  oneof k {\n"
+        + "    int32 n = 3;\n    string s = 4;\n  }", ""), PROTOBUF)).isFalse();
+    assertThat(plain.equivalent(proto("int32 id = 1;\n  string memo = 2;\n  oneof k {\n"
+        + "    int32 n = 4;\n    string s = 3;\n  }", ""), PROTOBUF)).isFalse();
+  }
+
+  @Test
+  void protobufEnumConstantsArePairedByNameAndNumberInAnyOrder() {
+    String e = "enum E {\n  %s\n}\nmessage Row {\n  E e = 1;\n}\n";
+    LogicalType plain = lt(file(String.format(e, "A = 0;\n  B = 1;\n  C = 2;")));
+    assertThat(plain.equivalent(lt(file(String.format(e, "A = 0;\n  C = 2;\n  B = 1;"))),
+        PROTOBUF)).isTrue();
+    assertThat(plain.equivalent(lt(file(String.format(e, "A = 0;\n  C = 1;\n  B = 2;"))),
+        PROTOBUF)).isFalse();
+  }
+
+  @Test
+  void avroFieldsSymbolsAndBranchesArePairedByNameInAnyOrder() {
+    String record = "{\"type\":\"record\",\"name\":\"R\",\"fields\":[%s]}";
+    String enm = "{\"name\":\"e\",\"type\":{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[%s]}}";
+    String union = "{\"name\":\"u\",\"type\":[%s]}";
+    String id = "{\"name\":\"id\",\"type\":\"int\"}";
+    LogicalType plain = lt(new AvroSchema(String.format(record, id + ","
+        + String.format(enm, "\"A\",\"B\"") + "," + String.format(union, "\"int\",\"string\""))));
+    assertThat(plain.equivalent(lt(new AvroSchema(String.format(record,
+        String.format(union, "\"string\",\"int\"") + "," + String.format(enm, "\"B\",\"A\"")
+            + "," + id))), AVRO)).isTrue();
+  }
+
+  @Test
+  void jsonUnionBranchesStillCountByPosition() {
+    String u = "{\"u\":{\"oneOf\":[%s]}}";
+    String s = "{\"type\":\"string\"}";
+    String i = "{\"type\":\"integer\"}";
+    assertThat(json("{\"type\":\"object\",\"properties\":" + String.format(u, s + "," + i) + "}")
+        .equivalent(json("{\"type\":\"object\",\"properties\":" + String.format(u, i + "," + s)
+            + "}"), JSON)).isFalse();
+  }
+
+  @Test
+  void aJsonRefAndTheBodyItNamesInlineAreEquivalent() {
+    String d = "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"string\"}}}";
+    String byRef = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/$defs/D\"}},"
+        + "\"$defs\":{\"D\":%s}}";
+    String inline = "{\"type\":\"object\",\"properties\":{\"d\":%s}}";
+    LogicalType referenced = json(String.format(byRef, d));
+    assertThat(referenced.equivalent(json(String.format(inline, d)), JSON)).isTrue();
+    assertThat(json(String.format(inline, d)).equivalent(referenced, JSON)).isTrue();
+    assertThat(referenced.equivalent(json(String.format(inline,
+        d.replace("\"k\"", "\"j\""))), JSON)).isFalse();
   }
 
   @Test
   void protobufEnumNumbersCount() {
     String e = "enum E {\n  A = 0;\n  B = %d;\n}\nmessage Row {\n  E e = 1;\n}\n";
-    assertThat(lt(file(String.format(e, 1))).equivalent(lt(file(String.format(e, 2)))))
+    assertThat(lt(file(String.format(e, 1))).equivalent(lt(file(String.format(e, 2))), PROTOBUF))
         .isFalse();
   }
 
@@ -132,9 +188,9 @@ class LogicalTypeEquivalenceTest {
     String fixed = "[\"null\",{\"type\":\"fixed\",\"name\":\"F\",\"size\":4%s},\"int\"]";
     String aliased = ",\"aliases\":[\"Old\"]";
     assertThat(avro(field("i", String.format(inner, ""), null))
-        .equivalent(avro(field("i", String.format(inner, aliased), null)))).isFalse();
+        .equivalent(avro(field("i", String.format(inner, aliased), null)), AVRO)).isFalse();
     assertThat(avro(field("f", String.format(fixed, ""), "null"))
-        .equivalent(avro(field("f", String.format(fixed, aliased), "null")))).isFalse();
+        .equivalent(avro(field("f", String.format(fixed, aliased), "null")), AVRO)).isFalse();
   }
 
   private static String field(String name, String type, String defaultValue) {

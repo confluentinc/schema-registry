@@ -676,6 +676,31 @@ class ProtoToLogicalTypeConverterTest {
     assertTrue(lt.getExternalTypes().contains("com.Foo"));
   }
 
+  @Test
+  void aDependencyReExportingThroughTwoLevelsIsImportedThroughThem() {
+    // wrap2.proto re-exports wrap1.proto, which re-exports leaf.proto: Foo is still leaf's.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string id = 1;\n}\n";
+    String wrap1 = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    String wrap2 = "syntax = \"proto3\";\npackage com;\nimport public \"wrap1.proto\";\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("wrap2.proto", wrap2);
+    resolved.put("wrap1.proto", wrap1);
+    resolved.put("leaf.proto", leaf);
+    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"wrap2.proto\";\n"
+        + "message Row {\n  int32 id = 1;\n  com.Foo foo = 2;\n}\n",
+        Arrays.asList(new SchemaReference("wrap2.proto", "wrap2", 1),
+            new SchemaReference("wrap1.proto", "wrap1", 1),
+            new SchemaReference("leaf.proto", "leaf", 1)),
+        resolved, 1, null);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
+
+    assertEquals(Arrays.asList("id", "foo"), fieldNames(lt));
+    assertEquals("com.Foo", rowOf(lt).getFields().get(1).getSchema().getQualifiedName());
+    assertTrue(lt.getExternalTypes().contains("com.Foo"));
+  }
+
   private static Schema rowOf(LogicalType lt) {
     Schema root = lt.getRootSchema();
     return root.getType() == Schema.Type.NAMED_TYPE_REF

@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy;
 
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -639,14 +640,17 @@ public class LogicalType {
   }
 
   /**
-   * Whether {@code other} describes the same data: the same types, nullability, names, positions,
-   * enum symbols and named types, the same native steps and titles its converter recorded, and the
-   * same field numbers, enum numbers and aliases. Unlike {@link #equals}, docs, tags, rules,
-   * defaults and every other param are ignored: they document the data, and do not change it. So
-   * are the root's own name and namespace, and the order of a Protobuf file's messages.
+   * Whether {@code other} describes the same data, as a location is found under {@code policy}:
+   * the same types, nullability, names, enum symbols and named types, the same native steps and
+   * titles its converter recorded, and the same aliases and Protobuf numbers. Members are paired
+   * by name, as each format finds them, except JSON union branches, which are found by position;
+   * a Protobuf member's number, recorded or implied by its position, must match too. A JSON
+   * {@code $ref} and the same body inline are equivalent. Unlike {@link #equals}, docs, tags,
+   * rules, defaults and every other param are ignored, as are the root's own name and namespace:
+   * they document the data, and do not change it.
    */
-  public boolean equivalent(LogicalType other) {
-    return other != null && LogicalTypeEquivalence.equivalent(this, other);
+  public boolean equivalent(LogicalType other, IdentityPolicy policy) {
+    return other != null && LogicalTypeEquivalence.equivalent(this, other, policy);
   }
 
   @Override
