@@ -697,16 +697,18 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
      * With {@code provenance.algorithm}, the writer renamed after the reader as provenance pairs
      * them, and the reader with the aliases provenance overrode removed; null to read without it.
      * Only names change, so the resolver still promotes, maps enum symbols, matches unions and
-     * fills defaults as it always has.
+     * fills defaults as it always has. A reader of the writer's own version loses its aliases too.
      */
     private AvroProvenanceRenamer.Renamed projectByProvenance(
         AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
       if (provenanceAlgorithm == null || readerAvroSchema == null) {
         return null;
       }
+      Schema writer = writerAvroSchema.rawSchema();
+      Schema reader = readerAvroSchema.rawSchema();
       return provenanceProjector().project(getSubject(), schemaId, writerAvroSchema,
-          readerAvroSchema, false, mapping -> AvroProvenanceRenamer.rename(
-              writerAvroSchema.rawSchema(), readerAvroSchema.rawSchema(), mapping)).orElse(null);
+          readerAvroSchema, false, mapping -> AvroProvenanceRenamer.rename(writer, reader, mapping),
+          () -> AvroProvenanceRenamer.sameVersion(writer, reader)).orElse(null);
     }
 
     Object read(AvroSchema writerAvroSchema) {

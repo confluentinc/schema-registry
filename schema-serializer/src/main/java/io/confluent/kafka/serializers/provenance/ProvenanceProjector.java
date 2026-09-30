@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -197,6 +198,17 @@ public final class ProvenanceProjector<T> {
   public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
       ParsedSchema reader, boolean includeMultipleMessages,
       Function<ProvenanceMapping, T> build) {
+    return project(subject, writerId, writer, reader, includeMultipleMessages, build, null);
+  }
+
+  /**
+   * As {@link #project(String, SchemaId, ParsedSchema, ParsedSchema, boolean, Function)}, with a
+   * writer read by a reader of its own version read as {@code sameVersion} makes it, asking
+   * nothing of the registry; with none, or when it makes none, read as written.
+   */
+  public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
+      ParsedSchema reader, boolean includeMultipleMessages,
+      Function<ProvenanceMapping, T> build, Supplier<T> sameVersion) {
     if (subject == null || reader == null || !names(writerId)) {
       return Optional.empty();
     }
@@ -211,8 +223,8 @@ public final class ProvenanceProjector<T> {
     Outcome<T> outcome;
     try {
       // Loaded atomically: the first records of a pair, however many at once, ask once.
-      outcome = outcomes.get(key,
-          () -> compute(subject, writerId, writer, reader, includeMultipleMessages, build));
+      outcome = outcomes.get(key, () -> compute(
+          subject, writerId, writer, reader, includeMultipleMessages, build, sameVersion));
     } catch (ExecutionException | UncheckedExecutionException | ExecutionError e) {
       throw fresh(e.getCause());
     }
@@ -242,7 +254,8 @@ public final class ProvenanceProjector<T> {
   }
 
   private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,
-      ParsedSchema reader, boolean includeMultipleMessages, Function<ProvenanceMapping, T> build) {
+      ParsedSchema reader, boolean includeMultipleMessages, Function<ProvenanceMapping, T> build,
+      Supplier<T> sameVersion) {
     String written = writerSchemaId.getId() != null
         ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
     Integer writerId = writerSchemaId.getId();
@@ -272,7 +285,8 @@ public final class ProvenanceProjector<T> {
         provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
       }
       if (provenance == null) {
-        return Outcome.unavailable();
+        // One and the same version: nothing to pair.
+        return sameVersion != null ? Outcome.of(sameVersion.get()) : Outcome.unavailable();
       }
       return Outcome.of(build.apply(ProvenanceMapping.join(provenance, writerId, readerId)));
     } catch (IOException e) {

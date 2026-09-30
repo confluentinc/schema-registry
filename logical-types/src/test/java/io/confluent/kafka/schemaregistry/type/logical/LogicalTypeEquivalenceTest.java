@@ -174,6 +174,28 @@ class LogicalTypeEquivalenceTest {
   }
 
   @Test
+  void aWrappedUnionsBranchNumbersCount() {
+    // A Flink wrapper's oneof is numbered on its own, not in its message's sequence.
+    assertThat(multi(wrapped(1, 2)).equivalent(multi(wrapped(2, 1)), PROTOBUF)).isFalse();
+    assertThat(multi(wrapped(1, 2)).equivalent(multi(wrapped(1, 2)), PROTOBUF)).isTrue();
+  }
+
+  @Test
+  void aJsonDefThatOnlyReferencesAnotherStandsForIt() {
+    String e = "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"string\"}}}";
+    String chain = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/E\"},\"E\":" + e + "}}";
+    String direct = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/E\"}},"
+        + "\"definitions\":{\"E\":" + e + "}}";
+    String inline = "{\"type\":\"object\",\"properties\":{\"d\":" + e + "}}";
+    String renamed = direct.replace("/E", "/Q").replace("\"E\"", "\"Q\"");
+    assertThat(json(chain).equivalent(json(inline), JSON)).isTrue();
+    assertThat(json(inline).equivalent(json(chain), JSON)).isTrue();
+    assertThat(json(chain).equivalent(json(direct), JSON)).isTrue();
+    assertThat(json(direct).equivalent(json(renamed), JSON)).isFalse();
+  }
+
+  @Test
   void protobufEnumNumbersCount() {
     String e = "enum E {\n  A = 0;\n  B = %d;\n}\nmessage Row {\n  E e = 1;\n}\n";
     assertThat(lt(file(String.format(e, 1))).equivalent(lt(file(String.format(e, 2))), PROTOBUF))
@@ -213,6 +235,14 @@ class LogicalTypeEquivalenceTest {
 
   private static ProtobufSchema file(String body) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + body);
+  }
+
+  // Row holding an array of unions, its Flink wrapper's branches a and b numbered as given.
+  private static ProtobufSchema wrapped(int a, int b) {
+    return file("import \"confluent/meta.proto\";\nmessage Row {\n  int32 id = 1;\n"
+        + "  repeated UW us = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
+        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      string a = " + a + ";\n"
+        + "      string b = " + b + ";\n    }\n  }\n}\n");
   }
 
   private static LogicalType multi(ProtobufSchema schema) {

@@ -582,6 +582,35 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(7, get(read, "id"));
   }
 
+  @Test
+  void anOlderReaderDifferingOnlyInAWrappedUnionsNumbersIsNotTakenForTheLatest() throws Exception {
+    // v2 renumbers the wrapper's branches and v3 adds an option. The reader, v1 spelled
+    // otherwise, is v1: v2's a is not its b.
+    client.register(SUBJECT, wrapped("", 2, 1));
+    byte[] bytes = write(wrapped("", 1, 2), b -> {
+      FieldDescriptor us = field(b, "us");
+      b.setField(field(b, "id"), 7).addRepeatedField(us,
+          DynamicMessage.newBuilder(us.getMessageType())
+              .setField(us.getMessageType().findFieldByName("a"), "old").build());
+    });
+    String option = "option deprecated = true;\n  ";
+    client.register(SUBJECT, wrapped(option, 1, 2));
+
+    DynamicMessage read = read(wrapped(option, 2, 1), bytes, "v1");
+    DynamicMessage element = (DynamicMessage) ((List<?>) get(read, "us")).get(0);
+    assertEquals(7, get(read, "id"));
+    assertFalse(element.hasField(element.getDescriptorForType().findFieldByName("b")));
+  }
+
+  // Row holding an array of unions, its Flink wrapper's branches a and b numbered as given.
+  private static ProtobufSchema wrapped(String option, int a, int b) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\nmessage Row {\n  " + option + "int32 id = 1;\n"
+        + "  repeated UW us = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
+        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      string a = " + a + ";\n"
+        + "      string b = " + b + ";\n    }\n  }\n}\n");
+  }
+
   private static final String OPTIONS = "syntax = \"proto3\";\npackage o;\n"
       + "import \"google/protobuf/descriptor.proto\";\n"
       + "extend google.protobuf.FieldOptions {\n  string label = 50001;\n}\n";

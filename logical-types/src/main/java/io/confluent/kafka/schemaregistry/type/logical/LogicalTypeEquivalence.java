@@ -20,8 +20,10 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.type.logical.provenance.IdentityPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +46,9 @@ final class LogicalTypeEquivalence {
   private final Map<String, Schema> theirs;
   // Named type pairs already being compared: a recursive type is equivalent where it recurs.
   private final Set<List<String>> comparing = new HashSet<>();
+  // Oneofs whose members' numbers were compared in their message's sequence; any other Protobuf
+  // union, as a Flink wrapper's, is numbered on its own, so its recorded numbers are compared.
+  private final Set<Schema> oneofs = Collections.newSetFromMap(new IdentityHashMap<>());
 
   private LogicalTypeEquivalence(IdentityPolicy policy, Map<String, Schema> mine,
       Map<String, Schema> theirs) {
@@ -67,15 +72,34 @@ final class LogicalTypeEquivalence {
         || !identityParams(a.getParams(), b.getParams())) {
       return false;
     }
-    boolean refA = a.getType() == Schema.Type.NAMED_TYPE_REF;
-    if (refA != (b.getType() == Schema.Type.NAMED_TYPE_REF)) {
+    // A named type that is only a reference, as a JSON def of just a $ref, stands for the one it
+    // names; the use site's nullability is the one compared.
+    Schema ra = unaliased(a, mine);
+    Schema rb = unaliased(b, theirs);
+    boolean refA = ra.getType() == Schema.Type.NAMED_TYPE_REF;
+    if (refA != (rb.getType() == Schema.Type.NAMED_TYPE_REF)) {
       // A JSON $ref and the body it names inline are one location to provenance: the body is
       // compared, at the reference's nullability.
-      Schema x = refA ? mine.get(a.getQualifiedName()) : a;
-      Schema y = refA ? b : theirs.get(b.getQualifiedName());
+      Schema x = refA ? mine.get(ra.getQualifiedName()) : ra;
+      Schema y = refA ? rb : theirs.get(rb.getQualifiedName());
       return x != null && y != null && x.getType() == y.getType() && bodies(x, y);
     }
-    return a.getType() == b.getType() && bodies(a, b);
+    return ra.getType() == rb.getType() && bodies(ra, rb);
+  }
+
+  // The last reference of a chain of named types each only referring to the next.
+  private static Schema unaliased(Schema schema, Map<String, Schema> named) {
+    Schema current = schema;
+    Set<String> seen = new HashSet<>();
+    while (current.getType() == Schema.Type.NAMED_TYPE_REF
+        && seen.add(current.getQualifiedName())) {
+      Schema body = named.get(current.getQualifiedName());
+      if (body == null || body.getType() != Schema.Type.NAMED_TYPE_REF) {
+        break;
+      }
+      current = body;
+    }
+    return current;
   }
 
   private boolean bodies(Schema a, Schema b) {
@@ -85,7 +109,7 @@ final class LogicalTypeEquivalence {
       case ENUM:
         return enumValues(a.getEnumValues(), b.getEnumValues());
       case UNION:
-        return branches(a.getBranches(), b.getBranches());
+        return branches(a, b);
       case ARRAY:
       case MULTISET:
         return schemas(a.getElementType(), b.getElementType());
@@ -128,8 +152,13 @@ final class LogicalTypeEquivalence {
           && Objects.equals(number(x.getFieldNumber(), x, impliedA),
               number(y.getFieldNumber(), y, impliedB));
       if (!same || !identityParams(x.getParams(), y.getParams())
-          || !oneofNumbers(x.getSchema(), y.getSchema(), impliedA, impliedB)
-          || !schemas(x.getSchema(), y.getSchema())) {
+          || !oneofNumbers(x.getSchema(), y.getSchema(), impliedA, impliedB)) {
+        return false;
+      }
+      if (policy == IdentityPolicy.PROTOBUF && isUnion(x.getSchema())) {
+        oneofs.add(x.getSchema());
+      }
+      if (!schemas(x.getSchema(), y.getSchema())) {
         return false;
       }
     }
@@ -174,10 +203,13 @@ final class LogicalTypeEquivalence {
   }
 
   // Branches are paired by name, except in JSON, where a branch is found by its position.
-  private boolean branches(List<Schema.UnionBranch> a, List<Schema.UnionBranch> b) {
+  private boolean branches(Schema union, Schema other) {
+    List<Schema.UnionBranch> a = union.getBranches();
+    List<Schema.UnionBranch> b = other.getBranches();
     if (a.size() != b.size()) {
       return false;
     }
+    boolean ownNumbers = policy == IdentityPolicy.PROTOBUF && !oneofs.contains(union);
     List<Schema.UnionBranch> xs = policy == IdentityPolicy.JSON
         ? a : sorted(a, Schema.UnionBranch::getName);
     List<Schema.UnionBranch> ys = policy == IdentityPolicy.JSON
@@ -188,6 +220,9 @@ final class LogicalTypeEquivalence {
       boolean same = Arrays.asList(x.getName(), x.getNativeNames(), x.getNativeAliases(),
           x.getNativeTitle()).equals(Arrays.asList(y.getName(), y.getNativeNames(),
           y.getNativeAliases(), y.getNativeTitle()));
+      if (ownNumbers && !Objects.equals(x.getFieldNumber(), y.getFieldNumber())) {
+        return false;
+      }
       if (!same || !identityParams(x.getParams(), y.getParams())
           || !schemas(x.getSchema(), y.getSchema())) {
         return false;

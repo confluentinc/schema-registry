@@ -172,6 +172,30 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderSkippingADefThatOnlyReferencesAnotherIsMatchedByStructure() throws Exception {
+    // D is only a $ref to E: a reader naming E, or inlining it, is still v3, where f is new.
+    String e = "{\"type\": \"object\", \"properties\": {\"k\": {\"type\": \"string\"}}}";
+    String chain = "{\"type\": \"object\", \"properties\": "
+        + "{\"d\": {\"$ref\": \"#/definitions/D\"}%s}, \"definitions\": "
+        + "{\"D\": {\"$ref\": \"#/definitions/E\"}, \"E\": " + e + "}}";
+    String f = ", \"f\": {\"type\": \"string\"}";
+    String g = ", \"g\": {\"type\": \"string\"}";
+    byte[] bytes = write(new JsonSchema(String.format(chain, f)),
+        "{\"d\": {\"k\": \"K\"}, \"f\": \"old\"}");
+    client.register(SUBJECT, new JsonSchema(String.format(chain, "")));
+    client.register(SUBJECT, new JsonSchema(String.format(chain, f + g)));
+
+    for (String reader : new String[] {
+        "{\"type\": \"object\", \"properties\": {\"d\": {\"$ref\": \"#/definitions/E\"}" + f + g
+            + "}, \"definitions\": {\"E\": " + e + "}}",
+        "{\"type\": \"object\", \"properties\": {\"d\": " + e + f + g + "}}"}) {
+      JsonNode read = read(new JsonSchema(reader), bytes, "v1");
+      assertFalse(read.has("f"), reader);
+      assertEquals("K", read.get("d").get("k").asText(), reader);
+    }
+  }
+
+  @Test
   void aPropertyPresentThroughoutIsLeftAlone() throws Exception {
     JsonSchema v1 = object(number("id"), string("name"));
     JsonSchema v2 = object(number("id"), string("name"), string("extra"));

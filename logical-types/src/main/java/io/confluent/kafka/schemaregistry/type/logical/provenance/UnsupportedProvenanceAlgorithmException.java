@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 /**
  * A request this registry cannot answer under the algorithm it names, as a dynamic range whose
- * transitions fall to two algorithms. The request's to change, so a caller should stop asking.
+ * transitions fall to two algorithms. The request has to change, so a caller should stop asking.
  */
 public class UnsupportedProvenanceAlgorithmException extends IllegalArgumentException {
 

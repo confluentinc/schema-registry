@@ -203,6 +203,23 @@ final class AvroProvenanceRenamer {
   }
 
   /**
+   * The pairing of a writer with a reader of its own version: the writer as written, the reader
+   * with every alias removed. Each field and type already bears its reader's name, so an alias
+   * could only rename one a second time, into a duplicate.
+   */
+  static Renamed sameVersion(Schema writer, Schema reader) {
+    final Map<Schema, Schema> copies = new IdentityHashMap<>();
+    final Schema readerCopy = new AvroProvenanceRenamer(null).readerCopy(reader, copies);
+    final Map<Schema, Schema> originals = new IdentityHashMap<>();
+    copies.forEach((original, copy) -> {
+      if (copy != original) {
+        originals.put(copy, original);
+      }
+    });
+    return new Renamed(writer, readerCopy, originals, Collections.emptyMap());
+  }
+
+  /**
    * Rejects a reader record that the resolver would find a field missing from with no default to
    * fall back to. Avro fails that on every record; this fails it once, naming the field. A sink is
    * the exception: only the records containing its branch fail, as they come.

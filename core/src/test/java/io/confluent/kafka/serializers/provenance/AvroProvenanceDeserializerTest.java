@@ -462,6 +462,24 @@ class AvroProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aReaderStandingForTheWritersOwnVersionReadsWithoutItsAliases() throws Exception {
+    // f7's alias names f5, a field of its own: Avro would rename the writer's f5 onto f7. v2 only
+    // reorders v1, so a reader in v1's text, reordered, is v2, the writer's version.
+    String f7 = "{\"name\":\"f7\",\"type\":\"int\",\"aliases\":[\"f5\"]}";
+    String f5 = "{\"name\":\"f5\",\"type\":\"float\"}";
+    client.register(SUBJECT, new AvroSchema(record(idField(), f7, f5)));
+    Schema v2 = record(f5, f7, idField());
+    byte[] bytes = write(v2,
+        new GenericRecordBuilder(v2).set("id", 7).set("f7", 1).set("f5", 3.5f));
+
+    for (Schema reader : new Schema[] {v2, record(idField(), f5, f7)}) {
+      GenericRecord read = read(reader, bytes, "v1");
+      assertEquals(1, read.get("f7"), reader.toString());
+      assertEquals(3.5f, read.get("f5"), reader.toString());
+    }
+  }
+
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
     client.register(SUBJECT, new AvroSchema(writer));
     return serializer.serialize(TOPIC, record.build());
