@@ -50,6 +50,7 @@ import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
+import com.github.erosb.jsonsKema.JsonPointer;
 import com.github.erosb.jsonsKema.JsonString;
 import com.github.erosb.jsonsKema.JsonVisitor;
 import com.github.erosb.jsonsKema.MaxItemsSchema;
@@ -73,6 +74,7 @@ import com.github.erosb.jsonsKema.Regexp;
 import com.github.erosb.jsonsKema.RequiredSchema;
 import com.github.erosb.jsonsKema.Schema;
 import com.github.erosb.jsonsKema.SchemaVisitor;
+import com.github.erosb.jsonsKema.SourceLocation;
 import com.github.erosb.jsonsKema.TrueSchema;
 import com.github.erosb.jsonsKema.TypeSchema;
 import com.github.erosb.jsonsKema.UnevaluatedItemsSchema;
@@ -118,8 +120,14 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   // object-identity cycle in the schema graph (e.g. a $ref/$dynamicRef to the recursive 2020-12
   // meta-schema) is broken instead of recursing forever and overflowing the stack.
   private final Set<Schema> descending;
+  private final String rootId;
 
   public SchemaTranslator() {
+    this(null);
+  }
+
+  public SchemaTranslator(String rootId) {
+    this.rootId = rootId;
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
     this.refReferred = new IdentityHashMap<>();
@@ -242,6 +250,22 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
     if (schema.getId() != null) {
       ctx.schemaBuilder().id(schema.getId().getValue());
+    }
+    // Preserve schema-identity metadata that the everit loader keeps for Draft-07 but the
+    // json-sKema translation otherwise drops (DGS-25567): the everit schemaLocation, and the
+    // root $id, which the loader consumes into the document base URI. Consumers such as Flink's
+    // cyclic-schema cut to VARIANT key a $ref target by its schema location, so losing it on
+    // 2019-09/2020-12 changes the inferred type versus Draft-07.
+    SourceLocation location = schema.getLocation();
+    if (location != null) {
+      JsonPointer pointer = location.getPointer();
+      if (pointer != null) {
+        ctx.schemaBuilder().schemaLocation(toEveritSchemaLocation(pointer));
+      }
+      if (rootId != null && schema.getId() == null
+          && (pointer == null || pointer.getSegments().isEmpty())) {
+        ctx.schemaBuilder().id(rootId);
+      }
     }
     if (schema.getTitle() != null) {
       ctx.schemaBuilder().title(schema.getTitle().getValue());
@@ -608,6 +632,22 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitWriteOnlySchema(WriteOnlySchema schema) {
     // ignore writeOnly
     return super.visitWriteOnlySchema(schema);
+  }
+
+  /**
+   * Renders a json-sKema pointer as an everit same-document location: {@code #} for the root,
+   * {@code #/$defs/Foo} for a nested definition.
+   */
+  private static String toEveritSchemaLocation(JsonPointer pointer) {
+    List<String> segments = pointer.getSegments();
+    if (segments.isEmpty()) {
+      return "#";
+    }
+    StringBuilder sb = new StringBuilder("#");
+    for (String segment : segments) {
+      sb.append('/').append(segment.replace("~", "~0").replace("/", "~1"));
+    }
+    return sb.toString();
   }
 
   private org.everit.json.schema.Schema.Builder<?> typeToSchema(String type) {

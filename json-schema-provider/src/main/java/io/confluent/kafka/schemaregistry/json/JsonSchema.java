@@ -601,7 +601,12 @@ public class JsonSchema implements ParsedSchema {
         objectMapper.readTree(rootJson), JsonObject.class);
     com.github.erosb.jsonsKema.Schema skemaObj =
         new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
-    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
+    String rootId = null;
+    JsonNode idNode = jsonNode.get("$id");
+    if (idNode != null && idNode.isTextual()) {
+      rootId = idNode.asText();
+    }
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator(rootId));
     assert ctx != null;
     ctx.close();
     setSkemaObj(skemaObj);
