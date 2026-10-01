@@ -21,8 +21,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -169,6 +171,49 @@ final class JsonValidationShape {
       }
     }
     return shaped;
+  }
+
+  /**
+   * Whether two shapes are equal. A shape shares each definition's subtree wherever it is used,
+   * so a pair already found equal is not compared again: equals would walk it once per use.
+   */
+  static boolean alike(JsonNode a, JsonNode b) {
+    return alike(a, b, new IdentityHashMap<>());
+  }
+
+  private static boolean alike(JsonNode a, JsonNode b, Map<JsonNode, Set<JsonNode>> equal) {
+    if (a == b) {
+      return true;
+    }
+    if (a.getNodeType() != b.getNodeType() || a.size() != b.size()) {
+      return false;
+    }
+    if (!a.isContainerNode()) {
+      return a.equals(b);
+    }
+    Set<JsonNode> known =
+        equal.computeIfAbsent(a, k -> Collections.newSetFromMap(new IdentityHashMap<>()));
+    if (known.contains(b)) {
+      return true;
+    }
+    if (a.isArray()) {
+      for (int i = 0; i < a.size(); i++) {
+        if (!alike(a.get(i), b.get(i), equal)) {
+          return false;
+        }
+      }
+    } else {
+      Iterator<String> names = a.fieldNames();
+      while (names.hasNext()) {
+        String name = names.next();
+        JsonNode other = b.get(name);
+        if (other == null || !alike(a.get(name), other, equal)) {
+          return false;
+        }
+      }
+    }
+    known.add(b);
+    return true;
   }
 
   private JsonNode definition(String target) {

@@ -402,9 +402,9 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * The schema id {@code schema} is registered under in {@code subject}, or else the latest
-   * version whose logical type is equivalent to its own; null when none is. A
-   * {@code derived} schema skips the first: only the latest version it equals will do.
+   * The schema id {@code schema} is registered under in {@code subject}, soft-deleted versions
+   * included, or else the latest version whose logical type is equivalent to its own; null when
+   * none is. A {@code derived} schema skips the first: only the latest version it equals will do.
    */
   private Integer registeredId(String subject, ParsedSchema schema, boolean derived)
       throws IOException, RestClientException {
@@ -415,8 +415,10 @@ public final class ProvenanceProjector<T> {
     }
     Integer id = null;
     if (!derived) {
+      // By version, not by id: the registry's id lookup skips soft-deleted versions, which a
+      // pinned reader or an old writer may still be.
       try {
-        id = client.getId(subject, schema);
+        id = metadataOf(subject, client.getVersion(subject, schema)).getId();
       } catch (RestClientException e) {
         if (e.getStatus() != 404) {
           throw e;
@@ -444,12 +446,9 @@ public final class ProvenanceProjector<T> {
       return null;
     }
     SchemaType schemaType = SchemaType.of(schema.schemaType());
-    List<Integer> versions;
-    try {
-      versions = client.getAllVersions(subject, true);
-    } catch (UnsupportedOperationException e) {
-      versions = client.getAllVersions(subject);
-    }
+    // Soft-deleted versions included: without them a match could settle on a later version. A
+    // client that cannot list them throws, and the pair is read without provenance.
+    List<Integer> versions = client.getAllVersions(subject, true);
     for (int i = versions.size() - 1; i >= 0; i--) {
       SchemaMetadata metadata = metadataOf(subject, versions.get(i));
       // Another format's version is skipped unparsed: this client may have no provider for it.
@@ -489,11 +488,7 @@ public final class ProvenanceProjector<T> {
   // A soft-deleted version is still a version: old records and pinned readers use them.
   private SchemaMetadata metadataOf(String subject, int version)
       throws IOException, RestClientException {
-    try {
-      return client.getSchemaMetadata(subject, version, true);
-    } catch (UnsupportedOperationException e) {
-      return client.getSchemaMetadata(subject, version);
-    }
+    return client.getSchemaMetadata(subject, version, true);
   }
 
   private static final class Outcome<T> {

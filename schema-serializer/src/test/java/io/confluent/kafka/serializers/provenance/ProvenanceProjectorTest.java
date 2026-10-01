@@ -246,6 +246,21 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void aClientThatCannotListSoftDeletedVersionsMatchesNoReaderByStructure()
+      throws Exception {
+    // Without its soft-deleted versions a match could settle on a later version: read as written.
+    CountingClient client = new CountingClient();
+    client.listsDeletedVersions = false;
+    ParsedSchema respelled = client.reader.copy(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null), null);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    assertEquals(Optional.empty(), projector.project(SUBJECT,
+        new SchemaId(AvroSchema.TYPE, client.writer, (String) null), client.writerSchema,
+        respelled, false, m -> "built"));
+    assertEquals(0, client.asked);
+  }
+
+  @Test
   public void anExpiredOutcomeIsWorkedOutAfresh() throws Exception {
     CountingClient client = new CountingClient();
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, 0);
@@ -501,6 +516,8 @@ public class ProvenanceProjectorTest {
     int lastReaderId;
     String lastAlgorithm;
     boolean rejectsForeignWriters;
+    // As a client implementing only the basic lookups, without soft-deleted versions.
+    boolean listsDeletedVersions = true;
     RestClientException failure;
     SchemaProvenance provenance;
     // Holds every request until released, counting them across threads.
@@ -511,6 +528,15 @@ public class ProvenanceProjectorTest {
       writer = register(SUBJECT, writerSchema);
       otherWriter = register(SUBJECT, new AvroSchema("\"string\""));
       readerId = register(SUBJECT, reader);
+    }
+
+    @Override
+    public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+        throws IOException, RestClientException {
+      if (!listsDeletedVersions) {
+        throw new UnsupportedOperationException();
+      }
+      return super.getAllVersions(subject, lookupDeletedSchema);
     }
 
     @Override

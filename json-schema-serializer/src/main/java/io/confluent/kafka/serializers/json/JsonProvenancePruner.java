@@ -293,7 +293,8 @@ final class JsonProvenancePruner {
     }
     return alike.computeIfAbsent(union, u -> {
       JsonNode written = JsonValidationShape.of(writer.toJsonNode(), u);
-      return written != null && written.equals(JsonValidationShape.of(reader.toJsonNode(), u));
+      JsonNode read = JsonValidationShape.of(reader.toJsonNode(), u);
+      return written != null && read != null && JsonValidationShape.alike(written, read);
     });
   }
 

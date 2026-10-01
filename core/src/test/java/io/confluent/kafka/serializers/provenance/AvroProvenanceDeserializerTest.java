@@ -456,6 +456,20 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aPinnedReaderOfASoftDeletedVersionIsThatVersion() throws Exception {
+    // v1 is soft-deleted; a reader in v1's exact text is still v1, not v3, which re-adds x.
+    String x = "{\"name\":\"x\",\"type\":\"string\",\"default\":\"%s\"}";
+    Schema v1 = record(idField(), String.format(x, "V1D"));
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    Schema v3 = record(idField(), String.format(x, "DEF"));
+    byte[] bytes = write(v3, new GenericRecordBuilder(v3).set("id", 7).set("x", "new"));
+    client.deleteSchemaVersion(SUBJECT, "1");
+
+    assertEquals("V1D", read(v1, bytes, "v1").get("x").toString());
+  }
+
+  @Test
   void anAuthFailureReachesTheConsumerAsASchemaFetchsWould() throws Exception {
     // Not a record to skip: the deserializer leaves the authentication or authorization failure.
     for (int status : new int[] {401, 403}) {

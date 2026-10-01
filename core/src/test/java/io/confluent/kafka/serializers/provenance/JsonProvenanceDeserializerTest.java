@@ -212,6 +212,36 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aChainDoublingADefinitionAtEachLevelIsComparedQuickly() throws Exception {
+    // D_i names D_i+1 twice under propertyNames, which the logical type ignores: shared shapes
+    // compared node by node would take hours at this depth.
+    StringBuilder defs = new StringBuilder();
+    for (int i = 0; i < 40; i++) {
+      defs.append(i > 0 ? ", " : "").append("\"D").append(i).append("\": {\"type\": \"object\", ")
+          .append("\"propertyNames\": {\"anyOf\": [{\"$ref\": \"#/definitions/D").append(i + 1)
+          .append("\"}, {\"$ref\": \"#/definitions/D").append(i + 1).append("\"}]}}");
+    }
+    defs.append(", \"D40\": {\"type\": \"string\"}");
+    String schema = "{\"type\": \"object\", \"properties\": {\"u\": {\"oneOf\": ["
+        + "{\"type\": \"object\", \"properties\": {\"k\": {\"const\": \"A\"}, "
+        + "\"x\": {\"$ref\": \"#/definitions/D0\"}}}, "
+        + "{\"type\": \"object\", \"properties\": {\"k\": {\"const\": \"B\"}, "
+        + "\"y\": {\"type\": \"string\"}}}]}%s}, \"definitions\": {" + defs + "}}";
+    String f = ", \"f\": {\"type\": \"string\"%s}";
+    byte[] bytes = write(new JsonSchema(String.format(schema, String.format(f, ""))),
+        "{\"u\": {\"k\": \"B\", \"y\": \"Y\"}, \"f\": \"old\"}");
+    client.register(SUBJECT, new JsonSchema(String.format(schema, "")));
+    JsonSchema reader = new JsonSchema(String.format(schema,
+        String.format(f, ", \"description\": \"again\"")));
+    client.register(SUBJECT, reader);
+
+    JsonNode read =
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(reader, bytes, "v1"));
+    assertFalse(read.has("f"));
+    assertEquals("Y", read.get("u").get("y").asText());
+  }
+
+  @Test
   void aPropertyPresentThroughoutIsLeftAlone() throws Exception {
     JsonSchema v1 = object(number("id"), string("name"));
     JsonSchema v2 = object(number("id"), string("name"), string("extra"));

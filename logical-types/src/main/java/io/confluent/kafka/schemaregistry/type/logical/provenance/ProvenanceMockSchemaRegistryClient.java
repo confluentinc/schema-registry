@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
@@ -118,6 +119,57 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       }
     }
     return new ArrayList<>(versions);
+  }
+
+  /**
+   * As the registry looks a schema's id up: soft-deleted versions skipped, where the base mock
+   * still finds them.
+   */
+  @Override
+  public RegisterSchemaResponse getIdWithResponse(String subject, ParsedSchema schema,
+      boolean normalize) throws IOException, RestClientException {
+    RegisterSchemaResponse response = super.getIdWithResponse(subject, schema, normalize);
+    if (softDeletedOf(subject).containsValue(response.getId())
+        && liveVersion(subject, schema, normalize) == null) {
+      throw new RestClientException("Schema not found", 404, 40403);
+    }
+    return response;
+  }
+
+  /**
+   * As the registry looks a schema's version up: soft-deleted versions included, where the base
+   * mock forgets them. Of several, the latest.
+   */
+  @Override
+  public int getVersion(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    Integer live = liveVersion(subject, schema, normalize);
+    if (live != null) {
+      return live;
+    }
+    int id = super.getIdWithResponse(subject, schema, normalize).getId();
+    Integer found = null;
+    for (Map.Entry<Integer, Integer> deleted : softDeletedOf(subject).entrySet()) {
+      if (deleted.getValue() == id) {
+        found = deleted.getKey();
+      }
+    }
+    if (found == null) {
+      throw new RestClientException("Subject Not Found", 404, 40401);
+    }
+    return found;
+  }
+
+  private Integer liveVersion(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    try {
+      return super.getVersion(subject, schema, normalize);
+    } catch (RestClientException e) {
+      if (e.getStatus() != 404) {
+        throw e;
+      }
+      return null;
+    }
   }
 
   @Override
