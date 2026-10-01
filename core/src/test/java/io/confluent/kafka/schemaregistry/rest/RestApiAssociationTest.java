@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
@@ -58,6 +59,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -4363,6 +4365,315 @@ public class RestApiAssociationTest extends ClusterTestHarness {
       assertNull(result.getError());
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Readback tests: batch result associations must match GET by resourceId
+  // -------------------------------------------------------------------------
+
+  /**
+   * Creates key + value associations for one resource in a single batch op and verifies the
+   * associations list in the batch result equals what GET by resourceId returns.
+   */
+  @Test
+  public void testBatchReadbackCreateMultipleTypes() throws Exception {
+    String keySubject = "rbCreateKeySubject";
+    String valueSubject = "rbCreateValueSubject";
+    String resourceName = "rbCreateTopic";
+    String resourceId = "rb-create-multi-1";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), keySubject);
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), valueSubject);
+
+    List<AssociationOpRequest> requests = Collections.singletonList(
+        new AssociationOpRequest(
+            resourceName, "default", resourceId, "topic",
+            ImmutableList.of(
+                new AssociationCreateOp(
+                    keySubject, "key", LifecyclePolicy.WEAK, false, null, null),
+                new AssociationCreateOp(
+                    valueSubject, "value", LifecyclePolicy.WEAK, false, null, null)
+            )));
+
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(requests));
+
+    AssociationResult result = batchResponse.getResults().get(0);
+    assertNull(result.getError());
+    assertNotNull(result.getResult());
+
+    // GET the stored state and compare with the batch result.
+    List<Association> stored = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(result.getResult().getAssociations(), stored);
+  }
+
+  /**
+   * Resource has key + value.  A batch upserts value only.  The batch result must include
+   * both associations (key untouched + value re-affirmed) matching what GET returns.
+   */
+  @Test
+  public void testBatchReadbackUpsertExistingPlusUntouched() throws Exception {
+    String keySubject = "rbUpsertKeySubject";
+    String valueSubject = "rbUpsertValueSubject";
+    String resourceName = "rbUpsertTopic";
+    String resourceId = "rb-upsert-untouched-1";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), keySubject);
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), valueSubject);
+
+    // Pre-create both associations.
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest(
+            resourceName, "default", resourceId, "topic",
+            ImmutableList.of(
+                new AssociationCreateOrUpdateInfo(
+                    keySubject, "key", LifecyclePolicy.WEAK, false, null, null),
+                new AssociationCreateOrUpdateInfo(
+                    valueSubject, "value", LifecyclePolicy.WEAK, false, null, null)
+            )));
+
+    // Batch upserts only value (key is untouched).
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(
+            new AssociationOpRequest(
+                resourceName, "default", resourceId, "topic",
+                Collections.singletonList(
+                    new AssociationUpsertOp(
+                        valueSubject, "value", LifecyclePolicy.WEAK, false, null, null))))));
+
+    AssociationResult result = batchResponse.getResults().get(0);
+    assertNull(result.getError());
+    assertNotNull(result.getResult());
+
+    // GET should return both key and value; batch result must match.
+    List<Association> stored = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(result.getResult().getAssociations(), stored);
+  }
+
+  /**
+   * Upserts an association that is bit-for-bit identical to the stored one (idempotent).
+   * The batch result associations must still reflect the stored state returned by GET.
+   */
+  @Test
+  public void testBatchReadbackIdempotentRecreate() throws Exception {
+    String subject = "rbIdempotentSubject";
+    String resourceName = "rbIdempotentTopic";
+    String resourceId = "rb-idempotent-1";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), subject);
+
+    // Create once.
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest(
+            resourceName, "default", resourceId, "topic",
+            Collections.singletonList(
+                new AssociationCreateOrUpdateInfo(
+                    subject, "key", LifecyclePolicy.WEAK, false, null, null))));
+
+    // Upsert the same association again (identical — skipped internally).
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(
+            new AssociationOpRequest(
+                resourceName, "default", resourceId, "topic",
+                Collections.singletonList(
+                    new AssociationUpsertOp(
+                        subject, "key", LifecyclePolicy.WEAK, false, null, null))))));
+
+    AssociationResult result = batchResponse.getResults().get(0);
+    assertNull(result.getError());
+    assertNotNull(result.getResult());
+
+    List<Association> stored = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(result.getResult().getAssociations(), stored);
+  }
+
+  /**
+   * A single batch request for one resource contains a CREATE (value) followed by a DELETE (key).
+   * The batch result associations must equal the stored state: only value, no key.
+   */
+  @Test
+  public void testBatchReadbackCreateAndDelete() throws Exception {
+    String keySubject = "rbCdKeySubject";
+    String valueSubject = "rbCdValueSubject";
+    String resourceName = "rbCdTopic";
+    String resourceId = "rb-create-delete-1";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), keySubject);
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), valueSubject);
+
+    // Pre-create key only.
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest(
+            resourceName, "default", resourceId, "topic",
+            Collections.singletonList(
+                new AssociationCreateOrUpdateInfo(
+                    keySubject, "key", LifecyclePolicy.WEAK, false, null, null))));
+
+    // Batch: create value, delete key (two ops for the same resource).
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(ImmutableList.of(
+            new AssociationOpRequest(
+                resourceName, "default", resourceId, "topic",
+                Collections.singletonList(
+                    new AssociationCreateOp(
+                        valueSubject, "value", LifecyclePolicy.WEAK, false, null, null))),
+            new AssociationOpRequest(
+                resourceName, "default", resourceId, "topic",
+                Collections.singletonList(
+                    new AssociationDeleteOp("key"))))));
+
+    // Two requests in the batch → two results; the second carries the final state.
+    assertEquals(2, batchResponse.getResults().size());
+    AssociationResult createResult = batchResponse.getResults().get(0);
+    assertNull(createResult.getError());
+    AssociationResult deleteResult = batchResponse.getResults().get(1);
+    assertNull(deleteResult.getError());
+    assertNotNull(deleteResult.getResult());
+
+    List<Association> stored = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(deleteResult.getResult().getAssociations(), stored);
+  }
+
+  /**
+   * A batch request deletes the sole association for a resource.  The batch result must
+   * carry an empty (or null) associations list matching the empty GET response.
+   */
+  @Test
+  public void testBatchReadbackDeleteOnly() throws Exception {
+    String subject = "rbDelOnlySubject";
+    String resourceName = "rbDelOnlyTopic";
+    String resourceId = "rb-delete-only-1";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), subject);
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest(
+            resourceName, "default", resourceId, "topic",
+            Collections.singletonList(
+                new AssociationCreateOrUpdateInfo(
+                    subject, "key", LifecyclePolicy.WEAK, false, null, null))));
+
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(
+            new AssociationOpRequest(
+                resourceName, "default", resourceId, "topic",
+                Collections.singletonList(new AssociationDeleteOp("key"))))));
+
+    AssociationResult result = batchResponse.getResults().get(0);
+    assertNull(result.getError());
+    assertNotNull(result.getResult());
+
+    List<Association> stored = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.emptyList(), null, 0, -1);
+    // After deletion the stored list is empty; the batch result must agree.
+    assertEquals(0, stored.size());
+    List<AssociationInfo> batchAssociations = result.getResult().getAssociations();
+    assertTrue(batchAssociations == null || batchAssociations.isEmpty(),
+        "Expected no associations in batch result after delete-only op");
+  }
+
+  /**
+   * A batch request covers two distinct resources.  The batch result for each resource must
+   * match what GET by resourceId returns for that resource.
+   */
+  @Test
+  public void testBatchReadbackTwoRequests() throws Exception {
+    String subject1 = "rbTwoReqSubject1";
+    String subject2 = "rbTwoReqSubject2";
+    String resourceName1 = "rbTwoReqTopic1";
+    String resourceName2 = "rbTwoReqTopic2";
+    String resourceId1 = "rb-two-req-1";
+    String resourceId2 = "rb-two-req-2";
+
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), subject1);
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), subject2);
+
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(ImmutableList.of(
+            new AssociationOpRequest(
+                resourceName1, "default", resourceId1, "topic",
+                Collections.singletonList(
+                    new AssociationCreateOp(
+                        subject1, "key", LifecyclePolicy.WEAK, false, null, null))),
+            new AssociationOpRequest(
+                resourceName2, "default", resourceId2, "topic",
+                Collections.singletonList(
+                    new AssociationCreateOp(
+                        subject2, "value", LifecyclePolicy.WEAK, false, null, null))))));
+
+    assertEquals(2, batchResponse.getResults().size());
+
+    AssociationResult result1 = batchResponse.getResults().get(0);
+    assertNull(result1.getError());
+    List<Association> stored1 = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId1, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(result1.getResult().getAssociations(), stored1);
+
+    AssociationResult result2 = batchResponse.getResults().get(1);
+    assertNull(result2.getError());
+    List<Association> stored2 = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId2, "topic",
+        Collections.emptyList(), null, 0, -1);
+    assertBatchResultMatchesGet(result2.getResult().getAssociations(), stored2);
+  }
+
+  /**
+   * Asserts that the association types and lifecycle policies in the batch result match
+   * the associations returned by GET by resourceId.
+   *
+   * <p>Both lists are compared by associationType (sorted), so order does not matter.
+   */
+  private static void assertBatchResultMatchesGet(
+      List<AssociationInfo> batchAssociations, List<Association> storedAssociations) {
+    // Compare the fields the batch response carries, in order, against what GET returns.
+    // AssociationInfo reports frozen as null when it matches the lifecycle default, so the
+    // stored side goes through the same conversion.
+    List<List<Object>> expected = new ArrayList<>();
+    for (Association a : storedAssociations) {
+      AssociationInfo info = new AssociationInfo(
+          a.getSubject(), a.getAssociationType(), a.getLifecycle(), a.isFrozen(), null);
+      expected.add(Arrays.asList(
+          info.getSubject(), info.getAssociationType(), info.getLifecycle(), info.getFrozen()));
+    }
+    List<List<Object>> actual = new ArrayList<>();
+    if (batchAssociations != null) {
+      for (AssociationInfo ai : batchAssociations) {
+        actual.add(Arrays.asList(
+            ai.getSubject(), ai.getAssociationType(), ai.getLifecycle(), ai.getFrozen()));
+      }
+    }
+    assertEquals(expected, actual, "Batch result associations differ from GET result");
+  }
+
 
 }
 

@@ -2229,21 +2229,54 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   // --------------- Association mutation methods ---------------
 
+  /**
+   * Holds the result of a create-or-update operation: the API response (written associations
+   * only) together with the full post-write snapshot for every association type that was part
+   * of the request (written values merged with unchanged/skipped values).
+   */
+  static final class CreateOrUpdateResult {
+    final AssociationResponse response;
+    /** Keyed by associationType; contains every type covered by the request. */
+    final Map<String, Association> postWriteSnapshot;
+
+    CreateOrUpdateResult(AssociationResponse response,
+        Map<String, Association> postWriteSnapshot) {
+      this.response = response;
+      this.postWriteSnapshot = postWriteSnapshot;
+    }
+  }
+
   public AssociationResponse createAssociation(
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
-    return createOrUpdateAssociation(context, dryRun, request, true);
+    return createOrUpdateAssociationInternal(context, dryRun, request, true, null).response;
   }
 
   public AssociationResponse createOrUpdateAssociation(
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
-    return createOrUpdateAssociation(context, dryRun, request, false);
+    return createOrUpdateAssociationInternal(context, dryRun, request, false, null).response;
   }
 
   public AssociationResponse createOrUpdateAssociation(
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
       boolean isCreate)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociationInternal(context, dryRun, request, isCreate, null).response;
+  }
+
+  /**
+   * Internal variant of createOrUpdateAssociation that returns both the API response and the
+   * full post-write snapshot for the types covered by this request, enabling callers to track
+   * resource state across multiple sequential operations without additional store reads.
+   *
+   * @param preReadStateByType when non-null, the pre-read state is taken from this map (filtered
+   *     to the types in the request) instead of calling getAssociationsByResourceId. Pass null
+   *     to fall back to the normal store read.
+   */
+  CreateOrUpdateResult createOrUpdateAssociationInternal(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
+      boolean isCreate, Map<String, Association> preReadStateByType)
       throws SchemaRegistryException {
     String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
         + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
@@ -2275,9 +2308,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       infosByType.put(associationType, info);
     }
 
-    List<Association> associations = getAssociationsByResourceId(
-        request.getResourceId(), request.getResourceType(),
-        new ArrayList<>(infosByType.keySet()), null);
+    // Use the caller-supplied pre-read state when available; otherwise fall back to a store read.
+    List<Association> associations;
+    if (preReadStateByType != null) {
+      associations = infosByType.keySet().stream()
+          .map(preReadStateByType::get)
+          .filter(Objects::nonNull)
+          .collect(Collectors.toList());
+    } else {
+      associations = getAssociationsByResourceId(
+          request.getResourceId(), request.getResourceType(),
+          new ArrayList<>(infosByType.keySet()), null);
+    }
 
     Map<String, Association> assocsByType;
     if (associations.isEmpty() && isCreate && dryRun && request.getResourceId() == null) {
@@ -2526,13 +2568,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     if (dryRun) {
-      return new AssociationResponse(
+      AssociationResponse dryRunResponse = new AssociationResponse(
           request.getResourceName(),
           request.getResourceNamespace(),
           request.getResourceId(),
           request.getResourceType(),
           Collections.emptyList()
       );
+      return new CreateOrUpdateResult(dryRunResponse, Collections.emptyMap());
     }
 
     Map<String, Schema> registeredSchemas = new HashMap<>();
@@ -2562,13 +2605,27 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     for (AssociationValue associationValue : associationValues) {
       putAssociation(associationValue);
     }
-    return Association.toAssociationResponse(
+    List<Association> writtenEntities = associationValues.stream()
+        .map(AssociationValue::toAssociationEntity)
+        .collect(Collectors.toList());
+    AssociationResponse response = Association.toAssociationResponse(
         request.getResourceName(), request.getResourceNamespace(),
         request.getResourceId(), request.getResourceType(),
-        associationValues.stream()
-            .map(AssociationValue::toAssociationEntity)
-            .collect(Collectors.toList()),
+        writtenEntities,
         registeredSchemas);
+
+    // Build the post-write snapshot: written associations + skipped (unchanged) ones.
+    Map<String, Association> postWriteSnapshot = new LinkedHashMap<>();
+    for (Association written : writtenEntities) {
+      postWriteSnapshot.put(written.getAssociationType(), written);
+    }
+    for (String skippedType : assocTypesToSkip) {
+      Association existing = assocsByType.get(skippedType);
+      if (existing != null) {
+        postWriteSnapshot.put(skippedType, existing);
+      }
+    }
+    return new CreateOrUpdateResult(response, postWriteSnapshot);
   }
 
   /**
@@ -2867,6 +2924,20 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         // A run of adjacent create-or-update ops is applied as one request rather than one at
         // a time. Validation there sees every association type in the run at once, so a batch
         // can convert them together, and nothing is written until all of them have passed.
+
+        // Seed the accumulated state from a single upfront read so that subsequent ops in this
+        // request all see the same resource snapshot and no extra store reads are needed at the
+        // end. The map is keyed by associationType and updated incrementally as ops are applied.
+        Map<String, Association> accumulatedState = null;
+        if (!dryRun && req.getResourceId() != null) {
+          List<Association> initial = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+          accumulatedState = new LinkedHashMap<>();
+          for (Association a : initial) {
+            accumulatedState.put(a.getAssociationType(), a);
+          }
+        }
+
         int index = 0;
         while (index < ops.size()) {
           AssociationOp op = ops.get(index);
@@ -2880,6 +2951,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                   Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
               );
               metricsContainer.getAssociationBatchMutateDelete().record();
+              // Remove the deleted type from our in-memory state so the final result is accurate.
+              if (accumulatedState != null) {
+                accumulatedState.remove(deleteOp.getAssociationType());
+              }
             }
             index++;
             continue;
@@ -2907,16 +2982,24 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           } else {
             metricsContainer.getAssociationBatchMutateUpsert().record();
           }
-          AssociationResponse response = createOrUpdateAssociation(context, dryRun,
+          CreateOrUpdateResult result = createOrUpdateAssociationInternal(context, dryRun,
               new AssociationCreateOrUpdateRequest(req, run),
-              op.getType() == OpType.CREATE);
-          collectSchemas(response, schemas);
+              op.getType() == OpType.CREATE,
+              accumulatedState);
+          collectSchemas(result.response, schemas);
+          // Merge the post-write snapshot into the accumulated state.
+          if (accumulatedState != null) {
+            accumulatedState.putAll(result.postWriteSnapshot);
+          }
           index = end;
         }
+        // Build the final result from the accumulated in-memory state, avoiding an extra
+        // store read. On dryRun nothing was written and associations stays null, so the
+        // response carries an empty list, as before.
         List<Association> associations = null;
-        if (!dryRun) {
-          associations = getAssociationsByResourceId(
-              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        if (accumulatedState != null) {
+          associations = new ArrayList<>(accumulatedState.values());
+          Collections.sort(associations);
         }
         results.add(new AssociationResult(null,
             Association.toAssociationResponse(
