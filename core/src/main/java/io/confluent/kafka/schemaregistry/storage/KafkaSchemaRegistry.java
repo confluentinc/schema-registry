@@ -74,6 +74,7 @@ import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -125,7 +126,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
   private final LockChainedExecutor cascadeDeleteExecutor;
-  private final Set<String> pendingCascadeDeletes = ConcurrentHashMap.newKeySet();
+  private final Map<String, Integer> pendingCascadeDeletes = new ConcurrentHashMap<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -1131,6 +1132,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         for (String qualifiedSubject : subjectsToDelete) {
           enqueueCascadeDelete(qualifiedSubject);
         }
+        if (!subjectsToDelete.isEmpty()) {
+          log.info("Queued {} cascaded subject deletes for resource {}: {}",
+              subjectsToDelete.size(), resourceId, subjectsToDelete);
+        }
       } else {
         // forward delete associations request to the leader
         if (leaderIdentity != null) {
@@ -1148,20 +1153,29 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void enqueueCascadeDelete(String qualifiedSubject) {
     String tenant = tenant();
-    pendingCascadeDeletes.add(qualifiedSubject);
+    // Counted rather than a set, since the same subject can be queued more than once
+    pendingCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
     boolean queued = cascadeDeleteExecutor.submit(kafkaStore.lockFor(qualifiedSubject), () -> {
       try {
         withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject));
       } finally {
-        pendingCascadeDeletes.remove(qualifiedSubject);
+        removePendingCascadeDelete(qualifiedSubject);
       }
     });
     if (!queued) {
-      pendingCascadeDeletes.remove(qualifiedSubject);
-      metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
-      log.error("Could not queue cascaded delete of subject {} since schema registry is "
-          + "shutting down; the subject was not deleted", qualifiedSubject);
+      removePendingCascadeDelete(qualifiedSubject);
+      recordCascadeNotDeleted(qualifiedSubject, "schema registry is shutting down");
     }
+  }
+
+  private void removePendingCascadeDelete(String qualifiedSubject) {
+    pendingCascadeDeletes.computeIfPresent(qualifiedSubject, (k, n) -> n > 1 ? n - 1 : null);
+  }
+
+  private void recordCascadeNotDeleted(String qualifiedSubject, String reason) {
+    metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+    log.error("Cascaded delete of subject {} did not run since {}; the subject was not "
+        + "deleted", qualifiedSubject, reason);
   }
 
   /**
@@ -1177,17 +1191,22 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private void runCascadeDelete(String qualifiedSubject) {
+  @VisibleForTesting
+  void runCascadeDelete(String qualifiedSubject) {
     Lock lock = kafkaStore.lockFor(qualifiedSubject);
     lock.lock();
     try {
       if (!isLeader()) {
-        log.warn("Skipping cascaded delete of subject {} since this instance is no longer "
-            + "the leader; the subject was not deleted", qualifiedSubject);
+        recordCascadeNotDeleted(qualifiedSubject, "this instance is no longer the leader");
         return;
       }
       if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
         log.warn("Skipping cascaded delete of subject {} since it is now in IMPORT mode",
+            qualifiedSubject);
+        return;
+      }
+      if (!getAllVersions(qualifiedSubject, LookupFilter.INCLUDE_DELETED).hasNext()) {
+        log.debug("Skipping cascaded delete of subject {} since it no longer exists",
             qualifiedSubject);
         return;
       }
@@ -1509,10 +1528,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   public void close() throws IOException {
     log.info("Shutting down schema registry");
     // Drain cascaded deletes first, while this instance can still write to the store
-    if (!cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        || !pendingCascadeDeletes.isEmpty()) {
-      log.warn("Shut down before completing cascaded deletes; these subjects were not "
-          + "deleted: {}", pendingCascadeDeletes);
+    cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    Map<String, Integer> notDeleted = new HashMap<>(pendingCascadeDeletes);
+    if (!notDeleted.isEmpty()) {
+      int count = notDeleted.values().stream().mapToInt(Integer::intValue).sum();
+      for (int i = 0; i < count; i++) {
+        metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+      }
+      log.error("Shut down before completing {} cascaded deletes; these subjects were not "
+          + "deleted: {}", count, notDeleted.keySet());
     }
     if (leaderElector != null) {
       leaderElector.close();

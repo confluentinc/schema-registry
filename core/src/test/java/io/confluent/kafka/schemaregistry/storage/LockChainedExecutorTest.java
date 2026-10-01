@@ -141,4 +141,29 @@ public class LockChainedExecutorTest {
     assertFalse(executor.close(100, TimeUnit.MILLISECONDS));
     release.countDown();
   }
+
+  @Test
+  public void testTaskQueuedBehindTimedOutTaskNeverRuns() throws Exception {
+    LockChainedExecutor executor = new LockChainedExecutor(1, "test");
+    Object key = new Object();
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicInteger secondRan = new AtomicInteger();
+    assertTrue(executor.submit(key, () -> {
+      started.countDown();
+      try {
+        release.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }));
+    assertTrue(executor.submit(key, secondRan::incrementAndGet));
+    assertTrue(started.await(10, TimeUnit.SECONDS));
+
+    // close() interrupts the first task after the timeout; the pool is shut down by then, so
+    // the second task is rejected instead of running, and submit() never threw for it
+    assertFalse(executor.close(100, TimeUnit.MILLISECONDS));
+    Thread.sleep(200);
+    assertEquals(0, secondRan.get());
+  }
 }

@@ -3946,6 +3946,54 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
   }
 
+  @Test
+  public void testDeleteAssociationsAsyncWeakKeepsSubject() throws Exception {
+    String subject = "async-weak-subject";
+    restApp.restClient.registerSchema(TestUtils.getRandomCanonicalAvroString(1).get(0), subject);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "async-weak-topic", "default", "async-weak-123", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "key", LifecyclePolicy.WEAK, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // 202 even though a WEAK association queues no subject delete
+    assertEquals(202, rawDelete("/associations/resources/async-weak-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"));
+
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "async-weak-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+    Thread.sleep(1000);
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncKeyAndValue() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
+    keyRequest.setSchema(schemas.get(0));
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
+    valueRequest.setSchema(schemas.get(1));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "async-kv-topic", "default", "async-kv-123", "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, keyRequest, null),
+            new AssociationCreateOrUpdateInfo(
+                null, "value", LifecyclePolicy.STRONG, true, valueRequest, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    assertEquals(202, rawDelete("/associations/resources/async-kv-123"
+        + "?resourceType=topic&associationType=key&associationType=value"
+        + "&cascadeLifecycle=true&async=true"));
+
+    TestUtils.waitUntilTrue(() -> isHardDeleted(":.default:async-kv-topic-key")
+            && isHardDeleted(":.default:async-kv-topic-value"), 30_000,
+        "Key and value subjects were not hard-deleted");
+  }
+
   private String createStrongKeyAssociation(String resourceName, String resourceId)
       throws Exception {
     RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();

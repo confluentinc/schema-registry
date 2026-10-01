@@ -20,10 +20,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Runs tasks on a shared thread pool, chained per key. Tasks submitted with the same key run
@@ -36,7 +36,8 @@ class LockChainedExecutor {
   private final ExecutorService executor;
   private final ConcurrentHashMap<Object, CompletableFuture<Void>> tails =
       new ConcurrentHashMap<>();
-  private volatile boolean closed = false;
+  private final ReentrantReadWriteLock stateLock = new ReentrantReadWriteLock();
+  private boolean closed = false;
 
   LockChainedExecutor(int threads, String threadNamePrefix) {
     AtomicInteger threadCount = new AtomicInteger();
@@ -53,17 +54,21 @@ class LockChainedExecutor {
    * @return false if the executor is closed and the task was not queued
    */
   boolean submit(Object key, Runnable task) {
-    if (closed) {
-      return false;
-    }
     CompletableFuture<Void> next;
+    // Hold the read lock so close() cannot snapshot the chains between the closed check and
+    // adding this task. The pool never rejects a task before close(): a task rejected after
+    // close() completes its future exceptionally without running, rather than throwing here.
+    stateLock.readLock().lock();
     try {
+      if (closed) {
+        return false;
+      }
       next = tails.compute(key, (k, tail) ->
           (tail == null ? CompletableFuture.<Void>completedFuture(null)
               : tail.handle((r, t) -> (Void) null))
               .thenRunAsync(task, executor));
-    } catch (RejectedExecutionException e) {
-      return false;
+    } finally {
+      stateLock.readLock().unlock();
     }
     // Drop the entry once this task is the last one for its key and has finished
     next.whenComplete((r, t) -> tails.remove(key, next));
@@ -72,15 +77,22 @@ class LockChainedExecutor {
 
   /**
    * Stops accepting new tasks, waits up to the timeout for queued and running tasks, then
-   * stops the pool.
+   * stops the pool. Tasks still queued after the timeout never run.
    *
    * @return true if every queued task finished before the timeout
    */
   boolean close(long timeout, TimeUnit unit) {
-    closed = true;
+    CompletableFuture<?>[] queued;
+    stateLock.writeLock().lock();
+    try {
+      closed = true;
+      queued = tails.values().toArray(new CompletableFuture<?>[0]);
+    } finally {
+      stateLock.writeLock().unlock();
+    }
     boolean drained = true;
     try {
-      CompletableFuture.allOf(tails.values().toArray(new CompletableFuture<?>[0]))
+      CompletableFuture.allOf(queued)
           .handle((r, t) -> (Void) null)
           .get(timeout, unit);
     } catch (InterruptedException e) {

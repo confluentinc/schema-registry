@@ -485,7 +485,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
    * Deletes the associations for a resource. When {@code async} is true, implementations that
    * support it delete the association entries before returning and complete any cascaded
    * subject deletes in the background. A queued subject is deleted even if new versions are
-   * registered under it before the background delete runs. By default this runs synchronously.
+   * registered under it before the background delete runs. Until then the subject still
+   * exists, so recreating the resource with a different schema can fail. By default this runs
+   * synchronously.
    */
   default void deleteAssociationsOrForward(
       String subject,  // subject is only used for locking per tenant

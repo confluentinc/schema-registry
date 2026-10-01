@@ -620,7 +620,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ASSOCIATION_DELETE_ASYNC_THREADS_DOC =
       "Number of threads the leader uses to run cascaded subject deletes queued by "
       + "DELETE /associations/resources/{resourceId} with async=true. Deletes that share a "
-      + "store lock run one at a time, in the order they were queued.";
+      + "store lock run one at a time, in the order they were queued. In a single-tenant "
+      + "deployment all deletes share one store lock and run one at a time, regardless of "
+      + "this setting.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =

@@ -520,8 +520,10 @@ public class AssociationsResource {
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "Delete the associations, return 202, and finish cascaded "
-          + "subject deletes in the background. A queued subject is deleted even if new "
-          + "versions are registered under it before the background delete runs.")
+          + "subject deletes in the background. 202 is returned even if no subject needed "
+          + "deleting. A queued subject is deleted even if new versions are registered under "
+          + "it before the background delete runs. Until then the subject still exists, so "
+          + "recreating the resource with a different schema can fail.")
       @QueryParam("async") boolean async) {
 
     log.debug("Deleting association for resource {}", resourceId);
