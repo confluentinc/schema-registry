@@ -143,6 +143,32 @@ public class LockChainedExecutorTest {
   }
 
   @Test
+  public void testCloseWaitsForInterruptedTaskToExit() throws Exception {
+    LockChainedExecutor executor = new LockChainedExecutor(1, "test");
+    CountDownLatch started = new CountDownLatch(1);
+    AtomicInteger cleanedUp = new AtomicInteger();
+    assertTrue(executor.submit(new Object(), () -> {
+      started.countDown();
+      try {
+        new CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+        // Slow cleanup after the interrupt, like a delete finishing its catch/finally
+        try {
+          Thread.sleep(200);
+        } catch (InterruptedException ignored) {
+          // not expected
+        }
+        cleanedUp.incrementAndGet();
+      }
+    }));
+    assertTrue(started.await(10, TimeUnit.SECONDS));
+
+    assertFalse(executor.close(50, TimeUnit.MILLISECONDS));
+    assertEquals(1, cleanedUp.get());
+    assertTrue(executor.isTerminated());
+  }
+
+  @Test
   public void testTaskQueuedBehindTimedOutTaskNeverRuns() throws Exception {
     LockChainedExecutor executor = new LockChainedExecutor(1, "test");
     Object key = new Object();

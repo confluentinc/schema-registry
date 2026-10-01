@@ -33,6 +33,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 class LockChainedExecutor {
 
+  static final long TERMINATION_WAIT_MS = 5_000;
+
   private final ExecutorService executor;
   private final ConcurrentHashMap<Object, CompletableFuture<Void>> tails =
       new ConcurrentHashMap<>();
@@ -77,7 +79,10 @@ class LockChainedExecutor {
 
   /**
    * Stops accepting new tasks, waits up to the timeout for queued and running tasks, then
-   * stops the pool. Tasks still queued after the timeout never run.
+   * stops the pool. Tasks still queued after the timeout never run. Tasks still running are
+   * interrupted, and close() waits a further {@link #TERMINATION_WAIT_MS} for them to exit, so
+   * by the time it returns they have finished their cleanup; {@link #isTerminated()} reports
+   * whether they did.
    *
    * @return true if every queued task finished before the timeout
    */
@@ -102,6 +107,15 @@ class LockChainedExecutor {
       drained = false;
     }
     executor.shutdownNow();
+    try {
+      executor.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
     return drained;
+  }
+
+  boolean isTerminated() {
+    return executor.isTerminated();
   }
 }

@@ -46,6 +46,7 @@ import org.mockito.InOrder;
 public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
 
   private static final String SUBJECT = ":.default:cascade-topic-key";
+  private static final String RESOURCE_ID = "cascade-123";
 
   private RestApp follower;
 
@@ -66,7 +67,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     deleteAssociationOnly();
     double failures = cascadeFailureCount(registry());
 
-    registry().runCascadeDelete(SUBJECT);
+    registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
 
     assertTrue(isHardDeleted(restApp));
     assertEquals(failures, cascadeFailureCount(registry()));
@@ -78,7 +79,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     double failures = cascadeFailureCount(registry());
 
     // The association still exists, so deleteSubject refuses to delete the subject
-    registry().runCascadeDelete(SUBJECT);
+    registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(SUBJECT));
     assertEquals(failures, cascadeFailureCount(registry()));
@@ -91,7 +92,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     restApp.restClient.setMode("IMPORT", SUBJECT, true);
     double failures = cascadeFailureCount(registry());
 
-    registry().runCascadeDelete(SUBJECT);
+    registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(SUBJECT));
     assertEquals(failures, cascadeFailureCount(registry()));
@@ -105,7 +106,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     restApp.restClient.setMode("READONLY", SUBJECT, true);
     double failures = cascadeFailureCount(registry());
 
-    registry().runCascadeDelete(SUBJECT);
+    registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(SUBJECT));
     assertEquals(failures + 1, cascadeFailureCount(registry()));
@@ -115,7 +116,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
   public void testSkipsSubjectThatNoLongerExists() throws Exception {
     double failures = cascadeFailureCount(registry());
 
-    registry().runCascadeDelete(":.default:never-registered-key");
+    registry().runCascadeDelete(":.default:never-registered-key", RESOURCE_ID);
 
     assertEquals(failures, cascadeFailureCount(registry()));
   }
@@ -132,10 +133,45 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     assertFalse(follower.isLeader(), "Second instance should be the follower");
     double failures = cascadeFailureCount(followerRegistry);
 
-    followerRegistry.runCascadeDelete(SUBJECT);
+    followerRegistry.runCascadeDelete(SUBJECT, RESOURCE_ID);
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(SUBJECT));
     assertEquals(failures + 1, cascadeFailureCount(followerRegistry));
+  }
+
+  @Test
+  public void testDeletesVersionsRegisteredAfterRequest() throws Exception {
+    createStrongKeyAssociation();
+    deleteAssociationOnly();
+    // A producer registers a new schema before the queued delete runs
+    restApp.restClient.updateCompatibility(CompatibilityLevel.NONE.name, SUBJECT);
+    restApp.restClient.registerSchema(TestUtils.getRandomCanonicalAvroString(1).get(0), SUBJECT);
+    assertEquals(2, restApp.restClient.getAllVersions(SUBJECT).size());
+    double failures = cascadeFailureCount(registry());
+
+    registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
+
+    // Documented behavior: the queued delete removes the new version too
+    assertTrue(isHardDeleted(restApp));
+    assertEquals(failures, cascadeFailureCount(registry()));
+  }
+
+  @Test
+  public void testInterruptedDeleteCountedOnce() throws Exception {
+    createStrongKeyAssociation();
+    deleteAssociationOnly();
+    double failures = cascadeFailureCount(registry());
+
+    // Simulates shutdownNow() interrupting the task
+    Thread.currentThread().interrupt();
+    try {
+      registry().runCascadeDelete(SUBJECT, RESOURCE_ID);
+    } finally {
+      Thread.interrupted();
+    }
+
+    assertEquals(failures + 1, cascadeFailureCount(registry()));
+    assertFalse(isHardDeleted(restApp));
   }
 
   @Test
@@ -159,7 +195,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
     schemaRequest.setSchema(TestUtils.getRandomCanonicalAvroString(1).get(0));
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
-        "cascade-topic", "default", "cascade-123", "topic",
+        "cascade-topic", "default", RESOURCE_ID, "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
             null, "key", LifecyclePolicy.STRONG, true, schemaRequest, null)));
     restApp.restClient.createAssociation(
@@ -171,7 +207,7 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
   private void deleteAssociationOnly() throws Exception {
     KafkaSchemaRegistry registry = registry();
     registry.deleteAssociationEntries(registry.getAssociationsByResourceId(
-        "cascade-123", "topic", Collections.singletonList("key"), null));
+        RESOURCE_ID, "topic", Collections.singletonList("key"), null));
   }
 
   private static boolean isHardDeleted(RestApp app) throws Exception {

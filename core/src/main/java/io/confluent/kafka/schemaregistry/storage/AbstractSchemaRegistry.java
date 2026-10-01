@@ -2676,11 +2676,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun)
       throws SchemaRegistryException {
-    List<Association> associations = getAssociationsByResourceId(resourceId,
-        resourceType, associationTypes, null);
-    for (Association association : associations) {
-      checkDeleteAssociation(association, cascadeLifecycle);
-    }
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
     if (dryRun) {
       return;
     }
@@ -2691,6 +2688,22 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         cascadeDeleteSubject(qualifiedSubject);
       }
     }
+  }
+
+  /**
+   * Returns the associations to delete for a resource, after checking that every one of them
+   * can be deleted. Shared by the synchronous and asynchronous delete paths.
+   */
+  protected List<Association> validateDeleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    return associations;
   }
 
   protected void deleteAssociationEntries(List<Association> associations)
