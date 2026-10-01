@@ -813,9 +813,35 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
             return product;
           }
         }
+        if (isGeneratedAny(schema) && containsType((CombinedSchemaExt) schema, current)) {
+          product.set(i, mergeIntoAny((CombinedSchemaExt) schema, current));
+          return product;
+        }
+      }
+      // Keyword order is arbitrary, so a multi-type anyOf may arrive after keyword schemas
+      // (e.g. items) that belong in one of its branches; fold those in too.
+      if (isGeneratedAny(current)) {
+        CombinedSchemaExt any = (CombinedSchemaExt) current;
+        List<org.everit.json.schema.Schema> result = new ArrayList<>();
+        for (org.everit.json.schema.Schema schema : product) {
+          if (containsType(any, schema)) {
+            any = mergeIntoAny(any, schema);
+          } else {
+            result.add(schema);
+          }
+        }
+        result.add(any);
+        return result;
       }
       product.add(current);
       return product;
+    }
+
+    private CombinedSchemaExt mergeIntoAny(
+        CombinedSchemaExt any, org.everit.json.schema.Schema schema) {
+      return CombinedSchemaExt.anyOf(accumulate(new ArrayList<>(any.getSubschemas()), schema))
+          .isGenerated(true)
+          .build();
     }
 
     private List<org.everit.json.schema.Schema> concat(
