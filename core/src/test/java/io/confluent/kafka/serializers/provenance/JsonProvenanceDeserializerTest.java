@@ -976,6 +976,52 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aPropertyRequiredOnlyByAPrunedSiblingIsNotRequired() throws Exception {
+    // The trigger and the property it requires are both new: once both are pruned nothing is
+    // required, whichever of the two the pruner reaches first.
+    for (String[] pair : new String[][] {{"z", "b"}, {"b", "z"}}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      String trigger = pair[0];
+      String dependent = pair[1];
+      String props = string(dependent) + ", \"" + trigger + "\": {\"type\": \"integer\"}";
+      JsonSchema v1 = object(props);
+      JsonSchema v2 = object(string("q"));
+      JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+          + props + ", " + string("g") + "}, \"dependencies\": {\"" + trigger + "\": [\""
+          + dependent + "\"]}}");
+      byte[] bytes = write(v1, "{\"" + dependent + "\": \"x\", \"" + trigger + "\": 1}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      assertEquals(0, read(v3, bytes, "v1").size(), trigger);
+    }
+  }
+
+  @Test
+  void aPropertyRequiredByAnotherAllOfPartIsDefaultedOrFails() throws Exception {
+    // The dependencies clause sits in an allOf part apart from the one declaring p.
+    String v3 = "{\"allOf\": [{\"type\": \"object\", \"properties\": {\"a\": {\"type\": "
+        + "\"integer\"}, \"p\": {\"type\": \"string\"%s}}}, {\"dependencies\": {\"a\": [\"p\"]}}]}";
+    for (String defaulted : new String[] {"", ", \"default\": \"pd\""}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      JsonSchema v1 = object("\"a\": {\"type\": \"integer\"}", string("p"));
+      JsonSchema reader = new JsonSchema(String.format(v3, defaulted));
+      byte[] bytes = write(v1, "{\"a\": 1, \"p\": \"old\"}");
+      client.register(SUBJECT, object("\"a\": {\"type\": \"integer\"}"));
+      client.register(SUBJECT, reader);
+
+      if (defaulted.isEmpty()) {
+        Exception e = assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"));
+      } else {
+        assertEquals("pd", read(reader, bytes, "v1").get("p").asText());
+      }
+    }
+  }
+
+  @Test
   void aDefaultTheReaderRejectsIsNoValue() throws Exception {
     // n is new and required, but its default is no integer: no value to read, not an invalid one.
     JsonSchema v1 = object("\"a\": {\"type\": \"integer\"}", "\"n\": {\"type\": \"integer\"}");
@@ -989,6 +1035,39 @@ class JsonProvenanceDeserializerTest {
 
     Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
     assertTrue(e.getCause().getMessage().contains("does not validate"));
+  }
+
+  @Test
+  void anUnusedUnconvertibleDefinitionKeepsProvenance() throws Exception {
+    // An unused 2020-12 definition the logical type cannot express used to cost the subject its
+    // provenance, so the re-added note kept its value.
+    String body = "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", "
+        + "\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}%s}, "
+        + "\"$defs\": {\"U\": {\"not\": {\"type\": \"string\"}}}}";
+    JsonSchema v1 = new JsonSchema(String.format(body, ", " + string("note")));
+    JsonSchema v2 = new JsonSchema(String.format(body, ""));
+    JsonSchema v3 = new JsonSchema(String.format(body, ", " + string("note") + ", "
+        + string("g")));
+    byte[] bytes = write(v1, "{\"a\": \"x\", \"note\": \"old\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = read(v3, bytes, "v1");
+    assertEquals("x", read.get("a").asText());
+    assertFalse(read.has("note"));
+  }
+
+  @Test
+  void aRootUnionIsReadOverTheWire() throws Exception {
+    // A root union's branches have no names of their own: the response must still carry them.
+    String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "
+        + "{\"type\": \"integer\"}]}";
+    JsonSchema v1 = new JsonSchema(String.format(root, string("x")));
+    JsonSchema v2 = new JsonSchema(String.format(root, string("x") + ", " + string("g")));
+    byte[] bytes = write(v1, "{\"x\": \"s\"}");
+    client.register(SUBJECT, v2);
+
+    assertEquals("s", read(v2, bytes, "v1").get("x").asText());
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

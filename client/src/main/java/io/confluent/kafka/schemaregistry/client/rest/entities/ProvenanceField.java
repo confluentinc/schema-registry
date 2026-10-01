@@ -78,6 +78,9 @@ public class ProvenanceField {
       + "or null for an array element or map value. Steps the logical type hides are included "
       + "and steps with no native form left out, so it need not match path step for step",
       example = "[\"items\", null, \"sku\"]")
+  // An empty list is a location with no native step of its own, as a oneof or a root union's
+  // branch: unlike null, it must reach the client.
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   @JsonProperty("names")
   public List<String> getNames() {
     return names;

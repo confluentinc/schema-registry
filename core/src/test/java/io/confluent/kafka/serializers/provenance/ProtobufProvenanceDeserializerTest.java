@@ -1257,6 +1257,20 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(0, get(read, "k2"));
   }
 
+  @Test
+  void aOneofInTheRootMessageIsReadOverTheWire() throws Exception {
+    // The oneof's location has no names of its own: the response must still carry them, as [].
+    ProtobufSchema v1 = row("int32 a = 1;", "oneof o { int32 b = 2; string s = 3; }");
+    ProtobufSchema v2 = row("int32 a = 1;", "oneof o { int32 b = 2; string s = 3; }",
+        "int32 d = 4;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "a"), 7).setField(field(b, "b"), 5));
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "a"));
+    assertEquals(5, get(read, "b"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

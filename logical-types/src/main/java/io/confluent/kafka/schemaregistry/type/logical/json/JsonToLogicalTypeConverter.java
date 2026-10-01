@@ -379,8 +379,16 @@ public class JsonToLogicalTypeConverter {
         // A null definition has no type of its own: a union reads it as its null member.
         continue;
       }
-      Schema converted = convertWithCycleDetection(
-          defSchema, false, ctx, Collections.emptyList());
+      Runnable undo = ctx.checkpoint();
+      Schema converted;
+      try {
+        converted = convertWithCycleDetection(defSchema, false, ctx, Collections.emptyList());
+      } catch (ValidationException e) {
+        // A definition the logical type cannot express fails only where it is used, as under
+        // draft-07, which converts definitions on demand; nothing of the attempt is kept.
+        undo.run();
+        continue;
+      }
       ctx.putNamedType(entry.getKey(), converted);
     }
   }

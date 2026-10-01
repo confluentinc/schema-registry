@@ -263,6 +263,37 @@ class JsonToLogicalTypeConverterTest {
   }
 
   @Test
+  void anUnusedUnconvertibleDefinitionDoesNotFailAModernDraft() {
+    // 2020-12 converts every $defs entry up front: one the logical type cannot express fails only
+    // where it is used, as draft-07's on-demand conversion does.
+    String body = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}%s}"
+        + ",\"$defs\":{\"U\":%s}}";
+    String plain = rootOf(String.format(body, "", "{\"type\":\"string\"}")).toDdl();
+    String[] unconvertible = {
+        "{\"not\":{\"type\":\"string\"}}",
+        "{\"if\":{\"type\":\"string\"},\"then\":{\"minLength\":1}}",
+        "{\"const\":null}",
+        "{\"allOf\":[{\"type\":\"null\"}]}",
+        "{\"type\":\"array\",\"prefixItems\":[{\"type\":\"string\"}]}"};
+    for (String u : unconvertible) {
+      assertEquals(plain, rootOf(String.format(body, "", u)).toDdl(), u);
+      assertThatThrownBy(() -> rootOf(String.format(body, ",\"b\":{\"$ref\":\"#/$defs/U\"}", u)))
+          .as(u).isInstanceOf(ValidationException.class);
+    }
+  }
+
+  @Test
+  void aDefinitionThatFailedLeavesNoPlaceholder() {
+    // U reaches V first, and V fails: what that attempt left, V's empty placeholder included, is
+    // undone, so b's use of V fails rather than reading an empty struct.
+    String schema = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"b\":{\"$ref\":\"#/$defs/V\"}},"
+        + "\"$defs\":{\"U\":{\"$ref\":\"#/$defs/V\"},\"V\":{\"not\":{\"type\":\"string\"}}}}";
+    assertThatThrownBy(() -> rootOf(schema)).isInstanceOf(ValidationException.class);
+  }
+
+  @Test
   void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
     String[][] cases = {
         {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},

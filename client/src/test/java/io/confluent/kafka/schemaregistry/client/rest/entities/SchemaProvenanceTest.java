@@ -65,6 +65,15 @@ public class SchemaProvenanceTest {
   }
 
   @Test
+  public void anEmptyNamesListRoundTrips() throws Exception {
+    // A oneof or a root union's branch has no native step of its own: [] is not "no names".
+    ProvenanceField field = field(path(1), Collections.emptyList(), "UNION", 2);
+    JsonNode json = MAPPER.valueToTree(field);
+    assertTrue(json.get("names").isArray());
+    assertEquals(field, MAPPER.readValue(MAPPER.writeValueAsString(field), ProvenanceField.class));
+  }
+
+  @Test
   public void aVersionWithNoMembersSaysSo() {
     JsonNode json = MAPPER.valueToTree(new ProvenanceVersion(1, 1001, Collections.emptyList()));
     assertTrue(json.get("fields").isArray());

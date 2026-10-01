@@ -507,6 +507,9 @@ final class JsonProvenancePruner {
         written.put(target, readings);
       }
     }
+    // Required only by a sibling's presence: decided once pruning settles, as the sibling may be
+    // pruned too.
+    List<Deferred> deferred = new ArrayList<>();
     // A property removed can change how the rest of the value reads: pruned until nothing more is.
     boolean changed = true;
     while (changed) {
@@ -528,7 +531,7 @@ final class JsonProvenancePruner {
         String name = target.names.get(target.names.size() - 1);
         for (Map.Entry<ObjectNode, List<Reach>> e : reached.entrySet()) {
           JsonNode before = e.getKey().get(name);
-          JsonNode value = remove(e.getKey(), e.getValue(), name, target.names);
+          JsonNode value = remove(e.getKey(), e.getValue(), name, target.names, deferred);
           if (value != null) {
             addContainers(value, defaults);
             placed.computeIfAbsent(e.getKey(), n -> new HashSet<>()).add(name);
@@ -536,6 +539,26 @@ final class JsonProvenancePruner {
           changed |= e.getKey().get(name) != before;
         }
       }
+    }
+    for (Deferred d : deferred) {
+      if (!d.node.has(d.name) && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
+        placeDefault(d.node, d.reaches, d.name, d.names);
+      }
+    }
+  }
+
+  /** A pruned property only a sibling's presence requires, decided once pruning settles. */
+  private static final class Deferred {
+    final ObjectNode node;
+    final List<Reach> reaches;
+    final String name;
+    final List<String> names;
+
+    Deferred(ObjectNode node, List<Reach> reaches, String name, List<String> names) {
+      this.node = node;
+      this.reaches = reaches;
+      this.name = name;
+      this.names = names;
     }
   }
 
@@ -686,8 +709,10 @@ final class JsonProvenancePruner {
         walk(names, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
             ambiguous, alternatives, at);
       }
-    } else if (declared || object.getRequiredProperties().contains(name)) {
-      // A part that only requires the property, as allOf [Base, {required: [p]}], is reached too.
+    } else if (declared || object.getRequiredProperties().contains(name)
+        || dependedOn(object, name)) {
+      // A part that only requires the property, as allOf [Base, {required: [p]}] or a
+      // dependencies clause, is reached too.
       at.accept((ObjectNode) node, object, name, choices, ambiguous, alternatives);
     }
   }
@@ -837,23 +862,37 @@ final class JsonProvenancePruner {
    * property is required if some applying reach requires it in every reading.
    */
   private static JsonNode remove(ObjectNode node, List<Reach> reaches, String name,
-      List<String> names) {
+      List<String> names, List<Deferred> deferred) {
     boolean declared = false;
-    Schema withDefault = null;
     for (Reach reach : reaches) {
-      Schema property = reach.object.getPropertySchemas().get(name);
-      declared |= property != null;
-      if (withDefault == null) {
-        withDefault = withDefault(property);
-      }
+      declared |= reach.object.getPropertySchemas().get(name) != null;
     }
     if (!declared) {
       // Only parts requiring it reached the property: an extra property, not a location.
       return null;
     }
     node.remove(name);
-    if (!requiredInEveryReading(reaches, name, node)) {
+    if (!requiredInEveryReading(reaches, name, node, false)) {
+      if (requiredInEveryReading(reaches, name, node, true)) {
+        deferred.add(new Deferred(node, reaches, name, names));
+      }
       return null;
+    }
+    return placeDefault(node, reaches, name, names);
+  }
+
+  /**
+   * Puts the reader's default for a pruned property that every reading requires.
+   *
+   * @throws SerializationException if it declares none, or one that does not validate under it
+   */
+  private static JsonNode placeDefault(ObjectNode node, List<Reach> reaches, String name,
+      List<String> names) {
+    Schema withDefault = null;
+    for (Reach reach : reaches) {
+      if (withDefault == null) {
+        withDefault = withDefault(reach.object.getPropertySchemas().get(name));
+      }
     }
     if (withDefault == null) {
       throw new SerializationException("Property " + names + " is new to the reader: "
@@ -872,6 +911,11 @@ final class JsonProvenancePruner {
     } catch (IOException e) {
       throw new SerializationException("Could not read the default of property '" + name + "'", e);
     }
+  }
+
+  // Whether some property's presence makes name required: dependencies, or dependentRequired.
+  private static boolean dependedOn(ObjectSchema object, String name) {
+    return object.getPropertyDependencies().values().stream().anyMatch(d -> d.contains(name));
   }
 
   // Whether a property present in node makes name required: dependencies, or dependentRequired.
@@ -907,13 +951,13 @@ final class JsonProvenancePruner {
    * seen for each ambiguous union, over the reaches consistent with it.
    */
   private static boolean requiredInEveryReading(List<Reach> reaches, String name,
-      ObjectNode node) {
+      ObjectNode node, boolean dependencies) {
     boolean anyRequires = false;
     boolean allRequire = true;
     boolean extras = false;
     for (Reach reach : reaches) {
       boolean requires = reach.object.getRequiredProperties().contains(name)
-          || requiredBy(reach.object, node, name);
+          || dependencies && requiredBy(reach.object, node, name);
       if (requires && reach.alternatives.isEmpty()) {
         // An allOf part or an unambiguous step applies in every reading.
         return true;

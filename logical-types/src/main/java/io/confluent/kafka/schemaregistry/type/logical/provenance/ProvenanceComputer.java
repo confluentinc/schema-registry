@@ -815,14 +815,23 @@ public final class ProvenanceComputer {
       // A peer whose own name another peer newly aliases yields it. One yielding without naming
       // another by a new alias of its own fails below, so only whole permutations go through.
       Map<Node, Node> before = new IdentityHashMap<>(own);
+      // The own-matched peers newly aliasing each name, indexed once: a group can be wide.
+      Map<String, List<Node>> newClaims = new HashMap<>();
+      for (Node other : peers) {
+        Node theirs = before.get(other);
+        if (theirs != null) {
+          for (String alias : other.aliases) {
+            if (!theirs.aliases.contains(alias)) {
+              newClaims.computeIfAbsent(alias, k -> new ArrayList<>()).add(other);
+            }
+          }
+        }
+      }
       for (Node peer : peers) {
         Node mine = before.get(peer);
-        for (Node other : peers) {
-          Node theirs = other != peer ? before.get(other) : null;
-          if (mine != null && theirs != null && newlyAliases(other, theirs, mine.name)) {
-            ownClaimant.remove(own.remove(peer));
-            break;
-          }
+        List<Node> claimants = mine != null ? newClaims.get(mine.name) : null;
+        if (claimants != null && claimants.stream().anyMatch(other -> other != peer)) {
+          ownClaimant.remove(own.remove(peer));
         }
       }
 
@@ -865,12 +874,6 @@ public final class ProvenanceComputer {
               + p.name);
         }
       }
-    }
-
-    // Whether peer, continuing was, names the previous location called name by an alias was had
-    // no part in.
-    private static boolean newlyAliases(Node peer, Node was, String name) {
-      return peer.aliases.contains(name) && !was.aliases.contains(name);
     }
 
     /**

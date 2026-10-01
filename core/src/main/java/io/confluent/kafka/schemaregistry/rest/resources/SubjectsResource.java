@@ -114,11 +114,12 @@ public class SubjectsResource {
    * Provenance over one requested range, keyed by the subject, the mode, the algorithm, and every
    * (version, schema id, registration time) in the range, soft-deleted versions included. It is
    * computed over the range alone — its ends and everything between — so a version outside it,
-   * however old or however broken, has no effect. Any registration or deletion inside the range
-   * changes the key, so nothing needs invalidating, and many readers asking for the same range
-   * collapse into one computation per node. Asynchronous, so that a long computation holds no
-   * lock other keys wait on; it still runs on the thread of the request that started it. Weighed
-   * by the locations each range holds.
+   * however old or however broken, has no effect. Any registration, or a version's removal, inside
+   * the range changes the key, so nothing needs invalidating; a soft delete changes nothing
+   * provenance depends on, as soft-deleted versions are included. Many readers asking for the
+   * same range collapse into one computation per node. Asynchronous, so that a long computation
+   * holds no lock other keys wait on; it still runs on the thread of the request that started it.
+   * Weighed by the locations each range holds.
    */
   private final AsyncCache<List<Object>, Computed> provenanceCache = Caffeine.newBuilder()
       .maximumWeight(MAX_CACHED_PROVENANCE_LOCATIONS)

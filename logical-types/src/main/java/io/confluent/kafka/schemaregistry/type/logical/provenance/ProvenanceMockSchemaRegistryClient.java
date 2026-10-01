@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -270,7 +271,14 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       // As the registry does: any other computation failure is a server error.
       throw new RestClientException(String.valueOf(e.getMessage()), 500, SERVER_ERROR);
     }
-    return ProvenanceHistory.slice(whole, from, to, includeInterior);
+    return onTheWire(ProvenanceHistory.slice(whole, from, to, includeInterior));
+  }
+
+  // As a client receives it: through the JSON the registry serves, so a test sees what the wire
+  // drops or keeps.
+  private static SchemaProvenance onTheWire(SchemaProvenance provenance) throws IOException {
+    return JacksonMapper.INSTANCE.readValue(
+        JacksonMapper.INSTANCE.writeValueAsString(provenance), SchemaProvenance.class);
   }
 
   /**

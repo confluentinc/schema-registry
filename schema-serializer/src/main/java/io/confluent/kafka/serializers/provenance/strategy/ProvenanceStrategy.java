@@ -35,8 +35,9 @@ import org.apache.kafka.common.errors.RetriableException;
  * reader schema. The default, {@link ClientProvenanceStrategy}, asks Schema Registry.
  *
  * <p>The response must be the one the registry's endpoint would give: each version's locations
- * with the {@code path} and {@code names} Schema Registry's converters produce, as a reader finds
- * its fields by them, and a pid per location that is equal exactly where the location continues.
+ * with the {@code path}, {@code names} and {@code kind} Schema Registry's converters produce, and
+ * the {@code kind} of each version's root, as a reader finds its fields and tells a field from a
+ * union branch by them, and a pid per location that is equal exactly where the location continues.
  *
  * <p>What a failure is thrown as decides what the record gets:
  * <ul>
