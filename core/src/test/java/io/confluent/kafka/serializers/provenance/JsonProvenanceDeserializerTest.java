@@ -945,6 +945,52 @@ class JsonProvenanceDeserializerTest {
     assertFalse(read.has("note"));
   }
 
+  @Test
+  void aPropertyRequiredByAnotherIsDefaultedOrFailsWhenPruned() throws Exception {
+    // a's presence requires p, by draft-07 dependencies or 2020-12 dependentRequired: a pruned p
+    // takes its default, or fails the record, as one listed in required does.
+    String body = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"integer\"}%s}%s}";
+    String p = ", \"p\": {\"type\": \"string\"%s}";
+    for (String requires : new String[] {", \"dependencies\": {\"a\": [\"p\"]}",
+        ", \"$schema\": \"https://json-schema.org/draft/2020-12/schema\", "
+            + "\"dependentRequired\": {\"a\": [\"p\"]}"}) {
+      for (String defaulted : new String[] {"", ", \"default\": \"pd\""}) {
+        client = new ProvenanceMockSchemaRegistryClient();
+        serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+        JsonSchema v1 = new JsonSchema(String.format(body, String.format(p, ""), ""));
+        JsonSchema v2 = new JsonSchema(String.format(body, "", ""));
+        JsonSchema v3 = new JsonSchema(String.format(body, String.format(p, defaulted), requires));
+        byte[] bytes = write(v1, "{\"a\": 1, \"p\": \"old\"}");
+        client.register(SUBJECT, v2);
+        client.register(SUBJECT, v3);
+
+        if (defaulted.isEmpty()) {
+          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+          assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"),
+              requires);
+        } else {
+          assertEquals("pd", read(v3, bytes, "v1").get("p").asText(), requires);
+        }
+      }
+    }
+  }
+
+  @Test
+  void aDefaultTheReaderRejectsIsNoValue() throws Exception {
+    // n is new and required, but its default is no integer: no value to read, not an invalid one.
+    JsonSchema v1 = object("\"a\": {\"type\": \"integer\"}", "\"n\": {\"type\": \"integer\"}");
+    JsonSchema v2 = object("\"a\": {\"type\": \"integer\"}");
+    JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
+        + "\"a\": {\"type\": \"integer\"}, \"n\": {\"type\": \"integer\", \"default\": \"oops\"}}, "
+        + "\"required\": [\"n\"]}");
+    byte[] bytes = write(v1, "{\"a\": 1, \"n\": 3}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    assertTrue(e.getCause().getMessage().contains("does not validate"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

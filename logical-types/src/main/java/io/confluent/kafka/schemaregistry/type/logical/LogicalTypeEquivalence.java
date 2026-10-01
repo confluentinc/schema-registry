@@ -299,7 +299,12 @@ final class LogicalTypeEquivalence {
 
   private static boolean identityParams(Map<String, Object> a, Map<String, Object> b) {
     for (String key : IDENTITY_PARAMS) {
-      if (!Objects.equals(a.get(key), b.get(key))) {
+      if (key.equals(Schema.AVRO_ALIASES)) {
+        // An alias list names what a location continued, in whatever order it is declared.
+        if (!new HashSet<>(Schema.parseAliases(a)).equals(new HashSet<>(Schema.parseAliases(b)))) {
+          return false;
+        }
+      } else if (!Objects.equals(a.get(key), b.get(key))) {
         return false;
       }
     }

@@ -429,6 +429,25 @@ class AvroProvenanceDeserializerTest {
     assertEquals(5, on.get("x"));
   }
 
+  @Test
+  void aReaderListingAliasesInAnotherOrderIsIdentifiedByStructure() throws Exception {
+    // The reader is v3 but for a doc and the order of b's aliases: found by structure, n is the
+    // field re-added at v3, so the writer's n is no value of it.
+    Schema v1 = record(idField(), "{\"name\":\"a\",\"type\":\"int\"}", string("n"));
+    Schema v2 = record(idField(), "{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\",\"z\"]}");
+    String v3 = "{\"type\":\"record\",\"name\":\"MyRecord\",\"namespace\":\"io.confluent\",%s"
+        + "\"fields\":[" + idField() + ",{\"name\":\"b\",\"type\":\"int\",\"aliases\":[%s]},"
+        + "{\"name\":\"n\",\"type\":\"string\",\"default\":\"dflt\"}]}";
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("a", 5).set("n", "old"));
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, new AvroSchema(String.format(v3, "", "\"a\",\"z\"")));
+    Schema reader = new Schema.Parser().parse(String.format(v3, "\"doc\":\"d\",", "\"z\",\"a\""));
+
+    GenericRecord read = read(reader, bytes, "v1");
+    assertEquals(5, read.get("b"));
+    assertEquals("dflt", read.get("n").toString());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private GenericRecord sameBothWays(Schema writer, Schema reader, Object value) throws Exception {

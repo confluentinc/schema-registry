@@ -852,7 +852,7 @@ final class JsonProvenancePruner {
       return null;
     }
     node.remove(name);
-    if (!requiredInEveryReading(reaches, name)) {
+    if (!requiredInEveryReading(reaches, name, node)) {
       return null;
     }
     if (withDefault == null) {
@@ -862,11 +862,22 @@ final class JsonProvenancePruner {
     }
     try {
       JsonNode value = MAPPER.readTree(JSONObject.valueToString(withDefault.getDefaultValue()));
+      if (!validates(withDefault, validatable(value))) {
+        // A default the reader itself rejects is no value to read either.
+        throw new SerializationException("Property " + names + " is new to the reader, and the "
+            + "default it declares does not validate under it. There is no value to read.");
+      }
       node.set(name, value);
       return value;
     } catch (IOException e) {
       throw new SerializationException("Could not read the default of property '" + name + "'", e);
     }
+  }
+
+  // Whether a property present in node makes name required: dependencies, or dependentRequired.
+  private static boolean requiredBy(ObjectSchema object, ObjectNode node, String name) {
+    return object.getPropertyDependencies().entrySet().stream()
+        .anyMatch(e -> node.has(e.getKey()) && e.getValue().contains(name));
   }
 
   private static JsonNode withoutProperty(ObjectNode node, String name, CombinedSchema schema) {
@@ -895,12 +906,14 @@ final class JsonProvenancePruner {
    * Whether every reading of the value requires {@code name}: each combination of the branches
    * seen for each ambiguous union, over the reaches consistent with it.
    */
-  private static boolean requiredInEveryReading(List<Reach> reaches, String name) {
+  private static boolean requiredInEveryReading(List<Reach> reaches, String name,
+      ObjectNode node) {
     boolean anyRequires = false;
     boolean allRequire = true;
     boolean extras = false;
     for (Reach reach : reaches) {
-      boolean requires = reach.object.getRequiredProperties().contains(name);
+      boolean requires = reach.object.getRequiredProperties().contains(name)
+          || requiredBy(reach.object, node, name);
       if (requires && reach.alternatives.isEmpty()) {
         // An allOf part or an unambiguous step applies in every reading.
         return true;

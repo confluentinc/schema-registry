@@ -258,6 +258,22 @@ class LogicalTypeEquivalenceTest {
     return "{\"type\":\"object\",\"properties\":{\"d\":" + body + "}}";
   }
 
+  @Test
+  void avroAliasesInAnotherOrderAreEquivalent() {
+    // An alias list names what a location continued: its order says nothing, its members do.
+    String inner = "{\"type\":\"record\",\"name\":\"In\",\"aliases\":[%s],\"fields\":["
+        + "{\"name\":\"v\",\"type\":\"int\"}]}";
+    assertThat(avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"x\",\"z\"]}")
+        .equivalent(AVRO, avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"z\",\"x\"]}")))
+        .isTrue();
+    assertThat(avro(field("i", String.format(inner, "\"Old\",\"Older\""), null))
+        .equivalent(AVRO, avro(field("i", String.format(inner, "\"Older\",\"Old\""), null))))
+        .isTrue();
+    assertThat(avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"x\",\"z\"]}")
+        .equivalent(AVRO, avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"x\"]}")))
+        .isFalse();
+  }
+
   private static String field(String name, String type, String defaultValue) {
     return "{\"name\":\"" + name + "\",\"type\":" + type
         + (defaultValue != null ? ",\"default\":" + defaultValue : "") + "}";
