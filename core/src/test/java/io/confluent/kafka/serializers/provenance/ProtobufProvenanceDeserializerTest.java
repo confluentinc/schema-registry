@@ -405,6 +405,22 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aMessageReaddedAfterAGapDoesNotInheritTheOldData() throws Exception {
+    // M is dropped in v2 and re-added in v3 with a new field at the old number.
+    String host = "message Host { int32 h = 1; }";
+    ProtobufSchema v1 = file("message M { int32 old = 1; }", host);
+    Descriptor m = v1.toDescriptor("p.M");
+    byte[] bytes = write(v1,
+        DynamicMessage.newBuilder(m).setField(m.findFieldByName("old"), 5).build());
+    client.register(SUBJECT, file(host));
+    ProtobufSchema v3 = file(host, "message M { int32 neu = 1; }");
+    client.register(SUBJECT, v3);
+
+    assertEquals(5, get(read(v3, bytes, null), "neu"));
+    assertEquals(0, get(read(v3, bytes, "v1"), "neu"));
+  }
+
+  @Test
   void aReusedNumberInTheSecondMessageDoesNotInheritTheOldData() throws Exception {
     ProtobufSchema v1 = file(ORDER, "message Refund { int32 id = 1; string note = 2; }");
     ProtobufSchema v2 = file(ORDER, "message Refund { int32 id = 1; }");

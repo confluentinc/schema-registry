@@ -140,7 +140,8 @@ final class ProtoProvenanceRenumberer {
 
   /**
    * Whether an ancestor of {@code path} is a moving field. A oneof moving is no field: its names
-   * are its parent's, and its members still need numbers of their own.
+   * are its parent's, and its members still need numbers of their own. Nor is a top-level message:
+   * restarted, it moves none of its members by itself.
    */
   private boolean underMovingField(Descriptor root, List<Integer> path,
       Set<List<Integer>> moving, ProvenanceMapping mapping, boolean multi) {
@@ -148,8 +149,11 @@ final class ProtoProvenanceRenumberer {
       List<Integer> ancestor = path.subList(0, k);
       if (moving.contains(ancestor)) {
         List<String> names = mapping.readerNamesOf(ancestor);
-        if (names != null && !names.isEmpty()
-            && !isOneof(ancestor, names, fieldAt(root, names, multi), mapping)) {
+        // A top-level message is no field: restarted, it moves none of its members by itself,
+        // so each is decided on its own.
+        FieldDescriptor field =
+            names == null || names.isEmpty() ? null : fieldAt(root, names, multi);
+        if (field != null && !isOneof(ancestor, names, field, mapping)) {
           return true;
         }
       }
