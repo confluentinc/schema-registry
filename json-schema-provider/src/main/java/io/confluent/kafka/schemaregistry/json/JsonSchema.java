@@ -605,7 +605,7 @@ public class JsonSchema implements ParsedSchema {
     if (idNode != null && idNode.isTextual()) {
       rootId = idNode.asText();
     }
-    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator(rootId));
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator(base, rootId));
     assert ctx != null;
     ctx.close();
     setSkemaObj(skemaObj);

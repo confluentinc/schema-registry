@@ -50,7 +50,6 @@ import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
-import com.github.erosb.jsonsKema.JsonPointer;
 import com.github.erosb.jsonsKema.JsonString;
 import com.github.erosb.jsonsKema.JsonVisitor;
 import com.github.erosb.jsonsKema.MaxItemsSchema;
@@ -80,8 +79,11 @@ import com.github.erosb.jsonsKema.TypeSchema;
 import com.github.erosb.jsonsKema.UnevaluatedItemsSchema;
 import com.github.erosb.jsonsKema.UnevaluatedPropertiesSchema;
 import com.github.erosb.jsonsKema.UniqueItemsSchema;
+import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.WriteOnlySchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -100,6 +102,7 @@ import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.SchemaLocation;
 import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.loader.OrgJsonUtil;
 import org.json.JSONArray;
@@ -120,13 +123,19 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   // object-identity cycle in the schema graph (e.g. a $ref/$dynamicRef to the recursive 2020-12
   // meta-schema) is broken instead of recursing forever and overflowing the stack.
   private final Set<Schema> descending;
+  private final URI rootDocument;
   private final String rootId;
 
   public SchemaTranslator() {
-    this(null);
+    this(URI.create(JsonSchema.DEFAULT_BASE_URI), null);
   }
 
-  public SchemaTranslator(String rootId) {
+  /**
+   * @param rootDocument the document source json-sKema assigned to the root document
+   * @param rootId the root {@code $id}, which json-sKema consumes into the base URI
+   */
+  public SchemaTranslator(URI rootDocument, String rootId) {
+    this.rootDocument = rootDocument;
     this.rootId = rootId;
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
@@ -252,13 +261,13 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       ctx.schemaBuilder().id(schema.getId().getValue());
     }
     SourceLocation location = schema.getLocation();
-    if (location != null) {
-      JsonPointer pointer = location.getPointer();
-      if (pointer != null) {
-        ctx.schemaBuilder().schemaLocation(toEveritSchemaLocation(pointer));
-      }
-      if (rootId != null && schema.getId() == null
-          && (pointer == null || pointer.getSegments().isEmpty())) {
+    if (location != UnknownSource.INSTANCE) {
+      boolean inRootDocument = rootDocument.equals(location.getDocumentSource());
+      ctx.schemaBuilder().schemaLocation(new SchemaLocation(
+          inRootDocument ? null : toEveritDocumentUri(location.getDocumentSource()),
+          location.getPointer().getSegments()));
+      if (inRootDocument && rootId != null && schema.getId() == null
+          && location.getPointer().getSegments().isEmpty()) {
         ctx.schemaBuilder().id(rootId);
       }
     }
@@ -630,19 +639,12 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   }
 
   /**
-   * Renders a json-sKema pointer as an everit same-document location: {@code #} for the root,
-   * {@code #/$defs/Foo} for a nested definition.
+   * Maps a json-sKema document source to the URI everit reports for a referenced document: the
+   * reference relative to the root document, resolved against the root {@code $id} when present.
    */
-  private static String toEveritSchemaLocation(JsonPointer pointer) {
-    List<String> segments = pointer.getSegments();
-    if (segments.isEmpty()) {
-      return "#";
-    }
-    StringBuilder sb = new StringBuilder("#");
-    for (String segment : segments) {
-      sb.append('/').append(segment.replace("~", "~0").replace("/", "~1"));
-    }
-    return sb.toString();
+  private URI toEveritDocumentUri(URI documentSource) {
+    URI relative = rootDocument.relativize(documentSource);
+    return rootId != null ? URI.create(rootId).resolve(relative) : relative;
   }
 
   private org.everit.json.schema.Schema.Builder<?> typeToSchema(String type) {

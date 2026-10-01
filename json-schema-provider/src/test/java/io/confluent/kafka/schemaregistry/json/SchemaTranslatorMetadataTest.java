@@ -16,8 +16,12 @@
 package io.confluent.kafka.schemaregistry.json;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Collections;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
@@ -68,6 +72,69 @@ public class SchemaTranslatorMetadataTest {
         + "\"properties\":{\"root\":{\"$ref\":\"#/$defs/a~1b~0c\"}},"
         + "\"$defs\":{\"a/b~c\":{\"type\":\"object\","
         + "\"properties\":{\"self\":{\"$ref\":\"#/$defs/a~1b~0c\"}}}}}";
+  }
+
+  private static String external(String draft) {
+    String defs = defsKeyword(draft);
+    return "{\"$schema\":\"" + draft + "\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"type\":\"string\"}},"
+        + "\"" + defs + "\":{\"Foo\":{\"type\":\"object\","
+        + "\"properties\":{\"e\":{\"type\":\"string\"}}}}}";
+  }
+
+  private static String crossDocument(String draft, String id) {
+    String defs = defsKeyword(draft);
+    return "{\"$schema\":\"" + draft + "\","
+        + (id != null ? "\"$id\":\"" + id + "\"," : "")
+        + "\"type\":\"object\","
+        + "\"properties\":{"
+        + "\"extRoot\":{\"$ref\":\"external.json\"},"
+        + "\"extFoo\":{\"$ref\":\"external.json#/" + defs + "/Foo\"},"
+        + "\"localFoo\":{\"$ref\":\"#/" + defs + "/Foo\"}},"
+        + "\"" + defs + "\":{\"Foo\":{\"type\":\"object\","
+        + "\"properties\":{\"l\":{\"type\":\"string\"}}}}}";
+  }
+
+  private static String defsKeyword(String draft) {
+    return DRAFT_7.equals(draft) ? "definitions" : "$defs";
+  }
+
+  private static ObjectSchema loadCrossDocument(String draft, String id) {
+    return (ObjectSchema) new JsonSchema(
+        crossDocument(draft, id),
+        Collections.singletonList(new SchemaReference("external.json", "external", 1)),
+        Collections.singletonMap("external.json", external(draft)),
+        null).rawSchema();
+  }
+
+  private static Schema referred(ObjectSchema root, String property) {
+    return ((ReferenceSchema) root.getPropertySchemas().get(property)).getReferredSchema();
+  }
+
+  @Test
+  public void crossDocumentTargets_matchDraft7() {
+    for (String id : new String[] {"https://example.com/main.json", null}) {
+      ObjectSchema draft7 = loadCrossDocument(DRAFT_7, id);
+      for (String draft : MODERN_DRAFTS) {
+        ObjectSchema modern = loadCrossDocument(draft, id);
+        String msg = draft + " $id=" + id;
+        assertEquals(msg, draft7.getId(), modern.getId());
+        assertEquals(msg, draft7.getSchemaLocation(), modern.getSchemaLocation());
+        for (String property : new String[] {"extRoot", "extFoo"}) {
+          Schema draft7Target = referred(draft7, property);
+          Schema modernTarget = referred(modern, property);
+          assertNull(msg + " " + property, modernTarget.getId());
+          assertEquals(msg + " " + property,
+              draft7Target.getSchemaLocation()
+                  .replace("/definitions/", "/$defs/"),
+              modernTarget.getSchemaLocation());
+        }
+        assertEquals(msg, "#/$defs/Foo", referred(modern, "localFoo").getSchemaLocation());
+        assertNotEquals(msg, referred(modern, "localFoo").getSchemaLocation(),
+            referred(modern, "extFoo").getSchemaLocation());
+      }
+    }
   }
 
   @Test
