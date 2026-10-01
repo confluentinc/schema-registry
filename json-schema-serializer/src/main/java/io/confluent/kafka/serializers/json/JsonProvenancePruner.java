@@ -159,11 +159,9 @@ final class JsonProvenancePruner {
     mapping.requireKinds();
     Schema raw = reader.rawSchema();
     Map<List<String>, Target> byNames = new LinkedHashMap<>();
-    Set<List<Integer>> properties = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
       if (!mapping.isReaderBranch(path)) {
-        properties.add(path);
         byNames.computeIfAbsent(names, Target::new).candidates.add(
             new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
       }
@@ -174,17 +172,11 @@ final class JsonProvenancePruner {
       if (!mapping.isReaderBranch(path)) {
         continue;
       }
-      for (int k = path.size() - 1; k > 0; k--) {
-        List<Integer> owner = path.subList(0, k);
-        if (properties.contains(owner)) {
-          Target target = byNames.get(mapping.readerNamesOf(owner));
-          if (target != null) {
-            target.branches.put(branchChoices(mapping, path),
-                new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
-            target.readerKinds.put(branchChoices(mapping, path), mapping.readerKindOf(path));
-          }
-          break;
-        }
+      Target target = byNames.get(readerPropertyOf(mapping, path));
+      if (target != null) {
+        target.branches.put(branchChoices(mapping, path),
+            new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+        target.readerKinds.put(branchChoices(mapping, path), mapping.readerKindOf(path));
       }
     }
     // Writer locations spelled alike: a value may have been written as any of them, and read as
@@ -261,11 +253,22 @@ final class JsonProvenancePruner {
     List<Integer> choices = new ArrayList<>();
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      if (mapping.writerKindOf(prefix) != null && mapping.isWriterBranch(prefix)) {
+      if (mapping.isWriterBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
     return choices;
+  }
+
+  // The names of the nearest reader property enclosing a branch at path; empty at the root.
+  private static List<String> readerPropertyOf(ProvenanceMapping mapping, List<Integer> path) {
+    for (int k = path.size() - 1; k > 0; k--) {
+      List<Integer> prefix = path.subList(0, k);
+      if (mapping.readerKindOf(prefix) != null && !mapping.isReaderBranch(prefix)) {
+        return mapping.readerNamesOf(prefix);
+      }
+    }
+    return Collections.emptyList();
   }
 
   // The names of the nearest writer property enclosing a branch at path; empty at the root.
@@ -326,7 +329,7 @@ final class JsonProvenancePruner {
   private static List<String> outermostUnion(ProvenanceMapping mapping, List<Integer> path) {
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      if (mapping.writerKindOf(prefix) != null && mapping.isWriterBranch(prefix)) {
+      if (mapping.isWriterBranch(prefix)) {
         return writerPropertyOf(mapping, prefix);
       }
     }
@@ -380,7 +383,7 @@ final class JsonProvenancePruner {
         }
       }
       if (options.size() == 1 && nullable) {
-        // A nullable value, no union.
+        // A nullable value, no union; a bare one-branch oneOf stays one, as in walkCombined.
         heldIn(options.get(0), value, branches, held, kindAt);
         return;
       }
@@ -601,7 +604,7 @@ final class JsonProvenancePruner {
     List<Integer> choices = new ArrayList<>();
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      if (mapping.readerKindOf(prefix) != null && mapping.isReaderBranch(prefix)) {
+      if (mapping.isReaderBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
@@ -712,7 +715,9 @@ final class JsonProvenancePruner {
       }
     }
     if (branches.size() == 1 && branches.size() < subschemas.size()) {
-      // A nullable union, which the logical type collapses: no branch step.
+      // A nullable union, which the logical type collapses: no branch step. A bare one-branch
+      // oneOf stays a union, as provenance's V1 conversion keeps it; V2 unwraps it, so moving
+      // provenance to V2 changes this rule, and heldIn's.
       walk(names, branches.get(0), node, step, choices, ambiguous, alternatives, at);
       return;
     }

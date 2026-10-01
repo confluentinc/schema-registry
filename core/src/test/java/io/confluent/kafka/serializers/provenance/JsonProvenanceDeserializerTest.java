@@ -885,6 +885,27 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void anObjectInAReAddedAnyValueBranchIsPruned() throws Exception {
+    // A {} or true branch is a scalar to the logical type, with no properties for the walk to
+    // prune: like a map's, its branch holds the object.
+    for (String any : new String[] {"{}", "true"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      String body = "{\"type\": \"object\", \"properties\": {%s\"e\": {\"oneOf\": "
+          + "[{\"type\": \"integer\"}, %s]}}}";
+      JsonSchema v1 = new JsonSchema(String.format(body, "", any));
+      JsonSchema v2 = new JsonSchema(String.format(body, "", "{\"type\": \"boolean\"}"));
+      JsonSchema v3 = new JsonSchema(String.format(body, "\"g\": {\"type\": \"string\"}, ", any));
+      byte[] bytes = write(v1, "{\"e\": {\"k\": \"s\"}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      assertTrue(read(v3, bytes, null).has("e"), any);
+      assertFalse(read(v3, bytes, "v1").has("e"), any);
+    }
+  }
+
+  @Test
   void aMapFittingNoBranchOfTheReaderIsPruned() throws Exception {
     // Under draft-07, 1.0 is no integer: the map fits no branch of v3, and the branch it was
     // written in does not continue into one.

@@ -272,14 +272,16 @@ public final class ProvenanceMapping {
   }
 
   /**
-   * Whether the reader location at {@code readerPath} is a union branch rather than a field.
+   * Whether the reader location at {@code readerPath} is a union branch rather than a field; false
+   * for a path that is no location, which ends in a collection step.
    */
   public boolean isReaderBranch(List<Integer> readerPath) {
     return isBranch(readerPath, readerKinds, readerRootKind);
   }
 
   /**
-   * Whether the writer location at {@code writerPath} is a union branch rather than a field.
+   * Whether the writer location at {@code writerPath} is a union branch rather than a field; false
+   * for a path that is no location, which ends in a collection step.
    */
   public boolean isWriterBranch(List<Integer> writerPath) {
     return isBranch(writerPath, writerKinds, writerRootKind);
