@@ -597,11 +597,15 @@ public class JsonSchema implements ParsedSchema {
     // when the body lives in `definitions`.
     String rootJson = mergeDefBuckets(
         objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
-    JsonValue schemaJson = objectMapper.convertValue(
-        objectMapper.readTree(rootJson), JsonObject.class);
+    JsonValue schemaJson = new com.github.erosb.jsonsKema.JsonParser(rootJson, base).parse();
     com.github.erosb.jsonsKema.Schema skemaObj =
         new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
-    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
+    String rootId = null;
+    JsonNode idNode = jsonNode.get("$id");
+    if (idNode != null && idNode.isTextual()) {
+      rootId = idNode.asText();
+    }
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator(base, rootId));
     assert ctx != null;
     ctx.close();
     setSkemaObj(skemaObj);

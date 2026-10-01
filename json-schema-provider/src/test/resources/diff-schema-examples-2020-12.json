@@ -24,6 +24,7 @@
       "$id": "something_else"
     },
     "changes": [
+      "ID_CHANGED #/"
     ],
     "compatible": true
   },
