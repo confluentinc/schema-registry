@@ -37,7 +37,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import org.apache.kafka.common.errors.SerializationException;
@@ -170,21 +169,16 @@ final class JsonProvenancePruner {
       }
     }
     for (List<Integer> path : mapping.readerPaths()) {
-      // A branch of a property's own union, or of its items' or map values': under the nearest
-      // property, spelled as it is but for unnamed steps.
-      List<String> names = mapping.readerNamesOf(path);
+      // A branch of a property's own union, or of its items' or map values': the nearest
+      // property enclosing it.
       if (!mapping.isReaderBranch(path)) {
         continue;
       }
       for (int k = path.size() - 1; k > 0; k--) {
         List<Integer> owner = path.subList(0, k);
         if (properties.contains(owner)) {
-          List<String> ownerNames = mapping.readerNamesOf(owner);
-          Target target = byNames.get(ownerNames);
-          if (target != null && names.size() >= ownerNames.size()
-              && names.subList(0, ownerNames.size()).equals(ownerNames)
-              && names.subList(ownerNames.size(), names.size()).stream()
-                  .allMatch(Objects::isNull)) {
+          Target target = byNames.get(mapping.readerNamesOf(owner));
+          if (target != null) {
             target.branches.put(branchChoices(mapping, path),
                 new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
             target.readerKinds.put(branchChoices(mapping, path), mapping.readerKindOf(path));
@@ -199,8 +193,8 @@ final class JsonProvenancePruner {
     Map<List<String>, List<String>> outermost = new HashMap<>();
     for (List<Integer> path : mapping.writerPaths()) {
       List<String> names = mapping.writerNamesOf(path);
-      if (names != null && mapping.isWriterBranch(path)) {
-        Target target = byNames.get(withoutUnnamedSteps(names));
+      if (mapping.isWriterBranch(path)) {
+        Target target = byNames.get(writerPropertyOf(mapping, path));
         if (target != null) {
           target.writerKinds.put(writerBranchChoices(mapping, path), mapping.writerKindOf(path));
         }
@@ -267,20 +261,22 @@ final class JsonProvenancePruner {
     List<Integer> choices = new ArrayList<>();
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      if (mapping.writerNamesOf(prefix) != null && mapping.isWriterBranch(prefix)) {
+      if (mapping.writerKindOf(prefix) != null && mapping.isWriterBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
     return choices;
   }
 
-  // A branch's names without the unnamed steps into an array or map: its property's.
-  private static List<String> withoutUnnamedSteps(List<String> names) {
-    int end = names.size();
-    while (end > 0 && names.get(end - 1) == null) {
-      end--;
+  // The names of the nearest writer property enclosing a branch at path; empty at the root.
+  private static List<String> writerPropertyOf(ProvenanceMapping mapping, List<Integer> path) {
+    for (int k = path.size() - 1; k > 0; k--) {
+      List<Integer> prefix = path.subList(0, k);
+      if (mapping.writerKindOf(prefix) != null && !mapping.isWriterBranch(prefix)) {
+        return mapping.writerNamesOf(prefix);
+      }
     }
-    return names.subList(0, end);
+    return Collections.emptyList();
   }
 
   /**
@@ -324,17 +320,14 @@ final class JsonProvenancePruner {
   }
 
   /**
-   * The names of the outermost union a writer location sits under, spelled as its branches are
-   * but for unnamed steps; null if it sits under none. A property's own branches spell its names,
-   * so its union is found from them: where no location spelled so sits under a union, the whole
-   * schema stands in.
+   * The names of the outermost union a writer location sits under: the property holding it, or
+   * none for a union at the root, where the whole schema stands in; null if it sits under none.
    */
   private static List<String> outermostUnion(ProvenanceMapping mapping, List<Integer> path) {
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      List<String> names = mapping.writerNamesOf(prefix);
-      if (names != null && mapping.isWriterBranch(prefix)) {
-        return withoutUnnamedSteps(names);
+      if (mapping.writerKindOf(prefix) != null && mapping.isWriterBranch(prefix)) {
+        return writerPropertyOf(mapping, prefix);
       }
     }
     return null;
@@ -608,7 +601,7 @@ final class JsonProvenancePruner {
     List<Integer> choices = new ArrayList<>();
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      if (mapping.readerNamesOf(prefix) != null && mapping.isReaderBranch(prefix)) {
+      if (mapping.readerKindOf(prefix) != null && mapping.isReaderBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
