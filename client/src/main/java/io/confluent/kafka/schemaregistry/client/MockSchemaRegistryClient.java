@@ -637,12 +637,24 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null && versions.containsKey(schema)) {
-      return versions.get(schema);
-    } else {
-      throw new RestClientException("Subject Not Found", 404, 40401);
+    // As the registry finds a version: by content, whatever version the schema carries.
+    if (schema.version() != null) {
+      schema = schema.copy((Integer) null);
     }
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+    if (versions != null) {
+      if (versions.containsKey(schema)) {
+        return versions.get(schema);
+      }
+      for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
+        ParsedSchema key = entry.getKey();
+        // Registered with a version or not, a schema is found by its content.
+        if (key.version() != null && key.copy((Integer) null).equals(schema)) {
+          return entry.getValue();
+        }
+      }
+    }
+    throw new RestClientException("Subject Not Found", 404, 40401);
   }
 
   @Override
@@ -654,6 +666,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
+  }
+
+  // This mock keeps no soft-deleted versions, so asking for them adds none.
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getAllVersions(subject);
   }
 
   private List<Integer> allVersions(String subject) {
@@ -757,8 +776,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
+      // A lookup finds what was registered; it never replaces it with the schema it was asked
+      // about, which may carry a version or metadata of its own.
+      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
+      parsedSchemaCache.asMap().putIfAbsent(contentCacheKey(schemaEntity), schema);
       return schemaResponse;
     }
   }
