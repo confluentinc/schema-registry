@@ -80,6 +80,8 @@ public class MetricsContainer {
       "association-batch-mutate-upsert-count";
   public static final String METRIC_NAME_ASSOCIATION_BATCH_MUTATE_DELETE_COUNT =
       "association-batch-mutate-delete-count";
+  public static final String METRIC_NAME_ASSOCIATION_DELETE_ASYNC_CASCADE_FAILURE_COUNT =
+      "association-delete-async-cascade-failure-count";
   public static final String METRIC_NAME_REGISTERED_COUNT = "registered-count";
   public static final String METRIC_NAME_DELETED_COUNT = "deleted-count";
   public static final String METRIC_NAME_AVRO_SCHEMAS_CREATED = "avro-schemas-created";
@@ -113,6 +115,7 @@ public class MetricsContainer {
   private final SchemaRegistryMetric associationBatchMutateCreateBatchSize;
   private final SchemaRegistryMetric associationBatchMutateUpsert;
   private final SchemaRegistryMetric associationBatchMutateDelete;
+  private final SchemaRegistryMetric associationDeleteAsyncCascadeFailure;
 
   private final SchemaRegistryMetric avroSchemasCreated;
   private final SchemaRegistryMetric jsonSchemasCreated;
@@ -188,6 +191,10 @@ public class MetricsContainer {
     this.associationBatchMutateDelete = createMetric(
             METRIC_NAME_ASSOCIATION_BATCH_MUTATE_DELETE_COUNT,
             "Number of delete ops within batchMutate calls", new CumulativeCount());
+    this.associationDeleteAsyncCascadeFailure = createMetric(
+            METRIC_NAME_ASSOCIATION_DELETE_ASYNC_CASCADE_FAILURE_COUNT,
+            "Number of failed background subject deletes queued by async deleteAssociations",
+            new CumulativeCount());
 
     this.customSchemaProviders = createMetric(METRIC_NAME_CUSTOM_SCHEMA_PROVIDER,
             "Number of custom schema providers", new Value());
@@ -312,6 +319,10 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric getAssociationBatchMutateDelete() {
     return associationBatchMutateDelete;
+  }
+
+  public SchemaRegistryMetric getAssociationDeleteAsyncCascadeFailure() {
+    return associationDeleteAsyncCascadeFailure;
   }
 
   public SchemaRegistryMetric getCustomSchemaProviderCount() {
