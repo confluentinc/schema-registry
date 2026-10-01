@@ -81,6 +81,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -99,6 +100,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         LeaderAwareSchemaRegistry {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+  private static final long CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS = 10_000;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
@@ -122,6 +124,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private final String kafkaClusterId;
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
+  private final LockChainedExecutor cascadeDeleteExecutor;
+  private final Set<String> pendingCascadeDeletes = ConcurrentHashMap.newKeySet();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -165,6 +169,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     this.kafkaStore = kafkaStore(config);
     this.store = kafkaStore;
     this.metadataEncoder = new KafkaMetadataEncoderService(this);
+    this.cascadeDeleteExecutor = new LockChainedExecutor(
+        config.associationDeleteAsyncThreads(), "sr-association-cascade-delete");
   }
 
   private static MetricsContainer initMetricsContainer(
@@ -1083,7 +1089,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         // forward update config request to the leader
         if (leaderIdentity != null) {
           forwardDeleteAssociationsRequestToLeader(resourceId,
-              resourceType, associationTypes, cascadeLifecycle, dryRun, headerProperties);
+              resourceType, associationTypes, cascadeLifecycle, dryRun, false, headerProperties);
         } else {
           throw new UnknownLeaderException("Delete association request failed since leader is "
               + "unknown");
@@ -1091,6 +1097,110 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  public void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    if (!async || dryRun) {
+      deleteAssociationsOrForward(subject, resourceId, resourceType, associationTypes,
+          cascadeLifecycle, dryRun, headerProperties);
+      return;
+    }
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        List<Association> associations = getAssociationsByResourceId(resourceId,
+            resourceType, associationTypes, null);
+        for (Association association : associations) {
+          checkDeleteAssociation(association, cascadeLifecycle);
+        }
+        List<String> subjectsToDelete = new ArrayList<>();
+        for (Association association : associations) {
+          String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+          if (qualifiedSubject != null) {
+            subjectsToDelete.add(qualifiedSubject);
+          }
+        }
+        deleteAssociationEntries(associations);
+        for (String qualifiedSubject : subjectsToDelete) {
+          enqueueCascadeDelete(qualifiedSubject);
+        }
+      } else {
+        // forward delete associations request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteAssociationsRequestToLeader(resourceId,
+              resourceType, associationTypes, cascadeLifecycle, false, true, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Delete association request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  private void enqueueCascadeDelete(String qualifiedSubject) {
+    String tenant = tenant();
+    pendingCascadeDeletes.add(qualifiedSubject);
+    boolean queued = cascadeDeleteExecutor.submit(kafkaStore.lockFor(qualifiedSubject), () -> {
+      try {
+        withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject));
+      } finally {
+        pendingCascadeDeletes.remove(qualifiedSubject);
+      }
+    });
+    if (!queued) {
+      pendingCascadeDeletes.remove(qualifiedSubject);
+      metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+      log.error("Could not queue cascaded delete of subject {} since schema registry is "
+          + "shutting down; the subject was not deleted", qualifiedSubject);
+    }
+  }
+
+  /**
+   * Runs a background task with the request's context restored on the current thread.
+   * Subclasses can override this to restore additional per-request state.
+   */
+  protected void withRequestContext(String tenant, Runnable task) {
+    setTenant(tenant);
+    try {
+      task.run();
+    } finally {
+      setTenant(null);
+    }
+  }
+
+  private void runCascadeDelete(String qualifiedSubject) {
+    Lock lock = kafkaStore.lockFor(qualifiedSubject);
+    lock.lock();
+    try {
+      if (!isLeader()) {
+        log.warn("Skipping cascaded delete of subject {} since this instance is no longer "
+            + "the leader; the subject was not deleted", qualifiedSubject);
+        return;
+      }
+      if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        log.warn("Skipping cascaded delete of subject {} since it is now in IMPORT mode",
+            qualifiedSubject);
+        return;
+      }
+      cascadeDeleteSubject(qualifiedSubject);
+      log.info("Completed cascaded delete of subject {}", qualifiedSubject);
+    } catch (AssociationForSubjectExistsException e) {
+      log.warn("Skipping cascaded delete of subject {} since it has been re-associated",
+          qualifiedSubject);
+    } catch (Exception e) {
+      metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+      log.error("Cascaded delete of subject {} failed", qualifiedSubject, e);
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -1339,14 +1449,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void forwardDeleteAssociationsRequestToLeader(
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete associations request to %s", baseUrl));
     try {
-      leaderRestService.deleteAssociations(
-          headerProperties, resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun);
+      leaderRestService.deleteAssociations(headerProperties, resourceId, resourceType,
+          associationTypes, cascadeLifecycle, dryRun, async);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the delete association request to %s",
@@ -1397,6 +1508,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
+    // Drain cascaded deletes first, while this instance can still write to the store
+    if (!cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        || !pendingCascadeDeletes.isEmpty()) {
+      log.warn("Shut down before completing cascaded deletes; these subjects were not "
+          + "deleted: {}", pendingCascadeDeletes);
+    }
     if (leaderElector != null) {
       leaderElector.close();
     }
