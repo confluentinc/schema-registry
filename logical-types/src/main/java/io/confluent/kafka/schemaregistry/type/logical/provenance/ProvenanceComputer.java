@@ -784,8 +784,10 @@ public final class ProvenanceComputer {
      * Avro rules. A peer continues the previous location of its own name, or the one an alias
      * names. An explicit alias wins: Avro renames a writer field to the reader field aliasing it
      * even when a reader field of that name exists. A peer continuing itself may carry its aliases
-     * forward, but a new one naming another location would make one continue two. Each previous
-     * location has at most one continuation, and each peer continues at most one.
+     * forward, but a new one naming another location would make one continue two, unless the
+     * peers' new aliases permute their names: fields or types swapped or rotated, which Avro's
+     * decoder reads by the aliases. Each previous location has at most one continuation, and each
+     * peer continues at most one.
      */
     private void arbitrate(List<Node> peers, List<Node> previous, Map<Node, Node> matched) {
       Map<String, Node> byPreviousName = new HashMap<>();
@@ -810,19 +812,34 @@ public final class ProvenanceComputer {
         }
       }
 
+      // A peer whose own name another peer newly aliases yields it. One yielding without naming
+      // another by a new alias of its own fails below, so only whole permutations go through.
+      Map<Node, Node> before = new IdentityHashMap<>(own);
+      for (Node peer : peers) {
+        Node mine = before.get(peer);
+        for (Node other : peers) {
+          Node theirs = other != peer ? before.get(other) : null;
+          if (mine != null && theirs != null && newlyAliases(other, theirs, mine.name)) {
+            ownClaimant.remove(own.remove(peer));
+            break;
+          }
+        }
+      }
+
       Map<Node, Set<Node>> aliasClaimants = new LinkedHashMap<>();
       for (Node peer : peers) {
         Node mine = own.get(peer);
+        Node was = before.get(peer);
         for (String alias : peer.aliases) {
           Node aliased = byPreviousName.get(alias);
-          if (aliased == null || aliased == mine) {
+          if (aliased == null || aliased == was) {
+            continue;
+          }
+          if (was != null && was.aliases.contains(alias)) {
+            // Carried forward from the version that introduced it.
             continue;
           }
           if (mine != null) {
-            if (mine.aliases.contains(alias)) {
-              // Carried forward from the version that introduced it.
-              continue;
-            }
             throw new AmbiguousProvenanceException("Ambiguous identity resolution at version ",
                 version, ": " + peer.where.path + " continues " + mine.name
                 + " and names another entity by a new alias: " + aliased.name);
@@ -848,6 +865,12 @@ public final class ProvenanceComputer {
               + p.name);
         }
       }
+    }
+
+    // Whether peer, continuing was, names the previous location called name by an alias was had
+    // no part in.
+    private static boolean newlyAliases(Node peer, Node was, String name) {
+      return peer.aliases.contains(name) && !was.aliases.contains(name);
     }
 
     /**

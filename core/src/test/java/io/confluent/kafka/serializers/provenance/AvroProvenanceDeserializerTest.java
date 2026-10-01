@@ -387,6 +387,48 @@ class AvroProvenanceDeserializerTest {
     assertTrue(trace.toString().contains("missing required field b"), trace.toString());
   }
 
+  @Test
+  void fieldsSwappedByAliasesAreReadByTheirAliases() throws Exception {
+    // a and b swap names by aliases: each value follows its field both ways, where Avro alone
+    // reads the older data by the aliases only, and the newer by name, into the wrong types.
+    Schema v1 = record("{\"name\":\"a\",\"type\":\"int\"}", string("b"));
+    Schema v2 = record("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}",
+        "{\"name\":\"a\",\"type\":\"string\",\"aliases\":[\"b\"]}");
+    byte[] older = write(v1, new GenericRecordBuilder(v1).set("a", 5).set("b", "s"));
+    byte[] newer = write(v2, new GenericRecordBuilder(v2).set("b", 6).set("a", "t"));
+
+    GenericRecord forward = read(v2, older, "v1");
+    assertEquals(5, forward.get("b"));
+    assertEquals("s", forward.get("a").toString());
+    GenericRecord backward = read(v1, newer, "v1");
+    assertEquals(6, backward.get("a"));
+    assertEquals("t", backward.get("b").toString());
+  }
+
+  @Test
+  void typesSwappedByAliasesInOneUnionAreReadByTheirAliases() throws Exception {
+    // A and B swap names by aliases inside one union. Data written as v2's B, read under v1,
+    // belongs in v1's A, which B continues; Avro alone matches the branch by name and drops x.
+    String body = "{\"name\":\"u\",\"type\":[\"int\","
+        + "{\"type\":\"record\",\"name\":\"%s\",%s\"fields\":"
+        + "[{\"name\":\"x\",\"type\":\"int\",\"default\":-1}]},"
+        + "{\"type\":\"record\",\"name\":\"%s\",%s\"fields\":"
+        + "[{\"name\":\"y\",\"type\":\"int\",\"default\":-1}]}]}";
+    Schema v1 = record(String.format(body, "A", "", "B", ""));
+    Schema v2 = record(String.format(body, "B", "\"aliases\":[\"io.confluent.A\"],", "A",
+        "\"aliases\":[\"io.confluent.B\"],"));
+    client.register(SUBJECT, new AvroSchema(v1));
+    Schema b2 = v2.getField("u").schema().getTypes().get(1);
+    byte[] bytes = write(v2, new GenericRecordBuilder(v2)
+        .set("u", new GenericRecordBuilder(b2).set("x", 5).build()));
+
+    GenericRecord off = (GenericRecord) read(v1, bytes, null).get("u");
+    assertEquals("B", off.getSchema().getName());
+    GenericRecord on = (GenericRecord) read(v1, bytes, "v1").get("u");
+    assertEquals("A", on.getSchema().getName());
+    assertEquals(5, on.get("x"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private GenericRecord sameBothWays(Schema writer, Schema reader, Object value) throws Exception {

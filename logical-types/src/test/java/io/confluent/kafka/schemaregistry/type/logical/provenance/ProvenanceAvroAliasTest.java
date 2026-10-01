@@ -60,9 +60,8 @@ class ProvenanceAvroAliasTest {
 
   @Test
   void whatAvroCannotResolveIsAmbiguous() {
-    // A swap (the checker throws), two fields aliasing one (the decoder takes the last), one
-    // field aliasing two present ones (a duplicate field).
-    assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("b", I, "a"), fa("a", I, "b")));
+    // Two fields aliasing one (the decoder takes the last), one field aliasing two present ones
+    // (a duplicate field).
     assertAmbiguous(avro(f("a", I)), avro(fa("b", I, "a"), fa("c", I, "a")));
     assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("c", I, "a", "b")));
   }
@@ -141,6 +140,45 @@ class ProvenanceAvroAliasTest {
     List<Map<String, Integer>> both = pids(avro(f("u", a), f("v", "\"A\"")),
         avro(f("u", rec("B", f("x", I), "A")), f("v", c)));
     assertThat(same(both, "u.x", "u.x") && same(both, "v.x", "v.x")).isTrue();
+  }
+
+  @Test
+  void fieldsSwappedOrRotatedByAliasesKeepEachLocation() {
+    // The decoder reads a whole permutation by the aliases, nested too; a shift, which leaves
+    // one field continuing its own name while another newly claims it, stays ambiguous.
+    List<Map<String, Integer>> swap = pids(avro(f("a", I), f("b", S)),
+        avro(fa("b", I, "a"), fa("a", S, "b")));
+    assertThat(same(swap, "a", "b") && same(swap, "b", "a")).isTrue();
+    List<Map<String, Integer>> rotation = pids(avro(f("a", I), f("b", S), f("c", I)),
+        avro(fa("b", I, "a"), fa("c", S, "b"), fa("a", I, "c")));
+    assertThat(same(rotation, "a", "b") && same(rotation, "b", "c")
+        && same(rotation, "c", "a")).isTrue();
+    List<Map<String, Integer>> nested = pids(avro(f("r", rec("N", f("a", I) + "," + f("b", S)))),
+        avro(f("r", rec("N", fa("b", I, "a") + "," + fa("a", S, "b")))));
+    assertThat(same(nested, "r.a", "r.b") && same(nested, "r.b", "r.a")).isTrue();
+    assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("b", I, "a"), fa("c", I, "b")));
+    assertAmbiguous(avro(f("a", I), f("b", I)), avro(f("a", I), fa("b", I, "a")));
+  }
+
+  @Test
+  void typesSwappedByAliasesInOneUnionKeepEachLocation() {
+    // Both branches of one union: each continues the type it aliases, as Avro reads it. A
+    // rotation is the same; a shift, which no branch completes, stays ambiguous.
+    String a = rec("A", f("x", I));
+    String b = rec("B", f("y", I));
+    String c = rec("C", f("z", I));
+    List<Map<String, Integer>> swap = pids(avro(f("u", "[\"int\"," + a + "," + b + "]")),
+        avro(f("u", "[\"int\"," + rec("B", f("x", I), "A") + "," + rec("A", f("y", I), "B")
+            + "]")));
+    assertThat(same(swap, "u.A.x", "u.B.x") && same(swap, "u.B.y", "u.A.y")).isTrue();
+    List<Map<String, Integer>> rotation = pids(
+        avro(f("u", "[\"int\"," + a + "," + b + "," + c + "]")),
+        avro(f("u", "[\"int\"," + rec("B", f("x", I), "A") + "," + rec("C", f("y", I), "B")
+            + "," + rec("A", f("z", I), "C") + "]")));
+    assertThat(same(rotation, "u.A.x", "u.B.x") && same(rotation, "u.B.y", "u.C.y")
+        && same(rotation, "u.C.z", "u.A.z")).isTrue();
+    assertAmbiguous(avro(f("u", "[\"int\"," + a + "," + b + "]")),
+        avro(f("u", "[\"int\"," + a + "," + rec("B", f("y", I), "A") + "]")));
   }
 
   @Test

@@ -311,11 +311,13 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void twoFieldsSwappedByAliasesAreRejected() {
-    assertThatThrownBy(() -> avro(
+  void twoFieldsSwappedByAliasesKeepEachLocation() {
+    // Avro's decoder reads the swap by the aliases, though its checker rejects it.
+    Pids pids = avro(
         lt(struct(field("a"), field("b"))),
-        lt(struct(field("b", "a"), field("a", "b")))))
-        .isInstanceOf(AmbiguousProvenanceException.class);
+        lt(struct(field("b", "a"), field("a", "b"))));
+    assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
+    assertThat(pids.at(1, 1)).isEqualTo(pids.at(0, 1));
   }
 
   @Test
