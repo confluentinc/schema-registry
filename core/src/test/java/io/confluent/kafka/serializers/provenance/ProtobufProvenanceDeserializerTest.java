@@ -302,7 +302,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aReusedNumberWhoseElementsChangeCategoryIsNew() throws Exception {
+  void aReusedNumberWhoseElementsChangeKindIsNew() throws Exception {
     // repeated M becoming repeated int32 under one number: the messages' bytes are no ints.
     ProtobufSchema v1 = file("message Row {\n  repeated M x = 1;\n}",
         "message M {\n  int32 a = 1;\n}");

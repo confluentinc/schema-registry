@@ -93,7 +93,7 @@ class ProvenanceIdentityRulesTest {
 
   @Test
   void aMapWhoseKeyAndValueShareATypeIsNoCycle() {
-    // P as key and value is P beside itself: the value becoming Q changes no category, so the map
+    // P as key and value is P beside itself: the value becoming Q changes no kind, so the map
     // and its key continue, and only the value's member is new.
     String entries = "{\"m\":{\"type\":\"array\",\"connect.type\":\"map\",\"items\":"
         + "{\"type\":\"object\",\"properties\":{\"key\":{\"$ref\":\"#/definitions/P\"},"
@@ -111,7 +111,7 @@ class ProvenanceIdentityRulesTest {
 
   @Test
   void aCollectionHoldingItselfStillHasNoProvenance() {
-    // The category of what a collection holds must not follow it round: the recursion is named.
+    // The kind of what a collection holds must not follow it round: the recursion is named.
     assertThatThrownBy(() -> compute(json("{\"x\":{\"$ref\":\"#/definitions/L\"}}",
         "{\"L\":{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/L\"}}}")))
         .isInstanceOf(RecursiveTypeException.class);
@@ -817,7 +817,7 @@ class ProvenanceIdentityRulesTest {
   // --- What a collection holds ----------------------------------------------------------------
 
   @Test
-  void aCollectionWhoseElementsChangeCategoryIsNew() {
+  void aCollectionWhoseElementsChangeKindIsNew() {
     // A list of structs becoming a list of strings has no SQL ALTER, as a struct becoming a
     // string has none: the collection is new, in every format.
     List<ProvenanceVersion> j = compute(
@@ -836,7 +836,7 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
-  void aCollectionWhoseElementsKeepTheirCategoryContinues() {
+  void aCollectionWhoseElementsKeepTheirKindContinues() {
     List<ProvenanceVersion> v = compute(
         json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}", null),
         json("{\"x\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}", null));
@@ -902,7 +902,7 @@ class ProvenanceIdentityRulesTest {
 
   @Test
   void aOneBranchJsonUnionUnwrappedIsANewColumn() {
-    // V1 keeps a bare one-branch oneOf as a union, so unwrapping it changes x's category, though
+    // V1 keeps a bare one-branch oneOf as a union, so unwrapping it changes x's kind, though
     // no document changes: x is new, as the V1 columns are.
     List<ProvenanceVersion> v = compute(
         json("{\"x\":{\"oneOf\":[{\"type\":\"integer\"}]}}", null),

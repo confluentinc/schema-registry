@@ -52,7 +52,7 @@ import java.util.function.ToIntFunction;
  * version, or to none; a matched member keeps its match's id, and any other takes a new one. A
  * location is matched only among the previous version's locations under its parent's match, so
  * the parent is matched first and scopes its members; collection steps ({@code []},
- * {@code {key}}, {@code {value}}) are part of that scope. A location whose type changes category —
+ * {@code {key}}, {@code {value}}) are part of that scope. A location whose type changes kind —
  * a leaf, struct, union, array, multiset or map becoming another, or what a collection holds
  * doing so — is new, with everything under it, however it was matched: no SQL {@code ALTER}
  * expresses the change. Nothing absent from the
@@ -199,7 +199,7 @@ public final class ProvenanceComputer {
   // Locations
   // -----------------------------------------------------------------------------------------
 
-  private enum Kind {
+  private enum Role {
     /** One use of a named type at one location: an Avro record, enum or fixed, or a message. */
     NAMED_TYPE,
     FIELD,
@@ -207,11 +207,11 @@ public final class ProvenanceComputer {
   }
 
   /**
-   * What a location's type is, references resolved. A change between categories has no SQL
+   * What a location's type is, references resolved. A change between kinds has no SQL
    * {@code ALTER} — Iceberg allows none, and Flink reads a multiset as neither a list nor a map —
    * so it is a drop and an add.
    */
-  private enum Category {
+  private enum Kind {
     LEAF,
     STRUCT,
     UNION,
@@ -223,7 +223,7 @@ public final class ProvenanceComputer {
   /** One location of one version: what it is, where it is, and what it matched. */
   private static final class Node {
 
-    private final Kind kind;
+    private final Role role;
     private final String name;
     private final List<String> aliases;
     private final Integer number;
@@ -242,13 +242,13 @@ public final class ProvenanceComputer {
 
     /** This node's member groups, keyed by the collection steps leading to each. */
     private final Map<String, List<Node>> groups = new HashMap<>();
-    private List<Category> category;
+    private List<Kind> kinds;
     private Node match;
     private int id;
 
-    Node(Kind kind, String name, List<String> aliases, Integer number, Schema body,
+    Node(Role role, String name, List<String> aliases, Integer number, Schema body,
         Map<Object, Integer> childDerived, Where where) {
-      this.kind = kind;
+      this.role = role;
       this.name = name;
       this.aliases = aliases != null ? aliases : Collections.emptyList();
       this.number = number;
@@ -264,11 +264,11 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The previous version's members of this node's match at {@code step}, of one kind.
+     * The previous version's members of this node's match at {@code step}, of one role.
      */
-    List<Node> previous(String step, Kind kind) {
+    List<Node> previous(String step, Role role) {
       List<Node> group = match != null ? match.groups.get(step) : null;
-      return group != null && group.get(0).kind == kind ? group : Collections.emptyList();
+      return group != null && group.get(0).role == role ? group : Collections.emptyList();
     }
   }
 
@@ -385,17 +385,17 @@ public final class ProvenanceComputer {
       }
       owner.groups.put(step, peers);
       for (Node peer : peers) {
-        peer.category = categoryOf(peer.body);
+        peer.kinds = kindsOf(peer.body);
       }
-      match(peers, owner.previous(step, peers.get(0).kind));
+      match(peers, owner.previous(step, peers.get(0).role));
       for (Node peer : peers) {
-        if (peer.match != null && !peer.match.category.equals(peer.category)) {
-          // Matched, but its type changed category: it, and all under it, are new.
+        if (peer.match != null && !peer.match.kinds.equals(peer.kinds)) {
+          // Matched, but its type changed kind: it, and all under it, are new.
           peer.match = null;
         }
       }
       for (Node peer : peers) {
-        if (peer.kind != Kind.NAMED_TYPE) {
+        if (peer.role != Role.NAMED_TYPE) {
           members.add(peer);
           // Each use of a shared type is a location, so they can multiply with depth.
           if (members.size() > MAX_LOCATIONS) {
@@ -445,7 +445,7 @@ public final class ProvenanceComputer {
             walkNamed(name, () -> processType(named, owner, step, where.through(named), derived));
           } else if (named != null) {
             walkNamed(name, () -> processGroup(Collections.singletonList(new Node(
-                Kind.NAMED_TYPE, name, typeAliases(named), null, named, Collections.emptyMap(),
+                Role.NAMED_TYPE, name, typeAliases(named), null, named, Collections.emptyMap(),
                 where.through(named))), owner, step));
           }
           break;
@@ -457,28 +457,28 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * The category of {@code schema}, then of what each collection holds: a list of structs
-     * becoming a list of strings changes category as a struct becoming a string does.
+     * The kind of {@code schema}, then of what each collection holds: a list of structs becoming
+     * a list of strings changes kind as a struct becoming a string does.
      */
-    private List<Category> categoryOf(Schema schema) {
-      List<Category> categories = new ArrayList<>();
-      addCategories(schema, categories, Collections.newSetFromMap(new IdentityHashMap<>()));
-      return categories;
+    private List<Kind> kindsOf(Schema schema) {
+      List<Kind> kinds = new ArrayList<>();
+      addKinds(schema, kinds, Collections.newSetFromMap(new IdentityHashMap<>()));
+      return kinds;
     }
 
-    private void addCategories(Schema schema, List<Category> categories, Set<Schema> seen) {
+    private void addKinds(Schema schema, List<Kind> kinds, Set<Schema> seen) {
       Schema type = resolved(schema);
       if (type != null && !seen.add(type)) {
         // A collection holding itself: walkNamed reports the recursion.
         return;
       }
-      Category category = category(type);
-      categories.add(category);
-      if (category == Category.ARRAY || category == Category.MULTISET) {
-        addCategories(type.getElementType(), categories, seen);
-      } else if (category == Category.MAP) {
-        addCategories(type.getKeyType(), categories, seen);
-        addCategories(type.getValueType(), categories, seen);
+      Kind kind = kindOf(type);
+      kinds.add(kind);
+      if (kind == Kind.ARRAY || kind == Kind.MULTISET) {
+        addKinds(type.getElementType(), kinds, seen);
+      } else if (kind == Kind.MAP) {
+        addKinds(type.getKeyType(), kinds, seen);
+        addKinds(type.getValueType(), kinds, seen);
       }
       // Only what holds it: a type met again beside itself, as a map's key and value, is no cycle.
       if (type != null) {
@@ -486,23 +486,23 @@ public final class ProvenanceComputer {
       }
     }
 
-    private static Category category(Schema type) {
+    private static Kind kindOf(Schema type) {
       if (type == null) {
-        return Category.LEAF;
+        return Kind.LEAF;
       }
       switch (type.getType()) {
         case STRUCT:
-          return Category.STRUCT;
+          return Kind.STRUCT;
         case UNION:
-          return Category.UNION;
+          return Kind.UNION;
         case ARRAY:
-          return Category.ARRAY;
+          return Kind.ARRAY;
         case MULTISET:
-          return Category.MULTISET;
+          return Kind.MULTISET;
         case MAP:
-          return Category.MAP;
+          return Kind.MAP;
         default:
-          return Category.LEAF;
+          return Kind.LEAF;
       }
     }
 
@@ -534,7 +534,7 @@ public final class ProvenanceComputer {
         List<Field> fields = container.getFields();
         for (int i = 0; i < fields.size(); i++) {
           Field field = fields.get(i);
-          nodes.add(new Node(Kind.FIELD, field.getName(), field.getAliases(),
+          nodes.add(new Node(Role.FIELD, field.getName(), field.getAliases(),
               numberOf(field.getFieldNumber(), field, derived), field.getSchema(), derived,
               where.descend(field.getSchema(), i, field.getNativeNames())));
         }
@@ -542,7 +542,7 @@ public final class ProvenanceComputer {
         List<UnionBranch> branches = container.getBranches();
         for (int i = 0; i < branches.size(); i++) {
           UnionBranch branch = branches.get(i);
-          Node node = new Node(Kind.BRANCH, branchName(branch), branchAliases(branch),
+          Node node = new Node(Role.BRANCH, branchName(branch), branchAliases(branch),
               numberOf(branch.getFieldNumber(), branch, enclosingDerived), branch.getSchema(),
               enclosingDerived, where.descend(branch.getSchema(), i, branch.getNativeNames()));
           if (schemaType == SchemaType.JSON) {
@@ -618,7 +618,7 @@ public final class ProvenanceComputer {
           continue;
         }
         Node continued = isNamedAvroType(peer) ? shortNameContinuation(peer, peers, previous)
-            : peer.kind == Kind.BRANCH ? promotionContinuation(peer, peers, previous, taken)
+            : peer.role == Role.BRANCH ? promotionContinuation(peer, peers, previous, taken)
             : null;
         if (continued != null && taken.add(continued)) {
           matched.put(peer, continued);
@@ -684,7 +684,7 @@ public final class ProvenanceComputer {
     /** JSON: a property by name; a union branch by hint, discriminators, title, then content. */
     private static void matchJson(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
-      if (peers.get(0).kind == Kind.BRANCH) {
+      if (peers.get(0).role == Role.BRANCH) {
         matchJsonBranches(peers, previous, matched);
         return;
       }
@@ -871,7 +871,7 @@ public final class ProvenanceComputer {
      * branch the converter names by its full name rather than a type name.
      */
     private static boolean isNamedAvroType(Node peer) {
-      return peer.kind == Kind.NAMED_TYPE || peer.kind == Kind.BRANCH
+      return peer.role == Role.NAMED_TYPE || peer.role == Role.BRANCH
           && (isReference(peer.body) || !AVRO_UNNAMED.contains(peer.name));
     }
 
@@ -960,7 +960,7 @@ public final class ProvenanceComputer {
 
     /** A Protobuf oneof's member field numbers; null for anything that is not a oneof. */
     private Set<Integer> memberNumbersOf(Node node) {
-      if (schemaType != SchemaType.PROTOBUF || node.kind != Kind.FIELD
+      if (schemaType != SchemaType.PROTOBUF || node.role != Role.FIELD
           || node.number != null || !isUnion(node.body)) {
         return null;
       }
@@ -1339,7 +1339,7 @@ public final class ProvenanceComputer {
      * (a discriminator), or its type for a branch with no members; null for anything else.
      */
     private Set<String> contentOf(Node node) {
-      if (schemaType != SchemaType.JSON || node.kind != Kind.BRANCH) {
+      if (schemaType != SchemaType.JSON || node.role != Role.BRANCH) {
         return null;
       }
       Set<String> content = new TreeSet<>();

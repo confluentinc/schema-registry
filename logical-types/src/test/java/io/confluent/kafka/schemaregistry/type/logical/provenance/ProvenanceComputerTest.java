@@ -572,7 +572,7 @@ class ProvenanceComputerTest {
 
   @Test
   void changingACollectionKindRestartsTheFieldAndItsMembers() {
-    // ARRAY<STRUCT> to MAP<K, STRUCT> changes f's category, which no SQL ALTER expresses: f and
+    // ARRAY<STRUCT> to MAP<K, STRUCT> changes f's kind, which no SQL ALTER expresses: f and
     // everything under it are new.
     Pids pids = avro(
         lt(struct(new Field("f", Schema.createArray(struct(field("x"))), 0))),
@@ -584,7 +584,7 @@ class ProvenanceComputerTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Category changes -- no SQL ALTER, so a drop and an add
+  // Kind changes -- no SQL ALTER, so a drop and an add
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -608,7 +608,7 @@ class ProvenanceComputerTest {
 
   @Test
   void anArrayBecomingAMultisetIsNewWithItsMembers() {
-    // Both descend through the same element step, so without the category rule x would continue.
+    // Both descend through the same element step, so without the kind rule x would continue.
     Pids pids = avro(
         lt(struct(new Field("f", Schema.createArray(struct(field("x"))), 0))),
         lt(struct(new Field("f", Schema.createMultiset(struct(field("x"))), 0))));
@@ -618,7 +618,7 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void anAliasClaimingAFieldOfAnotherCategoryLeavesItToNoOne() {
+  void anAliasClaimingAFieldOfAnotherKindLeavesItToNoOne() {
     // b says it is the old a, and is a struct where a was a leaf: b is new, and the new a, which
     // the alias outranks, is new too -- DROP a, ADD b, ADD a.
     Pids pids = avro(
@@ -641,7 +641,7 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aLeafPromotionIsNoCategoryChange() {
+  void aLeafPromotionIsNoKindChange() {
     Pids pids = avro(
         lt(struct(field("f"))),
         lt(struct(new Field("f", Schema.create(Schema.Type.BIGINT), 0))));

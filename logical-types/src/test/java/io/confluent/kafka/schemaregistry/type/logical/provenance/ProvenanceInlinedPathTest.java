@@ -126,7 +126,7 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void aRetypedCollectionIsNewWithItsMembers() {
-    // ARRAY<ROW> to MAP<K, ROW>: a change of category, so the field and its members are new.
+    // ARRAY<ROW> to MAP<K, ROW>: a change of kind, so the field and its members are new.
     ProvenanceReport report = ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(
         lt(struct(arrayOf("items", struct(field("sku"))))),
         lt(struct(mapOf("items", struct(field("sku")))))));

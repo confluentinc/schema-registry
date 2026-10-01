@@ -163,7 +163,7 @@ class AvroProvenanceDeserializerTest {
 
   @Test
   void aValueWidenedIntoAUnionIsANewColumn() throws Exception {
-    // A leaf becoming a union changes category, a drop and an add: Avro alone reads the value
+    // A leaf becoming a union changes kind, a drop and an add: Avro alone reads the value
     // into the int branch, provenance does not, and with no default the record fails.
     assertNewColumn(field("int"), field("[\"int\",\"string\"]"), 7, null);
     assertNewColumn(field("int"), defaulted("[\"int\",\"string\"]", "0"), 7, 0);
