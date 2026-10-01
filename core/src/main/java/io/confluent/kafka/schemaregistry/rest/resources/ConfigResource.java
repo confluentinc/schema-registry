@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -29,7 +30,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,23 +41,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
+import java.util.Optional;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -69,12 +72,59 @@ public class ConfigResource {
 
   public static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ConfigResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
+  }
+
+  /**
+   * Rejects a compatibilityLevel/compatibilityPolicy combination of FORWARD(_TRANSITIVE) and
+   * LOGICAL up front. Iceberg, the only current LOGICAL target, supports only
+   * backward-compatible evolution, so this pairing can never be satisfied.
+   *
+   * <p>Checks only what this request determines on its own: a field it sets explicitly, or one
+   * it omits, whose current effective value already stands. A field explicitly set to
+   * {@code null} to clear an override takes its value from the scope's parent instead, which
+   * cannot be established here without re-deriving the inheritance chain -- so those updates are
+   * left to the registration-time check in
+   * {@code AbstractSchemaRegistry#isCompatibleWithPrevious}, which resolves the effective config
+   * for real and is the actual guarantee.
+   */
+  private void validateLogicalCompatibilityPairing(String subject, ConfigUpdateRequest request) {
+    Optional<String> requestedLevel = request.getOptionalCompatibilityLevel();
+    Optional<String> requestedPolicy = request.getOptionalCompatibilityPolicy();
+    if (requestedLevel == null && requestedPolicy == null) {
+      return;
+    }
+    boolean isClearingAnOverride =
+        (requestedLevel != null && !requestedLevel.isPresent())
+            || (requestedPolicy != null && !requestedPolicy.isPresent());
+    if (isClearingAnOverride) {
+      return;
+    }
+    Config existingConfig;
+    try {
+      existingConfig = schemaRegistry.getConfigInScope(subject);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to get the configs for subject " + subject, e);
+    }
+    CompatibilityLevel effectiveLevel = requestedLevel != null
+        ? CompatibilityLevel.forName(requestedLevel.get())
+        : CompatibilityLevel.forName(existingConfig.getCompatibilityLevel());
+    CompatibilityPolicy effectivePolicy = requestedPolicy != null
+        ? CompatibilityPolicy.forName(requestedPolicy.get())
+        : CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy());
+    if (effectivePolicy == CompatibilityPolicy.LOGICAL
+        && (effectiveLevel == CompatibilityLevel.FORWARD
+            || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      throw new RestInvalidCompatibilityException(
+          "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
+    }
   }
 
   @Path("/{subject}")
@@ -144,6 +194,7 @@ public class ConfigResource {
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    validateLogicalCompatibilityPairing(subject, request);
 
     try {
       Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
@@ -256,6 +307,7 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
+    validateLogicalCompatibilityPairing(null, request);
     try {
       Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
       return new ConfigUpdateRequest(config);

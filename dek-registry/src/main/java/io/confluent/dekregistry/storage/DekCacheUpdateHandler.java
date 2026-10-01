@@ -22,7 +22,7 @@ import org.apache.kafka.common.Configurable;
 public interface DekCacheUpdateHandler
     extends CacheUpdateHandler<EncryptionKeyId, EncryptionKey>, Configurable {
 
-  String DEK_REGISTRY = "dekRegistry";
+  String DEK_REGISTRY = AbstractDekRegistry.KEY;
 
   @Override
   default void configure(Map<String, ?> map) {

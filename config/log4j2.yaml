@@ -1,0 +1,35 @@
+Configuration:
+  name: Log4j2
+  Appenders:
+    RollingFile:
+      name: file
+      fileName: "${sys:schema-registry.log.dir}/schema-registry.log"
+      filePattern: "${sys:schema-registry.log.dir}/schema-registry.log.%i"
+      PatternLayout:
+        pattern: "[%d] %p %m (%c:%L)%n"
+      Policies:
+        SizeBasedTriggeringPolicy:
+          size: 100MB
+      DefaultRolloverStrategy:
+        max: 10
+        fileIndex: min
+    Console:
+      name: stdout
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: "[%d] %p %m (%c:%L)%n"
+  Loggers:
+    Root:
+      level: INFO
+      AppenderRef:
+        - ref: file
+        - ref: stdout
+    Logger:
+      - name: kafka
+        level: ERROR
+        AppenderRef:
+          - ref: stdout
+      - name: org.apache.kafka
+        level: ERROR
+        AppenderRef:
+          - ref: stdout

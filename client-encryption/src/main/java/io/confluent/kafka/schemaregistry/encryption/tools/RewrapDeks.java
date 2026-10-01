@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.tools;
 
 import static io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.EMPTY_AAD;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.CachedDekRegistryClient.DekId;
@@ -26,6 +27,7 @@ import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -86,12 +88,13 @@ public class RewrapDeks implements Callable<Integer> {
         configs,
         Collections.emptyMap()
     )) {
-      Kek kek = client.getKek(kekName, includeDeleted);
       List<String> subjects = subject != null
           ? Collections.singletonList(subject)
           : client.listDeks(kekName, includeDeleted);
 
       for (String subject : subjects) {
+        String context = QualifiedSubject.contextFor(DEFAULT_TENANT, subject);
+        Kek kek = client.getKek(kekName, includeDeleted, context);
         for (DekFormat algorithm : DekFormat.values()) {
           List<Integer> versions = client.listDekVersions(
               kekName,

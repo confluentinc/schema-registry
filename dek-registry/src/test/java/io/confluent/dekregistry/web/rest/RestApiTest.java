@@ -15,97 +15,71 @@
 
 package io.confluent.dekregistry.web.rest;
 
-import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.X_FORWARD_HEADER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
-import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
-import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.Mode;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
-import org.junit.Test;
 
-public class RestApiTest extends ClusterTestHarness {
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
-  FakeTicker fakeTicker;
-  CachedDekRegistryClient client;
+@Tag("IntegrationTest")
+public abstract class RestApiTest {
 
-  public RestApiTest() {
-    super(1, true);
+  protected FakeTicker fakeTicker;
+  protected CachedDekRegistryClient client;
+
+  protected RestApp restApp = null;
+
+  protected String kmsType = "test-kms";
+  protected String kmsKeyId = "myid";
+  protected String kmsKeyId3 = "myid2";
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
   }
 
-  @Override
-  public Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.put(
-        SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,
-        DekRegistryResourceExtension.class.getName()
-    );
-    props.put(
-        SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
-        DekRegistryRestService.X_FORWARD_HEADER
-    );
-    return props;
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
-  @Before
-  public void setUp() throws Exception {
-    super.setUp();
-    fakeTicker = new FakeTicker();
-    client = new CachedDekRegistryClient(
-        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls()),
-        1000,
-        60,
-        null,
-        null,
-        fakeTicker
-    );
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
-      public void handle(String subject, ConfigUpdateRequest request) {
-      }
-
-      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
+  /**
+   * Returns configs to pass to Kek.toAead() for test encryption.
+   * Subclasses can override to inject a TEST_CLIENT for fake KMS implementations.
+   */
+  protected Map<String, ?> getTestClientConfigs() {
+    return Collections.emptyMap();
   }
 
   @Test
@@ -133,9 +107,6 @@ public class RestApiTest extends ClusterTestHarness {
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
     String kek3Name = "kek3";
-    String kmsType = "test-kms";
-    String kmsKeyId = "myid";
-    String kmsKeyId3 = "myid2";
     String subject = "mysubject";
     String badSubject = "badSubject";
     String subject2 = "mysubject2";
@@ -151,6 +122,13 @@ public class RestApiTest extends ClusterTestHarness {
     // Create kek
     Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
     assertEquals(kek, newKek);
+
+    try {
+      client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.ALREADY_EXISTS_ERROR_CODE, e.getErrorCode());
+    }
 
     // Delete kek
     client.deleteKek(headers, kekName, false);
@@ -232,7 +210,7 @@ public class RestApiTest extends ClusterTestHarness {
     byte[] rawDek = new Cryptor(algorithm).generateKey();
     String rawDekStr =
         new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
-    Aead aead = kek.toAead(Collections.emptyMap());
+    Aead aead = kek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -270,6 +248,9 @@ public class RestApiTest extends ClusterTestHarness {
     newKek = client.updateKek(headers, kekName, kmsProps, doc, true);
     assertEquals(kek2, newKek);
 
+    // Test shared kek
+    client.testKek(kekName);
+
     // Advance ticker
     fakeTicker.advance(61, TimeUnit.SECONDS);
 
@@ -298,6 +279,18 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
+
+    Dek subject2Version1 = client.getDekVersion(kekName, subject2, 1, algorithm, false);
+    assertEquals(1, subject2Version1.getVersion());
+    Dek subject2Version2 = client.getDekVersion(kekName, subject2, 2, algorithm, false);
+    assertEquals(2, subject2Version2.getVersion());
+
+    try {
+      client.getDekVersion(kekName, subject2, 99, algorithm, false);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
 
     versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
     assertEquals(ImmutableList.of(1), versions);
@@ -359,6 +352,9 @@ public class RestApiTest extends ClusterTestHarness {
 
     versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, true, 0, 2);
+    assertEquals(ImmutableList.of(1, 2), versions);
 
     client.undeleteDekVersion(headers, kekName, subject2, 2, null);
 
@@ -485,7 +481,7 @@ public class RestApiTest extends ClusterTestHarness {
     // Use the test-kms type to generate a dummy dek locally
     Kek testKek = new Kek(kekName, "test-kms", kmsKeyId, null, null, false, null, null);
     byte[] rawDek = new Cryptor(algorithm).generateKey();
-    Aead aead = testKek.toAead(Collections.emptyMap());
+    Aead aead = testKek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -528,6 +524,57 @@ public class RestApiTest extends ClusterTestHarness {
     }
   }
 
+  // A failed createDek must not leave an orphan DEK that turns retries into 409.
+  @Test
+  public void testNoOrphanDekOnUnwrapFailure() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-fail-decrypt";
+    String subject = "orphan-test-subject";
+    String failKmsType = "test-fail-decrypt-kms";
+    String failKmsKeyId = "test-fail-decrypt-kms://anykey";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, failKmsType, failKmsKeyId, null, null, true, false);
+
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected DekGenerationException on first createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
+
+    try {
+      List<String> deks = client.listDeks(kekName, false);
+      assertEquals(Collections.emptyList(), deks);
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    try {
+      List<String> deksIncludingDeleted = client.listDeks(kekName, true);
+      assertEquals(Collections.emptyList(), deksIncludingDeleted);
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    try {
+      client.getDek(kekName, subject, algorithm, false);
+      fail("Expected no DEK record after failed createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+
+    // An orphan from a prior persist would surface as AlreadyExists here.
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected DekGenerationException on retried createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
+
+    client.deleteKek(headers, kekName, false);
+    client.deleteKek(headers, kekName, true);
+  }
+
   @Test
   public void testRegisterCreatesKmsDefaults() throws Exception {
     String subject = "testSubject";
@@ -544,16 +591,61 @@ public class RestApiTest extends ClusterTestHarness {
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false).getId());
+        restApp.restClient.registerSchema(request1, subject, false).getId(),
+        "Registering should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     Map<String, String> newParams = schemaString.getRuleSet().getDomainRules().get(0).getParams();
     assertEquals("aws-kms-us-west-2-111122223333-key-1234abcd-12ab-34cd-56ef-1234567890ab",
         newParams.get("encrypt.kek.name"));
     assertEquals("aws-kms", newParams.get("encrypt.kms.type"));
+  }
+
+  // A KMS authentication/authorization failure must surface as HTTP 403, not 500.
+  @Test
+  public void testDekGenerationForbiddenWhenKmsDeniesAccess() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-access-denied";
+    String subject = "access-denied-subject";
+    String failKmsType = "test-fail-decrypt-kms";
+    // The "access-denied" marker drives the test KMS to fail decrypt with an access-denied error.
+    String failKmsKeyId = "test-fail-decrypt-kms://access-denied";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, failKmsType, failKmsKeyId, null, null, true, false);
+
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected a 403 DekGenerationException when the KMS denies access");
+    } catch (RestClientException e) {
+      assertEquals(403, e.getStatus());
+      assertEquals(DekRegistryErrors.DEK_GENERATION_FORBIDDEN_ERROR_CODE, e.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testNotFoundErrorPaths() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String missingKek = "missing-kek";
+    String missingSubject = "missing-subject";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    assertKeyNotFound(() -> client.getKek(missingKek, false));
+    assertKeyNotFound(() -> client.testKek(missingKek));
+    assertKeyNotFound(() -> client.undeleteKek(headers, missingKek));
+    assertKeyNotFound(() -> client.getDek(missingKek, missingSubject, algorithm, false));
+    assertKeyNotFound(() -> client.getDekVersion(missingKek, missingSubject, 1, algorithm, false));
+    assertKeyNotFound(() -> client.undeleteDek(headers, missingKek, missingSubject, algorithm));
+  }
+
+  private void assertKeyNotFound(Executable op) {
+    RestClientException e = assertThrows(RestClientException.class, op);
+    assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
   }
 }
 

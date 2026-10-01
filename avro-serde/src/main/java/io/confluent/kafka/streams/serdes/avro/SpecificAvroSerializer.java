@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.streams.serdes.avro;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -36,7 +35,6 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
  *
  * <p>See {@link SpecificAvroDeserializer} for its deserializer counterpart.</p>
  */
-@InterfaceStability.Unstable
 public class SpecificAvroSerializer<T extends org.apache.avro.specific.SpecificRecord>
     implements Serializer<T> {
 

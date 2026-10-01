@@ -1,0 +1,69 @@
+syntax = "proto3";
+package io.confluent.protobuf.generated;
+
+message Row {
+  arrayNullableRepeatedWrapper arrayNullable = 1 [(confluent.field_meta) = {
+    doc: "arrayNullable comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+  repeated elementNullableElementWrapper elementNullable = 2 [(confluent.field_meta) = {
+    doc: "elementNullable comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+  arrayAndElementNullableRepeatedWrapper arrayAndElementNullable = 3 [(confluent.field_meta) = {
+    doc: "arrayAndElementNullable comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+
+  message arrayNullableRepeatedWrapper {
+    repeated int64 value = 1;
+  }
+  message elementNullableElementWrapper {
+    optional int64 value = 1;
+  }
+  message arrayAndElementNullableRepeatedWrapper {
+    repeated valueElementWrapper value = 1 [(confluent.field_meta) = {
+      params: [
+        {
+          key: "flink.version",
+          value: "1"
+        },
+        {
+          key: "flink.wrapped",
+          value: "true"
+        }
+      ]
+    }];
+
+    message valueElementWrapper {
+      optional int64 value = 1;
+    }
+  }
+}

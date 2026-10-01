@@ -21,10 +21,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
 /**
  * For any record type that is published to Kafka, registers the schema
@@ -34,8 +32,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
  * Instead, checks compatibility of any occurrences of the same record name
  * across <em>all</em> topics.
  */
-public class RecordNameStrategy implements SubjectNameStrategy,
-    io.confluent.kafka.serializers.subject.SubjectNameStrategy {
+public class RecordNameStrategy implements SubjectNameStrategy {
 
   @Override
   public void configure(Map<String, ?> config) {
@@ -74,11 +71,5 @@ public class RecordNameStrategy implements SubjectNameStrategy,
           + AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + " = "
           + getClass().getName() + ", the message value must only be a record schema");
     }
-  }
-
-  @Override
-  @Deprecated
-  public String getSubjectName(String topic, boolean isKey, Object value) {
-    return subjectName(topic, isKey, new AvroSchema(AvroSchemaUtils.getSchema(value)));
   }
 }

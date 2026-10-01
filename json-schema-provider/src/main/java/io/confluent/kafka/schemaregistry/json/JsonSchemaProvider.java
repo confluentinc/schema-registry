@@ -17,15 +17,11 @@ package io.confluent.kafka.schemaregistry.json;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 public class JsonSchemaProvider extends AbstractSchemaProvider {
-
-  private static final Logger log = LoggerFactory.getLogger(JsonSchemaProvider.class);
 
   /**
    * Config key (within the {@code schema.providers.} provider config map) controlling whether
@@ -62,20 +58,21 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
+  public ParsedSchema parseSchemaOrElseThrow(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
       return new JsonSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema, isNew),
+              resolveReferences(schema, validateAsNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null,
               shouldBlockRemoteRefs(schema, fetchRemoteRefs)
       );
     } catch (Exception e) {
-      log.error("Could not parse JSON schema", e);
-      throw e;
+      throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
+          + ", details: " + e.getMessage(), e);
     }
   }
 }

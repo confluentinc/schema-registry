@@ -67,7 +67,7 @@ public class FieldRedactionExecutorTest {
     ParsedSchema schema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, "ENCRYPT",
         Collections.singleton("PII"), null, null, null, null, false);
-    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
@@ -88,7 +88,7 @@ public class FieldRedactionExecutorTest {
     schema = schema.copy(metadata, null);
     Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, "ENCRYPT",
         Collections.singleton("PII2"), null, null, null, null, false);
-    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
@@ -104,7 +104,7 @@ public class FieldRedactionExecutorTest {
     ParsedSchema schema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("cel", null, RuleKind.CONDITION, RuleMode.WRITE, "CEL",
         null, null, "message.name == 'hi'", null, null, false);
-    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));

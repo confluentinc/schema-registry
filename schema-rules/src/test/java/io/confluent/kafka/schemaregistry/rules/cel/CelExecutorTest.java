@@ -485,6 +485,52 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerFieldConstraintTimestampMillisRawLong() throws Exception {
+    // A timestamp-millis field's unit lives only in the schema, and avro's logical-type
+    // converters are off by default, so the field rule's `value` binding has to be presented
+    // against the field's schema. Otherwise timestamp(value) reads 1700000000123 as epoch
+    // *seconds* and this equality fails. The field is a nullable union, so this covers the
+    // union-branch walk too.
+    Schema schema = createLogicalSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("dewey_no", "921.00000000000000000");
+    avroRecord.put("removal_dt", 1700000000123L);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == 'removal_dt' ; timestamp(value) == timestamp(\"2023-11-14T22:13:20.123Z\")",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    GenericRecord obj = (GenericRecord) avroDeserializer.deserialize(topic, bytes);
+    // The rule is a CONDITION, so nothing is written back; the round-trip value is what was
+    // serialized. This deserializer has the logical-type converters on, hence the Instant.
+    assertEquals(Instant.ofEpochMilli(1700000000123L), obj.get("removal_dt"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerFieldConstraintTimestampMillisInstant() throws Exception {
+    // The converters-on shape: the value is already an Instant, and reads identically.
+    Schema schema = createLogicalSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("dewey_no", "921.00000000000000000");
+    avroRecord.put("removal_dt", Instant.ofEpochMilli(1700000000123L));
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, null, null,
+        "name == 'removal_dt' ; timestamp(value) == timestamp(\"2023-11-14T22:13:20.123Z\")",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    avroSerializer.serialize(topic, avroRecord);
+  }
+
+  @Test
   public void testKafkaAvroSerializerFieldTransform() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(avroRecord.getSchema());

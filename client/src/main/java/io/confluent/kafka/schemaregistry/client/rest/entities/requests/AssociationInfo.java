@@ -1,0 +1,146 @@
+/*
+ * Copyright 2025 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
+import java.util.Objects;
+
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class AssociationInfo {
+
+  private String subject;
+  private String associationType;
+  private LifecyclePolicy lifecycle;
+  private Boolean frozen;
+  private Schema schema;
+
+  @JsonCreator
+  public AssociationInfo(
+      @JsonProperty("subject") String subject,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
+      @JsonProperty("frozen") Boolean frozen,
+      @JsonProperty("schema") Schema schema) {
+    this.subject = subject;
+    this.associationType = associationType;
+    this.lifecycle = lifecycle;
+    this.frozen = frozen;
+    this.schema = schema;
+  }
+
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
+  }
+
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
+  }
+
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
+  }
+
+  @JsonProperty("lifecycle")
+  public LifecyclePolicy getLifecycle() {
+    return lifecycle;
+  }
+
+  @JsonProperty("lifecycle")
+  public void setLifecycle(LifecyclePolicy lifecycle) {
+    this.lifecycle = lifecycle;
+  }
+
+  /**
+   * The effective frozen value, applying the lifecycle default when unset.
+   * Used by business logic; not serialized directly.
+   */
+  @JsonIgnore
+  public boolean isFrozen() {
+    return frozen != null ? frozen : defaultFrozen();
+  }
+
+  /**
+   * The frozen value for serialization. Returns {@code null} (so the property is
+   * omitted) when it matches the lifecycle default, and the explicit value otherwise.
+   */
+  @JsonProperty("frozen")
+  public Boolean getFrozen() {
+    if (frozen == null || frozen == defaultFrozen()) {
+      return null;
+    }
+    return frozen;
+  }
+
+  @JsonProperty("frozen")
+  public void setFrozen(Boolean frozen) {
+    this.frozen = frozen;
+  }
+
+  private boolean defaultFrozen() {
+    return lifecycle == LifecyclePolicy.STRONG;
+  }
+
+  @JsonProperty("schema")
+  public Schema getSchema() {
+    return schema;
+  }
+
+  @JsonProperty("schema")
+  public void setSchema(Schema schema) {
+    this.schema = schema;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    AssociationInfo that = (AssociationInfo) o;
+    return isFrozen() == that.isFrozen()
+        && Objects.equals(subject, that.subject)
+        && Objects.equals(associationType, that.associationType)
+        && lifecycle == that.lifecycle
+        && Objects.equals(schema, that.schema);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        subject, associationType, lifecycle, isFrozen(), schema);
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+}

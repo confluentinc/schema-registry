@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.header.Headers;
 public class RuleContext {
 
   private final Map<String, ?> configs;
+  private final ExecutionEnvironment enabledEnv;
   private final ParsedSchema source;
   private final ParsedSchema target;
   private final String subject;
@@ -56,6 +58,7 @@ public class RuleContext {
 
   public RuleContext(
       Map<String, ?> configs,
+      ExecutionEnvironment enabledEnv,
       ParsedSchema source,
       ParsedSchema target,
       String subject,
@@ -69,6 +72,7 @@ public class RuleContext {
       int index,
       List<Rule> rules) {
     this.configs = configs;
+    this.enabledEnv = enabledEnv;
     this.source = source;
     this.target = target;
     this.subject = subject;
@@ -86,6 +90,10 @@ public class RuleContext {
 
   public Map<String, ?> configs() {
     return configs;
+  }
+
+  public ExecutionEnvironment enabledEnv() {
+    return enabledEnv;
   }
 
   public ParsedSchema source() {
@@ -179,6 +187,12 @@ public class RuleContext {
 
   public FieldContext enterField(Object containingMessage,
       String fullName, String name, RuleContext.Type type, Set<String> tags) {
+    return enterField(containingMessage, fullName, name, type, tags, null);
+  }
+
+  public FieldContext enterField(Object containingMessage,
+      String fullName, String name, RuleContext.Type type, Set<String> tags,
+      Object fieldDescriptor) {
     Set<String> metadataTags = getTags(fullName);
     if (!metadataTags.isEmpty()) {
       tags = new HashSet<>(tags);
@@ -186,7 +200,8 @@ public class RuleContext {
     }
     Set<String> ruleTags = rule().getTags();
     if (!type.isPrimitive() || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
-      return new FieldContext(containingMessage, fullName, name, type, tags);
+      return new FieldContext(containingMessage, fullName, name, type, tags,
+          fieldDescriptor);
     } else {
       return null;
     }
@@ -210,15 +225,24 @@ public class RuleContext {
     private final String fullName;
     private final String name;
     private Type type;
+    private boolean inCombined;
     private final Set<String> tags;
+    private final Object fieldDescriptor;
 
     public FieldContext(Object containingMessage, String fullName,
         String name, Type type, Set<String> tags) {
+      this(containingMessage, fullName, name, type, tags, null);
+    }
+
+    public FieldContext(Object containingMessage, String fullName,
+        String name, Type type, Set<String> tags, Object fieldDescriptor) {
       this.containingMessage = containingMessage;
       this.fullName = fullName;
       this.name = name;
       this.type = type;
+      this.inCombined = type == Type.COMBINED;
       this.tags = tags;
+      this.fieldDescriptor = fieldDescriptor;
       fieldContexts.addLast(this);
     }
 
@@ -234,12 +258,32 @@ public class RuleContext {
       return name;
     }
 
+    /**
+     * The producer's own handle on the field, for formats that have one: a protobuf
+     * {@code FieldDescriptor}, or an Avro {@code Schema.Field}. Null for JSON Schema, whose
+     * walk carries no such object.
+     *
+     * <p>{@link #getName()} and {@link #getFullName()} are the <em>registered schema's</em>
+     * names for the field, which can differ from the producer's under a compatible rename,
+     * and {@link Type} collapses distinctions the format makes — a {@code uint64} and an
+     * {@code int64} both arrive as {@link Type#LONG}, and Java has no unsigned primitive to
+     * carry the difference in the value either. An executor that has to present the value
+     * faithfully therefore goes through this rather than re-deriving the field from a name.
+     */
+    public Object getFieldDescriptor() {
+      return fieldDescriptor;
+    }
+
     public Type getType() {
       return type;
     }
 
     public void setType(Type type) {
       this.type = type;
+    }
+
+    public boolean isInCombined() {
+      return inCombined;
     }
 
     public Set<String> getTags() {
@@ -279,6 +323,7 @@ public class RuleContext {
     ARRAY(false),
     MAP(false),
     COMBINED(false),
+    NULLABLE(false),
     FIXED(false),
     STRING(true),
     BYTES(true),

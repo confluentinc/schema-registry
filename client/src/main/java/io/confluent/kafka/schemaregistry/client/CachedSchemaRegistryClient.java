@@ -19,10 +19,16 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -58,7 +64,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 
 import javax.net.ssl.HostnameVerifier;
 
@@ -72,17 +77,23 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private final RestService restService;
   private final int cacheCapacity;
-  private final Map<String, Map<ParsedSchema, RegisterSchemaResponse>> schemaToResponseCache;
-  private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
-  private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
-  private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
-  private final Map<String, Map<Integer, Schema>> versionToSchemaCache;
+  private final Cache<String, Cache<SchemaAndNormalize, RegisterSchemaResponse>>
+      schemaToResponseCache;
+  private final Cache<String, Cache<RequestAndNormalize, RegisterSchemaResponse>>
+      requestToResponseCache;
+  private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToIdCache;
+  private final Cache<String, Cache<Integer, Schema>> idToSchemaCache;
+  private final Cache<String, ParsedSchema> guidToSchemaCache;
+  private final Cache<String, Cache<SchemaAndNormalize, String>> schemaToGuidCache;
+  private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToVersionCache;
+  private final Cache<String, Cache<Integer, Schema>> versionToSchemaCache;
   private final Cache<String, SchemaMetadata> latestVersionCache;
   private final Cache<SubjectAndMetadata, SchemaMetadata> latestWithMetadataCache;
   private final Cache<SubjectAndSchema, Long> missingSchemaCache;
   private final Cache<SubjectAndInt, Long> missingIdCache;
+  private final Cache<String, Long> missingGuidCache;
   private final Cache<SubjectAndInt, Long> missingVersionCache;
-  private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
+  private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers;
   private final Ticker ticker;
 
@@ -206,11 +217,30 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Map<String, String> httpHeaders,
       Ticker ticker) {
     this.cacheCapacity = cacheCapacity;
-    this.schemaToResponseCache = new BoundedConcurrentHashMap<>(cacheCapacity);
-    this.schemaToIdCache = new BoundedConcurrentHashMap<>(cacheCapacity);
-    this.idToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
-    this.schemaToVersionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
-    this.versionToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaToResponseCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.requestToResponseCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.schemaToIdCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.idToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.schemaToGuidCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.guidToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.schemaToVersionCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.versionToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
     this.restService = restService;
     this.ticker = ticker;
 
@@ -233,21 +263,29 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
     this.latestWithMetadataCache = latestWithMetadataBuilder.build();
 
-    long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
-    long missingVersionTTL = SchemaRegistryClientConfig.getMissingVersionTTL(configs);
-    long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
     int maxMissingCacheSize = SchemaRegistryClientConfig.getMaxMissingCacheSize(configs);
 
+    long missingSchemaTTL = SchemaRegistryClientConfig.getMissingSchemaTTL(configs);
     this.missingSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
         .expireAfterWrite(missingSchemaTTL, TimeUnit.SECONDS)
         .build();
+
+    long missingIdTTL = SchemaRegistryClientConfig.getMissingIdTTL(configs);
     this.missingIdCache = CacheBuilder.newBuilder()
         .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
         .expireAfterWrite(missingIdTTL, TimeUnit.SECONDS)
         .build();
+
+    this.missingGuidCache = CacheBuilder.newBuilder()
+        .maximumSize(maxMissingCacheSize)
+        .ticker(ticker)
+        .expireAfterWrite(missingIdTTL, TimeUnit.SECONDS)
+        .build();
+
+    long missingVersionTTL = SchemaRegistryClientConfig.getMissingVersionTTL(configs);
     this.missingVersionCache = CacheBuilder.newBuilder()
         .maximumSize(maxMissingCacheSize)
         .ticker(ticker)
@@ -258,32 +296,23 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
         : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    if (configs != null) {
+      String prefix = SchemaProvider.SCHEMA_PROVIDERS_PREFIX + ".";
+      for (Map.Entry<String, ?> entry : configs.entrySet()) {
+        if (entry.getKey().startsWith(prefix)) {
+          schemaProviderConfigs.put(
+              entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+      }
+    }
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     for (SchemaProvider provider : this.providers.values()) {
       provider.configure(schemaProviderConfigs);
     }
 
-    final Map<String, SchemaProvider> schemaProviders = this.providers;
     this.parsedSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
-        .build(new CacheLoader<Schema, ParsedSchema>() {
-          @Override
-          public ParsedSchema load(Schema schema) throws Exception {
-            String schemaType = schema.getSchemaType();
-            if (schemaType == null) {
-              schemaType = AvroSchema.TYPE;
-            }
-            SchemaProvider schemaProvider = schemaProviders.get(schemaType);
-            if (schemaProvider == null) {
-              log.error("Invalid schema type {}", schemaType);
-              throw new IllegalStateException("Invalid schema type " + schemaType);
-            }
-            return schemaProvider.parseSchema(schema, false, false).orElseThrow(
-                () -> new IOException("Invalid schema " + schema.getSchema()
-                    + " with refs " + schema.getReferences()
-                    + " of type " + schema.getSchemaType()));
-          }
-        });
+        .build();
 
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
@@ -340,9 +369,48 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
     try {
-      return Optional.of(parsedSchemaCache.get(schema));
-    } catch (ExecutionException e) {
+      return Optional.of(parseSchemaOrElseThrow(schema));
+    } catch (IOException e) {
       return Optional.empty();
+    }
+  }
+
+  private Schema contentCacheKey(Schema schema) {
+    // The subject is part of the key only for a provider whose result depends on it, so that two
+    // subjects sharing a body do not share the first one's parse.
+    SchemaProvider provider = providers.get(
+        schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE);
+    String subject = provider != null && provider.isSubjectDependent(schema)
+        ? schema.getSubject() : null;
+    return new Schema(
+        subject, null, null, schema.getSchemaType(), schema.getReferences(),
+        schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
+  }
+
+  @Override
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    // Use a content-based cache key by stripping subject, version, and id,
+    // so the same schema content produces the same cache entry regardless of subject
+    Schema cacheKey = contentCacheKey(schema);
+    try {
+      return parsedSchemaCache.get(cacheKey, () -> {
+        String schemaType = schema.getSchemaType();
+        if (schemaType == null) {
+          schemaType = AvroSchema.TYPE;
+        }
+        SchemaProvider schemaProvider = providers.get(schemaType);
+        if (schemaProvider == null) {
+          log.error("Invalid schema type {}", schemaType);
+          throw new IllegalArgumentException("Invalid schema type " + schemaType);
+        }
+        return schemaProvider.parseSchemaOrElseThrow(schema, false, false);
+      });
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        throw new IOException(cause);
+      }
+      throw new IOException(e);
     }
   }
 
@@ -350,30 +418,47 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return providers;
   }
 
-  private RegisterSchemaResponse registerAndGetId(
-      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
-      throws IOException, RestClientException {
+  private RegisterSchemaRequest toRegisterSchemaRequest(
+      ParsedSchema schema, int version, int id, boolean propagateSchemaTags) {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    if (id >= 0) {
+      request.setVersion(version);
+      request.setId(id);
+    }
     if (propagateSchemaTags) {
       request.setPropagateSchemaTags(true);
     }
-    return restService.registerSchema(request, subject, normalize);
+    return request;
   }
 
-  private RegisterSchemaResponse registerAndGetId(
-      String subject, ParsedSchema schema, int version, int id,
-      boolean normalize, boolean propagateSchemaTags)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-    request.setVersion(version);
-    request.setId(id);
-    if (propagateSchemaTags) {
-      request.setPropagateSchemaTags(true);
+  /**
+   * Registers the request and records the resulting schema by id, shared by the schema- and
+   * request-based register paths. Each caller owns its own response cache; only the call itself
+   * and the id bookkeeping are common.
+   */
+  private RegisterSchemaResponse doRegister(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException, ExecutionException {
+    RegisterSchemaResponse response = restService.registerSchema(request, subject, normalize);
+    if (response.getSchema() != null) {
+      String context = toQualifiedContext(subject);
+      final Cache<Integer, Schema> idSchemaMap = idToSchemaCache.get(
+          context, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
+      idSchemaMap.put(response.getId(), new Schema(subject, response));
     }
-    return restService.registerSchema(request, subject, normalize);
+    return response;
   }
 
+  @Deprecated
   protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
+      throws IOException, RestClientException {
+    Schema schema = getSchemaEntityByIdFromRegistry(id, subject);
+    return parseSchemaOrElseThrow(schema);
+  }
+
+  protected Schema getSchemaEntityByIdFromRegistry(int id, String subject)
       throws IOException, RestClientException {
     if (missingIdCache.getIfPresent(new SubjectAndInt(subject, id)) != null) {
       throw new RestClientException("Schema " + id + " not found",
@@ -389,39 +474,58 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
+    return new Schema(restSchema.getSubject(), restSchema.getVersion(), id, restSchema);
+  }
+
+  protected ParsedSchema getSchemaByGuidFromRegistry(String guid, String format)
+      throws IOException, RestClientException {
+    String cacheKey = format != null ? guid + ":" + format : guid;
+    if (missingGuidCache.getIfPresent(cacheKey) != null) {
+      throw new RestClientException("Schema " + guid + " not found",
+          HTTP_NOT_FOUND, SCHEMA_NOT_FOUND_ERROR_CODE);
+    }
+
+    SchemaString restSchema;
+    try {
+      restSchema = restService.getByGuid(guid, format);
+    } catch (RestClientException rce) {
+      if (isSchemaOrSubjectNotFoundException(rce)) {
+        missingGuidCache.put(cacheKey, System.currentTimeMillis());
+      }
+      throw rce;
+    }
     Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
-    return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
-            + " with refs " + restSchema.getReferences()
-            + " of type " + restSchema.getSchemaType()));
+    return schema.orElseThrow(() -> new IOException("Invalid schema of type "
+        + restSchema.getSchemaType()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    checkMissingSchemaCache(subject, schema, normalize);
-
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
-    try {
-      RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-      response = restService.lookUpSubjectVersion(request, subject, normalize, true);
-    } catch (RestClientException rce) {
-      if (isSchemaOrSubjectNotFoundException(rce)) {
-        missingSchemaCache.put(
-            new SubjectAndSchema(subject, schema, normalize), System.currentTimeMillis());
-      }
-      throw rce;
-    }
-
-    return response.getVersion();
+    return getIdWithResponseFromRegistry(subject, schema, normalize, true).getVersion();
   }
 
   private int getIdFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return getIdWithResponseFromRegistry(subject, schema, normalize, false).getId();
+  }
+
+  private String getGuidFromRegistry(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponseFromRegistry(subject, schema, normalize, false).getGuid();
+  }
+
+  private RegisterSchemaResponse getIdWithResponseFromRegistry(
+      String subject, ParsedSchema schema, boolean normalize, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
     checkMissingSchemaCache(subject, schema, normalize);
 
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema schemaEntity;
+    RegisterSchemaResponse response;
     try {
       RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
-      response = restService.lookUpSubjectVersion(request, subject, normalize, false);
+      schemaEntity = restService.lookUpSubjectVersion(
+          request, subject, normalize, lookupDeletedSchema);
+      response = new RegisterSchemaResponse(schemaEntity);
     } catch (RestClientException rce) {
       if (isSchemaOrSubjectNotFoundException(rce)) {
         missingSchemaCache.put(
@@ -429,7 +533,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    return response.getId();
+    return response;
   }
 
   @Override
@@ -461,30 +565,66 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, int version, int id,
       boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
-        schemaToResponseCache.computeIfAbsent(
-            subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+    try {
+      final Cache<SchemaAndNormalize, RegisterSchemaResponse> schemaResponseMap =
+          schemaToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
 
-    RegisterSchemaResponse cachedResponse = schemaResponseMap.get(schema);
-    if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
-      return cachedResponse;
-    }
-
-    synchronized (this) {
-      cachedResponse = schemaResponseMap.get(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
       if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
         return cachedResponse;
       }
 
-      final RegisterSchemaResponse retrievedResponse = id >= 0
-          ? registerAndGetId(subject, schema, version, id, normalize, propagateSchemaTags)
-          : registerAndGetId(subject, schema, normalize, propagateSchemaTags);
-      schemaResponseMap.put(schema, retrievedResponse);
-      String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
-          context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
-      idSchemaMap.put(retrievedResponse.getId(), schema);
-      return retrievedResponse;
+      synchronized (this) {
+        cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
+        if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
+          return cachedResponse;
+        }
+
+        final RegisterSchemaResponse retrievedResponse = doRegister(
+            subject,
+            toRegisterSchemaRequest(schema, version, id, propagateSchemaTags),
+            normalize);
+        schemaResponseMap.put(cacheKey, retrievedResponse);
+        return retrievedResponse;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
+    }
+  }
+
+  @Override
+  public RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    try {
+      final Cache<RequestAndNormalize, RegisterSchemaResponse> requestResponseMap =
+          requestToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
+
+      RequestAndNormalize cacheKey =
+          new RequestAndNormalize(request.copy(), normalize);
+      int id = request.getId() != null ? request.getId() : -1;
+      RegisterSchemaResponse cachedResponse = requestResponseMap.getIfPresent(cacheKey);
+      if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
+        return cachedResponse;
+      }
+
+      synchronized (this) {
+        cachedResponse = requestResponseMap.getIfPresent(cacheKey);
+        if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
+          return cachedResponse;
+        }
+
+        final RegisterSchemaResponse retrievedResponse = doRegister(subject, request, normalize);
+        requestResponseMap.put(cacheKey, retrievedResponse);
+        return retrievedResponse;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
     }
   }
 
@@ -496,26 +636,60 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    Schema schema = getSchemaEntityBySubjectAndId(subject, id);
+    return parseSchemaOrElseThrow(schema);
+  }
+
+  @Override
+  public Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
     if (subject == null) {
       subject = NO_SUBJECT;
     }
 
-    final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+    try {
+      final Cache<Integer, Schema> idSchemaMap = idToSchemaCache.get(
+          subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
 
-    ParsedSchema cachedSchema = idSchemaMap.get(id);
+      Schema cachedSchema = idSchemaMap.getIfPresent(id);
+      if (cachedSchema != null) {
+        return cachedSchema;
+      }
+
+      synchronized (this) {
+        cachedSchema = idSchemaMap.getIfPresent(id);
+        if (cachedSchema != null) {
+          return cachedSchema;
+        }
+
+        final Schema retrievedSchema = getSchemaEntityByIdFromRegistry(id, subject);
+        idSchemaMap.put(id, retrievedSchema);
+        return retrievedSchema;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
+    }
+  }
+
+  @Override
+  public ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    String cacheKey = format != null ? guid + ":" + format : guid;
+    ParsedSchema cachedSchema = guidToSchemaCache.getIfPresent(cacheKey);
     if (cachedSchema != null) {
       return cachedSchema;
     }
 
     synchronized (this) {
-      cachedSchema = idSchemaMap.get(id);
+      cachedSchema = guidToSchemaCache.getIfPresent(cacheKey);
       if (cachedSchema != null) {
         return cachedSchema;
       }
 
-      final ParsedSchema retrievedSchema = getSchemaByIdFromRegistry(id, subject);
-      idSchemaMap.put(id, retrievedSchema);
+      final ParsedSchema retrievedSchema = getSchemaByGuidFromRegistry(guid, format);
+      guidToSchemaCache.put(cacheKey, retrievedSchema);
       return retrievedSchema;
     }
   }
@@ -559,28 +733,34 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private Schema getSchemaByVersion(String subject, int version, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
-    final Map<Integer, Schema> versionSchemaMap = versionToSchemaCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+    try {
+      final Cache<Integer, Schema> versionSchemaMap = versionToSchemaCache.get(
+          subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
 
-    // The cache is only used when lookupDeletedSchema is true
-    Schema cachedSchema = lookupDeletedSchema ? versionSchemaMap.get(version) : null;
-    if (cachedSchema != null) {
-      return cachedSchema;
-    }
-
-    synchronized (this) {
-      cachedSchema = lookupDeletedSchema ? versionSchemaMap.get(version) : null;
+      // The cache is only used when lookupDeletedSchema is true
+      Schema cachedSchema = lookupDeletedSchema ? versionSchemaMap.getIfPresent(version) : null;
       if (cachedSchema != null) {
         return cachedSchema;
       }
 
-      final Schema retrievedSchema = getSchemaByVersionFromRegistry(
-          subject, version, lookupDeletedSchema);
-      // The cache is only used when lookupDeletedSchema is true
-      if (lookupDeletedSchema) {
-        versionSchemaMap.put(version, retrievedSchema);
+      synchronized (this) {
+        cachedSchema = lookupDeletedSchema ? versionSchemaMap.getIfPresent(version) : null;
+        if (cachedSchema != null) {
+          return cachedSchema;
+        }
+
+        final Schema retrievedSchema = getSchemaByVersionFromRegistry(
+            subject, version, lookupDeletedSchema);
+        // The cache is only used when lookupDeletedSchema is true
+        if (lookupDeletedSchema) {
+          versionSchemaMap.put(version, retrievedSchema);
+        }
+        return retrievedSchema;
       }
-      return retrievedSchema;
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
     }
   }
 
@@ -621,6 +801,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getSchemaMetadata(String subject, int version, String format)
+      throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        restService.getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version, format, false, null);
+    return new SchemaMetadata(response);
+  }
+
+  @Override
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     SchemaMetadata schema = latestVersionCache.getIfPresent(subject);
@@ -633,6 +821,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schema = new SchemaMetadata(response);
     latestVersionCache.put(subject, schema);
     return schema;
+  }
+
+  @Override
+  public SchemaMetadata getLatestSchemaMetadata(String subject, String format)
+      throws IOException, RestClientException {
+    if (format == null) {
+      return getLatestSchemaMetadata(subject);
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        restService.getLatestVersion(DEFAULT_REQUEST_PROPERTIES, subject, format, null);
+    return new SchemaMetadata(response);
   }
 
   @Override
@@ -660,23 +859,30 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getVersion(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+    try {
+      final Cache<SchemaAndNormalize, Integer> schemaVersionMap = schemaToVersionCache.get(
+          subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
 
-    Integer cachedVersion = schemaVersionMap.get(schema);
-    if (cachedVersion != null) {
-      return cachedVersion;
-    }
-
-    synchronized (this) {
-      cachedVersion = schemaVersionMap.get(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      Integer cachedVersion = schemaVersionMap.getIfPresent(cacheKey);
       if (cachedVersion != null) {
         return cachedVersion;
       }
 
-      final int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
-      schemaVersionMap.put(schema, retrievedVersion);
-      return retrievedVersion;
+      synchronized (this) {
+        cachedVersion = schemaVersionMap.getIfPresent(cacheKey);
+        if (cachedVersion != null) {
+          return cachedVersion;
+        }
+
+        final int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
+        schemaVersionMap.put(cacheKey, retrievedVersion);
+        return retrievedVersion;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
     }
   }
 
@@ -702,27 +908,179 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaIdMap = schemaToIdCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+    try {
+      final Cache<SchemaAndNormalize, Integer> schemaIdMap = schemaToIdCache.get(
+          subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
 
-    Integer cachedId = schemaIdMap.get(schema);
-    if (cachedId != null) {
-      return cachedId;
-    }
-
-    synchronized (this) {
-      cachedId = schemaIdMap.get(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      Integer cachedId = schemaIdMap.getIfPresent(cacheKey);
       if (cachedId != null) {
         return cachedId;
       }
 
-      final int retrievedId = getIdFromRegistry(subject, schema, normalize);
-      schemaIdMap.put(schema, retrievedId);
-      String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
-          context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
-      idSchemaMap.put(retrievedId, schema);
-      return retrievedId;
+      synchronized (this) {
+        cachedId = schemaIdMap.getIfPresent(cacheKey);
+        if (cachedId != null) {
+          return cachedId;
+        }
+
+        final RegisterSchemaResponse retrievedResponse =
+            getIdWithResponseFromRegistry(subject, schema, normalize, false);
+        final int retrievedId = retrievedResponse.getId();
+        schemaIdMap.put(cacheKey, retrievedId);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, Schema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          idSchemaMap.put(retrievedId, new Schema(subject, retrievedResponse));
+        }
+        return retrievedId;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
+    }
+  }
+
+  public String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  public String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    try {
+      final Cache<SchemaAndNormalize, String> guidMap = schemaToGuidCache.get(
+          subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
+
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      String cachedGuid = guidMap.getIfPresent(cacheKey);
+      if (cachedGuid != null) {
+        return cachedGuid;
+      }
+
+      synchronized (this) {
+        cachedGuid = guidMap.getIfPresent(cacheKey);
+        if (cachedGuid != null) {
+          return cachedGuid;
+        }
+
+        final String retrievedGuid = getGuidFromRegistry(subject, schema, normalize);
+        guidMap.put(cacheKey, retrievedGuid);
+        guidToSchemaCache.put(retrievedGuid, schema);
+        return retrievedGuid;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
+    }
+  }
+
+  @Override
+  public RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    try {
+      final Cache<SchemaAndNormalize, RegisterSchemaResponse> schemaResponseMap =
+          schemaToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
+
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
+      if (cachedResponse != null) {
+        // Allow the schema to be looked up again if version is not valid
+        // This is for backward compatibility with versions before CP 8.0
+        if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+          return cachedResponse;
+        }
+      }
+
+      synchronized (this) {
+        cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
+        if (cachedResponse != null) {
+          // Allow the schema to be looked up again if version is not valid
+          // This is for backward compatibility with versions before CP 8.0
+          if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+            return cachedResponse;
+          }
+        }
+
+        final RegisterSchemaResponse retrievedResponse =
+            getIdWithResponseFromRegistry(subject, schema, normalize, false);
+        schemaResponseMap.put(cacheKey, retrievedResponse);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, Schema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          idSchemaMap.put(retrievedResponse.getId(), new Schema(subject, retrievedResponse));
+        }
+        return retrievedResponse;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
+    }
+  }
+
+  /**
+   * Unlike {@link #getIdWithResponse(String, ParsedSchema, boolean)}, this does not consult the
+   * missing-schema cache: that cache is keyed by parsed schema, and a request carrying a body no
+   * provider can parse has none. A lookup of a known-missing schema therefore reaches the registry
+   * rather than short-circuiting, which costs a round trip but returns the same result.
+   */
+  @Override
+  public RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    try {
+      final Cache<RequestAndNormalize, RegisterSchemaResponse> requestResponseMap =
+          requestToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
+              .maximumSize(cacheCapacity)
+              .build());
+
+      RequestAndNormalize cacheKey =
+          new RequestAndNormalize(request.copy(), normalize);
+      RegisterSchemaResponse cachedResponse = requestResponseMap.getIfPresent(cacheKey);
+      if (cachedResponse != null) {
+        // Allow the schema to be looked up again if version is not valid
+        // This is for backward compatibility with versions before CP 8.0
+        if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+          return cachedResponse;
+        }
+      }
+
+      synchronized (this) {
+        cachedResponse = requestResponseMap.getIfPresent(cacheKey);
+        if (cachedResponse != null) {
+          // Allow the schema to be looked up again if version is not valid
+          // This is for backward compatibility with versions before CP 8.0
+          if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+            return cachedResponse;
+          }
+        }
+
+        Schema schemaEntity = restService.lookUpSubjectVersion(request, subject, normalize, false);
+        final RegisterSchemaResponse retrievedResponse = new RegisterSchemaResponse(schemaEntity);
+        requestResponseMap.put(cacheKey, retrievedResponse);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, Schema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          idSchemaMap.put(retrievedResponse.getId(), new Schema(subject, retrievedResponse));
+        }
+        return retrievedResponse;
+      }
+    } catch (ExecutionException e) {
+      throw new IOException("Error accessing cache", e);
     }
   }
 
@@ -737,13 +1095,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Map<String, String> requestProperties, String subject, boolean isPermanent)
       throws IOException, RestClientException {
     Objects.requireNonNull(subject, "subject");
-    schemaToVersionCache.remove(subject);
+    schemaToVersionCache.invalidate(subject);
     if (isPermanent) {
-      versionToSchemaCache.remove(subject);
+      versionToSchemaCache.invalidate(subject);
     }
-    idToSchemaCache.remove(subject);
-    schemaToIdCache.remove(subject);
-    schemaToResponseCache.remove(subject);
+    idToSchemaCache.invalidate(subject);
+    schemaToIdCache.invalidate(subject);
+    schemaToResponseCache.invalidate(subject);
+    requestToResponseCache.invalidate(subject);
     latestVersionCache.invalidate(subject);
     latestWithMetadataCache.invalidateAll();
     return restService.deleteSubject(requestProperties, subject, isPermanent);
@@ -762,14 +1121,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String version,
       boolean isPermanent)
       throws IOException, RestClientException {
-    schemaToVersionCache
-        .getOrDefault(subject, Collections.emptyMap())
-        .values()
-        .remove(Integer.valueOf(version));
+    Cache<SchemaAndNormalize, Integer> versionCache = schemaToVersionCache.getIfPresent(subject);
+    if (versionCache != null) {
+      versionCache.asMap().values().remove(Integer.valueOf(version));
+    }
     if (isPermanent) {
-      versionToSchemaCache
-          .getOrDefault(subject, Collections.emptyMap())
-          .remove(Integer.valueOf(version));
+      Cache<Integer, Schema> schemaCache = versionToSchemaCache.getIfPresent(subject);
+      if (schemaCache != null) {
+        schemaCache.invalidate(Integer.valueOf(version));
+      }
     }
     latestVersionCache.invalidate(subject);
     latestWithMetadataCache.invalidateAll();
@@ -795,6 +1155,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+    return restService.testCompatibility(request, subject, "latest", normalize, true);
+  }
+
+  @Override
+  public List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
     return restService.testCompatibility(request, subject, "latest", normalize, true);
   }
 
@@ -867,7 +1234,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+  public SchemaRegistryDeployment getSchemaRegistryDeployment()
       throws IOException, RestClientException {
     return restService.getSchemaRegistryDeployment();
   }
@@ -897,15 +1264,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized void reset() {
-    schemaToResponseCache.clear();
-    schemaToIdCache.clear();
-    idToSchemaCache.clear();
-    schemaToVersionCache.clear();
-    versionToSchemaCache.clear();
+    schemaToResponseCache.invalidateAll();
+    requestToResponseCache.invalidateAll();
+    schemaToIdCache.invalidateAll();
+    idToSchemaCache.invalidateAll();
+    schemaToVersionCache.invalidateAll();
+    versionToSchemaCache.invalidateAll();
+    schemaToGuidCache.invalidateAll();
+    guidToSchemaCache.invalidateAll();
     latestVersionCache.invalidateAll();
     latestWithMetadataCache.invalidateAll();
     missingSchemaCache.invalidateAll();
     missingIdCache.invalidateAll();
+    missingGuidCache.invalidateAll();
     missingVersionCache.invalidateAll();
   }
 
@@ -914,6 +1285,70 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (restService != null) {
       restService.close();
     }
+  }
+
+  @Override
+  public AssociationResponse createAssociation(AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    return restService.createAssociation(DEFAULT_REQUEST_PROPERTIES, null, false, request);
+  }
+
+  @Override
+  public AssociationResponse createOrUpdateAssociation(AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    return restService.createOrUpdateAssociation(DEFAULT_REQUEST_PROPERTIES, null, false, request);
+  }
+
+  @Override
+  public List<Association> getAssociationsBySubject(String subject,
+      String resourceType, List<String> associationTypes, String lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsBySubject(
+        DEFAULT_REQUEST_PROPERTIES, subject, resourceType, associationTypes, lifecyclePolicy,
+        offset, limit);
+  }
+
+  @Override
+  public List<Association> getAssociationsByResourceId(String resourceId,
+      String resourceType, List<String> associationTypes, String lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceId(
+        DEFAULT_REQUEST_PROPERTIES, resourceId, resourceType, associationTypes, lifecyclePolicy,
+        offset, limit);
+  }
+
+  @Override
+  public List<Association> getAssociationsByResourceName(String resourceName,
+      String resourceNamespace, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceName(
+        DEFAULT_REQUEST_PROPERTIES, resourceName, resourceNamespace, resourceType, associationTypes,
+        lifecyclePolicy, offset, limit);
+  }
+
+  @Override
+  public void deleteAssociations(String resourceId, String resourceType,
+                                  List<String> associationTypes, boolean cascadeLifecycle)
+      throws IOException, RestClientException {
+    restService.deleteAssociations(DEFAULT_REQUEST_PROPERTIES,
+        resourceId, resourceType, associationTypes, cascadeLifecycle, false);
+  }
+
+  @Override
+  public AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws IOException, RestClientException {
+    return restService.batchGetAssociations(DEFAULT_REQUEST_PROPERTIES, includeSchemas, request);
+  }
+
+  @Override
+  public AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request)
+      throws IOException, RestClientException {
+    return restService.mutateAssociations(DEFAULT_REQUEST_PROPERTIES, context, dryRun, request);
   }
 
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
@@ -939,6 +1374,60 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     QualifiedSubject qualifiedSubject =
         QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
+  }
+
+  static class SchemaAndNormalize {
+    private final ParsedSchema schema;
+    private final boolean normalize;
+
+    SchemaAndNormalize(ParsedSchema schema, boolean normalize) {
+      this.schema = schema;
+      this.normalize = normalize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SchemaAndNormalize that = (SchemaAndNormalize) o;
+      return normalize == that.normalize && schema.equals(that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schema, normalize);
+    }
+  }
+
+  static class RequestAndNormalize {
+    private final RegisterSchemaRequest request;
+    private final boolean normalize;
+
+    RequestAndNormalize(RegisterSchemaRequest request, boolean normalize) {
+      this.request = request;
+      this.normalize = normalize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      RequestAndNormalize that = (RequestAndNormalize) o;
+      return normalize == that.normalize && request.equals(that.request);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(request, normalize);
+    }
   }
 
   static class SubjectAndSchema {

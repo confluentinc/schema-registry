@@ -18,8 +18,10 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.serializers.DeserializerWithSchema;
+import java.util.function.Function;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -27,7 +29,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaProtobufDeserializer<T extends Message>
-    extends AbstractKafkaProtobufDeserializer<T> implements Deserializer<T> {
+    extends AbstractKafkaProtobufDeserializer<T> implements DeserializerWithSchema<T> {
 
   /**
    * Constructor used by Kafka consumer.
@@ -83,6 +85,17 @@ public class KafkaProtobufDeserializer<T extends Message>
   @Override
   public T deserialize(String topic, Headers headers, byte[] bytes) {
     return (T) deserialize(false, topic, isKey, headers, bytes);
+  }
+
+  @Override
+  public ProtobufSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] bytes) {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes);
+  }
+
+  @Override
+  public ProtobufSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc) {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, writerToReaderSchemaFunc);
   }
 
   @Override

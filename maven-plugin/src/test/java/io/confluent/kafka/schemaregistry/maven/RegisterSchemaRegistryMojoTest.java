@@ -33,11 +33,49 @@ import java.util.Map;
 
 public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   RegisterSchemaRegistryMojo mojo;
+  MockSchemaRegistryClient client;
 
   @Before
   public void createMojo(){
     this.mojo = new RegisterSchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.client = new MockSchemaRegistryClient(MojoUtils.defaultSchemaProviders());
+    this.mojo.client(this.client);
+  }
+
+  @Test
+  public void registerLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    String ddl = "TYPE STRUCT<name STRING, age INT>";
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    writeText(ddlFile, ddl);
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+    expectedVersions.put(subject, 1);
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+    // The plugin sends the DDL; what gets stored is the native schema it denotes. (The registry
+    // names the root after the subject; this client names it from whichever parse cached it
+    // first, so the name is not asserted here.)
+    String registered = this.client.getLatestSchemaMetadata(subject).getSchema();
+    Assert.assertNotEquals(ddl, registered);
+    Assert.assertTrue(registered, registered.contains("\"type\":\"record\""));
+    Assert.assertTrue(registered, registered.contains("\"name\":\"age\""));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void registerMalformedSchemaStillFails() throws Exception {
+    String subject = "TestMalformedSubject-value";
+    File schemaFile = new File(this.tempDirectory, subject + ".avsc");
+    writeMalformedFile(schemaFile);
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, schemaFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
   }
 
   @Test

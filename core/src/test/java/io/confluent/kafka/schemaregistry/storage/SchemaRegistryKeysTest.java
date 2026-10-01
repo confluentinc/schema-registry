@@ -103,16 +103,16 @@ public class SchemaRegistryKeysTest {
   @Test
   public void testSchemaKeyComparator() throws Exception {
     String subject = "foo";
-    SchemaRegistryKey key1 = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
-    SchemaRegistryKey key2 = new SchemaKey(subject, KafkaSchemaRegistry.MAX_VERSION);
+    SchemaRegistryKey key1 = new SchemaKey(subject, SchemaRegistry.MIN_VERSION);
+    SchemaRegistryKey key2 = new SchemaKey(subject, SchemaRegistry.MAX_VERSION);
     assertTrue("key 1 should be less than key2", key1.compareTo(key2) < 0);
-    SchemaRegistryKey key1Dup = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
+    SchemaRegistryKey key1Dup = new SchemaKey(subject, SchemaRegistry.MIN_VERSION);
     assertEquals("key 1 should be equal to key1Dup", key1, key1Dup);
     String subject4 = "bar";
-    SchemaRegistryKey key4 = new SchemaKey(subject4, KafkaSchemaRegistry.MIN_VERSION);
+    SchemaRegistryKey key4 = new SchemaKey(subject4, SchemaRegistry.MIN_VERSION);
     assertTrue("key1 should be greater than key4", key1.compareTo(key4) > 0);
     String subject5 = "fo";
-    SchemaRegistryKey key5 = new SchemaKey(subject5, KafkaSchemaRegistry.MIN_VERSION);
+    SchemaRegistryKey key5 = new SchemaKey(subject5, SchemaRegistry.MIN_VERSION);
     // compare key1 and key5
     assertTrue("key5 should be less than key1", key1.compareTo(key5) > 0);
     SchemaRegistryKey[] expectedOrder = {key4, key5, key1, key2};

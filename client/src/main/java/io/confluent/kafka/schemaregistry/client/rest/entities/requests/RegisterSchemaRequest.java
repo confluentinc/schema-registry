@@ -20,19 +20,18 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -72,6 +71,24 @@ public class RegisterSchemaRequest {
     this.schema = schema.getSchema();
   }
 
+  public RegisterSchemaRequest copy() {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setVersion(getVersion());
+    request.setId(getId());
+    request.setSchemaType(getSchemaType());
+    // References are mutable and take part in equality, so a copy used as a cache key must not
+    // share them with the original.
+    request.setReferences(getReferences() == null ? null
+        : getReferences().stream().map(SchemaReference::copy).collect(Collectors.toList()));
+    request.setMetadata(getMetadata());
+    request.setRuleSet(getRuleSet());
+    request.setSchema(getSchema());
+    request.setSchemaTagsToAdd(getSchemaTagsToAdd());
+    request.setSchemaTagsToRemove(getSchemaTagsToRemove());
+    request.setPropagateSchemaTags(isPropagateSchemaTags());
+    return request;
+  }
+
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }
@@ -100,7 +117,6 @@ public class RegisterSchemaRequest {
 
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }

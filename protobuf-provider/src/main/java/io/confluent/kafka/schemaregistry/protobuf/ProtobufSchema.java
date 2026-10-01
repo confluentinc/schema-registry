@@ -53,6 +53,7 @@ import com.google.protobuf.DescriptorProtos.FeatureSet.Utf8Validation;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
+import com.google.protobuf.DescriptorProtos.FieldOptions.FeatureSupport;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
@@ -76,7 +77,8 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMaskProto;
-import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.GeneratedMessage.ExtendableMessage;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
@@ -133,15 +135,21 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.ValidationRule;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
-import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import io.confluent.protobuf.type.VariantProto;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -157,15 +165,18 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -181,6 +192,10 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
   public static final String TAGS_FIELD = "tags";
+  public static final String RULES_FIELD = "rules";
+  public static final String NAME_FIELD = "name";
+  public static final String EXPR_FIELD = "expr";
+  public static final String SQL_FIELD = "sql";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
 
@@ -206,7 +221,6 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String CC_GENERIC_SERVICES = "cc_generic_services";
   private static final String JAVA_GENERIC_SERVICES = "java_generic_services";
   private static final String PY_GENERIC_SERVICES = "py_generic_services";
-  private static final String PHP_GENERIC_SERVICES = "php_generic_services";
   private static final String DEPRECATED = "deprecated";
   private static final String DEBUG_REDACT = "debug_redact";
   private static final String RETENTION = "retention";
@@ -249,12 +263,19 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String MESSAGE_ENCODING = "message_encoding";
   private static final String JSON_FORMAT = "json_format";
 
+  private static final String FEATURE_SUPPORT = "feature_support";
+  private static final String EDITION_INTRODUCED = "edition_introduced";
+  private static final String EDITION_DEPRECATED = "edition_deprecated";
+  private static final String DEPRECATION_WARNING = "deprecation_warning";
+  private static final String EDITION_REMOVED = "edition_removed";
+
   private static final String VERIFICATION = "verification";
 
   public static final Location DEFAULT_LOCATION = Location.get("");
 
   public static final String CFLT_META_LOCATION = "confluent/meta.proto";
   public static final String CFLT_DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String CFLT_VARIANT_LOCATION = "confluent/type/variant.proto";
   public static final String CALENDAR_PERIOD_LOCATION = "google/type/calendar_period.proto";
   public static final String COLOR_LOCATION = "google/type/color.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
@@ -287,6 +308,8 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CFLT_DECIMAL_SCHEMA =
       toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement CFLT_VARIANT_SCHEMA =
+      toProtoFile(VariantProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CALENDAR_PERIOD_SCHEMA =
       toProtoFile(CalendarPeriodProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement COLOR_SCHEMA =
@@ -349,10 +372,12 @@ public class ProtobufSchema implements ParsedSchema {
     EXTENSION_REGISTRY = ExtensionRegistry.newInstance();
     DecimalProto.registerAllExtensions(EXTENSION_REGISTRY);
     MetaProto.registerAllExtensions(EXTENSION_REGISTRY);
+    VariantProto.registerAllExtensions(EXTENSION_REGISTRY);
 
     KNOWN_DEPENDENCIES = new HashMap<>();
     KNOWN_DEPENDENCIES.put(CFLT_META_LOCATION, CFLT_META_SCHEMA);
     KNOWN_DEPENDENCIES.put(CFLT_DECIMAL_LOCATION, CFLT_DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CFLT_VARIANT_LOCATION, CFLT_VARIANT_SCHEMA);
     KNOWN_DEPENDENCIES.put(CALENDAR_PERIOD_LOCATION, CALENDAR_PERIOD_SCHEMA);
     KNOWN_DEPENDENCIES.put(COLOR_LOCATION, COLOR_SCHEMA);
     KNOWN_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
@@ -408,6 +433,13 @@ public class ProtobufSchema implements ParsedSchema {
 
   private transient volatile int hashCode = NO_HASHCODE;
 
+  // Keyed by the runtime descriptor of a message passed to validateMessage: whether that
+  // message has to be re-read through this schema's descriptor before rules can bind `this`
+  // to it. Identity-keyed, and a serializer sees a small fixed set of message types. The
+  // answer is no only for a class that describes the same fields as the registered schema;
+  // a class that has fallen behind it re-reads every record. See needsSchemaView.
+  private final transient Map<Descriptor, Boolean> schemaViewNeeded = new ConcurrentHashMap<>();
+
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
   private static final Base64.Encoder base64Encoder = Base64.getEncoder();
@@ -454,9 +486,8 @@ public class ProtobufSchema implements ParsedSchema {
           )));
       this.metadata = metadata;
       this.ruleSet = ruleSet;
-    } catch (IllegalStateException e) {
-      log.error("Could not parse Protobuf schema {} with references {}", schemaString,
-          references, e);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      log.error("Could not parse Protobuf schema", e);
       throw e;
     }
   }
@@ -634,9 +665,16 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     ProtobufSchema schemaCopy = this.copy();
     JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
-    modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove, addBeforeRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
       return new ProtobufSchema(newFileElement.toSchema(),
@@ -651,7 +689,7 @@ public class ProtobufSchema implements ParsedSchema {
         schemaCopy.name()
       );
     } catch (JsonProcessingException e) {
-      throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
+      throw new IllegalArgumentException("Cannot deserialize json into ProtoFileElement", e);
     }
   }
 
@@ -727,12 +765,16 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
+    ImmutableList.Builder<String> weakImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
     Set<Integer> publicDependencyList = new HashSet<>(file.getPublicDependencyList());
+    Set<Integer> weakDependencyList = new HashSet<>(file.getWeakDependencyList());
     for (int i = 0; i < dependencyList.size(); i++) {
       String depName = dependencyList.get(i);
       if (publicDependencyList.contains(i)) {
         publicImports.add(depName);
+      } else if (weakDependencyList.contains(i)) {
+        weakImports.add(depName);
       } else {
         imports.add(depName);
       }
@@ -778,10 +820,6 @@ public class ProtobufSchema implements ParsedSchema {
     if (file.getOptions().hasPyGenericServices()) {
       options.add(new OptionElement(
           PY_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPyGenericServices(), false));
-    }
-    if (file.getOptions().hasPhpGenericServices()) {
-      options.add(new OptionElement(
-          PHP_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPhpGenericServices(), false));
     }
     if (file.getOptions().hasDeprecated()) {
       options.add(new OptionElement(
@@ -838,7 +876,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
-        Collections.emptyList(),
+        weakImports.build(),
         types.build(),
         services.build(),
         extendElements.build(),
@@ -1086,6 +1124,31 @@ public class ProtobufSchema implements ParsedSchema {
     if (!tags.isEmpty()) {
       map.put(TAGS_FIELD, tags);
     }
+    List<MetaProto.Rule> rules = meta.getRulesList();
+    if (!rules.isEmpty()) {
+      List<Map<String, String>> ruleEntries = new ArrayList<>(rules.size());
+      for (MetaProto.Rule rule : rules) {
+        Map<String, String> entry = new LinkedHashMap<>();
+        if (!rule.getName().isEmpty()) {
+          entry.put(NAME_FIELD, rule.getName());
+        }
+        if (!rule.getDoc().isEmpty()) {
+          entry.put(DOC_FIELD, rule.getDoc());
+        }
+        if (!rule.getExpr().isEmpty()) {
+          entry.put(EXPR_FIELD, rule.getExpr());
+        }
+        if (!rule.getSql().isEmpty()) {
+          entry.put(SQL_FIELD, rule.getSql());
+        }
+        if (!entry.isEmpty()) {
+          ruleEntries.add(entry);
+        }
+      }
+      if (!ruleEntries.isEmpty()) {
+        map.put(RULES_FIELD, ruleEntries);
+      }
+    }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
@@ -1124,6 +1187,10 @@ public class ProtobufSchema implements ParsedSchema {
       if (ev.getOptions().hasFeatures()) {
         FeatureSet featureSet = ev.getOptions().getFeatures();
         options.add(toFeaturesOption(featureSet));
+      }
+      if (ev.getOptions().hasFeatureSupport()) {
+        FeatureSupport featureSupport = ev.getOptions().getFeatureSupport();
+        options.add(toFeatureSupportOption(featureSupport));
       }
       if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
         Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
@@ -1270,6 +1337,23 @@ public class ProtobufSchema implements ParsedSchema {
     return new OptionElement(FEATURES, Kind.MAP, map, false);
   }
 
+  private static OptionElement toFeatureSupportOption(FeatureSupport featureSupport) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    if (featureSupport.hasEditionIntroduced()) {
+      map.put(EDITION_INTRODUCED, toOptionValue(featureSupport.getEditionIntroduced(), true));
+    }
+    if (featureSupport.hasEditionDeprecated()) {
+      map.put(EDITION_DEPRECATED, toOptionValue(featureSupport.getEditionDeprecated(), true));
+    }
+    if (featureSupport.hasDeprecationWarning()) {
+      map.put(DEPRECATION_WARNING, toOptionValue(featureSupport.getDeprecationWarning(), true));
+    }
+    if (featureSupport.hasEditionRemoved()) {
+      map.put(EDITION_REMOVED, toOptionValue(featureSupport.getEditionRemoved(), true));
+    }
+    return new OptionElement(FEATURE_SUPPORT, Kind.MAP, map, false);
+  }
+
   private static ServiceElement toService(ServiceDescriptorProto sd) {
     String name = sd.getName();
     log.trace("*** service name: {}", name);
@@ -1381,6 +1465,10 @@ public class ProtobufSchema implements ParsedSchema {
       FeatureSet featureSet = fd.getOptions().getFeatures();
       options.add(toFeaturesOption(featureSet));
     }
+    if (fd.getOptions().hasFeatureSupport()) {
+      FeatureSupport featureSupport = fd.getOptions().getFeatureSupport();
+      options.add(toFeatureSupportOption(featureSupport));
+    }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       OptionElement option = toOption(CONFLUENT_FIELD_META, meta);
@@ -1466,8 +1554,8 @@ public class ProtobufSchema implements ParsedSchema {
     return toDynamicSchema().getEnumValue(enumTypeName, enumNumber);
   }
 
-  private MessageElement firstMessage() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static MessageElement firstMessage(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof MessageElement) {
         return (MessageElement) typeElement;
       }
@@ -1475,8 +1563,8 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
-  private EnumElement firstEnum() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static EnumElement firstEnum(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof EnumElement) {
         return (EnumElement) typeElement;
       }
@@ -1615,11 +1703,6 @@ public class ProtobufSchema implements ParsedSchema {
       if (pyGenericServices != null) {
         schema.setPyGenericServices(Boolean.parseBoolean(pyGenericServices.getValue().toString()));
       }
-      OptionElement phpGenericServices = options.get(PHP_GENERIC_SERVICES);
-      if (phpGenericServices != null) {
-        schema.setPhpGenericServices(
-            Boolean.parseBoolean(phpGenericServices.getValue().toString()));
-      }
       OptionElement isDeprecated = options.get(DEPRECATED);
       if (isDeprecated != null) {
         schema.setDeprecated(Boolean.parseBoolean(isDeprecated.getValue().toString()));
@@ -1667,7 +1750,8 @@ public class ProtobufSchema implements ParsedSchema {
       cache.put(name, dynamicSchema);
       return dynamicSchema;
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 
@@ -1887,7 +1971,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static Declaration toDeclaration(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     Declaration.Builder builder = Declaration.newBuilder();
@@ -1916,7 +2000,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static FeatureSet toFeatures(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     FeatureSet.Builder builder = FeatureSet.newBuilder();
@@ -1975,9 +2059,46 @@ public class ProtobufSchema implements ParsedSchema {
     return builder.build();
   }
 
+  public static FeatureSupport toFeatureSupport(OptionElement option) {
+    if (option.getKind() != Kind.MAP) {
+      throw new IllegalArgumentException("Expected option of kind MAP");
+    }
+    Map<String, ?> map = (Map<String, ?>) option.getValue();
+    FeatureSupport.Builder builder = FeatureSupport.newBuilder();
+    Object editionIntroduced = map.get(EDITION_INTRODUCED);
+    if (editionIntroduced != null) {
+      try {
+        builder.setEditionIntroduced(Edition.valueOf((String) toPrimitiveValue(editionIntroduced)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionIntroduced(Edition.EDITION_UNKNOWN);
+      }
+    }
+    Object editionDeprecated = map.get(EDITION_DEPRECATED);
+    if (editionDeprecated != null) {
+      try {
+        builder.setEditionDeprecated(Edition.valueOf((String) toPrimitiveValue(editionDeprecated)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionDeprecated(Edition.EDITION_UNKNOWN);
+      }
+    }
+    Object deprecationWarning = map.get(DEPRECATION_WARNING);
+    if (deprecationWarning != null) {
+      builder.setDeprecationWarning((String) toPrimitiveValue(deprecationWarning));
+    }
+    Object editionRemoved = map.get(EDITION_REMOVED);
+    if (editionRemoved != null) {
+      try {
+        builder.setEditionRemoved(Edition.valueOf((String) toPrimitiveValue(editionRemoved)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionRemoved(Edition.EDITION_UNKNOWN);
+      }
+    }
+    return builder.build();
+  }
+
   public static EditionDefault toEditionDefault(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     EditionDefault.Builder builder = EditionDefault.newBuilder();
@@ -2105,9 +2226,13 @@ public class ProtobufSchema implements ParsedSchema {
     if (!editionDefaults.isEmpty()) {
       field.addEditionDefaults(editionDefaults);
     }
-    OptionElement option = options.get(FEATURES);
-    if (option != null) {
-      field.setFeatures(toFeatures(option));
+    OptionElement features = options.get(FEATURES);
+    if (features != null) {
+      field.setFeatures(toFeatures(features));
+    }
+    OptionElement featureSupport = options.get(FEATURE_SUPPORT);
+    if (featureSupport != null) {
+      field.setFeatureSupport(toFeatureSupport(featureSupport));
     }
     ProtobufMeta meta = findMeta(CONFLUENT_FIELD_META, options);
     if (meta != null) {
@@ -2135,7 +2260,8 @@ public class ProtobufSchema implements ParsedSchema {
     if (!meta.isPresent()) {
       return null;
     }
-    return new ProtobufMeta(findDoc(meta), findParams(meta), findTags(meta));
+    return new ProtobufMeta(
+        findDoc(meta), findParams(meta), findTags(meta), findRules(meta));
   }
 
   public static String findDoc(Optional<OptionElement> meta) {
@@ -2174,6 +2300,20 @@ public class ProtobufSchema implements ParsedSchema {
       return (List<String>) result;
     } else {
       return result != null ? Collections.singletonList(result.toString()) : null;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static List<Map<String, String>> findRules(Optional<OptionElement> meta) {
+    Object result = findMetaField(meta, RULES_FIELD);
+    if (result == null) {
+      return null;
+    } else if (result instanceof Map) {
+      return Collections.singletonList((Map<String, String>) result);
+    } else if (result instanceof List) {
+      return (List<Map<String, String>>) result;
+    } else {
+      throw new IllegalStateException("Unrecognized rules type " + result.getClass().getName());
     }
   }
 
@@ -2230,9 +2370,11 @@ public class ProtobufSchema implements ParsedSchema {
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       FeatureSet constFeatures = findOption(FEATURES, constantOptions)
           .map(ProtobufSchema::toFeatures).orElse(null);
+      FeatureSupport constFeatureSupport = findOption(FEATURE_SUPPORT, constantOptions)
+          .map(ProtobufSchema::toFeatureSupport).orElse(null);
       ProtobufMeta meta = findMeta(CONFLUENT_ENUM_VALUE_META, constantOptions);
       enumer.addValue(constant.getName(), constant.getTag(),
-          meta, isConstDeprecated, isDebugRedact, constFeatures);
+          meta, isConstDeprecated, isDebugRedact, constFeatures, constFeatureSupport);
     }
     ProtobufMeta meta = findMeta(CONFLUENT_ENUM_META, enumOptions);
     enumer.setMeta(meta);
@@ -2271,7 +2413,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public boolean hasTopLevelField(String field) {
-    return schemaObj != null && schemaObj.getTypes()
+    return schemaObj != null && effectiveFile().getTypes()
             .stream()
             .map(ProtobufSchema::getFieldNames)
             .flatMap(Collection::stream)
@@ -2288,18 +2430,76 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    TypeElement typeElement = firstMessage();
+    ProtoFileElement file = effectiveFile();
+    TypeElement typeElement = firstMessage(file);
     if (typeElement == null) {
-      typeElement = firstEnum();
+      typeElement = firstEnum(file);
     }
-    if (typeElement == null) {
-      throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+    if (typeElement != null) {
+      String typeName = typeElement.getName();
+      String packageName = file.getPackageName();
+      return packageName != null && !packageName.isEmpty()
+          ? packageName + '.' + typeName
+          : typeName;
     }
-    String typeName = typeElement.getName();
-    String packageName = schemaObj.getPackageName();
-    return packageName != null && !packageName.isEmpty()
-        ? packageName + '.' + typeName
-        : typeName;
+    throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+  }
+
+  /**
+   * For an empty file with exactly one {@code import public} and no private
+   * imports, returns the directly-imported {@link ProtoFileElement} provided
+   * it has at least one local type. Returns null if the shape is malformed
+   * (zero or multiple public imports, any private imports, missing dep, or
+   * the dep itself has no local types).
+   *
+   * <p>Resolution is depth-1 only: the empty wrapper must directly import a
+   * non-empty file. Chains of empty wrappers are not supported.
+   */
+  private ProtoFileElement resolvePublicImportWrapper() {
+    if (schemaObj == null) {
+      return null;
+    }
+    if (!schemaObj.getTypes().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getImports().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getServices().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getExtendDeclarations().isEmpty()) {
+      return null;
+    }
+    if (schemaObj.getPublicImports().size() != 1) {
+      return null;
+    }
+    // Mirror descriptor resolution: well-known protos (timestamp, struct, etc.)
+    // live in KNOWN_DEPENDENCIES, not user-provided `dependencies`. Two cheap
+    // lookups avoid the HashMap allocation in `dependenciesWithLogicalTypes()`
+    // — important since this method runs on the per-record serialize path.
+    String depName = schemaObj.getPublicImports().get(0);
+    ProtoFileElement leaf = dependencies.get(depName);
+    if (leaf == null) {
+      leaf = KNOWN_DEPENDENCIES.get(depName);
+    }
+    if (leaf == null || leaf.getTypes().isEmpty()) {
+      return null;
+    }
+    return leaf;
+  }
+
+  /**
+   * The {@link ProtoFileElement} whose types and package define this schema's
+   * effective type space. For a normal schema this is {@link #schemaObj}. For
+   * a resolvable empty public-import wrapper, this is the imported file.
+   * Used to centralize the "look at the imported file's types instead of
+   * mine" logic across {@link #toMessageIndexes}, {@link #toMessageName},
+   * {@link #hasTopLevelField}, etc.
+   */
+  private ProtoFileElement effectiveFile() {
+    ProtoFileElement leaf = resolvePublicImportWrapper();
+    return leaf != null ? leaf : schemaObj;
   }
 
   @Override
@@ -2407,12 +2607,16 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
+    if (strict) {
+      toDynamicSchema();
+    }
   }
 
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Lists.newArrayList("Incompatible because of different schema type");
+      return Lists.newArrayList("{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
+              + "Incompatible because of different schema type\", additionalInfo:\"\"}");
     }
     final List<Difference> differences = SchemaDiff.compare(
         (ProtobufSchema) previousSchema, this
@@ -2584,8 +2788,17 @@ public class ProtobufSchema implements ParsedSchema {
 
   public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    // For an empty public-import wrapper, `file` is the imported file. Strip
+    // its package from `name` so the per-part walk matches local type names.
+    if (file != schemaObj) {
+      String pkg = file.getPackageName();
+      if (pkg != null && !pkg.isEmpty() && name.startsWith(pkg + ".")) {
+        name = name.substring(pkg.length() + 1);
+      }
+    }
     String[] parts = name.split("\\.");
-    List<TypeElement> types = schemaObj.getTypes();
     for (String part : parts) {
       int i = 0;
       for (TypeElement type : types) {
@@ -2612,9 +2825,16 @@ public class ProtobufSchema implements ParsedSchema {
 
   public String toMessageName(MessageIndexes indexes) {
     StringBuilder sb = new StringBuilder();
-    List<TypeElement> types = schemaObj.getTypes();
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    String packageName = file.getPackageName();
     boolean first = true;
-    for (Integer index : indexes.indexes()) {
+    List<Integer> indexList = indexes.indexes();
+    if (indexList.isEmpty()) {
+      // Default to the first message
+      indexList = MessageIndexes.DEFAULT_INDEX;
+    }
+    for (Integer index : indexList) {
       if (!first) {
         sb.append(".");
       } else {
@@ -2628,7 +2848,6 @@ public class ProtobufSchema implements ParsedSchema {
       types = message.getNestedTypes();
     }
     String messageName = sb.toString();
-    String packageName = schemaObj.getPackageName();
     return packageName != null && !packageName.isEmpty()
         ? packageName + '.' + messageName
         : messageName;
@@ -2740,7 +2959,7 @@ public class ProtobufSchema implements ParsedSchema {
           .collect(Collectors.toList());
     } else if (message instanceof Map) {
       return message;
-    } else if (message instanceof Message) {
+    } else if (message instanceof Message && !isCelLeafMessage(desc)) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         if (isMapKeyField(fd)) {
@@ -2760,7 +2979,9 @@ public class ProtobufSchema implements ParsedSchema {
         }
         try (FieldContext fc = ctx.enterField(
             message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
-            getInlineTags(schemaFd))
+            // The producer's own field: the value below is read through it, so it is what
+            // says how the value should be presented to a rule.
+            getInlineTags(schemaFd), fd)
         ) {
           // Skip-on-null, as in the validation walk: a field with explicit presence that
           // is unset has no value to transform, and writing one back would materialize
@@ -2782,7 +3003,7 @@ public class ProtobufSchema implements ParsedSchema {
               throw new RuntimeException(new RuleConditionException(ctx.rule()));
             }
           } else {
-            copy.setField(fd, newValue);
+            setTransformedField(ctx, copy, fd, newValue);
           }
         }
       }
@@ -2806,6 +3027,97 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Writes a CEL_FIELD result back into {@code fd}.
+   *
+   * <p>For a value-type field the executor hands back whatever the rule produced, and only a few
+   * of those can be stored in a message-typed field. A {@link BigDecimal} or {@link Instant} — the
+   * same shapes the Avro field setter takes — is rebuilt into the message. A message that is
+   * already of the right type passes through, which is what an identity rule ({@code value})
+   * produces, since the binding presents the field as its own message. A null clears the field:
+   * protobuf has no null to store and {@code setField} rejects it.
+   *
+   * <p>Anything else is a rule authoring error, and is reported as one. Passing it to
+   * {@code setField} raises a bare {@code ClassCastException} (or a {@code NullPointerException}
+   * for null) naming neither the rule nor the field, which is what a broad untagged masking or
+   * redaction rule reaching one of these fields would otherwise produce.
+   */
+  private static void setTransformedField(
+      RuleContext ctx, Message.Builder parent, FieldDescriptor fd, Object value) {
+    if (fd.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+        || !isCelLeafMessage(fd.getMessageType())) {
+      parent.setField(fd, value);
+      return;
+    }
+    Descriptor desc = fd.getMessageType();
+    if (value == null) {
+      parent.clearField(fd);
+      return;
+    }
+    if (fd.isRepeated() && value instanceof List) {
+      // The walk maps over a repeated field, so each element reached the rule on its own and
+      // comes back needing the same rebuild.
+      List<?> in = (List<?>) value;
+      List<Object> out = new ArrayList<>(in.size());
+      for (Object element : in) {
+        out.add(rebuildValueType(ctx, parent, fd, desc, element));
+      }
+      parent.setField(fd, out);
+      return;
+    }
+    parent.setField(fd, rebuildValueType(ctx, parent, fd, desc, value));
+  }
+
+  /** Turns one CEL_FIELD result into the value type's message, or reports why it cannot. */
+  private static Object rebuildValueType(RuleContext ctx, Message.Builder parent,
+      FieldDescriptor fd, Descriptor desc, Object value) {
+    if (value == null) {
+      throw valueTypeError(ctx, fd, "null", "a decimal or timestamp");
+    }
+    if (value instanceof Message
+        && desc.getFullName().equals(((Message) value).getDescriptorForType().getFullName())) {
+      // Already the right message, which is what an identity rule produces: the binding
+      // presents one of these fields as its own message.
+      return value;
+    }
+    if (DECIMAL_TYPE_NAME.equals(desc.getFullName())) {
+      if (!(value instanceof BigDecimal)) {
+        throw valueTypeError(ctx, fd, value.getClass().getName(), "a decimal");
+      }
+      BigDecimal dec = (BigDecimal) value;
+      // Same mapping as DecimalUtils.fromBigDecimal: precision and scale describe the value
+      // itself, not a declared column width — the reverse conversion reads precision into a
+      // MathContext. A builder from the parent is used rather than the generated Decimal so
+      // that a message parsed dynamically from a registered schema is written back in kind.
+      Message.Builder b = parent.newBuilderForField(fd);
+      b.setField(desc.findFieldByName("value"),
+          ByteString.copyFrom(dec.unscaledValue().toByteArray()));
+      b.setField(desc.findFieldByName("precision"), dec.precision());
+      b.setField(desc.findFieldByName("scale"), dec.scale());
+      return b.build();
+    }
+    if (!(value instanceof Instant)) {
+      throw valueTypeError(ctx, fd, value.getClass().getName(), "a timestamp");
+    }
+    Instant instant = (Instant) value;
+    Message.Builder b = parent.newBuilderForField(fd);
+    b.setField(desc.findFieldByName("seconds"), instant.getEpochSecond());
+    b.setField(desc.findFieldByName("nanos"), instant.getNano());
+    return b.build();
+  }
+
+  /**
+   * Wrapped in a RuntimeException because the transform walk cannot declare a checked exception;
+   * {@link #transformMessage} unwraps a RuleException cause and rethrows it, as the condition
+   * path already does.
+   */
+  private static RuntimeException valueTypeError(
+      RuleContext ctx, FieldDescriptor fd, String actual, String expected) {
+    return new RuntimeException(new RuleException(ctx.rule(),
+        "Rule returned " + actual + " for field '" + fd.getFullName()
+            + "', which is a " + fd.getMessageType().getFullName() + "; expected " + expected));
+  }
+
   private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,
       FieldContext fieldCtx) throws RuleException {
     if (message instanceof ByteString) {
@@ -2818,12 +3130,357 @@ public class ProtobufSchema implements ParsedSchema {
     return result;
   }
 
+  /**
+   * Walk {@code message} against this schema's descriptor and evaluate every
+   * inline {@code Meta.rules} CHECK constraint encountered, collecting all
+   * failures into the returned list. Read-only — does not modify the message.
+   *
+   * <p>Two kinds of rules are evaluated:
+   * <ul>
+   *   <li><b>Message-level</b> ({@code Meta.message_meta.rules}) — the rule's
+   *       CEL receives the message itself as {@code this}. Evaluated once
+   *       per message node visited.</li>
+   *   <li><b>Field-level</b> ({@code Meta.field_meta.rules}) — the rule's
+   *       CEL receives the field value as {@code this}. Honors the
+   *       column-level skip-on-null contract: skipped when the field is
+   *       absent (oneof unset, {@code optional} scalar unset, or message
+   *       field unset).</li>
+   * </ul>
+   *
+   * <p>Failures (rules evaluating to {@code false} OR runtime CEL errors)
+   * are appended to the returned list with their dotted-path location
+   * (e.g. {@code addr.zip}, {@code tags[3]}). The walk continues after
+   * each failure so callers see the full set rather than only the first.
+   *
+   * @throws org.apache.kafka.common.errors.SerializationException if the
+   *     message cannot be read through this schema at all, which no rule
+   *     result can express — the walk reads it through the registered
+   *     descriptor so that rules see the schema's field names.
+   */
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    List<ValidationRuleError> violations = new ArrayList<>();
+    if (executor == null || !(message instanceof Message)) {
+      return violations;
+    }
+    Message msg = (Message) message;
+    // Use the schema-side descriptor (carries the Meta extensions) — the
+    // runtime descriptor on `msg` may not have them.
+    Descriptor desc = toDescriptor(msg.getDescriptorForType().getFullName());
+    if (desc == null) {
+      return violations;
+    }
+    // The walk is driven by the caller's message throughout: it decides which fields exist,
+    // which are absent, and what the values are. A rule that binds `this` to a message needs
+    // one more thing, though — a view of that message in the schema's terms, since a rule's
+    // CEL environment is built from the schema and `this.renamed` cannot read a field the
+    // caller's class calls something else. Protobuf pairs fields by number on the wire, so
+    // re-reading the message through the registered descriptor produces exactly that view.
+    //
+    // Whether that is needed is decided once per runtime descriptor (see needsSchemaView)
+    // rather than per record. A generated class describing the same fields as the registered
+    // schema skips it entirely, even though the two descriptors are distinct objects. A class
+    // that has fallen behind the schema does not: under use.latest.version the schema may
+    // declare a field the class has never heard of, and a rule that binds `this` can read the
+    // schema's default for it, so those producers re-read every record. That cost is the
+    // price of evaluating rules in the schema's terms, not an accident.
+    Message schemaMsg = null;
+    if (needsSchemaView(desc, msg.getDescriptorForType())) {
+      try {
+        schemaMsg = DynamicMessage.parseFrom(desc, msg.toByteString());
+      } catch (InvalidProtocolBufferException e) {
+        // The bytes the producer is about to write cannot be read through the registered
+        // schema, so a consumer reading with that schema could not read them either — a
+        // bytes field carrying non-UTF-8 data against a schema that declares a string, for
+        // instance, which is a compatible change. Fail in the channel the caller already
+        // handles rather than returning silently, and name the type so it is searchable.
+        throw new SerializationException(
+            "Could not read message " + desc.getFullName()
+                + " through the registered schema", e);
+      }
+    }
+    toValidatedMessage(desc, msg, schemaMsg, "", executor, failFast, violations);
+    return violations;
+  }
+
+  /**
+   * Whether validating a message whose runtime descriptor is {@code runtimeDesc} has to
+   * re-read it through {@code desc} — true when the two disagree about any field a rule
+   * could observe: its name, its type, or whether it is repeated, at any depth.
+   *
+   * <p>Presence deliberately does not count. Whether an unset field is absent is decided by
+   * the producer's field on the producer's message, which the walk reads directly, so a
+   * schema that only moved a field into or out of a oneof needs no re-read.
+   *
+   * <p>A field the schema declares and the caller's class does not <em>does</em> count, which
+   * means a class running behind the registered schema — the {@code use.latest.version} case
+   * — re-reads every record. Only an exact match skips the re-read. Narrowing that to the
+   * rules that could actually observe the added field is possible but not simple: a rule
+   * binding {@code this} at any ancestor can traverse into the field, and a field-level rule
+   * on a message-valued field binds {@code this} to a type that need not declare rules of its
+   * own, so a per-descriptor test for message-level rules would be wrong in both directions.
+   *
+   * <p>Memoized per runtime descriptor: both descriptors are stable for the lifetime of a
+   * serializer, so this is one map lookup per record rather than a tree comparison.
+   */
+  private boolean needsSchemaView(Descriptor desc, Descriptor runtimeDesc) {
+    if (desc == runtimeDesc) {
+      return false;
+    }
+    return schemaViewNeeded.computeIfAbsent(runtimeDesc,
+        rd -> !presentsSameValues(desc, rd, new HashSet<>()));
+  }
+
+  /**
+   * Whether {@code desc} and {@code runtimeDesc} present every field they share — paired by
+   * number, which is how protobuf identifies a field — under the same name, type and label,
+   * recursively through message-valued fields.
+   *
+   * <p>A field the registered schema declares and the caller's does not counts as a
+   * difference: adding a field is a compatible change, and a message-level rule may reference
+   * the added field expecting the schema's default for it, which only a message read through
+   * the schema can supply. Fields only the caller declares are ignored — no rule can name
+   * them, and the walk skips them.
+   *
+   * <p>{@code visited} holds the descriptor pairs already compared, so a self-referential
+   * message type terminates.
+   */
+  private static boolean presentsSameValues(
+      Descriptor desc, Descriptor runtimeDesc, Set<String> visited) {
+    if (!visited.add(desc.getFullName() + '\0' + runtimeDesc.getFullName())) {
+      // Already compared on another path, or cycling back to it. Either way this pair
+      // contributes no new disagreement.
+      return true;
+    }
+    for (FieldDescriptor schemaFd : desc.getFields()) {
+      if (runtimeDesc.findFieldByNumber(schemaFd.getNumber()) == null) {
+        return false;
+      }
+    }
+    for (FieldDescriptor runtimeFd : runtimeDesc.getFields()) {
+      FieldDescriptor schemaFd = desc.findFieldByNumber(runtimeFd.getNumber());
+      if (schemaFd == null) {
+        continue;
+      }
+      if (!schemaFd.getName().equals(runtimeFd.getName())
+          || schemaFd.getType() != runtimeFd.getType()
+          || schemaFd.isRepeated() != runtimeFd.isRepeated()) {
+        return false;
+      }
+      if (schemaFd.getType() == Type.MESSAGE
+          && !presentsSameValues(schemaFd.getMessageType(), runtimeFd.getMessageType(),
+              visited)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Mirrors {@link #toTransformedMessage}'s value-driven dispatch shape.
+   * Each call receives a {@code (descriptor, value)} pair — the registered
+   * schema's descriptor and the caller's value — plus {@code schemaValue},
+   * the same value read through that descriptor, or {@code null} when the
+   * two descriptors present it identically and the caller's value already
+   * reads as the schema does. The caller's value drives the walk; the
+   * schema's view is used only where a rule binds {@code this} to a
+   * message. Dispatch is on the value type:
+   * <ul>
+   *   <li>{@code List} — repeated field or proto3 map (which arrives as a
+   *       {@code List<MapEntry>}); recurse on each element with the same
+   *       descriptor and an indexed path.</li>
+   *   <li>{@code Map} — Java {@code Map} adapters; nothing to walk
+   *       (proto3 maps go through the {@code List} branch above).</li>
+   *   <li>{@code Message} — evaluate message-level rules with
+   *       {@code this = msg}; iterate fields, evaluate field-level rules,
+   *       then recurse on each field's value (handles nested messages,
+   *       repeated, and map descent uniformly via the value-type
+   *       dispatch).</li>
+   *   <li>otherwise — primitive leaf; field-level rules were already
+   *       evaluated by the parent {@code Message} case.</li>
+   * </ul>
+   */
+  private static void toValidatedMessage(
+      Descriptor desc, Object value, Object schemaValue, String path,
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    if (desc == null) {
+      return;
+    }
+    if (value instanceof List) {
+      List<?> schemaElements = schemaValue instanceof List ? (List<?>) schemaValue : null;
+      int i = 0;
+      for (Object element : (List<?>) value) {
+        // Both lists came from the same bytes, so they line up; the guard is for safety.
+        Object schemaElement =
+            schemaElements != null && i < schemaElements.size() ? schemaElements.get(i) : null;
+        toValidatedMessage(desc, element, schemaElement, path + "[" + i + "]", executor,
+            failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+        i++;
+      }
+    } else if (value instanceof Map) {
+      // Proto3 maps arrive as List<MapEntry>, hitting the List branch
+      // above. Java Map only appears for some adapters; no walk needed.
+      return;
+    } else if (value instanceof Message) {
+      Message msg = (Message) value;
+      // The same message in the registered schema's terms, when the two descriptors present
+      // fields differently; null when they agree and `msg` already reads as the schema does.
+      Message schemaMsg = schemaValue instanceof Message ? (Message) schemaValue : null;
+      // Message-level rules: this = msg, type hint = desc. `this` is a message, so it has to
+      // read as the schema names it.
+      if (desc.getOptions().hasExtension(MetaProto.messageMeta)) {
+        Meta meta = desc.getOptions().getExtension(MetaProto.messageMeta);
+        Object thisValue = schemaMsg != null ? schemaMsg : msg;
+        for (MetaProto.Rule rule : meta.getRulesList()) {
+          evaluateOne(rule, desc, thisValue, path, executor, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+      }
+      // Iterate the caller's own fields — same shape as toTransformedMessage's field loop —
+      // and pair each to the registered schema by number, which is how protobuf identifies a
+      // field. Fields the schema does not declare are skipped, so the walk visits the
+      // intersection, which is the set the transform walk visits too.
+      for (FieldDescriptor fd : msg.getDescriptorForType().getFields()) {
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
+        if (schemaFd == null) {
+          continue;
+        }
+        // Skip-on-null per proto3 presence: hasPresence() returns true for
+        // any field that tracks presence (oneof, optional scalar, singular
+        // message field). Non-optional plain scalars in proto3 don't track
+        // presence — their typed-default value is passed through.
+        // Repeated/map fields are never null in proto3; the collection
+        // itself is bound to `this` (per the design's "empty == null"
+        // convention for collection IS NULL).
+        //
+        // Both halves are read from the caller's message: whether an unset field counts as
+        // absent is decided by the class that wrote it, not by the registered schema, and the
+        // two can disagree — moving a field into or out of a oneof is a compatible change.
+        if (fd.hasPresence() && !msg.hasField(fd)) {
+          continue;
+        }
+        Object fieldValue = msg.getField(fd);
+        // The path names the field as the registered schema does, which is what a rule
+        // refers to; the value is still read through the caller's field.
+        String childPath = path.isEmpty()
+            ? schemaFd.getName()
+            : path + "." + schemaFd.getName();
+        // Where a schema view exists, every value comes from it, not just message-valued
+        // ones: the two descriptors can disagree about representation as well as naming.
+        // bytes and string are interchangeable at the same number — a compatible change —
+        // and a rule authored as `this == 'hello'` cannot match a ByteString. The same goes
+        // for a renamed enum value. Reading the field is cheap next to the re-read that
+        // already happened, so there is nothing to gain from narrowing this further.
+        Object schemaFieldValue = schemaMsg == null ? null : schemaMsg.getField(schemaFd);
+        // Field-level rules: this = the field value as the schema presents it. Hint is the
+        // field's own message descriptor for nested messages, and the field itself for
+        // everything else — the declared type is what an executor needs to present the
+        // value faithfully, and Java's boxes lose it: a uint64 and an int64 both arrive
+        // as Long. Both come from the schema's field, since that is where the value being
+        // bound comes from.
+        if (schemaFd.getOptions().hasExtension(MetaProto.fieldMeta)) {
+          Meta meta = schemaFd.getOptions().getExtension(MetaProto.fieldMeta);
+          Object hint = (schemaFd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+              ? schemaFd.getMessageType()
+              : schemaFd;
+          Object thisValue = schemaFieldValue != null ? schemaFieldValue : fieldValue;
+          for (MetaProto.Rule rule : meta.getRulesList()) {
+            evaluateOne(rule, hint, thisValue, childPath, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
+          }
+        }
+        // Recurse — the value-type dispatch handles repeated (List),
+        // proto3 maps (List<MapEntry>), and singular nested messages
+        // uniformly. For non-message fields the recursion lands at the
+        // leaf branch and returns immediately.
+        Descriptor childDesc = (schemaFd.getType() == Type.MESSAGE)
+            ? schemaFd.getMessageType()
+            : desc;
+        toValidatedMessage(childDesc, fieldValue, schemaFieldValue, childPath, executor,
+            failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+    }
+    // else: primitive leaf — no rules at this level.
+  }
+
+  private static void evaluateOne(
+      MetaProto.Rule rule, Object schema, Object value,
+      String fieldPath, ValidationRuleExecutor executor,
+      List<ValidationRuleError> out) {
+    ValidationRule validationRule =
+        new ValidationRule(rule.getName(), rule.getDoc(), rule.getExpr(), rule.getSql());
+    try {
+      Object result = executor.execute(validationRule, schema, value);
+      if (result instanceof Boolean) {
+        if (Boolean.FALSE.equals(result)) {
+          out.add(new ValidationRuleError(validationRule, fieldPath, null, null));
+        }
+      } else if (result instanceof String) {
+        String msg = (String) result;
+        if (!msg.isEmpty()) {
+          out.add(new ValidationRuleError(validationRule, fieldPath, msg, null));
+        }
+      } else {
+        throw new SerializationException(
+            "Validation rule '" + validationRule.getName() + "' resolved to an unexpected type: "
+                + (result == null ? "null" : result.getClass().getName()));
+      }
+    } catch (RuleException e) {
+      out.add(new ValidationRuleError(validationRule, fieldPath, null, e));
+    }
+  }
+
+  /**
+   * Protobuf message types a CEL rule treats as a single value rather than a record. Avro
+   * carries the same concepts as logical types on a primitive, so the field is a leaf there
+   * and a CEL_FIELD rule reaches it; in protobuf they are messages, and without this the
+   * walk descends into their internals and transforms {@code value}/{@code scale} /
+   * {@code seconds}/{@code nanos} one at a time instead.
+   */
+  private static final String DECIMAL_TYPE_NAME = "confluent.type.Decimal";
+  private static final String TIMESTAMP_TYPE_NAME = "google.protobuf.Timestamp";
+
+  /**
+   * Whether {@code desc} is one of the message types bound to CEL as a single value.
+   */
+  private static boolean isCelLeafMessage(Descriptor desc) {
+    if (desc == null) {
+      return false;
+    }
+    String name = desc.getFullName();
+    return DECIMAL_TYPE_NAME.equals(name) || TIMESTAMP_TYPE_NAME.equals(name);
+  }
+
   private RuleContext.Type getType(FieldDescriptor field) {
     if (field.isMapField()) {
       return RuleContext.Type.MAP;
     }
     switch (field.getType()) {
       case MESSAGE:
+        // Report the same primitive type the Avro counterpart does, so that CEL_FIELD
+        // applies to the field and a rule written against one format ports to the other.
+        if (isCelLeafMessage(field.getMessageType())) {
+          return DECIMAL_TYPE_NAME.equals(field.getMessageType().getFullName())
+              ? RuleContext.Type.BYTES
+              : RuleContext.Type.LONG;
+        }
         return RuleContext.Type.RECORD;
       case ENUM:
         return RuleContext.Type.ENUM;
@@ -2986,7 +3643,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private void modifySchemaTags(ProtoFileElement original, JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
     Map<Object, OptionElement> optionCache = new HashMap<>();
@@ -3024,47 +3682,95 @@ public class ProtobufSchema implements ParsedSchema {
       }
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        OptionElement newOption = new OptionElement(metaName, Kind.OPTION,
-            new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
-        allOptions.add(newOption);
-      }
-      mergedOptions = mergeOptions(allOptions);
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        OptionElement metaOptionElement = mergedOptions.get(metaName);
-        if (metaOptionElement != null) {
-          LinkedHashMap<String, Object> metaMap =
-              new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
-          Object tagsObj = metaMap.get(TAGS_FIELD);
-          if (tagsObj != null) {
-            List<Object> allTags;
-            if (tagsObj instanceof List) {
-              allTags = (List<Object>) tagsObj;
-            } else {
-              allTags = Collections.singletonList(tagsObj);
-            }
-            List<Object> remainingTags = allTags.stream()
-                .filter(tag -> !tagsToRemove.contains(tag))
-                .collect(Collectors.toCollection(ArrayList::new));
 
-            if (remainingTags.isEmpty()) {
-              metaMap.remove(TAGS_FIELD);
-            } else {
-              metaMap.put(TAGS_FIELD, remainingTags);
-            }
-
-            if (metaMap.isEmpty()) {
-              mergedOptions.remove(metaName);
-            } else {
-              mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
-            }
-          }
+      if (addBeforeRemove) {
+        // Add tags to allOptions before merging so they are folded in by mergeOptions()
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          OptionElement newOption = new OptionElement(metaName, Kind.OPTION,
+              new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
+          allOptions.add(newOption);
+        }
+        mergedOptions = mergeOptions(allOptions);
+        removeTags(mergedOptions, metaName, tagsToRemove);
+      } else {
+        // Merge existing options first, remove, then add directly into the merged result
+        // via addTags() since mergeOptions() has already been called
+        mergedOptions = mergeOptions(allOptions);
+        removeTags(mergedOptions, metaName, tagsToRemove);
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          addTags(mergedOptions, metaName, tagsToAdd);
         }
       }
       optionCache.put(matchingElement, mergedOptions.get(metaName));
       ((ObjectNode) entityNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void removeTags(Map<String, OptionElement> mergedOptions,
+                          String metaName, Set<String> tagsToRemove) {
+    if (tagsToRemove == null || tagsToRemove.isEmpty()) {
+      return;
+    }
+    OptionElement metaOptionElement = mergedOptions.get(metaName);
+    if (metaOptionElement != null) {
+      LinkedHashMap<String, Object> metaMap =
+          new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
+      Object tagsObj = metaMap.get(TAGS_FIELD);
+      if (tagsObj != null) {
+        List<Object> allTags;
+        if (tagsObj instanceof List) {
+          allTags = (List<Object>) tagsObj;
+        } else {
+          allTags = Collections.singletonList(tagsObj);
+        }
+        List<Object> remainingTags = allTags.stream()
+            .filter(tag -> !tagsToRemove.contains(tag))
+            .collect(Collectors.toCollection(ArrayList::new));
+
+        if (remainingTags.isEmpty()) {
+          metaMap.remove(TAGS_FIELD);
+        } else {
+          metaMap.put(TAGS_FIELD, remainingTags);
+        }
+
+        if (metaMap.isEmpty()) {
+          mergedOptions.remove(metaName);
+        } else {
+          mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
+        }
+      }
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void addTags(Map<String, OptionElement> mergedOptions,
+                       String metaName, Set<String> tagsToAdd) {
+    OptionElement metaOptionElement = mergedOptions.get(metaName);
+    if (metaOptionElement != null) {
+      LinkedHashMap<String, Object> metaMap =
+          new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
+      Object tagsObj = metaMap.get(TAGS_FIELD);
+      List<Object> allTags;
+      if (tagsObj instanceof List) {
+        allTags = new ArrayList<>((List<Object>) tagsObj);
+      } else if (tagsObj != null) {
+        allTags = new ArrayList<>(Collections.singletonList(tagsObj));
+      } else {
+        allTags = new ArrayList<>();
+      }
+      for (String tag : tagsToAdd) {
+        if (!allTags.contains(tag)) {
+          allTags.add(tag);
+        }
+      }
+      metaMap.put(TAGS_FIELD, allTags);
+      mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
+    } else {
+      LinkedHashMap<String, Object> metaMap = new LinkedHashMap<>();
+      metaMap.put(TAGS_FIELD, new ArrayList<>(tagsToAdd));
+      mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
     }
   }
 
@@ -3135,7 +3841,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {
@@ -3152,11 +3858,21 @@ public class ProtobufSchema implements ParsedSchema {
     private final String doc;
     private final Map<String, String> params;
     private final List<String> tags;
+    private final List<Map<String, String>> rules;
 
     public ProtobufMeta(String doc, Map<String, String> params, List<String> tags) {
+      this(doc, params, tags, null);
+    }
+
+    public ProtobufMeta(
+        String doc,
+        Map<String, String> params,
+        List<String> tags,
+        List<Map<String, String>> rules) {
       this.doc = doc;
       this.params = params;
       this.tags = tags;
+      this.rules = rules;
     }
 
     public String getDoc() {
@@ -3171,10 +3887,15 @@ public class ProtobufSchema implements ParsedSchema {
       return tags;
     }
 
+    public List<Map<String, String>> getRules() {
+      return rules;
+    }
+
     public boolean isEmpty() {
       return doc == null
           && (params == null || params.isEmpty())
-          && (tags == null || tags.isEmpty());
+          && (tags == null || tags.isEmpty())
+          && (rules == null || rules.isEmpty());
     }
 
     @Override
@@ -3188,12 +3909,13 @@ public class ProtobufSchema implements ParsedSchema {
       ProtobufMeta metadata = (ProtobufMeta) o;
       return Objects.equals(doc, metadata.doc)
           && Objects.equals(params, metadata.params)
-          && Objects.equals(tags, metadata.tags);
+          && Objects.equals(tags, metadata.tags)
+          && Objects.equals(rules, metadata.rules);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(doc, params, tags);
+      return Objects.hash(doc, params, tags, rules);
     }
   }
 }

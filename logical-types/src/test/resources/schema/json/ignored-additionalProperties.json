@@ -1,0 +1,23 @@
+{
+  "$id": "https://att.com/messagerouter/work_order_network_objects.schema.json",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "additionalProperties": false,
+  "description": "Array field with additional properties",
+  "items": {
+    "properties": {
+      "attributes": {
+        "additionalProperties": {
+          "description": "Attribute value",
+          "type": "string"
+        },
+        "type": "string"
+      }
+    },
+    "required": [
+      "attributes"
+    ],
+    "type": "object"
+  },
+  "title": "WorkOrderNetworkObjects",
+  "type": "array"
+}

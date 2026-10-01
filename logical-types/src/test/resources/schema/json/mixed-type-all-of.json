@@ -1,0 +1,13 @@
+{
+  "$id": "https://att.com/messagerouter/work_order_network_objects.schema.json",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "allOf": [
+    {
+      "type": "string"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false
+    }
+  ]
+}

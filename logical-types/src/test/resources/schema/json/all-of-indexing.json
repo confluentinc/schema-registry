@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "allOf": [
+    {
+      "$ref": "#/definitions/MessageBase"
+    },
+    {
+      "$ref": "#/definitions/MessageBase2"
+    }
+  ],
+  "title": "IdentifyUserMessage",
+  "description": "An IdentifyUser message",
+  "type": "object",
+  "properties": {
+    "prevUserId": {
+      "type": "string",
+      "connect.index": 0
+    },
+    "newUserId": {
+      "type": "string",
+      "connect.index": 10
+    }
+  },
+  "definitions": {
+    "MessageBase": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "connect.index": 2
+        },
+        "type": {
+          "type": "string",
+          "connect.index": 3
+        }
+      }
+    },
+    "MessageBase2": {
+      "properties": {
+        "id2": {
+          "type": "string",
+          "connect.index": 4
+        }
+      }
+    }
+  }
+}

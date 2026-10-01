@@ -48,4 +48,4 @@ do
       ;;
     esac
 done
-exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleProducer $DEFAULT_LINE_READER $DEFAULT_SCHEMA_REGISTRY_URL "$@"
+exec $(dirname $0)/schema-registry-run-class org.apache.kafka.tools.ConsoleProducer $DEFAULT_LINE_READER $DEFAULT_SCHEMA_REGISTRY_URL "$@"

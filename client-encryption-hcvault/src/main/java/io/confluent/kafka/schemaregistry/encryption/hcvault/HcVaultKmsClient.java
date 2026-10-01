@@ -121,7 +121,7 @@ public class HcVaultKmsClient implements KmsClient {
       config = config.build();
 
       this.vaultConfig = config;
-      this.vault = new Vault(config).logical();
+      this.vault = Vault.create(config).logical();
       return this;
     } catch (URISyntaxException | VaultException e) {
       throw new GeneralSecurityException("invalid path provided", e);
@@ -172,7 +172,7 @@ public class HcVaultKmsClient implements KmsClient {
       config = config.build();
 
       this.vaultConfig = config;
-      this.vault = new Vault(config).logical();
+      this.vault = Vault.create(config).logical();
     } catch (URISyntaxException | VaultException e) {
       throw new GeneralSecurityException("unable to create config", e);
     }
@@ -185,7 +185,7 @@ public class HcVaultKmsClient implements KmsClient {
   public KmsClient withConfig(VaultConfig config)
       throws GeneralSecurityException {
     this.vaultConfig = config;
-    this.vault = new Vault(config).logical();
+    this.vault = Vault.create(config).logical();
     return this;
   }
 

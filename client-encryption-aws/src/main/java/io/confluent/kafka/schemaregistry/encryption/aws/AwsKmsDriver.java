@@ -25,11 +25,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.model.NotFoundException;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
@@ -54,6 +57,35 @@ public class AwsKmsDriver implements KmsDriver {
   @Override
   public String getKeyUrlPrefix() {
     return AwsKmsClient.PREFIX;
+  }
+
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof AwsServiceException)) {
+      return false;
+    }
+    AwsServiceException e = (AwsServiceException) t;
+    if (isAccessDeniedStatus(e.statusCode())) {
+      return true;
+    }
+    // NotFoundException is treated as access-denied here too: for a *shared* (cross-account)
+    // KMS key, "the key doesn't exist" and "we were never granted access to it" are
+    // indistinguishable from the caller's perspective, and equally a customer configuration
+    // problem -- neither should surface as an internal 500. AWS does not guarantee which of
+    // the two exceptions it returns for a missing cross-account key (it depends on where in
+    // its IAM-then-resource evaluation the request fails), so treating them differently would
+    // make our own response code non-deterministic across otherwise-identical requests.
+    if (e instanceof NotFoundException) {
+      return true;
+    }
+    // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400, so the
+    // status code alone is not enough; also inspect the service error code.
+    AwsErrorDetails details = e.awsErrorDetails();
+    if (details != null && details.errorCode() != null) {
+      String code = details.errorCode();
+      return code.contains("AccessDenied") || code.contains("Unauthorized");
+    }
+    return false;
   }
 
   private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)

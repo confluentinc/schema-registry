@@ -19,12 +19,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.net.URI;
 import java.util.Collections;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,7 +38,7 @@ public class AliasNonDefaultTenantFilterTest {
 
   @Before
   public void setUp() throws Exception {
-    KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     when(schemaRegistry.tenant()).thenReturn("myTenant");
     aliasFilter = new AliasFilter(schemaRegistry);
 

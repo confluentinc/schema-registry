@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+
 /**
  * A rule exception that occurs when the client interacts with a remote service.
  */
@@ -35,4 +37,17 @@ public class RuleClientException extends RuleException {
   public RuleClientException(String message, Throwable cause) {
     super(message, cause);
   }
+
+  public RuleClientException(Rule rule, Throwable cause) {
+    super(rule, cause);
+  }
+
+  public RuleClientException(Rule rule, String message) {
+    super(rule, message);
+  }
+
+  public RuleClientException(Rule rule, String message, Throwable cause) {
+    super(rule, message, cause);
+  }
+
 }
