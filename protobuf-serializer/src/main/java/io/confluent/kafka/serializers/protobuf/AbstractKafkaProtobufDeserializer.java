@@ -158,7 +158,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       schema = schemaWithName(schema, name);
       if (subject == null || strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(schemaId, schema, subject, isKey);
+        // Fetched again by id it comes back unnamed, as its file's first message: name it again.
+        schema = schemaWithName(schemaForDeserialize(schemaId, schema, subject, isKey), name);
       }
       Object buf = executeRules(
           subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
