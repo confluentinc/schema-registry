@@ -73,13 +73,17 @@ import com.github.erosb.jsonsKema.Regexp;
 import com.github.erosb.jsonsKema.RequiredSchema;
 import com.github.erosb.jsonsKema.Schema;
 import com.github.erosb.jsonsKema.SchemaVisitor;
+import com.github.erosb.jsonsKema.SourceLocation;
 import com.github.erosb.jsonsKema.TrueSchema;
 import com.github.erosb.jsonsKema.TypeSchema;
 import com.github.erosb.jsonsKema.UnevaluatedItemsSchema;
 import com.github.erosb.jsonsKema.UnevaluatedPropertiesSchema;
 import com.github.erosb.jsonsKema.UniqueItemsSchema;
+import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.WriteOnlySchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -98,6 +102,7 @@ import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.SchemaLocation;
 import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.loader.OrgJsonUtil;
 import org.json.JSONArray;
@@ -118,8 +123,20 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   // object-identity cycle in the schema graph (e.g. a $ref/$dynamicRef to the recursive 2020-12
   // meta-schema) is broken instead of recursing forever and overflowing the stack.
   private final Set<Schema> descending;
+  private final URI rootDocument;
+  private final String rootId;
 
   public SchemaTranslator() {
+    this(URI.create(JsonSchema.DEFAULT_BASE_URI), null);
+  }
+
+  /**
+   * @param rootDocument the document source json-sKema assigned to the root document
+   * @param rootId the root {@code $id}, which json-sKema consumes into the base URI
+   */
+  public SchemaTranslator(URI rootDocument, String rootId) {
+    this.rootDocument = rootDocument;
+    this.rootId = rootId;
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
     this.refReferred = new IdentityHashMap<>();
@@ -242,6 +259,17 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
     if (schema.getId() != null) {
       ctx.schemaBuilder().id(schema.getId().getValue());
+    }
+    SourceLocation location = schema.getLocation();
+    if (location != UnknownSource.INSTANCE) {
+      boolean inRootDocument = rootDocument.equals(location.getDocumentSource());
+      ctx.schemaBuilder().schemaLocation(new SchemaLocation(
+          inRootDocument ? null : toEveritDocumentUri(location.getDocumentSource()),
+          location.getPointer().getSegments()));
+      if (inRootDocument && rootId != null && schema.getId() == null
+          && location.getPointer().getSegments().isEmpty()) {
+        ctx.schemaBuilder().id(rootId);
+      }
     }
     if (schema.getTitle() != null) {
       ctx.schemaBuilder().title(schema.getTitle().getValue());
@@ -610,6 +638,15 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     return super.visitWriteOnlySchema(schema);
   }
 
+  /**
+   * Maps a json-sKema document source to the URI everit reports for a referenced document: the
+   * reference relative to the root document, resolved against the root {@code $id} when present.
+   */
+  private URI toEveritDocumentUri(URI documentSource) {
+    URI relative = rootDocument.relativize(documentSource);
+    return rootId != null ? URI.create(rootId).resolve(relative) : relative;
+  }
+
   private org.everit.json.schema.Schema.Builder<?> typeToSchema(String type) {
     switch (type) {
       case "string":
@@ -776,9 +813,35 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
             return product;
           }
         }
+        if (isGeneratedAny(schema) && containsType((CombinedSchemaExt) schema, current)) {
+          product.set(i, mergeIntoAny((CombinedSchemaExt) schema, current));
+          return product;
+        }
+      }
+      // Keyword order is arbitrary, so a multi-type anyOf may arrive after keyword schemas
+      // (e.g. items) that belong in one of its branches; fold those in too.
+      if (isGeneratedAny(current)) {
+        CombinedSchemaExt any = (CombinedSchemaExt) current;
+        List<org.everit.json.schema.Schema> result = new ArrayList<>();
+        for (org.everit.json.schema.Schema schema : product) {
+          if (containsType(any, schema)) {
+            any = mergeIntoAny(any, schema);
+          } else {
+            result.add(schema);
+          }
+        }
+        result.add(any);
+        return result;
       }
       product.add(current);
       return product;
+    }
+
+    private CombinedSchemaExt mergeIntoAny(
+        CombinedSchemaExt any, org.everit.json.schema.Schema schema) {
+      return CombinedSchemaExt.anyOf(accumulate(new ArrayList<>(any.getSubschemas()), schema))
+          .isGenerated(true)
+          .build();
     }
 
     private List<org.everit.json.schema.Schema> concat(
