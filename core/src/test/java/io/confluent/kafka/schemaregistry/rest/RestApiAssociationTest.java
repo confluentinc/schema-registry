@@ -3895,6 +3895,105 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         latest.getSchemaTags());
   }
 
+  @Test
+  public void testDeleteAssociationsAsyncCascade() throws Exception {
+    String subject = createStrongKeyAssociation("async-topic", "async-123");
+
+    assertEquals(202, rawDelete("/associations/resources/async-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"));
+
+    // The association is gone as soon as the request returns
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "async-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+
+    // The subject is eventually hard-deleted in the background
+    TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
+        "Subject " + subject + " was not hard-deleted");
+  }
+
+  @Test
+  public void testDeleteAssociationsSyncCascadeReturns204() throws Exception {
+    String subject = createStrongKeyAssociation("sync-topic", "sync-123");
+
+    assertEquals(204, rawDelete("/associations/resources/sync-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true"));
+
+    assertTrue(isHardDeleted(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncDryRun() throws Exception {
+    String subject = createStrongKeyAssociation("dryrun-topic", "dryrun-123");
+
+    assertEquals(204, rawDelete("/associations/resources/dryrun-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"
+        + "&dryRun=true"));
+
+    assertEquals(1, restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "dryrun-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).size());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncFrozenWithoutCascade() throws Exception {
+    String subject = createStrongKeyAssociation("frozen-async-topic", "frozen-async-123");
+
+    assertEquals(409, rawDelete("/associations/resources/frozen-async-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=false&async=true"));
+
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  private String createStrongKeyAssociation(String resourceName, String resourceId)
+      throws Exception {
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(TestUtils.getRandomCanonicalAvroString(1).get(0));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        "default",
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,
+                schemaRequest,
+                null
+            )
+        )
+    );
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    return ":.default:" + resourceName + "-key";
+  }
+
+  private boolean isHardDeleted(String subject) throws Exception {
+    try {
+      restApp.restClient.getAllVersions(
+          RestService.DEFAULT_REQUEST_PROPERTIES, subject, true, false);
+      return false;
+    } catch (RestClientException e) {
+      return e.getErrorCode() == Errors.SUBJECT_NOT_FOUND_ERROR_CODE;
+    }
+  }
+
+  private int rawDelete(String path) throws Exception {
+    URL url = new URL(restApp.restConnect + path);
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    conn.setRequestMethod("DELETE");
+    conn.setConnectTimeout(10_000);
+    conn.setReadTimeout(10_000);
+    try {
+      return conn.getResponseCode();
+    } finally {
+      conn.disconnect();
+    }
+  }
+
   private String rawGet(String path) throws Exception {
     URL url = new URL(restApp.restConnect + path);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();

@@ -481,6 +481,22 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException {
   }
 
+  /**
+   * Deletes the associations for a resource. When {@code async} is true, implementations that
+   * support it delete the association entries before returning and complete any cascaded
+   * subject deletes in the background. A queued subject is deleted even if new versions are
+   * registered under it before the background delete runs. By default this runs synchronously.
+   */
+  default void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    deleteAssociationsOrForward(subject, resourceId, resourceType, associationTypes,
+        cascadeLifecycle, dryRun, headerProperties);
+  }
+
   default void addLeaderChangeListener(Consumer<Boolean> listener) {}
 
   default boolean isLeader() {
