@@ -642,11 +642,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.copy((Integer) null);
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null && versions.containsKey(schema)) {
-      return versions.get(schema);
-    } else {
-      throw new RestClientException("Subject Not Found", 404, 40401);
+    if (versions != null) {
+      if (versions.containsKey(schema)) {
+        return versions.get(schema);
+      }
+      for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
+        ParsedSchema key = entry.getKey();
+        // Registered with a version or not, a schema is found by its content.
+        if (key.version() != null && key.copy((Integer) null).equals(schema)) {
+          return entry.getValue();
+        }
+      }
     }
+    throw new RestClientException("Subject Not Found", 404, 40401);
   }
 
   @Override

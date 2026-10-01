@@ -218,11 +218,13 @@ public final class ProvenanceProjector<T> {
     }
     // A writer named by GUID alone is keyed by it; its schema id is looked up when computed. A
     // supplied reader id is part of the question: the same schema may stand for either version.
-    // So is the reader's name: Protobuf schemas are equal whichever message of the file they name.
-    // A reader derived from a class equals its text, so which of the two it is counts too.
+    // So are the writer's and reader's names: a Protobuf file's messages share its schema id, and
+    // its schemas are equal whichever message they name. A reader derived from a class equals its
+    // text, so which of the two it is counts too.
     boolean derived = derivedReaders.getIfPresent(reader) != null;
     List<Object> key = Arrays.asList(subject,
-        writerId.getId() != null ? writerId.getId() : writerId.getGuid(), reader, reader.name(),
+        writerId.getId() != null ? writerId.getId() : writerId.getGuid(),
+        writer != null ? writer.name() : null, reader, reader.name(),
         includeMultipleMessages, derived ? null : suppliedId(reader), derived);
     Outcome<T> outcome;
     try {

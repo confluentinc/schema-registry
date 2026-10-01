@@ -1218,5 +1218,10 @@ public class MockSchemaRegistryClientTest {
           + "[{\"name\":\"a\",\"type\":\"int\"}]}");
       mock.register("s", schema);
       assertEquals(1, mock.getVersion("s", schema.copy(3)));
+
+      // Registered carrying a version, it is found by its content too.
+      mock.register("t", schema.copy(3));
+      assertEquals(1, mock.getVersion("t", schema));
+      assertEquals(1, mock.getVersion("t", schema.copy(3)));
     }
 }

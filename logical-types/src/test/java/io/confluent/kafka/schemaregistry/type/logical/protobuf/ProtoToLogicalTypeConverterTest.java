@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
+import com.google.protobuf.StringValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -715,6 +716,17 @@ class ProtoToLogicalTypeConverterTest {
 
     assertEquals(Arrays.asList(1, 2), Arrays.asList(us.getBranches().get(0).getFieldNumber(),
         us.getBranches().get(1).getFieldNumber()));
+  }
+
+  @Test
+  void anUnwrappedWrapperRootNamesNoMessage() {
+    // A google.protobuf wrapper at the root holds a value, not a message.
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(StringValue.getDescriptor()));
+    assertNull(ProtoToLogicalTypeConverter.rootMessage(lt));
+    assertEquals("p.Row", ProtoToLogicalTypeConverter.rootMessage(ProtoToLogicalTypeConverter
+        .toLogicalType(new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+            + "message Row {\n  int32 id = 1;\n}\n"))));
   }
 
   private static Schema rowOf(LogicalType lt) {

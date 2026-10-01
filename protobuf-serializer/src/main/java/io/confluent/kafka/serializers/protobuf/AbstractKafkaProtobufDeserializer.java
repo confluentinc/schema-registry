@@ -411,17 +411,20 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
+    // The writer named at the record's message: it may come back unnamed, as its file's first,
+    // and its name tells each record's message apart, here and in the projector's cache.
+    ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
     // Single-message provenance roots each version at its file's first message: a record written
     // as another has no locations there, so it is read without provenance.
-    Descriptor written = writer.toDescriptor();
+    Descriptor written = named.toDescriptor();
     boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
-    return provenanceProjector().project(subject, writerId, writer, reader, multi,
+    return provenanceProjector().project(subject, writerId, named, reader, multi,
         mapping -> {
           if (!placed) {
             throw new ProvenanceUnavailableException("The record was written as message " + name
                 + ", not its file's first, which single-message provenance has no locations for");
           }
-          return ProtoProvenanceRenumberer.renumber(reader, writer, mapping, multi);
+          return ProtoProvenanceRenumberer.renumber(reader, named, mapping, multi);
         }).orElse(null);
   }
 

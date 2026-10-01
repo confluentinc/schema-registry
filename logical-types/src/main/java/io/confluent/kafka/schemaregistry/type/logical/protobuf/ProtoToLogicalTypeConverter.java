@@ -86,8 +86,10 @@ public class ProtoToLogicalTypeConverter {
     if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
       return root.getQualifiedName();
     }
+    // An unwrapped wrapper root has no name of its own: it holds a value, not a message.
+    String name = logicalType.getName();
     String namespace = logicalType.getNamespace();
-    return namespace != null ? namespace + "." + logicalType.getName() : logicalType.getName();
+    return name == null || namespace == null ? name : namespace + "." + name;
   }
 
   /**

@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
@@ -753,6 +754,63 @@ class ProtobufProvenanceDeserializerTest {
     DynamicMessage read = read(reader, bytes, "v1");
     assertEquals(7, get(read, "id"));
     assertEquals("old", get(read, "memo"));
+  }
+
+  @Test
+  void aRecordOfTheSecondMessageFirstLeavesTheFirstMessagesProvenanceAlone() throws Exception {
+    // One writer id, two messages: B's fallback is its own, so A, read after it, still is A.
+    String b = "message B {\n  int32 x = 1;\n}\n";
+    ProtobufSchema v1 = file("message A {\n  int32 id = 1;\n  string note = 2;\n}\n" + b);
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, file("message A {\n  int32 id = 1;\n}\n" + b));
+    ProtobufSchema reader = file("message A {\n  int32 id = 1;\n  string memo = 2;\n}\n");
+    client.register(SUBJECT, reader);
+    Descriptor a = v1.toDescriptor("p.A");
+    Descriptor bb = v1.toDescriptor("p.B");
+    byte[] ofB = framed(id, v1, "p.B",
+        DynamicMessage.newBuilder(bb).setField(bb.findFieldByName("x"), 3).build());
+    byte[] ofA = framed(id, v1, "p.A", DynamicMessage.newBuilder(a)
+        .setField(a.findFieldByName("id"), 7).setField(a.findFieldByName("note"), "old").build());
+
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config("v1"));
+    deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), ofB, w -> reader);
+    DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), ofA, w -> reader).getValue();
+    assertEquals(7, get(read, "id"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aRecordOfAnotherThanItsFilesFirstMessageUnderRecordNameStrategyIsReadAsWritten()
+      throws Exception {
+    // The writer comes back unnamed by its record's name: the check still sees B, not A.
+    String a = "message A {\n  int32 a = 1;\n}\n";
+    String subject = "p.B";
+    ProtobufSchema v1 = file(a + "message B {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    int id = client.register(subject, v1);
+    client.register(subject, file(a + "message B {\n  int32 id = 1;\n}\n"));
+    ProtobufSchema reader = file("message B {\n  int32 id = 1;\n  string memo = 2;\n}\n");
+    client.register(subject, reader);
+    Descriptor b = v1.toDescriptor("p.B");
+    byte[] bytes = framed(id, v1, "p.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("id"), 7).setField(b.findFieldByName("note"), "old").build());
+
+    Map<String, Object> config = config("v1");
+    config.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
+    DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        client, config).deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, w -> reader)
+        .getValue();
+    assertEquals(7, get(read, "id"));
+    assertEquals("old", get(read, "memo"));
+  }
+
+  // A record of the named message of a file registered under the given id, as the wire frames it.
+  private static byte[] framed(int id, ProtobufSchema file, String message, DynamicMessage record) {
+    byte[] indexes = file.toMessageIndexes(message).toByteArray();
+    byte[] body = record.toByteArray();
+    return ByteBuffer.allocate(5 + indexes.length + body.length).put((byte) 0).putInt(id)
+        .put(indexes).put(body).array();
   }
 
   // A v1 record with note "old", then v2 dropping note and v3 adding memo at its number.
