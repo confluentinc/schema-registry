@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
@@ -92,6 +93,9 @@ final class JsonProvenancePruner {
     final List<Candidate> candidates = new ArrayList<>();
     // The branches of the property's own union, by branch choices: a primitive lives there.
     final Map<List<Integer>, Candidate> branches = new HashMap<>();
+    // Each side's branches under the property, by its own branch choices, to their kinds.
+    final Map<List<Integer>, String> readerKinds = new HashMap<>();
+    final Map<List<Integer>, String> writerKinds = new HashMap<>();
     // Indexed once planned: a value reaches the property once per path, so look-ups add up.
     private Map<List<Integer>, List<Candidate>> byChoices;
     private boolean clashes;
@@ -153,12 +157,13 @@ final class JsonProvenancePruner {
       JsonSchema writer) {
     // A property the walk cannot find would keep a value provenance says is new.
     mapping.requireNames();
+    mapping.requireKinds();
     Schema raw = reader.rawSchema();
     Map<List<String>, Target> byNames = new LinkedHashMap<>();
     Set<List<Integer>> properties = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (isProperty(mapping, path, names)) {
+      if (!mapping.isReaderBranch(path)) {
         properties.add(path);
         byNames.computeIfAbsent(names, Target::new).candidates.add(
             new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
@@ -168,7 +173,7 @@ final class JsonProvenancePruner {
       // A branch of a property's own union, or of its items' or map values': under the nearest
       // property, spelled as it is but for unnamed steps.
       List<String> names = mapping.readerNamesOf(path);
-      if (!isBranch(mapping, path, names)) {
+      if (!mapping.isReaderBranch(path)) {
         continue;
       }
       for (int k = path.size() - 1; k > 0; k--) {
@@ -182,6 +187,7 @@ final class JsonProvenancePruner {
                   .allMatch(Objects::isNull)) {
             target.branches.put(branchChoices(mapping, path),
                 new Candidate(branchChoices(mapping, path), writerChoices(mapping, path)));
+            target.readerKinds.put(branchChoices(mapping, path), mapping.readerKindOf(path));
           }
           break;
         }
@@ -193,6 +199,12 @@ final class JsonProvenancePruner {
     Map<List<String>, List<String>> outermost = new HashMap<>();
     for (List<Integer> path : mapping.writerPaths()) {
       List<String> names = mapping.writerNamesOf(path);
+      if (names != null && mapping.isWriterBranch(path)) {
+        Target target = byNames.get(withoutUnnamedSteps(names));
+        if (target != null) {
+          target.writerKinds.put(writerBranchChoices(mapping, path), mapping.writerKindOf(path));
+        }
+      }
       if (names != null) {
         spelled.merge(names, 1, Integer::sum);
         List<String> union = outermostUnion(mapping, path);
@@ -244,18 +256,31 @@ final class JsonProvenancePruner {
    */
   private static List<Integer> writerChoices(ProvenanceMapping mapping, List<Integer> readerPath) {
     List<Integer> written = mapping.writerPathOf(readerPath);
-    if (written == null) {
-      return null;
-    }
+    return written == null ? null : writerBranchChoices(mapping, written);
+  }
+
+  /**
+   * The branch index of every union branch on the way to the writer's {@code path}, outermost
+   * first.
+   */
+  private static List<Integer> writerBranchChoices(ProvenanceMapping mapping, List<Integer> path) {
     List<Integer> choices = new ArrayList<>();
-    for (int k = 1; k <= written.size(); k++) {
-      List<Integer> prefix = written.subList(0, k);
-      List<String> names = mapping.writerNamesOf(prefix);
-      if (names != null && isWriterBranch(mapping, prefix, names)) {
+    for (int k = 1; k <= path.size(); k++) {
+      List<Integer> prefix = path.subList(0, k);
+      if (mapping.writerNamesOf(prefix) != null && mapping.isWriterBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
     return choices;
+  }
+
+  // A branch's names without the unnamed steps into an array or map: its property's.
+  private static List<String> withoutUnnamedSteps(List<String> names) {
+    int end = names.size();
+    while (end > 0 && names.get(end - 1) == null) {
+      end--;
+    }
+    return names.subList(0, end);
   }
 
   /**
@@ -308,12 +333,8 @@ final class JsonProvenancePruner {
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
       List<String> names = mapping.writerNamesOf(prefix);
-      if (names != null && isWriterBranch(mapping, prefix, names)) {
-        int end = names.size();
-        while (end > 0 && names.get(end - 1) == null) {
-          end--;
-        }
-        return names.subList(0, end);
+      if (names != null && mapping.isWriterBranch(prefix)) {
+        return withoutUnnamedSteps(names);
       }
     }
     return null;
@@ -323,40 +344,26 @@ final class JsonProvenancePruner {
     return names.size() >= prefix.size() && names.subList(0, prefix.size()).equals(prefix);
   }
 
-  private static boolean isWriterBranch(ProvenanceMapping mapping, List<Integer> path,
-      List<String> names) {
-    List<String> enclosing = Collections.emptyList();
-    for (int k = path.size() - 1; k > 0; k--) {
-      List<String> n = mapping.writerNamesOf(path.subList(0, k));
-      if (n != null) {
-        enclosing = n;
-        break;
-      }
-    }
-    if (names.size() < enclosing.size() || !names.subList(0, enclosing.size()).equals(enclosing)) {
-      return false;
-    }
-    for (String step : names.subList(enclosing.size(), names.size())) {
-      if (step != null) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   /**
    * The union branches a property's value is held in, each as the branch indexes of the unions on
-   * the way: a primitive, or an array, in its own union's, its items' or its map values'; a map
-   * too. An object's other branches are the walk's to tell.
+   * the way: one in its own union's, its items' or its map values', unless that branch is a
+   * struct, whose properties the walk tells. {@code kinds} are that side's branches, by choices
+   * from {@code reached}, the branches taken to the property.
    */
-  private static List<List<Integer>> heldIn(ObjectSchema object, String name, JsonNode value) {
+  private static List<List<Integer>> heldIn(ObjectSchema object, String name, JsonNode value,
+      List<Integer> reached, Map<List<Integer>, String> kinds) {
     List<List<Integer>> held = new ArrayList<>();
-    heldIn(object.getPropertySchemas().get(name), value, Collections.emptyList(), held);
+    heldIn(object.getPropertySchemas().get(name), value, Collections.emptyList(), held,
+        choices -> {
+          List<Integer> full = new ArrayList<>(reached);
+          full.addAll(choices);
+          return kinds.get(full);
+        });
     return held;
   }
 
   private static void heldIn(Schema schema, JsonNode value, List<Integer> branches,
-      List<List<Integer>> held) {
+      List<List<Integer>> held, Function<List<Integer>, String> kindAt) {
     // A definition that only refers to itself, however indirectly, holds nothing.
     schema = referred(schema);
     if (value == null) {
@@ -366,7 +373,7 @@ final class JsonProvenancePruner {
         && ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
       // Every part applies, as the walk takes it: a union in one is the property's own.
       for (Schema part : ((CombinedSchema) schema).getSubschemas()) {
-        heldIn(part, value, branches, held);
+        heldIn(part, value, branches, held, kindAt);
       }
     } else if (schema instanceof CombinedSchema) {
       List<Schema> options = new ArrayList<>();
@@ -381,25 +388,29 @@ final class JsonProvenancePruner {
       }
       if (options.size() == 1 && nullable) {
         // A nullable value, no union.
-        heldIn(options.get(0), value, branches, held);
+        heldIn(options.get(0), value, branches, held, kindAt);
         return;
       }
       // As the walk validates it: json-sKema counts 1.0 an integer, everit does not.
       Object validatable = validatable(
           schema instanceof CombinedSchemaExt ? integralDecimals(value) : value);
       boolean fits = false;
+      boolean mapBranch = false;
       for (int i = 0; i < options.size(); i++) {
+        List<Integer> in = new ArrayList<>(branches);
+        in.add(i);
+        String kind = kindAt.apply(in);
+        mapBranch |= kind != null && kind.startsWith("MAP");
         if (validates(options.get(i), validatable)) {
           fits = true;
-          List<Integer> in = new ArrayList<>(branches);
-          in.add(i);
-          if (!value.isObject() || isMap(options.get(i))) {
+          if (!value.isObject() || kind != null && !kind.equals("STRUCT")) {
             held.add(in);
           }
-          heldIn(options.get(i), value, in, held);
+          heldIn(options.get(i), value, in, held, kindAt);
         }
       }
-      if (!fits && !value.isObject() && !value.isNull()) {
+      // An object fits a map branch as well as a struct one: a map's union decides it too.
+      if (!fits && !value.isNull() && (!value.isObject() || mapBranch)) {
         // In none of the branches: which it was written in decides.
         List<Integer> none = new ArrayList<>(branches);
         none.add(NO_BRANCH);
@@ -408,7 +419,7 @@ final class JsonProvenancePruner {
     } else if (schema instanceof ArraySchema && value.isArray()) {
       Schema items = ((ArraySchema) schema).getAllItemSchema();
       for (JsonNode element : value) {
-        heldIn(items, element, branches, held);
+        heldIn(items, element, branches, held, kindAt);
       }
     } else if (schema instanceof ObjectSchema && value.isObject()) {
       ObjectSchema object = (ObjectSchema) schema;
@@ -416,17 +427,11 @@ final class JsonProvenancePruner {
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> field = fields.next();
         if (!object.getPropertySchemas().containsKey(field.getKey())) {
-          heldIn(object.getSchemaOfAdditionalProperties(), field.getValue(), branches, held);
+          heldIn(object.getSchemaOfAdditionalProperties(), field.getValue(), branches, held,
+              kindAt);
         }
       }
     }
-  }
-
-  // A map has no property of its own for the walk to prune: like an array, its branch holds it.
-  private static boolean isMap(Schema schema) {
-    Schema body = referred(schema);
-    return body instanceof ObjectSchema
-        && "map".equals(body.getUnprocessedProperties().get("connect.type"));
   }
 
   // The schema a chain of references ends at; one only referring to itself, however indirectly.
@@ -495,7 +500,8 @@ final class JsonProvenancePruner {
               Set<List<Integer>> as = readings.computeIfAbsent(node, n -> new HashSet<>());
               as.add(choices);
               if (!target.branches.isEmpty()) {
-                for (List<Integer> branches : heldIn(object, name, node.get(name))) {
+                for (List<Integer> branches
+                    : heldIn(object, name, node.get(name), choices, target.writerKinds)) {
                   List<Integer> extended = new ArrayList<>(choices);
                   extended.addAll(branches);
                   as.add(extended);
@@ -596,45 +602,13 @@ final class JsonProvenancePruner {
   }
 
   /**
-   * Whether the location at {@code path} is a property of its own. A union branch has no step in
-   * the document, so it spells the same names as the location holding it and is never removed.
-   */
-  private static boolean isProperty(ProvenanceMapping mapping, List<Integer> path,
-      List<String> names) {
-    return !names.isEmpty() && names.get(names.size() - 1) != null
-        && !isBranch(mapping, path, names);
-  }
-
-  /**
-   * Whether the location at {@code path} is a union branch: a JSON location is a property or a
-   * branch.
-   */
-  private static boolean isBranch(ProvenanceMapping mapping, List<Integer> path,
-      List<String> names) {
-    List<String> enclosing = mapping.enclosingReaderNamesOf(path);
-    if (names.size() < enclosing.size()
-        || !names.subList(0, enclosing.size()).equals(enclosing)) {
-      return false;
-    }
-    // A branch spells its enclosing location's names, then at most unnamed steps into an array or
-    // map; a property adds a name of its own.
-    for (String step : names.subList(enclosing.size(), names.size())) {
-      if (step != null) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
    * The branch index of every union branch on the way to {@code path}, outermost first.
    */
   private static List<Integer> branchChoices(ProvenanceMapping mapping, List<Integer> path) {
     List<Integer> choices = new ArrayList<>();
     for (int k = 1; k <= path.size(); k++) {
       List<Integer> prefix = path.subList(0, k);
-      List<String> names = mapping.readerNamesOf(prefix);
-      if (names != null && isBranch(mapping, prefix, names)) {
+      if (mapping.readerNamesOf(prefix) != null && mapping.isReaderBranch(prefix)) {
         choices.add(prefix.get(k - 1));
       }
     }
@@ -836,7 +810,8 @@ final class JsonProvenancePruner {
     if (target.branches.isEmpty()) {
       return true;
     }
-    for (List<Integer> branches : heldIn(object, name, node.get(name))) {
+    for (List<Integer> branches
+        : heldIn(object, name, node.get(name), choices, target.readerKinds)) {
       List<Integer> extended = new ArrayList<>(choices);
       extended.addAll(branches);
       if (extended.get(extended.size() - 1) == NO_BRANCH) {

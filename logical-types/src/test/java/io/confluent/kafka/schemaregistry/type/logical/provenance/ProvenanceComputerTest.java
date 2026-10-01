@@ -619,7 +619,7 @@ class ProvenanceComputerTest {
 
   @Test
   void anAliasClaimingAFieldOfAnotherKindLeavesItToNoOne() {
-    // b says it is the old a, and is a struct where a was a leaf: b is new, and the new a, which
+    // b says it is the old a, and is a struct where a was a scalar: b is new, and the new a, which
     // the alias outranks, is new too -- DROP a, ADD b, ADD a.
     Pids pids = avro(
         lt(struct(field("a"))),
@@ -641,7 +641,7 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void aLeafPromotionIsNoKindChange() {
+  void aScalarPromotionIsNoKindChange() {
     Pids pids = avro(
         lt(struct(field("f"))),
         lt(struct(new Field("f", Schema.create(Schema.Type.BIGINT), 0))));

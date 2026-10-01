@@ -35,25 +35,26 @@ public class SchemaProvenanceTest {
   @Test
   public void serializesToTheDocumentedShape() throws Exception {
     SchemaProvenance provenance = new SchemaProvenance("orders-value", Arrays.asList(
-        new ProvenanceVersion(1, 1001, Arrays.asList(
-            field(path(0), names("id"), 1),
-            field(path(1), names("name"), 2),
-            field(path(2), names("region"), 3))),
-        new ProvenanceVersion(2, 1002, Arrays.asList(
-            field(path(0), names("id"), 1),
-            field(path(1), names("full_name"), 2),
-            field(path(2), names("tier"), 4)))));
+        new ProvenanceVersion(1, 1001, "STRUCT", Arrays.asList(
+            field(path(0), names("id"), "SCALAR", 1),
+            field(path(1), names("name"), "SCALAR", 2),
+            field(path(2), names("region"), "MAP<SCALAR, STRUCT>", 3))),
+        new ProvenanceVersion(2, 1002, "STRUCT", Arrays.asList(
+            field(path(0), names("id"), "SCALAR", 1),
+            field(path(1), names("full_name"), "SCALAR", 2),
+            field(path(2), names("tier"), "SCALAR", 4)))));
 
     assertEquals(MAPPER.readTree(
         "{\"subject\":\"orders-value\",\"versions\":["
-            + "{\"version\":1,\"id\":1001,\"fields\":["
-            + "{\"path\":[0],\"names\":[\"id\"],\"pid\":1},"
-            + "{\"path\":[1],\"names\":[\"name\"],\"pid\":2},"
-            + "{\"path\":[2],\"names\":[\"region\"],\"pid\":3}]},"
-            + "{\"version\":2,\"id\":1002,\"fields\":["
-            + "{\"path\":[0],\"names\":[\"id\"],\"pid\":1},"
-            + "{\"path\":[1],\"names\":[\"full_name\"],\"pid\":2},"
-            + "{\"path\":[2],\"names\":[\"tier\"],\"pid\":4}]}]}"),
+            + "{\"version\":1,\"id\":1001,\"kind\":\"STRUCT\",\"fields\":["
+            + "{\"path\":[0],\"names\":[\"id\"],\"kind\":\"SCALAR\",\"pid\":1},"
+            + "{\"path\":[1],\"names\":[\"name\"],\"kind\":\"SCALAR\",\"pid\":2},"
+            + "{\"path\":[2],\"names\":[\"region\"],\"kind\":\"MAP<SCALAR, STRUCT>\","
+            + "\"pid\":3}]},"
+            + "{\"version\":2,\"id\":1002,\"kind\":\"STRUCT\",\"fields\":["
+            + "{\"path\":[0],\"names\":[\"id\"],\"kind\":\"SCALAR\",\"pid\":1},"
+            + "{\"path\":[1],\"names\":[\"full_name\"],\"kind\":\"SCALAR\",\"pid\":2},"
+            + "{\"path\":[2],\"names\":[\"tier\"],\"kind\":\"SCALAR\",\"pid\":4}]}]}"),
         MAPPER.valueToTree(provenance));
   }
 
@@ -73,17 +74,23 @@ public class SchemaProvenanceTest {
   @Test
   public void roundTripsAndIgnoresUnknownProperties() throws Exception {
     String json = "{\"subject\":\"s\",\"future\":true,\"versions\":["
-        + "{\"version\":3,\"id\":7,\"fields\":["
-        + "{\"path\":[0,1],\"pid\":2,\"default\":0,\"alsoFuture\":1}]}]}";
+        + "{\"version\":3,\"id\":7,\"kind\":\"UNION\",\"fields\":["
+        + "{\"path\":[0,1],\"kind\":\"ARRAY<STRUCT>\",\"pid\":2,\"default\":0,"
+        + "\"alsoFuture\":1}]}]}";
     SchemaProvenance read = MAPPER.readValue(json, SchemaProvenance.class);
 
     assertEquals(new SchemaProvenance("s", Collections.singletonList(
-        new ProvenanceVersion(3, 7, Collections.singletonList(
-            field(path(0, 1), null, 2))))), read);
+        new ProvenanceVersion(3, 7, "UNION", Collections.singletonList(
+            field(path(0, 1), null, "ARRAY<STRUCT>", 2))))), read);
   }
 
   private static ProvenanceField field(List<Integer> path, List<String> names, int id) {
     return new ProvenanceField(path, names, id);
+  }
+
+  private static ProvenanceField field(List<Integer> path, List<String> names, String kind,
+      int id) {
+    return new ProvenanceField(path, names, kind, id);
   }
 
   private static List<Integer> path(Integer... steps) {

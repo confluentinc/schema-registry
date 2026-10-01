@@ -40,7 +40,16 @@ public class JsonProvenancePrunerTest {
   public void aLocationWithoutNamesFailsEveryRecord() {
     assertThrows(SerializationException.class, () -> JsonProvenancePruner.plan(
         mapping(Arrays.asList(p(1, "a")),
-            Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, 2))), READER));
+            Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, "SCALAR", 2))),
+        READER));
+  }
+
+  @Test
+  public void aLocationWithoutAKindFailsEveryRecord() {
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"),
+            new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), 2))), READER));
+    assertTrue(e.getMessage(), e.getMessage().contains("no kind for location [2]"));
   }
 
   @Test
@@ -60,11 +69,12 @@ public class JsonProvenancePrunerTest {
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
       List<ProvenanceField> reader) {
     return ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
-        new ProvenanceVersion(1, 1, writer), new ProvenanceVersion(2, 2, reader))), 1, 2);
+        new ProvenanceVersion(1, 1, "STRUCT", writer),
+        new ProvenanceVersion(2, 2, "STRUCT", reader))), 1, 2);
   }
 
   // Flat, unique paths: with no enclosing location, every location is a property.
   private static ProvenanceField p(int pid, String... names) {
-    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(names), pid);
+    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(names), "SCALAR", pid);
   }
 }

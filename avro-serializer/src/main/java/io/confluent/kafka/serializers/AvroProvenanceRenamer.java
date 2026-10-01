@@ -220,9 +220,10 @@ final class AvroProvenanceRenamer {
   }
 
   /**
-   * Rejects a reader record that the resolver would find a field missing from with no default to
-   * fall back to. Avro fails that on every record; this fails it once, naming the field. A sink is
-   * the exception: only the records containing its branch fail, as they come.
+   * Rejects a reader record every record reads that the resolver would find a field missing from
+   * with no default to fall back to: Avro fails each record on it; this fails once, naming the
+   * field. A writer union's branch, a collection's element and a sink's branch are read only by
+   * the records holding one, which Avro fails as they come.
    */
   private static void requireEveryFieldHasAValue(Resolver.Action action,
       Set<Resolver.Action> seen) {
@@ -245,13 +246,8 @@ final class AvroProvenanceRenamer {
       for (Resolver.Action field : ((Resolver.RecordAdjust) action).fieldActions) {
         requireEveryFieldHasAValue(field, seen);
       }
-    } else if (action instanceof Resolver.Container) {
-      requireEveryFieldHasAValue(((Resolver.Container) action).elementAction, seen);
-    } else if (action instanceof Resolver.WriterUnion) {
-      for (Resolver.Action branch : ((Resolver.WriterUnion) action).actions) {
-        requireEveryFieldHasAValue(branch, seen);
-      }
     } else if (action instanceof Resolver.ReaderUnion) {
+      // A writer that is no union always takes the reader's branch.
       requireEveryFieldHasAValue(((Resolver.ReaderUnion) action).actualAction, seen);
     }
   }

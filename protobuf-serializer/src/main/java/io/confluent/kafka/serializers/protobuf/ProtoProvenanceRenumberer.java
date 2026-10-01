@@ -136,7 +136,8 @@ final class ProtoProvenanceRenumberer {
         // A oneof: no step of its own, so no field to number; its members are visited as fields.
         continue;
       }
-      if (field != null) {
+      if (field != null && (!nested || renumberer.passesThrough(root, names))) {
+        // Read as a nested record, only what lies under the record's message is ever parsed.
         renumberer.decide(field.getContainingType(), field, move);
       }
     }
@@ -288,6 +289,22 @@ final class ProtoProvenanceRenumberer {
       message = messageOf(field);
     }
     return field;
+  }
+
+  // Whether names, from a top-level message, take a field of the record's message on the way.
+  private boolean passesThrough(Descriptor root, List<String> names) {
+    Descriptor message = topLevel(names.get(0));
+    for (int i = 1; i < names.size() && message != null; i++) {
+      FieldDescriptor field = names.get(i) != null ? message.findFieldByName(names.get(i)) : null;
+      if (field == null) {
+        return false;
+      }
+      if (isOf(field, root)) {
+        return true;
+      }
+      message = messageOf(field);
+    }
+    return false;
   }
 
   /**

@@ -25,8 +25,9 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * One version of a {@link SchemaProvenance}: its version number, its schema id, and its fields in
- * path order — lexicographic on the index paths, so a prefix precedes its extensions.
+ * One version of a {@link SchemaProvenance}: its version number, its schema id, its root's kind,
+ * and its fields in path order — lexicographic on the index paths, so a prefix precedes its
+ * extensions.
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -35,14 +36,21 @@ public class ProvenanceVersion {
 
   private Integer version;
   private Integer id;
+  private String kind;
   private List<ProvenanceField> fields;
+
+  public ProvenanceVersion(Integer version, Integer id, List<ProvenanceField> fields) {
+    this(version, id, null, fields);
+  }
 
   @JsonCreator
   public ProvenanceVersion(@JsonProperty("version") Integer version,
                            @JsonProperty("id") Integer id,
+                           @JsonProperty("kind") String kind,
                            @JsonProperty("fields") List<ProvenanceField> fields) {
     this.version = version;
     this.id = id;
+    this.kind = kind;
     this.fields = fields;
   }
 
@@ -68,6 +76,19 @@ public class ProvenanceVersion {
   @JsonProperty("id")
   public void setId(Integer id) {
     this.id = id;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The root's kind, as a field's "
+      + "kind is spelled: the fields directly under a STRUCT root are its fields, and those "
+      + "directly under a UNION root its branches", example = "STRUCT")
+  @JsonProperty("kind")
+  public String getKind() {
+    return kind;
+  }
+
+  @JsonProperty("kind")
+  public void setKind(String kind) {
+    this.kind = kind;
   }
 
   /**
@@ -98,16 +119,18 @@ public class ProvenanceVersion {
     ProvenanceVersion that = (ProvenanceVersion) o;
     return Objects.equals(version, that.version)
         && Objects.equals(id, that.id)
+        && Objects.equals(kind, that.kind)
         && Objects.equals(fields, that.fields);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(version, id, fields);
+    return Objects.hash(version, id, kind, fields);
   }
 
   @Override
   public String toString() {
-    return "{version=" + version + ",id=" + id + ",fields=" + fields + "}";
+    return "{version=" + version + ",id=" + id + ",kind=" + kind + ",fields=" + fields
+        + "}";
   }
 }

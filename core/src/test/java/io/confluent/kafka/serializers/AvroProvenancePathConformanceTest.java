@@ -118,7 +118,7 @@ class AvroProvenancePathConformanceTest {
             + "\"items\":{\"type\":\"record\",\"name\":\"MapEntry\","
             + "\"namespace\":\"io.confluent.connect.avro\",\"fields\":[{\"name\":\"key\",\"type\":"
             + inner("K", "k", "int") + "},{\"name\":\"value\",\"type\":\"int\"}]}}}"),
-        // A Variant, a leaf to the logical type.
+        // A Variant, a scalar to the logical type.
         record("{\"name\":\"v\",\"type\":{\"type\":\"record\",\"name\":\"Variant\","
             + "\"namespace\":\"confluent.type\",\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
             + "{\"name\":\"value\",\"type\":\"bytes\"}]}}"),

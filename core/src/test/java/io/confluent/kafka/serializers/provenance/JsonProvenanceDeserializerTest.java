@@ -865,6 +865,65 @@ class JsonProvenanceDeserializerTest {
     assertEquals("t", read.get("u").asText());
   }
 
+  @Test
+  void aMapInAReAddedBranchBehindAnAllOfIsPruned() throws Exception {
+    // The converter reads this allOf as the map: its kind holds it, however it is spelled.
+    String map = "{\"type\": \"object\", \"connect.type\": \"map\", "
+        + "\"additionalProperties\": {\"type\": \"string\"}}";
+    String body = "{\"type\": \"object\", \"properties\": {%s\"e\": {\"oneOf\": "
+        + "[{\"type\": \"integer\"}, %s]}}, \"$defs\": {\"M\": " + map + "}}";
+    String allOf = "{\"allOf\": [{\"$ref\": \"#/$defs/M\"}, {\"minProperties\": 0}]}";
+    JsonSchema v1 = new JsonSchema(String.format(body, "", allOf));
+    JsonSchema v2 = new JsonSchema(String.format(body, "", "{\"type\": \"boolean\"}"));
+    JsonSchema v3 = new JsonSchema(String.format(body, "\"g\": {\"type\": \"string\"}, ", allOf));
+    byte[] bytes = write(v1, "{\"e\": {\"k\": \"s\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertTrue(read(v3, bytes, null).has("e"));
+    assertFalse(read(v3, bytes, "v1").has("e"));
+  }
+
+  @Test
+  void aMapFittingNoBranchOfTheReaderIsPruned() throws Exception {
+    // Under draft-07, 1.0 is no integer: the map fits no branch of v3, and the branch it was
+    // written in does not continue into one.
+    String body = "{\"type\": \"object\", \"properties\": {\"e\": {\"oneOf\": ["
+        + "{\"type\": \"string\"}, {\"type\": \"object\", \"connect.type\": \"map\", "
+        + "\"additionalProperties\": {\"type\": \"%s\"}}]}}}";
+    JsonSchema v1 = new JsonSchema(String.format(body, "number"));
+    JsonSchema v2 = new JsonSchema(String.format(body, "boolean"));
+    JsonSchema v3 = new JsonSchema(String.format(body, "integer"));
+    byte[] map = write(v1, "{\"e\": {\"k\": 1.0}}");
+    byte[] string = write(v1, "{\"e\": \"s\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, map, "v1").has("e"));
+    assertEquals("s", read(v3, string, "v1").get("e").asText());
+  }
+
+  @Test
+  void aNullMemberBehindARefKeepsProvenanceUnderAModernDraft() throws Exception {
+    // A 2020-12 null definition used to cost the subject its provenance, so note kept its value.
+    String ab = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}}}";
+    String body = "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", "
+        + "\"type\": \"object\", \"properties\": {%2$s\"o\": {\"oneOf\": [%1$s, " + ab + "]}}, "
+        + "\"$defs\": {\"N\": {\"type\": \"null\"}}}";
+    String ref = "{\"$ref\": \"#/$defs/N\"}";
+    String note = "\"note\": {\"type\": \"string\"}, ";
+    JsonSchema v1 = new JsonSchema(String.format(body, "{\"type\": \"null\"}", note));
+    JsonSchema v2 = new JsonSchema(String.format(body, ref, ""));
+    JsonSchema v3 = new JsonSchema(String.format(body, ref, note));
+    byte[] bytes = write(v1, "{\"o\": {\"a\": \"s\"}, \"note\": \"old\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = read(v3, bytes, "v1");
+    assertEquals("s", read.get("o").get("a").asText());
+    assertFalse(read.has("note"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

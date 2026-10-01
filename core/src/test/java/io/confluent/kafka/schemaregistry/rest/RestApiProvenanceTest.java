@@ -89,6 +89,21 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void eachLocationAndTheRootCarryTheirKind() throws Exception {
+    register(SUBJECT, record(field("id", "int"),
+        "{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":[\"int\",\"string\"]}}",
+        "{\"name\":\"m\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"record\","
+            + "\"name\":\"In\",\"fields\":[{\"name\":\"i\",\"type\":\"int\"}]}}}"));
+
+    ProvenanceVersion version = byVersion(SUBJECT, "1", "1", false).getVersions().get(0);
+
+    assertEquals("STRUCT", version.getKind());
+    assertEquals(Arrays.asList("SCALAR", "ARRAY<UNION>", "SCALAR", "SCALAR",
+        "MAP<SCALAR, STRUCT>", "SCALAR"), version.getFields().stream()
+        .map(ProvenanceField::getKind).collect(Collectors.toList()));
+  }
+
+  @Test
   public void aRangeNamedBySchemaIdComesBackInVersionOrder() throws Exception {
     int v1 = register(SUBJECT, record(field("id", "int")));
     int v2 = register(SUBJECT, record(field("id", "int"), field("name", "string")));

@@ -365,7 +365,7 @@ class AvroProvenanceStrictnessTest {
 
   @Test
   void aValueWidenedIntoAUnionIsANewColumnNotAFallback() throws Exception {
-    // A leaf becoming a union changes kind, so f is new: provenance applies, and with no
+    // A scalar becoming a union changes kind, so f is new: provenance applies, and with no
     // default there is nothing to read -- not a fallback to native reading.
     Schema v1 = record("\"int\"", "v1");
     Schema v2 = record("[\"int\",\"string\"]", "v2");

@@ -1235,6 +1235,28 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(0, get(read(v2, bytes, "v1"), "q"));
   }
 
+  @Test
+  void aNestedRecordIgnoresConflictsOutsideItsMessage() throws Exception {
+    // N's s2 moves from T to S, so S needs two numberings; a record of p.M.Inner never parses N,
+    // so Inner's k2, new, must not fall back to the writer's k.
+    String n = "message N { S s1 = 1; %s s2 = 2; }";
+    String st = "message S { int32 x = 1; }\nmessage T { int32 y = 1; }";
+    String m = "message M { Inner a = 1; message Inner { int32 i = 1; %s } }";
+    ProtobufSchema v1 = file(String.format(m, "int32 k = 2;"), String.format(n, "T"), st);
+    ProtobufSchema v2 = file(String.format(m, ""), String.format(n, "S"), st);
+    ProtobufSchema v3 = file(String.format(m, "int32 k2 = 2;"), String.format(n, "S"), st);
+    Descriptor inner = v1.toDescriptor("p.M.Inner");
+    byte[] bytes = write(v1, DynamicMessage.newBuilder(inner)
+        .setField(inner.findFieldByName("i"), 4).setField(inner.findFieldByName("k"), 5).build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals(5, get(read(v3, bytes, null), "k2"));
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals(4, get(read, "i"));
+    assertEquals(0, get(read, "k2"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

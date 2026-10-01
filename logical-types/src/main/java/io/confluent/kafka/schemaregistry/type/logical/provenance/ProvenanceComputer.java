@@ -53,7 +53,7 @@ import java.util.function.ToIntFunction;
  * location is matched only among the previous version's locations under its parent's match, so
  * the parent is matched first and scopes its members; collection steps ({@code []},
  * {@code {key}}, {@code {value}}) are part of that scope. A location whose type changes kind —
- * a leaf, struct, union, array, multiset or map becoming another, or what a collection holds
+ * a scalar, struct, union, array, multiset or map becoming another, or what a collection holds
  * doing so — is new, with everything under it, however it was matched: no SQL {@code ALTER}
  * expresses the change. Nothing absent from the
  * previous version is ever continued, so a range of versions pairs its versions exactly as the
@@ -104,7 +104,7 @@ public final class ProvenanceComputer {
 
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
-  // A JSON branch's content entries: a member's path, a discriminator's value, a leaf's type.
+  // A JSON branch's content entries: a member's path, a discriminator's value, a scalar's type.
   private static final String MEMBER = "m:";
   private static final String DISCRIMINATOR = "d:";
   private static final String TYPE = "t:";
@@ -184,9 +184,9 @@ public final class ProvenanceComputer {
       for (Node member : walk.members) {
         member.id = member.match != null ? member.match.id : nextId++;
         members.add(new ProvenanceReport.Member(
-            member.where.path, member.where.names, member.id));
+            member.where.path, member.where.names, spelled(member.kinds), member.id));
       }
-      reported.add(new ProvenanceReport.Version(version, members));
+      reported.add(new ProvenanceReport.Version(version, walk.rootKind(), members));
       previous = root;
       previousSchemaType = schemaType;
       previousRootMessage = rootMessage;
@@ -212,12 +212,49 @@ public final class ProvenanceComputer {
    * so it is a drop and an add.
    */
   private enum Kind {
-    LEAF,
+    /**
+     * A type with no locations under it: a primitive, an enum, a fixed, or a variant, whose
+     * nested values the logical type gives no members.
+     */
+    SCALAR,
     STRUCT,
     UNION,
     ARRAY,
     MULTISET,
     MAP
+  }
+
+  /**
+   * {@code kinds}, as a walk's {@code kindsOf} lists them, spelled for the report:
+   * {@code ARRAY<k>}, {@code MULTISET<k>} and {@code MAP<k, k>} name what they hold. Equal lists
+   * spell alike.
+   */
+  private static String spelled(List<Kind> kinds) {
+    StringBuilder spelled = new StringBuilder();
+    spell(kinds, 0, spelled);
+    return spelled.toString();
+  }
+
+  // Spells the kind at kinds[at] and what it holds; returns the index after them.
+  private static int spell(List<Kind> kinds, int at, StringBuilder spelled) {
+    if (at >= kinds.size()) {
+      return at;
+    }
+    Kind kind = kinds.get(at);
+    spelled.append(kind.name());
+    int next = at + 1;
+    if (kind == Kind.ARRAY || kind == Kind.MULTISET) {
+      spelled.append('<');
+      next = spell(kinds, next, spelled);
+      spelled.append('>');
+    } else if (kind == Kind.MAP) {
+      spelled.append('<');
+      next = spell(kinds, next, spelled);
+      spelled.append(", ");
+      next = spell(kinds, next, spelled);
+      spelled.append('>');
+    }
+    return next;
   }
 
   /** One location of one version: what it is, where it is, and what it matched. */
@@ -466,6 +503,14 @@ public final class ProvenanceComputer {
       return kinds;
     }
 
+    /**
+     * The root's kind, spelled; null when the logical type has no root.
+     */
+    String rootKind() {
+      Schema root = logicalType.getRootSchema();
+      return root == null ? null : spelled(kindsOf(root));
+    }
+
     private void addKinds(Schema schema, List<Kind> kinds, Set<Schema> seen) {
       Schema type = resolved(schema);
       if (type != null && !seen.add(type)) {
@@ -488,7 +533,7 @@ public final class ProvenanceComputer {
 
     private static Kind kindOf(Schema type) {
       if (type == null) {
-        return Kind.LEAF;
+        return Kind.SCALAR;
       }
       switch (type.getType()) {
         case STRUCT:
@@ -502,7 +547,7 @@ public final class ProvenanceComputer {
         case MAP:
           return Kind.MAP;
         default:
-          return Kind.LEAF;
+          return Kind.SCALAR;
       }
     }
 

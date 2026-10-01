@@ -31,7 +31,8 @@ import org.apache.kafka.common.errors.SerializationException;
 /**
  * Which writer field feeds each reader field, from joining two versions of a {@link
  * SchemaProvenance} on the provenance id. Paths are the endpoint's inlined index paths; names are
- * each location in the native schema's own names, with {@code null} for an unnamed step.
+ * each location in the native schema's own names, with {@code null} for an unnamed step; kinds
+ * are what each location's type is, as the endpoint spells it.
  */
 public final class ProvenanceMapping {
 
@@ -39,6 +40,10 @@ public final class ProvenanceMapping {
   private final Map<List<Integer>, List<Integer>> writerToReader;
   private final Map<List<Integer>, List<String>> readerNames;
   private final Map<List<Integer>, List<String>> writerNames;
+  private final Map<List<Integer>, String> readerKinds;
+  private final Map<List<Integer>, String> writerKinds;
+  private final String readerRootKind;
+  private final String writerRootKind;
   private final Map<List<String>, List<Integer>> readerAt;
   private final Map<List<String>, List<Integer>> writerAt;
   private final List<List<Integer>> readerPaths;
@@ -51,6 +56,8 @@ public final class ProvenanceMapping {
     readerId = reader.getId();
     Map<Integer, List<Integer>> writerByPid = new HashMap<>();
     writerNames = new HashMap<>();
+    writerKinds = new HashMap<>();
+    writerRootKind = writer.getKind();
     writerAt = new HashMap<>();
     List<List<Integer>> written = new ArrayList<>();
     Set<Integer> writerPids = new HashSet<>();
@@ -59,11 +66,16 @@ public final class ProvenanceMapping {
       written.add(field.getPath());
       writerByPid.put(field.getPid(), field.getPath());
       index(field, writerNames, writerAt);
+      if (field.getKind() != null) {
+        writerKinds.put(field.getPath(), field.getKind());
+      }
     }
     writerPaths = Collections.unmodifiableList(written);
     readerToWriter = new HashMap<>();
     writerToReader = new HashMap<>();
     readerNames = new HashMap<>();
+    readerKinds = new HashMap<>();
+    readerRootKind = reader.getKind();
     readerAt = new HashMap<>();
     List<List<Integer>> paths = new ArrayList<>();
     Set<Integer> readerPids = new HashSet<>();
@@ -71,6 +83,9 @@ public final class ProvenanceMapping {
       requirePid(field, readerPids, readerId);
       paths.add(field.getPath());
       index(field, readerNames, readerAt);
+      if (field.getKind() != null) {
+        readerKinds.put(field.getPath(), field.getKind());
+      }
       List<Integer> writerPath = writerByPid.get(field.getPid());
       if (writerPath != null) {
         readerToWriter.put(field.getPath(), writerPath);
@@ -148,6 +163,31 @@ public final class ProvenanceMapping {
   }
 
   /**
+   * Fails unless every location on both sides, and both roots, carry a kind: a reader telling a
+   * field from a branch by it would otherwise guess.
+   *
+   * @throws SerializationException naming the first location without a kind
+   */
+  public void requireKinds() {
+    requireKinds(writerPaths, writerKinds, writerRootKind, writerId);
+    requireKinds(readerPaths, readerKinds, readerRootKind, readerId);
+  }
+
+  private static void requireKinds(List<List<Integer>> paths, Map<List<Integer>, String> kinds,
+      String rootKind, int schemaId) {
+    if (rootKind == null) {
+      throw new SerializationException(
+          "The provenance response gives no kind for the root of schema id " + schemaId);
+    }
+    for (List<Integer> path : paths) {
+      if (!kinds.containsKey(path)) {
+        throw new SerializationException("The provenance response gives no kind for location "
+            + path + " of schema id " + schemaId);
+      }
+    }
+  }
+
+  /**
    * The writer's schema id.
    */
   public int writerId() {
@@ -215,6 +255,116 @@ public final class ProvenanceMapping {
       }
     }
     return Collections.emptyList();
+  }
+
+  /**
+   * The kind of the reader location at {@code readerPath}, or null when the response carried none.
+   */
+  public String readerKindOf(List<Integer> readerPath) {
+    return readerKinds.get(readerPath);
+  }
+
+  /**
+   * The kind of the writer location at {@code writerPath}, or null when the response carried none.
+   */
+  public String writerKindOf(List<Integer> writerPath) {
+    return writerKinds.get(writerPath);
+  }
+
+  /**
+   * Whether the reader location at {@code readerPath} is a union branch rather than a field.
+   */
+  public boolean isReaderBranch(List<Integer> readerPath) {
+    return isBranch(readerPath, readerKinds, readerRootKind);
+  }
+
+  /**
+   * Whether the writer location at {@code writerPath} is a union branch rather than a field.
+   */
+  public boolean isWriterBranch(List<Integer> writerPath) {
+    return isBranch(writerPath, writerKinds, writerRootKind);
+  }
+
+  // A location is a branch when the type it sits in is a union: the nearest enclosing location's,
+  // or the root's, followed through the collection steps between.
+  private static boolean isBranch(List<Integer> path, Map<List<Integer>, String> kinds,
+      String rootKind) {
+    int k = path.size() - 1;
+    while (k > 0 && !kinds.containsKey(path.subList(0, k))) {
+      k--;
+    }
+    String enclosing = k > 0 ? kinds.get(path.subList(0, k)) : rootKind;
+    if (enclosing == null) {
+      return false;
+    }
+    Kind reached = Kind.parse(enclosing).through(path.subList(k, path.size() - 1));
+    return reached != null && reached.name.equals("UNION");
+  }
+
+  /**
+   * A kind as the endpoint spells it: {@code SCALAR}, {@code STRUCT}, {@code UNION}, or
+   * {@code ARRAY<k>}, {@code MULTISET<k>} or {@code MAP<k, k>} of what a collection holds.
+   */
+  private static final class Kind {
+    final String name;
+    final List<Kind> held;
+
+    private Kind(String name, List<Kind> held) {
+      this.name = name;
+      this.held = held;
+    }
+
+    static Kind parse(String spelled) {
+      int[] at = {0};
+      Kind kind = parse(spelled, at);
+      if (at[0] != spelled.length()) {
+        throw malformed(spelled);
+      }
+      return kind;
+    }
+
+    private static Kind parse(String spelled, int[] at) {
+      int start = at[0];
+      while (at[0] < spelled.length() && Character.isLetter(spelled.charAt(at[0]))) {
+        at[0]++;
+      }
+      String name = spelled.substring(start, at[0]);
+      if (name.isEmpty()) {
+        throw malformed(spelled);
+      }
+      List<Kind> held = new ArrayList<>();
+      if (at[0] < spelled.length() && spelled.charAt(at[0]) == '<') {
+        do {
+          at[0]++;
+          while (at[0] < spelled.length() && spelled.charAt(at[0]) == ' ') {
+            at[0]++;
+          }
+          held.add(parse(spelled, at));
+        } while (at[0] < spelled.length() && spelled.charAt(at[0]) == ',');
+        if (at[0] >= spelled.length() || spelled.charAt(at[0]) != '>') {
+          throw malformed(spelled);
+        }
+        at[0]++;
+      }
+      return new Kind(name, held);
+    }
+
+    private static SerializationException malformed(String spelled) {
+      return new SerializationException("The provenance response gives a malformed kind: "
+          + spelled);
+    }
+
+    // What this kind holds at the end of collection steps: an element 0, a map's key 0, value 1.
+    Kind through(List<Integer> steps) {
+      Kind kind = this;
+      for (int step : steps) {
+        if (step < 0 || step >= kind.held.size()) {
+          return null;
+        }
+        kind = kind.held.get(step);
+      }
+      return kind;
+    }
   }
 
   /**

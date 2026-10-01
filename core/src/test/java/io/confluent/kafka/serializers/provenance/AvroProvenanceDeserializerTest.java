@@ -163,7 +163,7 @@ class AvroProvenanceDeserializerTest {
 
   @Test
   void aValueWidenedIntoAUnionIsANewColumn() throws Exception {
-    // A leaf becoming a union changes kind, a drop and an add: Avro alone reads the value
+    // A scalar becoming a union changes kind, a drop and an add: Avro alone reads the value
     // into the int branch, provenance does not, and with no default the record fails.
     assertNewColumn(field("int"), field("[\"int\",\"string\"]"), 7, null);
     assertNewColumn(field("int"), defaulted("[\"int\",\"string\"]", "0"), 7, 0);
@@ -362,6 +362,29 @@ class AvroProvenanceDeserializerTest {
         .deserializeWithSchema(TOPIC, new RecordHeaders(), out.toByteArray(), writer -> reader)
         .getValue();
     assertEquals(7, read.get("id"));
+  }
+
+  @Test
+  void aFieldWithNoValueFailsOnlyTheRecordsReachingIt() throws Exception {
+    // A gains b, with no default, under a nullable union: a record whose u is null never reads A;
+    // one holding an A fails, as Avro fails it.
+    String a1 = "{\"type\":\"record\",\"name\":\"A\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"}]}";
+    String a2 = "{\"type\":\"record\",\"name\":\"A\",\"fields\":[{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"b\",\"type\":\"int\"}]}";
+    Schema v1 = record(idField(), "{\"name\":\"u\",\"type\":[\"null\"," + a1 + "]}");
+    Schema v2 = record(idField(), "{\"name\":\"u\",\"type\":[\"null\"," + a2 + "]}");
+    byte[] none = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("u", null));
+    Schema inner = v1.getField("u").schema().getTypes().get(1);
+    byte[] some = write(v1, new GenericRecordBuilder(v1).set("id", 8)
+        .set("u", new GenericRecordBuilder(inner).set("a", 5).build()));
+    client.register(SUBJECT, new AvroSchema(v2));
+
+    assertEquals(7, read(v2, none, "v1").get("id"));
+    Exception e = assertThrows(Exception.class, () -> read(v2, some, "v1"));
+    StringWriter trace = new StringWriter();
+    e.printStackTrace(new PrintWriter(trace));
+    assertTrue(trace.toString().contains("missing required field b"), trace.toString());
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

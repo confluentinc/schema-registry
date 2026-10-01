@@ -252,6 +252,17 @@ class JsonToLogicalTypeConverterTest {
   }
 
   @Test
+  void aNullDefinitionConvertsUnderAModernDraft() {
+    // 2020-12 converts every $defs entry up front: a null one, used or not, has no type to give.
+    String body = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"o\":{\"oneOf\":[%s,{\"type\":\"string\"}]}}%s}";
+    String inline = String.format(body, "{\"type\":\"null\"}", "");
+    String ref = String.format(body, "{\"$ref\":\"#/$defs/N\"}",
+        ",\"$defs\":{\"N\":{\"type\":\"null\"}}");
+    assertEquals(rootOf(inline).toDdl(), rootOf(ref).toDdl());
+  }
+
+  @Test
   void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
     String[][] cases = {
         {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},

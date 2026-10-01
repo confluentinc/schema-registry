@@ -59,10 +59,11 @@ public final class SchemaProvenanceEncoder {
         fields.add(new ProvenanceField(
             member.getPath(),
             member.getNames(),
+            member.getKind(),
             member.getId()));
       }
-      encoded.add(new ProvenanceVersion(
-          versions == null ? null : versions.get(i), schemaIds.get(i), fields));
+      encoded.add(new ProvenanceVersion(versions == null ? null : versions.get(i),
+          schemaIds.get(i), reported.get(i).getKind(), fields));
     }
     return new SchemaProvenance(subject, encoded);
   }

@@ -92,6 +92,50 @@ class ProvenanceInlinedPathTest {
   }
 
   @Test
+  void kindsSpellEveryLocationAndTheRoot() {
+    ProvenanceReport.Version version = report(everyStep()).getVersions().get(0);
+    assertThat(version.getKind()).isEqualTo("STRUCT");
+    assertThat(version.getMembers()).extracting(
+        ProvenanceReport.Member::getPath, ProvenanceReport.Member::getKind).containsExactly(
+        tuple(path(0), "SCALAR"),
+        tuple(path(1), "STRUCT"),                  // a reference, resolved
+        tuple(path(1, 0), "SCALAR"),
+        tuple(path(2), "ARRAY<STRUCT>"),
+        tuple(path(2, 0, 0), "SCALAR"),
+        tuple(path(3), "MAP<SCALAR, STRUCT>"),
+        tuple(path(3, 1, 0), "SCALAR"),
+        tuple(path(4), "UNION"),
+        tuple(path(4, 0), "SCALAR"),
+        tuple(path(4, 1), "SCALAR"));
+    assertThat(report(nested()).getVersions().get(0).getKind()).isEqualTo("STRUCT");
+  }
+
+  @Test
+  void kindsSpellNestedCollectionsAndARootUnion() {
+    // What tells a branch from a field where the step above is no location: a union under an
+    // array, and a union at the root.
+    Schema tags = Schema.createUnion(Arrays.asList(
+        new UnionBranch("n", Schema.create(Schema.Type.INT)),
+        new UnionBranch("s", struct(field("i")))));
+    Schema deep = Schema.createArray(Schema.createMap(Schema.createString(), struct(field("x"))));
+    ProvenanceReport.Version version = report(lt(Schema.createUnion(Arrays.asList(
+        new UnionBranch("R", struct(arrayOf("tags", tags), mapOf("deep", deep))),
+        new UnionBranch("n", Schema.create(Schema.Type.INT)))))).getVersions().get(0);
+
+    assertThat(version.getKind()).isEqualTo("UNION");
+    assertThat(version.getMembers()).extracting(
+        ProvenanceReport.Member::getPath, ProvenanceReport.Member::getKind).containsExactly(
+        tuple(path(0), "STRUCT"),
+        tuple(path(0, 0), "ARRAY<UNION>"),
+        tuple(path(0, 0, 0, 0), "SCALAR"),
+        tuple(path(0, 0, 0, 1), "STRUCT"),
+        tuple(path(0, 0, 0, 1, 0), "SCALAR"),
+        tuple(path(0, 1), "MAP<SCALAR, ARRAY<MAP<SCALAR, STRUCT>>>"),
+        tuple(path(0, 1, 1, 0, 1, 0), "SCALAR"),
+        tuple(path(1), "SCALAR"));
+  }
+
+  @Test
   void anEdgeWithNoRecordedStepsLeavesItsNamesUnknown() {
     assertThat(report(lt(struct(new Field("o", struct(field("a")), 0)))).getVersions().get(0)
         .getMembers()).extracting(ProvenanceReport.Member::getNames).containsOnlyNulls();

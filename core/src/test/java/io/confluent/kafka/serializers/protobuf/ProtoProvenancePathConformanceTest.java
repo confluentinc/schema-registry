@@ -120,15 +120,15 @@ class ProtoProvenancePathConformanceTest {
     ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
         reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
 
-    // Nothing under a moving field is read; a multi-message writer's record is of a message the
-    // reader declares or fails, so there nothing moves at all.
+    // Nothing under a moving field is read, and a record never parses another top-level message:
+    // only the record's own outermost fields move, in either mode.
     Descriptor root = reader.toDescriptor();
     Map<String, Integer> before = numbers(root);
     Map<String, Boolean> moved = new TreeMap<>();
     Map<String, Boolean> expected = new TreeMap<>();
     numbers(renumbered.toDescriptor()).forEach((name, number) -> {
       moved.put(name, !number.equals(before.get(name)));
-      expected.put(name, !multi && root.findFieldByName(simple(name)) != null
+      expected.put(name, root.findFieldByName(simple(name)) != null
           && name.equals(root.getFullName() + "." + simple(name)));
     });
     assertEquals(expected, moved);

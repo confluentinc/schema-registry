@@ -64,10 +64,12 @@ public final class ProvenanceReport {
   public static final class Version {
 
     private final int index;
+    private final String kind;
     private final List<Member> members;
 
-    Version(int index, List<Member> members) {
+    Version(int index, String kind, List<Member> members) {
       this.index = index;
+      this.kind = kind;
       this.members = Collections.unmodifiableList(members);
     }
 
@@ -76,6 +78,13 @@ public final class ProvenanceReport {
      */
     public int getIndex() {
       return index;
+    }
+
+    /**
+     * The root's kind, spelled as {@link Member#getKind()} is; null for a version with no root.
+     */
+    public String getKind() {
+      return kind;
     }
 
     /**
@@ -99,11 +108,13 @@ public final class ProvenanceReport {
 
     private final List<Integer> path;
     private final List<String> names;
+    private final String kind;
     private final int id;
 
-    Member(List<Integer> path, List<String> names, int id) {
+    Member(List<Integer> path, List<String> names, String kind, int id) {
       this.path = path;
       this.names = names;
+      this.kind = kind;
       this.id = id;
     }
 
@@ -121,6 +132,15 @@ public final class ProvenanceReport {
      */
     public List<String> getNames() {
       return names;
+    }
+
+    /**
+     * What the member's type is, references resolved: {@code SCALAR}, {@code STRUCT},
+     * {@code UNION}, or {@code ARRAY<k>}, {@code MULTISET<k>} or {@code MAP<k, k>} of the kinds
+     * they hold. A member whose kind changes is new, with everything under it.
+     */
+    public String getKind() {
+      return kind;
     }
 
     /**

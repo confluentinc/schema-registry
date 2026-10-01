@@ -27,6 +27,8 @@ import java.util.Objects;
 /**
  * One field of one version: where it sits, what it is called, and which provenance id it carries.
  * A field is any addressable position in the inlined schema: a struct field or a union branch.
+ * Its {@code kind} tells which: a location directly under a {@code STRUCT} is a field, and one
+ * directly under a {@code UNION} a branch, following collection steps through the kind they pass.
  *
  * <p>The {@code pid} identifies the field <em>at a location</em> in the fully inlined schema. A
  * named type used by two fields gives each of its fields two ids, one per use site, so a consumer
@@ -40,14 +42,21 @@ public class ProvenanceField {
 
   private List<Integer> path;
   private List<String> names;
+  private String kind;
   private Integer pid;
+
+  public ProvenanceField(List<Integer> path, List<String> names, Integer pid) {
+    this(path, names, null, pid);
+  }
 
   @JsonCreator
   public ProvenanceField(@JsonProperty("path") List<Integer> path,
                           @JsonProperty("names") List<String> names,
+                          @JsonProperty("kind") String kind,
                           @JsonProperty("pid") Integer pid) {
     this.path = path;
     this.names = names;
+    this.kind = kind;
     this.pid = pid;
   }
 
@@ -79,6 +88,21 @@ public class ProvenanceField {
     this.names = names;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "What a location's type is, references "
+      + "resolved: SCALAR (a type with no locations under it: a primitive, an enum, a fixed or "
+      + "a variant), STRUCT, UNION, or ARRAY, MULTISET or MAP of the kinds they hold. A location "
+      + "whose kind changes takes a new pid, as does everything under it",
+      example = "MAP<SCALAR, STRUCT>")
+  @JsonProperty("kind")
+  public String getKind() {
+    return kind;
+  }
+
+  @JsonProperty("kind")
+  public void setKind(String kind) {
+    this.kind = kind;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = "The provenance id: unique per "
       + "location, stable across versions while the field keeps its identity", example = "3")
   @JsonProperty("pid")
@@ -102,16 +126,17 @@ public class ProvenanceField {
     ProvenanceField that = (ProvenanceField) o;
     return Objects.equals(path, that.path)
         && Objects.equals(names, that.names)
+        && Objects.equals(kind, that.kind)
         && Objects.equals(pid, that.pid);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(path, names, pid);
+    return Objects.hash(path, names, kind, pid);
   }
 
   @Override
   public String toString() {
-    return "{path=" + path + ",names=" + names + ",pid=" + pid + "}";
+    return "{path=" + path + ",names=" + names + ",kind=" + kind + ",pid=" + pid + "}";
   }
 }

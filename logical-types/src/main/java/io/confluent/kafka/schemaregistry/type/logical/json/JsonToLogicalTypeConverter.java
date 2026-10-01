@@ -375,6 +375,10 @@ public class JsonToLogicalTypeConverter {
           continue;
         }
       }
+      if (resolveReference(defSchema) instanceof NullSchema) {
+        // A null definition has no type of its own: a union reads it as its null member.
+        continue;
+      }
       Schema converted = convertWithCycleDetection(
           defSchema, false, ctx, Collections.emptyList());
       ctx.putNamedType(entry.getKey(), converted);
