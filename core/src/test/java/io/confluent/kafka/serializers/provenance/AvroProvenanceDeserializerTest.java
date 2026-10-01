@@ -487,6 +487,28 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aKeyIsReadByProvenanceUnderItsKeySubject() throws Exception {
+    // The key subject's history: x, re-added in v3, is new there.
+    String keySubject = TOPIC + "-key";
+    Schema v1 = record(idField(), string("x"));
+    client.register(keySubject, new AvroSchema(v1));
+    KafkaAvroSerializer keys = new KafkaAvroSerializer(client);
+    keys.configure(config(null), true);
+    byte[] bytes = keys.serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("x", "old").build());
+    client.register(keySubject, new AvroSchema(record(idField())));
+    Schema v3 = record(idField(), "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\"}");
+    client.register(keySubject, new AvroSchema(v3));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client);
+    deserializer.configure(config("v1"), true);
+
+    GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, v3).getValue();
+    assertEquals(7, read.get("id"));
+    assertEquals("DEF", read.get("x").toString());
+  }
+
+  @Test
   void anAuthFailureReachesTheConsumerAsASchemaFetchsWould() throws Exception {
     // Not a record to skip: the deserializer leaves the authentication or authorization failure.
     for (int status : new int[] {401, 403}) {

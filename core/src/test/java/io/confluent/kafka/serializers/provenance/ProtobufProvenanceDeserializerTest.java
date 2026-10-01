@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
@@ -803,6 +804,30 @@ class ProtobufProvenanceDeserializerTest {
         .getValue();
     assertEquals(7, get(read, "id"));
     assertEquals("old", get(read, "memo"));
+  }
+
+  @Test
+  void aRecordUnderTopicRecordNameStrategyIsReadByItsOwnMessagesProvenance() throws Exception {
+    // The subject is the topic and the record's message; B, the file's second, keeps its own.
+    String subject = TOPIC + "-p.B";
+    String a = "message A {\n  int32 a = 1;\n}\n";
+    ProtobufSchema v1 = file(a + "message B {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    int id = client.register(subject, v1);
+    client.register(subject, file(a + "message B {\n  int32 id = 1;\n}\n"));
+    ProtobufSchema reader = file(a + "message B {\n  int32 id = 1;\n  string memo = 2;\n}\n");
+    client.register(subject, reader);
+    Descriptor b = v1.toDescriptor("p.B");
+    byte[] bytes = framed(id, v1, "p.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("id"), 7).setField(b.findFieldByName("note"), "old").build());
+
+    Map<String, Object> config = config("v1");
+    config.put("value.subject.name.strategy", TopicRecordNameStrategy.class.getName());
+    DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
+        client, config).deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, w -> reader)
+        .getValue();
+    assertEquals("p.B", read.getDescriptorForType().getFullName());
+    assertEquals(7, get(read, "id"));
+    assertEquals("", get(read, "memo"));
   }
 
   // A record of the named message of a file registered under the given id, as the wire frames it.
