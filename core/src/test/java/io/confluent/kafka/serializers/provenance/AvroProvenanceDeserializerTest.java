@@ -470,6 +470,23 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aLatestWithMetadataReaderOfAnOlderVersionIsThatVersion() throws Exception {
+    // The reader is v1, carrying its version: found by its content, as the registry finds it, it
+    // is v1, where x is another entity than v3's.
+    String x = "{\"name\":\"x\",\"type\":\"string\",\"default\":\"%s\"}";
+    client.register(SUBJECT, new AvroSchema(record(idField(), String.format(x, "A"))).copy(
+        new Metadata(null, Collections.singletonMap("tag", "m1"), null), null));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    Schema v3 = record(idField(), String.format(x, "B"));
+    byte[] bytes = write(v3, new GenericRecordBuilder(v3).set("id", 7).set("x", "new"));
+    Map<String, Object> config = config("v1");
+    config.put("use.latest.with.metadata", "tag=m1");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+
+    assertEquals("A", ((GenericRecord) deserializer.deserialize(TOPIC, bytes)).get("x").toString());
+  }
+
+  @Test
   void anAuthFailureReachesTheConsumerAsASchemaFetchsWould() throws Exception {
     // Not a record to skip: the deserializer leaves the authentication or authorization failure.
     for (int status : new int[] {401, 403}) {

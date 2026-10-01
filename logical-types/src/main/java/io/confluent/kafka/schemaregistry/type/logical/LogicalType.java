@@ -647,7 +647,7 @@ public class LogicalType {
    * wrapper union's branches by the numbers they record. A JSON {@code $ref} and the same body
    * inline are equivalent, as is a def that only references another. Unlike {@link #equals}, docs,
    * tags, rules, defaults and every other param are ignored, as are the root's own name and
-   * namespace: they document the data, and do not change it.
+   * namespace, except a Protobuf root message's: they document the data, and do not change it.
    */
   public boolean equivalent(SchemaType schemaType, LogicalType other) {
     requireNonNull(schemaType, "schemaType");

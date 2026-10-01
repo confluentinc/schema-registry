@@ -17,6 +17,8 @@
 package io.confluent.kafka.serializers.json;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -87,6 +89,24 @@ public class JsonValidationShapeTest {
 
     assertNotNull(shape(schema));
     assertEquals(shape(schema), shape(schema));
+  }
+
+  @Test
+  public void aDifferenceInsideASharedDefinitionIsNotAlike() throws Exception {
+    // D is used three times; only a leaf inside it differs, then only its fields' order.
+    String schema = "{\"properties\": {\"u\": {\"oneOf\": [{\"$ref\": \"#/definitions/D\"}, "
+        + "{\"properties\": {\"a\": {\"$ref\": \"#/definitions/D\"}, "
+        + "\"b\": {\"$ref\": \"#/definitions/D\"}}}]}}, \"definitions\": {\"D\": %s}}";
+    JsonNode string = shape(String.format(schema,
+        "{\"properties\": {\"p\": {\"type\": \"string\"}, \"q\": {\"type\": \"integer\"}}}"));
+    JsonNode number = shape(String.format(schema,
+        "{\"properties\": {\"p\": {\"type\": \"number\"}, \"q\": {\"type\": \"integer\"}}}"));
+    JsonNode reordered = shape(String.format(schema,
+        "{\"properties\": {\"q\": {\"type\": \"integer\"}, \"p\": {\"type\": \"string\"}}}"));
+
+    assertFalse(JsonValidationShape.alike(string, number));
+    assertFalse(JsonValidationShape.alike(number, string));
+    assertTrue(JsonValidationShape.alike(string, reordered));
   }
 
   private static JsonNode shape(String schema) throws Exception {

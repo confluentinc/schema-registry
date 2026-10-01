@@ -130,6 +130,13 @@ class LogicalTypeEquivalenceTest {
   }
 
   @Test
+  void aProtobufRootMessageOfAnotherNameIsNotEquivalent() {
+    // Single-message provenance takes another message at the root for another entity.
+    assertThat(lt(file("message A {\n  int32 id = 1;\n}\n")).equivalent(PROTOBUF,
+        lt(file("message B {\n  int32 id = 1;\n}\n")))).isFalse();
+  }
+
+  @Test
   void protobufEnumConstantsArePairedByNameAndNumberInAnyOrder() {
     String e = "enum E {\n  %s\n}\nmessage Row {\n  E e = 1;\n}\n";
     LogicalType plain = lt(file(String.format(e, "A = 0;\n  B = 1;\n  C = 2;")));

@@ -419,9 +419,9 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aNestedMessageWrittenAsTheRecordIsRenumbered() throws Exception {
-    // A nested record type has no location of its own under the file's first message; its
-    // fields are found through the top-level messages.
+  void aNestedMessageWrittenAsTheRecordWithASingleMessageReaderIsReadAsWritten() throws Exception {
+    // The reader's file has one top-level message, so provenance is single-message, rooted at
+    // it: a nested record type has no location there, and reads as without provenance.
     String row = "message Row { message Inner { int32 x = 1; %s } Inner i = 1; }";
     ProtobufSchema v1 = file(String.format(row, "string y = 2;"));
     ProtobufSchema v2 = file(String.format(row, ""));
@@ -436,7 +436,7 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals("old", get(read(v3, bytes, null), "z"));
     DynamicMessage read = read(v3, bytes, "v1");
     assertEquals(4, get(read, "x"));
-    assertEquals("", get(read, "z"));
+    assertEquals("old", get(read, "z"));
   }
 
   @Test
@@ -711,6 +711,48 @@ class ProtobufProvenanceDeserializerTest {
           .append("}\n");
     }
     return new ProtobufSchema(file.append("message M16 {\n  int32 id = 1;\n}\n").toString());
+  }
+
+  @Test
+  void aMessageStandingFirstOnlyInAnInteriorVersionIsNotTakenForTheRecords() throws Exception {
+    // v2 puts B before A: in single-message provenance its root is B, another message, so A's
+    // fields restart there rather than chain note through B's y into memo.
+    String head = "syntax = \"proto3\";\npackage p;\n";
+    byte[] bytes = write(new ProtobufSchema(head + "message A {\n  int32 id = 1;\n"
+        + "  string note = 2;\n}\n"), b -> b.setField(field(b, "id"), 7)
+        .setField(field(b, "note"), "old"));
+    client.register(SUBJECT, new ProtobufSchema(head + "message B {\n  int32 x = 1;\n"
+        + "  string y = 2;\n}\nmessage A {\n  int32 id = 1;\n}\n"));
+    ProtobufSchema v3 = new ProtobufSchema(head + "message A {\n  int32 id = 1;\n"
+        + "  string memo = 2;\n}\n");
+    client.register(SUBJECT, v3);
+
+    assertEquals("", get(read(v3, bytes, "v1"), "memo"));
+  }
+
+  @Test
+  void aRecordOfAnotherThanItsFilesFirstMessageReadBySingleMessageIsReadAsWritten()
+      throws Exception {
+    // The reader's file has one message, so provenance is single-message, rooted at each file's
+    // first message: B, written second, has no locations there, and reads as without provenance.
+    String head = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 a = 1;\n}\n";
+    ProtobufSchema v1 = new ProtobufSchema(head + "message B {\n  int32 id = 1;\n"
+        + "  string note = 2;\n}\n");
+    Descriptor b = v1.toDescriptor("p.B");
+    byte[] body = DynamicMessage.newBuilder(b).setField(b.findFieldByName("id"), 7)
+        .setField(b.findFieldByName("note"), "old").build().toByteArray();
+    int id = client.register(SUBJECT, v1);
+    byte[] indexes = v1.toMessageIndexes("p.B").toByteArray();
+    byte[] bytes = ByteBuffer.allocate(5 + indexes.length + body.length).put((byte) 0).putInt(id)
+        .put(indexes).put(body).array();
+    client.register(SUBJECT, new ProtobufSchema(head + "message B {\n  int32 id = 1;\n}\n"));
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message B {\n  int32 id = 1;\n  string memo = 2;\n}\n");
+    client.register(SUBJECT, reader);
+
+    DynamicMessage read = read(reader, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    assertEquals("old", get(read, "memo"));
   }
 
   // A v1 record with note "old", then v2 dropping note and v3 adding memo at its number.

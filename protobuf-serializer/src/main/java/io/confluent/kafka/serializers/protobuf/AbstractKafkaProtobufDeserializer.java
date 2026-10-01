@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -403,18 +404,25 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return null;
     }
-    // A nested message written as the record has no location of its own under the file's first
-    // message: its fields are found through the top-level messages, as with several of them.
-    boolean multi = writer.toDescriptor().getFile().getMessageTypes().size() > 1
-        || reader.toDescriptor().getFile().getMessageTypes().size() > 1
-        || writer.toDescriptor().getContainingType() != null;
+    // As Flink chooses its row: every top-level message when the reader's file has several, else
+    // its one message.
+    boolean multi = reader.toDescriptor().getFile().getMessageTypes().size() > 1;
     if (multi && reader.toDescriptor(name) == null) {
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
+    // Single-message provenance roots each version at its file's first message: a record written
+    // as another has no locations there, so it is read without provenance.
+    Descriptor written = writer.toDescriptor();
+    boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
     return provenanceProjector().project(subject, writerId, writer, reader, multi,
-        mapping -> ProtoProvenanceRenumberer.renumber(reader, writer, mapping, multi))
-        .orElse(null);
+        mapping -> {
+          if (!placed) {
+            throw new ProvenanceUnavailableException("The record was written as message " + name
+                + ", not its file's first, which single-message provenance has no locations for");
+          }
+          return ProtoProvenanceRenumberer.renumber(reader, writer, mapping, multi);
+        }).orElse(null);
   }
 
   private volatile ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;

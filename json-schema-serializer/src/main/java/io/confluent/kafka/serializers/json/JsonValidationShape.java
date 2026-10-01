@@ -32,8 +32,9 @@ import java.util.Set;
 
 /**
  * What decides whether a value validates against the subschemas a property's names spell, as a
- * tree to compare with another schema's: local {@code $ref}s inlined, annotations left out. Two
- * equal shapes validate every value alike, so read it as the same union branches.
+ * tree to compare with another schema's: each local {@code $ref}'s definition shaped once and
+ * shared, annotations left out. Two shapes {@link #alike} validate every value alike, so read it
+ * as the same union branches.
  */
 final class JsonValidationShape {
 

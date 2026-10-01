@@ -637,6 +637,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
+    // As the registry finds a version: by content, whatever version the schema carries.
+    if (schema.version() != null) {
+      schema = schema.copy((Integer) null);
+    }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     if (versions != null && versions.containsKey(schema)) {
       return versions.get(schema);

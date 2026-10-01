@@ -75,6 +75,22 @@ public class ProtoToLogicalTypeConverter {
   public static final String MULTI_MESSAGE_ROOT_PARAM = "confluent:multi-message-root";
 
   /**
+   * The full name of the message a logical type of this converter is rooted at; null for the
+   * multi-message root, whose messages are named by its fields.
+   */
+  public static String rootMessage(LogicalType logicalType) {
+    Schema root = logicalType.getRootSchema();
+    if (root == null || Boolean.TRUE.equals(root.getParams().get(MULTI_MESSAGE_ROOT_PARAM))) {
+      return null;
+    }
+    if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
+      return root.getQualifiedName();
+    }
+    String namespace = logicalType.getNamespace();
+    return namespace != null ? namespace + "." + logicalType.getName() : logicalType.getName();
+  }
+
+  /**
    * The field numbers a struct implies by recording none: this converter omits them
    * all-or-nothing, precisely when regular fields take 1..n in declaration order, the oneof
    * members continue it, and no regular field holds a wrapped union. Keyed by field and branch, by

@@ -757,15 +757,15 @@ class ProvenanceComputerTest {
   }
 
   @Test
-  void protobufRootRenameKeepsItsFields() {
+  void protobufRootRenameRestartsItsFields() {
     Pids pids = protobuf(
         lt(Schema.createNamedTypeRef("acme.User"), namedTypes("acme.User", struct(field("city")))),
         lt(Schema.createNamedTypeRef("acme.Person"),
             namedTypes("acme.Person", struct(field("city")))));
 
-    // The root is no location, so its name does not decide its fields, whether the converter
-    // keeps it a reference or unwraps it; a message renamed where it is used still restarts.
-    assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
+    // Another message at the root is another entity, as a message renamed where it is used is:
+    // single-message provenance cannot tell a rename from another message placed first.
+    assertThat(pids.at(1, 0)).isNotEqualTo(pids.at(0, 0));
   }
 
   @Test

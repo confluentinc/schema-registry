@@ -1209,4 +1209,14 @@ public class MockSchemaRegistryClientTest {
       assertNull(registered.version());
       assertEquals(1, mock.getVersion("s", registered));
     }
+
+    @Test
+    public void aSchemaCarryingAVersionIsFoundByItsContent() throws Exception {
+      // As the registry finds a version, whatever version the schema carries.
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      AvroSchema schema = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":"
+          + "[{\"name\":\"a\",\"type\":\"int\"}]}");
+      mock.register("s", schema);
+      assertEquals(1, mock.getVersion("s", schema.copy(3)));
+    }
 }

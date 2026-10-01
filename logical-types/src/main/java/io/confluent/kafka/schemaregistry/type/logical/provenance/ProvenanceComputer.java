@@ -71,7 +71,9 @@ import java.util.function.ToIntFunction;
  * and each use of a shared type has its own ids. Under JSON's rules a named type is
  * transparent, as if inlined. A recursive type has no finite set of uses, and is rejected. A root
  * that refers to a named type — as a converter keeps a root record or message naming types inside
- * it — is walked through, so the root's name never matters.
+ * it — is walked through. The root's name matters only for a Protobuf message: another message at
+ * the root, as one placed first in its file, is a different entity, and everything under it
+ * restarts.
  *
  * <p>The walk is the same for every format; only matching a peer group differs, by one matcher per
  * format. A match on evidence weaker than a name or number — an Avro short name or promotion
@@ -153,6 +155,7 @@ public final class ProvenanceComputer {
     List<ProvenanceReport.Version> reported = new ArrayList<>(versions.size());
     Node previous = null;
     SchemaType previousSchemaType = null;
+    String previousRootMessage = null;
     int nextId = 1;
     int locations = 0;
     for (int version = 0; version < versions.size(); version++) {
@@ -165,8 +168,14 @@ public final class ProvenanceComputer {
         throw new IllegalArgumentException("Null SchemaType at version " + version);
       }
 
+      // A Protobuf root is a named message: another message at the root, as one placed first in
+      // its file, is a different entity, so everything under it restarts.
+      String rootMessage = schemaType == SchemaType.PROTOBUF
+          ? ProtoToLogicalTypeConverter.rootMessage(logicalType) : null;
+      boolean continues = schemaType == previousSchemaType
+          && Objects.equals(rootMessage, previousRootMessage);
       Walk walk = new Walk(version, schemaType, logicalType);
-      final Node root = walk.walk(schemaType == previousSchemaType ? previous : null);
+      final Node root = walk.walk(continues ? previous : null);
       locations += walk.members.size();
       if (locations > MAX_REPORT_LOCATIONS) {
         throw new TooManyLocationsException(MAX_REPORT_LOCATIONS);
@@ -180,9 +189,11 @@ public final class ProvenanceComputer {
       reported.add(new ProvenanceReport.Version(version, members));
       previous = root;
       previousSchemaType = schemaType;
+      previousRootMessage = rootMessage;
     }
     return new ProvenanceReport(reported, nextId - 1);
   }
+
 
   // -----------------------------------------------------------------------------------------
   // Locations
@@ -356,7 +367,7 @@ public final class ProvenanceComputer {
       Where where = Where.root(schema);
       if (schema.getType() == Schema.Type.NAMED_TYPE_REF) {
         // The converter keeps a root record or message as a reference while types are nested in
-        // it or a peer uses it. It is still the root, so the root's name never matters.
+        // it or a peer uses it. It is still the root, walked through.
         String name = schema.getQualifiedName();
         Schema body = namedTypes.get(name);
         walkNamed(name, () -> processType(body, root, "", where.through(body),

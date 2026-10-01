@@ -303,6 +303,20 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void anotherProtobufMessageAtTheRootIsAnotherEntity() {
+    // Single-message provenance roots each version at its file's first message: B is not A.
+    String head = "syntax = \"proto3\";\npackage p;\n";
+    ProtobufSchema a = new ProtobufSchema(head + "message A {\n  int32 id = 1;\n}\n");
+    ProtobufSchema b = new ProtobufSchema(head + "message B {\n  int32 id = 1;\n}\n"
+        + "message A {\n  int32 id = 1;\n}\n");
+    List<ProvenanceVersion> v = compute(a, b, a);
+    assertThat(pid(v, 1, 0)).isNotEqualTo(pid(v, 0, 0));
+    assertThat(pid(v, 2, 0)).isNotEqualTo(pid(v, 1, 0));
+    List<ProvenanceVersion> same = compute(a, a);
+    assertThat(pid(same, 1, 0)).isEqualTo(pid(same, 0, 0));
+  }
+
+  @Test
   void aVersionWithTooManyLocationsHasNoProvenance() {
     // M_i uses M_i+1 twice, so each level doubles the locations: past the limit, no provenance.
     // The message names the version by its number.

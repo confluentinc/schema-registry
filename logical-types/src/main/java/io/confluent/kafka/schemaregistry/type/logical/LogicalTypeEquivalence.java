@@ -56,9 +56,13 @@ final class LogicalTypeEquivalence {
     this.theirs = theirs;
   }
 
-  // The root's own name and namespace (a JSON title, a Protobuf package) are never read by
-  // provenance; named types are still compared by qualified name.
+  // The root's own name and namespace (a JSON title, an Avro record's) are never read by
+  // provenance, but a Protobuf root message is: another message at the root is another entity.
   static boolean equivalent(SchemaType schemaType, LogicalType a, LogicalType b) {
+    if (schemaType == SchemaType.PROTOBUF && !Objects.equals(
+        ProtoToLogicalTypeConverter.rootMessage(a), ProtoToLogicalTypeConverter.rootMessage(b))) {
+      return false;
+    }
     return new LogicalTypeEquivalence(schemaType, a.getNamedTypes(), b.getNamedTypes())
         .schemas(a.getRootSchema(), b.getRootSchema());
   }
