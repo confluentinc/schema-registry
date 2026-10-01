@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -54,7 +55,8 @@ final class JsonValidationShape {
       "additionalItems", "unevaluatedItems", "unevaluatedProperties"));
   private static final Set<String> SCHEMA_ARRAYS = new HashSet<>(Arrays.asList(
       "allOf", "anyOf", "oneOf", "prefixItems", "items"));
-  // Inlining repeats a definition at each use; past this, the comparison is not worth it.
+  // The schema as written, each definition counted once; past this, the comparison is not worth
+  // it.
   private static final int MAX_NODES = 10_000;
 
   private static final class Unfollowed extends RuntimeException {
@@ -65,6 +67,9 @@ final class JsonValidationShape {
 
   private final JsonNode root;
   private final Set<String> inlining = new HashSet<>();
+  // Each definition's shape, made once and shared wherever it is used: the cap then counts the
+  // schema as written, not as inlined, which grows with every use of a shared definition.
+  private final Map<String, JsonNode> definitions = new HashMap<>();
   private int nodes;
 
   private JsonValidationShape(JsonNode root) {
@@ -147,10 +152,7 @@ final class JsonValidationShape {
         throw new Unfollowed();
       }
       if (key.equals("$ref")) {
-        String target = value.asText();
-        enter(target);
-        shaped.set(key, shape(resolve(target)));
-        inlining.remove(target);
+        shaped.set(key, definition(value.asText()));
       } else if (SCHEMA_MAPS.contains(key) && value.isObject()) {
         ObjectNode map = JsonNodeFactory.instance.objectNode();
         value.fields().forEachRemaining(e ->
@@ -167,6 +169,17 @@ final class JsonValidationShape {
       }
     }
     return shaped;
+  }
+
+  private JsonNode definition(String target) {
+    JsonNode known = definitions.get(target);
+    if (known == null) {
+      enter(target);
+      known = shape(resolve(target));
+      inlining.remove(target);
+      definitions.put(target, known);
+    }
+    return known;
   }
 
   // A reference into this document; one recursing into itself is not inlined.

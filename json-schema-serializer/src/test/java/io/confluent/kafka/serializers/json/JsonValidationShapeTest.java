@@ -69,6 +69,26 @@ public class JsonValidationShapeTest {
     assertNull(shape("{\"properties\": {\"v\": {}}}"));
   }
 
+  @Test
+  public void aDefinitionSharedByManyBranchesCountsOnce() throws Exception {
+    // Twenty branches use one Meta of 600 properties: inlined at each use it would pass the cap,
+    // shaped once it does not.
+    StringBuilder meta = new StringBuilder();
+    for (int i = 0; i < 600; i++) {
+      meta.append(i > 0 ? ", " : "").append("\"m").append(i).append("\": {\"type\": \"string\"}");
+    }
+    StringBuilder branches = new StringBuilder();
+    for (int i = 0; i < 20; i++) {
+      branches.append(i > 0 ? ", " : "").append("{\"properties\": {\"kind\": {\"enum\": [\"E")
+          .append(i).append("\"]}, \"meta\": {\"$ref\": \"#/definitions/Meta\"}}}");
+    }
+    String schema = "{\"properties\": {\"u\": {\"oneOf\": [" + branches + "]}}, "
+        + "\"definitions\": {\"Meta\": {\"properties\": {" + meta + "}}}}";
+
+    assertNotNull(shape(schema));
+    assertEquals(shape(schema), shape(schema));
+  }
+
   private static JsonNode shape(String schema) throws Exception {
     return JsonValidationShape.of(MAPPER.readTree(schema), U);
   }
