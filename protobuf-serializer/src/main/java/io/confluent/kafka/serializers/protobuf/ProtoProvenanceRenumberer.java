@@ -98,10 +98,23 @@ final class ProtoProvenanceRenumberer {
     }
     Set<List<Integer>> moving = new HashSet<>();
     boolean reached = false;
+    boolean nested = includeMultipleMessages && root.getContainingType() != null;
+    // Whether the record's message is reached only under restarted uses, and which of its fields
+    // continue a field of the writer's own message.
+    boolean reachedMoving = false;
+    Set<Integer> ofWriterRecord = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
+      if (includeMultipleMessages && !nested && !names.get(0).equals(root.getFullName())) {
+        // Another top-level message: the record never parses it, so its locations decide nothing.
+        continue;
+      }
       if (renumberer.underMovingField(root, path, moving, mapping, includeMultipleMessages)) {
         // Nothing under a field that moves is ever read, so nothing under it needs a number.
+        if (nested && !reachedMoving) {
+          FieldDescriptor at = renumberer.fieldAt(root, names, includeMultipleMessages);
+          reachedMoving = at != null && isOf(at, root);
+        }
         continue;
       }
       boolean move = mapping.writerPathOf(path) == null;
@@ -109,8 +122,15 @@ final class ProtoProvenanceRenumberer {
         moving.add(path);
       }
       FieldDescriptor field = renumberer.fieldAt(root, names, includeMultipleMessages);
-      if (field != null && field.getContainingType().getFullName().equals(root.getFullName())) {
+      if (field != null && isOf(field, root)) {
         reached = true;
+        if (nested && !move && writer != null) {
+          FieldDescriptor was =
+              writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path)));
+          if (was != null && isOf(was, root)) {
+            ofWriterRecord.add(field.getNumber());
+          }
+        }
       }
       if (isOneof(path, names, field, mapping)) {
         // A oneof: no step of its own, so no field to number; its members are visited as fields.
@@ -120,7 +140,22 @@ final class ProtoProvenanceRenumberer {
         renumberer.decide(field.getContainingType(), field, move);
       }
     }
-    boolean nested = includeMultipleMessages && root.getContainingType() != null;
+    if (nested && !reached && reachedMoving) {
+      // Every location reaching the record's message is under a restarted use: each of its
+      // fields is new there, so none takes the writer's value.
+      for (FieldDescriptor field : root.getFields()) {
+        renumberer.decide(root, field, true);
+      }
+      reached = true;
+    }
+    if (nested && reached && writer != null) {
+      // Read directly, the record's fields continue only fields of the writer's own message: one
+      // continuing a field of another message at every use takes no value here.
+      Map<Integer, Boolean> decided = renumberer.moves.get(root.getFullName());
+      if (decided != null) {
+        decided.replaceAll((number, move) -> move || !ofWriterRecord.contains(number));
+      }
+    }
     if (nested && !root.getFields().isEmpty() && !reached) {
       // Locations start at the file's top-level messages: a nested message reaches them only
       // through a field using it, and read directly it would escape provenance silently.
@@ -226,6 +261,33 @@ final class ProtoProvenanceRenumberer {
       }
     }));
     return moved;
+  }
+
+  // Whether field belongs to the message named as message is.
+  private static boolean isOf(FieldDescriptor field, Descriptor message) {
+    return field.getContainingType().getFullName().equals(message.getFullName());
+  }
+
+  // The writer's field names end at, from its file's top-level messages; null where none is.
+  private static FieldDescriptor writerFieldAt(ProtobufSchema writer, List<String> names) {
+    if (names == null || names.isEmpty()) {
+      return null;
+    }
+    Descriptor message = null;
+    for (Descriptor top : writer.toDescriptor().getFile().getMessageTypes()) {
+      if (top.getFullName().equals(names.get(0))) {
+        message = top;
+      }
+    }
+    FieldDescriptor field = null;
+    for (int i = 1; i < names.size() && message != null; i++) {
+      field = names.get(i) != null ? message.findFieldByName(names.get(i)) : null;
+      if (field == null) {
+        return null;
+      }
+      message = messageOf(field);
+    }
+    return field;
   }
 
   /**

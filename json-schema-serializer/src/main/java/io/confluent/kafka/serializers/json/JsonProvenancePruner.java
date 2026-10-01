@@ -346,8 +346,8 @@ final class JsonProvenancePruner {
 
   /**
    * The union branches a property's value is held in, each as the branch indexes of the unions on
-   * the way: a primitive, or an array, in its own union's, its items' or its map values'. An
-   * object's branch is the walk's to tell.
+   * the way: a primitive, or an array, in its own union's, its items' or its map values'; a map
+   * too. An object's other branches are the walk's to tell.
    */
   private static List<List<Integer>> heldIn(ObjectSchema object, String name, JsonNode value) {
     List<List<Integer>> held = new ArrayList<>();
@@ -358,10 +358,7 @@ final class JsonProvenancePruner {
   private static void heldIn(Schema schema, JsonNode value, List<Integer> branches,
       List<List<Integer>> held) {
     // A definition that only refers to itself, however indirectly, holds nothing.
-    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-    while (schema instanceof ReferenceSchema && seen.add(schema)) {
-      schema = ((ReferenceSchema) schema).getReferredSchema();
-    }
+    schema = referred(schema);
     if (value == null) {
       return;
     }
@@ -375,7 +372,8 @@ final class JsonProvenancePruner {
       List<Schema> options = new ArrayList<>();
       boolean nullable = false;
       for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
-        if (subschema instanceof NullSchema) {
+        // A null member behind a $ref is a null member all the same.
+        if (referred(subschema) instanceof NullSchema) {
           nullable = true;
         } else {
           options.add(subschema);
@@ -395,7 +393,7 @@ final class JsonProvenancePruner {
           fits = true;
           List<Integer> in = new ArrayList<>(branches);
           in.add(i);
-          if (!value.isObject()) {
+          if (!value.isObject() || isMap(options.get(i))) {
             held.add(in);
           }
           heldIn(options.get(i), value, in, held);
@@ -422,6 +420,22 @@ final class JsonProvenancePruner {
         }
       }
     }
+  }
+
+  // A map has no property of its own for the walk to prune: like an array, its branch holds it.
+  private static boolean isMap(Schema schema) {
+    Schema body = referred(schema);
+    return body instanceof ObjectSchema
+        && "map".equals(body.getUnprocessedProperties().get("connect.type"));
+  }
+
+  // The schema a chain of references ends at; one only referring to itself, however indirectly.
+  private static Schema referred(Schema schema) {
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    while (schema instanceof ReferenceSchema && seen.add(schema)) {
+      schema = ((ReferenceSchema) schema).getReferredSchema();
+    }
+    return schema;
   }
 
   // Whether a branch of the union reached by these choices continues one the value was written
@@ -726,7 +740,7 @@ final class JsonProvenancePruner {
     }
     List<Schema> branches = new ArrayList<>();
     for (Schema subschema : subschemas) {
-      if (!(subschema instanceof NullSchema)) {
+      if (!(referred(subschema) instanceof NullSchema)) {
         branches.add(subschema);
       }
     }

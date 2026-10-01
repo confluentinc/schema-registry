@@ -816,6 +816,55 @@ class JsonProvenanceDeserializerTest {
     assertEquals(1, read(v3, bytes, "v1").get("e").asInt());
   }
 
+  @Test
+  void aMapInAReAddedBranchIsPruned() throws Exception {
+    // A map has no property of its own to prune: its branch holds it, inline, behind a $ref,
+    // or as an array item.
+    String map = "{\"type\": \"object\", \"connect.type\": \"map\", "
+        + "\"additionalProperties\": {\"type\": \"string\"}}";
+    String defs = ", \"$defs\": {\"Map\": " + map + "}}";
+    String[][] shapes = {
+        {"{\"oneOf\": [{\"type\": \"integer\"}, %s]}", map, "}", "{\"k\": \"s\"}"},
+        {"{\"oneOf\": [{\"type\": \"integer\"}, %s]}", "{\"$ref\": \"#/$defs/Map\"}", defs,
+            "{\"k\": \"s\"}"},
+        {"{\"type\": \"array\", \"items\": {\"oneOf\": [{\"type\": \"integer\"}, %s]}}", map, "}",
+            "[{\"k\": \"s\"}]"}};
+    for (String[] shape : shapes) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      String head = "{\"type\": \"object\", \"properties\": {\"e\": ";
+      JsonSchema v1 = new JsonSchema(head + String.format(shape[0], shape[1]) + "}" + shape[2]);
+      JsonSchema v2 = new JsonSchema(
+          head + String.format(shape[0], "{\"type\": \"boolean\"}") + "}" + shape[2]);
+      // g only keeps v3 from being deduplicated into v1.
+      JsonSchema v3 = new JsonSchema(head + String.format(shape[0], shape[1])
+          + ", \"g\": {\"type\": \"string\"}}" + shape[2]);
+      byte[] bytes = write(v1, "{\"e\": " + shape[3] + "}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      assertTrue(read(v3, bytes, null).has("e"), shape[1]);
+      assertFalse(read(v3, bytes, "v1").has("e"), shape[1]);
+    }
+  }
+
+  @Test
+  void aNullMemberBehindARefIsANullMember() throws Exception {
+    // Moving the null member behind a $ref changes no union: o stays nullable, u keeps its two.
+    String ab = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}}}";
+    String body = "{\"type\": \"object\", \"properties\": {\"o\": {\"oneOf\": [%1$s, " + ab
+        + "]}, \"u\": {\"oneOf\": [%1$s, {\"type\": \"string\"}, {\"type\": \"integer\"}]}}%2$s}";
+    JsonSchema v1 = new JsonSchema(String.format(body, "{\"type\": \"null\"}", ""));
+    JsonSchema v2 = new JsonSchema(String.format(body, "{\"$ref\": \"#/$defs/N\"}",
+        ", \"$defs\": {\"N\": {\"type\": \"null\"}}"));
+    byte[] bytes = write(v1, "{\"o\": {\"a\": \"s\"}, \"u\": \"t\"}");
+    client.register(SUBJECT, v2);
+
+    JsonNode read = read(v2, bytes, "v1");
+    assertEquals("s", read.get("o").get("a").asText());
+    assertEquals("t", read.get("u").asText());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

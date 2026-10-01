@@ -765,7 +765,7 @@ public class JsonToLogicalTypeConverter {
     if (schema instanceof CombinedSchema
         && ((CombinedSchema) schema).getCriterion() != CombinedSchema.ALL_CRITERION) {
       List<org.everit.json.schema.Schema> nonNull = ((CombinedSchema) schema).getSubschemas()
-          .stream().filter(subschema -> !(subschema instanceof NullSchema))
+          .stream().filter(subschema -> !(resolveReference(subschema) instanceof NullSchema))
           .collect(Collectors.toList());
       return nonNull.size() == 1 ? singleValue(unwrap(nonNull.get(0))) : null;
     }
@@ -808,7 +808,8 @@ public class JsonToLogicalTypeConverter {
     List<org.everit.json.schema.Schema> nonNullSubschemas = new ArrayList<>();
     boolean hasNullMember = false;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (subSchema instanceof NullSchema) {
+      // A null member behind a $ref is a null member all the same.
+      if (resolveReference(subSchema) instanceof NullSchema) {
         hasNullMember = true;
       } else {
         nonNullSubschemas.add(subSchema);
@@ -827,7 +828,7 @@ public class JsonToLogicalTypeConverter {
     final List<UnionBranch> branches = new ArrayList<>();
 
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (subSchema instanceof NullSchema) {
+      if (resolveReference(subSchema) instanceof NullSchema) {
         isNullableUnion = true;
       } else {
         Map<String, Object> hint = unionMeta != null && index < unionMeta.size()

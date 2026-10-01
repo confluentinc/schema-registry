@@ -1177,6 +1177,64 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(7, inner.getField(inner.getDescriptorForType().findFieldByName("q")));
   }
 
+  @Test
+  void aNestedRecordWhoseUsesAllRestartedReadsDefaults() throws Exception {
+    // In's only use, y, is dropped and re-added as y2: nothing of In continues, so i is new.
+    String x = "message X { int32 z = 1; }";
+    ProtobufSchema v1 = file("message M { In y = 1; message In { int32 i = 1; } }", x);
+    ProtobufSchema v2 = file("message M { message In { int32 i = 1; } }", x);
+    ProtobufSchema v3 = file("message M { In y2 = 1; message In { int32 i = 1; } }", x);
+    Descriptor in = v1.toDescriptor("p.M.In");
+    byte[] bytes = write(v1,
+        DynamicMessage.newBuilder(in).setField(in.findFieldByName("i"), 5).build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals(5, get(read(v3, bytes, null), "i"));
+    assertEquals(0, get(read(v3, bytes, "v1"), "i"));
+  }
+
+  @Test
+  void aFieldRetypedToAnotherTopLevelMessageTakesNoValue() throws Exception {
+    // x moves from S to T, which another top-level message declares: t1 is new, and the read must
+    // not fall back to parsing the writer's s1 into it.
+    String m = "message M { int32 a = 1; %s x = 2; }";
+    String s = "message S { int32 s1 = 1; string s2 = 2; }";
+    String t = "message T { int32 t1 = 1; string t2 = 2; }";
+    String x = "message X { int32 z = 1; }";
+    ProtobufSchema v1 = file(String.format(m, "S"), s, t, x);
+    ProtobufSchema v2 = file(String.format(m, "T"), s, t, x);
+    Descriptor sd = v1.toDescriptor("p.S");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "a"), 7).setField(field(b, "x"),
+        DynamicMessage.newBuilder(sd).setField(sd.findFieldByName("s1"), 5).build()));
+    client.register(SUBJECT, v2);
+
+    DynamicMessage off = (DynamicMessage) get(read(v2, bytes, null), "x");
+    assertEquals(5, off.getField(off.getDescriptorForType().findFieldByName("t1")));
+    DynamicMessage on = read(v2, bytes, "v1");
+    assertEquals(7, get(on, "a"));
+    DynamicMessage onX = (DynamicMessage) get(on, "x");
+    assertEquals(0, onX.getField(onX.getDescriptorForType().findFieldByName("t1")));
+  }
+
+  @Test
+  void aNestedRecordTakesNoValueOfASwappedNestedType() throws Exception {
+    // In2 is renamed Inner as the old Inner goes: x's q continues, but the writer's Inner.p, at
+    // q's number, is no field the reader's Inner continues.
+    String x = "message X { int32 z = 1; }";
+    ProtobufSchema v1 = file("message M { int32 a = 1; In2 x = 2; "
+        + "message Inner { int32 p = 1; } message In2 { int32 q = 1; } }", x);
+    ProtobufSchema v2 =
+        file("message M { int32 a = 1; Inner x = 2; message Inner { int32 q = 1; } }", x);
+    Descriptor inner = v1.toDescriptor("p.M.Inner");
+    byte[] bytes = write(v1,
+        DynamicMessage.newBuilder(inner).setField(inner.findFieldByName("p"), 5).build());
+    client.register(SUBJECT, v2);
+
+    assertEquals(5, get(read(v2, bytes, null), "q"));
+    assertEquals(0, get(read(v2, bytes, "v1"), "q"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

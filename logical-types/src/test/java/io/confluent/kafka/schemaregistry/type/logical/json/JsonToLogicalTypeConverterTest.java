@@ -238,6 +238,20 @@ class JsonToLogicalTypeConverterTest {
   }
 
   @Test
+  void aNullMemberBehindARefConvertsAsAnInlineOneInBothEditions() {
+    String body = "{\"type\":\"object\",\"properties\":{"
+        + "\"o\":{\"oneOf\":[%1$s,"
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}]},"
+        + "\"u\":{\"oneOf\":[%1$s,{\"type\":\"string\"},{\"type\":\"integer\"}]},"
+        + "\"k\":{\"oneOf\":[%1$s,{\"const\":\"x\"}]}}%2$s}";
+    String inline = String.format(body, "{\"type\":\"null\"}", "");
+    String ref = String.format(body, "{\"$ref\":\"#/$defs/N\"}",
+        ",\"$defs\":{\"N\":{\"type\":\"null\"}}");
+    assertEquals(rootOf(inline).toDdl(), rootOf(ref).toDdl());
+    assertEquals(v1RootOf(inline).toDdl(), v1RootOf(ref).toDdl());
+  }
+
+  @Test
   void aLengthLimitedStringTypedConstOrEnumKeepsItsLengthInBothEditions() {
     String[][] cases = {
         {"{\"type\":\"string\",\"maxLength\":5,\"enum\":[\"a\",\"b\"]}", "VARCHAR", "false"},
