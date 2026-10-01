@@ -656,6 +656,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  // This mock keeps no soft-deleted versions, so asking for them adds none.
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getAllVersions(subject);
+  }
+
   private List<Integer> allVersions(String subject) {
     ArrayList<Integer> allVersions = new ArrayList<>();
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
@@ -757,8 +764,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
+      // A lookup finds what was registered; it never replaces it with the schema it was asked
+      // about, which may carry a version or metadata of its own.
+      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
+      parsedSchemaCache.asMap().putIfAbsent(contentCacheKey(schemaEntity), schema);
       return schemaResponse;
     }
   }
