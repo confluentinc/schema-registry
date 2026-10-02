@@ -1122,23 +1122,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        List<Association> associations = validateDeleteAssociations(
+        deleteAssociationsAndQueueCascade(
             resourceId, resourceType, associationTypes, cascadeLifecycle);
-        List<String> subjectsToDelete = new ArrayList<>();
-        for (Association association : associations) {
-          String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
-          if (qualifiedSubject != null) {
-            subjectsToDelete.add(qualifiedSubject);
-          }
-        }
-        deleteAssociationEntries(associations);
-        for (String qualifiedSubject : subjectsToDelete) {
-          enqueueCascadeDelete(qualifiedSubject, resourceId);
-        }
-        if (!subjectsToDelete.isEmpty()) {
-          log.info("Queued {} cascaded subject deletes for resource {}: {}",
-              subjectsToDelete.size(), resourceId, subjectsToDelete);
-        }
       } else {
         // forward delete associations request to the leader
         if (leaderIdentity != null) {
@@ -1151,6 +1136,33 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    // The caller holds the tenant's store lock: kafkaStore.lockFor(subject) from
+    // deleteAssociationsOrForward, or lockForAssociation(context) from mutateAssociations.
+    // Both resolve to the same lock for a tenant, which the queued deletes also take.
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
+    List<String> queued = new ArrayList<>();
+    // Queue each subject as soon as its association is deleted, as the synchronous path
+    // cascades each one in turn, so a failed write leaves no deleted association unqueued
+    for (Association association : associations) {
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      deleteAssociationEntry(association);
+      if (qualifiedSubject != null) {
+        enqueueCascadeDelete(qualifiedSubject, resourceId);
+        queued.add(qualifiedSubject);
+      }
+    }
+    if (!queued.isEmpty()) {
+      log.info("Queued {} cascaded subject deletes for resource {}: {}",
+          queued.size(), resourceId, queued);
     }
   }
 
@@ -1169,6 +1181,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       removePendingCascadeDelete(qualifiedSubject);
       recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
     }
+  }
+
+  /**
+   * Returns whether any queued cascaded subject delete has not finished yet. Lets tests wait
+   * for background deletes to complete before checking that a subject was kept.
+   */
+  @VisibleForTesting
+  public boolean hasPendingCascadeDeletes() {
+    return !pendingCascadeDeletes.isEmpty();
   }
 
   private void removePendingCascadeDelete(String qualifiedSubject) {
