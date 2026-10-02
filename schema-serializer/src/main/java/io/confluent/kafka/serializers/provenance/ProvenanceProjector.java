@@ -227,15 +227,17 @@ public final class ProvenanceProjector<T> {
     // its schemas are equal whichever message they name. A reader derived from a class equals its
     // text, so which of the two it is counts too.
     boolean derived = derivedReaders.getIfPresent(reader) != null;
+    // Read once: the key and the computation must see the same pin.
+    Pin pin = derived ? null : pinOf(reader);
     List<Object> key = Arrays.asList(subject,
         writerId.getId() != null ? writerId.getId() : writerId.getGuid(),
         writer != null ? writer.name() : null, reader, reader.name(),
-        includeMultipleMessages, derived ? null : pinOf(reader), derived);
+        includeMultipleMessages, pin, derived);
     Outcome<T> outcome;
     try {
       // Loaded atomically: the first records of a pair, however many at once, ask once.
-      outcome = outcomes.get(key, () -> compute(
-          subject, writerId, writer, reader, includeMultipleMessages, build, sameVersion));
+      outcome = outcomes.get(key, () -> compute(subject, writerId, writer, reader, pin,
+          includeMultipleMessages, build, sameVersion));
     } catch (ExecutionException | UncheckedExecutionException | ExecutionError e) {
       throw fresh(e.getCause());
     }
@@ -265,8 +267,8 @@ public final class ProvenanceProjector<T> {
   }
 
   private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,
-      ParsedSchema reader, boolean includeMultipleMessages, Function<ProvenanceMapping, T> build,
-      Supplier<T> sameVersion) {
+      ParsedSchema reader, Pin pin, boolean includeMultipleMessages,
+      Function<ProvenanceMapping, T> build, Supplier<T> sameVersion) {
     String written = writerSchemaId.getId() != null
         ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
     Integer writerId = writerSchemaId.getId();
@@ -278,8 +280,8 @@ public final class ProvenanceProjector<T> {
               "The writer schema is not a version of subject " + subject);
         }
       }
-      Integer readerVersion = pinnedVersion(subject, reader);
-      Integer readerId = readerVersion != null ? null : readerId(subject, reader);
+      Integer readerVersion = pinnedVersion(subject, pin);
+      Integer readerId = readerVersion != null ? null : readerId(subject, reader, pin);
       if (readerVersion == null && readerId == null) {
         throw new ProvenanceUnavailableException(
             "The reader schema is not a version of subject " + subject);
@@ -297,6 +299,9 @@ public final class ProvenanceProjector<T> {
         writerId = equal;
         provenance = provenance(
             subject, writerId, readerId, readerVersion, includeMultipleMessages);
+      }
+      if (pin != null) {
+        requireStructureOf(subject, reader, pin);
       }
       ProvenanceMapping mapping = provenance == null ? null
           : readerVersion != null ? ProvenanceMapping.joinToVersion(provenance, readerVersion)
@@ -405,23 +410,37 @@ public final class ProvenanceProjector<T> {
    * one it is registered under. A reader with a writer's rules merged onto it matches no version
    * exactly, but has the structure of the version it was pinned to.
    */
-  private Integer readerId(String subject, ParsedSchema reader)
+  private Integer readerId(String subject, ParsedSchema reader, Pin pin)
       throws IOException, RestClientException {
-    // An id supplied for an equal text reader is not the class's: it is the latest version it
-    // equals.
-    boolean derived = derivedReaders.getIfPresent(reader) != null;
-    Pin pin = derived ? null : pinOf(reader);
-    return pin != null && pin.id != null ? pin.id : registeredId(subject, reader, derived);
+    // A derived reader carries no pin: it is the latest version it equals.
+    return pin != null && pin.id != null ? pin.id
+        : registeredId(subject, reader, derivedReaders.getIfPresent(reader) != null);
   }
 
   /**
-   * The version {@code reader} is pinned to, or null if it is not pinned to one.
+   * Fails unless {@code reader} has the structure of the version it is pinned to, whatever its
+   * docs, metadata, rules or member order: provenance pairs by that version, so a reader of
+   * another structure would hand its own new fields that version's values.
+   */
+  private void requireStructureOf(String subject, ParsedSchema reader, Pin pin)
+      throws IOException, RestClientException {
+    int id = pin.id != null ? pin.id : metadataOf(subject, pin.version).getId();
+    Optional<LogicalType> pinned = logicalTypeOf(client.getSchemaBySubjectAndId(subject, id));
+    Optional<LogicalType> own = logicalTypeOf(reader);
+    if (pinned.isPresent() && own.isPresent()
+        && !own.get().equivalent(SchemaType.of(reader.schemaType()), pinned.get())) {
+      throw new SerializationException("The reader is pinned to " + pin + " of subject "
+          + subject + ", whose structure is not the reader's");
+    }
+  }
+
+  /**
+   * The version {@code pin} names, or null if it names none.
    *
    * @throws SerializationException if it is pinned to a version of another subject: every record
    *     of the writer fails
    */
-  private Integer pinnedVersion(String subject, ParsedSchema reader) {
-    Pin pin = derivedReaders.getIfPresent(reader) != null ? null : pinOf(reader);
+  private Integer pinnedVersion(String subject, Pin pin) {
     if (pin == null || pin.version == null) {
       return null;
     }
@@ -552,6 +571,11 @@ public final class ProvenanceProjector<T> {
     @Override
     public int hashCode() {
       return Objects.hash(id, subject, version);
+    }
+
+    @Override
+    public String toString() {
+      return version != null ? "version " + version : "schema id " + id;
     }
   }
 

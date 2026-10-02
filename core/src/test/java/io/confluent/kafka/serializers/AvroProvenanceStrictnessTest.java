@@ -539,6 +539,36 @@ class AvroProvenanceStrictnessTest {
     assertEquals("ada", byId.get("note").toString());
   }
 
+  @Test
+  void aReaderPinnedToAVersionOfAnotherStructureFailsItsRecords() throws Exception {
+    // note was dropped at v2, so v3's is new. v3's text pinned to v1 would pair the record with
+    // v1 and hand v3's new note the old value: a pin must name the reader's own structure.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}");
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"},"
+        + "{\"name\":\"extra\",\"type\":\"int\",\"default\":0}]}");
+    int v1Id = client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, new AvroSchema(v3));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    AvroSchema reader = new AvroSchema(v3);
+
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, SUBJECT, 1), false));
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, v1Id), false));
+    GenericRecord pinned = (GenericRecord) deserializer.deserializeWithReaderSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, SUBJECT, 3), false).getValue();
+    assertEquals("", pinned.get("note").toString());
+  }
+
   // -------------------------------------------------------------------------------------------
 
   private static AvroSchema withMetadata(Schema schema, String value) {

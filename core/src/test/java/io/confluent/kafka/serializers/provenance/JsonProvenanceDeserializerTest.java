@@ -1209,6 +1209,35 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void deeplyNestedUnionsArePrunedInTimeLinearInTheirDepth() throws Exception {
+    // Each union along the path asked whether its branches reach x by walking the rest of the
+    // path, so the cost doubled per level; 18 levels took seconds per record.
+    int depth = 18;
+    String withX = "{\"type\": \"object\", \"properties\": {\"x\": {\"type\": \"string\"%s}, "
+        + "\"y\": {\"type\": \"string\"}}}";
+    String noX = "{\"type\": \"object\", \"properties\": {\"y\": {\"type\": \"string\"}}}";
+    JsonSchema v1 = new JsonSchema(nested(depth, String.format(withX, "")));
+    JsonSchema v2 = new JsonSchema(nested(depth, noX));
+    JsonSchema v3 = new JsonSchema(
+        nested(depth, String.format(withX, ", \"description\": \"new\"")));
+    String doc = "{\"x\": \"old\", \"y\": \"keep\"}";
+    for (int level = 1; level <= depth; level++) {
+      doc = "{\"p" + level + "\": " + doc + "}";
+    }
+    byte[] bytes = write(v1, "{\"p\": " + doc + "}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> read(v3, bytes, "v1"));
+    JsonNode leaf = read.get("p");
+    for (int level = depth; level >= 1; level--) {
+      leaf = leaf.get("p" + level);
+    }
+    assertEquals("keep", leaf.get("y").asText());
+    assertFalse(leaf.has("x"));
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "
@@ -1258,6 +1287,16 @@ class JsonProvenanceDeserializerTest {
   private static String kinded(String kind, String property) {
     return "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"" + kind
         + "\"]}, " + number(property) + "}}";
+  }
+
+  // p: a union, depth levels deep, of an object holding the next level and an integer.
+  private static String nested(int depth, String leaf) {
+    String schema = leaf;
+    for (int level = 1; level <= depth; level++) {
+      schema = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {\"p" + level + "\": "
+          + schema + "}}, {\"type\": \"integer\"}]}";
+    }
+    return "{\"type\": \"object\", \"properties\": {\"p\": " + schema + "}}";
   }
 
   private static JsonSchema object(String... properties) {

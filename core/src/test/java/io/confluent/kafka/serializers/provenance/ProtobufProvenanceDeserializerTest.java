@@ -1332,6 +1332,64 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals("ada", get(pinned, "note"));
   }
 
+  @Test
+  void aOneofInANestedUserWrittenEntrysValueRestartsAlone() throws Exception {
+    // A map of maps is written as nested entry messages: the oneof sits two slots below the
+    // map, and its restart used to move the whole inner value, x included.
+    String in = "message In { int32 x = 1; %s }";
+    String oneof = "oneof o { int32 a = 2; string b = 3; }";
+    ProtobufSchema v1 = row(MAP_OF_MAPS, String.format(in, oneof));
+    ProtobufSchema v2 = row(MAP_OF_MAPS, String.format(in, ""));
+    ProtobufSchema v3 = row(MAP_OF_MAPS, String.format(in, oneof), "int32 z = 9;");
+    byte[] bytes = write(v1, along(v1, "kv[].value[].value", Map.of("x", 7, "a", 5)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage value = at(read(v3, bytes, "v1"), "kv[].value[].value");
+    assertEquals(7, get(value, "x"));
+    assertEquals(0, get(value, "a"));
+  }
+
+  @Test
+  void twoOneofsInANestedUserWrittenEntrysValueRestartApart() throws Exception {
+    // One oneof restarts and one continues: taken for the inner value field, they asked for two
+    // numberings of it, and the read fell back to giving the restarted a its old value.
+    String in = "message In { int32 x = 1; %s oneof p { int32 c = 4; string t = 5; } }";
+    String oneof = "oneof o { int32 a = 2; string b = 3; }";
+    ProtobufSchema v1 = row(MAP_OF_MAPS, String.format(in, oneof));
+    ProtobufSchema v2 = row(MAP_OF_MAPS, String.format(in, ""));
+    ProtobufSchema v3 = row(MAP_OF_MAPS, String.format(in, oneof), "int32 z = 9;");
+    byte[] bytes = write(v1, along(v1, "kv[].value[].value", Map.of("x", 7, "a", 5, "c", 9)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage value = at(read(v3, bytes, "v1"), "kv[].value[].value");
+    assertEquals(7, get(value, "x"));
+    assertEquals(9, get(value, "c"));
+    assertEquals(0, get(value, "a"));
+  }
+
+  @Test
+  void aOneofInAUserWrittenEntrysRepeatedValueRestartsAlone() throws Exception {
+    // A map of lists: the oneof sits in the list's element, below the entry's value slot.
+    String entry = "repeated VEntry kv = 1; "
+        + "message VEntry { string key = 1; repeated In value = 2; }";
+    String in = "message In { int32 x = 1; %s }";
+    String oneof = "oneof o { int32 a = 2; string b = 3; }";
+    ProtobufSchema v1 = row(entry, String.format(in, oneof));
+    ProtobufSchema v2 = row(entry, String.format(in, ""));
+    ProtobufSchema v3 = row(entry, String.format(in, oneof), "int32 z = 9;");
+    byte[] bytes = write(v1, along(v1, "kv[].value[]", Map.of("x", 7, "a", 5)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage read = at(read(v3, bytes, "v1"), "kv[]");
+    assertEquals(1, ((List<?>) get(read, "value")).size());
+    DynamicMessage value = at(read, "value[]");
+    assertEquals(7, get(value, "x"));
+    assertEquals(0, get(value, "a"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1389,6 +1447,48 @@ class ProtobufProvenanceDeserializerTest {
 
   private static DynamicMessage entryValue(DynamicMessage record) {
     return (DynamicMessage) get((DynamicMessage) ((List<?>) get(record, "kv")).get(0), "value");
+  }
+
+  // A map of maps, as nested entry messages, whose inner values are In.
+  private static final String MAP_OF_MAPS = "repeated OuterEntry kv = 1; "
+      + "message OuterEntry { string key = 1; repeated InnerEntry value = 2; } "
+      + "message InnerEntry { string key = 1; In value = 2; }";
+
+  // A Row holding one message along steps ("[]" for one element of a repeated field), keyed "k"
+  // wherever an entry has a key, ending at an In with the given fields set.
+  private static DynamicMessage along(ProtobufSchema schema, String steps,
+      Map<String, Object> fields) {
+    Descriptor in = schema.toDescriptor("p.Row.In");
+    DynamicMessage.Builder leaf = DynamicMessage.newBuilder(in);
+    fields.forEach((name, v) -> leaf.setField(in.findFieldByName(name), v));
+    return (DynamicMessage) along(schema.toDescriptor(), steps.split("\\."), 0, leaf.build());
+  }
+
+  private static Object along(Descriptor message, String[] steps, int i, DynamicMessage leaf) {
+    String name = steps[i].replace("[]", "");
+    FieldDescriptor field = message.findFieldByName(name);
+    Object child = i + 1 == steps.length ? leaf
+        : along(field.getMessageType(), steps, i + 1, leaf);
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(message);
+    if (message.findFieldByName("key") != null) {
+      builder.setField(message.findFieldByName("key"), "k");
+    }
+    if (field.isRepeated()) {
+      builder.addRepeatedField(field, child);
+    } else {
+      builder.setField(field, child);
+    }
+    return builder.build();
+  }
+
+  // The message along steps, taking the first element of each repeated field.
+  private static DynamicMessage at(DynamicMessage message, String steps) {
+    DynamicMessage current = message;
+    for (String step : steps.split("\\.")) {
+      Object value = get(current, step.replace("[]", ""));
+      current = (DynamicMessage) (step.endsWith("[]") ? ((List<?>) value).get(0) : value);
+    }
+    return current;
   }
 
   private static DynamicMessage refund(ProtobufSchema schema, int id, int amount) {

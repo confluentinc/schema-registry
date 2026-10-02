@@ -214,17 +214,30 @@ final class ProtoProvenanceRenumberer {
     return "UNION".equals(mapping.readerKindOf(path)) && isEntrySlot(path, names, mapping);
   }
 
-  // Whether names end at a map's or multiset's key or value, as a oneof in that message is
-  // spelled: an entry the converter reads by its shape need not be a native map entry.
+  // Whether names end at map or multiset slots below the nearest enclosing location, as a oneof
+  // in such a slot's message is spelled: one name per slot, however deeply the maps nest.
   private static boolean isEntrySlot(List<Integer> path, List<String> names,
       ProvenanceMapping mapping) {
-    if (path.size() < 3 || names.size() != mapping.enclosingReaderNamesOf(path).size() + 1) {
+    int k = path.size() - 1;
+    while (k > 0 && mapping.readerNamesOf(path.subList(0, k)) == null) {
+      k--;
+    }
+    String kind = k > 0 ? mapping.readerKindOf(path.subList(0, k)) : null;
+    if (kind == null || !(kind.startsWith("MAP<") || kind.startsWith("MULTISET<"))) {
       return false;
     }
-    String kind = mapping.readerKindOf(path.subList(0, path.size() - 2));
-    String last = names.get(names.size() - 1);
-    boolean entry = kind != null && (kind.startsWith("MAP<") || kind.startsWith("MULTISET<"));
-    return entry && ("key".equals(last) || "value".equals(last));
+    List<String> enclosing = mapping.readerNamesOf(path.subList(0, k));
+    int slots = names.size() - enclosing.size();
+    if (slots < 1 || slots > path.size() - 1 - k
+        || !names.subList(0, enclosing.size()).equals(enclosing)) {
+      return false;
+    }
+    for (String step : names.subList(enclosing.size(), names.size())) {
+      if (!"key".equals(step) && !"value".equals(step)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

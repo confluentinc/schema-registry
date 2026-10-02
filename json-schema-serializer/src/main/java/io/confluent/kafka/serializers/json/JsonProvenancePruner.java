@@ -492,7 +492,7 @@ final class JsonProvenancePruner {
       for (Target target : targets) {
         Map<ObjectNode, Set<List<Integer>>> readings = new IdentityHashMap<>();
         walk(target.names, writer, document, 0, new ArrayList<>(), false, Collections.emptyList(),
-            (node, object, name, choices, ambiguous, alternatives) -> {
+            new Reached(), (node, object, name, choices, ambiguous, alternatives) -> {
               Set<List<Integer>> as = readings.computeIfAbsent(node, n -> new HashSet<>());
               as.add(choices);
               if (!target.branches.isEmpty()) {
@@ -522,7 +522,8 @@ final class JsonProvenancePruner {
         Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>();
         Map<ObjectNode, Set<List<Integer>>> readings = written.get(target);
         walk(target.names, reader, document, 0, new ArrayList<>(), false,
-            Collections.emptyList(), (node, object, name, choices, ambiguous, alternatives) -> {
+            Collections.emptyList(), new Reached(),
+            (node, object, name, choices, ambiguous, alternatives) -> {
               if (!ambiguous && !defaults.contains(node)
                   && inNewStructBranchOnly(target, choices, object, name, node.get(name))) {
                 emptied.computeIfAbsent(node, n -> new HashMap<>()).putIfAbsent(name,
@@ -672,7 +673,7 @@ final class JsonProvenancePruner {
   static List<Integer> branchesTaken(JsonSchema reader, JsonNode document, List<String> names) {
     List<List<Integer>> taken = new ArrayList<>();
     walk(names, reader.rawSchema(), document, 0, new ArrayList<>(), false,
-        Collections.emptyList(),
+        Collections.emptyList(), new Reached(),
         (node, object, name, choices, ambiguous, alternatives) -> taken.add(choices));
     return taken.isEmpty() ? null : taken.get(0);
   }
@@ -735,18 +736,19 @@ final class JsonProvenancePruner {
   }
 
   private static void walk(List<String> names, Schema schema, JsonNode node, int step,
-      List<Integer> choices, boolean ambiguous, List<Alternative> alternatives, AtProperty at) {
+      List<Integer> choices, boolean ambiguous, List<Alternative> alternatives, Reached reached,
+      AtProperty at) {
     if (schema == null || node == null) {
       return;
     }
     if (schema instanceof ReferenceSchema) {
       walk(names, ((ReferenceSchema) schema).getReferredSchema(), node, step, choices, ambiguous,
-          alternatives, at);
+          alternatives, reached, at);
       return;
     }
     if (schema instanceof CombinedSchema) {
       walkCombined(names, (CombinedSchema) schema, node, step, choices, ambiguous, alternatives,
-          at);
+          reached, at);
       return;
     }
     String name = names.get(step);
@@ -757,7 +759,7 @@ final class JsonProvenancePruner {
           : schema instanceof ObjectSchema
               ? ((ObjectSchema) schema).getSchemaOfAdditionalProperties() : null;
       for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
-        walk(names, child, it.next(), step + 1, choices, ambiguous, alternatives, at);
+        walk(names, child, it.next(), step + 1, choices, ambiguous, alternatives, reached, at);
       }
       return;
     }
@@ -769,7 +771,7 @@ final class JsonProvenancePruner {
     if (step + 1 < names.size()) {
       if (declared) {
         walk(names, object.getPropertySchemas().get(name), node.get(name), step + 1, choices,
-            ambiguous, alternatives, at);
+            ambiguous, alternatives, reached, at);
       }
     } else if (declared || object.getRequiredProperties().contains(name)
         || dependedOn(object, name)) {
@@ -781,7 +783,7 @@ final class JsonProvenancePruner {
 
   private static void walkCombined(List<String> names, CombinedSchema schema, JsonNode node,
       int step, List<Integer> choices, boolean ambiguous, List<Alternative> alternatives,
-      AtProperty at) {
+      Reached reached, AtProperty at) {
     String name = names.get(step);
     if (name != null && !node.has(name)) {
       // Every branch reaches the property as a member of this very value: nothing to prune.
@@ -791,7 +793,7 @@ final class JsonProvenancePruner {
     if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
       // The converter merges an allOf; the next step lives in whichever part declares it.
       for (Schema part : subschemas) {
-        walk(names, part, node, step, choices, ambiguous, alternatives, at);
+        walk(names, part, node, step, choices, ambiguous, alternatives, reached, at);
       }
       return;
     }
@@ -805,7 +807,7 @@ final class JsonProvenancePruner {
       // A nullable union, which the logical type collapses: no branch step. A bare one-branch
       // oneOf stays a union, as provenance's V1 conversion keeps it; V2 unwraps it, so moving
       // provenance to V2 changes this rule, and heldIn's.
-      walk(names, branches.get(0), node, step, choices, ambiguous, alternatives, at);
+      walk(names, branches.get(0), node, step, choices, ambiguous, alternatives, reached, at);
       return;
     }
     // Only a branch declaring the next step can hold the property; one that does not bears on it
@@ -820,7 +822,7 @@ final class JsonProvenancePruner {
         boolean fits = validates(branches.get(i), validatable);
         // A nested union fitting only through a branch that does not declare the step holds the
         // property as an extra, as a flat union does: not a reading of it.
-        if (fits && !reaches(names, branches.get(i), node, step)) {
+        if (fits && !reaches(names, branches.get(i), node, step, reached)) {
           continue;
         }
         declaring.add(i);
@@ -860,7 +862,7 @@ final class JsonProvenancePruner {
         readings.add(new Alternative(schema, i, extra));
       }
       walk(names, branches.get(i), node, step, extended,
-          ambiguous || fallback || valid.size() > 1, readings, at);
+          ambiguous || fallback || valid.size() > 1, readings, reached, at);
     }
   }
 
@@ -1005,12 +1007,28 @@ final class JsonProvenancePruner {
   }
 
   // Whether walking the value under schema reaches a declaration of the property.
-  private static boolean reaches(List<String> names, Schema schema, JsonNode node, int step) {
-    boolean[] reached = {false};
-    walk(names, schema, node, step, new ArrayList<>(), false, Collections.emptyList(),
+  private static boolean reaches(List<String> names, Schema schema, JsonNode node, int step,
+      Reached reached) {
+    Map<Integer, Boolean> bySteps = reached.answers
+        .computeIfAbsent(schema, k -> new IdentityHashMap<>())
+        .computeIfAbsent(node, k -> new HashMap<>());
+    Boolean known = bySteps.get(step);
+    if (known != null) {
+      return known;
+    }
+    boolean[] declared = {false};
+    walk(names, schema, node, step, new ArrayList<>(), false, Collections.emptyList(), reached,
         (n, object, name, choices, ambiguous, alternatives) ->
-            reached[0] |= object.getPropertySchemas().containsKey(name));
-    return reached[0];
+            declared[0] |= object.getPropertySchemas().containsKey(name));
+    bySteps.put(step, declared[0]);
+    return declared[0];
+  }
+
+  // Answers of reaches within one top-level walk, which never changes the document, by branch,
+  // value and step: a union nested k deep is then walked once rather than 2^k times.
+  private static final class Reached {
+    private final Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers =
+        new IdentityHashMap<>();
   }
 
   private static JsonNode withoutProperty(ObjectNode node, String name, CombinedSchema schema) {
