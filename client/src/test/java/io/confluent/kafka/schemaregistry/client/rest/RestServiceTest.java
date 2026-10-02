@@ -90,6 +90,39 @@ public class RestServiceTest {
   private URL url;
 
   @Test
+  public void testDeleteAssociationsAsyncAccepted() throws Exception {
+    RestService restServiceSpy = spy(new RestService("http://localhost:8081"));
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+    doReturn(url).when(restServiceSpy).url(urlCaptor.capture());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_ACCEPTED);
+
+    // A 202 is a success and must not throw
+    restServiceSpy.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, "lkc-1",
+        "topic", Arrays.asList("key"), true, null, true);
+
+    assertTrue(urlCaptor.getValue().contains("async=true"));
+  }
+
+  @Test
+  public void testDeleteAssociationsDefaultOmitsAsync() throws Exception {
+    RestService restServiceSpy = spy(new RestService("http://localhost:8081"));
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+    doReturn(url).when(restServiceSpy).url(urlCaptor.capture());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_NO_CONTENT);
+
+    restServiceSpy.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, "lkc-1",
+        "topic", Arrays.asList("key"), true, null);
+
+    assertTrue(!urlCaptor.getValue().contains("async"));
+  }
+
+  @Test
   public void testSetForwardHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081", true);
     RestService restServiceSpy = spy(restService);

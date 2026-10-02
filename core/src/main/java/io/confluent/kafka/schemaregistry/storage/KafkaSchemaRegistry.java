@@ -20,6 +20,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_P
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -74,6 +75,7 @@ import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -81,6 +83,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -99,6 +102,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         LeaderAwareSchemaRegistry {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+  private static final long CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS = 10_000;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
@@ -122,6 +126,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private final String kafkaClusterId;
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
+  private final LockChainedExecutor cascadeDeleteExecutor;
+  private final Map<String, Integer> pendingCascadeDeletes = new ConcurrentHashMap<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -165,6 +171,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     this.kafkaStore = kafkaStore(config);
     this.store = kafkaStore;
     this.metadataEncoder = new KafkaMetadataEncoderService(this);
+    this.cascadeDeleteExecutor = new LockChainedExecutor(
+        config.associationDeleteAsyncThreads(), "sr-association-cascade-delete");
   }
 
   private static MetricsContainer initMetricsContainer(
@@ -593,22 +601,27 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 + "to generating an ID that is already in use.");
           }
         }
-        for (Schema deleted : deletedVersions) {
-          if (deleted.getId().equals(schema.getId())
-                  && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
-            SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
-            // Skip tombstoning if any schema (including soft-deleted) still references this
-            // (subject, version): references resolve by subject+version, not by global ID, so
-            // tombstoning would orphan those references even though the referrer may still be
-            // restored from a soft delete.
-            if (!getReferencedBy(key, true).isEmpty()) {
-              log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
-                  + " of {} v{} (id {}): still referenced by other schemas",
-                  key, schema.getSubject(), schema.getVersion(), schema.getId());
-              continue;
+        // Under LOGICAL a soft-deleted version with the same ID stays, so the subject's history,
+        // which provenance computes over, stays whole.
+        if (CompatibilityPolicy.forName(config.getCompatibilityPolicy())
+            != CompatibilityPolicy.LOGICAL) {
+          for (Schema deleted : deletedVersions) {
+            if (deleted.getId().equals(schema.getId())
+                    && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
+              SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
+              // Skip tombstoning if any schema (including soft-deleted) still references this
+              // (subject, version): references resolve by subject+version, not by global ID, so
+              // tombstoning would orphan those references even though the referrer may still be
+              // restored from a soft delete.
+              if (!getReferencedBy(key, true).isEmpty()) {
+                log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
+                    + " of {} v{} (id {}): still referenced by other schemas",
+                    key, schema.getSubject(), schema.getVersion(), schema.getId());
+                continue;
+              }
+              // Tombstone previous version with the same ID
+              kafkaStore.put(key, null);
             }
-            // Tombstone previous version with the same ID
-            kafkaStore.put(key, null);
           }
         }
         kafkaStore.put(schemaKey, schemaValue);
@@ -1083,7 +1096,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         // forward update config request to the leader
         if (leaderIdentity != null) {
           forwardDeleteAssociationsRequestToLeader(resourceId,
-              resourceType, associationTypes, cascadeLifecycle, dryRun, headerProperties);
+              resourceType, associationTypes, cascadeLifecycle, dryRun, false, headerProperties);
         } else {
           throw new UnknownLeaderException("Delete association request failed since leader is "
               + "unknown");
@@ -1091,6 +1104,130 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  public void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    if (!async || dryRun) {
+      deleteAssociationsOrForward(subject, resourceId, resourceType, associationTypes,
+          cascadeLifecycle, dryRun, headerProperties);
+      return;
+    }
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        List<Association> associations = validateDeleteAssociations(
+            resourceId, resourceType, associationTypes, cascadeLifecycle);
+        List<String> subjectsToDelete = new ArrayList<>();
+        for (Association association : associations) {
+          String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+          if (qualifiedSubject != null) {
+            subjectsToDelete.add(qualifiedSubject);
+          }
+        }
+        deleteAssociationEntries(associations);
+        for (String qualifiedSubject : subjectsToDelete) {
+          enqueueCascadeDelete(qualifiedSubject, resourceId);
+        }
+        if (!subjectsToDelete.isEmpty()) {
+          log.info("Queued {} cascaded subject deletes for resource {}: {}",
+              subjectsToDelete.size(), resourceId, subjectsToDelete);
+        }
+      } else {
+        // forward delete associations request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteAssociationsRequestToLeader(resourceId,
+              resourceType, associationTypes, cascadeLifecycle, false, true, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Delete association request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  private void enqueueCascadeDelete(String qualifiedSubject, String resourceId) {
+    String tenant = tenant();
+    // Counted rather than a set, since the same subject can be queued more than once
+    pendingCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
+    boolean queued = cascadeDeleteExecutor.submit(kafkaStore.lockFor(qualifiedSubject), () -> {
+      try {
+        withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject, resourceId));
+      } finally {
+        removePendingCascadeDelete(qualifiedSubject);
+      }
+    });
+    if (!queued) {
+      removePendingCascadeDelete(qualifiedSubject);
+      recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
+    }
+  }
+
+  private void removePendingCascadeDelete(String qualifiedSubject) {
+    pendingCascadeDeletes.computeIfPresent(qualifiedSubject, (k, n) -> n > 1 ? n - 1 : null);
+  }
+
+  private void recordCascadeNotDeleted(String qualifiedSubject, String resourceId,
+      String reason) {
+    metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+    log.error("Cascaded delete of subject {} for resource {} did not run since {}; the subject "
+        + "was not deleted", qualifiedSubject, resourceId, reason);
+  }
+
+  /**
+   * Runs a background task with the request's context restored on the current thread.
+   * Subclasses can override this to restore additional per-request state.
+   */
+  protected void withRequestContext(String tenant, Runnable task) {
+    setTenant(tenant);
+    try {
+      task.run();
+    } finally {
+      setTenant(null);
+    }
+  }
+
+  @VisibleForTesting
+  void runCascadeDelete(String qualifiedSubject, String resourceId) {
+    Lock lock = kafkaStore.lockFor(qualifiedSubject);
+    lock.lock();
+    try {
+      if (!isLeader()) {
+        recordCascadeNotDeleted(qualifiedSubject, resourceId,
+            "this instance is no longer the leader");
+        return;
+      }
+      if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        log.warn("Skipping cascaded delete of subject {} for resource {} since it is now in "
+            + "IMPORT mode", qualifiedSubject, resourceId);
+        return;
+      }
+      if (!getAllVersions(qualifiedSubject, LookupFilter.INCLUDE_DELETED).hasNext()) {
+        log.debug("Skipping cascaded delete of subject {} for resource {} since it no longer "
+            + "exists", qualifiedSubject, resourceId);
+        return;
+      }
+      cascadeDeleteSubject(qualifiedSubject);
+      log.info("Completed cascaded delete of subject {} for resource {}",
+          qualifiedSubject, resourceId);
+    } catch (AssociationForSubjectExistsException e) {
+      log.warn("Skipping cascaded delete of subject {} for resource {} since it has been "
+          + "re-associated", qualifiedSubject, resourceId);
+    } catch (Exception e) {
+      // Includes a delete interrupted by shutdown, which is reported here rather than by close()
+      metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+      log.error("Cascaded delete of subject {} for resource {} failed; it may be soft-deleted "
+          + "but not hard-deleted", qualifiedSubject, resourceId, e);
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -1339,14 +1476,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void forwardDeleteAssociationsRequestToLeader(
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete associations request to %s", baseUrl));
     try {
-      leaderRestService.deleteAssociations(
-          headerProperties, resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun);
+      leaderRestService.deleteAssociations(headerProperties, resourceId, resourceType,
+          associationTypes, cascadeLifecycle, dryRun, async);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the delete association request to %s",
@@ -1397,6 +1535,23 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
+    // Drain cascaded deletes first, while this instance can still write to the store
+    cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    // close() waits for interrupted deletes to exit, and each of those reports its own
+    // failure and leaves the pending map, so what remains here never started
+    if (!cascadeDeleteExecutor.isTerminated()) {
+      log.warn("Cascaded deletes were still running after shutdown; the count below may "
+          + "include subjects that are still being deleted");
+    }
+    Map<String, Integer> notDeleted = new HashMap<>(pendingCascadeDeletes);
+    if (!notDeleted.isEmpty()) {
+      int count = notDeleted.values().stream().mapToInt(Integer::intValue).sum();
+      for (int i = 0; i < count; i++) {
+        metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+      }
+      log.error("Shut down before {} cascaded deletes started; these subjects were not "
+          + "deleted: {}", count, notDeleted.keySet());
+    }
     if (leaderElector != null) {
       leaderElector.close();
     }

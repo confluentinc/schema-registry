@@ -221,6 +221,12 @@ public class SchemaRegistryConfig extends RestConfig {
       "association.batch.get.max.association.num.per.batch";
   public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 1;
   /**
+   * <code>association.delete.async.threads</code>
+   */
+  public static final String ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG =
+      "association.delete.async.threads";
+  public static final int ASSOCIATION_DELETE_ASYNC_THREADS_DEFAULT = 4;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -611,6 +617,12 @@ public class SchemaRegistryConfig extends RestConfig {
       + "and is not subject to this limit). A single topic may request both a key and a value "
       + "association without counting as two topics. Not enforced when "
       + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String ASSOCIATION_DELETE_ASYNC_THREADS_DOC =
+      "Number of threads the leader uses to run cascaded subject deletes queued by "
+      + "DELETE /associations/resources/{resourceId} with async=true. Deletes that share a "
+      + "store lock run one at a time, in the order they were queued. In a single-tenant "
+      + "deployment all deletes share one store lock and run one at a time, regardless of "
+      + "this setting.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -947,6 +959,10 @@ public class SchemaRegistryConfig extends RestConfig {
         MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT,
         ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC
     )
+    .define(ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG, ConfigDef.Type.INT,
+        ASSOCIATION_DELETE_ASYNC_THREADS_DEFAULT, ConfigDef.Range.atLeast(1),
+        ConfigDef.Importance.LOW, ASSOCIATION_DELETE_ASYNC_THREADS_DOC
+    )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
     )
@@ -1276,6 +1292,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public int maxAssociationNumPerGetBatch() {
     return getInt(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG);
+  }
+
+  public int associationDeleteAsyncThreads() {
+    return getInt(ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG);
   }
 
   public static void main(String[] args) {

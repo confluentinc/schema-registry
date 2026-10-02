@@ -495,8 +495,13 @@ public class AssociationsResource {
   @Path("/associations/resources/{resourceId}")
   @DELETE
   @Operation(summary = "Delete associations.", responses = {
-      @ApiResponse(responseCode = "200", description = "The delete response",
-          content = @Content(schema = @Schema(implementation = Association.class))),
+      @ApiResponse(responseCode = "204", description = "The associations, and any cascaded "
+          + "subjects, were deleted"),
+      @ApiResponse(responseCode = "202", description = "The associations were deleted; "
+          + "cascaded subject deletes are running in the background (async=true only)"),
+      @ApiResponse(responseCode = "404", description = "No associations found for the resource"),
+      @ApiResponse(responseCode = "409", description = "The association is frozen and "
+          + "cascadeLifecycle is false"),
       @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
   })
   @PerformanceMetric("associations.delete")
@@ -513,7 +518,13 @@ public class AssociationsResource {
       @Parameter(description = "Cascade lifecycle")
       @QueryParam("cascadeLifecycle") boolean cascadeLifecycle,
       @Parameter(description = "Dry run")
-      @QueryParam("dryRun") boolean dryRun) {
+      @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "Delete the associations, return 202, and finish cascaded "
+          + "subject deletes in the background. 202 is returned even if no subject needed "
+          + "deleting. A queued subject is deleted even if new versions are registered under "
+          + "it before the background delete runs. Until then the subject still exists, so "
+          + "recreating the resource with a different schema can fail.")
+      @QueryParam("async") boolean async) {
 
     log.debug("Deleting association for resource {}", resourceId);
 
@@ -536,9 +547,9 @@ public class AssociationsResource {
           QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       schemaRegistry.deleteAssociationsOrForward(qualifiedSubject,
-          resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun,
+          resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun, async,
           headerProperties);
-      asyncResponse.resume(Response.status(204).build());
+      asyncResponse.resume(Response.status(async && !dryRun ? 202 : 204).build());
     } catch (AssociationFrozenException e) {
       throw Errors.associationFrozenException(e.getAssociationType(), e.getSubject());
     } catch (SchemaVersionNotSoftDeletedException e) {

@@ -482,7 +482,8 @@ public class RestService implements Closeable, Configurable {
           T result = jsonDeserializer.readValue(is, responseFormat);
           is.close();
           return result;
-        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT
+            || responseCode == HttpURLConnection.HTTP_ACCEPTED) {
           return null;
         } else {
           ErrorMessage errorMessage;
@@ -615,7 +616,8 @@ public class RestService implements Closeable, Configurable {
           } catch (ParseException e) {
             throw new IOException("Error parsing response", e);
           }
-        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT
+            || responseCode == HttpURLConnection.HTTP_ACCEPTED) {
           return null;
         } else {
           ErrorMessage errorMessage;
@@ -2156,6 +2158,21 @@ public class RestService implements Closeable, Configurable {
       boolean cascadeLifecycle, Boolean dryRun
   ) throws IOException,
       RestClientException {
+    deleteAssociations(requestProperties, resourceId, resourceType, associationTypes,
+        cascadeLifecycle, dryRun, false);
+  }
+
+  /**
+   * Deletes the associations for a resource. When {@code async} is true, the server deletes the
+   * association entries before responding (202) and completes any cascaded subject deletes in
+   * the background.
+   */
+  public void deleteAssociations(
+      Map<String, String> requestProperties,
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, Boolean dryRun, boolean async
+  ) throws IOException,
+      RestClientException {
     UriBuilder builder =
         UriBuilder.fromPath("/associations/resources/{resourceId}");
     if (resourceType != null) {
@@ -2167,6 +2184,9 @@ public class RestService implements Closeable, Configurable {
     builder.queryParam("cascadeLifecycle", cascadeLifecycle);
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
+    }
+    if (async) {
+      builder.queryParam("async", true);
     }
     String path = builder.build(resourceId).toString();
 
