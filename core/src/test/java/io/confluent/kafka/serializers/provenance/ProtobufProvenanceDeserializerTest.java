@@ -1271,6 +1271,45 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(5, get(read, "b"));
   }
 
+  @Test
+  void aOneofInAUserWrittenEntrysValueRestartsAlone() throws Exception {
+    // The converter reads KvEntry as a map by its shape: the oneof is spelled at the value
+    // slot, and its restart used to move the whole value, x included.
+    String entry = "repeated KvEntry kv = 1; message KvEntry { string key = 1; In value = 2; }";
+    String oneof = "oneof o { int32 a = 2; string b = 3; }";
+    ProtobufSchema v1 = row(entry, "message In { int32 x = 1; " + oneof + " }");
+    ProtobufSchema v2 = row(entry, "message In { int32 x = 1; }");
+    ProtobufSchema v3 = row(entry, "message In { int32 x = 1; " + oneof + " }", "int32 z = 4;");
+    byte[] bytes = write(v1, entryRecord(v1, Map.of("x", 7, "a", 5)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage value = entryValue(read(v3, bytes, "v1"));
+    assertEquals(7, get(value, "x"));
+    assertEquals(0, get(value, "a"));
+  }
+
+  @Test
+  void twoOneofsInAUserWrittenEntrysValueRestartApart() throws Exception {
+    // One oneof restarts and one continues: taken for the value field, they asked for two
+    // numberings of it, and the read fell back to giving the restarted a its old value.
+    String entry = "repeated KvEntry kv = 1; message KvEntry { string key = 1; In value = 2; }";
+    String o = "oneof o { int32 a = 2; string s = 4; }";
+    String p = "oneof p { int32 c = 3; string t = 5; }";
+    ProtobufSchema v1 = row(entry, "message In { int32 x = 1; " + o + " " + p + " }");
+    ProtobufSchema v2 = row(entry, "message In { int32 x = 1; " + p + " }");
+    ProtobufSchema v3 = row(entry, "message In { int32 x = 1; " + o + " " + p + " }",
+        "int32 z = 9;");
+    byte[] bytes = write(v1, entryRecord(v1, Map.of("x", 7, "a", 5, "c", 9)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage value = entryValue(read(v3, bytes, "v1"));
+    assertEquals(7, get(value, "x"));
+    assertEquals(9, get(value, "c"));
+    assertEquals(0, get(value, "a"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1311,6 +1350,23 @@ class ProtobufProvenanceDeserializerTest {
     KafkaProtobufDeserializer<M> deserializer = new KafkaProtobufDeserializer<>(client);
     deserializer.configure(config, false);
     return deserializer.deserialize(TOPIC, bytes);
+  }
+
+  // A Row holding one KvEntry, keyed "k", whose In value has the given fields set.
+  private static DynamicMessage entryRecord(ProtobufSchema schema, Map<String, Object> fields) {
+    Descriptor kv = schema.toDescriptor("p.Row.KvEntry");
+    Descriptor in = schema.toDescriptor("p.Row.In");
+    DynamicMessage.Builder value = DynamicMessage.newBuilder(in);
+    fields.forEach((name, v) -> value.setField(in.findFieldByName(name), v));
+    DynamicMessage entry = DynamicMessage.newBuilder(kv)
+        .setField(kv.findFieldByName("key"), "k")
+        .setField(kv.findFieldByName("value"), value.build()).build();
+    return DynamicMessage.newBuilder(schema.toDescriptor())
+        .addRepeatedField(schema.toDescriptor().findFieldByName("kv"), entry).build();
+  }
+
+  private static DynamicMessage entryValue(DynamicMessage record) {
+    return (DynamicMessage) get((DynamicMessage) ((List<?>) get(record, "kv")).get(0), "value");
   }
 
   private static DynamicMessage refund(ProtobufSchema schema, int id, int amount) {

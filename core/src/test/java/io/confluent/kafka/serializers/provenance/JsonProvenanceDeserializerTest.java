@@ -1140,6 +1140,75 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aValueLeftAmbiguousByPruningLosesItsAmbiguousMembers() throws Exception {
+    // Only the re-added b1 kept p out of the second branch: once it is pruned, l reads two ways,
+    // and with a new p.l in k9 it must read one. An x the second branch rejects keeps l.
+    String body = "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": ["
+        + "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k1\"]}, %s"
+        + "\"l\": {\"type\": \"boolean\"}}}, "
+        + "{\"type\": \"object\", \"properties\": {\"b1\": {\"type\": \"integer\"}, "
+        + "\"l\": {\"type\": \"boolean\"}, \"x\": {\"type\": \"integer\"}}}%s]}}}";
+    String k9 = ", {\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k9\"]}, "
+        + "\"l\": {\"type\": \"boolean\"}}}";
+    JsonSchema v1 = new JsonSchema(String.format(body, string("b1") + ", ", ""));
+    JsonSchema v2 = new JsonSchema(String.format(body, "", ""));
+    JsonSchema v3 = new JsonSchema(String.format(body, string("b1") + ", ", k9));
+    byte[] bytes = write(v1, "{\"p\": {\"kind\": \"k1\", \"b1\": \"old\", \"l\": true}}");
+    byte[] ruled = write(v1,
+        "{\"p\": {\"kind\": \"k1\", \"b1\": \"old\", \"l\": true, \"x\": \"s\"}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "v1"));
+    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\", \"l\": true, \"x\": \"s\"}}"),
+        read(v3, ruled, "v1"));
+  }
+
+  @Test
+  void aNestedUnionHoldingThePropertyAsAnExtraIsNoReadingOfIt() throws Exception {
+    // The inner union fits only through B, where kind is an extra: as in the flat union, kind
+    // reads at A alone and continues. l still reads two ways and goes (k9 makes p.l strict).
+    String a = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k1\"]}, "
+        + "\"l\": {\"type\": \"boolean\"}}}";
+    String b = "{\"type\": \"object\", \"properties\": {\"l\": {\"type\": \"boolean\"}, "
+        + "\"x\": {\"type\": \"integer\"}}}";
+    String c = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k9\"]}, "
+        + "\"l\": {\"type\": \"boolean\"}}}";
+    String body = "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [" + a
+        + ", {\"oneOf\": [" + b + ", %s]}]}}}";
+    JsonSchema v1 = new JsonSchema(String.format(body, "{\"type\": \"integer\"}"));
+    JsonSchema v2 = new JsonSchema(String.format(body, c));
+    byte[] bytes = write(v1, "{\"p\": {\"kind\": \"k1\", \"l\": true}}");
+    client.register(SUBJECT, v2);
+
+    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v2, bytes, "v1"));
+  }
+
+  @Test
+  void aPropertyRequiredByASchemaDependencyIsDefaultedOrFails() throws Exception {
+    String body = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}, %s}, "
+        + "\"dependencies\": {\"a\": {\"required\": [\"x\"]}}}";
+    for (String x : new String[] {"\"x\": {\"type\": \"string\", \"default\": \"d\"}",
+        "\"x\": {\"type\": \"string\", \"description\": \"new\"}"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      JsonSchema v1 = new JsonSchema(String.format(body, string("x")));
+      JsonSchema v2 = new JsonSchema(String.format(body, "\"zz\": {\"type\": \"boolean\"}"));
+      JsonSchema v3 = new JsonSchema(String.format(body, x));
+      byte[] bytes = write(v1, "{\"a\": \"s\", \"x\": \"old\"}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      if (x.contains("default")) {
+        assertEquals("d", read(v3, bytes, "v1").get("x").asText());
+      } else {
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [x] is new to the reader"));
+      }
+    }
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "

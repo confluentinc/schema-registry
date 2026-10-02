@@ -817,8 +817,14 @@ final class JsonProvenancePruner {
         schema instanceof CombinedSchemaExt ? integralDecimals(node) : node);
     for (int i = 0; i < branches.size(); i++) {
       if (declares(names, branches.get(i), step, new IdentityHashMap<>())) {
+        boolean fits = validates(branches.get(i), validatable);
+        // A nested union fitting only through a branch that does not declare the step holds the
+        // property as an extra, as a flat union does: not a reading of it.
+        if (fits && !reaches(names, branches.get(i), node, step)) {
+          continue;
+        }
         declaring.add(i);
-        if (validates(branches.get(i), validatable)) {
+        if (fits) {
           valid.add(i);
         }
       }
@@ -975,15 +981,36 @@ final class JsonProvenancePruner {
     }
   }
 
-  // Whether some property's presence makes name required: dependencies, or dependentRequired.
+  // Whether some property's presence makes name required: dependencies (either form),
+  // dependentRequired, or dependentSchemas.
   private static boolean dependedOn(ObjectSchema object, String name) {
-    return object.getPropertyDependencies().values().stream().anyMatch(d -> d.contains(name));
+    return object.getPropertyDependencies().values().stream().anyMatch(d -> d.contains(name))
+        || object.getSchemaDependencies().values().stream().anyMatch(d -> requires(d, name));
   }
 
-  // Whether a property present in node makes name required: dependencies, or dependentRequired.
+  // Whether a property present in node makes name required: dependencies (either form),
+  // dependentRequired, or dependentSchemas.
   private static boolean requiredBy(ObjectSchema object, ObjectNode node, String name) {
     return object.getPropertyDependencies().entrySet().stream()
-        .anyMatch(e -> node.has(e.getKey()) && e.getValue().contains(name));
+        .anyMatch(e -> node.has(e.getKey()) && e.getValue().contains(name))
+        || object.getSchemaDependencies().entrySet().stream()
+            .anyMatch(e -> node.has(e.getKey()) && requires(e.getValue(), name));
+  }
+
+  // Whether a dependency's schema requires name directly.
+  private static boolean requires(Schema schema, String name) {
+    Schema object = referred(schema);
+    return object instanceof ObjectSchema
+        && ((ObjectSchema) object).getRequiredProperties().contains(name);
+  }
+
+  // Whether walking the value under schema reaches a declaration of the property.
+  private static boolean reaches(List<String> names, Schema schema, JsonNode node, int step) {
+    boolean[] reached = {false};
+    walk(names, schema, node, step, new ArrayList<>(), false, Collections.emptyList(),
+        (n, object, name, choices, ambiguous, alternatives) ->
+            reached[0] |= object.getPropertySchemas().containsKey(name));
+    return reached[0];
   }
 
   private static JsonNode withoutProperty(ObjectNode node, String name, CombinedSchema schema) {

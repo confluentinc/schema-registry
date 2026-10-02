@@ -199,13 +199,32 @@ final class ProtoProvenanceRenumberer {
 
   /**
    * Whether the location at {@code path}, ending at {@code field}, is a oneof: its names are its
-   * parent's, or end at a map entry's {@code value}, which is no location of its own.
+   * parent's, or end at a map entry's {@code value}, which is no location of its own — a native
+   * entry, or a key or value slot of one the converter reads as a map or multiset by its shape.
    */
   private static boolean isOneof(List<Integer> path, List<String> names, FieldDescriptor field,
       ProvenanceMapping mapping) {
-    return names.equals(mapping.enclosingReaderNamesOf(path))
-        || field != null && field.getContainingType().getOptions().getMapEntry()
-            && field.getNumber() == 2;
+    if (names.equals(mapping.enclosingReaderNamesOf(path))) {
+      return true;
+    }
+    if (field != null && field.getContainingType().getOptions().getMapEntry()
+        && field.getNumber() == 2) {
+      return true;
+    }
+    return "UNION".equals(mapping.readerKindOf(path)) && isEntrySlot(path, names, mapping);
+  }
+
+  // Whether names end at a map's or multiset's key or value, as a oneof in that message is
+  // spelled: an entry the converter reads by its shape need not be a native map entry.
+  private static boolean isEntrySlot(List<Integer> path, List<String> names,
+      ProvenanceMapping mapping) {
+    if (path.size() < 3 || names.size() != mapping.enclosingReaderNamesOf(path).size() + 1) {
+      return false;
+    }
+    String kind = mapping.readerKindOf(path.subList(0, path.size() - 2));
+    String last = names.get(names.size() - 1);
+    boolean entry = kind != null && (kind.startsWith("MAP<") || kind.startsWith("MULTISET<"));
+    return entry && ("key".equals(last) || "value".equals(last));
   }
 
   /**
