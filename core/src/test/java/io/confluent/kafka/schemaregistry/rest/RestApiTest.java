@@ -2322,6 +2322,83 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testUnderLogicalReRegisteringKeepsTheSoftDeletedVersion() throws Exception {
+    // Under LOGICAL, re-registering the content of a soft-deleted version gives a new version
+    // under the same global ID, and the soft-deleted version stays: provenance needs it.
+    String subject = "logical";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+
+    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
+    assertEquals(v2Id, reRegisteredId);
+
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
+    assertTrue(v2Deleted.getDeleted());
+    Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());
+    assertTrue(v1Deleted.getDeleted());
+    assertEquals(Arrays.asList(1, 2, 3), restApp.restClient.getAllVersions(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+
+    // Lookups by content and by ID find the live version, and registering again adds nothing.
+    assertEquals((Integer) 3, restApp.restClient.lookUpSubjectVersion(v2, subject).getVersion());
+    assertEquals(Collections.singletonList(new SubjectVersion(subject, 3)),
+        restApp.restClient.getAllVersionsById(v2Id));
+    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testUnderLogicalHardDeletingTheSuccessorKeepsTheRetainedVersionsId() throws Exception {
+    // Under LOGICAL the soft-deleted v2 stays when its content is re-registered as v3. Once v3 is
+    // hard-deleted, v2 still carries the schema ID: it resolves, and re-registering reuses it.
+    String subject = "logical_hard";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3");
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true);
+
+    assertEquals(v2, restApp.restClient.getId(v2Id, subject).getSchemaString());
+    assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 2, true).getId());
+    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    // v3 was hard-deleted, so its number is the next one.
+    assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 3).getId());
+  }
+
+  @Test
   public void testGetLatestVersionNonExistentSubject() throws Exception {
     String subject = "non_existent_subject";
 
