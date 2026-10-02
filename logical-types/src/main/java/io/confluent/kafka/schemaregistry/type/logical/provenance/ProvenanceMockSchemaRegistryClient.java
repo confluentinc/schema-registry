@@ -233,6 +233,16 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         includeInterior, includeMultipleMessages, algorithm);
   }
 
+  @Override
+  public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages,
+      String algorithm) throws IOException, RestClientException {
+    List<SchemaMetadata> history = history(subject);
+    return provenance(subject, history, carrying(history, fromId, subject),
+        named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages,
+        algorithm);
+  }
+
   private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
       int from, int to, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {

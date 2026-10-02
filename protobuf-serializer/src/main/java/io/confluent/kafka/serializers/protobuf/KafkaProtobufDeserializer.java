@@ -109,7 +109,8 @@ public class KafkaProtobufDeserializer<T extends Message>
 
   /**
    * As {@code deserializeWithSchema} with a reader function, where each reader may carry the
-   * schema id of the registered version it stands for, used by provenance as is.
+   * subject version, or the schema id, of the registered version it stands for, used by
+   * provenance as is.
    */
   public ProtobufSchemaAndValue deserializeWithReaderSchema(
       String topic, Headers headers, byte[] bytes,

@@ -922,6 +922,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+      throws IOException, RestClientException {
+    return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromId, toVersion, includeInterior, includeMultipleMessages, algorithm);
+  }
+
+  @Override
   public int getId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return getId(subject, schema, false);

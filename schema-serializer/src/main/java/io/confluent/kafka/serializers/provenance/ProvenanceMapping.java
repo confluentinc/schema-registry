@@ -131,6 +131,34 @@ public final class ProvenanceMapping {
         versionWithId(provenance, writerId), versionWithId(provenance, readerId));
   }
 
+  /**
+   * Joins the version {@code readerVersion} of {@code provenance}, the reader's, with its other
+   * end, the writer's; null when the two ends are one version. Found by version: the writer's
+   * schema id may also be the reader's, under an earlier version.
+   *
+   * @throws SerializationException if the reader's version is not among the versions, or more
+   *     than one other version is
+   */
+  public static ProvenanceMapping joinToVersion(SchemaProvenance provenance, int readerVersion) {
+    ProvenanceVersion reader = null;
+    ProvenanceVersion writer = null;
+    for (ProvenanceVersion version : provenance.getVersions()) {
+      if (version.getVersion() != null && version.getVersion() == readerVersion) {
+        reader = version;
+      } else if (writer == null) {
+        writer = version;
+      } else {
+        throw new SerializationException("The provenance response has more than one version "
+            + "besides the reader's, version " + readerVersion);
+      }
+    }
+    if (reader == null) {
+      throw new SerializationException(
+          "The provenance response has no version " + readerVersion);
+    }
+    return writer == null ? null : new ProvenanceMapping(writer, reader);
+  }
+
   private static ProvenanceVersion versionWithId(SchemaProvenance provenance, int schemaId) {
     for (ProvenanceVersion version : provenance.getVersions()) {
       if (version.getId() != null && version.getId() == schemaId) {

@@ -149,7 +149,8 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   /**
    * As {@code deserializeWithSchema} with a reader function, where each reader may carry the
-   * schema id of the registered version it stands for, used by provenance as is.
+   * subject version, or the schema id, of the registered version it stands for, used by
+   * provenance as is.
    */
   public GenericContainerWithVersion deserializeWithReaderSchema(
       String topic, Headers headers, byte[] bytes,

@@ -21,10 +21,12 @@ import org.apache.avro.generic.GenericRecord;
 import java.util.Map;
 import java.util.HashMap;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -33,9 +35,11 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import java.util.Arrays;
@@ -300,13 +304,14 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
-  public void aRangeMustBeNamedOneWayAndByBothEnds() throws Exception {
+  public void eachEndOfTheRangeMustBeNamedOnce() throws Exception {
     register(SUBJECT, record(field("id", "int")));
     for (String query : Arrays.asList(
         "",                                     // neither
         "?fromVersion=1",                       // one end
         "?fromId=1",                            // one end
-        "?fromVersion=1&toVersion=1&fromId=1&toId=1")) {  // both ways
+        "?fromVersion=1&fromId=1&toVersion=1",  // one end both ways
+        "?fromVersion=1&toVersion=1&fromId=1&toId=1")) {  // both ends both ways
       assertError(422, Errors.INVALID_PROVENANCE_REQUEST_ERROR_CODE,
           () -> restApp.restClient.httpRequest("/subjects/" + SUBJECT + "/provenance" + query,
               "GET", null, RestService.DEFAULT_REQUEST_PROPERTIES, PROVENANCE));
@@ -382,6 +387,65 @@ public abstract class RestApiProvenanceTest {
     // Every version is registered after v1's epoch, so each transition is matched by v1.
     assertEquals("dynamic", dynamic.getAlgorithm());
     assertEquals(v1.getVersions(), dynamic.getVersions());
+  }
+
+  @Test
+  public void eachEndOfTheRangeMayBeNamedEitherWay() throws Exception {
+    int v1 = register(SUBJECT, record(field("id", "int")));
+    int v2 = register(SUBJECT, record(field("id", "int"), field("name", "string")));
+
+    SchemaProvenance toVersion = restApp.restClient.getProvenanceToVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, 2, false, false, null);
+    SchemaProvenance fromVersion = restApp.restClient.httpRequest("/subjects/" + SUBJECT
+        + "/provenance?fromVersion=2&toId=" + v1, "GET", null,
+        RestService.DEFAULT_REQUEST_PROPERTIES, PROVENANCE);
+
+    assertEquals(Arrays.asList(1, 2), versions(toVersion));
+    assertEquals(Arrays.asList(v1, v2), schemaIds(toVersion));
+    assertEquals(Arrays.asList(1, 2), versions(fromVersion));
+  }
+
+  @Test
+  public void aReaderPinnedByIdOrVersionIsThatVersionAfterARollback() throws Exception {
+    // A rollback: v1's schema registered again with version -1 is v4, equal to v1 but for its
+    // confluent:version, so under a new id. note was dropped at v3, so it is new at v4.
+    String v1 = record(field("id", "int"),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    String v2 = record(field("id", "int"),
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}",
+        "{\"name\":\"extra\",\"type\":\"int\",\"default\":0}");
+    int v1Id = register(SUBJECT, v1);
+    int v2Id = register(SUBJECT, v2);
+    register(SUBJECT, record(field("id", "int")));
+    RegisterSchemaResponse v4 = restApp.restClient.registerSchema(
+        v1, AvroSchema.TYPE, Collections.emptyList(), SUBJECT, -1, -1);
+    assertEquals(4, v4.getVersion());
+    assertNotEquals(v1Id, v4.getId());
+
+    SchemaRegistryClient client = new CachedSchemaRegistryClient(restApp.restClient, 10);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "bogus");
+    config.put("auto.register.schemas", false);
+    config.put("use.schema.id", v2Id);
+    org.apache.avro.Schema writer = new org.apache.avro.Schema.Parser().parse(v2);
+    byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders",
+        new GenericRecordBuilder(writer).set("id", 7).set("note", "ada").set("extra", 1).build());
+    config.remove("use.schema.id");
+    config.put("provenance.algorithm", "v1");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+    // Flink's reader: the pinned v1 with other metadata merged on, registered nowhere.
+    AvroSchema merged = new AvroSchema(v1).copy(
+        new Metadata(null, Collections.singletonMap("owner", "flink"), null), null);
+
+    GenericRecord byStructure = (GenericRecord) deserializer.deserializeWithReaderSchema(
+        "orders", new RecordHeaders(), bytes, w -> ReaderSchema.of(merged), false).getValue();
+    GenericRecord byId = (GenericRecord) deserializer.deserializeWithReaderSchema("orders",
+        new RecordHeaders(), bytes, w -> ReaderSchema.of(merged, v1Id), false).getValue();
+    GenericRecord byVersion = (GenericRecord) deserializer.deserializeWithReaderSchema("orders",
+        new RecordHeaders(), bytes, w -> ReaderSchema.of(merged, SUBJECT, 1), false).getValue();
+    assertEquals("", byStructure.get("note").toString());
+    assertEquals("ada", byId.get("note").toString());
+    assertEquals("ada", byVersion.get("note").toString());
   }
 
   @Test

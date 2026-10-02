@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -55,7 +56,9 @@ import org.slf4j.LoggerFactory;
  * paired with the reader by provenance, and caches it.
  *
  * <p>Provenance pairs registered versions by schema id. A reader's id is the one its caller
- * supplied, else the one it is registered under; a writer's is the one its record carries. Where
+ * supplied, else the one it is registered under; a writer's is the one its record carries. A
+ * reader its caller pinned to a subject version is asked about by that version instead, as one
+ * schema id may sit under several versions. Where
  * that is missing — a record naming its schema by GUID — or names no version of the subject, it
  * is looked up the same way. A schema matching no version exactly takes the latest version of its
  * own schema type whose logical type is equivalent to its own under that type's rules
@@ -93,7 +96,7 @@ public final class ProvenanceProjector<T> {
   // Readers whose registered version the caller named, by the schema handed over, by identity:
   // an equal reader may stand for another version, or for none.
   // A deserializer handing over a copy says so (sameReader).
-  private final Cache<ParsedSchema, Integer> suppliedReaderInstances =
+  private final Cache<ParsedSchema, Pin> suppliedReaderInstances =
       CacheBuilder.newBuilder().weakKeys().build();
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
   private final Cache<ParsedSchema, Boolean> derivedReaders =
@@ -131,7 +134,7 @@ public final class ProvenanceProjector<T> {
 
   /**
    * {@code readers} as the reader function the deserializers take, remembering the registered id
-   * each reader comes with so it is used instead of being looked up.
+   * or version each reader comes with so it is used instead of being looked up.
    */
   public Function<ParsedSchema, ParsedSchema> readerSchemas(
       Function<ParsedSchema, ReaderSchema> readers) {
@@ -140,34 +143,35 @@ public final class ProvenanceProjector<T> {
       if (reader == null) {
         return null;
       }
-      if (reader.getId() != null) {
-        suppliedReaderInstances.put(reader.getSchema(), reader.getId());
+      if (reader.getId() != null || reader.getVersion() != null) {
+        suppliedReaderInstances.put(reader.getSchema(),
+            new Pin(reader.getId(), reader.getSubject(), reader.getVersion()));
       }
       return reader.getSchema();
     };
   }
 
   /**
-   * Whether {@code reader} came with the registered id of the version it stands for.
+   * Whether {@code reader} came with the registered id or version it stands for.
    */
-  public boolean suppliesId(ParsedSchema reader) {
-    return suppliedId(reader) != null;
+  public boolean isPinned(ParsedSchema reader) {
+    return pinOf(reader) != null;
   }
 
-  private Integer suppliedId(ParsedSchema reader) {
+  private Pin pinOf(ParsedSchema reader) {
     return suppliedReaderInstances.getIfPresent(reader);
   }
 
   /**
    * {@code copy}, which a deserializer made of {@code reader}, standing for the same version:
-   * any id supplied with {@code reader} is {@code copy}'s too. The Protobuf deserializer shares one
-   * copy among equal readers; equal Protobuf schemas are one registered version, so the id holds
-   * for each.
+   * any id or version supplied with {@code reader} is {@code copy}'s too. The Protobuf
+   * deserializer shares one copy among equal readers; equal Protobuf schemas are one registered
+   * version, so the pin holds for each.
    */
   public ParsedSchema sameReader(ParsedSchema reader, ParsedSchema copy) {
-    Integer id = suppliedId(reader);
-    if (id != null && copy != reader) {
-      suppliedReaderInstances.put(copy, id);
+    Pin pin = pinOf(reader);
+    if (pin != null && copy != reader) {
+      suppliedReaderInstances.put(copy, pin);
     }
     return copy;
   }
@@ -217,7 +221,8 @@ public final class ProvenanceProjector<T> {
       return Optional.empty();
     }
     // A writer named by GUID alone is keyed by it; its schema id is looked up when computed. A
-    // supplied reader id is part of the question: the same schema may stand for either version.
+    // supplied reader id or version is part of the question: the same schema may stand for
+    // either version.
     // So are the writer's and reader's names: a Protobuf file's messages share its schema id, and
     // its schemas are equal whichever message they name. A reader derived from a class equals its
     // text, so which of the two it is counts too.
@@ -225,7 +230,7 @@ public final class ProvenanceProjector<T> {
     List<Object> key = Arrays.asList(subject,
         writerId.getId() != null ? writerId.getId() : writerId.getGuid(),
         writer != null ? writer.name() : null, reader, reader.name(),
-        includeMultipleMessages, derived ? null : suppliedId(reader), derived);
+        includeMultipleMessages, derived ? null : pinOf(reader), derived);
     Outcome<T> outcome;
     try {
       // Loaded atomically: the first records of a pair, however many at once, ask once.
@@ -273,14 +278,16 @@ public final class ProvenanceProjector<T> {
               "The writer schema is not a version of subject " + subject);
         }
       }
-      Integer readerId = readerId(subject, reader);
-      if (readerId == null) {
+      Integer readerVersion = pinnedVersion(subject, reader);
+      Integer readerId = readerVersion != null ? null : readerId(subject, reader);
+      if (readerVersion == null && readerId == null) {
         throw new ProvenanceUnavailableException(
             "The reader schema is not a version of subject " + subject);
       }
       SchemaProvenance provenance;
       try {
-        provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
+        provenance = provenance(
+            subject, writerId, readerId, readerVersion, includeMultipleMessages);
       } catch (ProvenanceUnknownWriterException e) {
         // A writer id under no version of the subject: the writer's schema may still equal one.
         Integer equal = structuralMatch(subject, writer);
@@ -288,13 +295,17 @@ public final class ProvenanceProjector<T> {
           throw e;
         }
         writerId = equal;
-        provenance = provenance(subject, writerId, readerId, includeMultipleMessages);
+        provenance = provenance(
+            subject, writerId, readerId, readerVersion, includeMultipleMessages);
       }
-      if (provenance == null) {
+      ProvenanceMapping mapping = provenance == null ? null
+          : readerVersion != null ? ProvenanceMapping.joinToVersion(provenance, readerVersion)
+          : ProvenanceMapping.join(provenance, writerId, readerId);
+      if (mapping == null) {
         // One and the same version: nothing to pair.
         return sameVersion != null ? Outcome.of(sameVersion.get()) : Outcome.unavailable();
       }
-      return Outcome.of(build.apply(ProvenanceMapping.join(provenance, writerId, readerId)));
+      return Outcome.of(build.apply(mapping));
     } catch (IOException e) {
       throw new SerializationException(
           "Could not reach Schema Registry for the provenance of " + written, e);
@@ -336,22 +347,27 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * The provenance pairing two versions; null when they are one and the same.
+   * The provenance pairing the writer's version with the reader's, the reader named by schema id
+   * or, when pinned, by version; null when two schema ids are one and the same.
    *
    * @throws SerializationException if the request itself is rejected — a bad version, request or
-   *     range, which, being two schema ids and well formed, cannot be the schemas' doing, or an
-   *     unknown algorithm — or the strategy breaks its contract: every record of the writer fails
+   *     range, or an unknown algorithm — or the strategy breaks its contract: every record of the
+   *     writer fails
    */
-  private SchemaProvenance provenance(String subject, int writerId, int readerId,
-      boolean includeMultipleMessages) {
-    if (writerId == readerId) {
+  private SchemaProvenance provenance(String subject, int writerId, Integer readerId,
+      Integer readerVersion, boolean includeMultipleMessages) {
+    if (readerVersion == null && writerId == readerId) {
       return null;
     }
-    String pair = "schema ids " + writerId + " and " + readerId;
+    String pair = "schema id " + writerId + " and "
+        + (readerVersion != null ? "version " + readerVersion : "schema id " + readerId);
     SchemaProvenance provenance;
     try {
-      provenance = strategy.provenance(
-          client, subject, writerId, readerId, false, includeMultipleMessages, algorithm);
+      provenance = readerVersion != null
+          ? strategy.provenanceToVersion(client, subject, writerId, readerVersion, false,
+              includeMultipleMessages, algorithm)
+          : strategy.provenance(
+              client, subject, writerId, readerId, false, includeMultipleMessages, algorithm);
     } catch (ProvenanceRejectedException e) {
       throw new SerializationException(
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);
@@ -394,8 +410,26 @@ public final class ProvenanceProjector<T> {
     // An id supplied for an equal text reader is not the class's: it is the latest version it
     // equals.
     boolean derived = derivedReaders.getIfPresent(reader) != null;
-    Integer supplied = derived ? null : suppliedId(reader);
-    return supplied != null ? supplied : registeredId(subject, reader, derived);
+    Pin pin = derived ? null : pinOf(reader);
+    return pin != null && pin.id != null ? pin.id : registeredId(subject, reader, derived);
+  }
+
+  /**
+   * The version {@code reader} is pinned to, or null if it is not pinned to one.
+   *
+   * @throws SerializationException if it is pinned to a version of another subject: every record
+   *     of the writer fails
+   */
+  private Integer pinnedVersion(String subject, ParsedSchema reader) {
+    Pin pin = derivedReaders.getIfPresent(reader) != null ? null : pinOf(reader);
+    if (pin == null || pin.version == null) {
+      return null;
+    }
+    if (!pin.subject.equals(subject)) {
+      throw new SerializationException("The reader is pinned to version " + pin.version
+          + " of subject " + pin.subject + ", but the record's subject is " + subject);
+    }
+    return pin.version;
   }
 
   private Integer registeredId(String subject, ParsedSchema schema)
@@ -491,6 +525,34 @@ public final class ProvenanceProjector<T> {
   private SchemaMetadata metadataOf(String subject, int version)
       throws IOException, RestClientException {
     return client.getSchemaMetadata(subject, version, true);
+  }
+
+  // The registered version a caller named for a reader: a schema id, or a subject version.
+  private static final class Pin {
+    private final Integer id;
+    private final String subject;
+    private final Integer version;
+
+    Pin(Integer id, String subject, Integer version) {
+      this.id = id;
+      this.subject = subject;
+      this.version = version;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof Pin)) {
+        return false;
+      }
+      Pin pin = (Pin) o;
+      return Objects.equals(id, pin.id) && Objects.equals(subject, pin.subject)
+          && Objects.equals(version, pin.version);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(id, subject, version);
+    }
   }
 
   private static final class Outcome<T> {

@@ -283,6 +283,17 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * As {@link #getProvenanceById}, from the version carrying schema id {@code fromId} to version
+   * {@code toVersion}: the form a deserializer uses when its reader is pinned to a version, as one
+   * schema id may sit under several versions.
+   */
+  default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
   default List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)

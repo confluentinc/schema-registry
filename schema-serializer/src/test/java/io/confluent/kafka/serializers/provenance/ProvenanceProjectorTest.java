@@ -311,6 +311,106 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void aReaderPinnedToAVersionIsAskedAboutByIt() throws Exception {
+    // One schema id may sit under several versions: the version, not the id, says which.
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
+
+    for (int record = 0; record < 2; record++) {
+      Optional<String> built = projector.project(SUBJECT,
+          new SchemaId(AvroSchema.TYPE, client.writer, (String) null), client.writerSchema,
+          handedOver, false, mapping -> "built");
+      assertEquals(Optional.of("built"), built);
+    }
+    assertEquals(1, client.asked);
+    assertEquals(client.writer, client.lastWriterId);
+    assertEquals(3, client.lastReaderVersion);
+    assertTrue(projector.isPinned(handedOver));
+  }
+
+  @Test
+  public void aWriterOfThePinnedVersionItselfIsReadAsWritten() throws Exception {
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Collections.singletonList(
+        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.reader);
+    Optional<String> built = projector.project(SUBJECT,
+        new SchemaId(AvroSchema.TYPE, client.readerId, (String) null), client.reader,
+        handedOver, false, mapping -> "built", () -> "same");
+    assertEquals(Optional.of("same"), built);
+  }
+
+  @Test
+  public void aReaderPinnedToAnotherSubjectsVersionFailsEveryRecord() throws Exception {
+    CountingClient client = new CountingClient();
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, "other-value", 3)).apply(client.writerSchema);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    for (int record = 0; record < 2; record++) {
+      SerializationException e = assertThrows(SerializationException.class, () ->
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+      assertTrue(e.getMessage(), e.getMessage().contains("other-value"));
+    }
+    assertEquals(0, client.asked);
+  }
+
+  @Test
+  public void aPinnedVersionTheRegistryDoesNotHaveFailsEveryRecord() throws Exception {
+    CountingClient client = new CountingClient();
+    client.failure = new RestClientException("Version 9 not found.", 404, 40402);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, SUBJECT, 9)).apply(client.writerSchema);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    for (int record = 0; record < 2; record++) {
+      assertThrows(SerializationException.class, () ->
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+    }
+    assertEquals(1, client.asked);
+  }
+
+  @Test
+  public void aStrategyThatCannotPinAVersionFailsEveryRecord() throws Exception {
+    // Rather than read against whichever version carries the reader's schema id.
+    CountingClient client = new CountingClient();
+    ProvenanceStrategy byIdOnly = new ProvenanceStrategy() {
+      @Override
+      public void configure(Map<String, ?> configs) {
+      }
+
+      @Override
+      public SchemaProvenance provenance(SchemaRegistryClient c, String subject, int fromId,
+          int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
+        throw new AssertionError("asked by schema id");
+      }
+    };
+    ProvenanceProjector<String> projector =
+        new ProvenanceProjector<>(client, "v1", 10, -1, byIdOnly);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    SerializationException e = assertThrows(SerializationException.class, () ->
+        projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+    assertTrue(e.getMessage(), e.getMessage().contains("cannot pin"));
+  }
+
+  @Test
+  public void aPinnedVersionMustBeAVersionNumber() {
+    assertThrows(IllegalArgumentException.class,
+        () -> ReaderSchema.of(new AvroSchema("\"int\""), SUBJECT, -1));
+    assertThrows(NullPointerException.class,
+        () -> ReaderSchema.of(new AvroSchema("\"int\""), null, 1));
+  }
+
+  @Test
   public void aRejectedRequestFailsEveryRecordFromThatWriter() throws Exception {
     for (int[] rejection : new int[][] {{422, 42202}, {422, 42215}, {404, 40402},
         {422, 42216}}) {
@@ -514,6 +614,7 @@ public class ProvenanceProjectorTest {
     int asked;
     int lastWriterId;
     int lastReaderId;
+    int lastReaderVersion;
     String lastAlgorithm;
     boolean rejectsForeignWriters;
     // As a client implementing only the basic lookups, without soft-deleted versions.
@@ -558,6 +659,23 @@ public class ProvenanceProjectorTest {
       if (rejectsForeignWriters && !idsOf(subject).contains(fromId)) {
         throw new RestClientException("not a version", 404, 40411);
       }
+      if (failure != null) {
+        throw failure;
+      }
+      if (provenance != null) {
+        return provenance;
+      }
+      throw new UnsupportedOperationException("no provenance here");
+    }
+
+    @Override
+    public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        throws IOException, RestClientException {
+      asked++;
+      lastWriterId = fromId;
+      lastReaderVersion = toVersion;
+      lastAlgorithm = algorithm;
       if (failure != null) {
         throw failure;
       }

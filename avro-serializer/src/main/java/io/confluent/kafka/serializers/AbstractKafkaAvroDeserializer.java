@@ -124,14 +124,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             ? classReader(readerSchema) : new AvroSchema(readerSchema);
   }
 
-  // A reader function's class schema is a class reader too, unless its registered id came with
-  // it.
+  // A reader function's class schema is a class reader too, unless its registered id or version
+  // came with it.
   private AvroSchema readerOf(AvroSchema reader) {
     if (reader == null || provenanceAlgorithm == null) {
       return reader;
     }
     boolean bare = reader.metadata() == null && reader.ruleSet() == null;
-    return bare && !provenanceProjector().suppliesId(reader) && isClassSchema(reader.rawSchema())
+    return bare && !provenanceProjector().isPinned(reader) && isClassSchema(reader.rawSchema())
         ? classReader(reader.rawSchema()) : reader;
   }
 

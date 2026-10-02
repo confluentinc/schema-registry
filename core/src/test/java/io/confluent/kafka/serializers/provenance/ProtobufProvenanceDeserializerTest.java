@@ -26,6 +26,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -1310,6 +1311,27 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(0, get(value, "a"));
   }
 
+  @Test
+  void aReaderPinnedToAVersionIsReadAsThatVersion() throws Exception {
+    // v3 equals v1 but for metadata, and note was dropped at v2, so v3's note is new. A reader
+    // registered nowhere is matched by structure to v3; pinned, it is v1, through its copy.
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, row("int32 id = 1;"));
+    client.register(SUBJECT, withMetadata(v1, "v3"));
+    ProtobufSchema merged = withMetadata(v1, "merged");
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config("v1"));
+
+    DynamicMessage byStructure = (DynamicMessage) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> merged, false).getValue();
+    DynamicMessage pinned = (DynamicMessage) deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> ReaderSchema.of(merged, SUBJECT, 1), false)
+        .getValue();
+    assertEquals("", get(byStructure, "note"));
+    assertEquals("ada", get(pinned, "note"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1374,6 +1396,10 @@ class ProtobufProvenanceDeserializerTest {
     return DynamicMessage.newBuilder(refund)
         .setField(refund.findFieldByName("id"), id)
         .setField(refund.findFieldByName("amount"), amount).build();
+  }
+
+  private static ProtobufSchema withMetadata(ProtobufSchema schema, String value) {
+    return schema.copy(new Metadata(null, Collections.singletonMap("version", value), null), null);
   }
 
   private static Object get(DynamicMessage message, String name) {

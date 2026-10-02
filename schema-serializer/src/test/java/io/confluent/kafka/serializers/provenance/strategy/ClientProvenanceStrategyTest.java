@@ -81,6 +81,20 @@ public class ClientProvenanceStrategyTest {
   }
 
   @Test
+  public void aPinnedVersionIsAskedForByVersionAndFailsAlike() {
+    SchemaProvenance response = new SchemaProvenance("s", Collections.emptyList());
+    assertSame(response, askToVersion(new FailingClient(null, null, response)));
+    assertSame(IOException.class, assertThrows(ProvenanceRetriableException.class,
+        () -> askToVersion(new FailingClient(new IOException("down"), null, null)))
+        .getCause().getClass());
+    assertThrows(ProvenanceRejectedException.class, () -> askToVersion(new FailingClient(
+        new RestClientException("Version 9 not found.", 404, 40402), null, null)));
+    // A client that cannot pin a version fails the records, never reads another version.
+    assertThrows(ProvenanceRejectedException.class, () -> askToVersion(
+        new FailingClient(null, new UnsupportedOperationException("not implemented"), null)));
+  }
+
+  @Test
   public void transientStatusesAreServerErrorsTimeoutsAndThrottling() {
     assertTrue(ClientProvenanceStrategy.isTransient(500));
     assertTrue(ClientProvenanceStrategy.isTransient(408));
@@ -97,6 +111,11 @@ public class ClientProvenanceStrategyTest {
 
   private static SchemaProvenance ask(FailingClient client) {
     return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false, false, "v1");
+  }
+
+  private static SchemaProvenance askToVersion(FailingClient client) {
+    return new ClientProvenanceStrategy().provenanceToVersion(
+        client, "s", 1, 2, false, false, "v1");
   }
 
   // Answers the provenance request with a response, or fails as set.
@@ -116,6 +135,17 @@ public class ClientProvenanceStrategyTest {
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
         boolean includeInterior, boolean includeMultipleMessages, String algorithm)
         throws IOException, RestClientException {
+      return answer();
+    }
+
+    @Override
+    public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        throws IOException, RestClientException {
+      return answer();
+    }
+
+    private SchemaProvenance answer() throws IOException, RestClientException {
       if (checked instanceof IOException) {
         throw (IOException) checked;
       }

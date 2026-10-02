@@ -337,8 +337,8 @@ public class SubjectsResource {
   @PerformanceMetric("subjects.provenance.get")
   @Operation(summary = "Get column provenance between two versions",
       description = "Retrieves, for each version in the range, every column's inlined path and a "
-          + "provenance id that is stable across renames. Address the range either by version, "
-          + "with fromVersion and toVersion, or by schema id, with fromId and toId.",
+          + "provenance id that is stable across renames. Address each end of the range either "
+          + "by version (fromVersion, toVersion) or by schema id (fromId, toId), in any mix.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -388,14 +388,9 @@ public class SubjectsResource {
       @QueryParam("algorithm") String algorithm) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
-    boolean byVersion = fromVersion != null || toVersion != null;
-    boolean byId = fromId != null || toId != null;
-    if (byVersion == byId) {
-      throw Errors.invalidProvenanceRequestException(
-          "Name the range either by fromVersion and toVersion or by fromId and toId.");
-    }
-    if (byVersion ? fromVersion == null || toVersion == null : fromId == null || toId == null) {
-      throw Errors.invalidProvenanceRequestException("Name both ends of the range.");
+    if ((fromVersion == null) == (fromId == null) || (toVersion == null) == (toId == null)) {
+      throw Errors.invalidProvenanceRequestException("Name each end of the range once: by "
+          + "version (fromVersion, toVersion) or by schema id (fromId, toId).");
     }
     String version;
     try {
@@ -408,11 +403,14 @@ public class SubjectsResource {
 
     String errorMessage = "Error while computing provenance for subject " + subject;
     try {
-      return byVersion
-          ? provenanceByVersion(subject, fromVersion, toVersion, includeInterior,
-              includeMultipleMessages, version)
-          : provenanceById(subject, fromId, toId, includeInterior,
-              includeMultipleMessages, version);
+      List<Schema> history = nonEmptyProvenanceHistory(subject);
+      List<SchemaMetadata> entries = provenanceEntries(history);
+      int from = fromVersion != null ? versionNamed(fromVersion, entries)
+          : versionOfId(fromId, subject, entries);
+      int to = toVersion != null ? versionNamed(toVersion, entries)
+          : versionOfId(toId, subject, entries);
+      return provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages,
+          version);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -485,32 +483,6 @@ public class SubjectsResource {
     asyncResponse.resume(deletedVersions);
   }
 
-
-  /**
-   * The range between two versions, each a version number or {@code "latest"}.
-   */
-  private SchemaProvenance provenanceByVersion(String subject, String fromVersion, String toVersion,
-      boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) throws SchemaRegistryException, InvalidVersionException {
-    List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<SchemaMetadata> entries = provenanceEntries(history);
-    return provenanceOf(subject, history, versionNamed(fromVersion, entries),
-        versionNamed(toVersion, entries), includeInterior, includeMultipleMessages,
-        algorithm);
-  }
-
-  /**
-   * The range between the versions carrying two schema ids, in either order.
-   */
-  private SchemaProvenance provenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) throws SchemaRegistryException {
-    List<Schema> history = nonEmptyProvenanceHistory(subject);
-    List<SchemaMetadata> entries = provenanceEntries(history);
-    return provenanceOf(subject, history, versionOfId(fromId, subject, entries),
-        versionOfId(toId, subject, entries), includeInterior, includeMultipleMessages,
-        algorithm);
-  }
 
   private List<Schema> nonEmptyProvenanceHistory(String subject) throws SchemaRegistryException {
     List<Schema> history = provenanceHistory(subject);

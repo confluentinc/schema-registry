@@ -1611,16 +1611,8 @@ public class RestService implements Closeable, Configurable {
                                                  boolean includeMultipleMessages,
                                                  String algorithm)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
-    builder.queryParam("fromVersion", fromVersion);
-    builder.queryParam("toVersion", toVersion);
-    builder.queryParam("includeInterior", includeInterior);
-    builder.queryParam("includeMultipleMessages", includeMultipleMessages);
-    if (algorithm != null) {
-      builder.queryParam("algorithm", algorithm);
-    }
-    String path = builder.build(subject).toString();
-    return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
+    return getProvenance(requestProperties, subject, "fromVersion", fromVersion, "toVersion",
+        toVersion, includeInterior, includeMultipleMessages, algorithm);
   }
 
   /**
@@ -1635,9 +1627,33 @@ public class RestService implements Closeable, Configurable {
                                             boolean includeMultipleMessages,
                                             String algorithm)
       throws IOException, RestClientException {
+    return getProvenance(requestProperties, subject, "fromId", fromId, "toId", toId,
+        includeInterior, includeMultipleMessages, algorithm);
+  }
+
+  /**
+   * As {@link #getProvenanceById}, from the version carrying schema id {@code fromId} to version
+   * {@code toVersion}: the form a deserializer uses when its reader is pinned to a version, as one
+   * schema id may sit under several versions.
+   */
+  public SchemaProvenance getProvenanceToVersion(Map<String, String> requestProperties,
+                                                 String subject,
+                                                 int fromId,
+                                                 int toVersion,
+                                                 boolean includeInterior,
+                                                 boolean includeMultipleMessages,
+                                                 String algorithm)
+      throws IOException, RestClientException {
+    return getProvenance(requestProperties, subject, "fromId", fromId, "toVersion", toVersion,
+        includeInterior, includeMultipleMessages, algorithm);
+  }
+
+  private SchemaProvenance getProvenance(Map<String, String> requestProperties, String subject,
+      String fromParam, Object from, String toParam, Object to, boolean includeInterior,
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
-    builder.queryParam("fromId", fromId);
-    builder.queryParam("toId", toId);
+    builder.queryParam(fromParam, String.valueOf(from));
+    builder.queryParam(toParam, String.valueOf(to));
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
     if (algorithm != null) {

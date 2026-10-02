@@ -54,6 +54,24 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
     }
   }
 
+  @Override
+  public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
+      int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String algorithm) {
+    try {
+      return client.getProvenanceToVersion(
+          subject, fromId, toVersion, includeInterior, includeMultipleMessages, algorithm);
+    } catch (IOException e) {
+      throw new ProvenanceRetriableException("Could not reach Schema Registry", e);
+    } catch (RestClientException e) {
+      throw translate(e, "schema id " + fromId + " and version " + toVersion + " of subject "
+          + subject);
+    } catch (UnsupportedOperationException e) {
+      throw new ProvenanceRejectedException(
+          "The Schema Registry client cannot pin a reader to a version", e);
+    }
+  }
+
   private static RuntimeException translate(RestClientException e, String pair) {
     if (isTransient(e.getStatus())) {
       return new ProvenanceRetriableException(
