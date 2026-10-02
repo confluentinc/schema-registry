@@ -3994,6 +3994,115 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "Key and value subjects were not hard-deleted");
   }
 
+  @Test
+  public void testBatchMutateDeleteAsync() throws Exception {
+    String subject = createStrongKeyAssociation("batch-async-topic", "batch-async-123");
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        batchDelete("batch-async-topic", "batch-async-123", true, true));
+
+    assertNull(response.getResults().get(0).getError());
+    // The association is gone as soon as the request returns
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "batch-async-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+    TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
+        "Subject " + subject + " was not hard-deleted");
+  }
+
+  @Test
+  public void testBatchMutateDeleteSyncUnchanged() throws Exception {
+    String subject = createStrongKeyAssociation("batch-sync-topic", "batch-sync-123");
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        batchDelete("batch-sync-topic", "batch-sync-123", true, null));
+
+    assertNull(response.getResults().get(0).getError());
+    assertTrue(isHardDeleted(subject));
+  }
+
+  @Test
+  public void testBatchMutateDeleteAsyncDryRun() throws Exception {
+    String subject = createStrongKeyAssociation("batch-dryrun-topic", "batch-dryrun-123");
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true,
+        batchDelete("batch-dryrun-topic", "batch-dryrun-123", true, true));
+
+    assertNull(response.getResults().get(0).getError());
+    assertEquals(1, restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "batch-dryrun-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).size());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testBatchMutateAsyncMixedOps() throws Exception {
+    String asyncSubject = createStrongKeyAssociation("batch-mixed-a", "batch-mixed-a-123");
+    String syncSubject = createStrongKeyAssociation("batch-mixed-c", "batch-mixed-c-123");
+    String createdSubject = "batch-mixed-b-subject";
+    restApp.restClient.registerSchema(
+        TestUtils.getRandomCanonicalAvroString(1).get(0), createdSubject);
+
+    // One request with an async delete, a create, and a sync delete
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(batchDelete("batch-mixed-a", "batch-mixed-a-123", true, true)
+        .getRequests().get(0));
+    requests.add(new AssociationOpRequest("batch-mixed-b", "default", "batch-mixed-b-123",
+        "topic", ImmutableList.of(new AssociationCreateOp(
+            createdSubject, "key", LifecyclePolicy.WEAK, false, null, null))));
+    requests.add(batchDelete("batch-mixed-c", "batch-mixed-c-123", true, null)
+        .getRequests().get(0));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(requests));
+
+    assertNull(response.getResults().get(0).getError());
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "batch-mixed-a-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+    assertNull(response.getResults().get(1).getError());
+    assertEquals(1, response.getResults().get(1).getResult().getAssociations().size());
+    assertNull(response.getResults().get(2).getError());
+    // The sync delete finished inside the request; the async one finishes in the background
+    assertTrue(isHardDeleted(syncSubject));
+    TestUtils.waitUntilTrue(() -> isHardDeleted(asyncSubject), 30_000,
+        "Subject " + asyncSubject + " was not hard-deleted");
+    assertEquals(Collections.singletonList(1),
+        restApp.restClient.getAllVersions(createdSubject));
+  }
+
+  @Test
+  public void testBatchMutateAsyncPartialFailure() throws Exception {
+    String frozenSubject = createStrongKeyAssociation("batch-fail-a", "batch-fail-a-123");
+    String deletedSubject = createStrongKeyAssociation("batch-fail-b", "batch-fail-b-123");
+
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    // A frozen association cannot be deleted without cascadeLifecycle
+    requests.add(batchDelete("batch-fail-a", "batch-fail-a-123", false, true)
+        .getRequests().get(0));
+    requests.add(batchDelete("batch-fail-b", "batch-fail-b-123", true, true)
+        .getRequests().get(0));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(requests));
+
+    assertNotNull(response.getResults().get(0).getError());
+    assertNull(response.getResults().get(1).getError());
+    TestUtils.waitUntilTrue(() -> isHardDeleted(deletedSubject), 30_000,
+        "Subject " + deletedSubject + " was not hard-deleted");
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(frozenSubject));
+  }
+
+  private static AssociationBatchRequest batchDelete(String resourceName, String resourceId,
+      boolean cascadeLifecycle, Boolean async) {
+    return new AssociationBatchRequest(Collections.singletonList(new AssociationOpRequest(
+        resourceName, "default", resourceId, "topic",
+        ImmutableList.of(new AssociationDeleteOp("key", cascadeLifecycle, async)))));
+  }
+
   private String createStrongKeyAssociation(String resourceName, String resourceId)
       throws Exception {
     RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
