@@ -2676,27 +2676,65 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun)
       throws SchemaRegistryException {
-    List<Association> associations = getAssociationsByResourceId(resourceId,
-        resourceType, associationTypes, null);
-    for (Association association : associations) {
-      checkDeleteAssociation(association, cascadeLifecycle);
-    }
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
     if (dryRun) {
       return;
     }
     for (Association association : associations) {
       deleteAssociationEntry(association);
-      String unqualifiedSubject = association.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      Mode subjectMode = getModeInScope(qualifiedSubject);
-      if (subjectMode != Mode.IMPORT
-          && cascadeLifecycle
-          && association.getLifecycle() == LifecyclePolicy.STRONG) {
-        deleteSubject(qualifiedSubject, false);
-        deleteSubject(qualifiedSubject, true);
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      if (qualifiedSubject != null) {
+        cascadeDeleteSubject(qualifiedSubject);
       }
     }
+  }
+
+  /**
+   * Returns the associations to delete for a resource, after checking that every one of them
+   * can be deleted. Shared by the synchronous and asynchronous delete paths.
+   */
+  protected List<Association> validateDeleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    return associations;
+  }
+
+  protected void deleteAssociationEntries(List<Association> associations)
+      throws SchemaRegistryException {
+    for (Association association : associations) {
+      deleteAssociationEntry(association);
+    }
+  }
+
+  /**
+   * Returns the qualified subject that should be deleted along with the given association,
+   * or null if the subject should be kept.
+   */
+  protected String subjectToCascadeDelete(Association association, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    if (!cascadeLifecycle || association.getLifecycle() != LifecyclePolicy.STRONG) {
+      return null;
+    }
+    String unqualifiedSubject = association.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+      return null;
+    }
+    return qualifiedSubject;
+  }
+
+  protected void cascadeDeleteSubject(String qualifiedSubject)
+      throws SchemaRegistryException {
+    deleteSubject(qualifiedSubject, false);
+    deleteSubject(qualifiedSubject, true);
   }
 
   private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
