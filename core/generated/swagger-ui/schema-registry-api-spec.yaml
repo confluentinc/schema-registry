@@ -3830,6 +3830,10 @@ components:
         properties:
           associationType:
             type: string
+          cascadeLifecycle:
+            type: boolean
+          async:
+            type: boolean
     AssociationOp:
       type: object
       properties:

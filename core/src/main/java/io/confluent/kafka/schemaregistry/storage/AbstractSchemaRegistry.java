@@ -2706,11 +2706,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return associations;
   }
 
-  protected void deleteAssociationEntries(List<Association> associations)
+  /**
+   * Deletes the associations for a resource and leaves any cascaded subject deletes to run in
+   * the background. The caller holds the store lock for the resource's tenant
+   * ({@code lockFor(subject)} or {@code lockForAssociation(context)}). By default there is no
+   * background executor, so this deletes everything synchronously. Subclasses that want
+   * background deletes must override this method and provide their own executor.
+   */
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
       throws SchemaRegistryException {
-    for (Association association : associations) {
-      deleteAssociationEntry(association);
-    }
+    deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle, false);
   }
 
   /**
@@ -2873,12 +2880,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           if (!(op instanceof AssociationCreateOrUpdateOp)) {
             if (op instanceof AssociationDeleteOp) {
               AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
-              deleteAssociations(
-                  req.getResourceId(),
-                  req.getResourceType(),
-                  Collections.singletonList(deleteOp.getAssociationType()),
-                  Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
-              );
+              // An async delete still deletes the association entries here, but leaves its
+              // cascaded subject deletes to run in the background
+              if (Boolean.TRUE.equals(deleteOp.getAsync()) && !dryRun) {
+                deleteAssociationsAndQueueCascade(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle())
+                );
+              } else {
+                deleteAssociations(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
+                );
+              }
               metricsContainer.getAssociationBatchMutateDelete().record();
             }
             index++;

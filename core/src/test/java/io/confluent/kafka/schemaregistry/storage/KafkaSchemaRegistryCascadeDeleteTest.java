@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -34,7 +35,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -187,6 +190,42 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     order.verify(spyRegistry).setTenant(null);
   }
 
+  @Test
+  public void testDeleteKeyAndValueQueuesEach() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
+    keyRequest.setSchema(schemas.get(0));
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
+    valueRequest.setSchema(schemas.get(1));
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest("kv-topic", "default", "kv-123", "topic",
+            ImmutableList.of(
+                new AssociationCreateOrUpdateInfo(
+                    null, "key", LifecyclePolicy.STRONG, true, keyRequest, null),
+                new AssociationCreateOrUpdateInfo(
+                    null, "value", LifecyclePolicy.STRONG, true, valueRequest, null))));
+    KafkaSchemaRegistry registry = registry();
+    double failures = cascadeFailureCount(registry);
+
+    // Hold the tenant lock (the same lock is returned for any subject in this tenant), as the
+    // real callers (deleteAssociationsOrForward, mutateAssociations) do
+    Lock lock = registry.kafkaStore.lockFor(":.default:kv-topic-key");
+    lock.lock();
+    try {
+      registry.deleteAssociationsAndQueueCascade(
+          "kv-123", "topic", ImmutableList.of("key", "value"), true);
+    } finally {
+      lock.unlock();
+    }
+
+    assertTrue(registry.getAssociationsByResourceId(
+        "kv-123", "topic", ImmutableList.of("key", "value"), null).isEmpty());
+    TestUtils.waitUntilTrue(() -> isHardDeleted(restApp, ":.default:kv-topic-key")
+            && isHardDeleted(restApp, ":.default:kv-topic-value"), 30_000,
+        "Key and value subjects were not hard-deleted");
+    assertEquals(failures, cascadeFailureCount(registry));
+  }
+
   private KafkaSchemaRegistry registry() {
     return (KafkaSchemaRegistry) restApp.schemaRegistry();
   }
@@ -206,13 +245,19 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
   // queuing the background task
   private void deleteAssociationOnly() throws Exception {
     KafkaSchemaRegistry registry = registry();
-    registry.deleteAssociationEntries(registry.getAssociationsByResourceId(
-        RESOURCE_ID, "topic", Collections.singletonList("key"), null));
+    for (Association association : registry.getAssociationsByResourceId(
+        RESOURCE_ID, "topic", Collections.singletonList("key"), null)) {
+      registry.deleteAssociationEntry(association);
+    }
   }
 
   private static boolean isHardDeleted(RestApp app) throws Exception {
+    return isHardDeleted(app, SUBJECT);
+  }
+
+  private static boolean isHardDeleted(RestApp app, String subject) throws Exception {
     try {
-      app.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, true, false);
+      app.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true, false);
       return false;
     } catch (RestClientException e) {
       return e.getErrorCode() == 40401;
