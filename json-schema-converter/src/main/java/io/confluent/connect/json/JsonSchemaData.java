@@ -620,7 +620,10 @@ public class JsonSchemaData {
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
           if (isUnionSchema(schema)) {
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Object object = config.ignoreDefaultForNullables()
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
@@ -631,7 +634,10 @@ public class JsonSchemaData {
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
             Field extrasField = findExtrasField(schema, config);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               if (extrasField != null && extrasField.name().equals(field.name())) {
                 continue;
               }
