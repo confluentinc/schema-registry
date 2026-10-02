@@ -2213,9 +2213,10 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testReRegisteringKeepsAReferencedSoftDeletedVersion() throws Exception {
-    // Re-registering the content of a soft-deleted version reuses its global ID; a schema
-    // reference still pointing at the old (subject, version) keeps resolving.
+  public void testSameIdTombstonePreservesReferencedSoftDeletedVersion() throws Exception {
+    // Reproduces the bug where re-registering the content of a soft-deleted version
+    // reuses the same global ID and tombstones the old (subject, version) row, breaking
+    // any schema reference that still points at it (references resolve by subject+version).
     String userSubject = "user";
     String orderSubject = "order";
     restApp.restClient.updateCompatibility(NONE.name, userSubject);
@@ -2257,7 +2258,8 @@ public abstract class RestApiTest {
     assertEquals((Integer) 3, userV3.getVersion());
     assertEquals(Integer.valueOf(userV2Id), userV3.getId());
 
-    // The (subject, version) the soft-deleted order schema points at is still retrievable.
+    // The soft-deleted v2 must NOT have been tombstoned; the (subject, version) the
+    // soft-deleted order schema points at must still be retrievable.
     Schema softDeletedV2 = restApp.restClient.getVersion(userSubject, 2, true);
     assertEquals((Integer) 2, softDeletedV2.getVersion());
     assertEquals(Integer.valueOf(userV2Id), softDeletedV2.getId());
@@ -2270,11 +2272,54 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testReRegisteringASoftDeletedSchemaKeepsTheSoftDeletedVersion() throws Exception {
-    // Re-registering the content of a soft-deleted version gives a new version under the same
-    // global ID; the soft-deleted version stays, so the subject's history stays whole.
+  public void testSameIdTombstoneStillRunsWhenNoReferences() throws Exception {
+    // The reference-aware guard must not regress the original optimization: when nothing
+    // (active or soft-deleted) references the same-ID soft-deleted version, it should
+    // still be tombstoned during re-registration.
     String subject = "no_refs";
     restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+
+    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
+    assertEquals(v2Id, reRegisteredId);
+
+    // The old soft-deleted v2 should be gone (tombstoned); only the new v3 remains.
+    try {
+      restApp.restClient.getVersion(subject, 2, true);
+      fail("Soft-deleted v2 should have been tombstoned when no references exist");
+    } catch (RestClientException rce) {
+      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    // v1 (different id) should still be soft-deleted and visible with deleted=true.
+    Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());
+    assertTrue(v1Deleted.getDeleted());
+  }
+
+  @Test
+  public void testUnderLogicalReRegisteringKeepsTheSoftDeletedVersion() throws Exception {
+    // Under LOGICAL, re-registering the content of a soft-deleted version gives a new version
+    // under the same global ID, and the soft-deleted version stays: provenance needs it.
+    String subject = "logical";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
 
     String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
