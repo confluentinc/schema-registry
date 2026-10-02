@@ -29,10 +29,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -48,7 +50,10 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CO
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
-  private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
+  // Every version of each subject carrying a schema ID, by tenant, context and ID: a version
+  // going leaves the others, such as a soft-deleted one kept on re-registration, to resolve it.
+  private final Map<String, Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>>>
+      guidToSubjectVersions;
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
   private final Map<String, Map<String, Map<SchemaKey, Set<ContextId>>>> referencedBy;
 
@@ -124,14 +129,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (id == null) {
       return null;
     }
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(id);
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return null;
-    }
-    return new SchemaIdAndSubjects(id, subjectVersions);
+    Map<String, Integer> latest = new HashMap<>();
+    subjectVersionsOf(ctx, id).forEach((subject, versions) -> {
+      Integer version = latest(versions);
+      if (version != null) {
+        latest.put(subject, version);
+      }
+    });
+    return latest.isEmpty() ? null : new SchemaIdAndSubjects(id, latest);
   }
 
   @Override
@@ -152,18 +157,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(id);
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return null;
-    }
+    Map<String, NavigableSet<Integer>> subjectVersions = subjectVersionsOf(ctx, id);
     if (qs == null || qs.getSubject().isEmpty()) {
-      Map.Entry<String, Integer> entry = subjectVersions.entrySet().iterator().next();
-      return new SchemaKey(entry.getKey(), entry.getValue());
+      for (Map.Entry<String, NavigableSet<Integer>> entry : subjectVersions.entrySet()) {
+        Integer version = latest(entry.getValue());
+        if (version != null) {
+          return new SchemaKey(entry.getKey(), version);
+        }
+      }
+      return null;
     } else {
-      Integer version = subjectVersions.get(subject);
+      Integer version =
+          latest(subjectVersions.getOrDefault(subject, Collections.emptyNavigableSet()));
       return version != null ? new SchemaKey(subject, version) : null;
     }
   }
@@ -187,14 +192,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
-    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-    Map<Integer, Map<String, Integer>> guids =
-        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
-    Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
-    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
+    addSubjectVersion(schemaKey, schemaValue.getId());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
@@ -206,18 +204,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return;
     }
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return;
-    }
-    subjectVersions.computeIfPresent(schemaKey.getSubject(),
-        (k, v) -> schemaKey.getVersion() == v ? null : v);
-    if (subjectVersions.isEmpty()) {
-      guids.remove(schemaValue.getId());
-    }
+    removeSubjectVersion(schemaKey, schemaValue.getId());
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
@@ -242,13 +229,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public void schemaRegistered(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-    Map<Integer, Map<String, Integer>> guids =
-        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
-    Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
-    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
+    addSubjectVersion(schemaKey, schemaValue.getId());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
@@ -262,6 +243,42 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
       ids.add(new ContextId(ctx, schemaValue.getId()));
     }
+  }
+
+  // The versions of each subject carrying schema ID id in context ctx; empty when there are none.
+  private Map<String, NavigableSet<Integer>> subjectVersionsOf(String ctx, int id) {
+    return guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap())
+        .getOrDefault(ctx, Collections.emptyMap())
+        .getOrDefault(id, Collections.emptyMap());
+  }
+
+  private void addSubjectVersion(SchemaKey schemaKey, int id) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>())
+        .computeIfAbsent(ctx, k -> new ConcurrentHashMap<>())
+        .computeIfAbsent(id, k -> new ConcurrentHashMap<>())
+        .computeIfAbsent(schemaKey.getSubject(), k -> new ConcurrentSkipListSet<>())
+        .add(schemaKey.getVersion());
+  }
+
+  private void removeSubjectVersion(SchemaKey schemaKey, int id) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<Integer, Map<String, NavigableSet<Integer>>> guids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap())
+            .getOrDefault(ctx, Collections.emptyMap());
+    guids.computeIfPresent(id, (k, subjectVersions) -> {
+      subjectVersions.computeIfPresent(schemaKey.getSubject(), (s, versions) -> {
+        versions.remove(schemaKey.getVersion());
+        return versions.isEmpty() ? null : versions;
+      });
+      return subjectVersions.isEmpty() ? null : subjectVersions;
+    });
+  }
+
+  // The highest of versions, or null when there are none.
+  private static Integer latest(NavigableSet<Integer> versions) {
+    Iterator<Integer> it = versions.descendingIterator();
+    return it.hasNext() ? it.next() : null;
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
@@ -475,13 +492,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     String ctx = QualifiedSubject.contextFor(tenant(), subject);
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+    Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>> ctxGuids =
         guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
+    Map<Integer, Map<String, NavigableSet<Integer>>> guids =
+        ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Iterator<Map.Entry<Integer, Map<String, NavigableSet<Integer>>>> it =
+        guids.entrySet().iterator();
     while (it.hasNext()) {
-      Map<String, Integer> subjectVersions = it.next().getValue();
-      subjectVersions.entrySet().removeIf(e -> matchDeleted.test(e.getKey(), e.getValue()));
+      Map<String, NavigableSet<Integer>> subjectVersions = it.next().getValue();
+      subjectVersions.entrySet().removeIf(e -> {
+        e.getValue().removeIf(version -> matchDeleted.test(e.getKey(), version));
+        return e.getValue().isEmpty();
+      });
       if (subjectVersions.isEmpty()) {
         it.remove();
       }
