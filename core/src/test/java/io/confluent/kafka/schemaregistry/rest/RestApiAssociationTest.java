@@ -4127,14 +4127,23 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
         deleteThenCreate("dc-diff-topic", "dc-diff-old", "dc-diff-new", schemas.get(1)));
 
-    // The subject still exists when the create runs, so the frozen create is rejected
     assertNull(response.getResults().get(0).getError());
-    assertNotNull(response.getResults().get(1).getError());
-    assertEquals(Errors.INVALID_ASSOCIATION_ERROR_CODE,
-        response.getResults().get(1).getError().getErrorCode());
-    // The old topic's cleanup still completes
-    TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
-        "Subject " + subject + " was not hard-deleted");
+    // The batch releases the store lock between entries, so the background delete may run
+    // before the create. Either outcome is valid.
+    if (response.getResults().get(1).getError() != null) {
+      // The old subject was still there, so the frozen create was rejected; the old topic's
+      // cleanup still completes
+      assertEquals(Errors.INVALID_ASSOCIATION_ERROR_CODE,
+          response.getResults().get(1).getError().getErrorCode());
+      TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
+          "Subject " + subject + " was not hard-deleted");
+    } else {
+      // The background delete ran first, so the create started on an empty subject
+      assertEquals(1, restApp.restClient.getAssociationsByResourceId(
+          RestService.DEFAULT_REQUEST_PROPERTIES, "dc-diff-new", "topic",
+          Collections.singletonList("key"), null, 0, -1).size());
+      assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+    }
   }
 
   @Test
