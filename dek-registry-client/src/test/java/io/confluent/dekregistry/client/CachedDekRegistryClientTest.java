@@ -702,12 +702,11 @@ public class CachedDekRegistryClientTest {
   }
 
   @Test
-  public void testDekForbiddenWithDifferentErrorCodeNotCached() throws Exception {
+  public void testDekForbiddenWithDifferentErrorCodeCached() throws Exception {
     FakeTicker fakeTicker = new FakeTicker();
     CachedDekRegistryClient client = newClient(dekForbiddenTtlConfig(), fakeTicker);
 
-    // 403 status but a non-DEK_GENERATION_FORBIDDEN error code -- should not poison
-    // the forbidden cache.
+    // Any 403 (e.g. from an RBAC layer) is cached and the original error code is replayed.
     when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
         .thenThrow(new RestClientException("other 403", 403, 40399));
 
@@ -716,10 +715,11 @@ public class CachedDekRegistryClientTest {
         client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
         fail();
       } catch (RestClientException rce) {
+        assertEquals(403, rce.getStatus());
         assertEquals(40399, rce.getErrorCode());
       }
     }
-    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+    verify(restService, times(1)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
   }
 
   @FunctionalInterface

@@ -50,11 +50,6 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   // Mirrors io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE
   private static final int KEY_NOT_FOUND_ERROR_CODE = 40470;
 
-  // Mirrors io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors
-  //     .DEK_GENERATION_FORBIDDEN_ERROR_CODE, thrown when the KMS denies access while
-  //     generating or unwrapping a dek for a shared kek.
-  private static final int DEK_GENERATION_FORBIDDEN_ERROR_CODE = 40370;
-
   private final DekRegistryRestService restService;
   private final Cache<KekId, Kek> kekCache;
   private final Cache<DekId, Dek> dekCache;
@@ -65,7 +60,7 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   // authorization layer in front of it (e.g. RBAC/MDS), so there is no fixed, known error
   // code to replay on a cache hit -- the one actually returned is captured and reused instead.
   private final Cache<KekId, Integer> forbiddenKekCache;
-  private final Cache<DekId, Long> forbiddenDekCache;
+  private final Cache<DekId, Integer> forbiddenDekCache;
   private final Ticker ticker;
 
   public CachedDekRegistryClient(
@@ -295,10 +290,11 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
-    if (forbiddenDekCache.getIfPresent(key) != null) {
+    Integer forbiddenErrorCode = forbiddenDekCache.getIfPresent(key);
+    if (forbiddenErrorCode != null) {
       log.debug("Negative cache hit for forbidden dek (kek={}, subject={})", kekName, subject);
       throw new RestClientException("Access to dek (kek=" + kekName + ", subject=" + subject
-          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, DEK_GENERATION_FORBIDDEN_ERROR_CODE);
+          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, forbiddenErrorCode);
     }
     try {
       return dekCache.get(key, () -> {
@@ -307,8 +303,11 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
         } catch (RestClientException rce) {
           if (isKeyNotFoundException(rce)) {
             missingDekCache.put(key, System.currentTimeMillis());
-          } else if (isForbiddenException(rce)) {
-            forbiddenDekCache.put(key, System.currentTimeMillis());
+          } else if (rce.getStatus() == HttpURLConnection.HTTP_FORBIDDEN) {
+            // A 403 can come from dek-registry (KMS denied access while generating or
+            // unwrapping a dek for a shared kek) or from an authorization layer in front of it
+            // (e.g. RBAC), so the actual error code is captured rather than assumed.
+            forbiddenDekCache.put(key, rce.getErrorCode());
           }
           throw rce;
         }
@@ -338,11 +337,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
-    if (forbiddenDekCache.getIfPresent(key) != null) {
+    Integer forbiddenErrorCode = forbiddenDekCache.getIfPresent(key);
+    if (forbiddenErrorCode != null) {
       log.debug("Negative cache hit for forbidden dek (kek={}, subject={}, version={})",
           kekName, subject, version);
       throw new RestClientException("Access to dek (kek=" + kekName + ", subject=" + subject
-          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, DEK_GENERATION_FORBIDDEN_ERROR_CODE);
+          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, forbiddenErrorCode);
     }
     try {
       return dekCache.get(key, () -> {
@@ -351,8 +351,11 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
         } catch (RestClientException rce) {
           if (isKeyNotFoundException(rce)) {
             missingDekCache.put(key, System.currentTimeMillis());
-          } else if (isForbiddenException(rce)) {
-            forbiddenDekCache.put(key, System.currentTimeMillis());
+          } else if (rce.getStatus() == HttpURLConnection.HTTP_FORBIDDEN) {
+            // A 403 can come from dek-registry (KMS denied access while generating or
+            // unwrapping a dek for a shared kek) or from an authorization layer in front of it
+            // (e.g. RBAC), so the actual error code is captured rather than assumed.
+            forbiddenDekCache.put(key, rce.getErrorCode());
           }
           throw rce;
         }
@@ -381,11 +384,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
-    if (forbiddenDekCache.getIfPresent(key) != null) {
+    Integer forbiddenErrorCode = forbiddenDekCache.getIfPresent(key);
+    if (forbiddenErrorCode != null) {
       log.debug("Negative cache hit for forbidden dek (kek={}, subject={}, latest)",
           kekName, subject);
       throw new RestClientException("Access to dek (kek=" + kekName + ", subject=" + subject
-          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, DEK_GENERATION_FORBIDDEN_ERROR_CODE);
+          + ") denied", HttpURLConnection.HTTP_FORBIDDEN, forbiddenErrorCode);
     }
     try {
       return dekCache.get(key, () -> {
@@ -395,8 +399,11 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
         } catch (RestClientException rce) {
           if (isKeyNotFoundException(rce)) {
             missingDekCache.put(key, System.currentTimeMillis());
-          } else if (isForbiddenException(rce)) {
-            forbiddenDekCache.put(key, System.currentTimeMillis());
+          } else if (rce.getStatus() == HttpURLConnection.HTTP_FORBIDDEN) {
+            // A 403 can come from dek-registry (KMS denied access while generating or
+            // unwrapping a dek for a shared kek) or from an authorization layer in front of it
+            // (e.g. RBAC), so the actual error code is captured rather than assumed.
+            forbiddenDekCache.put(key, rce.getErrorCode());
           }
           throw rce;
         }
@@ -414,11 +421,6 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   private static boolean isKeyNotFoundException(RestClientException rce) {
     return rce.getStatus() == HttpURLConnection.HTTP_NOT_FOUND
         && rce.getErrorCode() == KEY_NOT_FOUND_ERROR_CODE;
-  }
-
-  private static boolean isForbiddenException(RestClientException rce) {
-    return rce.getStatus() == HttpURLConnection.HTTP_FORBIDDEN
-        && rce.getErrorCode() == DEK_GENERATION_FORBIDDEN_ERROR_CODE;
   }
 
   @Override
