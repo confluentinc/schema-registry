@@ -999,9 +999,14 @@ final class JsonProvenancePruner {
             .anyMatch(e -> node.has(e.getKey()) && requires(e.getValue(), name));
   }
 
-  // Whether a dependency's schema requires name directly.
+  // Whether a dependency's schema requires name: directly, or in any part of an allOf.
   private static boolean requires(Schema schema, String name) {
     Schema object = referred(schema);
+    if (object instanceof CombinedSchema
+        && ((CombinedSchema) object).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      return ((CombinedSchema) object).getSubschemas().stream()
+          .anyMatch(part -> requires(part, name));
+    }
     return object instanceof ObjectSchema
         && ((ObjectSchema) object).getRequiredProperties().contains(name);
   }

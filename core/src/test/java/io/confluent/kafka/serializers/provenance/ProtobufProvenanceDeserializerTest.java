@@ -1390,6 +1390,29 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(0, get(value, "a"));
   }
 
+  @Test
+  void aWrappedUnionFieldNamedValueInAMapOfListsIsNoOneof() throws Exception {
+    // In a map of lists, In's wrapped union field value is spelled as a oneof at the list's slot
+    // would be; taken for one, its restart was not moved, and it read as set with no branch.
+    String wrapped = "UW value = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
+        + "value: \"true\"}]}];";
+    String rest = "repeated KvEntry kv = 1; "
+        + "message KvEntry { string key = 1; repeated In value = 2; } "
+        + "message UW { oneof value { int32 a = 2; string b = 3; } } ";
+    ProtobufSchema v1 = withMeta(rest + "message In { int32 x = 1; " + wrapped + " }");
+    ProtobufSchema v2 = withMeta(rest + "message In { int32 x = 1; }");
+    ProtobufSchema v3 = withMeta(rest + "message In { int32 x = 1; " + wrapped + " } int32 z = 9;");
+    Descriptor uw = v1.toDescriptor("p.Row.UW");
+    DynamicMessage union = DynamicMessage.newBuilder(uw).setField(uw.findFieldByName("a"), 5).build();
+    byte[] bytes = write(v1, along(v1, "kv[].value[]", Map.of("x", 7, "value", union)));
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage in = at(read(v3, bytes, "v1"), "kv[].value[]");
+    assertEquals(7, get(in, "x"));
+    assertFalse(in.hasField(in.getDescriptorForType().findFieldByName("value")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1447,6 +1470,12 @@ class ProtobufProvenanceDeserializerTest {
 
   private static DynamicMessage entryValue(DynamicMessage record) {
     return (DynamicMessage) get((DynamicMessage) ((List<?>) get(record, "kv")).get(0), "value");
+  }
+
+  // One message, Row, holding the given members, in a file importing Confluent's field options.
+  private static ProtobufSchema withMeta(String members) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\nmessage Row {\n  " + members + "\n}\n");
   }
 
   // A map of maps, as nested entry messages, whose inner values are In.

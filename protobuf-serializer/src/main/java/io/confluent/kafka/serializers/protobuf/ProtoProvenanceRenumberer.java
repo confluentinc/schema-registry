@@ -28,6 +28,7 @@ import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -214,30 +215,59 @@ final class ProtoProvenanceRenumberer {
     return "UNION".equals(mapping.readerKindOf(path)) && isEntrySlot(path, names, mapping);
   }
 
-  // Whether names end at map or multiset slots below the nearest enclosing location, as a oneof
-  // in such a slot's message is spelled: one name per slot, however deeply the maps nest.
+  // Whether names are those of a oneof in the struct that map or multiset slots hold below the
+  // nearest enclosing location: one key or value name per map step, none per array step.
   private static boolean isEntrySlot(List<Integer> path, List<String> names,
       ProvenanceMapping mapping) {
     int k = path.size() - 1;
     while (k > 0 && mapping.readerNamesOf(path.subList(0, k)) == null) {
       k--;
     }
-    String kind = k > 0 ? mapping.readerKindOf(path.subList(0, k)) : null;
-    if (kind == null || !(kind.startsWith("MAP<") || kind.startsWith("MULTISET<"))) {
+    if (k == 0) {
       return false;
     }
-    List<String> enclosing = mapping.readerNamesOf(path.subList(0, k));
-    int slots = names.size() - enclosing.size();
-    if (slots < 1 || slots > path.size() - 1 - k
-        || !names.subList(0, enclosing.size()).equals(enclosing)) {
-      return false;
-    }
-    for (String step : names.subList(enclosing.size(), names.size())) {
-      if (!"key".equals(step) && !"value".equals(step)) {
-        return false;
+    String kind = mapping.readerKindOf(path.subList(0, k));
+    List<String> expected = new ArrayList<>(mapping.readerNamesOf(path.subList(0, k)));
+    boolean slot = false;
+    // Every step but the last enters a slot; the last is the oneof, in the struct reached.
+    for (int i = k; i < path.size() - 1 && kind != null; i++) {
+      List<String> args = kindArgs(kind);
+      if (kind.startsWith("MAP<") || kind.startsWith("MULTISET<")) {
+        int step = path.get(i);
+        expected.add(step == 0 ? "key" : "value");
+        kind = step < args.size() ? args.get(step) : "SCALAR";
+        slot = true;
+      } else if (kind.startsWith("ARRAY<")) {
+        kind = args.get(0);
+      } else {
+        kind = null;
       }
     }
-    return true;
+    return slot && "STRUCT".equals(kind) && names.equals(expected);
+  }
+
+  // The kinds a collection kind is of: MAP<SCALAR, STRUCT> gives SCALAR and STRUCT.
+  private static List<String> kindArgs(String kind) {
+    List<String> args = new ArrayList<>();
+    int open = kind.indexOf('<');
+    if (open < 0) {
+      return args;
+    }
+    int depth = 0;
+    int from = open + 1;
+    for (int i = from; i < kind.length() - 1; i++) {
+      char ch = kind.charAt(i);
+      if (ch == '<') {
+        depth++;
+      } else if (ch == '>') {
+        depth--;
+      } else if (ch == ',' && depth == 0) {
+        args.add(kind.substring(from, i).trim());
+        from = i + 1;
+      }
+    }
+    args.add(kind.substring(from, kind.length() - 1).trim());
+    return args;
   }
 
   /**

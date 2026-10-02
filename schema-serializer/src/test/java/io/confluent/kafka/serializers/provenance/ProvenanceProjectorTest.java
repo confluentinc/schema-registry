@@ -403,6 +403,23 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void aPinnedReaderWhoseVersionCannotBeFetchedFailsEveryRecord() throws Exception {
+    // The structure check fetches the pinned version: a failure the registry will repeat must
+    // fail the records, never fall back to reading without provenance.
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+    client.schemaByIdFailure = new RestClientException("Schema not found", 404, 40403);
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    ParsedSchema handedOver = projector.readerSchemas(
+        writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    assertThrows(SerializationException.class, () ->
+        projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+  }
+
+  @Test
   public void aPinnedVersionMustBeAVersionNumber() {
     assertThrows(IllegalArgumentException.class,
         () -> ReaderSchema.of(new AvroSchema("\"int\""), SUBJECT, -1));
@@ -620,6 +637,7 @@ public class ProvenanceProjectorTest {
     // As a client implementing only the basic lookups, without soft-deleted versions.
     boolean listsDeletedVersions = true;
     RestClientException failure;
+    RestClientException schemaByIdFailure;
     SchemaProvenance provenance;
     // Holds every request until released, counting them across threads.
     CountDownLatch gate;
@@ -666,6 +684,15 @@ public class ProvenanceProjectorTest {
         return provenance;
       }
       throw new UnsupportedOperationException("no provenance here");
+    }
+
+    @Override
+    public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+        throws IOException, RestClientException {
+      if (schemaByIdFailure != null) {
+        throw schemaByIdFailure;
+      }
+      return super.getSchemaBySubjectAndId(subject, id);
     }
 
     @Override

@@ -569,6 +569,32 @@ class AvroProvenanceStrictnessTest {
     assertEquals("", pinned.get("note").toString());
   }
 
+  @Test
+  void aReaderPinnedToAnIdOfNoVersionOfTheSubjectFailsItsRecords() throws Exception {
+    // As a key reader handed the value subject's pinned id: read without provenance, v3's new
+    // note took the old value.
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}");
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"},"
+        + "{\"name\":\"extra\",\"type\":\"int\",\"default\":0}]}");
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, new AvroSchema(v3));
+    int foreign = client.register("other-value", new AvroSchema("\"long\""));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    AvroSchema reader = new AvroSchema(v3);
+
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, foreign), false));
+  }
+
   // -------------------------------------------------------------------------------------------
 
   private static AvroSchema withMetadata(Schema schema, String value) {

@@ -291,6 +291,12 @@ public final class ProvenanceProjector<T> {
         provenance = provenance(
             subject, writerId, readerId, readerVersion, includeMultipleMessages);
       } catch (ProvenanceUnknownWriterException e) {
+        // A reader pinned to an id no version of the subject carries is the caller's mistake, as
+        // a missing pinned version is: every record of the writer fails.
+        if (pin != null && pin.id != null && !carriesId(subject, pin.id)) {
+          throw new SerializationException("The reader is pinned to schema id " + pin.id
+              + ", which no version of subject " + subject + " carries");
+        }
         // A writer id under no version of the subject: the writer's schema may still equal one.
         Integer equal = structuralMatch(subject, writer);
         if (equal == null || equal.equals(writerId)) {
@@ -424,14 +430,37 @@ public final class ProvenanceProjector<T> {
    */
   private void requireStructureOf(String subject, ParsedSchema reader, Pin pin)
       throws IOException, RestClientException {
-    int id = pin.id != null ? pin.id : metadataOf(subject, pin.version).getId();
-    Optional<LogicalType> pinned = logicalTypeOf(client.getSchemaBySubjectAndId(subject, id));
+    ParsedSchema version;
+    try {
+      int id = pin.id != null ? pin.id : metadataOf(subject, pin.version).getId();
+      version = client.getSchemaBySubjectAndId(subject, id);
+    } catch (RestClientException e) {
+      // Provenance was just had for this version: a failure that will recur fails the records
+      // rather than read them without provenance.
+      if (ClientProvenanceStrategy.isTransient(e.getStatus()) || e.getStatus() == 401
+          || e.getStatus() == 403) {
+        throw e;
+      }
+      throw new SerializationException("The version the reader is pinned to, " + pin
+          + " of subject " + subject + ", could not be fetched: " + e.getMessage(), e);
+    }
+    Optional<LogicalType> pinned = logicalTypeOf(version);
     Optional<LogicalType> own = logicalTypeOf(reader);
     if (pinned.isPresent() && own.isPresent()
         && !own.get().equivalent(SchemaType.of(reader.schemaType()), pinned.get())) {
       throw new SerializationException("The reader is pinned to " + pin + " of subject "
           + subject + ", whose structure is not the reader's");
     }
+  }
+
+  // Whether some version of subject, soft-deleted or not, carries schema id id.
+  private boolean carriesId(String subject, int id) throws IOException, RestClientException {
+    for (int version : client.getAllVersions(subject, true)) {
+      if (metadataOf(subject, version).getId() == id) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

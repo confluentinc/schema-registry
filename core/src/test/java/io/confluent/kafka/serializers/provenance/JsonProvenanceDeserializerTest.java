@@ -1238,6 +1238,37 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aPropertyRequiredInAnAllOfOfASchemaDependencyIsDefaultedOrFails() throws Exception {
+    // The dependency's schema requires x only through an allOf part, in either draft's spelling.
+    String[] bodies = {
+        "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}, %s}, "
+            + "\"dependencies\": {\"a\": {\"allOf\": [{\"required\": [\"x\"]}]}}}",
+        "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"type\": \"object\", "
+            + "\"properties\": {\"a\": {\"type\": \"string\"}, %s}, "
+            + "\"dependentSchemas\": {\"a\": {\"allOf\": [{\"required\": [\"x\"]}]}}}"};
+    for (String body : bodies) {
+      for (String x : new String[] {"\"x\": {\"type\": \"string\", \"default\": \"d\"}",
+          "\"x\": {\"type\": \"string\", \"description\": \"new\"}"}) {
+        client = new ProvenanceMockSchemaRegistryClient();
+        serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+        JsonSchema v1 = new JsonSchema(String.format(body, string("x")));
+        JsonSchema v2 = new JsonSchema(String.format(body, "\"zz\": {\"type\": \"boolean\"}"));
+        JsonSchema v3 = new JsonSchema(String.format(body, x));
+        byte[] bytes = write(v1, "{\"a\": \"s\", \"x\": \"old\"}");
+        client.register(SUBJECT, v2);
+        client.register(SUBJECT, v3);
+
+        if (x.contains("default")) {
+          assertEquals("d", read(v3, bytes, "v1").get("x").asText());
+        } else {
+          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+          assertTrue(e.getCause().getMessage().startsWith("Property [x] is new to the reader"));
+        }
+      }
+    }
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "
