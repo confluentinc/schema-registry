@@ -2685,19 +2685,25 @@ paths:
         description: Dry run
         schema:
           type: boolean
+      - name: async
+        in: query
+        description: "Delete the associations, return 202, and finish cascaded subject\
+          \ deletes in the background. 202 is returned even if no subject needed deleting.\
+          \ A queued subject is deleted even if new versions are registered under it before\
+          \ the background delete runs. Until then the subject still exists, so recreating\
+          \ the resource with a different schema can fail."
+        schema:
+          type: boolean
       responses:
-        "200":
-          description: The delete response
-          content:
-            application/vnd.schemaregistry.v1+json:
-              schema:
-                $ref: "#/components/schemas/Association"
-            application/vnd.schemaregistry+json; qs=0.9:
-              schema:
-                $ref: "#/components/schemas/Association"
-            application/json; qs=0.5:
-              schema:
-                $ref: "#/components/schemas/Association"
+        "204":
+          description: "The associations, and any cascaded subjects, were deleted"
+        "202":
+          description: The associations were deleted; cascaded subject deletes are
+            running in the background (async=true only)
+        "404":
+          description: No associations found for the resource
+        "409":
+          description: The association is frozen and cascadeLifecycle is false
         "422":
           description: Error code 42212 -- Invalid association
   /associations/resources/{resourceNamespace}/{resourceName}:

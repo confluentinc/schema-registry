@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -53,7 +54,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -3890,6 +3894,160 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         latest.getSchemaTags());
   }
 
+  @Test
+  public void testDeleteAssociationsAsyncCascade() throws Exception {
+    String subject = createStrongKeyAssociation("async-topic", "async-123");
+
+    assertEquals(202, rawDelete("/associations/resources/async-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"));
+
+    // The association is gone as soon as the request returns
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "async-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+
+    // The subject is eventually hard-deleted in the background
+    TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
+        "Subject " + subject + " was not hard-deleted");
+  }
+
+  @Test
+  public void testDeleteAssociationsSyncCascadeReturns204() throws Exception {
+    String subject = createStrongKeyAssociation("sync-topic", "sync-123");
+
+    assertEquals(204, rawDelete("/associations/resources/sync-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true"));
+
+    assertTrue(isHardDeleted(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncDryRun() throws Exception {
+    String subject = createStrongKeyAssociation("dryrun-topic", "dryrun-123");
+
+    assertEquals(204, rawDelete("/associations/resources/dryrun-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"
+        + "&dryRun=true"));
+
+    assertEquals(1, restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "dryrun-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).size());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncFrozenWithoutCascade() throws Exception {
+    String subject = createStrongKeyAssociation("frozen-async-topic", "frozen-async-123");
+
+    assertEquals(409, rawDelete("/associations/resources/frozen-async-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=false&async=true"));
+
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncWeakKeepsSubject() throws Exception {
+    String subject = "async-weak-subject";
+    restApp.restClient.registerSchema(TestUtils.getRandomCanonicalAvroString(1).get(0), subject);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "async-weak-topic", "default", "async-weak-123", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "key", LifecyclePolicy.WEAK, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // 202 even though a WEAK association queues no subject delete
+    assertEquals(202, rawDelete("/associations/resources/async-weak-123"
+        + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"));
+
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "async-weak-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+    Thread.sleep(1000);
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncKeyAndValue() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
+    keyRequest.setSchema(schemas.get(0));
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
+    valueRequest.setSchema(schemas.get(1));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "async-kv-topic", "default", "async-kv-123", "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, keyRequest, null),
+            new AssociationCreateOrUpdateInfo(
+                null, "value", LifecyclePolicy.STRONG, true, valueRequest, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    assertEquals(202, rawDelete("/associations/resources/async-kv-123"
+        + "?resourceType=topic&associationType=key&associationType=value"
+        + "&cascadeLifecycle=true&async=true"));
+
+    TestUtils.waitUntilTrue(() -> isHardDeleted(":.default:async-kv-topic-key")
+            && isHardDeleted(":.default:async-kv-topic-value"), 30_000,
+        "Key and value subjects were not hard-deleted");
+  }
+
+  private String createStrongKeyAssociation(String resourceName, String resourceId)
+      throws Exception {
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(TestUtils.getRandomCanonicalAvroString(1).get(0));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        "default",
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                null,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,
+                schemaRequest,
+                null
+            )
+        )
+    );
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    return ":.default:" + resourceName + "-key";
+  }
+
+  private boolean isHardDeleted(String subject) throws Exception {
+    try {
+      restApp.restClient.getAllVersions(
+          RestService.DEFAULT_REQUEST_PROPERTIES, subject, true, false);
+      return false;
+    } catch (RestClientException e) {
+      return e.getErrorCode() == Errors.SUBJECT_NOT_FOUND_ERROR_CODE;
+    }
+  }
+
+  // Uses a raw connection so callers can assert the exact status code (202 vs 204). Targets
+  // restApp.restClient's base URL and sends any credentials embedded in it, so subclasses that
+  // configure auth on the client still work.
+  private int rawDelete(String path) throws Exception {
+    URL url = new URL(restApp.restClient.getBaseUrls().current() + path);
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    conn.setRequestMethod("DELETE");
+    if (url.getUserInfo() != null) {
+      conn.setRequestProperty("Authorization",
+          "Basic " + Base64.getEncoder().encodeToString(url.getUserInfo().getBytes(UTF_8)));
+    }
+    conn.setConnectTimeout(10_000);
+    conn.setReadTimeout(10_000);
+    try {
+      return conn.getResponseCode();
+    } finally {
+      conn.disconnect();
+    }
+  }
+
   // Reads the response as a JSON tree rather than entity classes, so absent fields stay absent.
   // Goes through restApp.restClient so subclasses that configure auth on the client still work.
   private JsonNode rawGet(String path) throws Exception {
@@ -4177,6 +4335,33 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
             request));
     assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void testBatchMutateSizeLimitsDisabledByDefault() throws Exception {
+    StringBuilder padding = new StringBuilder();
+    for (int i = 0; i < 200; i++) {
+      padding.append('x');
+    }
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    for (int i = 0; i < 11; i++) {
+      RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+      schemaRequest.setSchema("{\"type\":\"record\",\"name\":\"LimitsDisabled" + i + "\",\"fields\":["
+          + "{\"name\":\"f\",\"type\":\"string\",\"default\":\"" + padding + "\"}]}");
+      AssociationCreateOp createOp = new AssociationCreateOp(
+          null, "value", null, null, schemaRequest, null);
+      requests.add(new AssociationOpRequest(
+          "limits-disabled-" + i, "default", "limits-disabled-" + i + "-id", "topic",
+          Collections.singletonList(createOp)));
+    }
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertEquals(11, response.getResults().size());
+    for (AssociationResult result : response.getResults()) {
+      assertNull(result.getError());
+    }
   }
 
 }
