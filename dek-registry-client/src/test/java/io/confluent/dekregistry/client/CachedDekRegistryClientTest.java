@@ -104,6 +104,13 @@ public class CachedDekRegistryClientTest {
     return configs;
   }
 
+  private static Map<String, Object> bothForbiddenTtlConfig() {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(DekRegistryClientConfig.FORBIDDEN_KEK_CACHE_TTL_CONFIG, 60L);
+    configs.put(DekRegistryClientConfig.FORBIDDEN_DEK_CACHE_TTL_CONFIG, 60L);
+    return configs;
+  }
+
   private static RestClientException notFound() {
     return new RestClientException("Key not found", 404, KEY_NOT_FOUND_ERROR_CODE);
   }
@@ -382,7 +389,7 @@ public class CachedDekRegistryClientTest {
     CachedDekRegistryClient client = newClient(kekForbiddenTtlConfig(), fakeTicker);
 
     // There is no fixed error code for a 403 on getKek (an external authorizer produces it),
-    // so unlike the dek case, any error code accompanying a 403 must be cached and replayed.
+    // so any error code accompanying a 403 must be cached and replayed (as for getDek).
     when(restService.getKek(KEK_NAME, false))
         .thenThrow(new RestClientException("Access denied", 403, 40312));
 
@@ -699,6 +706,50 @@ public class CachedDekRegistryClientTest {
 
     assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, true));
     verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, true);
+  }
+
+  @Test
+  public void testUpdateKekInvalidatesForbiddenDekCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekForbiddenTtlConfig(), fakeTicker);
+
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), eq(false)))
+        .thenThrow(forbidden())
+        .thenReturn(dek());
+    when(restService.updateKek(any(), eq(KEK_NAME), any(UpdateKekRequest.class)))
+        .thenReturn(kek());
+
+    expectForbidden(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+
+    // Updating the kek (e.g. corrected kmsProps) must clear the cached dek 403.
+    client.updateKek(KEK_NAME, null, null, false);
+
+    assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+  }
+
+  @Test
+  public void testResetInvalidatesForbiddenCaches() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(bothForbiddenTtlConfig(), fakeTicker);
+
+    when(restService.getKek(KEK_NAME, false))
+        .thenThrow(kekForbidden())
+        .thenReturn(kek());
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), eq(false)))
+        .thenThrow(forbidden())
+        .thenReturn(dek());
+
+    expectForbiddenKek(() -> client.getKek(KEK_NAME, false));
+    expectForbidden(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+
+    client.reset();
+
+    // Both lookups must reach the REST service again rather than replaying the cached 403.
+    assertNotNull(client.getKek(KEK_NAME, false));
+    assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+    verify(restService, times(2)).getKek(KEK_NAME, false);
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
   }
 
   @Test

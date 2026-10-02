@@ -663,6 +663,9 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     missingKekCache.invalidate(new KekId(name, true, context));
     forbiddenKekCache.invalidate(new KekId(name, false, context));
     forbiddenKekCache.invalidate(new KekId(name, true, context));
+    // kmsProps and shared control dek generation/unwrap, so a dek 403 cached before this
+    // update (e.g. KMS access denied) may no longer hold.
+    forbiddenDekCache.invalidateAll();
     return kek;
   }
 
