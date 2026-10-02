@@ -207,6 +207,8 @@ public class KafkaSchemaRegistryCascadeDeleteTest extends ClusterTestHarness {
     KafkaSchemaRegistry registry = registry();
     double failures = cascadeFailureCount(registry);
 
+    // Hold the tenant lock (the same lock is returned for any subject in this tenant), as the
+    // real callers (deleteAssociationsOrForward, mutateAssociations) do
     Lock lock = registry.kafkaStore.lockFor(":.default:kv-topic-key");
     lock.lock();
     try {

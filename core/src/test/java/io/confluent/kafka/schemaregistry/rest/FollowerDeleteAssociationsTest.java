@@ -79,8 +79,10 @@ public class FollowerDeleteAssociationsTest extends ClusterTestHarness {
                            CompatibilityLevel.NONE.name, true, null);
     follower.start();
 
-    assertTrue(leader.isLeader(), "First instance should be the leader");
-    assertFalse(follower.isLeader(), "Second instance should be the follower");
+    assertTrue(leader.isLeader(),
+        "Expected port1 (" + port1 + ") to be the leader, but it was not");
+    assertFalse(follower.isLeader(),
+        "Expected port2 (" + port2 + ") to be the follower, but it claimed leadership");
 
     String resourceId = "follower-async-123";
     String subject = ":.default:follower-topic-key";
@@ -139,8 +141,10 @@ public class FollowerDeleteAssociationsTest extends ClusterTestHarness {
                            CompatibilityLevel.NONE.name, true, null);
     follower.start();
 
-    assertTrue(leader.isLeader(), "First instance should be the leader");
-    assertFalse(follower.isLeader(), "Second instance should be the follower");
+    assertTrue(leader.isLeader(),
+        "Expected port1 (" + port1 + ") to be the leader, but it was not");
+    assertFalse(follower.isLeader(),
+        "Expected port2 (" + port2 + ") to be the follower, but it claimed leadership");
 
     String resourceId = "follower-batch-123";
     String subject = ":.default:follower-batch-topic-key";

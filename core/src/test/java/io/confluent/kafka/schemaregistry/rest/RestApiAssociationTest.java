@@ -51,6 +51,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.InputStream;
@@ -3964,7 +3965,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertTrue(restApp.restClient.getAssociationsByResourceId(
         RestService.DEFAULT_REQUEST_PROPERTIES, "async-weak-123", "topic",
         Collections.singletonList("key"), null, 0, -1).isEmpty());
-    Thread.sleep(1000);
+    awaitCascadeDeletes();
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
   }
 
@@ -4109,8 +4110,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     assertNull(response.getResults().get(0).getError());
     assertNull(response.getResults().get(1).getError());
-    // The create re-associated the subject, so the queued delete skips it
-    Thread.sleep(2000);
+    // The create re-associated the subject, so the queued delete skips it. Wait until it
+    // has actually run, so the checks below can't pass just because it hasn't run yet.
+    awaitCascadeDeletes();
     assertEquals(1, restApp.restClient.getAssociationsByResourceId(
         RestService.DEFAULT_REQUEST_PROPERTIES, "dc-same-new", "topic",
         Collections.singletonList("key"), null, 0, -1).size());
@@ -4163,8 +4165,16 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertTrue(restApp.restClient.getAssociationsByResourceId(
         RestService.DEFAULT_REQUEST_PROPERTIES, "batch-nocascade-123", "topic",
         Collections.singletonList("key"), null, 0, -1).isEmpty());
-    Thread.sleep(1000);
+    awaitCascadeDeletes();
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  // Waits until every queued background subject delete has finished (run or skipped), so a
+  // test can check that a subject was kept without racing the delete
+  private void awaitCascadeDeletes() throws Exception {
+    KafkaSchemaRegistry registry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    TestUtils.waitUntilTrue(() -> !registry.hasPendingCascadeDeletes(), 30_000,
+        "Queued cascaded subject deletes did not finish");
   }
 
   private void createStrongKeyAssociation(String resourceName, String resourceId,

@@ -1138,6 +1138,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle)
       throws SchemaRegistryException {
+    // The caller holds the tenant's store lock: kafkaStore.lockFor(subject) from
+    // deleteAssociationsOrForward, or lockForAssociation(context) from mutateAssociations.
+    // Both resolve to the same lock for a tenant, which the queued deletes also take.
     List<Association> associations = validateDeleteAssociations(
         resourceId, resourceType, associationTypes, cascadeLifecycle);
     List<String> queued = new ArrayList<>();
@@ -1172,6 +1175,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       removePendingCascadeDelete(qualifiedSubject);
       recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
     }
+  }
+
+  /**
+   * Returns whether any queued cascaded subject delete has not finished yet. Lets tests wait
+   * for background deletes to complete before checking that a subject was kept.
+   */
+  @VisibleForTesting
+  public boolean hasPendingCascadeDeletes() {
+    return !pendingCascadeDeletes.isEmpty();
   }
 
   private void removePendingCascadeDelete(String qualifiedSubject) {

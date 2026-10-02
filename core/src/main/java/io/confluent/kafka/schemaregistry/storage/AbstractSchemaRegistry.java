@@ -2710,7 +2710,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * Deletes the associations for a resource and leaves any cascaded subject deletes to run in
    * the background. The caller holds the store lock for the resource's tenant
    * ({@code lockFor(subject)} or {@code lockForAssociation(context)}). By default there is no
-   * background executor, so this deletes everything synchronously.
+   * background executor, so this deletes everything synchronously. Subclasses that want
+   * background deletes must override this method and provide their own executor.
    */
   protected void deleteAssociationsAndQueueCascade(
       String resourceId, String resourceType, List<String> associationTypes,
