@@ -22,6 +22,8 @@ public class DekRegistryClientConfig {
 
   public static final String MISSING_KEK_CACHE_TTL_CONFIG = "missing.kek.cache.ttl.sec";
   public static final String MISSING_DEK_CACHE_TTL_CONFIG = "missing.dek.cache.ttl.sec";
+  public static final String FORBIDDEN_KEK_CACHE_TTL_CONFIG = "forbidden.kek.cache.ttl.sec";
+  public static final String FORBIDDEN_DEK_CACHE_TTL_CONFIG = "forbidden.dek.cache.ttl.sec";
 
   public static long getMissingKekTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_KEK_CACHE_TTL_CONFIG)
@@ -29,9 +31,21 @@ public class DekRegistryClientConfig {
         : 0L;
   }
 
+  public static long getForbiddenKekTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(FORBIDDEN_KEK_CACHE_TTL_CONFIG)
+        ? Long.parseLong(configs.get(FORBIDDEN_KEK_CACHE_TTL_CONFIG).toString())
+        : 0L;
+  }
+
   public static long getMissingDekTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_DEK_CACHE_TTL_CONFIG)
         ? Long.parseLong(configs.get(MISSING_DEK_CACHE_TTL_CONFIG).toString())
+        : 0L;
+  }
+
+  public static long getForbiddenDekTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(FORBIDDEN_DEK_CACHE_TTL_CONFIG)
+        ? Long.parseLong(configs.get(FORBIDDEN_DEK_CACHE_TTL_CONFIG).toString())
         : 0L;
   }
 }
