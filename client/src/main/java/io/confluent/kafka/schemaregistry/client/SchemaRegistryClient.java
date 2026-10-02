@@ -523,4 +523,19 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
+
+  /**
+   * Applies a batch of association mutations. When {@code async} is true, delete ops delete
+   * their associations before the response and the server completes any cascaded subject
+   * deletes in the background. Implementations that don't support async throw rather than
+   * silently running synchronously.
+   */
+  public default AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, boolean async, AssociationBatchRequest request)
+      throws IOException, RestClientException {
+    if (async) {
+      throw new UnsupportedOperationException();
+    }
+    return mutateAssociations(context, dryRun, request);
+  }
 }

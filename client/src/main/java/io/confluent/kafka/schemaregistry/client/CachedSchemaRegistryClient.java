@@ -1355,6 +1355,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return restService.mutateAssociations(DEFAULT_REQUEST_PROPERTIES, context, dryRun, request);
   }
 
+  @Override
+  public AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, boolean async, AssociationBatchRequest request)
+      throws IOException, RestClientException {
+    return restService.mutateAssociations(
+        DEFAULT_REQUEST_PROPERTIES, context, dryRun, async, request);
+  }
+
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
       throws RestClientException {
     if (missingSchemaCache.getIfPresent(

@@ -424,6 +424,22 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
+  /**
+   * Applies a batch of association mutations. When {@code async} is true, implementations that
+   * support it delete the association entries of delete ops before returning and complete any
+   * cascaded subject deletes in the background. A queued subject is deleted even if new
+   * versions are registered under it before the background delete runs. Until then the subject
+   * still exists, so recreating the resource with a different schema can fail. By default this
+   * runs synchronously.
+   */
+  default AssociationBatchResponse mutateAssociationsOrForward(
+      String context, boolean dryRun, boolean async,
+      AssociationBatchRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return mutateAssociationsOrForward(context, dryRun, request, headerProperties);
+  }
+
   default AssociationResponse createOrUpdateAssociation(
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {

@@ -2049,12 +2049,28 @@ public class RestService implements Closeable, Configurable {
       String context, Boolean dryRun, AssociationBatchRequest request
   ) throws IOException,
       RestClientException {
+    return mutateAssociations(requestProperties, context, dryRun, false, request);
+  }
+
+  /**
+   * Applies a batch of association mutations. When {@code async} is true, delete ops delete
+   * their associations before the response and the server completes any cascaded subject
+   * deletes in the background.
+   */
+  public AssociationBatchResponse mutateAssociations(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, boolean async, AssociationBatchRequest request
+  ) throws IOException,
+      RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchMutate");
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
+    }
+    if (async) {
+      builder.queryParam("async", true);
     }
     String path = builder.build().toString();
 

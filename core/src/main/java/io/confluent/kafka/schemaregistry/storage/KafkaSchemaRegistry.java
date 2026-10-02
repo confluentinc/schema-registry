@@ -984,13 +984,22 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    return mutateAssociationsOrForward(context, dryRun, false, request, headerProperties);
+  }
+
+  @Override
+  public AssociationBatchResponse mutateAssociationsOrForward(
+      String context, boolean dryRun, boolean async,
+      AssociationBatchRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
     // Don't obtain lock for the entire batch request
     if (isLeader()) {
-      return mutateAssociations(context, dryRun, request);
+      return mutateAssociations(context, dryRun, async, request);
     } else {
       if (leaderIdentity != null) {
         return forwardMutateAssociationsRequestToLeader(
-            context, dryRun, request, headerProperties);
+            context, dryRun, async, request, headerProperties);
       } else {
         throw new UnknownLeaderException("Create associations request failed since leader is "
             + "unknown");
@@ -1116,23 +1125,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        List<Association> associations = validateDeleteAssociations(
+        deleteAssociationsAndQueueCascade(
             resourceId, resourceType, associationTypes, cascadeLifecycle);
-        List<String> subjectsToDelete = new ArrayList<>();
-        for (Association association : associations) {
-          String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
-          if (qualifiedSubject != null) {
-            subjectsToDelete.add(qualifiedSubject);
-          }
-        }
-        deleteAssociationEntries(associations);
-        for (String qualifiedSubject : subjectsToDelete) {
-          enqueueCascadeDelete(qualifiedSubject, resourceId);
-        }
-        if (!subjectsToDelete.isEmpty()) {
-          log.info("Queued {} cascaded subject deletes for resource {}: {}",
-              subjectsToDelete.size(), resourceId, subjectsToDelete);
-        }
       } else {
         // forward delete associations request to the leader
         if (leaderIdentity != null) {
@@ -1145,6 +1139,30 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
+    List<String> subjectsToDelete = new ArrayList<>();
+    for (Association association : associations) {
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      if (qualifiedSubject != null) {
+        subjectsToDelete.add(qualifiedSubject);
+      }
+    }
+    deleteAssociationEntries(associations);
+    for (String qualifiedSubject : subjectsToDelete) {
+      enqueueCascadeDelete(qualifiedSubject, resourceId);
+    }
+    if (!subjectsToDelete.isEmpty()) {
+      log.info("Queued {} cascaded subject deletes for resource {}: {}",
+          subjectsToDelete.size(), resourceId, subjectsToDelete);
     }
   }
 
@@ -1426,7 +1444,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   private AssociationBatchResponse forwardMutateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchRequest request,
+      String context, boolean dryRun, boolean async, AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -1434,7 +1452,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     log.debug(String.format("Forwarding create associations request to %s", baseUrl));
     try {
       AssociationBatchResponse response = leaderRestService.mutateAssociations(
-          headerProperties, context, dryRun, request);
+          headerProperties, context, dryRun, async, request);
       return response;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(

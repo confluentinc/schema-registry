@@ -454,6 +454,12 @@ public class AssociationsResource {
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "Delete ops delete their associations before the response, "
+          + "but finish their cascaded subject deletes in the background. A queued subject is "
+          + "deleted even if new versions are registered under it before the background delete "
+          + "runs. Until then the subject still exists, so recreating the resource with a "
+          + "different schema can fail.")
+      @QueryParam("async") boolean async,
       @Parameter(description = "The create requests", required = true)
       @NotNull AssociationBatchRequest request) {
 
@@ -469,7 +475,7 @@ public class AssociationsResource {
         context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
       }
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
-          context, dryRun, request, headerProperties);
+          context, dryRun, async, request, headerProperties);
       asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (AssociationBatchLimitExceededException e) {
       log.debug("Associations batchMutate request rejected for exceeding a configured "
