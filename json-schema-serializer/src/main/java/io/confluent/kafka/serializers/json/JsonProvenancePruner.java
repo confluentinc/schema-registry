@@ -510,6 +510,9 @@ final class JsonProvenancePruner {
     // Required only by a sibling's presence: decided once pruning settles, as the sibling may be
     // pruned too.
     List<Deferred> deferred = new ArrayList<>();
+    // Objects held only in new struct branches: once every member is pruned, the empty object
+    // is no value of the reader's either, so the property goes too (an extra key keeps it).
+    Map<ObjectNode, Map<String, Deferred>> emptied = new IdentityHashMap<>();
     // A property removed can change how the rest of the value reads: pruned until nothing more is.
     boolean changed = true;
     while (changed) {
@@ -520,6 +523,12 @@ final class JsonProvenancePruner {
         Map<ObjectNode, Set<List<Integer>>> readings = written.get(target);
         walk(target.names, reader, document, 0, new ArrayList<>(), false,
             Collections.emptyList(), (node, object, name, choices, ambiguous, alternatives) -> {
+              if (!ambiguous && !defaults.contains(node)
+                  && inNewStructBranchOnly(target, choices, object, name, node.get(name))) {
+                emptied.computeIfAbsent(node, n -> new HashMap<>()).putIfAbsent(name,
+                    new Deferred(node, Collections.singletonList(new Reach(object, alternatives)),
+                        name, target.names));
+              }
               if (!defaults.contains(node)
                   && !placed.getOrDefault(node, Collections.emptySet()).contains(name)
                   && !keeps(target, choices, ambiguous, node, object, name,
@@ -539,12 +548,65 @@ final class JsonProvenancePruner {
           changed |= e.getKey().get(name) != before;
         }
       }
+      for (Map<String, Deferred> byName : emptied.values()) {
+        for (Deferred d : byName.values()) {
+          JsonNode value = d.node.get(d.name);
+          if (value != null && value.isObject() && value.size() == 0) {
+            JsonNode placedValue = remove(d.node, d.reaches, d.name, d.names, deferred);
+            if (placedValue != null) {
+              addContainers(placedValue, defaults);
+              placed.computeIfAbsent(d.node, n -> new HashSet<>()).add(d.name);
+            }
+            changed = true;
+          }
+        }
+      }
+      emptied.values().forEach(byName -> byName.values()
+          .removeIf(d -> d.node.get(d.name) == null || placed.getOrDefault(d.node,
+              Collections.emptySet()).contains(d.name)));
     }
     for (Deferred d : deferred) {
       if (!d.node.has(d.name) && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
         placeDefault(d.node, d.reaches, d.name, d.names);
       }
     }
+  }
+
+  /**
+   * Whether the property's object value fits only struct branches of its own union that are new
+   * to the reader: their members are all new, so nothing of the object continues.
+   */
+  private static boolean inNewStructBranchOnly(Target target, List<Integer> choices,
+      ObjectSchema object, String name, JsonNode value) {
+    if (value == null || !value.isObject() || target.branches.isEmpty()) {
+      return false;
+    }
+    Schema schema = referred(object.getPropertySchemas().get(name));
+    if (!(schema instanceof CombinedSchema)
+        || ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      return false;
+    }
+    List<Schema> options = new ArrayList<>();
+    for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+      if (!(referred(subschema) instanceof NullSchema)) {
+        options.add(subschema);
+      }
+    }
+    Object validatable = validatable(
+        schema instanceof CombinedSchemaExt ? integralDecimals(value) : value);
+    boolean any = false;
+    for (int i = 0; i < options.size(); i++) {
+      List<Integer> in = new ArrayList<>(choices);
+      in.add(i);
+      if (validates(options.get(i), validatable)) {
+        Candidate branch = target.branches.get(in);
+        if (branch == null || branch.continues || !"STRUCT".equals(target.readerKinds.get(in))) {
+          return false;
+        }
+        any = true;
+      }
+    }
+    return any;
   }
 
   /** A pruned property only a sibling's presence requires, decided once pruning settles. */

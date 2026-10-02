@@ -1058,6 +1058,88 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aValueInARestartedObjectBranchIsPrunedWhole() throws Exception {
+    // The object branch is removed and re-added: x is new, and once it is pruned the empty object
+    // is no value of the reader's either. A key the reader never declares keeps it.
+    String body = "{\"type\": \"object\", \"properties\": {%s\"p\": {\"oneOf\": [%s]}}%s}";
+    String object = "{\"type\": \"object\", \"properties\": {\"x\": {\"type\": \"string\"}}}";
+    JsonSchema v1 = new JsonSchema(
+        String.format(body, "", object + ", {\"type\": \"integer\"}", ""));
+    JsonSchema v2 = new JsonSchema(String.format(body, "",
+        "{\"type\": \"integer\"}, {\"type\": \"boolean\"}", ""));
+    JsonSchema v3 = new JsonSchema(String.format(body, "\"g\": {\"type\": \"string\"}, ",
+        object + ", {\"type\": \"integer\"}", ""));
+    byte[] bytes = write(v1, "{\"p\": {\"x\": \"old\"}}");
+    byte[] extra = write(v1, "{\"p\": {\"x\": \"old\", \"z\": 1}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    assertFalse(read(v3, bytes, "v1").has("p"));
+    assertEquals(1, read(v3, extra, "v1").get("p").get("z").asInt());
+    assertFalse(read(v3, extra, "v1").get("p").has("x"));
+  }
+
+  @Test
+  void aRequiredValueInARestartedObjectBranchTakesItsDefaultOrFails() throws Exception {
+    String object = "{\"type\": \"object\", \"properties\": {\"x\": {\"type\": \"string\"}}}";
+    String body = "{\"type\": \"object\", \"properties\": {%s\"p\": {\"oneOf\": [%s]%s}}, "
+        + "\"required\": [\"p\"]}";
+    for (String defaulted : new String[] {"", ", \"default\": 7"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      JsonSchema v1 = new JsonSchema(
+          String.format(body, "", object + ", {\"type\": \"integer\"}", ""));
+      JsonSchema v2 = new JsonSchema(String.format(body, "",
+          "{\"type\": \"integer\"}, {\"type\": \"boolean\"}", ""));
+      JsonSchema v3 = new JsonSchema(String.format(body, "\"g\": {\"type\": \"string\"}, ",
+          object + ", {\"type\": \"integer\"}", defaulted));
+      byte[] bytes = write(v1, "{\"p\": {\"x\": \"old\"}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      if (defaulted.isEmpty()) {
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"));
+      } else {
+        assertEquals(7, read(v3, bytes, "v1").get("p").asInt());
+      }
+    }
+  }
+
+  @Test
+  void aContinuingDiscriminatorSurvivesARestartedBranchBelowIt() throws Exception {
+    // f0's T28 branch is removed and re-added: its members are pruned, and the empty f0, which
+    // fits all of f0's branches, used to break k1 and cost l the continuing kind.
+    String k4 = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k4\"]}, "
+        + "\"g0\": {\"type\": \"number\"}}}";
+    String k5 = k4.replace("k4", "k5");
+    String t28 = "{\"type\": \"object\", \"title\": \"T28\", \"properties\": {\"kind\": "
+        + "{\"enum\": [\"k6\"]}, \"g0\": {\"type\": \"number\"}}}";
+    String k1 = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k1\"]}, "
+        + "\"j\": {\"type\": \"integer\"}, \"f0\": {\"oneOf\": [%s]}}}";
+    String k2 = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k2\"]}, "
+        + "\"f\": {\"type\": \"boolean\"}}}";
+    String k7 = "{\"type\": \"object\", \"properties\": {\"e0\": {\"type\": \"integer\"}, "
+        + "\"kind\": {\"enum\": [\"k7\"]}}}";
+    String top = "{\"type\": \"object\", \"properties\": {\"l\": {\"oneOf\": [%s]}}}";
+    JsonSchema v1 = new JsonSchema(String.format(top,
+        String.format(k1, k4 + ", " + k5 + ", " + t28) + ", " + k2));
+    JsonSchema v2 = new JsonSchema(String.format(top,
+        String.format(k1, k4 + ", " + k5) + ", " + k2));
+    JsonSchema v3 = new JsonSchema(String.format(top,
+        k7 + ", " + String.format(k1, t28 + ", " + k4 + ", " + k5) + ", " + k2));
+    byte[] bytes = write(v1,
+        "{\"l\": {\"kind\": \"k1\", \"j\": 3, \"f0\": {\"kind\": \"k6\", \"g0\": 4.5}}}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode l = read(v3, bytes, "v1").get("l");
+    assertEquals("k1", l.get("kind").asText());
+    assertEquals(3, l.get("j").asInt());
+    assertFalse(l.has("f0"));
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "
