@@ -21,8 +21,12 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -34,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -103,6 +108,57 @@ public class FollowerDeleteAssociationsTest extends ClusterTestHarness {
     assertEquals(202, rawDelete(follower, "/associations/resources/" + resourceId
         + "?resourceType=topic&associationType=key&cascadeLifecycle=true&async=true"));
 
+    TestUtils.waitUntilTrue(() -> {
+      try {
+        leader.restClient.getAllVersions(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, true, false);
+        return false;
+      } catch (RestClientException e) {
+        return e.getErrorCode() == 40401;
+      }
+    }, 30000, "Subject should be hard-deleted on the leader");
+  }
+
+  @Test
+  public void testFollowerForwardsAsyncBatchMutate() throws Exception {
+    int port1 = choosePort();
+    int port2 = choosePort();
+
+    // Ensure port1 < port2 for deterministic leader election
+    if (port2 < port1) {
+      int tmp = port2;
+      port2 = port1;
+      port1 = tmp;
+    }
+
+    leader = new RestApp(port1, null, brokerList, KAFKASTORE_TOPIC,
+                         CompatibilityLevel.NONE.name, true, null);
+    leader.start();
+
+    follower = new RestApp(port2, null, brokerList, KAFKASTORE_TOPIC,
+                           CompatibilityLevel.NONE.name, true, null);
+    follower.start();
+
+    assertTrue(leader.isLeader(), "First instance should be the leader");
+    assertFalse(follower.isLeader(), "Second instance should be the follower");
+
+    String resourceId = "follower-batch-123";
+    String subject = ":.default:follower-batch-topic-key";
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(TestUtils.getRandomCanonicalAvroString(1).get(0));
+    leader.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest("follower-batch-topic", "default", resourceId,
+            "topic", ImmutableList.of(new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, schemaRequest, null))));
+
+    // The async flag is in the op, so it reaches the leader in the forwarded body
+    AssociationBatchResponse response = follower.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(new AssociationOpRequest(
+            "follower-batch-topic", "default", resourceId, "topic",
+            ImmutableList.of(new AssociationDeleteOp("key", true, true))))));
+
+    assertNull(response.getResults().get(0).getError());
     TestUtils.waitUntilTrue(() -> {
       try {
         leader.restClient.getAllVersions(
