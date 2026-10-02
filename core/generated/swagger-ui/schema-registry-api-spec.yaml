@@ -2855,6 +2855,15 @@ paths:
         description: Dry run
         schema:
           type: boolean
+      - name: async
+        in: query
+        description: "Delete ops delete their associations before the response, but\
+          \ finish their cascaded subject deletes in the background. A queued subject\
+          \ is deleted even if new versions are registered under it before the background\
+          \ delete runs. Until then the subject still exists, so recreating the resource\
+          \ with a different schema can fail."
+        schema:
+          type: boolean
       requestBody:
         description: The create requests
         content:

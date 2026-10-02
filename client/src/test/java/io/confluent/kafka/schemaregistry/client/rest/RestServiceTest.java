@@ -43,6 +43,9 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCr
 import com.google.common.collect.ImmutableMap;
 import org.junit.Test;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import org.junit.runner.RunWith;
@@ -104,6 +107,47 @@ public class RestServiceTest {
         "topic", Arrays.asList("key"), true, null, true);
 
     assertTrue(urlCaptor.getValue().contains("async=true"));
+  }
+
+  @Test
+  public void testMutateAssociationsAsyncInUrl() throws Exception {
+    assertTrue(captureMutateAssociationsUrl(true).contains("async=true"));
+  }
+
+  @Test
+  public void testMutateAssociationsDefaultOmitsAsync() throws Exception {
+    assertTrue(!captureMutateAssociationsUrl(false).contains("async"));
+  }
+
+  private String captureMutateAssociationsUrl(boolean async) throws Exception {
+    RestService restServiceSpy = spy(new RestService("http://localhost:8081"));
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
+
+    ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+    doReturn(url).when(restServiceSpy).url(urlCaptor.capture());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(207);
+    when(httpURLConnection.getOutputStream()).thenReturn(new java.io.ByteArrayOutputStream());
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "{\"results\":[]}".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    }).thenReturn(-1);
+
+    AssociationBatchRequest request = new AssociationBatchRequest(Arrays.asList(
+        new AssociationOpRequest("topic1", "default", "lkc-1", "topic",
+            Arrays.asList(new AssociationDeleteOp("key", true)))));
+    if (async) {
+      restServiceSpy.mutateAssociations(
+          RestService.DEFAULT_REQUEST_PROPERTIES, null, false, true, request);
+    } else {
+      restServiceSpy.mutateAssociations(
+          RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    }
+    return urlCaptor.getValue();
   }
 
   @Test
