@@ -1140,20 +1140,20 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throws SchemaRegistryException {
     List<Association> associations = validateDeleteAssociations(
         resourceId, resourceType, associationTypes, cascadeLifecycle);
-    List<String> subjectsToDelete = new ArrayList<>();
+    List<String> queued = new ArrayList<>();
+    // Queue each subject as soon as its association is deleted, as the synchronous path
+    // cascades each one in turn, so a failed write leaves no deleted association unqueued
     for (Association association : associations) {
       String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      deleteAssociationEntry(association);
       if (qualifiedSubject != null) {
-        subjectsToDelete.add(qualifiedSubject);
+        enqueueCascadeDelete(qualifiedSubject, resourceId);
+        queued.add(qualifiedSubject);
       }
     }
-    deleteAssociationEntries(associations);
-    for (String qualifiedSubject : subjectsToDelete) {
-      enqueueCascadeDelete(qualifiedSubject, resourceId);
-    }
-    if (!subjectsToDelete.isEmpty()) {
+    if (!queued.isEmpty()) {
       log.info("Queued {} cascaded subject deletes for resource {}: {}",
-          subjectsToDelete.size(), resourceId, subjectsToDelete);
+          queued.size(), resourceId, queued);
     }
   }
 

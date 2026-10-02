@@ -4096,6 +4096,90 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(frozenSubject));
   }
 
+  @Test
+  public void testBatchMutateAsyncDeleteThenCreateSameSchema() throws Exception {
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    String subject = ":.default:dc-same-topic-key";
+    createStrongKeyAssociation("dc-same-topic", "dc-same-old", schema);
+
+    // The old topic's async delete and the new topic's create, in separate entries
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        deleteThenCreate("dc-same-topic", "dc-same-old", "dc-same-new", schema));
+
+    assertNull(response.getResults().get(0).getError());
+    assertNull(response.getResults().get(1).getError());
+    // The create re-associated the subject, so the queued delete skips it
+    Thread.sleep(2000);
+    assertEquals(1, restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "dc-same-new", "topic",
+        Collections.singletonList("key"), null, 0, -1).size());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testBatchMutateAsyncDeleteThenCreateDifferentSchema() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = ":.default:dc-diff-topic-key";
+    createStrongKeyAssociation("dc-diff-topic", "dc-diff-old", schemas.get(0));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        deleteThenCreate("dc-diff-topic", "dc-diff-old", "dc-diff-new", schemas.get(1)));
+
+    // The subject still exists when the create runs, so the frozen create is rejected
+    assertNull(response.getResults().get(0).getError());
+    assertNotNull(response.getResults().get(1).getError());
+    assertEquals(Errors.INVALID_ASSOCIATION_ERROR_CODE,
+        response.getResults().get(1).getError().getErrorCode());
+    // The old topic's cleanup still completes
+    TestUtils.waitUntilTrue(() -> isHardDeleted(subject), 30_000,
+        "Subject " + subject + " was not hard-deleted");
+  }
+
+  @Test
+  public void testBatchMutateAsyncWithoutCascadeKeepsSubject() throws Exception {
+    String subject = "batch-nocascade-subject";
+    restApp.restClient.registerSchema(TestUtils.getRandomCanonicalAvroString(1).get(0), subject);
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest("batch-nocascade-topic", "default",
+            "batch-nocascade-123", "topic", ImmutableList.of(new AssociationCreateOrUpdateInfo(
+                subject, "key", LifecyclePolicy.WEAK, false, null, null))));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        batchDelete("batch-nocascade-topic", "batch-nocascade-123", false, true));
+
+    assertNull(response.getResults().get(0).getError());
+    assertTrue(restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "batch-nocascade-123", "topic",
+        Collections.singletonList("key"), null, 0, -1).isEmpty());
+    Thread.sleep(1000);
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  private void createStrongKeyAssociation(String resourceName, String resourceId,
+      String schema) throws Exception {
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(schema);
+    restApp.restClient.createAssociation(RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationCreateOrUpdateRequest(resourceName, "default", resourceId, "topic",
+            ImmutableList.of(new AssociationCreateOrUpdateInfo(
+                null, "key", LifecyclePolicy.STRONG, true, schemaRequest, null))));
+  }
+
+  private static AssociationBatchRequest deleteThenCreate(String resourceName,
+      String oldResourceId, String newResourceId, String schema) {
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(schema);
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(batchDelete(resourceName, oldResourceId, true, true).getRequests().get(0));
+    requests.add(new AssociationOpRequest(resourceName, "default", newResourceId, "topic",
+        ImmutableList.of(new AssociationCreateOp(
+            null, "key", LifecyclePolicy.STRONG, true, schemaRequest, null))));
+    return new AssociationBatchRequest(requests);
+  }
+
   private static AssociationBatchRequest batchDelete(String resourceName, String resourceId,
       boolean cascadeLifecycle, Boolean async) {
     return new AssociationBatchRequest(Collections.singletonList(new AssociationOpRequest(

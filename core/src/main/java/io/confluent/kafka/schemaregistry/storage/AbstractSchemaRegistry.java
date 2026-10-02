@@ -2706,17 +2706,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return associations;
   }
 
-  protected void deleteAssociationEntries(List<Association> associations)
-      throws SchemaRegistryException {
-    for (Association association : associations) {
-      deleteAssociationEntry(association);
-    }
-  }
-
   /**
    * Deletes the associations for a resource and leaves any cascaded subject deletes to run in
-   * the background. The caller holds the store lock. By default there is no background
-   * executor, so this deletes everything synchronously.
+   * the background. The caller holds the store lock for the resource's tenant
+   * ({@code lockFor(subject)} or {@code lockForAssociation(context)}). By default there is no
+   * background executor, so this deletes everything synchronously.
    */
   protected void deleteAssociationsAndQueueCascade(
       String resourceId, String resourceType, List<String> associationTypes,

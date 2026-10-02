@@ -35,8 +35,11 @@ public class AssociationDeleteOp extends AssociationOp {
   /**
    * Creates a delete op. When {@code async} is true, the association is deleted before the
    * response, but any cascaded subject deletes run in the background. A queued subject is
-   * deleted even if new versions are registered under it first. Servers that don't support
-   * async ignore the field and delete synchronously.
+   * deleted even if new versions are registered under it first. Until the background delete
+   * runs, the subject still exists: a create in a later entry of the same batch for the same
+   * subject fails with a different schema, as for any STRONG create on an existing subject,
+   * while one with the same schema re-associates the subject and the queued delete then skips
+   * it. Servers that don't support async ignore the field and delete synchronously.
    */
   @JsonCreator
   public AssociationDeleteOp(
