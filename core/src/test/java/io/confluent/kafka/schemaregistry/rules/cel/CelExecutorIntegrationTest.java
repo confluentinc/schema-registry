@@ -184,6 +184,8 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
     props.put("auto.register.schemas", "false");
     props.put("use.latest.version", "true");
     props.put("latest.compatibility.strict", "false");
+    // checkIBAN uses lookahead, which RE2 (the default) rejects; opt in via executor config
+    props.put("rule.executors._default_.param." + CelExecutor.CEL_REGEX_ENGINE, "pcre");
     return props;
   }
 

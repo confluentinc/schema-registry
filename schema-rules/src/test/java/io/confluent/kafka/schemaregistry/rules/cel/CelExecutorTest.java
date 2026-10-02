@@ -77,6 +77,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -435,6 +436,61 @@ public class CelExecutorTest {
 
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+  }
+
+  private void registerRegexRule(String expr, Map<String, String> params) throws Exception {
+    AvroSchema avroSchema = new AvroSchema(createUserRecord().getSchema());
+    Rule rule = new Rule("myRule", null, RuleKind.CONDITION, RuleMode.WRITE,
+        CelExecutor.TYPE, null, params, expr, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    schemaRegistry.register(topic + "-value", avroSchema.copy(null, ruleSet));
+  }
+
+  @Test
+  public void testRegexEngineRuleParamIgnored() throws Exception {
+    // A schema author must not be able to select PCRE: the lookahead only compiles under PCRE,
+    // so the rule failing proves RE2 was used despite the param.
+    registerRegexRule("message.name.matches('^(?=.*User).*$')",
+        Collections.singletonMap(CelExecutor.CEL_REGEX_ENGINE, "pcre"));
+    IndexedRecord avroRecord = createUserRecord();
+    assertThrows(SerializationException.class,
+        () -> avroSerializer.serialize(topic, avroRecord));
+  }
+
+  @Test
+  public void testRegexEngineUnknownRuleParamIgnored() throws Exception {
+    registerRegexRule("message.name.matches('^test.*$')",
+        Collections.singletonMap(CelExecutor.CEL_REGEX_ENGINE, "bogus-engine"));
+    IndexedRecord avroRecord = createUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+  }
+
+  @Test(timeout = 10000)
+  public void testRegexCatastrophicBacktrackingIsLinear() throws Exception {
+    // ^(a+)+$ against "aaa...!" is exponential under java.util.regex; RE2 answers in linear time.
+    registerRegexRule("message.name.matches('^(a+)+$')",
+        Collections.singletonMap(CelExecutor.CEL_REGEX_ENGINE, "pcre"));
+    char[] input = new char[100001];
+    Arrays.fill(input, 'a');
+    input[input.length - 1] = '!';
+    IndexedRecord avroRecord = createUserRecord(new String(input));
+    assertThrows(SerializationException.class,
+        () -> avroSerializer.serialize(topic, avroRecord));
+  }
+
+  @Test
+  public void testRegexEngineExecutorConfigPcre() throws Exception {
+    // The operator can still opt into PCRE through the executor config.
+    registerRegexRule("message.name.matches('^(?=.*User).*$')", null);
+    Map<String, Object> config = new HashMap<>(defaultConfig);
+    config.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + ".cel.param."
+        + CelExecutor.CEL_REGEX_ENGINE, "pcre");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, config);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, config);
+    IndexedRecord avroRecord = createUserRecord();
+    byte[] bytes = serializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, deserializer.deserialize(topic, bytes));
   }
 
   @Test

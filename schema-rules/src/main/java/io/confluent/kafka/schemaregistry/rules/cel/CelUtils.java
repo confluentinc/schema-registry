@@ -103,22 +103,19 @@ public final class CelUtils {
 
   /**
    * Regex engine used by the CEL {@code matches} / {@code matches_string}
-   * overloads. Selectable per-rule (via {@code params.cel.regex.engine}) or
-   * globally (via the executor config). The unconfigured default is
-   * {@link #DEFAULT}.
+   * overloads. Selectable only via the executor config, never per-rule. The
+   * unconfigured default is {@link #DEFAULT}.
    */
   public enum RegexEngine {
     PCRE,
     RE2;
 
     /**
-     * The default engine when none is configured. Change this single value to
-     * flip the default for {@link CelExecutor} and the no-engine
-     * {@link CelUtils#buildProgram} overload. Does <em>not</em> affect
-     * {@link CelValidator}, which always uses {@link #RE2} for ReDoS safety
-     * on the hot serialize path.
+     * The default engine when none is configured: {@link #RE2}, linear-time and
+     * so safe against ReDoS on the serialize/deserialize hot path. Applies to
+     * {@link CelExecutor} and the no-engine {@link CelUtils#buildProgram} overload.
      */
-    public static final RegexEngine DEFAULT = PCRE;
+    public static final RegexEngine DEFAULT = RE2;
 
     public static RegexEngine fromString(String s) {
       if (s == null || s.isEmpty()) {

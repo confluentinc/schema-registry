@@ -70,9 +70,10 @@ public class CelExecutor implements RuleExecutor {
    * {@code matches_string} overloads. Values: {@code "pcre"}
    * ({@link java.util.regex.Pattern}, supports lookahead and other PCRE
    * features) or {@code "re2"} (cel-java's stdlib choice, linear-time
-   * matching, no lookahead). Resolvable per-rule via
-   * {@code params.cel.regex.engine} or globally via the executor config;
-   * unconfigured falls back to {@link RegexEngine#DEFAULT}.
+   * matching, no lookahead). Read only from the executor config, never from
+   * rule params or schema metadata: those are supplied by the schema author,
+   * and letting them select a backtracking engine exposes every client to ReDoS.
+   * Unconfigured falls back to {@link RegexEngine#DEFAULT}.
    */
   public static final String CEL_REGEX_ENGINE = "cel.regex.engine";
 
@@ -173,28 +174,12 @@ public class CelExecutor implements RuleExecutor {
   }
 
   /**
-   * Resolve the regex engine for {@code ctx}: per-rule param wins over the
-   * executor's configured default. Used by {@link #bind} to seed
-   * {@link Bindings#regexEngine}.
-   */
-  private RegexEngine resolveRegexEngine(RuleContext ctx) throws RuleException {
-    String perRule = ctx.getParameter(CEL_REGEX_ENGINE);
-    if (perRule != null && !perRule.isEmpty()) {
-      try {
-        return RegexEngine.fromString(perRule);
-      } catch (IllegalArgumentException e) {
-        throw new RuleException(ctx.rule(), e);
-      }
-    }
-    return defaultRegexEngine;
-  }
-
-  /**
    * Resolve how unsigned protobuf fields are presented for {@code ctx}, from the setting
    * the schema declares beside the rule. Used by {@link CelFieldExecutor} to decide how to
    * bind {@code value}.
    *
-   * <p>Deliberately not readable from the executor config, unlike the regex engine: which
+   * <p>Deliberately not readable from the executor config (the regex engine is the
+   * reverse, config-only): which
    * literals a rule may use is a property of the rule's own text, not of the client running
    * it, and the same rule evaluated by two differently-configured clients has to agree.
    */
@@ -404,7 +389,7 @@ public class CelExecutor implements RuleExecutor {
     } catch (IllegalArgumentException e) {
       throw new RuleException(ctx.rule(), e);
     }
-    return new Bindings(type, schemaHint, declTypes, celArgs, obj, resolveRegexEngine(ctx));
+    return new Bindings(type, schemaHint, declTypes, celArgs, obj, defaultRegexEngine);
   }
 
   /**
