@@ -59,6 +59,23 @@ public class CycleContext<T> {
     return defaultValues;
   }
 
+  /**
+   * Captures what a conversion attempt can change here; running the result undoes the attempt.
+   */
+  public Runnable checkpoint() {
+    final Set<T> seen = new HashSet<>(seenSchemas);
+    final Deque<String> path = new ArrayDeque<>(fieldsPath);
+    final Map<List<Integer>, Object> defaults = new HashMap<>(defaultValues);
+    return () -> {
+      seenSchemas.clear();
+      seenSchemas.addAll(seen);
+      fieldsPath.clear();
+      fieldsPath.addAll(path);
+      defaultValues.clear();
+      defaultValues.putAll(defaults);
+    };
+  }
+
   public String getCyclicSchemaErrorMessage() {
     StringJoiner joiner = new StringJoiner(".");
     Iterator<String> it = fieldsPath.descendingIterator();
