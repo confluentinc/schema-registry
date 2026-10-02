@@ -447,7 +447,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       // determine the latest version of the schema in the subject
       List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
 
-      List<Schema> deletedVersions = new ArrayList<>();
       List<ParsedSchemaHolder> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
       // iterate from the latest to first
@@ -455,10 +454,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         LazyParsedSchemaHolder schemaHolder = new LazyParsedSchemaHolder(this, schemaKey);
         SchemaValue schemaValue = schemaHolder.schemaValue();
         newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
-        if (schemaValue.isDeleted()) {
-          deletedVersions.add(
-              new Schema(schemaValue.getSubject(), schemaValue.getVersion(), schemaValue.getId()));
-        } else {
+        if (!schemaValue.isDeleted()) {
           if (!undeletedVersions.isEmpty()) {
             // minor optimization: clear the holder if it is not the latest
             schemaHolder.clear();
@@ -578,24 +574,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 + "to generating an ID that is already in use.");
           }
         }
-        for (Schema deleted : deletedVersions) {
-          if (deleted.getId().equals(schema.getId())
-                  && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
-            SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
-            // Skip tombstoning if any schema (including soft-deleted) still references this
-            // (subject, version): references resolve by subject+version, not by global ID, so
-            // tombstoning would orphan those references even though the referrer may still be
-            // restored from a soft delete.
-            if (!getReferencedBy(key, true).isEmpty()) {
-              log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
-                  + " of {} v{} (id {}): still referenced by other schemas",
-                  key, schema.getSubject(), schema.getVersion(), schema.getId());
-              continue;
-            }
-            // Tombstone previous version with the same ID
-            kafkaStore.put(key, null);
-          }
-        }
+        // A soft-deleted version with the same ID stays: the subject's history stays whole.
         kafkaStore.put(schemaKey, schemaValue);
         logSchemaOp(schema, "REGISTER");
         return schema;

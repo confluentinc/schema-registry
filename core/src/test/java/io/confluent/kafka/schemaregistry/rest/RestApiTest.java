@@ -2213,10 +2213,9 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testSameIdTombstonePreservesReferencedSoftDeletedVersion() throws Exception {
-    // Reproduces the bug where re-registering the content of a soft-deleted version
-    // reuses the same global ID and tombstones the old (subject, version) row, breaking
-    // any schema reference that still points at it (references resolve by subject+version).
+  public void testReRegisteringKeepsAReferencedSoftDeletedVersion() throws Exception {
+    // Re-registering the content of a soft-deleted version reuses its global ID; a schema
+    // reference still pointing at the old (subject, version) keeps resolving.
     String userSubject = "user";
     String orderSubject = "order";
     restApp.restClient.updateCompatibility(NONE.name, userSubject);
@@ -2258,8 +2257,7 @@ public abstract class RestApiTest {
     assertEquals((Integer) 3, userV3.getVersion());
     assertEquals(Integer.valueOf(userV2Id), userV3.getId());
 
-    // The soft-deleted v2 must NOT have been tombstoned; the (subject, version) the
-    // soft-deleted order schema points at must still be retrievable.
+    // The (subject, version) the soft-deleted order schema points at is still retrievable.
     Schema softDeletedV2 = restApp.restClient.getVersion(userSubject, 2, true);
     assertEquals((Integer) 2, softDeletedV2.getVersion());
     assertEquals(Integer.valueOf(userV2Id), softDeletedV2.getId());
@@ -2272,10 +2270,9 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testSameIdTombstoneStillRunsWhenNoReferences() throws Exception {
-    // The reference-aware guard must not regress the original optimization: when nothing
-    // (active or soft-deleted) references the same-ID soft-deleted version, it should
-    // still be tombstoned during re-registration.
+  public void testReRegisteringASoftDeletedSchemaKeepsTheSoftDeletedVersion() throws Exception {
+    // Re-registering the content of a soft-deleted version gives a new version under the same
+    // global ID; the soft-deleted version stays, so the subject's history stays whole.
     String subject = "no_refs";
     restApp.restClient.updateCompatibility(NONE.name, subject);
 
@@ -2296,19 +2293,24 @@ public abstract class RestApiTest {
     int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
     assertEquals(v2Id, reRegisteredId);
 
-    // The old soft-deleted v2 should be gone (tombstoned); only the new v3 remains.
-    try {
-      restApp.restClient.getVersion(subject, 2, true);
-      fail("Soft-deleted v2 should have been tombstoned when no references exist");
-    } catch (RestClientException rce) {
-      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
     Schema v3 = restApp.restClient.getVersion(subject, 3);
     assertEquals(Integer.valueOf(v2Id), v3.getId());
-    // v1 (different id) should still be soft-deleted and visible with deleted=true.
+    Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
+    assertTrue(v2Deleted.getDeleted());
     Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
     assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());
     assertTrue(v1Deleted.getDeleted());
+    assertEquals(Arrays.asList(1, 2, 3), restApp.restClient.getAllVersions(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+
+    // Lookups by content and by ID find the live version, and registering again adds nothing.
+    assertEquals((Integer) 3, restApp.restClient.lookUpSubjectVersion(v2, subject).getVersion());
+    assertEquals(Collections.singletonList(new SubjectVersion(subject, 3)),
+        restApp.restClient.getAllVersionsById(v2Id));
+    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
   }
 
   @Test
