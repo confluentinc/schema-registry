@@ -1116,23 +1116,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        List<Association> associations = validateDeleteAssociations(
+        deleteAssociationsAndQueueCascade(
             resourceId, resourceType, associationTypes, cascadeLifecycle);
-        List<String> subjectsToDelete = new ArrayList<>();
-        for (Association association : associations) {
-          String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
-          if (qualifiedSubject != null) {
-            subjectsToDelete.add(qualifiedSubject);
-          }
-        }
-        deleteAssociationEntries(associations);
-        for (String qualifiedSubject : subjectsToDelete) {
-          enqueueCascadeDelete(qualifiedSubject, resourceId);
-        }
-        if (!subjectsToDelete.isEmpty()) {
-          log.info("Queued {} cascaded subject deletes for resource {}: {}",
-              subjectsToDelete.size(), resourceId, subjectsToDelete);
-        }
       } else {
         // forward delete associations request to the leader
         if (leaderIdentity != null) {
@@ -1145,6 +1130,30 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
+    List<String> subjectsToDelete = new ArrayList<>();
+    for (Association association : associations) {
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      if (qualifiedSubject != null) {
+        subjectsToDelete.add(qualifiedSubject);
+      }
+    }
+    deleteAssociationEntries(associations);
+    for (String qualifiedSubject : subjectsToDelete) {
+      enqueueCascadeDelete(qualifiedSubject, resourceId);
+    }
+    if (!subjectsToDelete.isEmpty()) {
+      log.info("Queued {} cascaded subject deletes for resource {}: {}",
+          subjectsToDelete.size(), resourceId, subjectsToDelete);
     }
   }
 

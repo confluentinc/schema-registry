@@ -3830,6 +3830,8 @@ components:
         properties:
           associationType:
             type: string
+          async:
+            type: boolean
     AssociationOp:
       type: object
       properties:
