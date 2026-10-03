@@ -28,7 +28,6 @@ import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -815,7 +814,10 @@ final class JsonProvenancePruner {
       for (Schema part : subschemas) {
         walk(names, part, node, step, choices, ambiguous, alternatives, reached, at);
       }
-      reached.allOfs--;
+      // A visit repeats only within one allOf's walk: once out of every allOf, none can.
+      if (--reached.allOfs == 0) {
+        reached.walked.clear();
+      }
       return;
     }
     List<Schema> branches = new ArrayList<>();
@@ -1058,7 +1060,7 @@ final class JsonProvenancePruner {
   private static final class Reached {
     private final Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers =
         new IdentityHashMap<>();
-    private final Map<AtProperty, Set<List<Object>>> walked = new IdentityHashMap<>();
+    private final Map<AtProperty, Set<Visit>> walked = new IdentityHashMap<>();
     // allOf parts being walked: only under one can two paths reach the same visit.
     private int allOfs;
 
@@ -1068,32 +1070,61 @@ final class JsonProvenancePruner {
       if (allOfs == 0) {
         return true;
       }
-      List<Object> key = new ArrayList<>(Arrays.asList(new Same(schema), new Same(node), step,
-          new ArrayList<>(choices), ambiguous));
-      for (Alternative a : alternatives) {
-        key.add(new Same(a.union));
-        key.add(a.branch);
-        key.add(a.extra);
-      }
-      return walked.computeIfAbsent(at, k -> new HashSet<>()).add(key);
+      return walked.computeIfAbsent(at, k -> new HashSet<>())
+          .add(new Visit(schema, node, step, choices, ambiguous, alternatives));
     }
   }
 
-  private static final class Same {
-    private final Object of;
+  // One visit of a walk: schemas, values and unions by identity, the readings by value. The
+  // lists are never changed once a walk step is given them.
+  private static final class Visit {
+    private final Schema schema;
+    private final JsonNode node;
+    private final int step;
+    private final List<Integer> choices;
+    private final boolean ambiguous;
+    private final List<Alternative> alternatives;
+    private final int hash;
 
-    Same(Object of) {
-      this.of = of;
+    Visit(Schema schema, JsonNode node, int step, List<Integer> choices, boolean ambiguous,
+        List<Alternative> alternatives) {
+      this.schema = schema;
+      this.node = node;
+      this.step = step;
+      this.choices = choices;
+      this.ambiguous = ambiguous;
+      this.alternatives = alternatives;
+      int h = System.identityHashCode(schema) * 31 + System.identityHashCode(node);
+      h = (h * 31 + step) * 31 + choices.hashCode();
+      for (Alternative a : alternatives) {
+        h = h * 31 + System.identityHashCode(a.union) * 7 + a.branch;
+      }
+      this.hash = h * 2 + (ambiguous ? 1 : 0);
     }
 
     @Override
     public boolean equals(Object o) {
-      return o instanceof Same && ((Same) o).of == of;
+      if (!(o instanceof Visit)) {
+        return false;
+      }
+      Visit v = (Visit) o;
+      if (v.schema != schema || v.node != node || v.step != step || v.ambiguous != ambiguous
+          || !v.choices.equals(choices) || v.alternatives.size() != alternatives.size()) {
+        return false;
+      }
+      for (int i = 0; i < alternatives.size(); i++) {
+        Alternative a = alternatives.get(i);
+        Alternative b = v.alternatives.get(i);
+        if (a.union != b.union || a.branch != b.branch || a.extra != b.extra) {
+          return false;
+        }
+      }
+      return true;
     }
 
     @Override
     public int hashCode() {
-      return System.identityHashCode(of);
+      return hash;
     }
   }
 

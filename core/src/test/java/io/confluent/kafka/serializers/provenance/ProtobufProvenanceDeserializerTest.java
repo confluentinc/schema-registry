@@ -1606,6 +1606,38 @@ class ProtobufProvenanceDeserializerTest {
     assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
   }
 
+  @Test
+  void aReAddedFieldFindsANumberBelowItsExtensionsBesideALargerMessage() throws Exception {
+    // M's numbers end at extensions 100 to max, and Big takes 1 to 99: avoiding Big's numbers too
+    // leaves none, so memo must move by avoiding M's own, not fall back to its old value.
+    StringBuilder big = new StringBuilder("message Big {");
+    for (int i = 1; i <= 99; i++) {
+      big.append(" optional int32 b").append(i).append(" = ").append(i).append(";");
+    }
+    String head = "syntax = \"proto2\";\npackage p;\n"
+        + "message Row { optional int32 id = 1; optional M u = 2; optional Big b = 3; }\n";
+    String tail = " extensions 100 to max; }\n" + big + " }\n";
+    ProtobufSchema v1 = new ProtobufSchema(head
+        + "message M { optional int32 x = 1; optional int32 note = 2;" + tail);
+    ProtobufSchema v2 = new ProtobufSchema(head + "message M { optional int32 x = 1;" + tail);
+    ProtobufSchema v3 = new ProtobufSchema(head
+        + "message M { optional int32 x = 1; optional int32 memo = 2;" + tail);
+    int id = client.register(SUBJECT, v1);
+    Descriptor row = v1.toDescriptor("p.Row");
+    Descriptor m = v1.toDescriptor("p.M");
+    byte[] bytes = framed(id, v1, "p.Row", DynamicMessage.newBuilder(row)
+        .setField(row.findFieldByName("id"), 7).setField(row.findFieldByName("u"),
+            DynamicMessage.newBuilder(m).setField(m.findFieldByName("note"), 77).build())
+        .build());
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage read = read(v3, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    DynamicMessage u = (DynamicMessage) get(read, "u");
+    assertFalse(u.hasField(u.getDescriptorForType().findFieldByName("memo")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

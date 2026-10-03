@@ -102,6 +102,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   // Bounded: each value holds its key, so weak keys alone would never let one go.
   private final Cache<Schema, AvroSchema> classReaders =
       CacheBuilder.newBuilder().weakKeys().maximumSize(DEFAULT_CACHE_CAPACITY).build();
+  // Any other reader schema passed in, wrapped once while provenance is on; bounded likewise.
+  private final Cache<Schema, AvroSchema> textReaders =
+      CacheBuilder.newBuilder().weakKeys().maximumSize(DEFAULT_CACHE_CAPACITY).build();
 
   /**
    * {@code schema}, a generated or reflected class's, as a reader. Its text leaves out what a
@@ -119,9 +122,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return null;
     }
     AvroSchema known = classReaders.getIfPresent(readerSchema);
-    return known != null ? known
-        : readerSchema == specificAvroReaderSchema || isClassSchema(readerSchema)
-            ? classReader(readerSchema) : new AvroSchema(readerSchema);
+    if (known != null) {
+      return known;
+    }
+    if (readerSchema == specificAvroReaderSchema || isClassSchema(readerSchema)) {
+      return classReader(readerSchema);
+    }
+    // One instance per schema passed in: provenance keys its cache by the reader, whose hash
+    // and equality walk the whole schema unless it is the same instance.
+    return provenanceAlgorithm == null ? new AvroSchema(readerSchema)
+        : textReaders.asMap().computeIfAbsent(readerSchema, AvroSchema::new);
   }
 
   // A reader function's class schema is a class reader too, unless its registered id or version
@@ -160,6 +170,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private synchronized void resetProvenance() {
     provenanceProjector = null;
     classReaders.invalidateAll();
+    textReaders.invalidateAll();
   }
 
   @Override

@@ -737,8 +737,17 @@ public final class ProvenanceComputer {
         matchJsonBranches(peers, previous, matched);
         return;
       }
+      // By name, indexed: an object may hold tens of thousands of properties. A name held twice
+      // matches neither, as sole decides.
+      Map<String, Node> byName = new HashMap<>();
+      Set<String> repeated = new HashSet<>();
+      for (Node p : previous) {
+        if (byName.put(p.name, p) != null) {
+          repeated.add(p.name);
+        }
+      }
       for (Node peer : peers) {
-        Node found = sole(previous, p -> peer.name.equals(p.name));
+        Node found = repeated.contains(peer.name) ? null : byName.get(peer.name);
         if (found != null) {
           matched.put(peer, found);
         }
@@ -1328,6 +1337,10 @@ public final class ProvenanceComputer {
      */
     private static boolean crosses(Node peer, Node candidate, List<Node> peers,
         Map<Node, Node> matched, List<Node> previous, Set<Node> taken) {
+      if (candidate.keys.equals(peer.keys)) {
+        // The same discriminator keys on both sides: neither has one the other lacks.
+        return false;
+      }
       List<Node> otherPrevious = new ArrayList<>();
       for (Node p : previous) {
         if (p != candidate && !taken.contains(p) && p.content != null) {

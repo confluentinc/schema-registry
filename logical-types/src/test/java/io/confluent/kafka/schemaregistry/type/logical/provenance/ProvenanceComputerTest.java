@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ import java.util.function.IntFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Tests for {@link ProvenanceComputer}, worked against the scenarios the provenance model is
@@ -916,6 +918,27 @@ class ProvenanceComputerTest {
   void anEmptySequenceReportsNothing() {
     assertThat(ProvenanceComputer.report(SchemaType.AVRO, new ArrayList<>()).getVersions())
         .isEmpty();
+  }
+
+  @Test
+  void aJsonObjectOfManyPropertiesIsMatchedInTimeLinearInItsWidth() {
+    // 60,000 properties, a tenth dropped and as many added: each was looked up among all the
+    // previous ones (10 s here); by name, indexed, it takes milliseconds.
+    List<Field> v1 = new ArrayList<>();
+    List<Field> v2 = new ArrayList<>();
+    for (int i = 0; i < 60_000; i++) {
+      v1.add(field("p" + i));
+      if (i % 10 != 0) {
+        v2.add(field("p" + i));
+      }
+    }
+    for (int i = 0; i < 6_000; i++) {
+      v2.add(field("q" + i));
+    }
+    Pids pids = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> Pids.of(SchemaType.JSON,
+        Arrays.asList(lt(Schema.createStruct(v1)), lt(Schema.createStruct(v2)))));
+
+    assertThat(pids.shared(1, 0)).hasSize(54_000);
   }
 
   // ---------------------------------------------------------------------------------------------

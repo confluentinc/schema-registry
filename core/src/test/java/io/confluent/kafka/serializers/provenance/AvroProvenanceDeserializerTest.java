@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -41,6 +42,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -717,6 +719,37 @@ class AvroProvenanceDeserializerTest {
         .deserialize(TOPIC, bytes);
     assertEquals(7, read.get("id"));
     assertEquals("new!", read.get("name").toString());
+  }
+
+  @Test
+  void aReaderSchemaPassedWithEveryRecordIsNotRehashedForEach() throws Exception {
+    // One reader schema passed with every record, as a caller holding it does: wrapped anew for
+    // each, the provenance cache hashed the whole schema per record (8,000 union branches here).
+    StringBuilder branches = new StringBuilder();
+    for (int i = 0; i < 8000; i++) {
+      branches.append(i > 0 ? "," : "").append("{\"type\":\"record\",\"name\":\"B").append(i)
+          .append("\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}");
+    }
+    String union = "{\"name\":\"u\",\"type\":[" + branches + "]}";
+    Schema v1 = record(union);
+    Schema v2 = record(union, "{\"name\":\"w\",\"type\":\"int\",\"default\":-1}");
+    GenericData.Record u = new GenericData.Record(v1.getField("u").schema().getTypes().get(0));
+    u.put("x", 7);
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("u", u));
+    client.register(SUBJECT, new AvroSchema(v2));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, v2);
+
+    GenericRecord read = assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+      GenericRecord last = null;
+      for (int i = 0; i < 20000; i++) {
+        last = (GenericRecord) deserializer.deserializeWithSchema(
+            TOPIC, new RecordHeaders(), bytes, v2).getValue();
+      }
+      return last;
+    });
+    assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
+    assertEquals(-1, read.get("w"));
   }
 
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {

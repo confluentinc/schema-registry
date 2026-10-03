@@ -62,15 +62,16 @@ final class ProtoProvenanceRenumberer {
   private final int readerId;
   // For each message, by full name: which of its field numbers must move.
   private final Map<String, Map<Integer, Boolean>> moves = new HashMap<>();
-  // The writer's messages, by full name, its imports' included: for their ranges.
+  // The writer's messages, by full name, its imports' included: a fresh number is none the
+  // writer's message of the same name writes under.
   private final Map<String, DescriptorProto> writerMessages = new HashMap<>();
-  // Every field number of every writer message: a fresh number takes none, since a location may
-  // hold another message's data than its name says (a retype, or one inside a map value).
+  // Every field number of every writer message: a fresh number takes none while another is left,
+  // since a location may hold another message's data than its name says (a map value retyped).
   private final Set<Integer> writerNumbers = new HashSet<>();
   // Every extension and reserved range of every writer message, for a renamed or retyped one.
   private final DescriptorProto.Builder writerRanges = DescriptorProto.newBuilder();
   // Reader messages a continuing field now types, where the writer's holds another message: the
-  // data there is that message's, so their fresh numbers avoid every writer range too.
+  // data there is that message's, so their fresh numbers avoid every writer number and range.
   private final Set<String> retypedInto = new HashSet<>();
 
   private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
@@ -473,18 +474,28 @@ final class ProtoProvenanceRenumberer {
       }
       DescriptorProto written =
           retypedInto.contains(fullName) ? null : writerMessages.get(fullName);
-      // Whatever message's data a location now holds, it is under some writer number.
-      taken.addAll(writerNumbers);
-      if (written == null) {
+      if (written != null) {
+        written.getFieldList().forEach(field -> taken.add(field.getNumber()));
+      } else {
         // A message renamed since the writer, or one a field was retyped to: its data may be under
-        // any writer message's extension ranges.
+        // any writer message's numbers, or in any of their extension ranges.
+        taken.addAll(writerNumbers);
         written = writerRanges.build();
       }
+      // A location may hold another message's data than its name says (a retype inside a map
+      // value), so every writer number is avoided too, while any number is left otherwise.
+      Set<Integer> avoided = new HashSet<>(taken);
+      avoided.addAll(writerNumbers);
       int next = MAX_FIELD_NUMBER;
       for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
         if (Boolean.TRUE.equals(decided.get(field.getNumber()))) {
-          next = freeNumber(message, written, taken, next);
+          try {
+            next = freeNumber(message, written, avoided, next);
+          } catch (ProvenanceUnavailableException e) {
+            next = freeNumber(message, written, taken, next);
+          }
           taken.add(next);
+          avoided.add(next);
           field.setNumber(next--);
         }
       }

@@ -499,11 +499,11 @@ class ProvenanceIdentityRulesTest {
 
   @Test
   void aWideUnionWhoseBranchesAllChangedIsMatchedInTimeQuadraticInItsWidth() {
-    // 400 untagged branches, each gaining a member in v2: every one reaches the overlap phase,
-    // whose crossing test scanned every other branch per candidate pair (15 s here).
+    // 1,600 untagged branches, each gaining a member in v2: every one reaches the overlap phase,
+    // whose crossing test listed every other branch per candidate pair, though none can cross.
     StringBuilder v1 = new StringBuilder();
     StringBuilder v2 = new StringBuilder();
-    for (int i = 0; i < 400; i++) {
+    for (int i = 0; i < 1600; i++) {
       StringBuilder members = new StringBuilder();
       for (int m = 0; m < 5; m++) {
         members.append(m > 0 ? "," : "").append("\"u").append(i).append('_').append(m)
@@ -517,10 +517,10 @@ class ProvenanceIdentityRulesTest {
       v1.append(i > 0 ? "," : "").append(branch).append("}}");
       v2.append(i > 0 ? "," : "").append(branch).append(",\"added\":{\"type\":\"string\"}}}");
     }
-    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(5),
+    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(8),
         () -> compute(json("{\"e\":{\"oneOf\":[" + v1 + "]}}", null),
             json("{\"e\":{\"oneOf\":[" + v2 + "]}}", null)));
-    for (int i = 0; i < 400; i++) {
+    for (int i = 0; i < 1600; i++) {
       assertThat(pid(versions, 1, 0, i)).isEqualTo(pid(versions, 0, 0, i));
     }
   }
