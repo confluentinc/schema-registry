@@ -75,7 +75,6 @@ import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -127,9 +126,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
   private final LockChainedExecutor cascadeDeleteExecutor;
-  // Queued cascaded deletes that have not finished, and the subset that have not yet started
+  // Queued cascaded deletes that have not finished
   private final Map<String, Integer> pendingCascadeDeletes = new ConcurrentHashMap<>();
-  private final Map<String, Integer> unstartedCascadeDeletes = new ConcurrentHashMap<>();
+  // Queued cascaded deletes that have not started, keyed by a token per delete. Whoever removes
+  // a token owns it: the task removes it to start, and the rejection path or close() removes it
+  // to report the delete as not run, so exactly one of them acts on each delete.
+  private final Map<Object, String> unstartedCascadeDeletes = new ConcurrentHashMap<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -1172,19 +1174,23 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     String tenant = tenant();
     // Counted rather than a set, since the same subject can be queued more than once
     pendingCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
-    unstartedCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
+    Object token = new Object();
+    unstartedCascadeDeletes.put(token, qualifiedSubject);
     boolean queued = cascadeDeleteExecutor.submit(kafkaStore.lockFor(qualifiedSubject), () -> {
-      decrement(unstartedCascadeDeletes, qualifiedSubject);
       try {
-        withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject, resourceId));
+        // If close() already claimed and reported this delete, it must not also run
+        if (unstartedCascadeDeletes.remove(token) != null) {
+          withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject, resourceId));
+        }
       } finally {
         decrement(pendingCascadeDeletes, qualifiedSubject);
       }
     });
     if (!queued) {
-      decrement(unstartedCascadeDeletes, qualifiedSubject);
       decrement(pendingCascadeDeletes, qualifiedSubject);
-      recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
+      if (unstartedCascadeDeletes.remove(token) != null) {
+        recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
+      }
     }
   }
 
@@ -1572,14 +1578,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     // Drain cascaded deletes first, while this instance can still write to the store
     cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     // Deletes that already started report their own failure, so only report those that never did
-    Map<String, Integer> notDeleted = new HashMap<>(unstartedCascadeDeletes);
-    if (!notDeleted.isEmpty()) {
-      int count = notDeleted.values().stream().mapToInt(Integer::intValue).sum();
-      for (int i = 0; i < count; i++) {
+    // Removing each token claims it, so a delete is not also reported by the rejection path
+    List<String> notDeleted = new ArrayList<>();
+    for (Object token : new ArrayList<>(unstartedCascadeDeletes.keySet())) {
+      String subject = unstartedCascadeDeletes.remove(token);
+      if (subject != null) {
         metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+        notDeleted.add(subject);
       }
+    }
+    if (!notDeleted.isEmpty()) {
       log.error("Shut down before {} cascaded deletes started; these subjects were not "
-          + "deleted: {}", count, notDeleted.keySet());
+          + "deleted: {}", notDeleted.size(), new LinkedHashSet<>(notDeleted));
     }
     if (leaderElector != null) {
       leaderElector.close();
