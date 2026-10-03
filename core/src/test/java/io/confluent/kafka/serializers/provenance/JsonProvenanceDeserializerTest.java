@@ -1365,6 +1365,39 @@ class JsonProvenanceDeserializerTest {
     assertEquals("s", read(v2, bytes, "v1").get("x").asText());
   }
 
+  @Test
+  void anAllOfNamingOneDefinitionTwiceIsWalkedOncePerLevel() throws Exception {
+    // Each level is allOf [$ref L, $ref L]: walked part by part, the leaf is reached 2^depth
+    // times (hours here); walked once per level, a read takes about a millisecond.
+    int depth = 32;
+    String x = "\"x\": {\"type\": \"string\"%s}, ";
+    StringBuilder defs = new StringBuilder(
+        "\"L0\": {\"type\": \"object\", \"properties\": {%s\"y\": {\"type\": \"string\"}}}");
+    for (int level = 1; level <= depth; level++) {
+      defs.append(", \"L").append(level).append("\": {\"type\": \"object\", \"properties\": ")
+          .append("{\"p\": {\"allOf\": [{\"$ref\": \"#/definitions/L").append(level - 1)
+          .append("\"}, {\"$ref\": \"#/definitions/L").append(level - 1).append("\"}]}}}");
+    }
+    String body = "{\"type\": \"object\", \"properties\": {\"root\": {\"$ref\": "
+        + "\"#/definitions/L" + depth + "\"}}, \"definitions\": {" + defs + "}}";
+    JsonSchema v1 = new JsonSchema(String.format(body, String.format(x, "")));
+    JsonSchema v2 = new JsonSchema(String.format(body, ""));
+    JsonSchema v3 = new JsonSchema(
+        String.format(body, String.format(x, ", \"description\": \"new\"")));
+    String doc = "{\"x\": \"old\", \"y\": \"keep\"}";
+    String kept = "{\"y\": \"keep\"}";
+    for (int level = 1; level <= depth; level++) {
+      doc = "{\"p\": " + doc + "}";
+      kept = "{\"p\": " + kept + "}";
+    }
+    byte[] bytes = write(v1, "{\"root\": " + doc + "}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(10), () -> read(v3, bytes, "v1"));
+    assertEquals(MAPPER.readTree("{\"root\": " + kept + "}"), read);
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

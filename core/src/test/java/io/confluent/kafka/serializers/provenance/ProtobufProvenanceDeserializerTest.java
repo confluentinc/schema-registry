@@ -1530,6 +1530,82 @@ class ProtobufProvenanceDeserializerTest {
     assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
   }
 
+  @Test
+  void aFreshNumberAvoidsTheWriterOfAMessageMovedOutOfAnImport() throws Exception {
+    // A moves from an import into the file, dropping hi and adding b: the writer's A is the
+    // imported one, so b's fresh number must avoid its numbers too.
+    String dep = "syntax = \"proto3\";\npackage p;\n"
+        + "message A { int32 x = 1; string hi = 536870911; }\n";
+    client.register("dep", new ProtobufSchema(dep));
+    ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\nimport \"a.proto\";\n"
+        + "message Row { int32 id = 1; A f = 2; }\n",
+        Collections.singletonList(new SchemaReference("a.proto", "dep", 1)),
+        Collections.singletonMap("a.proto", dep), null, null);
+    ProtobufSchema v2 = file("message Row { int32 id = 1; A f = 2; }",
+        "message A { int32 x = 1; C b = 3; }\nmessage C { int32 z = 1; }");
+    int id = client.register(SUBJECT, v1);
+    Descriptor row = v1.toDescriptor();
+    Descriptor a = row.findFieldByName("f").getMessageType();
+    byte[] bytes = framed(id, v1, "p.Row", DynamicMessage.newBuilder(row)
+        .setField(row.findFieldByName("id"), 7).setField(row.findFieldByName("f"),
+            DynamicMessage.newBuilder(a).setField(a.findFieldByName("hi"), "\u0000").build())
+        .build());
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    DynamicMessage f = (DynamicMessage) get(read, "f");
+    assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
+  }
+
+  @Test
+  void aFreshNumberAvoidsTheWriterUnderAMapValueRetypedToAnExistingMessage() throws Exception {
+    // A map value's type changes from A to B: the value has no location of its own, yet its data
+    // is still an A's, so B's new b must take no number A writes under.
+    String messages = "message A { int32 x = 1; string hi = 536870911; }\n"
+        + "message B { C b = 1; }\nmessage C { int32 z = 1; }";
+    ProtobufSchema v1 = file("message Row { int32 id = 1; map<string, A> f = 2; }", messages);
+    ProtobufSchema v2 = file("message Row { int32 id = 1; map<string, B> f = 2; }", messages);
+    int id = client.register(SUBJECT, v1);
+    Descriptor row = v1.toDescriptor();
+    Descriptor entry = row.findFieldByName("f").getMessageType();
+    Descriptor a = v1.toDescriptor("p.A");
+    byte[] bytes = framed(id, v1, "p.Row", DynamicMessage.newBuilder(row)
+        .setField(row.findFieldByName("id"), 7).addRepeatedField(row.findFieldByName("f"),
+            DynamicMessage.newBuilder(entry).setField(entry.findFieldByName("key"), "k")
+                .setField(entry.findFieldByName("value"), DynamicMessage.newBuilder(a)
+                    .setField(a.findFieldByName("hi"), "\u0000").build()).build())
+        .build());
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    DynamicMessage value =
+        (DynamicMessage) get((DynamicMessage) ((List<?>) get(read, "f")).get(0), "value");
+    assertFalse(value.hasField(value.getDescriptorForType().findFieldByName("b")));
+  }
+
+  @Test
+  void aFreshNumberAvoidsTheWriterUnderARetypeInASingleMessageFile() throws Exception {
+    // As above with the file's one message, so locations name no message: A and B are named
+    // nested types of Row.
+    String named = "option (confluent.message_meta) = "
+        + "{params: [{key: \"logical.named\", value: \"true\"}]}; ";
+    String nested = "message A { " + named + "int32 x = 1; string hi = 536870911; } "
+        + "message B { " + named + "C b = 1; } message C { int32 z = 1; }";
+    ProtobufSchema v1 = withMeta("int32 id = 1; A f = 2; " + nested);
+    ProtobufSchema v2 = withMeta("int32 id = 1; B f = 2; " + nested);
+    Descriptor a = v1.toDescriptor("p.Row.A");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "f"),
+        DynamicMessage.newBuilder(a).setField(a.findFieldByName("hi"), "\u0000").build()));
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    DynamicMessage f = (DynamicMessage) get(read, "f");
+    assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

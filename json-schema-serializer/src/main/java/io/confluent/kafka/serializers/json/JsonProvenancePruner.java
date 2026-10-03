@@ -28,6 +28,7 @@ import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -759,6 +760,11 @@ final class JsonProvenancePruner {
           alternatives, reached, at);
       return;
     }
+    if (!reached.first(at, schema, node, step, choices, ambiguous, alternatives)) {
+      // Reached already along another path, as through allOf parts naming one definition: the
+      // same readings, so the same answers.
+      return;
+    }
     if (schema instanceof CombinedSchema) {
       walkCombined(names, (CombinedSchema) schema, node, step, choices, ambiguous, alternatives,
           reached, at);
@@ -1045,10 +1051,43 @@ final class JsonProvenancePruner {
   }
 
   // Answers of reaches within one top-level walk, which never changes the document, by branch,
-  // value and step: a union nested k deep is then walked once rather than 2^k times.
+  // value and step, and the visits made: a union nested k deep, or allOf parts naming one
+  // definition k deep, is then walked once rather than 2^k times.
   private static final class Reached {
     private final Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers =
         new IdentityHashMap<>();
+    private final Map<AtProperty, Set<List<Object>>> walked = new IdentityHashMap<>();
+
+    // Whether this walk has not yet visited the schema and value with these readings.
+    boolean first(AtProperty at, Schema schema, JsonNode node, int step, List<Integer> choices,
+        boolean ambiguous, List<Alternative> alternatives) {
+      List<Object> key = new ArrayList<>(Arrays.asList(new Same(schema), new Same(node), step,
+          new ArrayList<>(choices), ambiguous));
+      for (Alternative a : alternatives) {
+        key.add(new Same(a.union));
+        key.add(a.branch);
+        key.add(a.extra);
+      }
+      return walked.computeIfAbsent(at, k -> new HashSet<>()).add(key);
+    }
+  }
+
+  private static final class Same {
+    private final Object of;
+
+    Same(Object of) {
+      this.of = of;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof Same && ((Same) o).of == of;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(of);
+    }
   }
 
   private static JsonNode withoutProperty(ObjectNode node, String name, CombinedSchema schema) {

@@ -62,14 +62,15 @@ final class ProtoProvenanceRenumberer {
   private final int readerId;
   // For each message, by full name: which of its field numbers must move.
   private final Map<String, Map<Integer, Boolean>> moves = new HashMap<>();
-  // The writer's messages, by full name: a fresh number must be none the writer writes under.
+  // The writer's messages, by full name, its imports' included: for their ranges.
   private final Map<String, DescriptorProto> writerMessages = new HashMap<>();
-  // Every field number of every writer message, for a reader message the writer names otherwise.
+  // Every field number of every writer message: a fresh number takes none, since a location may
+  // hold another message's data than its name says (a retype, or one inside a map value).
   private final Set<Integer> writerNumbers = new HashSet<>();
-  // Every extension and reserved range of every writer message, for the same.
+  // Every extension and reserved range of every writer message, for a renamed or retyped one.
   private final DescriptorProto.Builder writerRanges = DescriptorProto.newBuilder();
   // Reader messages a continuing field now types, where the writer's holds another message: the
-  // data there is that message's, so their fresh numbers avoid every writer number too.
+  // data there is that message's, so their fresh numbers avoid every writer range too.
   private final Set<String> retypedInto = new HashSet<>();
 
   private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
@@ -96,9 +97,7 @@ final class ProtoProvenanceRenumberer {
     ProtoProvenanceRenumberer renumberer =
         new ProtoProvenanceRenumberer(root.getFile(), mapping.readerId());
     if (writer != null) {
-      for (Descriptor message : writer.toDescriptor().getFile().getMessageTypes()) {
-        renumberer.collectWriter(message);
-      }
+      renumberer.collectWriter(writer.toDescriptor().getFile(), new HashSet<>());
     }
     Set<List<Integer>> moving = new HashSet<>();
     boolean reached = false;
@@ -130,7 +129,8 @@ final class ProtoProvenanceRenumberer {
         reached = true;
         if (nested && !move && writer != null) {
           FieldDescriptor was =
-              writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path)));
+              writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path)),
+                  includeMultipleMessages);
           if (was != null && isOf(was, root)) {
             ofWriterRecord.add(field.getNumber());
           }
@@ -138,7 +138,8 @@ final class ProtoProvenanceRenumberer {
       }
       if (!move && writer != null && messageOf(field) != null) {
         Descriptor held = messageOf(
-            writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path))));
+            writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path)),
+                includeMultipleMessages));
         if (held != null && !held.getFullName().equals(messageOf(field).getFullName())) {
           renumberer.retypedInto.add(messageOf(field).getFullName());
         }
@@ -297,19 +298,23 @@ final class ProtoProvenanceRenumberer {
     return field.getContainingType().getFullName().equals(message.getFullName());
   }
 
-  // The writer's field names end at, from its file's top-level messages; null where none is.
-  private static FieldDescriptor writerFieldAt(ProtobufSchema writer, List<String> names) {
+  // The writer's field names end at, from its file's top-level messages, or from its record's
+  // message in single-message mode; null where none is.
+  private static FieldDescriptor writerFieldAt(ProtobufSchema writer, List<String> names,
+      boolean multi) {
     if (names == null || names.isEmpty()) {
       return null;
     }
-    Descriptor message = null;
-    for (Descriptor top : writer.toDescriptor().getFile().getMessageTypes()) {
-      if (top.getFullName().equals(names.get(0))) {
-        message = top;
+    Descriptor message = multi ? null : writer.toDescriptor();
+    if (multi) {
+      for (Descriptor top : writer.toDescriptor().getFile().getMessageTypes()) {
+        if (top.getFullName().equals(names.get(0))) {
+          message = top;
+        }
       }
     }
     FieldDescriptor field = null;
-    for (int i = 1; i < names.size() && message != null; i++) {
+    for (int i = multi ? 1 : 0; i < names.size() && message != null; i++) {
       field = names.get(i) != null ? message.findFieldByName(names.get(i)) : null;
       if (field == null) {
         return null;
@@ -438,6 +443,16 @@ final class ProtoProvenanceRenumberer {
     }
   }
 
+  // The writer's file and its imports: a reader message may hold data of a message imported
+  // there.
+  private void collectWriter(FileDescriptor writerFile, Set<String> seen) {
+    if (!seen.add(writerFile.getName())) {
+      return;
+    }
+    writerFile.getMessageTypes().forEach(this::collectWriter);
+    writerFile.getDependencies().forEach(dependency -> collectWriter(dependency, seen));
+  }
+
   private void collectWriter(Descriptor message) {
     DescriptorProto proto = message.toProto();
     writerMessages.put(message.getFullName(), proto);
@@ -458,12 +473,11 @@ final class ProtoProvenanceRenumberer {
       }
       DescriptorProto written =
           retypedInto.contains(fullName) ? null : writerMessages.get(fullName);
-      if (written != null) {
-        written.getFieldList().forEach(field -> taken.add(field.getNumber()));
-      } else {
+      // Whatever message's data a location now holds, it is under some writer number.
+      taken.addAll(writerNumbers);
+      if (written == null) {
         // A message renamed since the writer, or one a field was retyped to: its data may be under
-        // any writer message's numbers, or in any of their extension ranges.
-        taken.addAll(writerNumbers);
+        // any writer message's extension ranges.
         written = writerRanges.build();
       }
       int next = MAX_FIELD_NUMBER;
@@ -487,8 +501,8 @@ final class ProtoProvenanceRenumberer {
    * nor the writer's extension ranges, which its data may still fill, nor, while any number is
    * left otherwise, its reserved ranges — and the implementation does not reserve. {@code written}
    * is the writer's message of the same name, or every writer message's ranges for one renamed
-   * since. A range is jumped over whole: one running to the maximum would otherwise be stepped
-   * through number by number.
+   * or retyped to since. A range is jumped over whole: one running to the maximum would otherwise
+   * be stepped through number by number.
    */
   private static int freeNumber(DescriptorProto.Builder message, DescriptorProto written,
       Set<Integer> taken, int from) {
