@@ -17,11 +17,14 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.Collections;
 import org.junit.Test;
 
@@ -600,5 +603,20 @@ public class AssociationsRequestTest {
         "test-resource", "test-ns", "test-id", null, Collections.singletonList(info));
     request.validate(false, false);
     assertNull(info.getLifecycle());
+  }
+
+  @Test
+  public void testDeleteOpAsyncJson() throws Exception {
+    ObjectMapper mapper = JacksonMapper.INSTANCE;
+
+    // Unset, async is left out, so older servers see the same body as before
+    String sync = mapper.writeValueAsString(new AssociationDeleteOp("key", true));
+    assertFalse(sync.contains("async"));
+
+    String async = mapper.writeValueAsString(new AssociationDeleteOp("key", true, true));
+    assertTrue(async.contains("\"async\":true"));
+    AssociationOp parsed = mapper.readValue(async, AssociationOp.class);
+    assertEquals(new AssociationDeleteOp("key", true, true), parsed);
+    assertEquals(Boolean.TRUE, ((AssociationDeleteOp) parsed).getAsync());
   }
 }
