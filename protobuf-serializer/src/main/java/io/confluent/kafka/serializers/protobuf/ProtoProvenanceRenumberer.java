@@ -68,6 +68,9 @@ final class ProtoProvenanceRenumberer {
   private final Set<Integer> writerNumbers = new HashSet<>();
   // Every extension and reserved range of every writer message, for the same.
   private final DescriptorProto.Builder writerRanges = DescriptorProto.newBuilder();
+  // Reader messages a continuing field now types, where the writer's holds another message: the
+  // data there is that message's, so their fresh numbers avoid every writer number too.
+  private final Set<String> retypedInto = new HashSet<>();
 
   private ProtoProvenanceRenumberer(FileDescriptor file, int readerId) {
     this.file = file;
@@ -131,6 +134,13 @@ final class ProtoProvenanceRenumberer {
           if (was != null && isOf(was, root)) {
             ofWriterRecord.add(field.getNumber());
           }
+        }
+      }
+      if (!move && writer != null && messageOf(field) != null) {
+        Descriptor held = messageOf(
+            writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path))));
+        if (held != null && !held.getFullName().equals(messageOf(field).getFullName())) {
+          renumberer.retypedInto.add(messageOf(field).getFullName());
         }
       }
       if (isOneof(path, names, field, mapping)) {
@@ -446,12 +456,13 @@ final class ProtoProvenanceRenumberer {
       for (FieldDescriptorProto field : message.getFieldList()) {
         taken.add(field.getNumber());
       }
-      DescriptorProto written = writerMessages.get(fullName);
+      DescriptorProto written =
+          retypedInto.contains(fullName) ? null : writerMessages.get(fullName);
       if (written != null) {
         written.getFieldList().forEach(field -> taken.add(field.getNumber()));
       } else {
-        // A message renamed since the writer: its data may be under any writer message's numbers,
-        // or in any of their extension ranges.
+        // A message renamed since the writer, or one a field was retyped to: its data may be under
+        // any writer message's numbers, or in any of their extension ranges.
         taken.addAll(writerNumbers);
         written = writerRanges.build();
       }

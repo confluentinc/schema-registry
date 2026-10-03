@@ -23,6 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -692,6 +696,27 @@ class AvroProvenanceDeserializerTest {
     assertEquals("DEF", ((GenericRecord) deserializer.deserialize(TOPIC, old)).get("x").toString());
     assertEquals("new",
         ((GenericRecord) deserializer.deserialize(TOPIC, latest)).get("x").toString());
+  }
+
+  @Test
+  void aReadRuleSeesTheReAddedColumnsDefault() throws Exception {
+    // Domain rules run on the projected record: a re-added column holds its default, not the
+    // dropped column's value, by the time a rule reads it.
+    Schema v1 = record(idField(), string("name"));
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("name", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    Rule bang = new Rule("bang", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
+        "name == 'name' ; value + '!'", null, null, false);
+    client.register(SUBJECT, new AvroSchema(
+        record(idField(), "{\"name\":\"name\",\"type\":\"string\",\"default\":\"new\"}"))
+        .copy(null, new RuleSet(null, Collections.singletonList(bang))));
+    Map<String, Object> config = config("v1");
+    config.put("use.latest.version", true);
+
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)
+        .deserialize(TOPIC, bytes);
+    assertEquals(7, read.get("id"));
+    assertEquals("new!", read.get("name").toString());
   }
 
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {

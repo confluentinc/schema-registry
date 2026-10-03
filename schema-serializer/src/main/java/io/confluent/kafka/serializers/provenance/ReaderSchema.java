@@ -62,7 +62,9 @@ public final class ReaderSchema {
    * fails, rather than be read against another subject's version.
    */
   public static ReaderSchema of(ParsedSchema schema, String subject, int version) {
-    Objects.requireNonNull(subject, "subject");
+    if (Objects.requireNonNull(subject, "subject").trim().isEmpty()) {
+      throw new IllegalArgumentException("A pinned version needs a subject");
+    }
     if (version < 1) {
       throw new IllegalArgumentException("A pinned version is a version number, not " + version);
     }

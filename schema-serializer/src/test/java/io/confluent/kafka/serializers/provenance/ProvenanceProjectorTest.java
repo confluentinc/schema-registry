@@ -425,6 +425,8 @@ public class ProvenanceProjectorTest {
         () -> ReaderSchema.of(new AvroSchema("\"int\""), SUBJECT, -1));
     assertThrows(NullPointerException.class,
         () -> ReaderSchema.of(new AvroSchema("\"int\""), null, 1));
+    assertThrows(IllegalArgumentException.class,
+        () -> ReaderSchema.of(new AvroSchema("\"int\""), " ", 1));
   }
 
   @Test

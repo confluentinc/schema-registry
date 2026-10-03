@@ -85,6 +85,9 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertCode(404, 40401, () -> client.getProvenanceById("nope-value", v1, v1, false, false, null));
     assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false, false, null));
     assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false, false, null));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "0", false, false, null));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "-2", "1", false, false, null));
+    assertCode(422, 42202, () -> client.getProvenanceToVersion(SUBJECT, v1, 0, false, false, null));
     assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false, false, null));
   }
 

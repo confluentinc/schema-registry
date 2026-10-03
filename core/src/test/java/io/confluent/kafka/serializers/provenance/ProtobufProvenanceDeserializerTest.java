@@ -1511,6 +1511,25 @@ class ProtobufProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aFreshNumberAvoidsTheWriterUnderAFieldRetypedToAnExistingMessage() throws Exception {
+    // f's type changes from A to B, both declared all along: f's data is still an A, so B's new b
+    // must take no number A writes under, here A's hi at the highest.
+    String messages = "message A { int32 x = 1; string hi = 536870911; }\n"
+        + "message B { C b = 1; }\nmessage C { int32 z = 1; }";
+    ProtobufSchema v1 = file("message Row { int32 id = 1; A f = 2; }", messages);
+    ProtobufSchema v2 = file("message Row { int32 id = 1; B f = 2; }", messages);
+    Descriptor a = v1.toDescriptor("p.A");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "f"),
+        DynamicMessage.newBuilder(a).setField(a.findFieldByName("hi"), "\u0000").build()));
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    DynamicMessage f = (DynamicMessage) get(read, "f");
+    assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

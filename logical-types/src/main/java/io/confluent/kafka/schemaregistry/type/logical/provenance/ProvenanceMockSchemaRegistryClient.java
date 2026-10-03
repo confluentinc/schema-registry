@@ -347,6 +347,10 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         throw new RestClientException("The specified version '" + version
             + "' is not a valid version id.", 422, INVALID_VERSION);
       }
+      if (number < 1) {
+        throw new RestClientException("The specified version '" + version
+            + "' is not a valid version id.", 422, INVALID_VERSION);
+      }
       resolved = ProvenanceHistory.version(history, number);
     }
     if (!resolved.isPresent()) {
