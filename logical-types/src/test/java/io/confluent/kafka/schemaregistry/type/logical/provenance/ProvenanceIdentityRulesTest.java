@@ -526,14 +526,31 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
-  void aJsonIntegerBranchWidenedToNumberKeepsItsPid() {
-    // A primitive branch has only its type for content, so no content phase pairs integer with
-    // number: the widening continues it, as a property's scalar change does.
-    String union = "{\"x\":{\"oneOf\":[{\"type\":\"%s\"},{\"type\":\"string\"}]}}";
+  void aJsonBranchContinuesTheSoleBranchOfItsScalarFamily() {
+    // A memberless branch has only its type for content, so no earlier phase pairs a type change:
+    // the one branch whose values can coincide with its own continues it, as a property would.
+    String[][] changes = {
+        {"{\"type\":\"integer\"}", "{\"type\":\"number\"}"},
+        {"{\"type\":\"number\"}", "{\"type\":\"integer\"}"},
+        {"{\"type\":\"string\"}", "{\"type\":\"string\",\"minLength\":2,\"maxLength\":2}"},
+        {"{\"type\":\"string\",\"enum\":[\"a\",\"b\"]}", "{\"type\":\"string\"}"},
+        {"{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}",
+            "{\"type\":\"array\",\"items\":{\"type\":\"number\"}}"}};
+    for (String[] change : changes) {
+      String union = "{\"x\":{\"oneOf\":[%s,{\"type\":\"boolean\"}]}}";
+      List<ProvenanceVersion> v = compute(json(String.format(union, change[0]), null),
+          json(String.format(union, change[1]), null));
+      assertThat(pid(v, 1, 0, 0)).as(change[1]).isEqualTo(pid(v, 0, 0, 0));
+      assertThat(pid(v, 1, 0, 1)).as(change[1]).isEqualTo(pid(v, 0, 0, 1));
+    }
+  }
+
+  @Test
+  void aJsonBranchOfAnotherScalarFamilyIsNew() {
+    String union = "{\"x\":{\"oneOf\":[{\"type\":\"%s\"},{\"type\":\"boolean\"}]}}";
     List<ProvenanceVersion> v = compute(json(String.format(union, "integer"), null),
-        json(String.format(union, "number"), null));
-    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
-    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 1));
+        json(String.format(union, "string"), null));
+    assertThat(pid(v, 1, 0, 0)).isNotEqualTo(pid(v, 0, 0, 0));
   }
 
   @Test
@@ -544,6 +561,17 @@ class ProvenanceIdentityRulesTest {
     List<ProvenanceVersion> v = compute(json(v1, null), json(v2, null));
     assertThat(pid(v, 1, 0, 0)).isNotEqualTo(pid(v, 0, 0, 0));
     assertThat(pid(v, 1, 0, 1)).isNotEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aJsonBranchWidenedBesideTwoOfItsFamilyIsNew() {
+    // The values phase runs before position (decided 2026-10-02): number sees both integers as
+    // candidates, and only position, after it, tells the two apart.
+    String union = "{\"x\":{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"%s\"}]}}";
+    List<ProvenanceVersion> v = compute(json(String.format(union, "integer"), null),
+        json(String.format(union, "number"), null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isNotEqualTo(pid(v, 0, 0, 1));
   }
 
   // An object branch titled so, holding one number property of each name.

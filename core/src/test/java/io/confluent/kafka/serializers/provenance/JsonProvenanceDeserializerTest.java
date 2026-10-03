@@ -1409,6 +1409,18 @@ class JsonProvenanceDeserializerTest {
     assertEquals(3, read(v2, bytes, "v1").get("x").asInt());
   }
 
+  @Test
+  void anArrayBranchWhoseItemsWidenedKeepsItsValue() throws Exception {
+    String union = "\"x\": {\"oneOf\": [{\"type\": \"array\", \"items\": {\"type\": \"%s\"}}, "
+        + "{\"type\": \"string\"}]}";
+    JsonSchema v1 = object(String.format(union, "integer"));
+    JsonSchema v2 = object(String.format(union, "number"));
+    byte[] bytes = write(v1, "{\"x\": [3, 4]}");
+    client.register(SUBJECT, v2);
+
+    assertEquals(MAPPER.readTree("[3, 4]"), read(v2, bytes, "v1").get("x"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

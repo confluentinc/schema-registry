@@ -109,9 +109,22 @@ public final class ProvenanceComputer {
   private static final String MEMBER = "m:";
   private static final String DISCRIMINATOR = "d:";
   private static final String TYPE = "t:";
-  // JSON's numeric scalars, narrowest first: a primitive branch continues one it widens from.
-  private static final List<String> JSON_NUMERIC =
-      Arrays.asList("TINYINT", "SMALLINT", "INT", "BIGINT", "FLOAT", "DOUBLE");
+  // Scalar types whose JSON values can coincide, by family: numeric, character, binary.
+  private static final Map<String, String> SCALAR_FAMILIES = new HashMap<>();
+
+  static {
+    for (String type : Arrays.asList("TINYINT", "SMALLINT", "INT", "BIGINT", "FLOAT", "DOUBLE",
+        "DECIMAL")) {
+      SCALAR_FAMILIES.put(type, "NUMERIC");
+    }
+    for (String type : Arrays.asList("VARCHAR", "CHAR", "ENUM")) {
+      SCALAR_FAMILIES.put(type, "CHARACTER");
+    }
+    for (String type : Arrays.asList("VARBINARY", "BINARY")) {
+      SCALAR_FAMILIES.put(type, "BINARY");
+    }
+  }
+
   // How deep a JSON branch's content looks: enough to tell usual branches apart, and bounded.
   private static final int CONTENT_DEPTH = 3;
 
@@ -281,6 +294,8 @@ public final class ProvenanceComputer {
     private Set<String> content;
     // The content's discriminator keys, each as d:path=, kept for the crossing test.
     private Set<String> keys;
+    // A memberless branch's content with each scalar type as its family; null for one with members.
+    private Set<String> values;
     private String title;
 
     /** This node's member groups, keyed by the collection steps leading to each. */
@@ -606,6 +621,7 @@ public final class ProvenanceComputer {
         node.memberNumbers = memberNumbersOf(node);
         node.content = contentOf(node);
         node.keys = node.content != null ? discriminatorKeys(node.content) : null;
+        node.values = node.content != null ? valuesOf(node.content) : null;
       }
       return nodes;
     }
@@ -1121,13 +1137,14 @@ public final class ProvenanceComputer {
      * peer shares it; the previous branch it shares strictly the most members with, and it with
      * that one, a member every untaken previous branch has (or, with one left, every previous
      * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
-     * discriminator, as when it moved and its members changed, repeated while it pairs any; for
-     * a primitive numeric branch, the one previous primitive branch it widens from (integer to
-     * number), each the other's only such pairing, as a property's scalar change continues; one
-     * at the same position sharing a member with it, where overlap alone cannot tell; else it is
-     * new. None continues another across a discriminator a branch related
-     * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
-     * different branches, as an Avro type renamed without an alias is.
+     * discriminator, as when it moved and its members changed, repeated while it pairs any; for a
+     * branch with no members, the one whose values can coincide with its own — the same scalar
+     * family (numeric, character or binary), or an array or map whose items or values do — each
+     * the other's only such branch, as a property's scalar change continues; one at the same
+     * position sharing a member with it, where overlap alone cannot tell; else it is new. None
+     * continues another across a discriminator a branch related to them has (see
+     * {@link #crosses}), nor across a hint: two branches hinted otherwise are different branches,
+     * as an Avro type renamed without an alias is.
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
@@ -1169,9 +1186,9 @@ public final class ProvenanceComputer {
                   && !crosses(a, p, peers, matched, previous, taken));
             }
           } else if (phase == 5) {
-            found = numericType(peer.content) == null ? null : mutual(peer,
-                unresolved(peers, matched), previous,
-                (a, p) -> !taken.contains(p) && widens(p.content, a.content) && !otherHints(a, p));
+            found = peer.values == null ? null : mutual(peer, unresolved(peers, matched), previous,
+                (a, p) -> !taken.contains(p) && a.values != null && a.values.equals(p.values)
+                    && !otherHints(a, p));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
                 && overlaps(peer.content, p.content)
@@ -1191,22 +1208,23 @@ public final class ProvenanceComputer {
       }
     }
 
-    // Whether a primitive branch of content mine widens, as a JSON value, into one of theirs.
-    private static boolean widens(Set<String> mine, Set<String> theirs) {
-      String from = numericType(mine);
-      String to = numericType(theirs);
-      return from != null && to != null
-          && JSON_NUMERIC.indexOf(from) < JSON_NUMERIC.indexOf(to);
-    }
-
-    // A primitive branch's numeric type, its content's one entry; null for any other branch.
-    private static String numericType(Set<String> content) {
-      if (content == null || content.size() != 1) {
-        return null;
+    /**
+     * A memberless branch's content with each scalar type replaced by its family, so that branches
+     * whose values can coincide compare equal; null for a branch with members or discriminators.
+     */
+    private static Set<String> valuesOf(Set<String> content) {
+      Set<String> values = new TreeSet<>();
+      for (String entry : content) {
+        if (!entry.startsWith(TYPE)) {
+          return null;
+        }
+        // Memberless, a path holds only collection steps: the type follows the last "/".
+        int end = entry.lastIndexOf('/') + 1;
+        String type = entry.substring(Math.max(end, TYPE.length()));
+        values.add(entry.substring(0, Math.max(end, TYPE.length()))
+            + SCALAR_FAMILIES.getOrDefault(type, type));
       }
-      String entry = content.iterator().next();
-      String type = entry.startsWith(TYPE) ? entry.substring(TYPE.length()) : null;
-      return JSON_NUMERIC.contains(type) ? type : null;
+      return values;
     }
 
     // The peers not yet paired: one paired already cannot take another previous branch.
