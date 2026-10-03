@@ -941,6 +941,27 @@ class ProvenanceComputerTest {
     assertThat(pids.shared(1, 0)).hasSize(54_000);
   }
 
+  @Test
+  void aProtobufMessageOfManyFieldsIsMatchedInTimeLinearInItsWidth() {
+    // 90,000 numbered fields, a tenth dropped and as many added: each was looked up by number
+    // among all the previous ones (17 s here); indexed, it takes milliseconds.
+    List<Field> v1 = new ArrayList<>();
+    List<Field> v2 = new ArrayList<>();
+    for (int i = 1; i <= 90_000; i++) {
+      v1.add(numbered("p" + i, i));
+      if (i % 10 != 0) {
+        v2.add(numbered("p" + i, i));
+      }
+    }
+    for (int i = 1; i <= 9_000; i++) {
+      v2.add(numbered("q" + i, 90_000 + i));
+    }
+    Pids pids = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> Pids.of(SchemaType.PROTOBUF,
+        Arrays.asList(lt(Schema.createStruct(v1)), lt(Schema.createStruct(v2)))));
+
+    assertThat(pids.shared(1, 0)).hasSize(81_000);
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------------------------

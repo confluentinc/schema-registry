@@ -102,9 +102,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   // Bounded: each value holds its key, so weak keys alone would never let one go.
   private final Cache<Schema, AvroSchema> classReaders =
       CacheBuilder.newBuilder().weakKeys().maximumSize(DEFAULT_CACHE_CAPACITY).build();
-  // Any other reader schema passed in, wrapped once while provenance is on; bounded likewise.
-  private final Cache<Schema, AvroSchema> textReaders =
-      CacheBuilder.newBuilder().weakKeys().maximumSize(DEFAULT_CACHE_CAPACITY).build();
+  // Any other reader schema passed in, wrapped once while provenance is on. Weak values: a
+  // wrapper lasts while provenance's cache keys by it, so a schema parsed per record keeps none.
+  private final Cache<Schema, AvroSchema> textReaders = CacheBuilder.newBuilder().weakKeys()
+      .weakValues().maximumSize(DEFAULT_CACHE_CAPACITY).build();
 
   /**
    * {@code schema}, a generated or reflected class's, as a reader. Its text leaves out what a

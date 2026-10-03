@@ -683,12 +683,21 @@ public final class ProvenanceComputer {
      */
     private static void matchProtobuf(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
+      // By number, indexed: a message may hold tens of thousands of fields. A number held twice
+      // matches neither, as sole decides.
+      Map<Integer, Node> byNumber = new HashMap<>();
+      Set<Integer> repeated = new HashSet<>();
+      for (Node p : previous) {
+        if (p.number != null && byNumber.put(p.number, p) != null) {
+          repeated.add(p.number);
+        }
+      }
       List<Node> overlapping = new ArrayList<>();
       for (Node peer : peers) {
         Node found = peer.memberNumbers != null
             ? sole(previous, p -> sharesMembers(p, peer))
             : peer.number != null
-            ? sole(previous, p -> peer.number.equals(p.number))
+            ? (repeated.contains(peer.number) ? null : byNumber.get(peer.number))
             : sole(previous, p -> p.number == null && p.memberNumbers == null
                 && peer.name.equals(p.name));
         if (found != null) {

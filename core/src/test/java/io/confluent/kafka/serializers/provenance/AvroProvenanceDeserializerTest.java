@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,6 +41,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -750,6 +752,35 @@ class AvroProvenanceDeserializerTest {
     });
     assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
     assertEquals(-1, read.get("w"));
+  }
+
+  @Test
+  void aReaderSchemaParsedForOneRecordIsNotKeptOnceDropped() throws Exception {
+    // A caller parsing its reader anew for each record: the wrapper kept per schema must not
+    // keep the schema itself, as equal readers share one cached outcome anyway.
+    Schema v1 = record(idField());
+    String v2 = record(idField(), "{\"name\":\"w\",\"type\":\"int\",\"default\":-1}").toString();
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7));
+    client.register(SUBJECT, new AvroSchema(v2));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), bytes,
+        new Schema.Parser().parse(v2));
+
+    WeakReference<Schema> once = readOnce(deserializer, bytes, v2);
+    for (int i = 0; i < 20 && once.get() != null; i++) {
+      System.gc();
+      Thread.sleep(20);
+    }
+    assertNull(once.get());
+  }
+
+  private static WeakReference<Schema> readOnce(KafkaAvroDeserializer deserializer, byte[] bytes,
+      String reader) {
+    Schema schema = new Schema.Parser().parse(reader);
+    GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, schema).getValue();
+    assertEquals(-1, read.get("w"));
+    return new WeakReference<>(schema);
   }
 
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
