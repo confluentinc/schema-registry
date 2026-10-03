@@ -96,12 +96,14 @@ class LockChainedExecutor {
       stateLock.writeLock().unlock();
     }
     boolean drained = true;
+    // Restore the interrupt flag only after the waits below, since it would make them throw
+    boolean interrupted = false;
     try {
       CompletableFuture.allOf(queued)
           .handle((r, t) -> (Void) null)
           .get(timeout, unit);
     } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+      interrupted = true;
       drained = false;
     } catch (ExecutionException | TimeoutException e) {
       drained = false;
@@ -110,6 +112,9 @@ class LockChainedExecutor {
     try {
       executor.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
+      interrupted = true;
+    }
+    if (interrupted) {
       Thread.currentThread().interrupt();
     }
     return drained;

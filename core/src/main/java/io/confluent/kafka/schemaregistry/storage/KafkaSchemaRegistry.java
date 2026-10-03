@@ -127,7 +127,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private final String groupId;
   private final List<Consumer<Boolean>> leaderChangeListeners = new CopyOnWriteArrayList<>();
   private final LockChainedExecutor cascadeDeleteExecutor;
+  // Queued cascaded deletes that have not finished, and the subset that have not yet started
   private final Map<String, Integer> pendingCascadeDeletes = new ConcurrentHashMap<>();
+  private final Map<String, Integer> unstartedCascadeDeletes = new ConcurrentHashMap<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -1170,15 +1172,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     String tenant = tenant();
     // Counted rather than a set, since the same subject can be queued more than once
     pendingCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
+    unstartedCascadeDeletes.merge(qualifiedSubject, 1, Integer::sum);
     boolean queued = cascadeDeleteExecutor.submit(kafkaStore.lockFor(qualifiedSubject), () -> {
+      decrement(unstartedCascadeDeletes, qualifiedSubject);
       try {
         withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject, resourceId));
       } finally {
-        removePendingCascadeDelete(qualifiedSubject);
+        decrement(pendingCascadeDeletes, qualifiedSubject);
       }
     });
     if (!queued) {
-      removePendingCascadeDelete(qualifiedSubject);
+      decrement(unstartedCascadeDeletes, qualifiedSubject);
+      decrement(pendingCascadeDeletes, qualifiedSubject);
       recordCascadeNotDeleted(qualifiedSubject, resourceId, "schema registry is shutting down");
     }
   }
@@ -1192,8 +1197,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     return !pendingCascadeDeletes.isEmpty();
   }
 
-  private void removePendingCascadeDelete(String qualifiedSubject) {
-    pendingCascadeDeletes.computeIfPresent(qualifiedSubject, (k, n) -> n > 1 ? n - 1 : null);
+  private static void decrement(Map<String, Integer> counts, String qualifiedSubject) {
+    counts.computeIfPresent(qualifiedSubject, (k, n) -> n > 1 ? n - 1 : null);
   }
 
   private void recordCascadeNotDeleted(String qualifiedSubject, String resourceId,
@@ -1219,7 +1224,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   @VisibleForTesting
   void runCascadeDelete(String qualifiedSubject, String resourceId) {
     Lock lock = kafkaStore.lockFor(qualifiedSubject);
-    lock.lock();
+    try {
+      // Interruptible so that shutdown can stop a task still waiting behind a store lock
+      lock.lockInterruptibly();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      recordCascadeNotDeleted(qualifiedSubject, resourceId,
+          "it was interrupted while waiting for the subject lock");
+      return;
+    }
     try {
       if (!isLeader()) {
         recordCascadeNotDeleted(qualifiedSubject, resourceId,
@@ -1558,13 +1571,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     log.info("Shutting down schema registry");
     // Drain cascaded deletes first, while this instance can still write to the store
     cascadeDeleteExecutor.close(CASCADE_DELETE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    // close() waits for interrupted deletes to exit, and each of those reports its own
-    // failure and leaves the pending map, so what remains here never started
-    if (!cascadeDeleteExecutor.isTerminated()) {
-      log.warn("Cascaded deletes were still running after shutdown; the count below may "
-          + "include subjects that are still being deleted");
-    }
-    Map<String, Integer> notDeleted = new HashMap<>(pendingCascadeDeletes);
+    // Deletes that already started report their own failure, so only report those that never did
+    Map<String, Integer> notDeleted = new HashMap<>(unstartedCascadeDeletes);
     if (!notDeleted.isEmpty()) {
       int count = notDeleted.values().stream().mapToInt(Integer::intValue).sum();
       for (int i = 0; i < count; i++) {
