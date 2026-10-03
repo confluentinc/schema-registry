@@ -256,12 +256,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>())
         .computeIfAbsent(ctx, k -> new ConcurrentHashMap<>())
-        .computeIfAbsent(id, k -> new ConcurrentHashMap<>())
-        .compute(schemaKey.getSubject(), (k, versions) -> {
-          // Add inside compute so it cannot race with removeSubjectVersion unlinking the set
-          NavigableSet<Integer> updated =
-              versions != null ? versions : new ConcurrentSkipListSet<>();
-          updated.add(schemaKey.getVersion());
+        .compute(id, (k, subjectVersions) -> {
+          // Add inside compute so it serializes with removeSubjectVersion unlinking the id entry
+          Map<String, NavigableSet<Integer>> updated =
+              subjectVersions != null ? subjectVersions : new ConcurrentHashMap<>();
+          updated.computeIfAbsent(schemaKey.getSubject(), s -> new ConcurrentSkipListSet<>())
+              .add(schemaKey.getVersion());
           return updated;
         });
   }
