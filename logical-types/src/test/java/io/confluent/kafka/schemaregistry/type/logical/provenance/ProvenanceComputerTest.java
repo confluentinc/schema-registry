@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -711,18 +714,21 @@ class ProvenanceComputerTest {
 
   @Test
   void anAvroVersionRecordingNumbersStillMatchesByName() {
-    Pids pids = Pids.of(ProvenanceComputer.report(Arrays.asList(SchemaType.AVRO, SchemaType.AVRO),
+    Pids pids = Pids.of(Pids.report(Arrays.asList(SchemaType.AVRO, SchemaType.AVRO),
         Arrays.asList(lt(struct(field("name"))), lt(struct(numbered("name", 1))))));
 
     assertThat(pids.at(1, 0)).isEqualTo(pids.at(0, 0));
   }
 
   @Test
-  void schemaTypesMustMatchVersions() {
-    assertThatThrownBy(() -> ProvenanceComputer.report(
-        Arrays.asList(SchemaType.AVRO, SchemaType.AVRO), Arrays.asList(lt(struct(field("name"))))))
+  void aSchemaIsNeededPerVersion() {
+    List<SchemaMetadata> history = Arrays.asList(
+        new SchemaMetadata(1, 1, "AVRO", Collections.emptyList(), ""),
+        new SchemaMetadata(2, 2, "AVRO", Collections.emptyList(), ""));
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", history,
+        ProvenanceHistory.held(Collections.singletonList(new AvroSchema("\"int\""))), false))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("one schema type per version");
+        .hasMessageContaining("one schema per version");
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -916,7 +922,7 @@ class ProvenanceComputerTest {
 
   @Test
   void anEmptySequenceReportsNothing() {
-    assertThat(ProvenanceComputer.report(SchemaType.AVRO, new ArrayList<>()).getVersions())
+    assertThat(Pids.report(SchemaType.AVRO, new ArrayList<>()).getVersions())
         .isEmpty();
   }
 

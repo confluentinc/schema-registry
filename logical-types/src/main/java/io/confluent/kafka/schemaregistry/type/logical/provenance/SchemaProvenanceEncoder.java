@@ -38,22 +38,26 @@ public final class SchemaProvenanceEncoder {
   /**
    * The wire form of {@code report}.
    *
-   * @param schemaIds the schema id of each version, in the report's order
-   * @param versions the version number of each version, or {@code null} where the caller does not
-   *     know them, as a caller computing from schemas alone does not
-   * @throws IllegalArgumentException if a list does not have one entry per version
+   * @param schemaIds the schema id of each version of the history, by index
+   * @param versions the version number of each version of the history, by index, or {@code null}
+   *     where the caller does not know them, as a caller computing from schemas alone does not
+   * @throws IllegalArgumentException if a list has no entry for a reported version's index
    */
   public static SchemaProvenance encode(String subject, ProvenanceReport report,
       List<Integer> schemaIds, List<Integer> versions) {
     List<ProvenanceReport.Version> reported = report.getVersions();
-    if (schemaIds.size() != reported.size()
-        || (versions != null && versions.size() != reported.size())) {
-      throw new IllegalArgumentException("Expected one schema id and version per version, got "
-          + reported.size() + " versions, " + schemaIds.size() + " schema ids and "
-          + (versions == null ? "no" : versions.size()) + " version numbers");
+    // By each reported version's index in the history: a report may keep only some versions.
+    for (ProvenanceReport.Version version : reported) {
+      if (version.getIndex() >= schemaIds.size()
+          || (versions != null && version.getIndex() >= versions.size())) {
+        throw new IllegalArgumentException("Expected a schema id and version for version index "
+            + version.getIndex() + ", got " + schemaIds.size() + " schema ids and "
+            + (versions == null ? "no" : versions.size()) + " version numbers");
+      }
     }
     List<ProvenanceVersion> encoded = new ArrayList<>(reported.size());
     for (int i = 0; i < reported.size(); i++) {
+      int index = reported.get(i).getIndex();
       List<ProvenanceField> fields = new ArrayList<>();
       for (ProvenanceReport.Member member : reported.get(i).getMembers()) {
         fields.add(new ProvenanceField(
@@ -62,8 +66,8 @@ public final class SchemaProvenanceEncoder {
             member.getKind(),
             member.getId()));
       }
-      encoded.add(new ProvenanceVersion(versions == null ? null : versions.get(i),
-          schemaIds.get(i), reported.get(i).getKind(), fields));
+      encoded.add(new ProvenanceVersion(versions == null ? null : versions.get(index),
+          schemaIds.get(index), reported.get(i).getKind(), fields));
     }
     return new SchemaProvenance(subject, encoded);
   }

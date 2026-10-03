@@ -184,8 +184,7 @@ class AvroProvenancePathConformanceTest {
   private static SchemaProvenance provenanceOf(Schema schema) {
     return ProvenanceHistory.compute("s",
         Collections.singletonList(new SchemaMetadata(1, 1, "AVRO", Collections.emptyList(), "")),
-        ProvenanceHistory.logicalTypesOf(
-            Collections.<ParsedSchema>singletonList(new AvroSchema(schema)), false));
+        ProvenanceHistory.held(Collections.<ParsedSchema>singletonList(new AvroSchema(schema))), false);
   }
 
   private static String record(String... fields) {

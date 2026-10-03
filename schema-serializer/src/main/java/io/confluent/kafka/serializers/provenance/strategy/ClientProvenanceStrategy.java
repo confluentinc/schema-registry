@@ -91,6 +91,7 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
       case 42215:
       case 40402:
       case 42216:
+      case 42219:
         return new ProvenanceRejectedException(e.getMessage(), e);
       case 40411:
         return new ProvenanceUnknownWriterException(e.getMessage(), e);

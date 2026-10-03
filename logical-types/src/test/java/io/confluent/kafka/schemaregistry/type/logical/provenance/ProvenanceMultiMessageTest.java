@@ -100,7 +100,7 @@ class ProvenanceMultiMessageTest {
     List<ParsedSchema> schemas = Arrays.asList(proto(ORDER, REFUND, LINE));
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
         Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), "")),
-        ProvenanceHistory.logicalTypesOf(schemas, false));
+        ProvenanceHistory.held(schemas), false);
 
     assertThat(pids(provenance.getVersions().get(0)).keySet())
         .contains(path(0), path(1), path(2), path(2, 0))
@@ -115,7 +115,7 @@ class ProvenanceMultiMessageTest {
       history.add(new SchemaMetadata(i + 1, i + 1, "PROTOBUF", Collections.emptyList(), ""));
     }
     return ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), true))
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(versions)), true)
         .getVersions();
   }
 

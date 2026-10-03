@@ -93,6 +93,7 @@ public class Errors {
   public static final int UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE = 42216;
   public static final int AMBIGUOUS_PROVENANCE_ERROR_CODE = 42217;
   public static final int PROVENANCE_TOO_LARGE_ERROR_CODE = 42218;
+  public static final int PROVENANCE_RANGE_TOO_LONG_ERROR_CODE = 42219;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -281,6 +282,11 @@ public class Errors {
   /** A version has more locations than provenance computes. */
   public static RestConstraintViolationException provenanceTooLargeException(String message) {
     return new RestConstraintViolationException(message, PROVENANCE_TOO_LARGE_ERROR_CODE);
+  }
+
+  /** A request for every version of a range covers more versions than one request may. */
+  public static RestConstraintViolationException provenanceRangeTooLongException(String message) {
+    return new RestConstraintViolationException(message, PROVENANCE_RANGE_TOO_LONG_ERROR_CODE);
   }
 
   public static RestConstraintViolationException unknownProvenanceAlgorithmException(

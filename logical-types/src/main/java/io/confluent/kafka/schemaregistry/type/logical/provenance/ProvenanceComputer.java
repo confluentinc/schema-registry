@@ -23,9 +23,11 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -38,6 +40,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
+import java.util.function.IntFunction;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
@@ -101,7 +105,7 @@ public final class ProvenanceComputer {
   /** The most locations one version may have; past it, the history has no provenance. */
   public static final int MAX_LOCATIONS = 100_000;
 
-  /** The most locations a whole report may hold, as every version's are kept at once. */
+  /** The most locations the versions of one report may hold together, kept in it or not. */
   public static final int MAX_REPORT_LOCATIONS = 500_000;
 
   /**
@@ -150,43 +154,34 @@ public final class ProvenanceComputer {
   }
 
   /**
-   * As {@link #report(List, List)}, every version of the one schema type.
-   */
-  public static ProvenanceReport report(SchemaType schemaType, List<LogicalType> versions) {
-    Objects.requireNonNull(schemaType, "schemaType");
-    Objects.requireNonNull(versions, "versions");
-    return report(Collections.nCopies(versions.size(), schemaType), versions);
-  }
-
-  /**
    * Every version's members with their provenance ids — the form a provenance endpoint serves.
+   * Each version is asked of {@code versionAt} once, in order, when the walk reaches it, and none
+   * is held past the next but the members {@code reported} keeps.
    *
-   * @param schemaTypes each version's schema type, in the same order as {@code versions}
-   * @param versions the schema versions in chronological order
-   * @throws IllegalArgumentException if the lists differ in size, a version or schema type is
-   *     null, or an entity has no name
+   * @param schemaTypes each version's schema type, in chronological order: one per version
+   * @param versionAt the logical type of the version at an index of {@code schemaTypes}
+   * @param reported whether the version at an index keeps its members in the report; every
+   *     version is walked regardless, as ids follow the unbroken chain of versions
+   * @throws IllegalArgumentException if a version or schema type is null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
    * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or
-   *     nests them more than {@link #MAX_DEPTH} deep, or the history has more than
+   *     nests them more than {@link #MAX_DEPTH} deep, or the versions walked more than
    *     {@link #MAX_REPORT_LOCATIONS}
    */
   public static ProvenanceReport report(List<SchemaType> schemaTypes,
-      List<LogicalType> versions) {
+      IntFunction<LogicalType> versionAt, IntPredicate reported) {
     Objects.requireNonNull(schemaTypes, "schemaTypes");
-    Objects.requireNonNull(versions, "versions");
-    if (versions.size() != schemaTypes.size()) {
-      throw new IllegalArgumentException("Expected one schema type per version, got "
-          + schemaTypes.size() + " schema types for " + versions.size() + " versions");
-    }
-    List<ProvenanceReport.Version> reported = new ArrayList<>(versions.size());
+    Objects.requireNonNull(versionAt, "versionAt");
+    Objects.requireNonNull(reported, "reported");
+    List<ProvenanceReport.Version> kept = new ArrayList<>();
     Node previous = null;
     SchemaType previousSchemaType = null;
     String previousRootMessage = null;
     int nextId = 1;
     int locations = 0;
-    for (int version = 0; version < versions.size(); version++) {
-      LogicalType logicalType = versions.get(version);
+    for (int version = 0; version < schemaTypes.size(); version++) {
+      LogicalType logicalType = versionAt.apply(version);
       if (logicalType == null) {
         throw new IllegalArgumentException("Null LogicalType at version " + version);
       }
@@ -207,18 +202,26 @@ public final class ProvenanceComputer {
       if (locations > MAX_REPORT_LOCATIONS) {
         throw new TooManyLocationsException(MAX_REPORT_LOCATIONS);
       }
-      List<ProvenanceReport.Member> members = new ArrayList<>(walk.members.size());
+      boolean keep = reported.test(version);
+      List<ProvenanceReport.Member> members = new ArrayList<>(keep ? walk.members.size() : 0);
       for (Node member : walk.members) {
         member.id = member.match != null ? member.match.id : nextId++;
-        members.add(new ProvenanceReport.Member(
-            member.where.path, member.where.names, spelled(member.kinds), member.id));
+        if (keep) {
+          members.add(new ProvenanceReport.Member(
+              member.where.path, member.where.names, spelled(member.kinds), member.id));
+        }
       }
-      reported.add(new ProvenanceReport.Version(version, walk.rootKind(), members));
+      if (keep) {
+        kept.add(new ProvenanceReport.Version(version, walk.rootKind(), members));
+      }
+      // Its ids taken, this version's links to the one before are done with: dropped, so each
+      // earlier version, logical type included, is free once the next has been matched to it.
+      forgetMatches(root);
       previous = root;
       previousSchemaType = schemaType;
       previousRootMessage = rootMessage;
     }
-    return new ProvenanceReport(reported, nextId - 1);
+    return new ProvenanceReport(kept, nextId - 1);
   }
 
 
@@ -256,6 +259,18 @@ public final class ProvenanceComputer {
    * {@code ARRAY<k>}, {@code MULTISET<k>} and {@code MAP<k, k>} name what they hold. Equal lists
    * spell alike.
    */
+  private static void forgetMatches(Node root) {
+    Deque<Node> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      Node node = pending.pop();
+      node.match = null;
+      for (List<Node> group : node.groups.values()) {
+        group.forEach(pending::push);
+      }
+    }
+  }
+
   private static String spelled(List<Kind> kinds) {
     StringBuilder spelled = new StringBuilder();
     spell(kinds, 0, spelled);

@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
@@ -25,7 +26,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
@@ -66,6 +66,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int UNKNOWN_ALGORITHM = 42216;
   private static final int AMBIGUOUS_PROVENANCE = 42217;
   private static final int PROVENANCE_TOO_LARGE = 42218;
+  private static final int PROVENANCE_RANGE_TOO_LONG = 42219;
+  // The registry's default for provenance.interior.max.versions.
+  private static final int INTERIOR_MAX_VERSIONS = 100;
   // The registry's generic server error carries its HTTP status as its error code.
   private static final int SERVER_ERROR = 500;
 
@@ -254,19 +257,35 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       }
     }
     List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
-    List<ParsedSchema> schemas = new ArrayList<>(range.size());
+    if (includeInterior && range.size() > INTERIOR_MAX_VERSIONS) {
+      throw new RestClientException("The range covers " + range.size() + " versions, more than "
+          + INTERIOR_MAX_VERSIONS + " with includeInterior", 422, PROVENANCE_RANGE_TOO_LONG);
+    }
+    // As the registry does: each version parsed when the computation reaches it.
+    List<ParsedSchemaHolder> schemas = new ArrayList<>(range.size());
     for (SchemaMetadata entry : range) {
-      try {
-        schemas.add(getSchemaBySubjectAndId(subject, entry.getId()));
-      } catch (RuntimeException e) {
-        throw new RestClientException("Version " + entry.getVersion() + " of subject " + subject
-            + " could not be parsed: " + e.getMessage(), 422, UNRESOLVABLE_REFERENCE);
-      }
+      schemas.add(new ParsedSchemaHolder() {
+        @Override
+        public ParsedSchema schema() {
+          try {
+            return getSchemaBySubjectAndId(subject, entry.getId());
+          } catch (IOException | RestClientException | RuntimeException e) {
+            throw new Unparsable("Version " + entry.getVersion() + " of subject " + subject
+                + " could not be parsed: " + e.getMessage());
+          }
+        }
+
+        @Override
+        public void clear() {
+        }
+      });
     }
     SchemaProvenance whole;
     try {
-      whole = compute(subject, range, ProvenanceHistory.logicalTypesOf(schemas,
-          includeMultipleMessages), algorithm);
+      whole = compute(subject, range, schemas, includeMultipleMessages, includeInterior,
+          algorithm);
+    } catch (Unparsable e) {
+      throw new RestClientException(e.getMessage(), 422, UNRESOLVABLE_REFERENCE);
     } catch (RecursiveTypeException e) {
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (AmbiguousProvenanceException e) {
@@ -296,8 +315,19 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
    * the computation fail.
    */
   protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-      List<LogicalType> logicalTypes, String algorithm) {
-    return ProvenanceHistory.compute(subject, range, logicalTypes, algorithm);
+      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
+      boolean includeInterior, String algorithm) {
+    return ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages,
+        includeInterior, algorithm);
+  }
+
+  // A version that could not be parsed, met during the computation.
+  private static final class Unparsable extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    private Unparsable(String message) {
+      super(message);
+    }
   }
 
   private List<SchemaMetadata> history(String subject)

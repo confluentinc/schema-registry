@@ -86,7 +86,7 @@ class JsonProvenanceStrictnessTest {
       history.add(new SchemaMetadata(i + 1, i + 1, "JSON", Collections.emptyList(), ""));
     }
     SchemaProvenance provenance = ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), false));
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(versions)), false);
     JsonNode node = MAPPER.readTree(document);
     JsonProvenancePruner.plan(ProvenanceMapping.join(provenance, 1, versions.length),
         versions[versions.length - 1], versions[0]).prune(node);

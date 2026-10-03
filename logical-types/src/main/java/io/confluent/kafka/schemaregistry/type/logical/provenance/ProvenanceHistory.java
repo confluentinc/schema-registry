@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
@@ -34,6 +36,8 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.function.IntFunction;
+import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
 /**
@@ -104,37 +108,56 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The whole history's provenance, from each version's logical type, as {@link #logicalTypesOf}
-   * gives them.
+   * The provenance of {@code history}, every version reported, by the latest algorithm.
+   *
+   * @see #compute(String, List, List, boolean, boolean, String)
+   */
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages) {
+    return compute(subject, history, schemas, includeMultipleMessages, true,
+        ProvenanceAlgorithm.LATEST_NAME);
+  }
+
+  /**
+   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm}: a
+   * version's name, {@link ProvenanceAlgorithm#LATEST_NAME} or none for the latest, or
+   * {@link ProvenanceAlgorithm#DYNAMIC_NAME}, under which each version is matched to its
+   * predecessor by the version effective when it was registered. A version of the algorithm
+   * changes the matching rules, never the logical type's edition, which is the Metastore's.
+   *
+   * <p>Each version is parsed and converted, as {@link #logicalTypeOf} converts it, only when the
+   * computation reaches it, and none is held past the next: a range costs the memory of its report,
+   * not of all its versions. So a failure is the first in version order.
    *
    * @param history the subject's versions, in version order; each one's schema type decides the
    *     identity rules it is matched by
-   * @param logicalTypes each version's logical type, in the same order as {@code history}
+   * @param schemas each version's schema, in the same order as {@code history}
+   * @param includeInterior whether every version is reported, or only the first and last; every
+   *     version is computed either way
    * @throws RecursiveTypeException if a version's schema refers to itself
    * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
    *     identity per location
    * @throws TooManyLocationsException if a version has more locations than provenance computes
-   */
-  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      List<LogicalType> logicalTypes) {
-    return compute(subject, history, logicalTypes, ProvenanceAlgorithm.LATEST);
-  }
-
-  /**
-   * As {@link #compute(String, List, List, ProvenanceAlgorithm)}, by the version named
-   * {@code algorithm}: a version's name, {@link ProvenanceAlgorithm#LATEST_NAME} or none for the
-   * latest, or {@link ProvenanceAlgorithm#DYNAMIC_NAME}, under which each version is matched to
-   * its predecessor by the version effective when it was registered. A version of the algorithm
-   * changes the matching rules, never the logical type's edition, which is the Metastore's.
-   *
-   * @throws IllegalArgumentException if no version has that name
+   * @throws IllegalArgumentException if no version of the algorithm has that name, or there is not
+   *     one schema per version
    * @throws UnsupportedProvenanceAlgorithmException if a dynamic range's transitions fall to an
    *     algorithm other than v1
+   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
+   *     logical form
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      List<LogicalType> logicalTypes, String algorithm) {
+      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
+      boolean includeInterior, String algorithm) {
+    if (schemas.size() != history.size()) {
+      throw new IllegalArgumentException("Expected one schema per version, got " + schemas.size()
+          + " schemas for " + history.size() + " versions");
+    }
+    IntFunction<LogicalType> versionAt =
+        i -> logicalTypeOf(schemas.get(i).schema(), includeMultipleMessages);
+    int last = history.size() - 1;
+    IntPredicate reported = includeInterior ? i -> true : i -> i == 0 || i == last;
     if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
-      return compute(subject, history, logicalTypes, ProvenanceAlgorithm.of(algorithm));
+      return compute(subject, history, versionAt, reported, ProvenanceAlgorithm.of(algorithm));
     }
     // The first version is matched to no predecessor, so only the later ones name an algorithm.
     for (SchemaMetadata entry : history.subList(Math.min(1, history.size()), history.size())) {
@@ -145,27 +168,24 @@ public final class ProvenanceHistory {
             + effective.getName() + " is not supported yet");
       }
     }
-    SchemaProvenance provenance = compute(subject, history, logicalTypes, ProvenanceAlgorithm.V1);
+    SchemaProvenance provenance =
+        compute(subject, history, versionAt, reported, ProvenanceAlgorithm.V1);
     provenance.setAlgorithm(ProvenanceAlgorithm.DYNAMIC_NAME);
     return provenance;
   }
 
-  /**
-   * As {@link #compute(String, List, List)}, by the named version of the algorithm, which the
-   * result records.
-   */
-  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      List<LogicalType> logicalTypes, ProvenanceAlgorithm algorithm) {
+  private static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      IntFunction<LogicalType> versionAt, IntPredicate reported, ProvenanceAlgorithm algorithm) {
     switch (algorithm) {
       case V1:
-        return computeV1(subject, history, logicalTypes);
+        return computeV1(subject, history, versionAt, reported);
       default:
         throw new IllegalArgumentException("Unsupported provenance algorithm " + algorithm);
     }
   }
 
   private static SchemaProvenance computeV1(String subject, List<SchemaMetadata> history,
-      List<LogicalType> logicalTypes) {
+      IntFunction<LogicalType> versionAt, IntPredicate reported) {
     List<SchemaType> schemaTypes = new ArrayList<>(history.size());
     List<Integer> ids = new ArrayList<>(history.size());
     List<Integer> versions = new ArrayList<>(history.size());
@@ -178,7 +198,7 @@ public final class ProvenanceHistory {
     }
     ProvenanceReport report;
     try {
-      report = ProvenanceComputer.report(schemaTypes, logicalTypes);
+      report = ProvenanceComputer.report(schemaTypes, versionAt, reported);
     } catch (AmbiguousProvenanceException e) {
       // The computer counts versions from 0 within the history; a caller knows them by number.
       int index = e.version();
@@ -193,18 +213,11 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * Each of {@code schemas} as {@link #logicalTypeOf} converts it.
-   *
-   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
-   *     logical form
+   * Schemas already parsed, as holders for {@link #compute}: each is still converted only when the
+   * computation reaches it.
    */
-  public static List<LogicalType> logicalTypesOf(List<ParsedSchema> schemas,
-      boolean includeMultipleMessages) {
-    List<LogicalType> logicalTypes = new ArrayList<>(schemas.size());
-    for (ParsedSchema schema : schemas) {
-      logicalTypes.add(logicalTypeOf(schema, includeMultipleMessages));
-    }
-    return logicalTypes;
+  public static List<ParsedSchemaHolder> held(List<? extends ParsedSchema> schemas) {
+    return schemas.stream().map(SimpleParsedSchemaHolder::new).collect(Collectors.toList());
   }
 
   /**

@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
@@ -49,6 +50,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -358,7 +360,8 @@ public class SubjectsResource {
                   + "Error code 42216 indicates an unknown algorithm. Error code 42217 indicates "
                   + "a history whose names and aliases do not determine one provenance. Error "
                   + "code 42218 indicates a version with too many locations to compute, or "
-                  + "nesting them too deep.",
+                  + "nesting them too deep. Error code 42219 indicates a range with "
+                  + "includeInterior covering more versions than one request may.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
@@ -380,7 +383,8 @@ public class SubjectsResource {
       @QueryParam("fromId") Integer fromId,
       @Parameter(description = "Schema id at the other end of the range")
       @QueryParam("toId") Integer toId,
-      @Parameter(description = "Whether to return every version in the range, not only its ends")
+      @Parameter(description = "Whether to return every version in the range, not only its "
+          + "ends; such a range may cover at most provenance.interior.max.versions versions")
       @DefaultValue("false") @QueryParam("includeInterior") boolean includeInterior,
       @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
           + "top-level messages; ignored for other formats")
@@ -504,7 +508,17 @@ public class SubjectsResource {
     List<Schema> range = history.stream()
         .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
         .collect(Collectors.toList());
-    List<Object> key = provenanceKey(subject, range, includeMultipleMessages, algorithm);
+    int maxInterior = schemaRegistry.config().getInt(
+        SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG);
+    if (includeInterior && range.size() > maxInterior) {
+      // Every version of the range is reported, so its size scales with the range's length.
+      throw Errors.provenanceRangeTooLongException("The range from version " + low + " to "
+          + high + " of subject " + subject + " covers " + range.size() + " versions, more than "
+          + maxInterior + " with includeInterior: read it in ranges of at most " + maxInterior
+          + " versions, each starting at the version the previous one ends at");
+    }
+    List<Object> key =
+        provenanceKey(subject, range, includeMultipleMessages, includeInterior, algorithm);
     CompletableFuture<Computed> mine = new CompletableFuture<>();
     CompletableFuture<Computed> pending = provenanceCache.asMap().putIfAbsent(key, mine);
     if (pending == null) {
@@ -512,8 +526,8 @@ public class SubjectsResource {
       // each request already waiting on it fails alike.
       Computed computed;
       try {
-        computed = new Computed(
-            computeProvenance(subject, range, includeMultipleMessages, algorithm), null);
+        computed = new Computed(computeProvenance(subject, range, includeMultipleMessages,
+            includeInterior, algorithm), null);
       } catch (RuntimeException e) {
         computed = new Computed(null, e);
       } catch (Error e) {
@@ -587,11 +601,13 @@ public class SubjectsResource {
   }
 
   private static List<Object> provenanceKey(String subject, List<Schema> history,
-      boolean includeMultipleMessages, String algorithm) {
-    // The mode and the algorithm are part of the key: each answers differently.
-    List<Object> key = new ArrayList<>(3 + 3 * history.size());
+      boolean includeMultipleMessages, boolean includeInterior, String algorithm) {
+    // The mode and the algorithm are part of the key: each answers differently. So is whether
+    // the interior is kept, as a request for the ends computes no more than it returns.
+    List<Object> key = new ArrayList<>(4 + 3 * history.size());
     key.add(subject);
     key.add(includeMultipleMessages);
+    key.add(includeInterior);
     key.add(algorithm);
     for (Schema schema : history) {
       key.add(schema.getVersion());
@@ -603,19 +619,18 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance computeProvenance(String subject, List<Schema> history,
-      boolean includeMultipleMessages, String algorithm) {
-    List<ParsedSchema> parsed = new ArrayList<>(history.size());
+      boolean includeMultipleMessages, boolean includeInterior, String algorithm) {
+    // Parsed and converted as the computation reaches each version, so a range holds no more
+    // than its report; a failure is then the first in version order.
+    List<ParsedSchemaHolder> schemas = new ArrayList<>(history.size());
     for (Schema schema : history) {
-      try {
-        parsed.add(schemaRegistry.parseSchema(schema, false, false));
-      } catch (InvalidSchemaException e) {
-        throw Errors.unresolvableReferenceException("Version " + schema.getVersion()
-            + " of subject " + subject + " could not be parsed: " + e.getMessage());
-      }
+      schemas.add(parsedWhenReached(subject, schema));
     }
     try {
-      return ProvenanceHistory.compute(subject, provenanceEntries(history),
-          ProvenanceHistory.logicalTypesOf(parsed, includeMultipleMessages), algorithm);
+      return ProvenanceHistory.compute(subject, provenanceEntries(history), schemas,
+          includeMultipleMessages, includeInterior, algorithm);
+    } catch (Unparsable e) {
+      throw Errors.unresolvableReferenceException(e.getMessage());
     } catch (RecursiveTypeException e) {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {
@@ -632,6 +647,34 @@ public class SubjectsResource {
       String message = "Could not compute provenance for subject " + subject;
       log.error(message, e);
       throw Errors.schemaRegistryException(message, e);
+    }
+  }
+
+  // A version's schema, parsed when the computation reaches it; the registry caches the parse.
+  private ParsedSchemaHolder parsedWhenReached(String subject, Schema schema) {
+    return new ParsedSchemaHolder() {
+      @Override
+      public ParsedSchema schema() {
+        try {
+          return schemaRegistry.parseSchema(schema, false, false);
+        } catch (InvalidSchemaException e) {
+          throw new Unparsable("Version " + schema.getVersion() + " of subject " + subject
+              + " could not be parsed: " + e.getMessage());
+        }
+      }
+
+      @Override
+      public void clear() {
+      }
+    };
+  }
+
+  // A version that could not be parsed, met during the computation.
+  private static final class Unparsable extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    private Unparsable(String message) {
+      super(message);
     }
   }
 

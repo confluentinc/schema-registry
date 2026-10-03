@@ -50,7 +50,16 @@ final class Pids {
   }
 
   static Pids of(SchemaType schemaType, List<LogicalType> versions) {
-    return new Pids(ProvenanceComputer.report(schemaType, versions));
+    return new Pids(report(schemaType, versions));
+  }
+
+  /** Every version reported, of the one schema type: as the computer's tests build them. */
+  static ProvenanceReport report(SchemaType schemaType, List<LogicalType> versions) {
+    return report(Collections.nCopies(versions.size(), schemaType), versions);
+  }
+
+  static ProvenanceReport report(List<SchemaType> schemaTypes, List<LogicalType> versions) {
+    return ProvenanceComputer.report(schemaTypes, versions::get, i -> true);
   }
 
   /**

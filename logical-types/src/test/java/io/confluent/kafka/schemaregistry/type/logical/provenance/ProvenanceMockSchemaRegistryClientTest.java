@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -92,6 +93,20 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aRangeWithItsInteriorCoversAtMostOneHundredVersions() throws Exception {
+    // As the registry's default: the ends of a longer range are still read.
+    for (int i = 0; i <= 100; i++) {
+      register(record(field("f" + i, "int")));
+    }
+    assertCode(422, 42219,
+        () -> client.getProvenanceByVersion(SUBJECT, "1", "101", true, false, null));
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "100", true, false, null)
+        .getVersions()).hasSize(100);
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "101", false, false, null)
+        .getVersions()).hasSize(2);
+  }
+
+  @Test
   void dynamicComputesAsV1AndSaysSo() throws Exception {
     int v1 = register(record(field("id", "int"), field("name", "string")));
     int v2 = register(record(field("id", "int"),
@@ -122,7 +137,8 @@ class ProvenanceMockSchemaRegistryClientTest {
     ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
       @Override
       protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-          List<LogicalType> logicalTypes, String algorithm) {
+          List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
+          boolean includeInterior, String algorithm) {
         throw new NullPointerException("unexpected");
       }
     };
@@ -136,7 +152,8 @@ class ProvenanceMockSchemaRegistryClientTest {
     ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
       @Override
       protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-          List<LogicalType> logicalTypes, String algorithm) {
+          List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
+          boolean includeInterior, String algorithm) {
         throw new UnsupportedProvenanceAlgorithmException("v2 beside v1");
       }
     };

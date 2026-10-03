@@ -74,7 +74,7 @@ class SchemaProvenanceEncoderTest {
   private static SchemaProvenance encode(
       java.util.List<Integer> schemaIds, java.util.List<Integer> versions) {
     return SchemaProvenanceEncoder.encode("s",
-        ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(
+        Pids.report(SchemaType.AVRO, Arrays.asList(
             LogicalTypeConversion.toLogicalType(V1), LogicalTypeConversion.toLogicalType(V2))),
         schemaIds, versions);
   }

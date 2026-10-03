@@ -74,7 +74,7 @@ class JsonProvenanceBranchNumberingTest {
     JsonSchema reader = new JsonSchema(schema);
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
         Collections.singletonList(new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), "")),
-        ProvenanceHistory.logicalTypesOf(Collections.<ParsedSchema>singletonList(reader), false));
+        ProvenanceHistory.held(Collections.<ParsedSchema>singletonList(reader)), false);
     ProvenanceField location = provenance.getVersions().get(0).getFields().stream()
         .filter(f -> names.equals(f.getNames())).findFirst().orElse(null);
     assertNotNull(location, "no location spelled " + names);

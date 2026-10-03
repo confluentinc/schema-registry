@@ -64,7 +64,7 @@ class ProvenanceEditionTest {
       history.add(new SchemaMetadata(i + 1, i + 1, "JSON", Collections.emptyList(), ""));
     }
     return ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(versions), false));
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(versions)), false);
   }
 
   private static List<List<Integer>> paths(SchemaProvenance provenance, int version) {

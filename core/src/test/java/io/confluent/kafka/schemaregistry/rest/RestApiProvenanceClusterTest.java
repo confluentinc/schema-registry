@@ -21,6 +21,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
+import java.util.Properties;
+
 /**
  * Runs {@link RestApiProvenanceTest} against an embedded cluster, with compatibility off so that
  * the tests can register renames, drops and re-adds a stricter level would refuse.
@@ -31,6 +33,10 @@ public class RestApiProvenanceClusterTest extends RestApiProvenanceTest {
 
   public RestApiProvenanceClusterTest() {
     this.harness = new ClusterTestHarness(1, true, CompatibilityLevel.NONE.name);
+    Properties props = new Properties();
+    // Small, so a test can cross it.
+    props.setProperty(SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG, "3");
+    harness.injectSchemaRegistryProperties(props);
   }
 
   @BeforeEach

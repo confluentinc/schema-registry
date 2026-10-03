@@ -138,6 +138,24 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aRangeWithItsInteriorCoversAtMostTheConfiguredVersions() throws Exception {
+    // The cluster test caps it at 3: four versions are read in two ranges sharing version 3,
+    // whose locations join the two ranges' ids. The ends alone are never capped.
+    register(SUBJECT, record(field("a", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int"), field("c", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int"), field("c", "int"),
+        field("d", "int")));
+
+    assertError(422, 42219, () -> byVersion(SUBJECT, "1", "4", true));
+    SchemaProvenance first = byVersion(SUBJECT, "1", "3", true);
+    SchemaProvenance second = byVersion(SUBJECT, "3", "4", true);
+    assertEquals(Arrays.asList(1, 2, 3), versions(first));
+    assertEquals(Arrays.asList(3, 4), versions(second));
+    assertEquals(Arrays.asList(1, 4), versions(byVersion(SUBJECT, "1", "4", false)));
+  }
+
+  @Test
   public void aRangeIsComputedFromItsOwnFirstVersion() throws Exception {
     register(SUBJECT, record(field("a", "int")));
     register(SUBJECT, record(field("a", "int"), field("b", "int")));

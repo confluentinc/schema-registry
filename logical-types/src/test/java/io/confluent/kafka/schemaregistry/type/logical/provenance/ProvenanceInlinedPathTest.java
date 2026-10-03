@@ -171,7 +171,7 @@ class ProvenanceInlinedPathTest {
   @Test
   void aRetypedCollectionIsNewWithItsMembers() {
     // ARRAY<ROW> to MAP<K, ROW>: a change of kind, so the field and its members are new.
-    ProvenanceReport report = ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(
+    ProvenanceReport report = Pids.report(SchemaType.AVRO, Arrays.asList(
         lt(struct(arrayOf("items", struct(field("sku"))))),
         lt(struct(mapOf("items", struct(field("sku")))))));
 
@@ -184,7 +184,7 @@ class ProvenanceInlinedPathTest {
     // Versions of different schema types match nothing, whatever their names say; the versions
     // after the change match each other again.
     LogicalType ab = lt(struct(field("a"), field("b")));
-    ProvenanceReport report = ProvenanceComputer.report(
+    ProvenanceReport report = Pids.report(
         Arrays.asList(SchemaType.AVRO, SchemaType.JSON, SchemaType.JSON),
         Arrays.asList(ab, ab, ab));
 
@@ -199,7 +199,7 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void reportDerivesIcebergStyleIds() {
-    ProvenanceReport report = ProvenanceComputer.report(// re-add
+    ProvenanceReport report = Pids.report(// re-add
         SchemaType.AVRO, Arrays.asList(
         lt(struct(field("id"), field("name"))),
         lt(struct(field("id"), field("full_name", "name"))),   // rename
@@ -222,7 +222,7 @@ class ProvenanceInlinedPathTest {
   void reportGivesSharedTypesOneIdPerUseSite() {
     // One definition-level rename, two inlined locations, each keeping its own id. Allocating per
     // entity instead would give home.city and work.city the same id and let a consumer pair them.
-    ProvenanceReport report = ProvenanceComputer.report(
+    ProvenanceReport report = Pids.report(
         SchemaType.AVRO, Arrays.asList(twoAddresses(), twoAddressesRenamed()));
 
     assertThat(ids(report, 0)).containsExactly(
@@ -237,7 +237,7 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void reportCarriesNamesAlongsideIds() {
-    ProvenanceReport report = ProvenanceComputer.report(
+    ProvenanceReport report = Pids.report(
         SchemaType.AVRO, Arrays.asList(twoAddresses()));
 
     assertThat(report.getVersions().get(0).getMembers()).extracting(
@@ -248,7 +248,7 @@ class ProvenanceInlinedPathTest {
 
   @Test
   void anEmptyHistoryReportsNothing() {
-    ProvenanceReport report = ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList());
+    ProvenanceReport report = Pids.report(SchemaType.AVRO, Arrays.asList());
     assertThat(report.getVersions()).isEmpty();
     assertThat(report.getLastId()).isZero();
   }
@@ -274,7 +274,7 @@ class ProvenanceInlinedPathTest {
   // -------------------------------------------------------------------------------------------
 
   private static ProvenanceReport report(LogicalType version) {
-    return ProvenanceComputer.report(SchemaType.AVRO, Arrays.asList(version));
+    return Pids.report(SchemaType.AVRO, Arrays.asList(version));
   }
 
   private static Map<List<Integer>, Integer> ids(ProvenanceReport report, int version) {

@@ -119,7 +119,7 @@ class ProvenanceHistorySweepTest {
           Collections.emptyList(), ""));
     }
     try {
-      ProvenanceHistory.compute("s", entries, ProvenanceHistory.logicalTypesOf(versions, false));
+      ProvenanceHistory.compute("s", entries, ProvenanceHistory.held(versions), false);
     } catch (ValidationException | RecursiveTypeException | AmbiguousProvenanceException e) {
       // Rejected by name: the registry answers 422, and the reader falls back.
     }

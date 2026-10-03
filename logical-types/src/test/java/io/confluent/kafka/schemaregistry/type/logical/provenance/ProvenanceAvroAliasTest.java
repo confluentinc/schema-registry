@@ -384,7 +384,7 @@ class ProvenanceAvroAliasTest {
     }
     List<Map<String, Integer>> pids = new ArrayList<>();
     for (ProvenanceVersion version : ProvenanceHistory.compute("s", entries,
-        ProvenanceHistory.logicalTypesOf(Arrays.asList(versions), false)).getVersions()) {
+        ProvenanceHistory.held(Arrays.asList(versions)), false).getVersions()) {
       Map<String, Integer> byNames = new HashMap<>();
       for (ProvenanceField field : version.getFields()) {
         byNames.put(String.join(".", field.getNames()), field.getPid());

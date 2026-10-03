@@ -315,8 +315,7 @@ class ProvenanceIdentityRulesTest {
     String text = chain.append("message M2000 { int32 x = 1; }\n").toString();
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), text)),
-        ProvenanceHistory.logicalTypesOf(
-            Collections.singletonList(new ProtobufSchema(text)), false)))
+        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(text))), false))
         .isInstanceOf(TooManyLocationsException.class)
         .hasMessageContaining("Version 7 nests locations more than 1000 deep");
   }
@@ -342,8 +341,7 @@ class ProvenanceIdentityRulesTest {
     String doubling = doublingMessages(16);
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), doubling)),
-        ProvenanceHistory.logicalTypesOf(
-            Collections.singletonList(new ProtobufSchema(doubling)), false)))
+        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(doubling))), false))
         .isInstanceOf(TooManyLocationsException.class)
         .hasMessageContaining("Version 7 has more than " + ProvenanceComputer.MAX_LOCATIONS);
   }
@@ -367,7 +365,7 @@ class ProvenanceIdentityRulesTest {
         + "{\"name\":\"a\",\"type\":\"int\"}]}");
     assertThat(ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(1, 1, null, Collections.emptyList(), avro.canonicalString())),
-        ProvenanceHistory.logicalTypesOf(Collections.singletonList(avro), false))
+        ProvenanceHistory.held(Collections.singletonList(avro)), false)
         .getVersions().get(0).getFields()).hasSize(1);
   }
 
@@ -383,7 +381,7 @@ class ProvenanceIdentityRulesTest {
         new SchemaMetadata(15, 5, "AVRO", Collections.emptyList(), ""),
         new SchemaMetadata(16, 6, "AVRO", Collections.emptyList(), ""));
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.logicalTypesOf(versions, false)))
+        ProvenanceHistory.held(versions), false))
         .isInstanceOf(AmbiguousProvenanceException.class)
         .hasMessageContaining("version 6");
   }
@@ -1138,7 +1136,7 @@ class ProvenanceIdentityRulesTest {
           Collections.emptyList(), ""));
     }
     return ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.logicalTypesOf(Arrays.asList(versions), false)).getVersions();
+        ProvenanceHistory.held(Arrays.asList(versions)), false).getVersions();
   }
 
   private static Map<List<Integer>, Integer> pids(List<ProvenanceVersion> versions, int version) {

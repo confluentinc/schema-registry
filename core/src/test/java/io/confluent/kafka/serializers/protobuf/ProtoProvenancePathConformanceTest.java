@@ -85,7 +85,7 @@ class ProtoProvenancePathConformanceTest {
       String label, ProtobufSchema reader, boolean multi) {
     ProvenanceVersion version = ProvenanceHistory.compute("s",
         Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), "")),
-        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(reader), multi))
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(reader)), multi)
         .getVersions().get(0);
     Map<List<Integer>, List<String>> names = new HashMap<>();
     version.getFields().forEach(f -> names.put(f.getPath(), f.getNames()));
@@ -115,7 +115,7 @@ class ProtoProvenancePathConformanceTest {
     SchemaProvenance provenance = ProvenanceHistory.compute("s",
         Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), ""),
             new SchemaMetadata(2, 2, "PROTOBUF", Collections.emptyList(), "")),
-        ProvenanceHistory.logicalTypesOf(Arrays.<ParsedSchema>asList(writer, reader), multi));
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(writer, reader)), multi);
 
     ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
         reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
