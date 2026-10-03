@@ -276,6 +276,8 @@ public final class ProvenanceComputer {
      */
     private Set<Integer> memberNumbers;
     private Set<String> content;
+    // The content's discriminator keys, each as d:path=, kept for the crossing test.
+    private Set<String> keys;
     private String title;
 
     /** This node's member groups, keyed by the collection steps leading to each. */
@@ -600,6 +602,7 @@ public final class ProvenanceComputer {
       for (Node node : nodes) {
         node.memberNumbers = memberNumbersOf(node);
         node.content = contentOf(node);
+        node.keys = node.content != null ? discriminatorKeys(node.content) : null;
       }
       return nodes;
     }
@@ -1346,11 +1349,16 @@ public final class ProvenanceComputer {
      * discriminator key {@code side} has and {@code other} lacks.
      */
     private static boolean hasCounterpart(Node side, Node other, List<Node> alternatives) {
-      Set<String> missing = discriminatorKeys(side.content);
-      missing.removeAll(discriminatorKeys(other.content));
+      Set<String> missing = new HashSet<>(side.keys);
+      missing.removeAll(other.keys);
+      if (missing.isEmpty()) {
+        // No key of side's that other lacks: no alternative can have one.
+        return false;
+      }
       for (Node alternative : alternatives) {
-        if (related(side.content, alternative.content)
-            && !Collections.disjoint(discriminatorKeys(alternative.content), missing)) {
+        // The key test first: it is the cheaper, and fails for most alternatives.
+        if (!Collections.disjoint(alternative.keys, missing)
+            && related(side.content, alternative.content)) {
           return true;
         }
       }
@@ -1396,10 +1404,12 @@ public final class ProvenanceComputer {
 
     /** Whether two branches share a member other than a discriminator, whatever their values. */
     private static boolean related(Set<String> mine, Set<String> theirs) {
+      Set<String> myKeys = discriminatorKeys(mine);
+      Set<String> theirKeys = discriminatorKeys(theirs);
       for (String entry : mine) {
         String key = DISCRIMINATOR + entry.substring(MEMBER.length()) + "=";
         if (entry.startsWith(MEMBER) && theirs.contains(entry)
-            && !discriminatorKeys(mine).contains(key) && !discriminatorKeys(theirs).contains(key)) {
+            && !myKeys.contains(key) && !theirKeys.contains(key)) {
           return true;
         }
       }

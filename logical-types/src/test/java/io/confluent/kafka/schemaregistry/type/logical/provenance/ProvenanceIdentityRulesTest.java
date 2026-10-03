@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -31,6 +32,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -493,6 +495,34 @@ class ProvenanceIdentityRulesTest {
         json("{\"u\":{\"oneOf\":[" + moved + "," + String.format(kept, "k=2") + "]}}", null));
     assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 0));
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aWideUnionWhoseBranchesAllChangedIsMatchedInTimeQuadraticInItsWidth() {
+    // 400 untagged branches, each gaining a member in v2: every one reaches the overlap phase,
+    // whose crossing test scanned every other branch per candidate pair (15 s here).
+    StringBuilder v1 = new StringBuilder();
+    StringBuilder v2 = new StringBuilder();
+    for (int i = 0; i < 400; i++) {
+      StringBuilder members = new StringBuilder();
+      for (int m = 0; m < 5; m++) {
+        members.append(m > 0 ? "," : "").append("\"u").append(i).append('_').append(m)
+            .append("\":{\"type\":\"string\"}");
+      }
+      // Members most branches share, but not all: they tell branches apart, so pairs overlap.
+      for (int c = 0; c < 5 && i % 3 != 0; c++) {
+        members.append(",\"c").append(c).append("\":{\"type\":\"string\"}");
+      }
+      String branch = "{\"type\":\"object\",\"properties\":{" + members;
+      v1.append(i > 0 ? "," : "").append(branch).append("}}");
+      v2.append(i > 0 ? "," : "").append(branch).append(",\"added\":{\"type\":\"string\"}}}");
+    }
+    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(5),
+        () -> compute(json("{\"e\":{\"oneOf\":[" + v1 + "]}}", null),
+            json("{\"e\":{\"oneOf\":[" + v2 + "]}}", null)));
+    for (int i = 0; i < 400; i++) {
+      assertThat(pid(versions, 1, 0, i)).isEqualTo(pid(versions, 0, 0, i));
+    }
   }
 
   // An object branch titled so, holding one number property of each name.

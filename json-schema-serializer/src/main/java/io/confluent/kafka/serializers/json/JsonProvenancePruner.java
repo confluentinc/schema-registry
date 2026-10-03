@@ -811,9 +811,11 @@ final class JsonProvenancePruner {
     List<Schema> subschemas = new ArrayList<>(schema.getSubschemas());
     if (schema.getCriterion() == CombinedSchema.ALL_CRITERION) {
       // The converter merges an allOf; the next step lives in whichever part declares it.
+      reached.allOfs++;
       for (Schema part : subschemas) {
         walk(names, part, node, step, choices, ambiguous, alternatives, reached, at);
       }
+      reached.allOfs--;
       return;
     }
     List<Schema> branches = new ArrayList<>();
@@ -1057,10 +1059,15 @@ final class JsonProvenancePruner {
     private final Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers =
         new IdentityHashMap<>();
     private final Map<AtProperty, Set<List<Object>>> walked = new IdentityHashMap<>();
+    // allOf parts being walked: only under one can two paths reach the same visit.
+    private int allOfs;
 
     // Whether this walk has not yet visited the schema and value with these readings.
     boolean first(AtProperty at, Schema schema, JsonNode node, int step, List<Integer> choices,
         boolean ambiguous, List<Alternative> alternatives) {
+      if (allOfs == 0) {
+        return true;
+      }
       List<Object> key = new ArrayList<>(Arrays.asList(new Same(schema), new Same(node), step,
           new ArrayList<>(choices), ambiguous));
       for (Alternative a : alternatives) {
