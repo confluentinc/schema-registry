@@ -96,20 +96,35 @@ class LockChainedExecutor {
       stateLock.writeLock().unlock();
     }
     boolean drained = true;
+    // Restore the interrupt flag only after the waits below, since it would make them throw
+    boolean interrupted = false;
     try {
       CompletableFuture.allOf(queued)
           .handle((r, t) -> (Void) null)
           .get(timeout, unit);
     } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+      interrupted = true;
       drained = false;
     } catch (ExecutionException | TimeoutException e) {
       drained = false;
     }
     executor.shutdownNow();
-    try {
-      executor.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
+    // An interrupt must not cut the wait short, or the caller could close the store while an
+    // interrupted task is still cleaning up, so keep waiting until the deadline
+    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TERMINATION_WAIT_MS);
+    while (true) {
+      long remaining = deadline - System.nanoTime();
+      if (remaining <= 0) {
+        break;
+      }
+      try {
+        executor.awaitTermination(remaining, TimeUnit.NANOSECONDS);
+        break;
+      } catch (InterruptedException e) {
+        interrupted = true;
+      }
+    }
+    if (interrupted) {
       Thread.currentThread().interrupt();
     }
     return drained;
