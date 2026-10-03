@@ -53,6 +53,23 @@ public class InMemoryCacheTest {
     assertNull(cache.schemaIdAndSubjects(schema()));
   }
 
+  @Test
+  public void tombstoningAnUnindexedVersionIsANoOp() throws Exception {
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+
+    // Nothing indexed for the tenant or context at all; the old value is non-null, as when
+    // the reader sees a tombstone for a record whose registration it never indexed
+    cache.schemaTombstoned(
+        new SchemaKey(SUBJECT, 2), new SchemaValue(SUBJECT, 2, 7, SCHEMA, false));
+
+    // Context indexed, but not this id
+    put(cache, 3, false);
+    SchemaKey key = new SchemaKey(SUBJECT, 4);
+    cache.schemaTombstoned(key, new SchemaValue(SUBJECT, 4, 8, SCHEMA, false));
+
+    assertEquals(new SchemaKey(SUBJECT, 3), cache.schemaKeyById(7, SUBJECT));
+  }
+
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {
     InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache =
         new InMemoryCache<>(new SchemaRegistrySerializer());

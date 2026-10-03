@@ -257,15 +257,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>())
         .computeIfAbsent(ctx, k -> new ConcurrentHashMap<>())
         .computeIfAbsent(id, k -> new ConcurrentHashMap<>())
-        .computeIfAbsent(schemaKey.getSubject(), k -> new ConcurrentSkipListSet<>())
-        .add(schemaKey.getVersion());
+        .compute(schemaKey.getSubject(), (k, versions) -> {
+          // Add inside compute so it cannot race with removeSubjectVersion unlinking the set
+          NavigableSet<Integer> updated =
+              versions != null ? versions : new ConcurrentSkipListSet<>();
+          updated.add(schemaKey.getVersion());
+          return updated;
+        });
   }
 
   private void removeSubjectVersion(SchemaKey schemaKey, int id) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>> ctxGuids =
+        guidToSubjectVersions.get(tenant());
     Map<Integer, Map<String, NavigableSet<Integer>>> guids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap())
-            .getOrDefault(ctx, Collections.emptyMap());
+        ctxGuids != null ? ctxGuids.get(ctx) : null;
+    if (guids == null) {
+      return;
+    }
     guids.computeIfPresent(id, (k, subjectVersions) -> {
       subjectVersions.computeIfPresent(schemaKey.getSubject(), (s, versions) -> {
         versions.remove(schemaKey.getVersion());
