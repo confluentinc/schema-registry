@@ -1175,9 +1175,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       try {
         // If close() already reported this delete as not run, it must not also run
         if (delete.state.compareAndSet(CascadeDeleteTask.QUEUED, CascadeDeleteTask.RUNNING)) {
-          withRequestContext(tenant, () -> runCascadeDelete(qualifiedSubject, resourceId));
+          withRequestContext(tenant, () -> runCascadeDelete(delete));
         }
       } finally {
+        // Once done, close() can no longer report this delete as still running
+        delete.state.compareAndSet(CascadeDeleteTask.RUNNING, CascadeDeleteTask.DONE);
         pendingCascadeDeletes.remove(delete);
       }
     });
@@ -1201,12 +1203,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   /**
    * A queued cascaded subject delete. The task, the enqueue rejection path and close() race to
    * move it out of its current state, and only the one that wins reports it, so each delete is
-   * reported as not run at most once and never runs after it was reported.
+   * reported as failed at most once and never runs after it was reported.
    */
   private static final class CascadeDeleteTask {
     static final int QUEUED = 0;
     static final int RUNNING = 1;
     static final int REPORTED = 2;
+    static final int DONE = 3;
 
     final String subject;
     final String resourceId;
@@ -1215,6 +1218,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     CascadeDeleteTask(String subject, String resourceId) {
       this.subject = subject;
       this.resourceId = resourceId;
+    }
+
+    /**
+     * Claims the right to report this running delete as failed, so that close() does not also
+     * report it.
+     */
+    boolean claimFailure() {
+      return state.compareAndSet(RUNNING, REPORTED);
     }
   }
 
@@ -1240,20 +1251,33 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   @VisibleForTesting
   void runCascadeDelete(String qualifiedSubject, String resourceId) {
+    CascadeDeleteTask delete = new CascadeDeleteTask(qualifiedSubject, resourceId);
+    delete.state.set(CascadeDeleteTask.RUNNING);
+    runCascadeDelete(delete);
+  }
+
+  // Each failure is reported only if close() has not already reported this delete
+  private void runCascadeDelete(CascadeDeleteTask delete) {
+    String qualifiedSubject = delete.subject;
+    String resourceId = delete.resourceId;
     Lock lock = kafkaStore.lockFor(qualifiedSubject);
     try {
       // Interruptible so that shutdown can stop a task still waiting behind a store lock
       lock.lockInterruptibly();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      recordCascadeNotDeleted(qualifiedSubject, resourceId,
-          "it was interrupted while waiting for the subject lock");
+      if (delete.claimFailure()) {
+        recordCascadeNotDeleted(qualifiedSubject, resourceId,
+            "it was interrupted while waiting for the subject lock");
+      }
       return;
     }
     try {
       if (!isLeader()) {
-        recordCascadeNotDeleted(qualifiedSubject, resourceId,
-            "this instance is no longer the leader");
+        if (delete.claimFailure()) {
+          recordCascadeNotDeleted(qualifiedSubject, resourceId,
+              "this instance is no longer the leader");
+        }
         return;
       }
       if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
@@ -1274,9 +1298,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           + "re-associated", qualifiedSubject, resourceId);
     } catch (Exception e) {
       // Includes a delete interrupted by shutdown, which is reported here rather than by close()
-      metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
-      log.error("Cascaded delete of subject {} for resource {} failed; it may be soft-deleted "
-          + "but not hard-deleted", qualifiedSubject, resourceId, e);
+      if (delete.claimFailure()) {
+        metricsContainer.getAssociationDeleteAsyncCascadeFailure().record();
+        log.error("Cascaded delete of subject {} for resource {} failed; it may be soft-deleted "
+            + "but not hard-deleted", qualifiedSubject, resourceId, e);
+      }
     } finally {
       lock.unlock();
     }
