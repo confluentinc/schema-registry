@@ -254,11 +254,8 @@ public final class ProvenanceComputer {
     MAP
   }
 
-  /**
-   * {@code kinds}, as a walk's {@code kindsOf} lists them, spelled for the report:
-   * {@code ARRAY<k>}, {@code MULTISET<k>} and {@code MAP<k, k>} name what they hold. Equal lists
-   * spell alike.
-   */
+  // Drops every link from a version's nodes to the one before, so the earlier version is free
+  // once its ids have been carried forward.
   private static void forgetMatches(Node root) {
     Deque<Node> pending = new ArrayDeque<>();
     pending.push(root);
@@ -271,6 +268,11 @@ public final class ProvenanceComputer {
     }
   }
 
+  /**
+   * {@code kinds}, as a walk's {@code kindsOf} lists them, spelled for the report:
+   * {@code ARRAY<k>}, {@code MULTISET<k>} and {@code MAP<k, k>} name what they hold. Equal lists
+   * spell alike.
+   */
   private static String spelled(List<Kind> kinds) {
     StringBuilder spelled = new StringBuilder();
     spell(kinds, 0, spelled);

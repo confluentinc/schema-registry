@@ -69,6 +69,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int PROVENANCE_RANGE_TOO_LONG = 42219;
   // The registry's default for provenance.interior.max.versions.
   private static final int INTERIOR_MAX_VERSIONS = 100;
+
+  // The registry's provenance.interior.max.versions; a test may lower it to page short histories.
+  private final int interiorMaxVersions;
   // The registry's generic server error carries its HTTP status as its error code.
   private static final int SERVER_ERROR = 500;
 
@@ -76,11 +79,21 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private final Map<String, Map<Integer, Integer>> softDeleted = new ConcurrentHashMap<>();
 
   public ProvenanceMockSchemaRegistryClient() {
+    this(INTERIOR_MAX_VERSIONS);
+  }
+
+  /**
+   * As the registry with {@code provenance.interior.max.versions} set to
+   * {@code interiorMaxVersions}.
+   */
+  public ProvenanceMockSchemaRegistryClient(int interiorMaxVersions) {
     super();
+    this.interiorMaxVersions = interiorMaxVersions;
   }
 
   public ProvenanceMockSchemaRegistryClient(List<SchemaProvider> providers) {
     super(providers);
+    this.interiorMaxVersions = INTERIOR_MAX_VERSIONS;
   }
 
   /**
@@ -257,9 +270,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       }
     }
     List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
-    if (includeInterior && range.size() > INTERIOR_MAX_VERSIONS) {
+    if (includeInterior && range.size() > interiorMaxVersions) {
       throw new RestClientException("The range covers " + range.size() + " versions, more than "
-          + INTERIOR_MAX_VERSIONS + " with includeInterior", 422, PROVENANCE_RANGE_TOO_LONG);
+          + interiorMaxVersions + " with includeInterior", 422, PROVENANCE_RANGE_TOO_LONG);
     }
     // As the registry does: each version parsed when the computation reaches it.
     List<ParsedSchemaHolder> schemas = new ArrayList<>(range.size());

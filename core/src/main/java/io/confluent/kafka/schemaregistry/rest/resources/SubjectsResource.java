@@ -56,6 +56,7 @@ import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -125,7 +126,7 @@ public class SubjectsResource {
    */
   private final AsyncCache<List<Object>, Computed> provenanceCache = Caffeine.newBuilder()
       .maximumWeight(MAX_CACHED_PROVENANCE_LOCATIONS)
-      .weigher((List<Object> key, Computed computed) -> computed.locations())
+      .weigher((List<Object> key, Computed computed) -> cacheWeight(key, computed.locations()))
       .buildAsync();
 
   @Inject
@@ -535,7 +536,7 @@ public class SubjectsResource {
         throw e;
       }
       mine.complete(computed);
-      if (computed.failure != null) {
+      if (computed.failure != null && !cachesFailure(computed.failure)) {
         provenanceCache.asMap().remove(key, mine);
       }
       pending = mine;
@@ -648,6 +649,22 @@ public class SubjectsResource {
       log.error(message, e);
       throw Errors.schemaRegistryException(message, e);
     }
+  }
+
+  // An entry's weight in the provenance cache. The key pins every version of the range, so an
+  // entry weighs at least the key's length: an ends-only answer or a failure would otherwise weigh
+  // next to nothing, and keys alone could fill the heap.
+  static int cacheWeight(List<?> key, int locations) {
+    return key.size() + locations;
+  }
+
+  // Whether a failed computation stays cached. The key pins every version of the range, so a 422
+  // is its own answer; a 500 may pass, and so may an unparsable version, whose references are
+  // read from the store.
+  static boolean cachesFailure(RuntimeException failure) {
+    return failure instanceof RestConstraintViolationException
+        && ((RestConstraintViolationException) failure).getErrorCode()
+            != Errors.UNRESOLVABLE_REFERENCE_ERROR_CODE;
   }
 
   // A version's schema, parsed when the computation reaches it; the registry caches the parse.

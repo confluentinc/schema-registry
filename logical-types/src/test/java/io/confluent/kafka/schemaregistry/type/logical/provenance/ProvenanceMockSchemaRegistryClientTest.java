@@ -27,7 +27,11 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -237,6 +241,43 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertCode(404, 40401, () -> client.getAllVersions(SUBJECT, true));
   }
 
+  @Test
+  void aLowerCapIsPagedAndThePagesStitchToTheWholeHistory() throws Exception {
+    ProvenanceMockSchemaRegistryClient capped = new ProvenanceMockSchemaRegistryClient(3);
+    String[] history = {
+        record(field("a", "int"), field("b", "int")),
+        record(field("b", "int")),
+        record(field("a", "int"), field("b", "int"), field("c", "int")),
+        record(field("b", "int"), field("c", "int"), field("d", "int")),
+        record(field("a", "int"), field("c", "int"), field("d", "int"))};
+    for (String schema : history) {
+      capped.register(SUBJECT, new AvroSchema(schema));
+      register(schema);
+    }
+    assertCode(422, 42219,
+        () -> capped.getProvenanceByVersion(SUBJECT, "1", "5", true, false, null));
+
+    // The pages share version 3, whose fields carry the first page's pids into the second.
+    List<ProvenanceVersion> first =
+        capped.getProvenanceByVersion(SUBJECT, "1", "3", true, false, null).getVersions();
+    List<ProvenanceVersion> second =
+        capped.getProvenanceByVersion(SUBJECT, "3", "5", true, false, null).getVersions();
+    Map<Integer, String> carried = new HashMap<>();
+    for (int i = 0; i < second.get(0).getFields().size(); i++) {
+      carried.put(second.get(0).getFields().get(i).getPid(),
+          "p" + first.get(2).getFields().get(i).getPid());
+    }
+    List<List<String>> stitched = new ArrayList<>();
+    first.forEach(v -> stitched.add(labels(v, pid -> "p" + pid)));
+    second.subList(1, 3).forEach(v ->
+        stitched.add(labels(v, pid -> carried.getOrDefault(pid, "q" + pid))));
+
+    List<List<String>> whole = new ArrayList<>();
+    client.getProvenanceByVersion(SUBJECT, "1", "5", true, false, null).getVersions()
+        .forEach(v -> whole.add(labels(v, pid -> "p" + pid)));
+    assertThat(canonical(stitched)).isEqualTo(canonical(whole));
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------
@@ -255,6 +296,20 @@ class ProvenanceMockSchemaRegistryClientTest {
 
   private static List<Integer> pids(ProvenanceVersion version) {
     return version.getFields().stream().map(ProvenanceField::getPid)
+        .collect(Collectors.toList());
+  }
+
+  private static List<String> labels(ProvenanceVersion version, IntFunction<String> label) {
+    return version.getFields().stream().map(f -> label.apply(f.getPid()))
+        .collect(Collectors.toList());
+  }
+
+  // Relabels identities in order of first appearance, so two numberings of one history agree.
+  private static List<List<String>> canonical(List<List<String>> versions) {
+    Map<String, String> renamed = new HashMap<>();
+    return versions.stream().map(v -> v.stream()
+            .map(l -> renamed.computeIfAbsent(l, k -> "id" + renamed.size()))
+            .collect(Collectors.toList()))
         .collect(Collectors.toList());
   }
 
