@@ -37,8 +37,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -94,9 +96,12 @@ public final class ProvenanceProjector<T> {
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
   // Readers whose registered version the caller named, by the schema handed over, by identity:
-  // an equal reader may stand for another version, or for none.
-  // A deserializer handing over a copy says so (sameReader).
+  // an equal reader may stand for another version, or for none. Each is a copy of the caller's
+  // (pinnedCopies); a deserializer handing over a copy of its own says so (sameReader).
   private final Cache<ParsedSchema, Pin> suppliedReaderInstances =
+      CacheBuilder.newBuilder().weakKeys().build();
+  // Copies of a caller's pinned reader, by its instance, then by pin.
+  private final Cache<ParsedSchema, Map<Pin, ParsedSchema>> pinnedCopies =
       CacheBuilder.newBuilder().weakKeys().build();
   // Readers derived from a generated class, by identity: matched to the latest version they equal.
   private final Cache<ParsedSchema, Boolean> derivedReaders =
@@ -143,11 +148,21 @@ public final class ProvenanceProjector<T> {
       if (reader == null) {
         return null;
       }
-      if (reader.getId() != null || reader.getVersion() != null) {
-        suppliedReaderInstances.put(reader.getSchema(),
-            new Pin(reader.getId(), reader.getSubject(), reader.getVersion()));
+      if (reader.getId() == null && reader.getVersion() == null) {
+        return reader.getSchema();
       }
-      return reader.getSchema();
+      // The pin goes on a copy kept for this instance and pin, never on the caller's instance:
+      // handed over later without one, or with another, it must not read as pinned to this.
+      Pin pin = new Pin(reader.getId(), reader.getSubject(), reader.getVersion());
+      ParsedSchema copy;
+      try {
+        copy = pinnedCopies.get(reader.getSchema(), ConcurrentHashMap::new)
+            .computeIfAbsent(pin, p -> reader.getSchema().copy());
+      } catch (ExecutionException e) {
+        throw new IllegalStateException(e.getCause());
+      }
+      suppliedReaderInstances.put(copy, pin);
+      return copy;
     };
   }
 

@@ -1269,6 +1269,55 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderInstancePinnedOnceIsNotPinnedWhenHandedOverWithout() throws Exception {
+    // v3 has v1's structure, note re-added: one reader instance with v3's text, pinned to v1
+    // once, kept that pin when handed over unpinned, and gave v3's new note the old value.
+    String v1Text = "{\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"integer\"}, "
+        + "\"note\": {\"type\": \"string\"}}}";
+    JsonSchema v1 = new JsonSchema(v1Text);
+    JsonSchema v3 = new JsonSchema(v1Text.replace("{\"type\": \"object\",",
+        "{\"type\": \"object\", \"description\": \"v3\","));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"old\"}");
+    client.register(SUBJECT, object("\"id\": {\"type\": \"integer\"}"));
+    client.register(SUBJECT, v3);
+    KafkaJsonSchemaDeserializer<JsonNode> deserializer =
+        new KafkaJsonSchemaDeserializer<>(client, config("v1"));
+
+    JsonNode pinned = (JsonNode) deserializer.deserializeWithReaderSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> ReaderSchema.of(v3, SUBJECT, 1), false).getValue();
+    JsonNode unpinned = (JsonNode) deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(),
+        bytes, w -> v3).getValue();
+    assertEquals("old", pinned.get("note").asText());
+    assertFalse(unpinned.has("note"));
+  }
+
+  @Test
+  void aChainOfDependenciesIsDefaultedOrFailsAlongItsLength() throws Exception {
+    // a requires x and x requires y, both re-added: x's default makes y required in turn.
+    String body = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}, %s}, "
+        + "\"dependencies\": {\"a\": [\"x\"], \"x\": [\"y\"]}}";
+    for (String y : new String[] {"\"y\": {\"type\": \"string\", \"default\": \"e\"}",
+        "\"y\": {\"type\": \"string\", \"description\": \"new\"}"}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      JsonSchema v1 = new JsonSchema(String.format(body, string("x") + ", " + string("y")));
+      JsonSchema v2 = new JsonSchema(String.format(body, "\"zz\": {\"type\": \"boolean\"}"));
+      JsonSchema v3 = new JsonSchema(String.format(body,
+          "\"x\": {\"type\": \"string\", \"default\": \"d\"}, " + y));
+      byte[] bytes = write(v1, "{\"a\": \"s\", \"x\": \"old\", \"y\": \"oldy\"}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      if (y.contains("default")) {
+        assertEquals("e", read(v3, bytes, "v1").get("y").asText());
+      } else {
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [y] is new to the reader"));
+      }
+    }
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "

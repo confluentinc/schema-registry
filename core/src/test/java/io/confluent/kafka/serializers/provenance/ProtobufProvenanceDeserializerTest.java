@@ -1413,6 +1413,46 @@ class ProtobufProvenanceDeserializerTest {
     assertFalse(in.hasField(in.getDescriptorForType().findFieldByName("value")));
   }
 
+  @Test
+  void aOneofInAFlinkWrappedListOrMapRestartsAlone() throws Exception {
+    // Flink wraps a nullable list or map in a message whose payload is named value: In's oneof is
+    // then spelled below the wrapper's payload, and was taken for it, moving the whole list.
+    String wrapped = " [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
+        + "value: \"true\"}]}]";
+    String list = "WL ins = 1" + wrapped + "; message WL { repeated In value = 1; } ";
+    String map = "WM ins = 1" + wrapped + "; message WM { repeated InEntry value = 1; } "
+        + "message InEntry { string key = 1; In value = 2; } ";
+    String[][] shapes = {{list, "ins.value[]"}, {map, "ins.value[].value"}};
+    String oneof = "oneof o { int32 a = 2; string s = 4; }";
+    for (String[] shape : shapes) {
+      for (boolean two : new boolean[] {false, true}) {
+        // With a second oneof continuing, the two asked for two numberings and fell back,
+        // giving the restarted a its old value.
+        String other = two ? "oneof p { int32 c = 3; string t = 5; }" : "";
+        client = new ProvenanceMockSchemaRegistryClient();
+        serializer = new KafkaProtobufSerializer<>(client, config(null));
+        ProtobufSchema v1 = withMeta(shape[0] + "message In { int32 x = 1; " + oneof + " "
+            + other + " }");
+        ProtobufSchema v2 = withMeta(shape[0] + "message In { int32 x = 1; " + other + " }");
+        ProtobufSchema v3 = withMeta(shape[0] + "message In { int32 x = 1; " + oneof + " "
+            + other + " } int32 z = 9;");
+        byte[] bytes = write(v1, along(v1, shape[1],
+            two ? Map.of("x", 7, "a", 5, "c", 9) : Map.of("x", 7, "a", 5)));
+        client.register(SUBJECT, v2);
+        client.register(SUBJECT, v3);
+
+        DynamicMessage read = read(v3, bytes, "v1");
+        assertEquals(1, ((List<?>) get(at(read, "ins"), "value")).size());
+        DynamicMessage in = at(read, shape[1]);
+        assertEquals(7, get(in, "x"));
+        assertEquals(0, get(in, "a"));
+        if (two) {
+          assertEquals(9, get(in, "c"));
+        }
+      }
+    }
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

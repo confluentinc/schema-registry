@@ -566,9 +566,16 @@ final class JsonProvenancePruner {
           .removeIf(d -> d.node.get(d.name) == null || placed.getOrDefault(d.node,
               Collections.emptySet()).contains(d.name)));
     }
-    for (Deferred d : deferred) {
-      if (!d.node.has(d.name) && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
-        placeDefault(d.node, d.reaches, d.name, d.names);
+    // A default put for one deferred property can make another required, as along a chain of
+    // dependencies: decided again until none is put.
+    boolean put = true;
+    while (put) {
+      put = false;
+      for (Deferred d : deferred) {
+        if (!d.node.has(d.name) && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
+          placeDefault(d.node, d.reaches, d.name, d.names);
+          put = true;
+        }
       }
     }
   }
@@ -943,7 +950,9 @@ final class JsonProvenancePruner {
     }
     node.remove(name);
     if (!requiredInEveryReading(reaches, name, node, false)) {
-      if (requiredInEveryReading(reaches, name, node, true)) {
+      // Required only by a sibling's presence: decided once pruning settles, even where the
+      // sibling is gone for now, as its default may yet be put.
+      if (reaches.stream().anyMatch(reach -> dependedOn(reach.object, name))) {
         deferred.add(new Deferred(node, reaches, name, names));
       }
       return null;
