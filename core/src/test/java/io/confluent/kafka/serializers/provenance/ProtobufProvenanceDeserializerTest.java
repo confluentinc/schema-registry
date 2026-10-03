@@ -1638,6 +1638,24 @@ class ProtobufProvenanceDeserializerTest {
     assertFalse(u.hasField(u.getDescriptorForType().findFieldByName("memo")));
   }
 
+  @Test
+  void aMessageChainNestingPastTheDepthLimitReadsWithoutProvenance() throws Exception {
+    // Past the depth limit the history has no provenance: read natively, once warned, rather
+    // than every record failing as the walk exhausts the stack.
+    StringBuilder chain = new StringBuilder();
+    for (int i = 0; i < 2000; i++) {
+      chain.append("message M").append(i).append(" { M").append(i + 1).append(" p = 1; }\n");
+    }
+    chain.append("message M2000 { int32 x = 1; }");
+    ProtobufSchema v1 = file("message Row { int32 id = 1; M0 m = 2; }", chain.toString());
+    ProtobufSchema v2 = file("message Row { int32 id = 1; M0 m = 2; string memo = 3; }",
+        chain.toString());
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7));
+    client.register(SUBJECT, v2);
+
+    assertEquals(7, get(read(v2, bytes, "v1"), "id"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,

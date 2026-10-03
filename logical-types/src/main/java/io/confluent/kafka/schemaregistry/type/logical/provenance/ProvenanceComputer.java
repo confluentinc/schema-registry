@@ -26,10 +26,10 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -104,6 +104,12 @@ public final class ProvenanceComputer {
   /** The most locations a whole report may hold, as every version's are kept at once. */
   public static final int MAX_REPORT_LOCATIONS = 500_000;
 
+  /**
+   * The deepest a location may nest; past it, the history has no provenance. A chain of named
+   * types nests with no text nesting, and the walk descends once per level.
+   */
+  public static final int MAX_DEPTH = 1_000;
+
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
   // A JSON branch's content entries: a member's path, a discriminator's value, a scalar's type.
@@ -161,8 +167,9 @@ public final class ProvenanceComputer {
    *     null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
-   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or the
-   *     history more than {@link #MAX_REPORT_LOCATIONS}
+   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or
+   *     nests them more than {@link #MAX_DEPTH} deep, or the history has more than
+   *     {@link #MAX_REPORT_LOCATIONS}
    */
   public static ProvenanceReport report(List<SchemaType> schemaTypes,
       List<LogicalType> versions) {
@@ -464,6 +471,9 @@ public final class ProvenanceComputer {
           if (members.size() > MAX_LOCATIONS) {
             throw new TooManyLocationsException(version, MAX_LOCATIONS);
           }
+        }
+        if (peer.where.path.size() > MAX_DEPTH) {
+          throw new TooManyLocationsException(version, MAX_DEPTH, true);
         }
         processType(peer.body, peer, "", peer.where, peer.childDerived);
       }
@@ -1162,7 +1172,7 @@ public final class ProvenanceComputer {
       // Phase 4's pairings unblock or block later ones: it visits the peers in an order fixed by
       // their content, so how a union lists its branches never decides between them.
       List<Node> byContent = new ArrayList<>(peers);
-      byContent.sort(Comparator.comparing(peer -> String.valueOf(peer.content)));
+      byContent.sort((x, y) -> compareContent(x.content, y.content));
       for (int phase = 0; phase < 8; phase++) {
         boolean progressed = false;
         for (Node peer : phase == 4 ? byContent : peers) {
@@ -1255,6 +1265,19 @@ public final class ProvenanceComputer {
             ? entry.substring(0, entry.length() - TYPE_BINARY.length()) + TYPE_CHARACTER : entry);
       }
       return strings;
+    }
+
+    // Contents in order entry by entry: their printed forms can collide, as names may hold ", ".
+    private static int compareContent(Set<String> mine, Set<String> theirs) {
+      Iterator<String> i = mine.iterator();
+      Iterator<String> j = theirs.iterator();
+      while (i.hasNext() && j.hasNext()) {
+        int c = i.next().compareTo(j.next());
+        if (c != 0) {
+          return c;
+        }
+      }
+      return Boolean.compare(i.hasNext(), j.hasNext());
     }
 
     // The peers not yet paired: one paired already cannot take another previous branch.

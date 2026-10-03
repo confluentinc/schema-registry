@@ -230,6 +230,14 @@ public final class ProvenanceMapping {
   }
 
   /**
+   * The outermost kind of the reader's root as the response gives it ({@code STRUCT},
+   * {@code UNION}, ...), or null when it gives none.
+   */
+  public String readerRootKindName() {
+    return readerRootKind == null ? null : Kind.parse(readerRootKind).name;
+  }
+
+  /**
    * Every writer field's path, in path order.
    */
   public List<List<Integer>> writerPaths() {

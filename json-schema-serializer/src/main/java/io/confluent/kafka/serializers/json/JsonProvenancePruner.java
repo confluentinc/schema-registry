@@ -158,6 +158,7 @@ final class JsonProvenancePruner {
     mapping.requireNames();
     mapping.requireKinds();
     Schema raw = reader.rawSchema();
+    requireRootKind(mapping, raw);
     Map<List<String>, Target> byNames = new LinkedHashMap<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
@@ -212,10 +213,9 @@ final class JsonProvenancePruner {
     while (added) {
       added = false;
       for (Target target : byNames.values()) {
-        if (!pruned.contains(target.names)
-            && (spelled.getOrDefault(target.names, 0) > 1 || crossesBranch(target))
-            && !readsAsWritten(target, outermost.getOrDefault(target.names,
-                Collections.emptyList()), pruned, alike, reader, writer)) {
+        if (!pruned.contains(target.names) && mayReadOtherwise(target, spelled)
+            && !readsAsWritten(target, unionOf(target, outermost), pruned, alike, reader,
+                writer)) {
           pruned.add(target.names);
           added = true;
         }
@@ -431,6 +431,36 @@ final class JsonProvenancePruner {
   }
 
   // The schema a chain of references ends at; one only referring to itself, however indirectly.
+  /**
+   * Fails where the response's reader root kind plainly contradicts the reader: taken as given,
+   * properties would pass for branches, or branches for properties, and none would be pruned.
+   */
+  private static void requireRootKind(ProvenanceMapping mapping, Schema raw) {
+    Schema root = referred(raw);
+    String kind = mapping.readerRootKindName();
+    boolean contradicts = root instanceof ObjectSchema
+        ? "UNION".equals(kind) : isUnion(root) && !"UNION".equals(kind);
+    if (contradicts) {
+      throw new SerializationException("The provenance response gives schema id "
+          + mapping.readerId() + " a root of kind " + kind + ", which its schema does not have");
+    }
+  }
+
+  // A oneOf or anyOf of two branches or more besides null, which the logical type keeps a union.
+  private static boolean isUnion(Schema schema) {
+    if (!(schema instanceof CombinedSchema)
+        || ((CombinedSchema) schema).getCriterion() == CombinedSchema.ALL_CRITERION) {
+      return false;
+    }
+    int branches = 0;
+    for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+      if (!(referred(subschema) instanceof NullSchema)) {
+        branches++;
+      }
+    }
+    return branches > 1;
+  }
+
   private static Schema referred(Schema schema) {
     Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     while (schema instanceof ReferenceSchema && seen.add(schema)) {
@@ -464,6 +494,23 @@ final class JsonProvenancePruner {
       }
     }
     return false;
+  }
+
+  // The union whose reading decides a property: the outermost one it sits under, else, for one
+  // whose items or values hold a union, its own; else the whole schema.
+  private static List<String> unionOf(Target target, Map<List<String>, List<String>> outermost) {
+    return outermost.getOrDefault(target.names,
+        target.branches.isEmpty() ? Collections.emptyList() : target.names);
+  }
+
+  /**
+   * Whether a value of a property every location of which continues may still read as another
+   * branch than it was written in: through its own union, whose branches spell its names, a
+   * branch that moved, or a union in its items or map values, spelled under the element's step.
+   */
+  private static boolean mayReadOtherwise(Target target, Map<List<String>, Integer> spelled) {
+    return spelled.getOrDefault(target.names, 0) > 1 || crossesBranch(target)
+        || !target.branches.isEmpty();
   }
 
   private static boolean isBranchOf(List<Integer> branch, List<Integer> union) {
@@ -990,16 +1037,17 @@ final class JsonProvenancePruner {
       }
     }
     if (withDefault == null) {
-      throw new SerializationException("Property " + names + " is new to the reader: "
-          + "provenance pairs it with nothing the writer wrote, and the reader requires it and "
-          + "declares no default. There is no value to read.");
+      throw new SerializationException("Property " + names + " has no value to read: provenance "
+          + "withholds it, as new to the reader or read as another branch than written, and the "
+          + "reader requires it and declares no default.");
     }
     try {
       JsonNode value = MAPPER.readTree(JSONObject.valueToString(withDefault.getDefaultValue()));
       if (!validates(withDefault, validatable(value))) {
         // A default the reader itself rejects is no value to read either.
-        throw new SerializationException("Property " + names + " is new to the reader, and the "
-            + "default it declares does not validate under it. There is no value to read.");
+        throw new SerializationException("Property " + names + " has no value to read: "
+            + "provenance withholds it, and the default the reader declares does not validate "
+            + "under it.");
       }
       node.set(name, value);
       return value;

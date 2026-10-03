@@ -359,9 +359,9 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-    assertEquals("Property [o, t] is new to the reader: provenance pairs it with nothing the "
-        + "writer wrote, and the reader requires it and declares no default. There is no value "
-        + "to read.", e.getCause().getMessage());
+    assertEquals("Property [o, t] has no value to read: provenance withholds it, as new to the "
+        + "reader or read as another branch than written, and the reader requires it and "
+        + "declares no default.", e.getCause().getMessage());
   }
 
   @Test
@@ -400,7 +400,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-    assertTrue(e.getCause().getMessage().startsWith("Property [p, t] is new to the reader"));
+    assertTrue(e.getCause().getMessage().startsWith("Property [p, t] has no value to read"));
   }
 
   @Test
@@ -966,7 +966,7 @@ class JsonProvenanceDeserializerTest {
 
         if (defaulted.isEmpty()) {
           Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-          assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"),
+          assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"),
               requires);
         } else {
           assertEquals("pd", read(v3, bytes, "v1").get("p").asText(), requires);
@@ -1014,7 +1014,7 @@ class JsonProvenanceDeserializerTest {
 
       if (defaulted.isEmpty()) {
         Exception e = assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
-        assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"));
       } else {
         assertEquals("pd", read(reader, bytes, "v1").get("p").asText());
       }
@@ -1099,7 +1099,7 @@ class JsonProvenanceDeserializerTest {
 
       if (defaulted.isEmpty()) {
         Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-        assertTrue(e.getCause().getMessage().startsWith("Property [p] is new to the reader"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"));
       } else {
         assertEquals(7, read(v3, bytes, "v1").get("p").asInt());
       }
@@ -1203,7 +1203,7 @@ class JsonProvenanceDeserializerTest {
         assertEquals("d", read(v3, bytes, "v1").get("x").asText());
       } else {
         Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-        assertTrue(e.getCause().getMessage().startsWith("Property [x] is new to the reader"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [x] has no value to read"));
       }
     }
   }
@@ -1262,7 +1262,7 @@ class JsonProvenanceDeserializerTest {
           assertEquals("d", read(v3, bytes, "v1").get("x").asText());
         } else {
           Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-          assertTrue(e.getCause().getMessage().startsWith("Property [x] is new to the reader"));
+          assertTrue(e.getCause().getMessage().startsWith("Property [x] has no value to read"));
         }
       }
     }
@@ -1312,7 +1312,7 @@ class JsonProvenanceDeserializerTest {
         assertEquals("e", read(v3, bytes, "v1").get("y").asText());
       } else {
         Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-        assertTrue(e.getCause().getMessage().startsWith("Property [y] is new to the reader"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [y] has no value to read"));
       }
     }
   }
@@ -1345,7 +1345,7 @@ class JsonProvenanceDeserializerTest {
       if (branchB.isEmpty()) {
         // Control: o stays, so x is still required and has no default.
         Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
-        assertTrue(e.getCause().getMessage().startsWith("Property [p, o, x] is new to the reader"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p, o, x] has no value to read"));
       } else {
         assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "v1"));
       }
@@ -1431,6 +1431,59 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
 
     assertEquals(MAPPER.readTree("[3, 4]"), read(v2, bytes, "v1").get("x"));
+  }
+
+  @Test
+  void aValueOfAnItemsUnionReadAsAnotherContinuingBranchIsPruned() throws Exception {
+    // Titles keep both branches while they swap types: 3, written as A, would read as B, the
+    // column of B's strings. As for a property's own union, it is pruned rather than moved.
+    String items = "\"x\": {\"type\": \"array\", \"items\": {\"anyOf\": "
+        + "[{\"title\": \"A\", \"type\": \"%s\"}, {\"title\": \"B\", \"type\": \"%s\"}]}}";
+    JsonSchema v1 = object(String.format(items, "integer", "string"));
+    JsonSchema v2 = object(String.format(items, "string", "integer"));
+    byte[] bytes = write(v1, "{\"x\": [3]}");
+    client.register(SUBJECT, v2);
+
+    assertFalse(read(v2, bytes, "v1").has("x"));
+  }
+
+  @Test
+  void aValueOfAMapValuesUnionReadAsAnotherContinuingBranchIsPruned() throws Exception {
+    String values = "\"x\": {\"type\": \"object\", \"connect.type\": \"map\", "
+        + "\"additionalProperties\": {\"anyOf\": "
+        + "[{\"title\": \"A\", \"type\": \"%s\"}, {\"title\": \"B\", \"type\": \"%s\"}]}}";
+    JsonSchema v1 = object(String.format(values, "integer", "string"));
+    JsonSchema v2 = object(String.format(values, "string", "integer"));
+    byte[] bytes = write(v1, "{\"x\": {\"k\": 3}}");
+    client.register(SUBJECT, v2);
+
+    assertFalse(read(v2, bytes, "v1").has("x"));
+  }
+
+  @Test
+  void anArrayOfAnUnchangedUnionIsNotWalkedWhenAnotherPropertyChanges() throws Exception {
+    // Only y changes: x's union is its own and the same on both sides, so its 100,000 elements
+    // need no walk, where a comparison of the whole schema would walk them on every read.
+    String x = "\"x\": {\"type\": \"array\", \"items\": "
+        + "{\"anyOf\": [{\"type\": \"integer\"}, {\"type\": \"string\"}]}}";
+    JsonSchema v1 = object(x, "\"y\": {\"type\": \"string\"}");
+    JsonSchema v2 = object(x, "\"z\": {\"type\": \"string\"}");
+    StringBuilder items = new StringBuilder();
+    for (int i = 0; i < 100_000; i++) {
+      items.append(i > 0 ? "," : "").append(i);
+    }
+    byte[] bytes = write(v1, "{\"x\": [" + items + "], \"y\": \"old\"}");
+    client.register(SUBJECT, v2);
+    read(v2, bytes, "v1");
+
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+      JsonNode last = null;
+      for (int i = 0; i < 50; i++) {
+        last = read(v2, bytes, "v1");
+      }
+      return last;
+    });
+    assertEquals(100_000, read.get("x").size());
   }
 
   // --- Helpers -----------------------------------------------------------------------------------

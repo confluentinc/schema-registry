@@ -73,6 +73,17 @@ public class JsonProvenancePrunerTest {
     assertEquals("{\"a\":1}", document.toString());
   }
 
+  @Test
+  public void aRootKindTheReaderContradictsFailsEveryRecord() {
+    // Read as a union, the reader's properties would pass for branches: nothing would be pruned.
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> JsonProvenancePruner.plan(ProvenanceMapping.join(new SchemaProvenance("s",
+            Arrays.asList(new ProvenanceVersion(1, 1, "STRUCT", Arrays.asList(p(1, "a"))),
+                new ProvenanceVersion(2, 2, "UNION", Arrays.asList(p(1, "a"), p(2, "u"))))),
+            1, 2), READER));
+    assertTrue(e.getMessage(), e.getMessage().contains("a root of kind UNION"));
+  }
+
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
       List<ProvenanceField> reader) {
     return ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
