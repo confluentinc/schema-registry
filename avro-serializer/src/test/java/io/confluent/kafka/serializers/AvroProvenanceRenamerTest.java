@@ -162,8 +162,12 @@ public class AvroProvenanceRenamerTest {
   public void aReaderFieldWithADefaultPasses() {
     Schema writer = record("R", field("id", "\"int\""));
     Schema reader = record("R", field("id", "\"int\""), field("name", "\"string\"", "\"x\""));
-    AvroProvenanceRenamer.rename(
+    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
         writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name"))));
+    // name has no writer source: the writer stays as it was, and the reader's default stands in.
+    assertEquals(1, renamed.writer.getFields().size());
+    assertEquals("id", renamed.writer.getFields().get(0).name());
+    assertEquals("x", renamed.reader.getField("name").defaultVal());
   }
 
   @Test

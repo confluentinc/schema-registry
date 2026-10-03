@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -109,7 +110,7 @@ public final class ProvenanceComputer {
   private static final String MEMBER = "m:";
   private static final String DISCRIMINATOR = "d:";
   private static final String TYPE = "t:";
-  // Scalar types whose JSON values can coincide, by family: numeric, character, binary.
+  // Scalar types by family as the logical type spells them: numeric, character, binary.
   private static final Map<String, String> SCALAR_FAMILIES = new HashMap<>();
   private static final String TYPE_CHARACTER = "CHARACTER";
   private static final String TYPE_BINARY = "BINARY";
@@ -763,7 +764,10 @@ public final class ProvenanceComputer {
           && !Collections.disjoint(previous.memberNumbers, peer.memberNumbers);
     }
 
-    /** JSON: a property by name; a union branch by hint, discriminators, title, then content. */
+    /**
+     * JSON: a property by name; a union branch by hint, discriminators, title, content, compatible
+     * values, then position.
+     */
     private static void matchJson(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       if (peers.get(0).role == Role.BRANCH) {
@@ -1142,22 +1146,26 @@ public final class ProvenanceComputer {
      * peer shares it; the previous branch it shares strictly the most members with, and it with
      * that one, a member every untaken previous branch has (or, with one left, every previous
      * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
-     * discriminator, as when it moved and its members changed, repeated while it pairs any; for a
-     * branch with no members, the one whose values can coincide with its own — the same scalar
-     * family (numeric, character or binary), or an array or map whose items or values do — each
-     * the other's only such branch, as a property's scalar change continues, then, of those left,
-     * a character with a binary branch, both strings in a document; one at the same
-     * position sharing a member with it, where overlap alone cannot tell; else it is new. None
-     * continues another across a discriminator a branch related to them has (see
+     * discriminator, as when it moved and its members changed, repeated while it pairs any, in an
+     * order fixed by content; for a branch with no members, the one of the same scalar family as
+     * the logical type spells it (numeric, character or binary), or an array or map whose items or
+     * values are — each the other's only such branch, as a property's scalar change continues,
+     * then, of those left, a character with a binary branch, both strings in a document; one at
+     * the same position sharing a member with it, where overlap alone cannot tell; else it is
+     * new. None continues another across a discriminator a branch related to them has (see
      * {@link #crosses}), nor across a hint: two branches hinted otherwise are different branches,
      * as an Avro type renamed without an alias is.
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
+      // Phase 4's pairings unblock or block later ones: it visits the peers in an order fixed by
+      // their content, so how a union lists its branches never decides between them.
+      List<Node> byContent = new ArrayList<>(peers);
+      byContent.sort(Comparator.comparing(peer -> String.valueOf(peer.content)));
       for (int phase = 0; phase < 8; phase++) {
         boolean progressed = false;
-        for (Node peer : peers) {
+        for (Node peer : phase == 4 ? byContent : peers) {
           if (matched.containsKey(peer)) {
             continue;
           }
@@ -1222,7 +1230,7 @@ public final class ProvenanceComputer {
 
     /**
      * A memberless branch's content with each scalar type replaced by its family, so that branches
-     * whose values can coincide compare equal; null for a branch with members or discriminators.
+     * of one family compare equal; null for a branch with members or discriminators.
      */
     private static Set<String> valuesOf(Set<String> content) {
       Set<String> values = new TreeSet<>();
@@ -1419,7 +1427,7 @@ public final class ProvenanceComputer {
       }
       List<Node> otherPrevious = new ArrayList<>();
       for (Node p : previous) {
-        if (p != candidate && !taken.contains(p) && p.content != null) {
+        if (p != candidate && !taken.contains(p)) {
           otherPrevious.add(p);
         }
       }

@@ -22,9 +22,11 @@ import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A report's pids, per version, by inlined path.
@@ -70,8 +72,9 @@ final class Pids {
    */
   List<List<Integer>> shared(int version, int other) {
     List<List<Integer>> shared = new ArrayList<>();
+    Set<Integer> others = new HashSet<>(byVersion.get(other).values());
     byVersion.get(version).forEach((path, pid) -> {
-      if (byVersion.get(other).containsValue(pid)) {
+      if (others.contains(pid)) {
         shared.add(path);
       }
     });

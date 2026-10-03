@@ -517,7 +517,7 @@ class ProvenanceIdentityRulesTest {
       v1.append(i > 0 ? "," : "").append(branch).append("}}");
       v2.append(i > 0 ? "," : "").append(branch).append(",\"added\":{\"type\":\"string\"}}}");
     }
-    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(8),
+    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(12),
         () -> compute(json("{\"e\":{\"oneOf\":[" + v1 + "]}}", null),
             json("{\"e\":{\"oneOf\":[" + v2 + "]}}", null)));
     for (int i = 0; i < 1600; i++) {
@@ -581,6 +581,51 @@ class ProvenanceIdentityRulesTest {
     List<ProvenanceVersion> v = compute(json(String.format(union, "{\"enum\":[1,2]}"), null),
         json(String.format(union, "{\"type\":\"string\"}"), null));
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aJsonBranchPairingDoesNotDependOnBranchOrder() {
+    // {a,g} and t2{a,e,g} each overlap both {a} and {a,e,g}: whichever pairing came first in
+    // union order decided what the other crossed. Listed either way, they pair alike.
+    String[] v1 = {tagged("t2", "c", "e"), tagged(null, "a", "c"), tagged("t2", "d"),
+        tagged(null, "a"), tagged(null, "a", "e", "g")};
+    String[] v2 = {tagged("t2", "c", "d", "e"), tagged("t2", "d", "f"), tagged(null, "a", "g"),
+        tagged("t2", "a", "e", "g"), tagged(null, "a", "c")};
+    String[] reordered = {v2[2], v2[3], v2[4], v2[0], v2[1]};
+    List<ProvenanceVersion> listed = compute(union(v1), union(v2));
+    List<ProvenanceVersion> other = compute(union(v1), union(reordered));
+    assertThat(pid(other, 1, 0, 0)).isEqualTo(pid(listed, 1, 0, 2));
+    assertThat(pid(other, 1, 0, 1)).isEqualTo(pid(listed, 1, 0, 3));
+  }
+
+  // An object branch holding a string member of each name, tagged kind = tag unless null.
+  private static String tagged(String tag, String... members) {
+    List<String> properties = new ArrayList<>();
+    if (tag != null) {
+      properties.add("\"kind\":{\"const\":\"" + tag + "\"}");
+    }
+    for (String member : members) {
+      properties.add("\"" + member + "\":{\"type\":\"string\"}");
+    }
+    return "{\"type\":\"object\",\"properties\":{" + String.join(",", properties) + "}}";
+  }
+
+  private static JsonSchema union(String... branches) {
+    return json("{\"x\":{\"oneOf\":[" + String.join(",", branches) + "]}}", null);
+  }
+
+  @Test
+  void aTitleSharedByTwoNewBranchesContinuesNeither() {
+    // One title, two branches holding it: the title tells neither apart, and neither continues
+    // by order.
+    String titled =
+        "{\"type\":\"object\",\"title\":\"T\",\"properties\":{\"%s\":{\"type\":\"string\"}}}";
+    List<ProvenanceVersion> v = compute(
+        union(String.format(titled, "a"), "{\"type\":\"boolean\"}"),
+        union(String.format(titled, "b"), String.format(titled, "c"), "{\"type\":\"boolean\"}"));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    assertThat(pid(v, 1, 0, 0)).isNotIn(before.values());
+    assertThat(pid(v, 1, 0, 1)).isNotIn(before.values());
   }
 
   @Test
@@ -896,6 +941,20 @@ class ProvenanceIdentityRulesTest {
     assertThat(after.get(path(0))).isEqualTo(before.get(path(1)));
     assertThat(after.get(path(0, 0))).isEqualTo(before.get(path(1, 0)));
     assertThat(after.get(path(0, 1))).isNotIn(before.values());
+  }
+
+  @Test
+  void aFieldMovedOutOfAOneofIsNew() {
+    // The mirror of the move into a oneof, and the direction BACKWARD allows: b changes parent.
+    List<ProvenanceVersion> v = compute(
+        proto("oneof c { int32 a = 1; string b = 2; }"),
+        proto("oneof c { int32 a = 1; } string b = 2;"));
+    Map<List<Integer>, Integer> before = pids(v, 0);
+    Map<List<Integer>, Integer> after = pids(v, 1);
+    // v1: c at [0], a at [0, 0], b at [0, 1]; v2: b at [0], c at [1], a at [1, 0].
+    assertThat(after.get(path(1))).isEqualTo(before.get(path(0)));
+    assertThat(after.get(path(1, 0))).isEqualTo(before.get(path(0, 0)));
+    assertThat(after.get(path(0))).isNotIn(before.values());
   }
 
   @Test

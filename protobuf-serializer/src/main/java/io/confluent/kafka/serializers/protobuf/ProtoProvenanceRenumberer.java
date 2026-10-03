@@ -43,9 +43,10 @@ import org.apache.kafka.common.errors.SerializationException;
  * <p>The parser pairs a wire field with a descriptor field by number and decodes it as the
  * descriptor's type. A field's provenance identity is its number too, so the two agree except where
  * a number was dropped and later reused: the reader's field is then a new entity, and number
- * matching would hand it the old field's data. Each such reader field moves to a number no writer
- * uses, so the writer's field lands in the unknown fields and the reader's reads as unset. Names,
- * types, options, metadata and rules are untouched, so domain rules see the reader as it is.
+ * matching would hand it the old field's data. Each such reader field moves to a number the
+ * writer's message does not use, and, while any is left, none any writer message uses, so the
+ * writer's field lands in the unknown fields and the reader's reads as unset. Names, types,
+ * options, metadata and rules are untouched, so domain rules see the reader as it is.
  *
  * <p>Fields are found by the names the provenance response carries, which the converter recorded
  * as the descriptor's own route to each location.
@@ -86,8 +87,9 @@ final class ProtoProvenanceRenumberer {
    * and fail the parse where it is a message.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
-   *     different numberings, a field needing a new number belongs to an imported file, or the
-   *     record's message is a nested one no location reaches
+   *     different numberings, a field needing a new number belongs to an imported file, a message
+   *     has no field number left to move a field to, or the record's message is a nested one no
+   *     location reaches
    * @throws SerializationException if a location's names are missing or not in the reader
    */
   static Renumbered renumber(ProtobufSchema reader, ProtobufSchema writer,

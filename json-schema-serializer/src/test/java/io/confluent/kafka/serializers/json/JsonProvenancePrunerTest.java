@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.serializers.json;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -61,9 +64,13 @@ public class JsonProvenancePrunerTest {
   }
 
   @Test
-  public void aNewPropertyInAUnionBranchIsDeclared() {
-    JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")),
+  public void aNewPropertyInAUnionBranchIsDeclared() throws Exception {
+    // u.b is declared by u's object branch only; the plan follows it, and prunes the new u.
+    JsonProvenancePruner pruner = JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")),
         Arrays.asList(p(1, "a"), p(2, "u"), p(3, "u", "b"))), READER);
+    JsonNode document = new ObjectMapper().readTree("{\"a\":1,\"u\":{\"b\":2}}");
+    pruner.prune(document);
+    assertEquals("{\"a\":1}", document.toString());
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
