@@ -29,8 +29,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
+import com.google.common.base.Ticker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.crypto.tink.aead.AeadConfig;
@@ -69,6 +69,7 @@ import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -430,10 +431,27 @@ public abstract class EncryptionExecutorTest {
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 
+  /**
+   * Both SchemaRegistryClient and DekRegistryClient declare default close() and ticker(), so a
+   * type that implements both must override them. Mocking this interface (instead of
+   * SchemaRegistryClient with DekRegistryClient as an extra interface) gives Mockito a single,
+   * unambiguous implementation of each; with extraInterfaces, Mockito 5's mock class is left
+   * without close() and calling it throws AbstractMethodError.
+   */
+  interface SchemaAndDekRegistryClient extends SchemaRegistryClient, DekRegistryClient {
+    @Override
+    default Ticker ticker() {
+      return Ticker.systemTicker();
+    }
+
+    @Override
+    default void close() throws IOException {
+    }
+  }
+
   @Test
   public void testSetSchemaRegistryClient() throws Exception {
-    SchemaRegistryClient mockClient = mock(SchemaRegistryClient.class,
-        withSettings().extraInterfaces(DekRegistryClient.class));
+    SchemaRegistryClient mockClient = mock(SchemaAndDekRegistryClient.class);
 
     EncryptionExecutor executor = new EncryptionExecutor();
     try {
@@ -455,8 +473,7 @@ public abstract class EncryptionExecutorTest {
 
   @Test
   public void testGetOrCreateKekUsesContextFromSubject() throws Exception {
-    SchemaRegistryClient mockClient = mock(SchemaRegistryClient.class,
-        withSettings().extraInterfaces(DekRegistryClient.class));
+    SchemaRegistryClient mockClient = mock(SchemaAndDekRegistryClient.class);
     DekRegistryClient mockDekClient = (DekRegistryClient) mockClient;
     Kek kek = new Kek("kek1", encryptionProps.getKmsType(), encryptionProps.getKmsKeyId(),
         null, null, false, 0L, false);
