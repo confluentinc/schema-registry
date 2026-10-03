@@ -111,6 +111,8 @@ public final class ProvenanceComputer {
   private static final String TYPE = "t:";
   // Scalar types whose JSON values can coincide, by family: numeric, character, binary.
   private static final Map<String, String> SCALAR_FAMILIES = new HashMap<>();
+  private static final String TYPE_CHARACTER = "CHARACTER";
+  private static final String TYPE_BINARY = "BINARY";
 
   static {
     for (String type : Arrays.asList("TINYINT", "SMALLINT", "INT", "BIGINT", "FLOAT", "DOUBLE",
@@ -118,10 +120,10 @@ public final class ProvenanceComputer {
       SCALAR_FAMILIES.put(type, "NUMERIC");
     }
     for (String type : Arrays.asList("VARCHAR", "CHAR", "ENUM")) {
-      SCALAR_FAMILIES.put(type, "CHARACTER");
+      SCALAR_FAMILIES.put(type, TYPE_CHARACTER);
     }
     for (String type : Arrays.asList("VARBINARY", "BINARY")) {
-      SCALAR_FAMILIES.put(type, "BINARY");
+      SCALAR_FAMILIES.put(type, TYPE_BINARY);
     }
   }
 
@@ -296,6 +298,8 @@ public final class ProvenanceComputer {
     private Set<String> keys;
     // A memberless branch's content with each scalar type as its family; null for one with members.
     private Set<String> values;
+    // The same with binary as character: in a JSON document, bytes are base64 strings.
+    private Set<String> strings;
     private String title;
 
     /** This node's member groups, keyed by the collection steps leading to each. */
@@ -622,6 +626,7 @@ public final class ProvenanceComputer {
         node.content = contentOf(node);
         node.keys = node.content != null ? discriminatorKeys(node.content) : null;
         node.values = node.content != null ? valuesOf(node.content) : null;
+        node.strings = node.values != null ? asStrings(node.values) : null;
       }
       return nodes;
     }
@@ -1140,7 +1145,8 @@ public final class ProvenanceComputer {
      * discriminator, as when it moved and its members changed, repeated while it pairs any; for a
      * branch with no members, the one whose values can coincide with its own — the same scalar
      * family (numeric, character or binary), or an array or map whose items or values do — each
-     * the other's only such branch, as a property's scalar change continues; one at the same
+     * the other's only such branch, as a property's scalar change continues, then, of those left,
+     * a character with a binary branch, both strings in a document; one at the same
      * position sharing a member with it, where overlap alone cannot tell; else it is new. None
      * continues another across a discriminator a branch related to them has (see
      * {@link #crosses}), nor across a hint: two branches hinted otherwise are different branches,
@@ -1149,7 +1155,7 @@ public final class ProvenanceComputer {
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      for (int phase = 0; phase < 7; phase++) {
+      for (int phase = 0; phase < 8; phase++) {
         boolean progressed = false;
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
@@ -1189,6 +1195,12 @@ public final class ProvenanceComputer {
             found = peer.values == null ? null : mutual(peer, unresolved(peers, matched), previous,
                 (a, p) -> !taken.contains(p) && a.values != null && a.values.equals(p.values)
                     && !otherHints(a, p));
+          } else if (phase == 6) {
+            // Then a character and a binary branch, which in a JSON document both hold strings,
+            // as Avro's string and bytes promote to each other: only those left unpaired.
+            found = peer.strings == null ? null : mutual(peer, unresolved(peers, matched),
+                previous, (a, p) -> !taken.contains(p) && a.strings != null
+                    && a.strings.equals(p.strings) && !otherHints(a, p));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
                 && overlaps(peer.content, p.content)
@@ -1225,6 +1237,16 @@ public final class ProvenanceComputer {
             + SCALAR_FAMILIES.getOrDefault(type, type));
       }
       return values;
+    }
+
+    // Values with each binary family entry as character.
+    private static Set<String> asStrings(Set<String> values) {
+      Set<String> strings = new TreeSet<>();
+      for (String entry : values) {
+        strings.add(entry.endsWith(TYPE_BINARY)
+            ? entry.substring(0, entry.length() - TYPE_BINARY.length()) + TYPE_CHARACTER : entry);
+      }
+      return strings;
     }
 
     // The peers not yet paired: one paired already cannot take another previous branch.

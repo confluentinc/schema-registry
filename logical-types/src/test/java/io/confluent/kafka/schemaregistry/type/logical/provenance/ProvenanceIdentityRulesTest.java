@@ -546,6 +546,44 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aJsonStringBranchBecomingBytesKeepsItsPid() {
+    // JSON writes Connect bytes as base64 strings, so a string and a bytes branch left unpaired
+    // continue, as Avro's string and bytes do.
+    String s = "{\"type\":\"string\"}";
+    String bytes = "{\"type\":\"string\",\"connect.type\":\"bytes\"}";
+    String union = "{\"x\":{\"oneOf\":[%s,{\"type\":\"boolean\"}]}}";
+    for (String[] change : new String[][] {{s, bytes}, {bytes, s}}) {
+      List<ProvenanceVersion> v = compute(json(String.format(union, change[0]), null),
+          json(String.format(union, change[1]), null));
+      assertThat(pid(v, 1, 0, 0)).as(change[1]).isEqualTo(pid(v, 0, 0, 0));
+    }
+  }
+
+  @Test
+  void aJsonCharacterAndBinaryBranchEachKeepTheirFamilysPairing() {
+    // Within each family first: the string continues as the enum and the fixed bytes as the
+    // bytes, rather than the two families' four branches leaving every one ambiguous.
+    String fixed = "{\"type\":\"string\",\"connect.type\":\"bytes\","
+        + "\"flink.minLength\":4,\"flink.maxLength\":4}";
+    String v1 = "{\"x\":{\"oneOf\":[{\"type\":\"string\"}," + fixed + "]}}";
+    String v2 = "{\"x\":{\"oneOf\":[{\"type\":\"string\",\"enum\":[\"a\"]},"
+        + "{\"type\":\"string\",\"connect.type\":\"bytes\"}]}}";
+    List<ProvenanceVersion> v = compute(json(v1, null), json(v2, null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aNumericEnumBranchIsInTheCharacterFamilyAsTheLogicalTypeSpellsIt() {
+    // The logical type spells every enum symbol as a string, so a numeric enum is an ENUM, of the
+    // character family, until the converter records a symbol's JSON type.
+    String union = "{\"x\":{\"oneOf\":[%s,{\"type\":\"boolean\"}]}}";
+    List<ProvenanceVersion> v = compute(json(String.format(union, "{\"enum\":[1,2]}"), null),
+        json(String.format(union, "{\"type\":\"string\"}"), null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
   void aJsonBranchOfAnotherScalarFamilyIsNew() {
     String union = "{\"x\":{\"oneOf\":[{\"type\":\"%s\"},{\"type\":\"boolean\"}]}}";
     List<ProvenanceVersion> v = compute(json(String.format(union, "integer"), null),

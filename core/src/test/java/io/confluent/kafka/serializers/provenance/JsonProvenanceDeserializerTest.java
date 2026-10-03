@@ -1410,6 +1410,18 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aStringBranchBecomingBytesKeepsItsValue() throws Exception {
+    String union = "\"f\": {\"oneOf\": [%s, {\"type\": \"boolean\"}]}";
+    JsonSchema v1 = object(String.format(union, "{\"type\": \"string\"}"));
+    JsonSchema v2 = object(String.format(union,
+        "{\"type\": \"string\", \"connect.type\": \"bytes\"}"));
+    byte[] bytes = write(v1, "{\"f\": \"YWJj\"}");
+    client.register(SUBJECT, v2);
+
+    assertEquals("YWJj", read(v2, bytes, "v1").get("f").asText());
+  }
+
+  @Test
   void anArrayBranchWhoseItemsWidenedKeepsItsValue() throws Exception {
     String union = "\"x\": {\"oneOf\": [{\"type\": \"array\", \"items\": {\"type\": \"%s\"}}, "
         + "{\"type\": \"string\"}]}";
