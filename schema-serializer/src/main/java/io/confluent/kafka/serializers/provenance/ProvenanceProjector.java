@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.provenance.strategy.ClientProvenanceStrategy;
 import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
@@ -151,19 +152,25 @@ public final class ProvenanceProjector<T> {
       if (reader.getId() == null && reader.getVersion() == null) {
         return reader.getSchema();
       }
-      // The pin goes on a copy kept for this instance and pin, never on the caller's instance:
-      // handed over later without one, or with another, it must not read as pinned to this.
-      Pin pin = new Pin(reader.getId(), reader.getSubject(), reader.getVersion());
-      ParsedSchema copy;
-      try {
-        copy = pinnedCopies.get(reader.getSchema(), ConcurrentHashMap::new)
-            .computeIfAbsent(pin, p -> reader.getSchema().copy());
-      } catch (ExecutionException e) {
-        throw new IllegalStateException(e.getCause());
-      }
-      suppliedReaderInstances.put(copy, pin);
-      return copy;
+      return pinnedCopy(reader.getSchema(),
+          new Pin(reader.getId(), reader.getSubject(), reader.getVersion()));
     };
+  }
+
+  /**
+   * The copy of {@code schema} kept for {@code pin}, pinned. The instance itself is never marked:
+   * handed over later without a pin, or with another, it must not read as pinned to this one.
+   */
+  private ParsedSchema pinnedCopy(ParsedSchema schema, Pin pin) {
+    ParsedSchema copy;
+    try {
+      copy = pinnedCopies.get(schema, ConcurrentHashMap::new)
+          .computeIfAbsent(pin, p -> schema.copy());
+    } catch (ExecutionException e) {
+      throw new IllegalStateException(e.getCause());
+    }
+    suppliedReaderInstances.put(copy, pin);
+    return copy;
   }
 
   /**
@@ -178,18 +185,17 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * {@code copy}, which a deserializer made of {@code reader}, standing for the same version:
-   * any id or version supplied with {@code reader} is {@code copy}'s too. The Protobuf
-   * deserializer shares one copy among equal readers; equal Protobuf schemas are one registered
-   * version, so the pin holds for each.
+   * {@code copy}, which a deserializer made of {@code reader}, as it stands for the same version:
+   * pinned as {@code reader} is, through a copy of it kept for that pin. The Protobuf deserializer
+   * shares one copy among equal readers, pinned otherwise or not at all, so it is never marked.
    */
   public ParsedSchema sameReader(ParsedSchema reader, ParsedSchema copy) {
     Pin pin = pinOf(reader);
-    if (pin != null && copy != reader) {
-      suppliedReaderInstances.put(copy, pin);
-    }
-    return copy;
+    // The deserializer may share copy among equal readers, pinned otherwise or not at all: the
+    // pin goes on a copy of it kept for this pin.
+    return pin == null || copy == reader ? copy : pinnedCopy(copy, pin);
   }
+
 
   /**
    * {@code reader}, marked as derived from a generated class. Its text is synthesized from the
@@ -488,11 +494,28 @@ public final class ProvenanceProjector<T> {
     if (pin == null || pin.version == null) {
       return null;
     }
-    if (!pin.subject.equals(subject)) {
+    if (!namesSubject(pin.subject, subject)) {
       throw new SerializationException("The reader is pinned to version " + pin.version
           + " of subject " + pin.subject + ", but the record's subject is " + subject);
     }
     return pin.version;
+  }
+
+  // Whether pinned names the record's subject: in its context, or naming none, in the record's.
+  private static boolean namesSubject(String pinned, String subject) {
+    if (pinned.equals(subject)) {
+      return true;
+    }
+    QualifiedSubject record = QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
+    if (record == null) {
+      return false;
+    }
+    if (!pinned.startsWith(QualifiedSubject.CONTEXT_PREFIX)) {
+      return pinned.equals(record.getSubject());
+    }
+    QualifiedSubject pin = QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, pinned);
+    return pin != null && pin.getContext().equals(record.getContext())
+        && pin.getSubject().equals(record.getSubject());
   }
 
   private Integer registeredId(String subject, ParsedSchema schema)

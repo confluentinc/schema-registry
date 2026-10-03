@@ -566,13 +566,19 @@ final class JsonProvenancePruner {
           .removeIf(d -> d.node.get(d.name) == null || placed.getOrDefault(d.node,
               Collections.emptySet()).contains(d.name)));
     }
+    // A deferred property whose object was pruned since stands for nothing in the document.
+    Set<JsonNode> attached = Collections.newSetFromMap(new IdentityHashMap<>());
+    if (!deferred.isEmpty()) {
+      addContainers(document, attached);
+    }
     // A default put for one deferred property can make another required, as along a chain of
     // dependencies: decided again until none is put.
     boolean put = true;
     while (put) {
       put = false;
       for (Deferred d : deferred) {
-        if (!d.node.has(d.name) && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
+        if (attached.contains(d.node) && !d.node.has(d.name)
+            && requiredInEveryReading(d.reaches, d.name, d.node, true)) {
           placeDefault(d.node, d.reaches, d.name, d.names);
           put = true;
         }

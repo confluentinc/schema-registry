@@ -58,7 +58,8 @@ public final class ReaderSchema {
 
   /**
    * A reader standing for version {@code version} of {@code subject}, soft-deleted or not. A
-   * record whose subject is another fails, rather than be read against another subject's version.
+   * subject naming no context is the record's own context's. A record whose subject is another
+   * fails, rather than be read against another subject's version.
    */
   public static ReaderSchema of(ParsedSchema schema, String subject, int version) {
     Objects.requireNonNull(subject, "subject");

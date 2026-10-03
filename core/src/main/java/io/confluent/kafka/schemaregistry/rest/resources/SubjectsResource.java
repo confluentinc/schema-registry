@@ -336,9 +336,10 @@ public class SubjectsResource {
   @DocumentedName("getProvenance")
   @PerformanceMetric("subjects.provenance.get")
   @Operation(summary = "Get column provenance between two versions",
-      description = "Retrieves, for each version in the range, every column's inlined path and a "
-          + "provenance id that is stable across renames. Address each end of the range either "
-          + "by version (fromVersion, toVersion) or by schema id (fromId, toId), in any mix.",
+      description = "Retrieves, for the range's two ends (or, with includeInterior, every version "
+          + "between them), every column's inlined path and a provenance id that is stable "
+          + "across renames. Address each end of the range either by version (fromVersion, "
+          + "toVersion) or by schema id (fromId, toId), in any mix, and in either order.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -361,16 +362,18 @@ public class SubjectsResource {
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
               description = "Internal Server Error. "
-                  + "Error code 50001 indicates a failure in the backend data store.",
+                  + "Error code 50001 indicates a failure in the backend data store. "
+                  + "Error code 500 indicates a failure computing provenance that no other code "
+                  + "names.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   public SchemaProvenance getProvenance(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
-      @Parameter(description = "First version of the range, or \"latest\"")
+      @Parameter(description = "Version at one end of the range, or \"latest\"")
       @QueryParam("fromVersion") String fromVersion,
-      @Parameter(description = "Last version of the range, or \"latest\"")
+      @Parameter(description = "Version at the other end of the range, or \"latest\"")
       @QueryParam("toVersion") String toVersion,
       @Parameter(description = "Schema id at one end of the range")
       @QueryParam("fromId") Integer fromId,

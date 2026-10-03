@@ -1453,6 +1453,64 @@ class ProtobufProvenanceDeserializerTest {
     }
   }
 
+  @Test
+  void aPinDoesNotReachALaterEqualReaderThroughTheSharedNamedCopy() throws Exception {
+    // v3 equals v1 but for metadata, and note was dropped at v2, so v3's note is new. Equal
+    // readers share one named copy in the deserializer: a pin put on it reached unpinned readers.
+    ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
+    byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7).setField(field(b, "note"), "ada"));
+    client.register(SUBJECT, row("int32 id = 1;"));
+    client.register(SUBJECT, withMetadata(v1, "v3"));
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config("v1"));
+    ProtobufSchema pinnedReader = withMetadata(v1, "merged");
+
+    assertEquals("ada", get(readPinned(deserializer, bytes, pinnedReader, 1), "note"));
+    assertEquals("", get((DynamicMessage) deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> withMetadata(v1, "merged"), false).getValue(), "note"));
+    assertEquals("", get(readPinned(deserializer, bytes, withMetadata(v1, "merged"), 3), "note"));
+    assertEquals("ada", get(readPinned(deserializer, bytes, pinnedReader, 1), "note"));
+  }
+
+  @Test
+  void pinsInterleavedAcrossAMultiMessageFileKeepToTheirOwnReads() throws Exception {
+    // v3 equals v1 but for metadata, and note was dropped at v2, so v3's notes are new. Records of
+    // A and B are read pinned to v1, pinned to v3, and unpinned, in turn, on one deserializer.
+    String messages = "message A {\n  int32 id = 1;%s\n}\nmessage B {\n  int32 id = 1;%s\n}\n";
+    ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + String.format(messages, " string note = 2;", " string note = 2;"));
+    ProtobufSchema v2 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + String.format(messages, "", ""));
+    int id = client.register(SUBJECT, v1);
+    Map<String, Object> pinToV1 = config(null);
+    pinToV1.put("use.schema.id", id);
+    KafkaProtobufSerializer<DynamicMessage> writer = new KafkaProtobufSerializer<>(client, pinToV1);
+    Map<String, byte[]> records = new HashMap<>();
+    for (String message : new String[] {"p.A", "p.B"}) {
+      Descriptor descriptor = v1.toDescriptor(message);
+      records.put(message, writer.serialize(TOPIC, DynamicMessage.newBuilder(descriptor)
+          .setField(descriptor.findFieldByName("id"), 7)
+          .setField(descriptor.findFieldByName("note"), "ada").build()));
+    }
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, withMetadata(v1, "v3"));
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config("v1"));
+    ProtobufSchema pinned = withMetadata(v1, "merged");
+
+    String[][] reads = {{"p.A", "1"}, {"p.B", "-"}, {"p.B", "1"}, {"p.A", "-"},
+        {"p.A", "3"}, {"p.B", "3"}, {"p.A", "1"}, {"p.B", "-"}};
+    for (String[] read : reads) {
+      byte[] bytes = records.get(read[0]);
+      DynamicMessage got = read[1].equals("-")
+          ? (DynamicMessage) deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), bytes,
+              w -> withMetadata(v1, "merged"), false).getValue()
+          : readPinned(deserializer, bytes, pinned, Integer.parseInt(read[1]));
+      assertEquals(read[1].equals("1") ? "ada" : "", get(got, "note"),
+          read[0] + " read pinned to " + read[1]);
+    }
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1464,6 +1522,12 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(off.toString(), on.toString());
     assertFalse(on.toString().isEmpty() && !off.toString().isEmpty());
     return on;
+  }
+
+  private static DynamicMessage readPinned(KafkaProtobufDeserializer<DynamicMessage> deserializer,
+      byte[] bytes, ProtobufSchema reader, int version) {
+    return (DynamicMessage) deserializer.deserializeWithReaderSchema(TOPIC, new RecordHeaders(),
+        bytes, w -> ReaderSchema.of(reader, SUBJECT, version), false).getValue();
   }
 
   private byte[] write(ProtobufSchema writer, Consumer<DynamicMessage.Builder> record)

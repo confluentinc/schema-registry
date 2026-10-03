@@ -1318,6 +1318,41 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aDeferredPropertyWhoseObjectWasPrunedSinceIsNotDecided() throws Exception {
+    // x is new and deferred, a requiring it; pruning it leaves o fitting only B's closed object,
+    // so o goes whole. x's requirement then stood for nothing, yet failed the record.
+    String o = "{\"type\": \"object\", \"properties\": {\"a\": {\"type\": \"string\"}%s}%s}";
+    String a = "{\"type\": \"object\", \"properties\": {\"kind\": {\"enum\": [\"k1\"]}, "
+        + "\"o\": %s}}";
+    String b = ", {\"type\": \"object\", \"properties\": {\"o\": "
+        + String.format(o, "", ", \"additionalProperties\": false") + "}}";
+    String body = "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [%s%s]}}}";
+    String dependency = ", \"dependencies\": {\"a\": [\"x\"]}";
+    for (String branchB : new String[] {b, ""}) {
+      client = new ProvenanceMockSchemaRegistryClient();
+      serializer = new KafkaJsonSchemaSerializer<>(client, config(null));
+      JsonSchema v1 = new JsonSchema(String.format(body,
+          String.format(a, String.format(o, ", " + string("x"), dependency)), branchB));
+      JsonSchema v2 = new JsonSchema(String.format(body,
+          String.format(a, String.format(o, "", "")), branchB));
+      JsonSchema v3 = new JsonSchema(String.format(body, String.format(a, String.format(o,
+          ", \"x\": {\"type\": \"string\", \"description\": \"new\"}", dependency)), branchB));
+      byte[] bytes = write(v1,
+          "{\"p\": {\"kind\": \"k1\", \"o\": {\"a\": \"s\", \"x\": \"old\"}}}");
+      client.register(SUBJECT, v2);
+      client.register(SUBJECT, v3);
+
+      if (branchB.isEmpty()) {
+        // Control: o stays, so x is still required and has no default.
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertTrue(e.getCause().getMessage().startsWith("Property [p, o, x] is new to the reader"));
+      } else {
+        assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "v1"));
+      }
+    }
+  }
+
+  @Test
   void aRootUnionIsReadOverTheWire() throws Exception {
     // A root union's branches have no names of their own: the response must still carry them.
     String root = "{\"oneOf\": [{\"type\": \"object\", \"properties\": {%s}}, "

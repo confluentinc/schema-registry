@@ -86,8 +86,9 @@ import java.util.function.ToIntFunction;
  * what the previous version called a location, never one of its aliases nor any older name. An
  * explicit alias wins, as Avro renames a writer field to the reader field aliasing it even when one
  * of that name exists. A peer continuing itself may carry its aliases forward, but not claim
- * another location with a new one. Each previous location has at most one continuation and each
- * peer continues at most one; where Avro itself cannot say which, the history is ambiguous.
+ * another location with a new one, unless the peers' new aliases permute their names: a swap or
+ * rotation, read as the aliases intend. Each previous location has at most one continuation and
+ * each peer continues at most one; where Avro itself cannot say which, the history is ambiguous.
  *
  * <h2>Allocation</h2>
  *

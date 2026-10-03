@@ -408,6 +408,25 @@ class ProvenanceIdentityRulesTest {
     assertThat(pidByNames(v, 1, "u", "b")).isEqualTo(pidByNames(v, 0, "u", "b"));
   }
 
+  @Test
+  void aJsonUnionCollapsingToANullableScalarRestarts() {
+    // oneOf [string, null] is a nullable string: the union's kind changes, so u is a new location.
+    List<ProvenanceVersion> v = compute(
+        json("{\"u\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}", null),
+        json("{\"u\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}}", null));
+    assertThat(pidByNames(v, 1, "u")).isNotEqualTo(pidByNames(v, 0, "u"));
+  }
+
+  @Test
+  void aProtobufListFlinkWrappedContinues() {
+    // The wrapper is transparent: both are an ARRAY<SCALAR> at xs.
+    List<ProvenanceVersion> v = compute(
+        wrappedProto("  int32 id = 1;\n  repeated int32 xs = 2;"),
+        wrappedProto("  int32 id = 1;\n  WL xs = 2" + WRAPPED + ";\n"
+            + "  message WL {\n    repeated int32 value = 1;\n  }"));
+    assertThat(pidByNames(v, 1, "xs")).isEqualTo(pidByNames(v, 0, "xs"));
+  }
+
   private static final String WRAPPED =
       " [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", value: \"true\"}]}]";
 

@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.test.Readded;
 import java.io.ByteArrayOutputStream;
@@ -593,6 +594,52 @@ class AvroProvenanceStrictnessTest {
 
     assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
         TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, foreign), false));
+  }
+
+  @Test
+  void aVersionPinWithoutAContextNamesTheRecordsOwnContext() throws Exception {
+    // Records of a context strategy's topic are of :.ctx:strict-value; a caller pins by the name
+    // it knows. Another context named outright still fails.
+    String subject = ":.ctx:" + SUBJECT;
+    Schema v1 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}]}");
+    Schema v2 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}");
+    Schema v3 = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"},"
+        + "{\"name\":\"extra\",\"type\":\"int\",\"default\":0}]}");
+    client.register(subject, new AvroSchema(v1));
+    client.register(subject, new AvroSchema(v2));
+    client.register(subject, new AvroSchema(v3));
+    Map<String, Object> config = config(null);
+    config.put("context.name.strategy", InContext.class.getName());
+    byte[] bytes = new KafkaAvroSerializer(client, config).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
+    config.put("provenance.algorithm", "v1");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+    AvroSchema reader = new AvroSchema(v3);
+
+    for (String pinned : new String[] {subject, SUBJECT}) {
+      GenericRecord read = (GenericRecord) deserializer.deserializeWithReaderSchema(TOPIC,
+          new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, pinned, 3), false).getValue();
+      assertEquals("", read.get("note").toString());
+    }
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, ":.other:" + SUBJECT, 3),
+        false));
+  }
+
+  public static class InContext implements ContextNameStrategy {
+    @Override
+    public void configure(Map<String, ?> configs) {
+    }
+
+    @Override
+    public String contextName(String topic) {
+      return "ctx";
+    }
   }
 
   // -------------------------------------------------------------------------------------------
