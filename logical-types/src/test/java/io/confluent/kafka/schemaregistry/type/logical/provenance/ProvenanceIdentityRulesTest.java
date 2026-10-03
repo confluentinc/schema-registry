@@ -525,6 +525,27 @@ class ProvenanceIdentityRulesTest {
     }
   }
 
+  @Test
+  void aJsonIntegerBranchWidenedToNumberKeepsItsPid() {
+    // A primitive branch has only its type for content, so no content phase pairs integer with
+    // number: the widening continues it, as a property's scalar change does.
+    String union = "{\"x\":{\"oneOf\":[{\"type\":\"%s\"},{\"type\":\"string\"}]}}";
+    List<ProvenanceVersion> v = compute(json(String.format(union, "integer"), null),
+        json(String.format(union, "number"), null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
+  void aJsonIntegerBranchWidenedWhereTwoNumbersCouldTakeItIsNew() {
+    String v1 = "{\"x\":{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]}}";
+    String v2 = "{\"x\":{\"oneOf\":[{\"type\":\"number\",\"maximum\":0},"
+        + "{\"type\":\"number\",\"minimum\":1},{\"type\":\"string\"}]}}";
+    List<ProvenanceVersion> v = compute(json(v1, null), json(v2, null));
+    assertThat(pid(v, 1, 0, 0)).isNotEqualTo(pid(v, 0, 0, 0));
+    assertThat(pid(v, 1, 0, 1)).isNotEqualTo(pid(v, 0, 0, 0));
+  }
+
   // An object branch titled so, holding one number property of each name.
   private static String titled(String title, String... numbers) {
     StringBuilder properties = new StringBuilder();

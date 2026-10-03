@@ -1398,6 +1398,17 @@ class JsonProvenanceDeserializerTest {
     assertEquals(MAPPER.readTree("{\"root\": " + kept + "}"), read);
   }
 
+  @Test
+  void anIntegerBranchWidenedToNumberKeepsItsValue() throws Exception {
+    String union = "\"x\": {\"oneOf\": [{\"type\": \"%s\"}, {\"type\": \"string\"}]}";
+    JsonSchema v1 = object(String.format(union, "integer"));
+    JsonSchema v2 = object(String.format(union, "number"));
+    byte[] bytes = write(v1, "{\"x\": 3}");
+    client.register(SUBJECT, v2);
+
+    assertEquals(3, read(v2, bytes, "v1").get("x").asInt());
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private byte[] write(JsonSchema writer, String json) throws Exception {

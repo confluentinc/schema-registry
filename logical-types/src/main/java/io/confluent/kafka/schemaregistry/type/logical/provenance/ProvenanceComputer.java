@@ -109,6 +109,9 @@ public final class ProvenanceComputer {
   private static final String MEMBER = "m:";
   private static final String DISCRIMINATOR = "d:";
   private static final String TYPE = "t:";
+  // JSON's numeric scalars, narrowest first: a primitive branch continues one it widens from.
+  private static final List<String> JSON_NUMERIC =
+      Arrays.asList("TINYINT", "SMALLINT", "INT", "BIGINT", "FLOAT", "DOUBLE");
   // How deep a JSON branch's content looks: enough to tell usual branches apart, and bounded.
   private static final int CONTENT_DEPTH = 3;
 
@@ -1118,7 +1121,9 @@ public final class ProvenanceComputer {
      * peer shares it; the previous branch it shares strictly the most members with, and it with
      * that one, a member every untaken previous branch has (or, with one left, every previous
      * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
-     * discriminator, as when it moved and its members changed, repeated while it pairs any; one
+     * discriminator, as when it moved and its members changed, repeated while it pairs any; for
+     * a primitive numeric branch, the one previous primitive branch it widens from (integer to
+     * number), each the other's only such pairing, as a property's scalar change continues; one
      * at the same position sharing a member with it, where overlap alone cannot tell; else it is
      * new. None continues another across a discriminator a branch related
      * to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise are
@@ -1127,7 +1132,7 @@ public final class ProvenanceComputer {
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
       Set<Node> taken = Collections.newSetFromMap(new IdentityHashMap<>());
-      for (int phase = 0; phase < 6; phase++) {
+      for (int phase = 0; phase < 7; phase++) {
         boolean progressed = false;
         for (Node peer : peers) {
           if (matched.containsKey(peer)) {
@@ -1163,6 +1168,10 @@ public final class ProvenanceComputer {
                   && overlaps(a.content, p.content) && !otherHints(a, p)
                   && !crosses(a, p, peers, matched, previous, taken));
             }
+          } else if (phase == 5) {
+            found = numericType(peer.content) == null ? null : mutual(peer,
+                unresolved(peers, matched), previous,
+                (a, p) -> !taken.contains(p) && widens(p.content, a.content) && !otherHints(a, p));
           } else {
             found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
                 && overlaps(peer.content, p.content)
@@ -1180,6 +1189,24 @@ public final class ProvenanceComputer {
           phase--;
         }
       }
+    }
+
+    // Whether a primitive branch of content mine widens, as a JSON value, into one of theirs.
+    private static boolean widens(Set<String> mine, Set<String> theirs) {
+      String from = numericType(mine);
+      String to = numericType(theirs);
+      return from != null && to != null
+          && JSON_NUMERIC.indexOf(from) < JSON_NUMERIC.indexOf(to);
+    }
+
+    // A primitive branch's numeric type, its content's one entry; null for any other branch.
+    private static String numericType(Set<String> content) {
+      if (content == null || content.size() != 1) {
+        return null;
+      }
+      String entry = content.iterator().next();
+      String type = entry.startsWith(TYPE) ? entry.substring(TYPE.length()) : null;
+      return JSON_NUMERIC.contains(type) ? type : null;
     }
 
     // The peers not yet paired: one paired already cannot take another previous branch.
