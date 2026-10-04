@@ -599,6 +599,28 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void enumBranchesContinueByTheirValuesNotTheirPosition() {
+    // A memberless enum's values are its members: each const continues the branch holding its
+    // value, wherever it is listed, rather than the one at its position.
+    String a = "{\"const\":\"a\"}";
+    String b = "{\"const\":\"b\"}";
+    List<ProvenanceVersion> inserted = compute(union(a, b), union("{\"const\":\"z\"}", a, b));
+    assertThat(pid(inserted, 1, 0, 0)).isNotIn(pids(inserted, 0).values());
+    assertThat(pid(inserted, 1, 0, 1)).isEqualTo(pid(inserted, 0, 0, 0));
+    assertThat(pid(inserted, 1, 0, 2)).isEqualTo(pid(inserted, 0, 0, 1));
+    List<ProvenanceVersion> reordered = compute(union(a, b), union(b, a));
+    assertThat(pid(reordered, 1, 0, 0)).isEqualTo(pid(reordered, 0, 0, 1));
+    assertThat(pid(reordered, 1, 0, 1)).isEqualTo(pid(reordered, 0, 0, 0));
+    // And an enum gaining a value continues by the most it shares.
+    String ab = "{\"type\":\"string\",\"enum\":[\"a\",\"b\"]}";
+    String xy = "{\"type\":\"string\",\"enum\":[\"x\",\"y\"]}";
+    String xyz = "{\"type\":\"string\",\"enum\":[\"x\",\"y\",\"z\"]}";
+    List<ProvenanceVersion> grown = compute(union(ab, xy), union(xyz, ab));
+    assertThat(pid(grown, 1, 0, 0)).isEqualTo(pid(grown, 0, 0, 1));
+    assertThat(pid(grown, 1, 0, 1)).isEqualTo(pid(grown, 0, 0, 0));
+  }
+
+  @Test
   void aJsonBranchPairingDoesNotDependOnBranchOrder() {
     // {a,g} and t2{a,e,g} each overlap both {a} and {a,e,g}: whichever pairing came first in
     // union order decided what the other crossed. Listed either way, they pair alike.

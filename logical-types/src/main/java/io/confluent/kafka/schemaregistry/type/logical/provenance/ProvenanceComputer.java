@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
@@ -121,6 +122,8 @@ public final class ProvenanceComputer {
   private static final String MEMBER = "m:";
   private static final String DISCRIMINATOR = "d:";
   private static final String TYPE = "t:";
+  // A memberless enum's permitted value: what tells consts and enums of one type apart.
+  private static final String SYMBOL = "s:";
   // Scalar types by family as the logical type spells them: numeric, character, binary.
   private static final Map<String, String> SCALAR_FAMILIES = new HashMap<>();
   private static final String TYPE_CHARACTER = "CHARACTER";
@@ -1171,7 +1174,8 @@ public final class ProvenanceComputer {
      * its branch; the one previous branch of its title, where no unpaired peer has it and no
      * discriminator conflicts — a title only documents in V1, so one changed only leaves the
      * branch to the phases below; the one previous branch of the same content, where no unpaired
-     * peer shares it; the previous branch it shares strictly the most members with, and it with
+     * peer shares it; the previous branch it shares strictly the most members with (properties, or
+   * a memberless enum's values, which also tell such branches' content apart), and it with
      * that one, a member every untaken previous branch has (or, with one left, every previous
      * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
      * discriminator, as when it moved and its members changed, repeated while it pairs any, in an
@@ -1263,6 +1267,9 @@ public final class ProvenanceComputer {
     private static Set<String> valuesOf(Set<String> content) {
       Set<String> values = new TreeSet<>();
       for (String entry : content) {
+        if (entry.startsWith(SYMBOL)) {
+          continue;
+        }
         if (!entry.startsWith(TYPE)) {
           return null;
         }
@@ -1364,7 +1371,7 @@ public final class ProvenanceComputer {
     private static int sharedMembers(Node a, Node p, Set<String> envelope) {
       int n = 0;
       for (String entry : a.content) {
-        if (entry.startsWith(MEMBER) && p.content.contains(entry) && !envelope.contains(entry)) {
+        if (isMemberLike(entry) && p.content.contains(entry) && !envelope.contains(entry)) {
           n++;
         }
       }
@@ -1385,7 +1392,7 @@ public final class ProvenanceComputer {
         untaken++;
         Set<String> members = new HashSet<>();
         for (String entry : p.content) {
-          if (entry.startsWith(MEMBER)) {
+          if (isMemberLike(entry)) {
             members.add(entry);
           }
         }
@@ -1414,7 +1421,7 @@ public final class ProvenanceComputer {
       if (mine.equals(theirs)) {
         return true;
       }
-      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry)
+      return mine.stream().anyMatch(entry -> isMemberLike(entry) && theirs.contains(entry)
           && !envelope.contains(entry));
     }
 
@@ -1438,7 +1445,7 @@ public final class ProvenanceComputer {
         // Nothing tells them apart, even with no members: as alike as they can be.
         return true;
       }
-      return mine.stream().anyMatch(entry -> entry.startsWith(MEMBER) && theirs.contains(entry));
+      return mine.stream().anyMatch(entry -> isMemberLike(entry) && theirs.contains(entry));
     }
 
     /** Whether a discriminator of one branch is named differently by the other. */
@@ -1607,8 +1614,23 @@ public final class ProvenanceComputer {
           break;
         default:
           content.add(TYPE + prefix + body.getType().name());
+          if (body.getType() == Schema.Type.ENUM && isValuePath(prefix)) {
+            for (EnumValue value : body.getEnumValues()) {
+              content.add(SYMBOL + prefix + contentStep(value.getSymbol()));
+            }
+          }
           break;
       }
+    }
+
+    // Whether a content path reaches a branch's own value, through collections only.
+    private static boolean isValuePath(String prefix) {
+      return prefix.replace("[]/", "").replace("{}/", "").isEmpty();
+    }
+
+    // A member, or a memberless enum's value: what branches share as evidence.
+    private static boolean isMemberLike(String entry) {
+      return entry.startsWith(MEMBER) || entry.startsWith(SYMBOL);
     }
 
     private static boolean isDiscriminator(Schema type) {

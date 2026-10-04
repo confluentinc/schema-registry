@@ -645,6 +645,22 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aConstBranchReorderedOrInsertedKeepsItsValue() throws Exception {
+    // Each const continues the branch holding its value, so neither change prunes it.
+    String a = "{\"const\": \"a\"}";
+    String b = "{\"const\": \"b\"}";
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [" + a + ", " + b + "]}");
+    byte[] bytes = write(v1, "{\"u\": \"b\"}");
+    JsonSchema inserted = object("\"u\": {\"oneOf\": [{\"const\": \"z\"}, " + a + ", " + b + "]}");
+    client.register(SUBJECT, inserted);
+    assertEquals("b", read(inserted, bytes, "v1").path("u").asText());
+
+    JsonSchema reordered = object("\"u\": {\"oneOf\": [" + b + ", " + a + "]}");
+    client.register(SUBJECT, reordered);
+    assertEquals("b", read(reordered, bytes, "v1").path("u").asText());
+  }
+
+  @Test
   void aBranchThatMovesAndGainsAMemberKeepsItsValues() throws Exception {
     String a = "{\"type\": \"object\", \"properties\": {" + number("x") + "}}";
     String b = "{\"type\": \"object\", \"properties\": {" + number("y") + "}}";
