@@ -418,6 +418,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     // as another has no locations there, so it is read without provenance.
     Descriptor written = named.toDescriptor();
     boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
+    if (!placed && reader.toDescriptor(name) == null) {
+      // Read without provenance, the record would be parsed as the reader's first message.
+      throw new SerializationException("The record was written as message " + name
+          + ", which the reader schema does not declare");
+    }
     return provenanceProjector().project(subject, writerId, named, reader, multi,
         mapping -> {
           if (!placed) {

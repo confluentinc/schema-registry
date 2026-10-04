@@ -535,8 +535,8 @@ public class ProtoToLogicalTypeConverter {
     // Seed with start's direct children so we don't immediately match start
     // itself (which would be true for any node, vacuously).
     for (com.google.protobuf.Descriptors.FieldDescriptor f : start.getFields()) {
-      if (f.getType()
-          == com.google.protobuf.Descriptors.FieldDescriptor.Type.MESSAGE) {
+      if (f.getJavaType()
+          == com.google.protobuf.Descriptors.FieldDescriptor.JavaType.MESSAGE) {
         stack.push(f.getMessageType());
       }
     }
@@ -549,8 +549,8 @@ public class ProtoToLogicalTypeConverter {
         continue;
       }
       for (com.google.protobuf.Descriptors.FieldDescriptor f : cur.getFields()) {
-        if (f.getType()
-            == com.google.protobuf.Descriptors.FieldDescriptor.Type.MESSAGE) {
+        if (f.getJavaType()
+            == com.google.protobuf.Descriptors.FieldDescriptor.JavaType.MESSAGE) {
           stack.push(f.getMessageType());
         }
       }
@@ -1018,7 +1018,7 @@ public class ProtoToLogicalTypeConverter {
             .flatMap(getParam(CommonConstants.FLINK_NOT_NULL))
             .map(s -> !Boolean.parseBoolean(s))
             .orElseGet(() ->
-                schema.getType().equals(Type.MESSAGE) && !schema.isRepeated());
+                schema.getJavaType() == FieldDescriptor.JavaType.MESSAGE && !schema.isRepeated());
     if (schema.isRepeated()) {
       return convertRepeated(schema, ctx, isNullableType, indexPath);
     } else {
@@ -1092,7 +1092,9 @@ public class ProtoToLogicalTypeConverter {
         return createStringType(isNullable, schema);
       case BYTES:
         return createBytesType(isNullable, schema);
-      case MESSAGE: {
+      // An edition's DELIMITED message field is a GROUP: the same message, encoded otherwise.
+      case MESSAGE:
+      case GROUP: {
         String fullName = schema.getMessageType().getFullName();
         switch (fullName) {
           case CommonConstants.PROTOBUF_DECIMAL_TYPE:

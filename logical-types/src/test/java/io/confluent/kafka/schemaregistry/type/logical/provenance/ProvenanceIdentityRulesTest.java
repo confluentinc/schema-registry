@@ -306,8 +306,8 @@ class ProvenanceIdentityRulesTest {
 
   @Test
   void aVersionNestingTooDeepHasNoProvenance() {
-    // Each message holds the next: no text nests, yet locations do, past the depth limit (1000),
-    // where the walk would otherwise exhaust the stack.
+    // Each message holds the next: no text nests, yet locations do, past the depth limit (100),
+    // where the walk would otherwise exhaust a 1 MB thread stack.
     StringBuilder chain = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
     for (int i = 0; i < 2000; i++) {
       chain.append("message M").append(i).append(" { M").append(i + 1).append(" p = 1; }\n");
@@ -317,7 +317,7 @@ class ProvenanceIdentityRulesTest {
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), text)),
         ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(text))), false))
         .isInstanceOf(TooManyLocationsException.class)
-        .hasMessageContaining("Version 7 nests locations more than 1000 deep");
+        .hasMessageContaining("Version 7 nests locations more than 100 deep");
   }
 
   @Test

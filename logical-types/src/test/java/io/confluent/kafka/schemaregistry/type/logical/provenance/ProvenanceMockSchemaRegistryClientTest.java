@@ -278,6 +278,20 @@ class ProvenanceMockSchemaRegistryClientTest {
     assertThat(canonical(stitched)).isEqualTo(canonical(whole));
   }
 
+  @Test
+  void aSoftDeletedSchemaRegisteredAgainIsANewVersionCarryingItsId() throws Exception {
+    int v1 = register(record(field("a", "int"), field("b", "int")));
+    register(record(field("b", "int")));
+    int v3 = register(record(field("a", "int"), field("b", "int"), field("c", "int")));
+    client.deleteSchemaVersion(SUBJECT, "1");
+
+    // As the registry: v1's text again is version 4, and v1's id now names it (latest wins).
+    assertThat(register(record(field("a", "int"), field("b", "int")))).isEqualTo(v1);
+    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3, 4);
+    assertThat(client.getProvenanceById(SUBJECT, v1, v3, false, false, null).getVersions())
+        .extracting(ProvenanceVersion::getVersion).containsExactly(3, 4);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------------------------

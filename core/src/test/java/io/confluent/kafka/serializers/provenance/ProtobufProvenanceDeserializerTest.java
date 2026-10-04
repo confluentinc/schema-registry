@@ -21,10 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import com.google.protobuf.TextFormat;
 import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
@@ -406,6 +409,19 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aMessageTheOneMessageReaderDoesNotDeclareFailsTheRecord() throws Exception {
+    ProtobufSchema writer = file("message Order { int32 id = 1; int32 total = 2; }", REFUND);
+    ProtobufSchema reader = file("message Order { int32 id = 1; int32 total = 2; }");
+    byte[] bytes = write(writer, refund(writer, 7, 42));
+    client.register(SUBJECT, reader);
+
+    // Without provenance the refund's amount reads as the order's total.
+    assertEquals(42, get(read(reader, bytes, null), "total"));
+    Exception e = assertThrows(Exception.class, () -> read(reader, bytes, "v1"));
+    assertTrue(trace(e).contains("p.Refund, which the reader schema does not declare"), trace(e));
+  }
+
+  @Test
   void aMessageReaddedAfterAGapDoesNotInheritTheOldData() throws Exception {
     // M is dropped in v2 and re-added in v3 with a new field at the old number.
     String host = "message Host { int32 h = 1; }";
@@ -776,7 +792,7 @@ class ProtobufProvenanceDeserializerTest {
 
   @Test
   void aRecordOfTheSecondMessageFirstLeavesTheFirstMessagesProvenanceAlone() throws Exception {
-    // One writer id, two messages: B's fallback is its own, so A, read after it, still is A.
+    // One writer id, two messages: B's failure is its own, so A, read after it, still is A.
     String b = "message B {\n  int32 x = 1;\n}\n";
     ProtobufSchema v1 = file("message A {\n  int32 id = 1;\n  string note = 2;\n}\n" + b);
     int id = client.register(SUBJECT, v1);
@@ -792,7 +808,8 @@ class ProtobufProvenanceDeserializerTest {
 
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
         new KafkaProtobufDeserializer<>(client, config("v1"));
-    deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), ofB, w -> reader);
+    assertThrows(SerializationException.class,
+        () -> deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), ofB, w -> reader));
     DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), ofA, w -> reader).getValue();
     assertEquals(7, get(read, "id"));
@@ -1656,6 +1673,24 @@ class ProtobufProvenanceDeserializerTest {
     assertEquals(7, get(read(v2, bytes, "v1"), "id"));
   }
 
+  @Test
+  void aDelimitedMessageFieldKeepsProvenance() throws Exception {
+    ProtobufSchema v1 = delimited("field { name: \"b\" number: 2 type: TYPE_INT32 } ");
+    ProtobufSchema v2 = delimited("");
+    ProtobufSchema v3 = delimited("field { name: \"c\" number: 2 type: TYPE_INT32 } ");
+    byte[] bytes = write(v1, b -> {
+      Descriptor sub = field(b, "s").getMessageType();
+      b.setField(field(b, "b"), 9).setField(field(b, "s"),
+          DynamicMessage.newBuilder(sub).setField(sub.findFieldByName("x"), 3).build());
+    });
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    DynamicMessage row = read(v3, bytes, "v1");
+    assertEquals(0, get(row, "c"));
+    assertEquals(3, get((DynamicMessage) get(row, "s"), "x"));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
@@ -1825,6 +1860,20 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   // A file of the given top-level declarations.
+  // Row { a = 1; scalar; Sub s = 3 } in edition 2023 with s DELIMITED, as its class registers it.
+  private static ProtobufSchema delimited(String scalar) throws Exception {
+    FileDescriptorProto.Builder file = FileDescriptorProto.newBuilder();
+    TextFormat.merge("name: \"row.proto\" package: \"p\" syntax: \"editions\" "
+        + "edition: EDITION_2023 message_type { name: \"Row\" "
+        + "field { name: \"a\" number: 1 type: TYPE_INT32 } " + scalar
+        + "field { name: \"s\" number: 3 type: TYPE_MESSAGE type_name: \".p.Row.Sub\" "
+        + "options { features { message_encoding: DELIMITED } } } "
+        + "nested_type { name: \"Sub\" field { name: \"x\" number: 1 type: TYPE_INT32 } } }",
+        file);
+    return new ProtobufSchema(FileDescriptor.buildFrom(file.build(), new FileDescriptor[0])
+        .findMessageTypeByName("Row"));
+  }
+
   private static ProtobufSchema file(String... members) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("\n", members)
         + "\n");

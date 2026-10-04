@@ -110,9 +110,10 @@ public final class ProvenanceComputer {
 
   /**
    * The deepest a location may nest; past it, the history has no provenance. A chain of named
-   * types nests with no text nesting, and the walk descends once per level.
+   * types nests with no text nesting, and the walk descends once per level: about 1.5 KB of stack
+   * a level, so 100 levels stay within a 320 KB thread stack beside its caller's frames.
    */
-  public static final int MAX_DEPTH = 1_000;
+  public static final int MAX_DEPTH = 100;
 
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
