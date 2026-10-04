@@ -2392,6 +2392,55 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testUnderLogicalReRegisteringReusesTheIdOfAnIdenticalStampedSchema()
+      throws Exception {
+    // Another subject holds the content the stamp produces, confluent:version=3 included; under
+    // LOGICAL, re-registering the soft-deleted version's content reuses that schema's ID, and
+    // the soft-deleted version keeps its own.
+    String other = "other";
+    String subject = "logical_reuse";
+    restApp.restClient.updateCompatibility(NONE.name, other);
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    String unrelated = "{\"type\":\"record\",\"name\":\"U\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"u\",\"type\":\"int\"}]}";
+
+    // other v3 is v2's content with confluent:version rewritten to 3
+    restApp.restClient.registerSchema(v1, other);
+    restApp.restClient.registerSchema(unrelated, other);
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v2);
+    request.setMetadata(
+        new Metadata(null, Collections.singletonMap("confluent:version", "1"), null));
+    int stampedId = restApp.restClient.registerSchema(request, other, false).getId();
+    Schema otherV3 = restApp.restClient.getVersion(other, 3);
+    assertEquals(Integer.valueOf(stampedId), otherV3.getId());
+    assertEquals("3", otherV3.getMetadata().getProperties().get("confluent:version"));
+
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, stampedId);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    assertEquals(stampedId, restApp.restClient.registerSchema(v2, subject));
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(stampedId), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+    Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
+    assertTrue(v2Deleted.getDeleted());
+    assertEquals(Integer.valueOf(stampedId), restApp.restClient.getVersion(other, 3).getId());
+  }
+
+  @Test
   public void testWithoutLogicalReRegisteringASoftDeletedVersionDoesNotStampTheVersion()
       throws Exception {
     String subject = "not_logical";
