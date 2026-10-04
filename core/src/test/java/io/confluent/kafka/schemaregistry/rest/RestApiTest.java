@@ -2468,7 +2468,14 @@ public abstract class RestApiTest {
     assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
     assertEquals("x", v3.getMetadata().getProperties().get("owner"));
 
-    assertEquals(v3Id, restApp.restClient.registerSchema(v2, subject));
+    // The response describes the stored v3, not the request with confluent:version set to 4.
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v2);
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(request, subject, false);
+    assertEquals(v3Id, response.getId());
+    assertEquals(Integer.valueOf(3), response.getVersion());
+    assertEquals(v3.getMetadata(), response.getMetadata());
+    assertEquals(v3.getGuid(), response.getGuid());
     assertEquals(Arrays.asList(1, 3), restApp.restClient.getAllVersions(subject));
   }
 
@@ -2489,10 +2496,18 @@ public abstract class RestApiTest {
     request.setSchema(v1);
     request.setVersion(1);
     int v1Id = restApp.restClient.registerSchema(request, subject, false).getId();
-    assertEquals("1", restApp.restClient.getVersion(subject, 1)
-        .getMetadata().getProperties().get("confluent:version"));
+    Schema stored = restApp.restClient.getVersion(subject, 1);
+    assertEquals("1", stored.getMetadata().getProperties().get("confluent:version"));
 
-    assertEquals(v1Id, restApp.restClient.registerSchema(v1, subject));
+    // The response describes the stored v1, not the request with confluent:version set to 2.
+    RegisterSchemaRequest unversioned = new RegisterSchemaRequest();
+    unversioned.setSchema(v1);
+    RegisterSchemaResponse response =
+        restApp.restClient.registerSchema(unversioned, subject, false);
+    assertEquals(v1Id, response.getId());
+    assertEquals(Integer.valueOf(1), response.getVersion());
+    assertEquals(stored.getMetadata(), response.getMetadata());
+    assertEquals(stored.getGuid(), response.getGuid());
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
   }
 

@@ -535,8 +535,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
               && (schemaId < 0 || schemaId == schemaValue.getId())
               && lookupSchema.canLookup(undeletedSchema, this)) {
             // This handles the case where a schema is sent with all references resolved
-            // or without confluent:version
-            return schema.copy(schemaValue.getVersion(), schemaValue.getId());
+            // or without confluent:version; return the stored schema, as the request's
+            // content, such as an inherited confluent:version, may differ from it
+            return toSchemaEntity(schemaValue);
           }
         }
       }
