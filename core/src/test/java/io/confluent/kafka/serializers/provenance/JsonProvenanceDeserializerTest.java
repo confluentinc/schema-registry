@@ -286,6 +286,24 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aRequiredNullablePropertyReAddedWithoutDefaultReadsNull() throws Exception {
+    // As Pydantic writes Optional[str] with no default: required, but null is a value it takes,
+    // so the re-added f reads null rather than failing the record.
+    JsonSchema v1 = object(number("id"), "\"f\": {\"type\": \"integer\"}");
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = new JsonSchema("{\"type\": \"object\", \"properties\": {" + number("id")
+        + ", \"f\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"null\"}]}},"
+        + " \"required\": [\"f\"]}");
+    byte[] bytes = write(v1, "{\"id\": 7, \"f\": 11}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+
+    JsonNode read = read(v3, bytes, "v1");
+    assertEquals(7, read.get("id").asInt());
+    assertTrue(read.get("f").isNull());
+  }
+
+  @Test
   void aPrunedPropertyReadsAsOneNeverWrittenUnderValidation() throws Exception {
     // With validation on, everit fills a default for an absent property; pruning first gives a
     // pruned one the same, and removes an old value the reader would reject.

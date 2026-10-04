@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BigIntegerNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
@@ -1037,6 +1038,17 @@ final class JsonProvenancePruner {
       }
     }
     if (withDefault == null) {
+      // A property every reach lets be null reads null, as a column added later reads null for
+      // older rows.
+      boolean nullable = !reaches.isEmpty();
+      for (Reach reach : reaches) {
+        Schema property = reach.object.getPropertySchemas().get(name);
+        nullable &= property == null || validates(property, validatable(NullNode.getInstance()));
+      }
+      if (nullable) {
+        node.putNull(name);
+        return node.get(name);
+      }
       throw new SerializationException("Property " + names + " has no value to read: provenance "
           + "withholds it, as new to the reader or read as another branch than written, and the "
           + "reader requires it and declares no default.");

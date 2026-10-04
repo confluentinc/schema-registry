@@ -178,6 +178,38 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aNullableFieldReAddedWithoutDefaultReadsNull() throws Exception {
+    // f is new to the reader and declares no default, but its union lets it be null: it reads
+    // null, as a column added later reads null for older rows, rather than failing the record.
+    Schema v1 = record(idField(), "{\"name\":\"f\",\"type\":\"int\"}");
+    Schema v2 = record(idField());
+    Schema v3 = record(idField(), "{\"name\":\"f\",\"type\":[\"null\",\"int\"]}");
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("f", 11));
+    client.register(SUBJECT, new AvroSchema(v2));
+    client.register(SUBJECT, new AvroSchema(v3));
+
+    GenericRecord read = read(v3, bytes, "v1");
+    assertEquals(7, read.get("id"));
+    assertNull(read.get("f"));
+  }
+
+  @Test
+  void aFieldWidenedIntoANullableUnionWithoutDefaultReadsNull() throws Exception {
+    // A kind change, so a new column: null where the union lists null first, as a default must;
+    // with null elsewhere there is still nothing to read.
+    Schema writer = field("int");
+    byte[] bytes = write(writer, new GenericRecordBuilder(writer).set("f", 7));
+    Schema nullFirst = field("[\"null\",\"int\",\"string\"]");
+    client.register(SUBJECT, new AvroSchema(nullFirst));
+    assertEquals(7, read(nullFirst, bytes, null).get("f"));
+    assertNull(read(nullFirst, bytes, "v1").get("f"));
+
+    Schema nullLast = field("[\"int\",\"string\",\"null\"]");
+    client.register(SUBJECT, new AvroSchema(nullLast));
+    assertThrows(Exception.class, () -> read(nullLast, bytes, "v1"));
+  }
+
+  @Test
   void aUnionNarrowedToTheBranchItHoldsIsANewColumn() throws Exception {
     assertNewColumn(field("[\"int\",\"string\"]"), field("int"), 7, null);
     assertNewColumn(field("[\"int\",\"string\"]"), defaulted("int", "0"), 7, 0);

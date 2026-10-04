@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import org.apache.avro.AvroTypeException;
@@ -633,8 +635,15 @@ final class AvroProvenanceRenamer {
     for (Field field : reader.getFields()) {
       // The default as parsed, unvalidated as the reader's own parse left it: Avro cannot write a
       // bytes or fixed default back from its value, and fails an invalid one only when used.
+      JsonNode value = Accessor.defaultValue(field);
+      if (value == null && field.schema().getType() == Type.UNION
+          && field.schema().getTypes().get(0).getType() == Type.NULL) {
+        // A nullable field with no default reads null where provenance gives it no value, as a
+        // column added later reads null for older rows.
+        value = NullNode.getInstance();
+      }
       final Field copy = Accessor.createField(field.name(), readerCopy(field.schema(), copies),
-          field.doc(), Accessor.defaultValue(field), false, field.order());
+          field.doc(), value, false, field.order());
       field.getObjectProps().forEach(copy::addProp);
       fields.add(copy);
     }
