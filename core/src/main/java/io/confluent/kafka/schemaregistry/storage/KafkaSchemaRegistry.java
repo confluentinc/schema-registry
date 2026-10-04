@@ -484,6 +484,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         validateReferencesNotStronglyAssociated(subject, schema);
       }
 
+      // Under LOGICAL, re-registering the content of a soft-deleted version of the subject stamps
+      // confluent:version into the metadata, so the schema gets a new ID and the soft-deleted
+      // version, part of the history provenance computes over, is not tombstoned below.
+      boolean stampVersion = false;
       if (parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -495,6 +499,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             // return only if the schema was previously registered under the input subject
             return schema.copy(
                 schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId());
+          } else if (schemaId < 0
+              && schema.getVersion() == 0
+              && mode != Mode.IMPORT
+              && schemaIdAndSubjects.hasSubject(subject)
+              && CompatibilityPolicy.forName(config.getCompatibilityPolicy())
+                  == CompatibilityPolicy.LOGICAL) {
+            // the schema was soft-deleted under the input subject; a new ID is assigned below
+            stampVersion = true;
           } else {
             // need to register schema under the input subject
             schemaId = schemaIdAndSubjects.getSchemaId();
@@ -514,6 +526,19 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             // or without confluent:version
             return schema.copy(schemaValue.getVersion(), schemaValue.getId());
           }
+        }
+      }
+
+      if (stampVersion) {
+        // A non-zero version sets confluent:version; the metadata merged from the previous
+        // version is already on the schema.
+        schema.setVersion(-1);
+        maybeSetMetadataRuleSet(config, schema, null, newVersion);
+        parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
+        // the stamped schema may already exist, such as under another subject
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+        if (schemaIdAndSubjects != null) {
+          schemaId = schemaIdAndSubjects.getSchemaId();
         }
       }
 
@@ -579,27 +604,22 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 + "to generating an ID that is already in use.");
           }
         }
-        // Under LOGICAL a soft-deleted version with the same ID stays, so the subject's history,
-        // which provenance computes over, stays whole.
-        if (CompatibilityPolicy.forName(config.getCompatibilityPolicy())
-            != CompatibilityPolicy.LOGICAL) {
-          for (Schema deleted : deletedVersions) {
-            if (deleted.getId().equals(schema.getId())
-                    && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
-              SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
-              // Skip tombstoning if any schema (including soft-deleted) still references this
-              // (subject, version): references resolve by subject+version, not by global ID, so
-              // tombstoning would orphan those references even though the referrer may still be
-              // restored from a soft delete.
-              if (!getReferencedBy(key, true).isEmpty()) {
-                log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
-                    + " of {} v{} (id {}): still referenced by other schemas",
-                    key, schema.getSubject(), schema.getVersion(), schema.getId());
-                continue;
-              }
-              // Tombstone previous version with the same ID
-              kafkaStore.put(key, null);
+        for (Schema deleted : deletedVersions) {
+          if (deleted.getId().equals(schema.getId())
+                  && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
+            SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
+            // Skip tombstoning if any schema (including soft-deleted) still references this
+            // (subject, version): references resolve by subject+version, not by global ID, so
+            // tombstoning would orphan those references even though the referrer may still be
+            // restored from a soft delete.
+            if (!getReferencedBy(key, true).isEmpty()) {
+              log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
+                  + " of {} v{} (id {}): still referenced by other schemas",
+                  key, schema.getSubject(), schema.getVersion(), schema.getId());
+              continue;
             }
+            // Tombstone previous version with the same ID
+            kafkaStore.put(key, null);
           }
         }
         kafkaStore.put(schemaKey, schemaValue);

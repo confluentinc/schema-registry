@@ -2312,9 +2312,10 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testUnderLogicalReRegisteringKeepsTheSoftDeletedVersion() throws Exception {
-    // Under LOGICAL, re-registering the content of a soft-deleted version gives a new version
-    // under the same global ID, and the soft-deleted version stays: provenance needs it.
+  public void testUnderLogicalReRegisteringASoftDeletedVersionStampsTheVersion() throws Exception {
+    // Under LOGICAL, re-registering the content of a soft-deleted version stamps confluent:version
+    // into the metadata, so the new version gets a new ID and the soft-deleted version stays:
+    // provenance needs it.
     String subject = "logical";
     restApp.restClient.updateCompatibility(NONE.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
@@ -2335,11 +2336,12 @@ public abstract class RestApiTest {
     assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
 
-    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
-    assertEquals(v2Id, reRegisteredId);
+    int v3Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, v3Id);
 
     Schema v3 = restApp.restClient.getVersion(subject, 3);
-    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    assertEquals(Integer.valueOf(v3Id), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
     Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
     assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
     assertTrue(v2Deleted.getDeleted());
@@ -2350,18 +2352,16 @@ public abstract class RestApiTest {
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
     assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
 
-    // Lookups by content and by ID find the live version, and registering again adds nothing.
-    assertEquals((Integer) 3, restApp.restClient.lookUpSubjectVersion(v2, subject).getVersion());
-    assertEquals(Collections.singletonList(new SubjectVersion(subject, 3)),
-        restApp.restClient.getAllVersionsById(v2Id));
-    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    // Registering again finds the live version and adds nothing.
+    assertEquals(v3Id, restApp.restClient.registerSchema(v2, subject));
     assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
   }
 
   @Test
-  public void testUnderLogicalHardDeletingTheSuccessorKeepsTheRetainedVersionsId() throws Exception {
-    // Under LOGICAL the soft-deleted v2 stays when its content is re-registered as v3. Once v3 is
-    // hard-deleted, v2 still carries the schema ID: it resolves, and re-registering reuses it.
+  public void testUnderLogicalHardDeletingTheStampedVersionKeepsTheSoftDeletedOne()
+      throws Exception {
+    // Once the stamped re-registration is hard-deleted, the soft-deleted v2 still carries its ID,
+    // and re-registering stamps the content again under the next version.
     String subject = "logical_hard";
     restApp.restClient.updateCompatibility(NONE.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
@@ -2376,16 +2376,36 @@ public abstract class RestApiTest {
     restApp.restClient.registerSchema(v1, subject);
     int v2Id = restApp.restClient.registerSchema(v2, subject);
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
-    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    assertNotEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3");
     restApp.restClient.deleteSchemaVersion(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true);
 
     assertEquals(v2, restApp.restClient.getId(v2Id, subject).getSchemaString());
     assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 2, true).getId());
-    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, reRegisteredId);
     // v3 was hard-deleted, so its number is the next one.
-    assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 3).getId());
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(reRegisteredId), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
+  public void testWithoutLogicalReRegisteringASoftDeletedVersionDoesNotStampTheVersion()
+      throws Exception {
+    String subject = "not_logical";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    assertEquals(v1Id, restApp.restClient.registerSchema(v1, subject));
+    Schema v2 = restApp.restClient.getVersion(subject, 2);
+    assertEquals(Integer.valueOf(v1Id), v2.getId());
+    assertNull(v2.getMetadata());
   }
 
   @Test
