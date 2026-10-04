@@ -200,10 +200,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     } catch (RuntimeException e) {
       // No live version: the base mock answers -1.
     }
-    if (id != null) {
-      // A live version the base mock numbered as a soft-deleted one replaces it.
-      deleted.remove(number);
-    } else if (isPermanent && deleted.remove(number) != null) {
+    if (id == null && isPermanent && deleted.remove(number) != null) {
       return number;
     }
     Integer result = super.deleteSchemaVersion(requestProperties, subject, version, isPermanent);

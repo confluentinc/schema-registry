@@ -212,17 +212,32 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
-  void aLiveVersionTakingASoftDeletedOnesNumberIsTheOneDeleted() throws Exception {
-    // The base mock numbers the new version as the deleted latest; the registry never would.
-    register(record(field("a", "int")));
+  void aVersionAfterASoftDeletedLatestTakesTheNextNumber() throws Exception {
+    // As in the registry: v2, soft-deleted, dropped b, so b is new at v3.
     register(record(field("a", "int"), field("b", "int")));
-    client.deleteSchemaVersion(SUBJECT, "2", false);
-    register(record(field("a", "int"), field("c", "int")));
-    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2);
+    register(record(field("a", "int")));
+    client.deleteSchemaVersion(SUBJECT, "2");
+    register(record(field("a", "int"), field("b", "string")));
 
-    client.deleteSchemaVersion(SUBJECT, "2", true);
-    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1);
-    assertThat(client.getAllVersions(SUBJECT)).containsExactly(1);
+    assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3);
+    SchemaProvenance all =
+        client.getProvenanceByVersion(SUBJECT, "1", "latest", true, false, null);
+    assertThat(pids(all.getVersions().get(2))).containsExactly(1, 3);
+  }
+
+  @Test
+  void aSoftDeletedSchemaLookedUpThenRegisteredAgainIsANewVersion() throws Exception {
+    String ab = record(field("a", "int"), field("b", "int"));
+    int v1 = register(ab);
+    register(record(field("a", "int")));
+    register(record(field("a", "int"), field("c", "int")));
+    client.deleteSchemaVersion(SUBJECT, "1");
+
+    // As a consumer's lookups find it: soft-deleted, with no id but still version 1.
+    assertCode(404, 40403, () -> client.getId(SUBJECT, new AvroSchema(ab)));
+    assertThat(client.getVersion(SUBJECT, new AvroSchema(ab))).isEqualTo(1);
+    assertThat(register(ab)).isEqualTo(v1);
+    assertThat(client.getAllVersions(SUBJECT, false)).containsExactly(2, 3, 4);
   }
 
   @Test

@@ -110,8 +110,8 @@ public final class ProvenanceComputer {
 
   /**
    * The deepest a location may nest; past it, the history has no provenance. A chain of named
-   * types nests with no text nesting, and the walk descends once per level: about 1.5 KB of stack
-   * a level, so 100 levels stay within a 320 KB thread stack beside its caller's frames.
+   * types nests with no text nesting, and the walk descends once per level: up to about 3 KB of
+   * stack a level once compiled, so 100 levels need about 300 KB beside the caller's frames.
    */
   public static final int MAX_DEPTH = 100;
 
