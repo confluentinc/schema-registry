@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
 import io.confluent.protobuf.MetaProto;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -84,12 +85,12 @@ final class ProtoProvenanceRenumberer {
    * {@code reader} with every field provenance gives no writer counterpart moved to an unused
    * number; {@code reader} itself when there is nothing to move. Fresh numbers also avoid those
    * {@code writer}, where given, writes under: data there would be parsed into the moved field,
-   * and fail the parse where it is a message.
+   * and fail the parse where it is a message. A field of an imported message moves in a copy of
+   * its file, which the reader's file is built against.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
-   *     different numberings, a field needing a new number belongs to an imported file, a message
-   *     has no field number left to move a field to, or the record's message is a nested one no
-   *     location reaches
+   *     different numberings, a message has no field number left to move a field to, or the
+   *     record's message is a nested one no location reaches
    * @throws SerializationException if a location's names are missing or not in the reader
    */
   static Renumbered renumber(ProtobufSchema reader, ProtobufSchema writer,
@@ -376,10 +377,6 @@ final class ProtoProvenanceRenumberer {
       throw new ProvenanceUnavailableException("Message " + message.getFullName()
           + " is used at several locations that provenance maps differently");
     }
-    if (move && message.getFile() != file) {
-      throw new ProvenanceUnavailableException("Field " + field.getFullName()
-          + " needs a new number, but its message is defined in an imported file");
-    }
   }
 
   /**
@@ -432,18 +429,47 @@ final class ProtoProvenanceRenumberer {
     if (moves.values().stream().noneMatch(m -> m.containsValue(true))) {
       return file;
     }
-    FileDescriptorProto.Builder proto = file.toProto().toBuilder();
-    String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
+    return rebuild(file, new HashMap<>());
+  }
+
+  // The file renumbered, its imports first: an imported message's fields move in a copy of its
+  // file under the same name, which the importing file is built against. Others pass through.
+  private FileDescriptor rebuild(FileDescriptor of, Map<String, FileDescriptor> rebuilt) {
+    FileDescriptor done = rebuilt.get(of.getName());
+    if (done != null) {
+      return done;
+    }
+    List<FileDescriptor> dependencies = new ArrayList<>();
+    boolean changed = false;
+    for (FileDescriptor dependency : of.getDependencies()) {
+      FileDescriptor copy = rebuild(dependency, rebuilt);
+      changed |= copy != dependency;
+      dependencies.add(copy);
+    }
+    if (!changed && of.getMessageTypes().stream().noneMatch(this::movesIn)) {
+      rebuilt.put(of.getName(), of);
+      return of;
+    }
+    FileDescriptorProto.Builder proto = of.toProto().toBuilder();
+    String prefix = of.getPackage().isEmpty() ? "" : of.getPackage() + ".";
     for (DescriptorProto.Builder message : proto.getMessageTypeBuilderList()) {
       renumberMessage(message, prefix + message.getName());
     }
     try {
-      return FileDescriptor.buildFrom(
-          proto.build(), file.getDependencies().toArray(new FileDescriptor[0]));
+      FileDescriptor copy = FileDescriptor.buildFrom(
+          proto.build(), dependencies.toArray(new FileDescriptor[0]));
+      rebuilt.put(of.getName(), copy);
+      return copy;
     } catch (DescriptorValidationException e) {
       throw new SerializationException(
-          "Could not renumber " + file.getName() + " after provenance: " + e.getMessage(), e);
+          "Could not renumber " + of.getName() + " after provenance: " + e.getMessage(), e);
     }
+  }
+
+  private boolean movesIn(Descriptor message) {
+    Map<Integer, Boolean> decided = moves.get(message.getFullName());
+    return decided != null && decided.containsValue(true)
+        || message.getNestedTypes().stream().anyMatch(this::movesIn);
   }
 
   // The writer's file and its imports: a reader message may hold data of a message imported

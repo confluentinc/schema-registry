@@ -269,6 +269,136 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReusedNumberInAnImportedMessageReadsUnset() throws Exception {
+    // active reuses flag's number in the imported N: it moves in a copy of d.proto, which Row is
+    // built against, while the well-known type's file passes through untouched.
+    String dep = "syntax = \"proto3\";\npackage d;\nmessage N {\n  int32 x = 1;\n%s}\n";
+    List<ProtobufSchema> versions = importing("syntax = \"proto3\";\npackage p;\n"
+        + "import \"d.proto\";\nimport \"google/protobuf/timestamp.proto\";\n"
+        + "message Row {\n  int32 id = 1;\n  d.N n = 2;\n  google.protobuf.Timestamp t = 3;\n}\n",
+        String.format(dep, "  bool flag = 2;\n"), String.format(dep, ""),
+        String.format(dep, "  bool active = 2;\n"));
+    byte[] bytes = writeById(versions.get(0), b -> {
+      Descriptor n = field(b, "n").getMessageType();
+      Descriptor t = field(b, "t").getMessageType();
+      b.setField(field(b, "id"), 7)
+          .setField(field(b, "n"), DynamicMessage.newBuilder(n).setField(n.findFieldByName("x"), 1)
+              .setField(n.findFieldByName("flag"), true).build())
+          .setField(field(b, "t"), DynamicMessage.newBuilder(t)
+              .setField(t.findFieldByName("seconds"), 42L).build());
+    });
+
+    DynamicMessage read = read(versions.get(2), bytes, "v1");
+    DynamicMessage n = (DynamicMessage) get(read, "n");
+    assertEquals(1, get(n, "x"));
+    assertFalse(n.hasField(n.getDescriptorForType().findFieldByName("active")));
+    assertEquals(42L, get((DynamicMessage) get(read, "t"), "seconds"));
+    DynamicMessage nativeRead = read(versions.get(2), bytes, null);
+    assertEquals(true, get((DynamicMessage) get(nativeRead, "n"), "active"));
+  }
+
+  @Test
+  void aClassWhoseImportedMessageReusesANumberReadsItUnset() throws Exception {
+    // The generated ReferrerMessage reads ReferencedMessage.is_active, which reuses the number
+    // of a dropped field of the imported file: unset, as the class's own fields would be.
+    String ref = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "message ReferencedMessage {\n  string ref_id = 1;\n%s}\n";
+    List<ProtobufSchema> versions = new ArrayList<>();
+    String[] refs = {String.format(ref, "  bool was_active = 2;\n"), String.format(ref, ""),
+        String.format(ref, "  bool is_active = 2;\n")};
+    for (int i = 0; i < refs.length; i++) {
+      client.register("ref", new ProtobufSchema(refs[i]));
+      ProtobufSchema version = new ProtobufSchema("syntax = \"proto3\";\n"
+          + "package io.confluent.kafka.serializers.protobuf.test;\n"
+          + "import \"ref.proto\";\nimport \"confluent/meta.proto\";\n"
+          + "message ReferrerMessage {\n"
+          + "  option (.confluent.message_meta).doc = \"ReferrerMessage\";\n"
+          + "  string root_id = 1;\n"
+          + "  ReferencedMessage ref = 2\n"
+          + "      [(.confluent.field_meta) = { doc: \"ReferencedMessage\" }];\n"
+          + "}\n", Collections.singletonList(new SchemaReference("ref.proto", "ref", i + 1)),
+          Collections.singletonMap("ref.proto", refs[i]), null, null);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    byte[] bytes = writeById(versions.get(0), b -> {
+      Descriptor r = field(b, "ref").getMessageType();
+      b.setField(field(b, "root_id"), "r").setField(field(b, "ref"), DynamicMessage.newBuilder(r)
+          .setField(r.findFieldByName("ref_id"), "a")
+          .setField(r.findFieldByName("was_active"), true).build());
+    });
+
+    assertTrue(readClass(ReferrerMessage.class, bytes, null, false).getRef().getIsActive());
+    ReferrerMessage read = readClass(ReferrerMessage.class, bytes, "v1", false);
+    assertEquals("a", read.getRef().getRefId());
+    assertFalse(read.getRef().getIsActive());
+  }
+
+  @Test
+  void aReusedNumberInAMessageImportedPubliclyReadsUnset() throws Exception {
+    // Row imports wrap.proto, which re-exports leaf.proto's N: the copies are made through it.
+    String leaf = "syntax = \"proto3\";\npackage d;\nmessage N {\n  int32 x = 1;\n%s}\n";
+    String wrap = "syntax = \"proto3\";\npackage w;\nimport public \"leaf.proto\";\n";
+    String[] leaves = {String.format(leaf, "  bool flag = 2;\n"), String.format(leaf, ""),
+        String.format(leaf, "  bool active = 2;\n")};
+    List<ProtobufSchema> versions = new ArrayList<>();
+    for (int i = 0; i < leaves.length; i++) {
+      client.register("leaf", new ProtobufSchema(leaves[i]));
+      SchemaReference toLeaf = new SchemaReference("leaf.proto", "leaf", i + 1);
+      client.register("wrap", new ProtobufSchema(wrap, Collections.singletonList(toLeaf),
+          Collections.singletonMap("leaf.proto", leaves[i]), null, null));
+      Map<String, String> resolved = new LinkedHashMap<>();
+      resolved.put("wrap.proto", wrap);
+      resolved.put("leaf.proto", leaves[i]);
+      ProtobufSchema version = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+          + "import \"wrap.proto\";\nmessage Row {\n  int32 id = 1;\n  d.N n = 2;\n}\n",
+          Arrays.asList(new SchemaReference("wrap.proto", "wrap", i + 1), toLeaf), resolved,
+          null, null);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    byte[] bytes = writeById(versions.get(0), b -> {
+      Descriptor n = field(b, "n").getMessageType();
+      b.setField(field(b, "n"), DynamicMessage.newBuilder(n)
+          .setField(n.findFieldByName("x"), 1).setField(n.findFieldByName("flag"), true).build());
+    });
+
+    DynamicMessage n = (DynamicMessage) get(read(versions.get(2), bytes, "v1"), "n");
+    assertEquals(1, get(n, "x"));
+    assertFalse(n.hasField(n.getDescriptorForType().findFieldByName("active")));
+  }
+
+  @Test
+  void aMessageMovedToAnotherPackageReadsItsRestartedMembersUnset() throws Exception {
+    // A package move is a new type, its members new: they are now pruned in the imported file
+    // rather than the pair falling back and handing them the old values.
+    String a = "syntax = \"proto3\";\npackage a;\nmessage N {\n  int32 x = 1;\n}\n";
+    String b = "syntax = \"proto3\";\npackage b;\nmessage N {\n  int32 x = 1;\n}\n";
+    client.register("na", new ProtobufSchema(a));
+    client.register("nb", new ProtobufSchema(b));
+    ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"n.proto\";\nmessage Row {\n  int32 id = 1;\n  a.N n = 2;\n}\n",
+        Collections.singletonList(new SchemaReference("n.proto", "na", 1)),
+        Collections.singletonMap("n.proto", a), null, null);
+    ProtobufSchema v2 = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"n2.proto\";\nmessage Row {\n  int32 id = 1;\n  b.N n = 2;\n}\n",
+        Collections.singletonList(new SchemaReference("n2.proto", "nb", 1)),
+        Collections.singletonMap("n2.proto", b), null, null);
+    client.register(SUBJECT, v1);
+    byte[] bytes = writeById(v1, row -> {
+      Descriptor n = field(row, "n").getMessageType();
+      row.setField(field(row, "id"), 7).setField(field(row, "n"),
+          DynamicMessage.newBuilder(n).setField(n.findFieldByName("x"), 11).build());
+    });
+    client.register(SUBJECT, v2);
+
+    assertEquals(11, get((DynamicMessage) get(read(v2, bytes, null), "n"), "x"));
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "id"));
+    assertEquals(0, get((DynamicMessage) get(read, "n"), "x"));
+  }
+
+  @Test
   void aSharedMessageUsedByANewFieldKeepsTheOldFieldsData() throws Exception {
     ProtobufSchema v1 = row("In a = 1;", "message In { int32 x = 1; }");
     ProtobufSchema v2 = row("In a = 1;", "In b = 2;", "message In { int32 x = 1; }");
@@ -1839,6 +1969,30 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   // A file of the given top-level declarations.
+  // A record of writer's first message, framed by the id writer is registered under.
+  private byte[] writeById(ProtobufSchema writer, Consumer<DynamicMessage.Builder> record)
+      throws Exception {
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(writer.toDescriptor());
+    record.accept(builder);
+    byte[] body = builder.build().toByteArray();
+    return ByteBuffer.allocate(6 + body.length).put((byte) 0)
+        .putInt(client.getId(SUBJECT, writer)).put((byte) 0).put(body).array();
+  }
+
+  // One version of main per dependency version, each importing it as d.proto from "dep".
+  private List<ProtobufSchema> importing(String main, String... deps) throws Exception {
+    List<ProtobufSchema> versions = new ArrayList<>();
+    for (int i = 0; i < deps.length; i++) {
+      client.register("dep", new ProtobufSchema(deps[i]));
+      ProtobufSchema version = new ProtobufSchema(main,
+          Collections.singletonList(new SchemaReference("d.proto", "dep", i + 1)),
+          Collections.singletonMap("d.proto", deps[i]), null, null);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    return versions;
+  }
+
   private static ProtobufSchema file(String... members) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("\n", members)
         + "\n");
