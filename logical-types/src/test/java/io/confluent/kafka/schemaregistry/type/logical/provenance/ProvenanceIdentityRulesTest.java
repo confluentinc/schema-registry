@@ -621,6 +621,37 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aTitleNeverOutweighsEqualContent() {
+    // A title only documents, while validation reads by content: each branch continues the one
+    // of its content, whichever title it now has.
+    String titled = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{%s}}";
+    String ab = "\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"}";
+    String cd = "\"c\":{\"type\":\"integer\"},\"d\":{\"type\":\"integer\"}";
+    List<ProvenanceVersion> swapped = compute(
+        union(String.format(titled, "X", ab), String.format(titled, "Y", cd)),
+        union(String.format(titled, "Y", ab), String.format(titled, "X", cd)));
+    assertThat(pid(swapped, 1, 0, 0)).isEqualTo(pid(swapped, 0, 0, 0));
+    assertThat(pid(swapped, 1, 0, 0, 0)).isEqualTo(pid(swapped, 0, 0, 0, 0));
+    assertThat(pid(swapped, 1, 0, 1)).isEqualTo(pid(swapped, 0, 0, 1));
+
+    // The title moved to a new branch: the unchanged one keeps its identity, the new one is new.
+    String card = "\"number\":{\"type\":\"string\"},\"cvv\":{\"type\":\"string\"}";
+    List<ProvenanceVersion> moved = compute(
+        union(String.format(titled, "Payment", card), "{\"type\":\"string\"}"),
+        union(String.format(titled, "Card", card),
+            String.format(titled, "Payment", "\"iban\":{\"type\":\"string\"}"),
+            "{\"type\":\"string\"}"));
+    assertThat(pid(moved, 1, 0, 0)).isEqualTo(pid(moved, 0, 0, 0));
+    assertThat(pid(moved, 1, 0, 1)).isNotIn(pids(moved, 0).values());
+
+    // So too without members: the titled branch retyped continues the branch of its new type.
+    List<ProvenanceVersion> retyped = compute(
+        union("{\"title\":\"X\",\"type\":\"boolean\"}", "{\"type\":\"string\"}"),
+        union("{\"title\":\"X\",\"type\":\"string\"}"));
+    assertThat(pid(retyped, 1, 0, 0)).isEqualTo(pid(retyped, 0, 0, 1));
+  }
+
+  @Test
   void aJsonBranchPairingDoesNotDependOnBranchOrder() {
     // {a,g} and t2{a,e,g} each overlap both {a} and {a,e,g}: whichever pairing came first in
     // union order decided what the other crossed. Listed either way, they pair alike.

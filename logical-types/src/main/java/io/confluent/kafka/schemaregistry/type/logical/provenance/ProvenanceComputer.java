@@ -1170,23 +1170,23 @@ public final class ProvenanceComputer {
      * JSON union branches, which V1 names by position unless a hint names them: a branch inserted
      * or reordered would otherwise take another's place. In turn: a hinted branch continues the
      * previous branch of its name; a branch continues the one previous branch with the same
-     * top-level discriminators, where no unpaired peer has them, as a tagged union's tag names
-     * its branch; the one previous branch of its title, where no unpaired peer has it and no
-     * discriminator conflicts — a title only documents in V1, so one changed only leaves the
-     * branch to the phases below; the one previous branch of the same content, where no unpaired
-     * peer shares it; the previous branch it shares strictly the most members with (properties, or
-   * a memberless enum's values, which also tell such branches' content apart), and it with
-     * that one, a member every untaken previous branch has (or, with one left, every previous
-     * branch had) aside, else the last previous branch it alone overlaps, and no conflicting
-     * discriminator, as when it moved and its members changed, repeated while it pairs any, in an
-     * order fixed by content; for a branch with no members, the one of the same scalar family as
-     * the logical type spells it (numeric, character or binary), or an array or map whose items or
-     * values are — each the other's only such branch, as a property's scalar change continues,
-     * then, of those left, a character with a binary branch, both strings in a document; one at
-     * the same position sharing a member with it, where overlap alone cannot tell; else it is
-     * new. None continues another across a discriminator a branch related to them has (see
-     * {@link #crosses}), nor across a hint: two branches hinted otherwise are different branches,
-     * as an Avro type renamed without an alias is.
+     * top-level discriminators, where no unpaired peer has them, as validation routes a record by
+     * its tag; the one previous branch of the same content, where no unpaired peer shares it; the
+     * one previous branch of its title, where no unpaired peer has it and no discriminator
+     * conflicts — a title only documents in V1, so it never outweighs equal content, and one
+     * changed only leaves the branch to the phases below; the previous branch it shares strictly
+     * the most members with (properties, or a memberless enum's values, which also tell such
+     * branches' content apart), and it with that one, a member every untaken previous branch has
+     * (or, with one left, every previous branch had) aside, else the last previous branch it alone
+     * overlaps, and no conflicting discriminator, as when it moved and its members changed,
+     * repeated while it pairs any, in an order fixed by content; for a branch with no members, the
+     * one of the same scalar family as the logical type spells it (numeric, character or binary),
+     * or an array or map whose items or values are — each the other's only such branch, as a
+     * property's scalar change continues, then, of those left, a character with a binary branch,
+     * both strings in a document; one at the same position sharing a member with it, where overlap
+     * alone cannot tell; else it is new. None continues another across a discriminator a branch
+     * related to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise
+     * are different branches, as an Avro type renamed without an alias is.
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
@@ -1211,13 +1211,14 @@ public final class ProvenanceComputer {
                 (a, p) -> !taken.contains(p) && tags(a.content).equals(tags(p.content))
                     && !otherHints(a, p));
           } else if (phase == 2) {
+            found = mutual(peer, unresolved(peers, matched), previous,
+                (a, p) -> !taken.contains(p) && a.content.equals(p.content) && !otherHints(a, p));
+          } else if (phase == 3) {
+            // After equal content: a title only documents, and validation reads by content.
             found = peer.title == null ? null : mutual(peer, unresolved(peers, matched),
                 previous,
                 (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
                     && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
-          } else if (phase == 3) {
-            found = mutual(peer, unresolved(peers, matched), previous,
-                (a, p) -> !taken.contains(p) && a.content.equals(p.content) && !otherHints(a, p));
           } else if (phase == 4) {
             List<Node> unresolved = unresolved(peers, matched);
             Set<String> envelope = envelope(previous, taken);

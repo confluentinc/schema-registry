@@ -126,8 +126,22 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
-  void aValueOfABranchContinuedAtAnotherPositionByTitleIsPruned() throws Exception {
-    // Equal validation shapes, but the titles pair each branch with the other's position.
+  void aValueOfABranchContinuedAtAnotherPositionByHintIsPruned() throws Exception {
+    // Equal validation shapes, but the hints pair each branch with the other's position.
+    String union = "\"p\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}], "
+        + "\"confluent:union\": [{\"name\": \"%s\"}, {\"name\": \"%s\"}]}";
+    JsonSchema v1 = object(String.format(union, "A", "B"));
+    JsonSchema v2 = object(String.format(union, "B", "A"));
+    byte[] bytes = write(v1, "{\"p\": \"x\"}");
+    client.register(SUBJECT, v2);
+
+    assertFalse(read(v2, bytes, "v1").has("p"));
+    assertEquals("x", read(v2, bytes, null).get("p").asText());
+  }
+
+  @Test
+  void aValueFollowsItsTypeWhereTitlesSwap() throws Exception {
+    // A title only documents: the string branch continues the string branch, whatever its title.
     JsonSchema v1 = object("\"p\": {\"anyOf\": [{\"title\": \"A\", \"type\": \"string\"}, "
         + "{\"title\": \"B\", \"type\": \"integer\"}]}");
     JsonSchema v2 = object("\"p\": {\"anyOf\": [{\"title\": \"B\", \"type\": \"string\"}, "
@@ -135,8 +149,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"p\": \"x\"}");
     client.register(SUBJECT, v2);
 
-    assertFalse(read(v2, bytes, "v1").has("p"));
-    assertEquals("x", read(v2, bytes, null).get("p").asText());
+    assertEquals("x", read(v2, bytes, "v1").get("p").asText());
   }
 
   @Test
@@ -661,6 +674,22 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aBranchWhoseTitleMovedKeepsItsValues() throws Exception {
+    // The card branch is unchanged but for its title, which a new branch now has: it keeps its
+    // identity, so its values, as validation would read them.
+    String card = "\"number\": {\"type\": \"string\"}, \"cvv\": {\"type\": \"string\"}";
+    JsonSchema v1 = object("\"u\": {\"oneOf\": [{\"type\": \"object\", \"title\": \"Payment\", "
+        + "\"properties\": {" + card + "}}, {\"type\": \"string\"}]}");
+    JsonSchema v2 = object("\"u\": {\"oneOf\": [{\"type\": \"object\", \"title\": \"Card\", "
+        + "\"properties\": {" + card + "}}, {\"type\": \"object\", \"title\": \"Payment\", "
+        + "\"properties\": {\"iban\": {\"type\": \"string\"}}}, {\"type\": \"string\"}]}");
+    byte[] bytes = write(v1, "{\"u\": {\"number\": \"4111\", \"cvv\": \"123\"}}");
+    client.register(SUBJECT, v2);
+
+    assertEquals("4111", read(v2, bytes, "v1").path("u").path("number").asText());
+  }
+
+  @Test
   void aBranchThatMovesAndGainsAMemberKeepsItsValues() throws Exception {
     String a = "{\"type\": \"object\", \"properties\": {" + number("x") + "}}";
     String b = "{\"type\": \"object\", \"properties\": {" + number("y") + "}}";
@@ -724,10 +753,10 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
-  void anItemOrValueOfABranchContinuedAtAnotherPositionByTitleIsPruned() throws Exception {
-    // As for a property's own union: the titles pair each item or value branch with the other's.
-    String swap = "[{\"title\": \"%s\", \"type\": \"string\"}, "
-        + "{\"title\": \"%s\", \"type\": \"integer\"}]";
+  void anItemOrValueOfABranchContinuedAtAnotherPositionByHintIsPruned() throws Exception {
+    // As for a property's own union: the hints pair each item or value branch with the other's.
+    String swap = "[{\"type\": \"string\"}, {\"type\": \"integer\"}], "
+        + "\"confluent:union\": [{\"name\": \"%s\"}, {\"name\": \"%s\"}]";
     for (String shape : new String[] {
         "{\"type\": \"array\", \"items\": {\"anyOf\": %s}}",
         "{\"type\": \"object\", \"connect.type\": \"map\", "
@@ -1451,10 +1480,11 @@ class JsonProvenanceDeserializerTest {
 
   @Test
   void aValueOfAnItemsUnionReadAsAnotherContinuingBranchIsPruned() throws Exception {
-    // Titles keep both branches while they swap types: 3, written as A, would read as B, the
+    // Hints keep both branches while they swap types: 3, written as A, would read as B, the
     // column of B's strings. As for a property's own union, it is pruned rather than moved.
     String items = "\"x\": {\"type\": \"array\", \"items\": {\"anyOf\": "
-        + "[{\"title\": \"A\", \"type\": \"%s\"}, {\"title\": \"B\", \"type\": \"%s\"}]}}";
+        + "[{\"type\": \"%s\"}, {\"type\": \"%s\"}], "
+        + "\"confluent:union\": [{\"name\": \"A\"}, {\"name\": \"B\"}]}}";
     JsonSchema v1 = object(String.format(items, "integer", "string"));
     JsonSchema v2 = object(String.format(items, "string", "integer"));
     byte[] bytes = write(v1, "{\"x\": [3]}");
@@ -1467,7 +1497,8 @@ class JsonProvenanceDeserializerTest {
   void aValueOfAMapValuesUnionReadAsAnotherContinuingBranchIsPruned() throws Exception {
     String values = "\"x\": {\"type\": \"object\", \"connect.type\": \"map\", "
         + "\"additionalProperties\": {\"anyOf\": "
-        + "[{\"title\": \"A\", \"type\": \"%s\"}, {\"title\": \"B\", \"type\": \"%s\"}]}}";
+        + "[{\"type\": \"%s\"}, {\"type\": \"%s\"}], "
+        + "\"confluent:union\": [{\"name\": \"A\"}, {\"name\": \"B\"}]}}";
     JsonSchema v1 = object(String.format(values, "integer", "string"));
     JsonSchema v2 = object(String.format(values, "string", "integer"));
     byte[] bytes = write(v1, "{\"x\": {\"k\": 3}}");
