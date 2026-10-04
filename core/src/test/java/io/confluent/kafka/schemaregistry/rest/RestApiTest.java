@@ -2441,6 +2441,62 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testUnderLogicalWithDefaultMetadataReRegisteringTheStampedVersionAddsNothing()
+      throws Exception {
+    // Default metadata skips the lookup before register, so register itself must find the live
+    // stamped version although the confluent:version it inherits was set to the next one.
+    String subject = "logical_defaults";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    logical.setDefaultMetadata(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null));
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    int v3Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, v3Id);
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+    assertEquals("x", v3.getMetadata().getProperties().get("owner"));
+
+    assertEquals(v3Id, restApp.restClient.registerSchema(v2, subject));
+    assertEquals(Arrays.asList(1, 3), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testWithDefaultMetadataReRegisteringAVersionedSchemaAddsNothing() throws Exception {
+    // v1 carries confluent:version=1; registering its content without a version inherits it as
+    // confluent:version=2, which must not keep the lookup from finding v1.
+    String subject = "versioned_defaults";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest defaults = new ConfigUpdateRequest();
+    defaults.setDefaultMetadata(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null));
+    restApp.restClient.updateConfig(defaults, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v1);
+    request.setVersion(1);
+    int v1Id = restApp.restClient.registerSchema(request, subject, false).getId();
+    assertEquals("1", restApp.restClient.getVersion(subject, 1)
+        .getMetadata().getProperties().get("confluent:version"));
+
+    assertEquals(v1Id, restApp.restClient.registerSchema(v1, subject));
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
   public void testWithoutLogicalReRegisteringASoftDeletedVersionDoesNotStampTheVersion()
       throws Exception {
     String subject = "not_logical";

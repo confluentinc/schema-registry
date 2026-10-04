@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
@@ -471,6 +472,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
+      // whether the client sent confluent:version, rather than it being inherited from the
+      // previous version and set to the next one below
+      boolean hasConfluentVersion = schema.getMetadata() != null
+          && schema.getMetadata().getConfluentVersion() != null;
       if (mode != Mode.IMPORT) {
         maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
@@ -516,12 +521,19 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
       // iterate from the latest to first
       if (schema.getVersion() == 0) {
+        // An inherited confluent:version was set to the next version, so it cannot match an
+        // existing version; look up without it, as if the client had not sent one.
+        ParsedSchema lookupSchema = parsedSchema;
+        if (parsedSchema != null && !hasConfluentVersion && parsedSchema.metadata() != null) {
+          lookupSchema = parsedSchema.copy(
+              Metadata.removeConfluentVersion(parsedSchema.metadata()), parsedSchema.ruleSet());
+        }
         for (ParsedSchemaHolder schemaHolder : undeletedVersions) {
           SchemaValue schemaValue = ((SchemaValueHolder) schemaHolder).schemaValue();
           ParsedSchema undeletedSchema = schemaHolder.schema();
-          if (parsedSchema != null
+          if (lookupSchema != null
               && (schemaId < 0 || schemaId == schemaValue.getId())
-              && parsedSchema.canLookup(undeletedSchema, this)) {
+              && lookupSchema.canLookup(undeletedSchema, this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
             return schema.copy(schemaValue.getVersion(), schemaValue.getId());
