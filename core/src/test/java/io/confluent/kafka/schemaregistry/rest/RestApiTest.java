@@ -3631,5 +3631,15 @@ public abstract class RestApiTest {
     // Other subjects are unaffected
     restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other);
     restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other, true);
+
+    // A missing target still gets its 404 under an inherited LOGICAL
+    restApp.restClient.updateConfig(request, null);
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, "missing", true));
+    assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true));
+    assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, e.getErrorCode());
   }
 }

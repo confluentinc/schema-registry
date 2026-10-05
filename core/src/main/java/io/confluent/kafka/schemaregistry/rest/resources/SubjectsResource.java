@@ -333,8 +333,10 @@ public class SubjectsResource {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
-      // since the leader checks the forwarded request again
-      schemaRegistry.checkPermanentDeleteAllowed(subject, permanentDelete);
+      // since the leader checks the forwarded request again. A missing target falls to the 404.
+      if (permanentDelete && schemaRegistry.hasSubjects(subject, true)) {
+        schemaRegistry.checkPermanentDeleteAllowed(subject, true);
+      }
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
               subject,
               permanentDelete);
