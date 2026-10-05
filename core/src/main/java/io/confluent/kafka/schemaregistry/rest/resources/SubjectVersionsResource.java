@@ -598,11 +598,9 @@ public class SubjectVersionsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      // Checked on the leader only, since a follower may have a stale config
-      // and the forwarded request is checked when it reaches the leader
-      if (schemaRegistry.isLeader()) {
-        schemaRegistry.checkPermanentDeleteAllowed(subject, permanentDelete);
-      }
+      // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
+      // since the leader checks the forwarded request again
+      schemaRegistry.checkPermanentDeleteAllowed(subject, permanentDelete);
       int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
               versionId.getVersionId(), permanentDelete);
       asyncResponse.resume(deletedVersion);
