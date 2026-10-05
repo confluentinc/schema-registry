@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -154,6 +155,19 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
+
+  /**
+   * Rejects a user-requested permanent delete when the subject's effective compatibilityPolicy
+   * is LOGICAL. Cascading deletes of a STRONG association do not call this.
+   */
+  default void checkPermanentDeleteAllowed(String subject, boolean permanentDelete)
+      throws SchemaRegistryException {
+    if (permanentDelete && CompatibilityPolicy.forName(
+        getConfigInScope(subject).getCompatibilityPolicy()) == CompatibilityPolicy.LOGICAL) {
+      throw new OperationNotPermittedException("Permanent delete is not allowed for subject "
+          + subject + " because compatibilityPolicy=LOGICAL");
+    }
+  }
 
   void deleteContext(String delimitedContext) throws SchemaRegistryException;
 

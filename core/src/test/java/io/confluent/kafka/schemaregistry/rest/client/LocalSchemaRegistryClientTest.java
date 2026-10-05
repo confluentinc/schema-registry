@@ -206,6 +206,18 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     }
 
     @Test
+    public void testPermanentDelete_LogicalPolicyNotPermitted() throws Exception {
+        Config config = new Config();
+        config.setCompatibilityPolicy("LOGICAL");
+        client.updateConfig(SUBJECT1, config);
+        client.deleteSchemaVersion(SUBJECT1, "1", false);
+        assertThrows(RestOperationNotPermittedException.class,
+            () -> client.deleteSchemaVersion(SUBJECT1, "1", true));
+        assertThrows(RestOperationNotPermittedException.class,
+            () -> client.deleteSubject(SUBJECT1, true));
+    }
+
+    @Test
     public void testGetVersion() throws Exception {
         assertEquals(1, client.getVersion(SUBJECT1, schema1));
         assertEquals(1, client.getVersion(SUBJECT2, schema2));
