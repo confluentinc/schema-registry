@@ -91,11 +91,9 @@ class LogicalPolicyCheckerTest {
 
   @Test
   void thePolicyReadsAMultiMessageProtobufFileAsFlinkDoes() {
-    // As Flink's row: one nullable row per top-level message, by its simple name, in file order.
+    // As Flink wraps them: one field per top-level message, by its full name, in file order.
     LogicalType logical = LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER, SHIP));
-    List<Field> fields = logical.getRootSchema().getFields();
-    assertEquals(List.of("Order", "Ship"), names(logical));
-    assertTrue(fields.stream().allMatch(f -> f.getSchema().isNullable()));
+    assertEquals(List.of("p.Order", "p.Ship"), names(logical));
     // A file with one message is that message, unwrapped.
     assertEquals(List.of("id"), names(LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER))));
   }
