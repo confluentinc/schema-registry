@@ -706,6 +706,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       if (!isPermanent && !schemaRegistry.hasSubjects(subject, false)) {
         throw Errors.subjectSoftDeletedException(subject);
       }
+      schemaRegistry.checkPermanentDeleteAllowed(subject, isPermanent);
       return schemaRegistry.deleteSubject(subject, isPermanent);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
@@ -774,6 +775,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     try {
+      schemaRegistry.checkPermanentDeleteAllowed(subject, isPermanent);
       schemaRegistry.deleteSchemaVersion(subject, schema.getVersion(), isPermanent);
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
