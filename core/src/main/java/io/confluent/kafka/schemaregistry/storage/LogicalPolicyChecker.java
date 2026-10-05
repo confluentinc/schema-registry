@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -108,8 +109,11 @@ public final class LogicalPolicyChecker {
    * reshaping it is.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    boolean several = schema.toDescriptor().getFile().getMessageTypes().size() > 1;
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, several);
+    // Its own messages: toDescriptor() follows a public import, so a file that only re-exports
+    // another would count that file's.
+    long own = schema.rawSchema().getTypes().stream()
+        .filter(type -> type instanceof MessageElement).count();
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, own > 1);
   }
 
 

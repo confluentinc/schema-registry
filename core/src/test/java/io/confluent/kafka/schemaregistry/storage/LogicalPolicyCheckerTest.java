@@ -27,11 +27,13 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
@@ -144,6 +146,18 @@ class LogicalPolicyCheckerTest {
     assertFalse(LogicalPolicyChecker.check(proto(ORDER),
         List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FORWARD)
         .isEmpty());
+  }
+
+  @Test
+  void aProtobufFileThatOnlyReExportsAnotherIsReadAsItsOwnFile() {
+    // Its own file declares no message, whatever the file it re-exports declares: it is not read
+    // as a multi-message file, and converts as format=logical shows it.
+    String dependency = "syntax = \"proto3\";\npackage d;\n" + ORDER + SHIP;
+    ProtobufSchema reExporting = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
+        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", dependency), null, null);
+    assertEquals(LogicalPolicyChecker.toLogicalType(reExporting).getRootSchema(),
+        LogicalPolicyChecker.toPolicyLogicalType(reExporting).getRootSchema());
   }
 
   @Test
