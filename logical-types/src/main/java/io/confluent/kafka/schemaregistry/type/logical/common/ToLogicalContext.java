@@ -212,4 +212,30 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   public Map<String, String> getExternalImports() {
     return externalImports;
   }
+
+  /**
+   * Captures what a conversion attempt can change, named types and their placeholders included;
+   * running the result undoes the attempt.
+   */
+  @Override
+  public Runnable checkpoint() {
+    final Runnable cycle = super.checkpoint();
+    final Map<String, Schema> types = new LinkedHashMap<>(namedTypes);
+    final Set<String> externals = new LinkedHashSet<>(externalTypes);
+    final Map<String, String> imports = new LinkedHashMap<>(externalImports);
+    final Map<String, String> assigned = new LinkedHashMap<>(assignedRefNameByUri);
+    final int next = nextRefIndex;
+    return () -> {
+      cycle.run();
+      namedTypes.clear();
+      namedTypes.putAll(types);
+      externalTypes.clear();
+      externalTypes.addAll(externals);
+      externalImports.clear();
+      externalImports.putAll(imports);
+      assignedRefNameByUri.clear();
+      assignedRefNameByUri.putAll(assigned);
+      nextRefIndex = next;
+    };
+  }
 }
