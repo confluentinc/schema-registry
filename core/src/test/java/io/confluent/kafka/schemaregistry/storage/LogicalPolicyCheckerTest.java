@@ -28,7 +28,11 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class LogicalPolicyCheckerTest {
@@ -62,6 +66,14 @@ class LogicalPolicyCheckerTest {
     return new SimpleParsedSchemaHolder(new AvroSchema(avro));
   }
 
+  // Protobuf files with one or several top-level messages, as Flink reads them.
+  private static final String ORDER = "message Order { int32 id = 1; }\n";
+  private static final String SHIP = "message Ship { string to = 1; }\n";
+
+  private static ProtobufSchema proto(String... messages) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("", messages));
+  }
+
   // -- toLogicalType ------------------------------------------------------------------------------
 
   @Test
@@ -75,6 +87,28 @@ class LogicalPolicyCheckerTest {
     when(unknown.schemaType()).thenReturn("XML");
     assertThrows(IllegalArgumentException.class,
         () -> LogicalPolicyChecker.toLogicalType(unknown));
+  }
+
+  @Test
+  void thePolicyReadsAMultiMessageProtobufFileAsFlinkDoes() {
+    // As Flink's row: one nullable row per top-level message, by its simple name, in file order.
+    LogicalType logical = LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER, SHIP));
+    List<Field> fields = logical.getRootSchema().getFields();
+    assertEquals(List.of("Order", "Ship"), names(logical));
+    assertTrue(fields.stream().allMatch(f -> f.getSchema().isNullable()));
+    // A file with one message is that message, unwrapped.
+    assertEquals(List.of("id"), names(LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER))));
+  }
+
+  @Test
+  void formatLogicalShowsAMultiMessageProtobufFilesFirstMessage() {
+    // Only the policy wraps the messages; format=logical keeps its reading.
+    assertEquals(List.of("id"), names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
+  }
+
+  private static List<String> names(LogicalType logical) {
+    return logical.getRootSchema().getFields().stream().map(Field::getName)
+        .collect(Collectors.toList());
   }
 
   // -- validity runs regardless of level / previous versions -------------------------------------
@@ -102,6 +136,34 @@ class LogicalPolicyCheckerTest {
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
     assertFalse(errors.isEmpty());
     assertTrue(errors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")), errors.toString());
+  }
+
+  @Test
+  void aProtobufFileGainingOrLosingAMessageIsRejected() {
+    // Flink's row reshapes between one message and several: every field moves under a row.
+    assertFalse(LogicalPolicyChecker.check(proto(ORDER, SHIP),
+        List.of(new SimpleParsedSchemaHolder(proto(ORDER))), CompatibilityLevel.BACKWARD).isEmpty());
+    assertFalse(LogicalPolicyChecker.check(proto(ORDER),
+        List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FORWARD)
+        .isEmpty());
+  }
+
+  @Test
+  void aChangeToAProtobufFilesSecondMessageIsChecked() {
+    // Every message is a row of the table, so narrowing a field of the second one is caught.
+    ProtobufSchema wide = proto(ORDER, "message Ship { int64 weight = 1; }\n");
+    ProtobufSchema narrow = proto(ORDER, "message Ship { int32 weight = 1; }\n");
+    List<String> errors = LogicalPolicyChecker.check(
+        narrow, List.of(new SimpleParsedSchemaHolder(wide)), CompatibilityLevel.BACKWARD);
+    assertFalse(errors.isEmpty());
+    assertTrue(errors.stream().anyMatch(e -> e.contains("weight")), errors.toString());
+  }
+
+  @Test
+  void aProtobufFilesMessagesReorderedAreCompatible() {
+    List<String> errors = LogicalPolicyChecker.check(proto(SHIP, ORDER),
+        List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FULL);
+    assertTrue(errors.isEmpty(), errors.toString());
   }
 
   @Test
