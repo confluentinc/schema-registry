@@ -479,7 +479,7 @@ public abstract class EncryptionExecutorTest {
       // and threaded through to the dek registry client, not dropped.
       RuleContext ctxWithContext = new RuleContext(Collections.emptyMap(), null, null, target,
           ":.myctx:widget-value", null, null, null, null, false,
-          RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+          RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
       executor.newTransform(ctxWithContext);
       verify(mockDekClient).getKek("kek1", false, ".myctx");
 
@@ -487,7 +487,7 @@ public abstract class EncryptionExecutorTest {
       // null rather than being sent to the registry as the literal "." context.
       RuleContext ctxDefaultContext = new RuleContext(Collections.emptyMap(), null, null, target,
           "widget-value", null, null, null, null, false,
-          RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+          RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
       executor.newTransform(ctxDefaultContext);
       verify(mockDekClient).getKek("kek1", false, null);
     } finally {

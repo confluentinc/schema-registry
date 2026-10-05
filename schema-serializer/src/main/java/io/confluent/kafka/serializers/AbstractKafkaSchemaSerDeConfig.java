@@ -188,6 +188,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String RULE_SERVICE_LOADER_ENABLE_DOCS =
       "Whether to enable the ServiceLoader for rule executors, defaults to true.";
 
+  public static final String RULE_METRICS_ENABLE = "rule.metrics.enable";
+  public static final boolean RULE_METRICS_ENABLE_DEFAULT = true;
+  public static final String RULE_METRICS_ENABLE_DOCS =
+      "Whether to register and emit rule-execution metrics from the schema-registry "
+          + "serializer/deserializer. Defaults to true. Set to false to skip metric "
+          + "registration entirely (no local registration, no JMX, no KIP-714 push).";
+
   public static final String VALIDATION_RULES_EXECUTOR_CLASS =
       "validation.rules.executor.class";
   public static final String VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT =
@@ -403,6 +410,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, RULE_ACTIONS_DOCS)
         .define(RULE_SERVICE_LOADER_ENABLE, Type.BOOLEAN, true,
                 Importance.LOW, RULE_SERVICE_LOADER_ENABLE_DOCS)
+        .define(RULE_METRICS_ENABLE, Type.BOOLEAN, RULE_METRICS_ENABLE_DEFAULT,
+                Importance.LOW, RULE_METRICS_ENABLE_DOCS)
         .define(VALIDATION_RULES_EXECUTOR_CLASS, Type.STRING,
                 VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT,
                 Importance.LOW, VALIDATION_RULES_EXECUTOR_CLASS_DOCS)
@@ -556,6 +565,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean enableRuleServiceLoader() {
     return this.getBoolean(RULE_SERVICE_LOADER_ENABLE);
+  }
+
+  public boolean enableRuleMetrics() {
+    return this.getBoolean(RULE_METRICS_ENABLE);
   }
 
   public ContextNameStrategy contextNameStrategy() {

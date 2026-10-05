@@ -22,7 +22,7 @@ public class RestInvalidModeException extends RestConstraintViolationException {
   public static final int ERROR_CODE = Errors.INVALID_MODE_ERROR_CODE;
 
   public RestInvalidModeException() {
-    this("Invalid mode. Valid values are READWRITE, READONLY, and IMPORT.");
+    this("Invalid mode. Valid values are READWRITE, READONLY, IMPORT and FORWARD.");
   }
 
   public RestInvalidModeException(String message) {

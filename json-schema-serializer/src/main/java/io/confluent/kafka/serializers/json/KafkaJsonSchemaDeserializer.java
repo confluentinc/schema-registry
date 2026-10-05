@@ -104,6 +104,15 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   }
 
   @Override
+  public JsonSchemaAndValue deserializeWithSchema(
+      String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults) {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  @Override
   public void close() {
     try {
       super.close();

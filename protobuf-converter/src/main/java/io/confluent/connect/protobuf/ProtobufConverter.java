@@ -19,6 +19,8 @@ import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -124,6 +126,11 @@ public class ProtobufConverter implements Converter {
             topic
         ), e);
       }
+    } catch (AuthenticationException | AuthorizationException e) {
+      // Rethrow as-is so Connect's retry-with-tolerance handling can see the
+      // original SR RestClientException in the cause chain instead of it being
+      // swallowed into a cause-less ConfigException below.
+      throw e;
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
@@ -173,6 +180,11 @@ public class ProtobufConverter implements Converter {
             topic
         ), e);
       }
+    } catch (AuthenticationException | AuthorizationException e) {
+      // Rethrow as-is so Connect's retry-with-tolerance handling can see the
+      // original SR RestClientException in the cause chain instead of it being
+      // swallowed into a cause-less ConfigException below.
+      throw e;
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
