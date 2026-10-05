@@ -28,4 +28,14 @@ public class RecursiveTypeException extends IllegalStateException {
   public RecursiveTypeException(String qualifiedName) {
     super("Cannot inline a recursive named type: " + qualifiedName);
   }
+
+  private RecursiveTypeException(String message, RecursiveTypeException cause) {
+    super(message, cause);
+  }
+
+  // As this, naming the version number it was found in; this itself if there is none.
+  RecursiveTypeException atVersion(int number) {
+    return number < 0 ? this : new RecursiveTypeException("Version " + number + ": " + getMessage(),
+        this);
+  }
 }

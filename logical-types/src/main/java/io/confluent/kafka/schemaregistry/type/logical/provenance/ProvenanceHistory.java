@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
@@ -184,6 +185,11 @@ public final class ProvenanceHistory {
     }
   }
 
+  // The registry's number for the computer's version index, or -1 if there is none.
+  private static int versionNumber(List<Integer> versions, int index) {
+    return index >= 0 && index < versions.size() ? versions.get(index) : -1;
+  }
+
   private static SchemaProvenance computeV1(String subject, List<SchemaMetadata> history,
       IntFunction<LogicalType> versionAt, IntPredicate reported) {
     List<SchemaType> schemaTypes = new ArrayList<>(history.size());
@@ -196,9 +202,21 @@ public final class ProvenanceHistory {
       ids.add(entry.getId());
       versions.add(entry.getVersion());
     }
+    // The version last converted is the one being converted or walked when either fails.
+    int[] reached = {-1};
+    IntFunction<LogicalType> tracked = i -> {
+      reached[0] = i;
+      return versionAt.apply(i);
+    };
     ProvenanceReport report;
     try {
-      report = ProvenanceComputer.report(schemaTypes, versionAt, reported);
+      report = ProvenanceComputer.report(schemaTypes, tracked, reported);
+    } catch (RecursiveTypeException e) {
+      throw e.atVersion(versionNumber(versions, reached[0]));
+    } catch (ValidationException e) {
+      int number = versionNumber(versions, reached[0]);
+      throw number < 0 ? e
+          : new ValidationException("Version " + number + ": " + e.getMessage(), e);
     } catch (AmbiguousProvenanceException e) {
       // The computer counts versions from 0 within the history; a caller knows them by number.
       int index = e.version();

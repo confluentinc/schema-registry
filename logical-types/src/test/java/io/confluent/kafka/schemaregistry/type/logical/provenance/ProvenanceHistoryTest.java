@@ -25,6 +25,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -73,6 +75,22 @@ class ProvenanceHistoryTest {
   }
 
   @Test
+  void aVersionWithNoLogicalFormOrARecursiveTypeIsNamed() {
+    // v2 fails: a Struct field (no logical form, 42201) or a recursive message (42213). The
+    // error names the version to fix, as an ambiguity or a limit already does.
+    String v1 = "message R { int32 id = 1; }\n";
+    String struct = "import \"google/protobuf/struct.proto\";\n"
+        + "message R { int32 id = 1; google.protobuf.Struct meta = 2; }\n";
+    String recursive = "message R { int32 id = 1; N n = 2; }\nmessage N { N next = 1; }\n";
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(2),
+        ProvenanceHistory.held(List.of(proto(v1), proto(struct))), false))
+        .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 2: ");
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(2),
+        ProvenanceHistory.held(List.of(proto(v1), proto(recursive))), false))
+        .isInstanceOf(RecursiveTypeException.class).hasMessageStartingWith("Version 2: ");
+  }
+
+  @Test
   void theEndsAlonePairAsTheWholeRangeDoes() {
     // a is dropped at v2 and re-added at v4: computed without keeping the interior, the ends
     // still carry every version's effect.
@@ -112,6 +130,18 @@ class ProvenanceHistoryTest {
       history.add(new SchemaMetadata(i, i, "AVRO", Collections.emptyList(), ""));
     }
     return history;
+  }
+
+  private static List<SchemaMetadata> protoHistory(int versions) {
+    List<SchemaMetadata> history = new ArrayList<>();
+    for (int i = 1; i <= versions; i++) {
+      history.add(new SchemaMetadata(i, i, "PROTOBUF", Collections.emptyList(), ""));
+    }
+    return history;
+  }
+
+  private static ProtobufSchema proto(String messages) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + messages);
   }
 
   private static AvroSchema record(String... fields) {
