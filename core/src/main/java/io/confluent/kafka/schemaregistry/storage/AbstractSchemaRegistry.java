@@ -747,6 +747,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * Deletes a subject without the LOGICAL permanent-delete check.
+   */
+  protected abstract List<Integer> deleteSubjectInternal(String subject, boolean permanentDelete)
+      throws SchemaRegistryException;
+
   protected Schema validateDeleteSchemaVersion(String subject,
                                                 int version,
                                                 boolean permanentDelete)
@@ -2695,7 +2701,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           && cascadeLifecycle
           && association.getLifecycle() == LifecyclePolicy.STRONG) {
         deleteSubject(qualifiedSubject, false);
-        deleteSubject(qualifiedSubject, true);
+        // Deleting a STRONG association hard-deletes its subject even under LOGICAL
+        deleteSubjectInternal(qualifiedSubject, true);
       }
     }
   }
