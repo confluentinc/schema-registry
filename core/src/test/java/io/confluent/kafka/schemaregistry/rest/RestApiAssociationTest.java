@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -4179,5 +4180,26 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
-}
+  @Test
+  public void testStrongCascadeHardDeletesLogicalSubject() throws Exception {
+    String subject = ":.default:logicalTopic-value";
+    String resourceId = "logical-cascade-123";
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(TestUtils.getRandomCanonicalAvroString(1).get(0));
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        "logicalTopic", "default", resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", LifecyclePolicy.STRONG, true, schemaRequest, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(config, subject);
 
+    // LOGICAL blocks a direct hard delete, but not the STRONG cascade
+    restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        resourceId, "topic", Collections.singletonList("value"), true, false);
+    assertFalse(restApp.restClient.getAllSubjects(true).contains(subject));
+  }
+
+}
