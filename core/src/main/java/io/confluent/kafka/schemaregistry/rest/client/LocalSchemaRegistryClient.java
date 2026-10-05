@@ -706,11 +706,14 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       if (!isPermanent && !schemaRegistry.hasSubjects(subject, false)) {
         throw Errors.subjectSoftDeletedException(subject);
       }
+      schemaRegistry.checkPermanentDeleteAllowed(subject, isPermanent);
       return schemaRegistry.deleteSubject(subject, isPermanent);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (SubjectNotSoftDeletedException e) {
       throw Errors.subjectNotSoftDeletedException(subject);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
           e);
@@ -772,6 +775,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     try {
+      schemaRegistry.checkPermanentDeleteAllowed(subject, isPermanent);
       schemaRegistry.deleteSchemaVersion(subject, schema.getVersion(), isPermanent);
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
@@ -789,6 +793,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
