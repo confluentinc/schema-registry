@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -132,6 +133,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  default RegisterSchemaResponse registerWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   /**
    * @deprecated use {@link #getSchemaById(int)} instead
    */
@@ -206,8 +213,26 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException;
 
+  /**
+   * Returns the latest schema rendered in {@code format}, which the registry interprets -- the
+   * formats a schema can be rendered in depend on its type.
+   */
+  default SchemaMetadata getLatestSchemaMetadata(String subject, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
+
+  /**
+   * Returns a version of a schema rendered in {@code format}, which the registry interprets --
+   * the formats a schema can be rendered in depend on its type.
+   */
+  default SchemaMetadata getSchemaMetadata(String subject, int version, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   default SchemaMetadata getSchemaMetadata(String subject, int version,
       boolean lookupDeletedSchema) throws IOException, RestClientException {
@@ -256,6 +281,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default List<String> testCompatibilityVerbose(
       String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default List<String> testCompatibilityVerboseWithRequest(
+      String subject, RegisterSchemaRequest request, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
@@ -369,6 +400,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse getIdWithRequestResponse(
+      String subject, RegisterSchemaRequest request, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

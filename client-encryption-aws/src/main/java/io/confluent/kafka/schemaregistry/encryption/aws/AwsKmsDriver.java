@@ -25,11 +25,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.model.NotFoundException;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
@@ -56,11 +59,46 @@ public class AwsKmsDriver implements KmsDriver {
     return AwsKmsClient.PREFIX;
   }
 
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof AwsServiceException)) {
+      return false;
+    }
+    AwsServiceException e = (AwsServiceException) t;
+    if (isAccessDeniedStatus(e.statusCode())) {
+      return true;
+    }
+    // NotFoundException is treated as access-denied here too: for a *shared* (cross-account)
+    // KMS key, "the key doesn't exist" and "we were never granted access to it" are
+    // indistinguishable from the caller's perspective, and equally a customer configuration
+    // problem -- neither should surface as an internal 500. AWS does not guarantee which of
+    // the two exceptions it returns for a missing cross-account key (it depends on where in
+    // its IAM-then-resource evaluation the request fails), so treating them differently would
+    // make our own response code non-deterministic across otherwise-identical requests.
+    if (e instanceof NotFoundException) {
+      return true;
+    }
+    // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400, so the
+    // status code alone is not enough; also inspect the service error code.
+    AwsErrorDetails details = e.awsErrorDetails();
+    if (details != null && details.errorCode() != null) {
+      String code = details.errorCode();
+      return code.contains("AccessDenied") || code.contains("Unauthorized");
+    }
+    return false;
+  }
+
   private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     try {
       String roleArn = (String) configs.get(ROLE_ARN);
-      if (roleArn == null) {
+      // Only fall back to AWS_ROLE_ARN env var when not in an IRSA-style context.
+      // IRSA (EKS service accounts, ECS task IAM, etc.) auto-sets both AWS_ROLE_ARN
+      // and AWS_WEB_IDENTITY_TOKEN_FILE; in that case DefaultCredentialsProvider's
+      // chain handles role assumption via AssumeRoleWithWebIdentity. Wrapping with
+      // StsAssumeRoleCredentialsProvider would incorrectly call AssumeRole on the
+      // IRSA role itself, which the IRSA role's trust policy does not permit.
+      if (roleArn == null && System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE) == null) {
         roleArn = System.getenv(AWS_ROLE_ARN);
       }
       String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
@@ -71,7 +109,6 @@ public class AwsKmsDriver implements KmsDriver {
       if (roleExternalId == null) {
         roleExternalId = System.getenv(AWS_ROLE_EXTERNAL_ID);
       }
-      String roleWebIdentityTokenFile = System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       String profile = (String) configs.get(PROFILE);
@@ -84,8 +121,7 @@ public class AwsKmsDriver implements KmsDriver {
       } else {
         provider = DefaultCredentialsProvider.create();
       }
-      // If roleWebIdentityTokenFile is set, use the DefaultCredentialsProvider
-      if (roleArn != null && roleWebIdentityTokenFile == null) {
+      if (roleArn != null) {
         Region region = getRegionFromKeyId(
             AwsKmsClient.removePrefix(AwsKmsClient.PREFIX, kekUrl.get()));
         return buildRoleProvider(provider, region, roleArn, roleSessionName, roleExternalId);

@@ -24,6 +24,7 @@
       "$id": "something_else"
     },
     "changes": [
+      "ID_CHANGED #/"
     ],
     "compatible": true
   },
@@ -553,7 +554,7 @@
       }
     },
     "changes": [
-      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar",
+      "OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar",
       "PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL #/properties/foo"
     ],
     "compatible": false,
@@ -1043,7 +1044,7 @@
       }
     },
     "changes": [
-      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
+      "OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
     ],
     "compatible": false,
     "compatible_lenient": true

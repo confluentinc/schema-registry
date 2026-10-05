@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 public enum CompatibilityPolicy {
+  LOGICAL,
   STRICT,
   LENIENT;
 
@@ -32,7 +33,9 @@ public enum CompatibilityPolicy {
     }
 
     name = name.toUpperCase();
-    if (STRICT.name.equals(name)) {
+    if (LOGICAL.name.equals(name)) {
+      return LOGICAL;
+    } else if (STRICT.name.equals(name)) {
       return STRICT;
     } else if (LENIENT.name.equals(name)) {
       return LENIENT;

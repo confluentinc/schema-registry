@@ -1,0 +1,697 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.type.logical;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Emits a {@link LogicalType} as DDL text — the inverse of
+ * {@link LogicalTypesSchemaVisitor}. Output is canonical (one statement per
+ * line; struct bodies multi-line when more than two fields). Round-trips
+ * through the visitor produce an equivalent {@code LogicalType}.
+ *
+ * <p><b>Lossy points</b> (intentional, matching visitor capability):
+ * <ul>
+ *   <li>External references have no syntactic marker — they're inferred on
+ *       read-back from usage. {@code USING TYPE} statements survive (carrying the
+ *       wire-format URI binding) but bare externals (no URI) are implicit,
+ *       identified by appearing in a type position without a matching local
+ *       {@code STRUCT}/{@code ENUM}.</li>
+ *   <li>Path-keyed {@code defaultValues} aren't re-emitted; field-level
+ *       defaults survive via {@link Schema.Field#getDefaultValue()}.</li>
+ *   <li>The single-root sugar is detected and the trailing root-registration
+ *       {@code TYPE} statement is elided when it would be redundant. There is
+ *       no multi-root UNION sugar: when several independent types are
+ *       unreferenced, root inference selects the first declared and the rest
+ *       remain peer named types; a UNION-of-named-types root must be written
+ *       explicitly ({@code TYPE UNION(...)}).</li>
+ * </ul>
+ *
+ * <p>A named inline root — a bare {@code STRUCT}/{@code ENUM} carrying
+ * {@link LogicalType#getName()} (e.g. an unwrapped Protobuf message) — is emitted as a named
+ * declaration and round-trips: the visitor unwraps a leaf named root back to a bare body carrying
+ * {@code LogicalType.name} (see {@code LogicalTypesSchemaVisitor.maybeUnwrapNamedRoot}), so the
+ * bare-root + name shape is preserved through {@code LT → DDL → LT}.
+ */
+public final class LogicalTypeToDdlConverter {
+
+  // Identifier-quoting rules (reserved keyword set, lexer rules) live in
+  // Schema.quoteIdentifierIfNeeded so this emitter and Schema.toDdl share
+  // a single source of truth. Removed the local RESERVED_KEYWORDS list.
+
+  private LogicalTypeToDdlConverter() {
+  }
+
+  public static String toDdl(LogicalType logicalType) {
+    return new Printer(logicalType).script();
+  }
+
+  private static final class Printer {
+    private final LogicalType lt;
+    private final Set<String> localNames;
+    // Not final: rowExpr/unionExpr swap in a fresh local builder so they
+    // can reuse appendField/appendBranch (which write to `sb`) without
+    // their output landing in the outer accumulator. Restored in a
+    // try/finally.
+    private StringBuilder sb = new StringBuilder();
+
+    Printer(LogicalType lt) {
+      this.lt = lt;
+      this.localNames = lt.getNamedTypes().keySet();
+    }
+
+    String script() {
+      if (lt.getNamespace() != null) {
+        sb.append("NAMESPACE ")
+            .append(qualifiedName(lt.getNamespace()))
+            .append(";\n");
+      }
+
+      // USING TYPE declarations: external-ness is inferred on read-back from
+      // usage, so bare externals don't need a syntactic marker. Only the
+      // URI bindings (synthetic-wrapper $ref / import targets) need to be
+      // emitted so they survive DDL → LT → DDL round-trip. Restrict to FQNs
+      // that local code actually references (intersect with externalRefs)
+      // to drop any stale entries.
+      Set<String> externalRefs = new LinkedHashSet<>(collectExternalRefs());
+      for (Map.Entry<String, String> e : lt.getExternalImports().entrySet()) {
+        if (!externalRefs.contains(e.getKey())) {
+          continue;
+        }
+        // displayName so the key re-emits the way a type reference does: the visitor stores it
+        // namespace-qualified, and re-parsing applies the namespace again.
+        sb.append("USING TYPE ").append(qualifiedName(displayName(e.getKey())))
+            .append(" FOR REF ").append(stringLiteral(e.getValue()))
+            .append(";\n");
+      }
+
+      // A named inline root (bare STRUCT/ENUM carrying LogicalType.name — e.g. a Protobuf message
+      // unwrapped to a struct, or a JSON root object's title) is emitted as a named declaration so
+      // its name shows in the DDL. It is emitted FIRST, before the peer declarations, because the
+      // visitor infers the root as the first-declared type not referenced by another — so ordering
+      // it first makes it the root even when independent peer types follow.
+      //
+      // The one guard is a name collision: if the root's namespace-qualified name already names a
+      // local type, emitting the declaration would duplicate it on parse, so fall back to the
+      // anonymous `TYPE STRUCT(...)` form instead. (Display only — exact-shape round-trip later.)
+      Schema root = lt.getRootSchema();
+      boolean rootIsBareNamed =
+          (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.ENUM)
+              && lt.getName() != null;
+      boolean rootIsNamedInline = rootIsBareNamed && !namedTypeKeyExistsForRoot(lt.getName());
+      if (rootIsNamedInline) {
+        printCreateType(lt.getName(), root);
+      }
+
+      // Peer named-type declarations (`STRUCT <name> (...)` / `ENUM <name> (...)`), LOCAL types
+      // only. Externals' bodies are also in namedTypes (lazy-promoted by the reader from
+      // resolvedReferences), but they're external by inference on read-back — must NOT be
+      // re-emitted here.
+      for (String name : orderedLocalNames()) {
+        if (lt.getExternalTypes().contains(name)) {
+          continue;
+        }
+        printCreateType(name, lt.getNamedTypes().get(name));
+      }
+
+      // Root registration.
+      if (rootIsNamedInline) {
+        // Force the root with an explicit trailing TYPE in two cases:
+        //   - a peer references it: inference drops referenced types from the unreferenced set, so
+        //     sugar would pick a peer instead;
+        //   - the root is nullable: a bare named declaration re-parses under sugar as NOT NULL
+        //     (ambient), so without the explicit TYPE the root's nullability would be lost.
+        // The trailing TYPE carries the nullability marker the bare declaration cannot.
+        if (inlineRootReferencedByPeer() || root.isNullable()) {
+          sb.append("TYPE ").append(qualifiedName(lt.getName()));
+          if (!root.isNullable()) {
+            sb.append(" NOT NULL");
+          }
+          sb.append(";\n");
+        }
+      } else if (!sugarWouldInferRoot()) {
+        // Trailing `TYPE <typeExpr>` for a root not emitted as a named declaration, omitted when
+        // the visitor's auto-detect would produce the same root from the declarations alone.
+        sb.append("TYPE ").append(typeExpr(root)).append(";\n");
+      }
+
+      return sb.toString();
+    }
+
+    // ---------------------------------------------------------------------
+    // Named-type declarations
+    // ---------------------------------------------------------------------
+
+    private void printCreateType(String name, Schema body) {
+      switch (body.getType()) {
+        case STRUCT:
+          sb.append("STRUCT ").append(qualifiedName(displayName(name))).append(" ");
+          appendStructBody(body, /*indent=*/"");
+          break;
+        case ENUM:
+          sb.append("ENUM ").append(qualifiedName(displayName(name))).append(" ");
+          appendEnumBody(body);
+          break;
+        default:
+          throw new ValidationException(
+              "Named-type body must be STRUCT or ENUM, got " + body.getType()
+                  + " for '" + name + "'");
+      }
+      appendCommentTagsParams(body);
+      sb.append(";\n");
+    }
+
+    private void appendStructBody(Schema struct, String indent) {
+      List<Schema.Field> fields = struct.getFields();
+      List<Rule> tableRules = struct.getRules();
+      // Use the multi-line shape if there are any table-level CHECKs, regardless
+      // of field count — table CHECKs read clearly on their own line.
+      boolean multiline = fields.size() > 2 || !tableRules.isEmpty();
+      int totalItems = fields.size() + tableRules.size();
+      if (!multiline) {
+        sb.append("(");
+        for (int i = 0; i < fields.size(); i++) {
+          if (i > 0) {
+            sb.append(", ");
+          }
+          appendField(fields.get(i));
+        }
+        sb.append(")");
+      } else {
+        sb.append("(\n");
+        String childIndent = indent + "  ";
+        int written = 0;
+        for (Schema.Field field : fields) {
+          sb.append(childIndent);
+          appendField(field);
+          written++;
+          if (written < totalItems) {
+            sb.append(",");
+          }
+          sb.append("\n");
+        }
+        for (Rule rule : tableRules) {
+          sb.append(childIndent);
+          appendCheckRule(rule);
+          written++;
+          if (written < totalItems) {
+            sb.append(",");
+          }
+          sb.append("\n");
+        }
+        sb.append(indent).append(")");
+      }
+    }
+
+    private void appendEnumBody(Schema enumSchema) {
+      List<Schema.EnumValue> values = enumSchema.getEnumValues();
+      sb.append("(");
+      for (int i = 0; i < values.size(); i++) {
+        if (i > 0) {
+          sb.append(", ");
+        }
+        sb.append(stringLiteral(values.get(i).getSymbol()));
+        if (values.get(i).getDoc() != null) {
+          sb.append(" COMMENT ").append(stringLiteral(values.get(i).getDoc()));
+        }
+        appendWithParams(values.get(i).getParams());
+      }
+      sb.append(")");
+    }
+
+    // ---------------------------------------------------------------------
+    // Field / branch
+    // ---------------------------------------------------------------------
+
+    private void appendField(Schema.Field field) {
+      sb.append(identifier(field.getName())).append(" ")
+          .append(typeExpr(field.getSchema()));
+      if (field.hasDefaultValue() && !field.hasDerivedDefault()) {
+        sb.append(" DEFAULT ").append(literal(field.getDefaultValue(), field.getSchema()));
+      }
+      // Per grammar order: defaultClause -> checkClause* -> commentClause
+      // -> tagsClause -> withClause.
+      for (Rule rule : field.getRules()) {
+        sb.append(' ');
+        appendCheckRule(rule);
+      }
+      if (field.getDoc() != null) {
+        sb.append(" COMMENT ").append(stringLiteral(field.getDoc()));
+      }
+      if (!field.getTags().isEmpty()) {
+        sb.append(" TAGS(");
+        for (int i = 0; i < field.getTags().size(); i++) {
+          if (i > 0) {
+            sb.append(", ");
+          }
+          sb.append(stringLiteral(field.getTags().get(i)));
+        }
+        sb.append(")");
+      }
+      appendWithParams(field.getParams());
+    }
+
+    /**
+     * Emit one CHECK clause: {@code [CONSTRAINT name] CHECK (sql) [MESSAGE 'doc']}.
+     * Uses {@link Rule#getSql()} verbatim for lossless DDL round-trip.
+     */
+    private void appendCheckRule(Rule rule) {
+      if (rule.getName() != null) {
+        sb.append("CONSTRAINT ").append(identifier(rule.getName())).append(' ');
+      }
+      sb.append("CHECK (").append(rule.getSql()).append(')');
+      if (rule.getDoc() != null) {
+        sb.append(" MESSAGE ").append(stringLiteral(rule.getDoc()));
+      }
+    }
+
+    private void appendBranch(Schema.UnionBranch branch) {
+      sb.append(identifier(branch.getName())).append(" ")
+          .append(typeExpr(branch.getSchema()));
+      if (branch.getDoc() != null) {
+        sb.append(" COMMENT ").append(stringLiteral(branch.getDoc()));
+      }
+      appendWithParams(branch.getParams());
+    }
+
+    // ---------------------------------------------------------------------
+    // Schema-level metadata (doc, tags, params on a named-type body)
+    // ---------------------------------------------------------------------
+
+    private void appendCommentTagsParams(Schema schema) {
+      if (schema.getDoc() != null) {
+        sb.append(" COMMENT ").append(stringLiteral(schema.getDoc()));
+      }
+      if (!schema.getTags().isEmpty()) {
+        sb.append(" TAGS(");
+        for (int i = 0; i < schema.getTags().size(); i++) {
+          if (i > 0) {
+            sb.append(", ");
+          }
+          sb.append(stringLiteral(schema.getTags().get(i)));
+        }
+        sb.append(")");
+      }
+      appendWithParams(schema.getParams());
+    }
+
+    private void appendWithParams(Map<String, Object> params) {
+      if (params == null || params.isEmpty()) {
+        return;
+      }
+      sb.append(" WITH(");
+      boolean first = true;
+      for (Map.Entry<String, Object> entry : params.entrySet()) {
+        if (!first) {
+          sb.append(", ");
+        }
+        first = false;
+        sb.append(stringLiteral(entry.getKey())).append(" = ")
+            .append(stringLiteral(String.valueOf(entry.getValue())));
+      }
+      sb.append(")");
+    }
+
+    // ---------------------------------------------------------------------
+    // Type expressions
+    // ---------------------------------------------------------------------
+
+    /**
+     * DDL form of {@code schema} as a type expression suitable for use in a
+     * field, branch, or trailing root-registration position. STRUCTs render
+     * as {@code STRUCT(...)}; everything else delegates to {@link Schema#toDdl}
+     * and adds richer metadata-aware nesting only where needed.
+     */
+    private String typeExpr(Schema schema) {
+      switch (schema.getType()) {
+        case STRUCT:
+          return rowExpr(schema);
+        case UNION:
+          return unionExpr(schema);
+        case ARRAY:
+          return wrapNullable("ARRAY<" + typeExpr(schema.getElementType()) + ">", schema);
+        case MULTISET:
+          return wrapNullable("MULTISET<" + typeExpr(schema.getElementType()) + ">", schema);
+        case MAP:
+          return wrapNullable(
+              "MAP<" + typeExpr(schema.getKeyType()) + ", "
+                  + typeExpr(schema.getValueType()) + ">", schema);
+        case NAMED_TYPE_REF:
+          // Schema.toDdl returns the bare qualified name without identifier
+          // quoting — collides with reserved words (e.g., a type literally
+          // named "Row" would lex as the ROW keyword). Quote per-segment.
+          return wrapNullable(qualifiedName(displayName(schema.getQualifiedName())), schema);
+        default:
+          // Primitive / decimal / parametric / ENUM — Schema.toDdl already
+          // emits the right syntax including the " NOT NULL" suffix when
+          // appropriate.
+          return schema.toDdl();
+      }
+    }
+
+    private String rowExpr(Schema struct) {
+      // Reuse appendField so inline STRUCT(...) emission preserves all
+      // per-field metadata (defaults, CHECK rules, doc, tags, params) —
+      // matching what the grammar's `rowType` accepts via `fieldDef`.
+      // Without this, e.g. `addr STRUCT(zip INT CHECK (zip > 0))` would
+      // round-trip to `addr STRUCT(zip INT)`, silently dropping the rule.
+      StringBuilder local = new StringBuilder("STRUCT(");
+      StringBuilder outer = sb;
+      sb = local;
+      try {
+        List<Schema.Field> fields = struct.getFields();
+        for (int i = 0; i < fields.size(); i++) {
+          if (i > 0) {
+            local.append(", ");
+          }
+          appendField(fields.get(i));
+        }
+      } finally {
+        sb = outer;
+      }
+      local.append(")");
+      return wrapNullable(local.toString(), struct);
+    }
+
+    private String unionExpr(Schema union) {
+      // Same swap-and-restore pattern as rowExpr so appendBranch can
+      // emit branch-level COMMENT/WITH metadata into the inline UNION(...)
+      // form.
+      StringBuilder local = new StringBuilder("UNION(");
+      StringBuilder outer = sb;
+      sb = local;
+      try {
+        List<Schema.UnionBranch> branches = union.getBranches();
+        for (int i = 0; i < branches.size(); i++) {
+          if (i > 0) {
+            local.append(", ");
+          }
+          appendBranch(branches.get(i));
+        }
+      } finally {
+        sb = outer;
+      }
+      local.append(")");
+      return wrapNullable(local.toString(), union);
+    }
+
+    private String wrapNullable(String base, Schema schema) {
+      return schema.isNullable() ? base : base + " NOT NULL";
+    }
+
+    // ---------------------------------------------------------------------
+    // Reference / sugar detection
+    // ---------------------------------------------------------------------
+
+    /**
+     * Walk the root schema and every LOCAL named-type body, collecting every
+     * {@link Schema.Type#NAMED_TYPE_REF} FQN. Intersect with
+     * {@link LogicalType#getExternalTypes} to find externals that local code
+     * actually references. Returns the FQNs eligible to receive a
+     * {@code USING TYPE} statement (when a URI binding exists).
+     *
+     * <p>Walking only LOCAL bodies (not external-promoted ones) avoids
+     * surfacing transitive externals in the emitted DDL — only the externals
+     * the user's local code directly references.
+     */
+    private List<String> collectExternalRefs() {
+      Set<String> all = new LinkedHashSet<>();
+      LogicalType.collectNamedRefs(lt.getRootSchema(), all);
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (lt.getExternalTypes().contains(e.getKey())) {
+          continue;
+        }
+        LogicalType.collectNamedRefs(e.getValue(), all);
+      }
+      all.retainAll(lt.getExternalTypes());
+      return new ArrayList<>(all);
+    }
+
+    /**
+     * True iff {@link LogicalTypesSchemaVisitor}'s "infer root from named-type
+     * declarations" sugar would, given just the local named types, produce
+     * the same {@code rootSchema} we have. When true, the trailing
+     * root-registration {@code TYPE} statement is elided.
+     */
+    /**
+     * True if the root's name, qualified by the document namespace, already names a local type —
+     * in which case emitting the root as a named declaration would duplicate it on parse.
+     */
+    private boolean namedTypeKeyExistsForRoot(String rootName) {
+      if (lt.getNamedTypes().containsKey(rootName)) {
+        return true;
+      }
+      String ns = lt.getNamespace();
+      return ns != null && lt.getNamedTypes().containsKey(ns + "." + rootName);
+    }
+
+    /**
+     * True if any local named type references the inline root (by its raw or namespace-qualified
+     * name). Such a reference removes the root from the visitor's unreferenced-root set, so
+     * inference would pick a peer instead and an explicit trailing TYPE is required.
+     */
+    private boolean inlineRootReferencedByPeer() {
+      Set<String> candidates = new LinkedHashSet<>();
+      candidates.add(lt.getName());
+      if (lt.getNamespace() != null) {
+        candidates.add(lt.getNamespace() + "." + lt.getName());
+      }
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (lt.getExternalTypes().contains(e.getKey())) {
+          continue; // externals are inferred from usage; they don't affect root inference
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        LogicalType.collectNamedRefs(e.getValue(), refs);
+        for (String candidate : candidates) {
+          if (refs.contains(candidate)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    private boolean sugarWouldInferRoot() {
+      if (lt.getNamedTypes().isEmpty()) {
+        return false;
+      }
+      // The visitor's sugar reasons over LOCAL types only — externals are
+      // inferred from usage and don't participate in root inference.
+      Set<String> defined = new LinkedHashSet<>(lt.getNamedTypes().keySet());
+      defined.removeAll(lt.getExternalTypes());
+      if (defined.isEmpty()) {
+        return false;
+      }
+      Map<String, Set<String>> uses = new LinkedHashMap<>();
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (lt.getExternalTypes().contains(e.getKey())) {
+          continue;
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        LogicalType.collectNamedRefs(e.getValue(), refs);
+        refs.retainAll(defined);
+        refs.remove(e.getKey()); // self-recursive types still count as roots
+        uses.put(e.getKey(), refs);
+      }
+      Set<String> referenced = new LinkedHashSet<>();
+      for (Set<String> r : uses.values()) {
+        referenced.addAll(r);
+      }
+      Set<String> roots = new LinkedHashSet<>(defined);
+      roots.removeAll(referenced);
+      // Nested types are never roots.
+      roots.removeIf(name -> LogicalType.parentOf(name, defined) != null);
+
+      Schema root = lt.getRootSchema();
+      if (roots.size() == 1) {
+        if (root.getType() != Schema.Type.NAMED_TYPE_REF || root.isNullable()) {
+          return false;
+        }
+        return roots.iterator().next().equals(root.getQualifiedName());
+      }
+      // Zero roots (cycle) or multiple unreferenced roots: the visitor infers a single root — the
+      // first-declared unreferenced type — which won't match a cyclic or UNION-of-refs root, so an
+      // explicit trailing TYPE is required. (A UNION-of-named-types root is no longer sugared; it
+      // must be written as an explicit `TYPE UNION(...)`.)
+      return false;
+    }
+
+    private static String simpleNameOf(String qualifiedName) {
+      int dot = qualifiedName.lastIndexOf('.');
+      return dot < 0 ? qualifiedName : qualifiedName.substring(dot + 1);
+    }
+
+    // ---------------------------------------------------------------------
+    // Ordering local named types (parents first, then children)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Local named types in an order that respects the dotted-nesting
+     * convention: a parent (e.g., {@code Outer}) precedes any of its
+     * children ({@code Outer.Inner}). Within the same nesting level,
+     * insertion order from {@link LogicalType#getNamedTypes()} is preserved.
+     */
+    private List<String> orderedLocalNames() {
+      // Stable sort by depth (number of nesting levels in the local-name
+      // tree) so parents come first. Depth is computed via parentOf chain
+      // length; a name with no local parent has depth 0.
+      List<String> names = new ArrayList<>(lt.getNamedTypes().keySet());
+      Map<String, Integer> depth = new LinkedHashMap<>();
+      for (String name : names) {
+        int d = 0;
+        String cur = name;
+        String p;
+        while ((p = LogicalType.parentOf(cur, lt.getNamedTypes().keySet())) != null) {
+          d++;
+          cur = p;
+        }
+        depth.put(name, d);
+      }
+      names.sort((a, b) -> Integer.compare(depth.get(a), depth.get(b)));
+      return names;
+    }
+
+    // ---------------------------------------------------------------------
+    // Names and literals
+    // ---------------------------------------------------------------------
+
+    /**
+     * Strip the document namespace prefix from a fully-qualified name so names under the active
+     * {@code NAMESPACE} render simplified (e.g. {@code com.example.demo.Address} → {@code Address}
+     * when the namespace is {@code com.example.demo}). Only simplifies when the visitor can reverse
+     * it on read-back:
+     * <ul>
+     *   <li>a bare (dot-free) remainder is always re-qualified with the namespace;</li>
+     *   <li>a dotted remainder is re-qualified only when a prefix of it names a locally-declared
+     *       parent type — i.e. it denotes nesting ({@code Outer.Inner}).</li>
+     * </ul>
+     * Otherwise the name is left fully qualified: foreign-namespace names, and a type in a
+     * sub-namespace of the document namespace with no local parent (e.g.
+     * {@code com.example.sub.Address}), would be read back as an unrelated FQN if simplified.
+     */
+    private String displayName(String fqn) {
+      String ns = lt.getNamespace();
+      if (ns == null || ns.isEmpty() || fqn == null || !fqn.startsWith(ns + ".")) {
+        return fqn;
+      }
+      String relative = fqn.substring(ns.length() + 1);
+      if (!relative.contains(".") || hasLocalParentPrefix(relative, ns)) {
+        return relative;
+      }
+      return fqn;
+    }
+
+    /**
+     * Mirror of {@code LogicalTypesSchemaVisitor#hasLocalParentPrefix} over the local named types:
+     * true iff a dotted prefix of {@code name} (as written, or namespace-prepended) names a
+     * locally-declared type — which is exactly when the visitor treats the dots as nesting and
+     * re-applies the namespace on read-back.
+     */
+    private boolean hasLocalParentPrefix(String name, String ns) {
+      Set<String> declared = lt.getLocalNamedTypes().keySet();
+      int dot = name.lastIndexOf('.');
+      while (dot > 0) {
+        String prefix = name.substring(0, dot);
+        if (declared.contains(prefix)
+            || (ns != null && !ns.isEmpty() && declared.contains(ns + "." + prefix))) {
+          return true;
+        }
+        dot = name.lastIndexOf('.', dot - 1);
+      }
+      return false;
+    }
+
+    private static String qualifiedName(String dotted) {
+      String[] parts = dotted.split("\\.");
+      StringBuilder b = new StringBuilder();
+      for (int i = 0; i < parts.length; i++) {
+        if (i > 0) {
+          b.append(".");
+        }
+        b.append(identifier(parts[i]));
+      }
+      return b.toString();
+    }
+
+    private static String identifier(String name) {
+      // Delegates to Schema.quoteIdentifierIfNeeded so this emitter and
+      // Schema.toDdl() share a single source of truth for the lexer keyword
+      // list and quoting rules.
+      return Schema.quoteIdentifierIfNeeded(name);
+    }
+
+    private static String stringLiteral(String s) {
+      return "'" + s.replace("'", "''") + "'";
+    }
+
+    private static String literal(Object value, Schema schema) {
+      if (value == null) {
+        return "NULL";
+      }
+      switch (schema.getType()) {
+        case BOOLEAN:
+          return Boolean.TRUE.equals(value) ? "TRUE" : "FALSE";
+        case TINYINT:
+        case SMALLINT:
+        case INT:
+        case BIGINT:
+        case DATE:
+        case TIME:
+        case TIMESTAMP:
+        case TIMESTAMP_LTZ:
+          return value.toString();
+        case FLOAT:
+        case DOUBLE:
+        case DECIMAL:
+          return value.toString();
+        case VARCHAR:
+        case CHAR:
+          return stringLiteral(value.toString());
+        case BINARY:
+        case VARBINARY:
+          return bytesLiteral(value);
+        default:
+          // Defaults on composite types or NAMED_TYPE_REF aren't supported by
+          // the grammar. Fall back to a quoted string so something is emitted;
+          // this won't round-trip cleanly but is better than a silent drop.
+          return stringLiteral(String.valueOf(value));
+      }
+    }
+
+    private static String bytesLiteral(Object value) {
+      byte[] bytes;
+      if (value instanceof byte[]) {
+        bytes = (byte[]) value;
+      } else if (value instanceof String) {
+        bytes = ((String) value).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      } else {
+        bytes = value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      }
+      StringBuilder hex = new StringBuilder("x'");
+      for (byte b : bytes) {
+        hex.append(String.format("%02X", b));
+      }
+      hex.append("'");
+      return hex.toString();
+    }
+  }
+}

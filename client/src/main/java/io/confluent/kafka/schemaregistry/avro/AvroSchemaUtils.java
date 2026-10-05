@@ -26,7 +26,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.avro.type.LogicalMapConversion;
+import io.confluent.avro.type.LogicalMapFactory;
 import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalTypeFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -45,7 +48,10 @@ import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.NameValidator;
+import org.apache.avro.NameValidator.Result;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaParseException;
 import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -74,6 +80,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -91,10 +98,23 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
+    registerLogicalTypeIfAbsent(new LogicalMapFactory());
+    registerLogicalTypeIfAbsent(new VariantLogicalTypeFactory());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
+  }
+
+  // Avro's LogicalTypes registry is a single JVM-global map keyed by name, so an
+  // unconditional register() would clobber another library's factory for the same name
+  // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
+  // unconditional, so leaving ours conditional lets whichever library claimed the name first
+  // keep owning it, while still registering when no other library has.
+  private static void registerLogicalTypeIfAbsent(LogicalTypes.LogicalTypeFactory factory) {
+    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(factory.getTypeName())) {
+      LogicalTypes.register(factory);
+    }
   }
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
@@ -123,6 +143,61 @@ public class AvroSchemaUtils {
     genericData.remove();
     reflectData.remove();
     specificData.remove();
+  }
+
+  // Walks a parsed Schema and validates simple names of named types, field names,
+  // and enum symbols against Avro's STRICT_VALIDATOR rules. Namespaces and aliases
+  // are intentionally not validated. Used in the NO_VALIDATION parser path so
+  // that callers can keep strict name checks while leaving namespaces unchecked.
+  public static void validateNames(Schema schema) {
+    if (schema == null) {
+      return;
+    }
+    validateNames(schema, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  private static void validateNames(Schema schema, Set<Schema> seen) {
+    if (schema == null || !seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        validateName(schema.getName());
+        for (Schema.Field field : schema.getFields()) {
+          validateName(field.name());
+          validateNames(field.schema(), seen);
+        }
+        break;
+      case ENUM:
+        validateName(schema.getName());
+        for (String symbol : schema.getEnumSymbols()) {
+          validateName(symbol);
+        }
+        break;
+      case FIXED:
+        validateName(schema.getName());
+        break;
+      case ARRAY:
+        validateNames(schema.getElementType(), seen);
+        break;
+      case MAP:
+        validateNames(schema.getValueType(), seen);
+        break;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          validateNames(branch, seen);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void validateName(String name) {
+    Result result = NameValidator.UTF_VALIDATOR.validate(name);
+    if (!result.isOK()) {
+      throw new SchemaParseException(result.getErrors());
+    }
   }
 
   public static GenericData getGenericData(boolean useLogicalTypes) {
@@ -172,6 +247,7 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new LogicalMapConversion());
     avroData.addLogicalTypeConversion(new VariantConversion());
     avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
@@ -182,7 +258,6 @@ public class AvroSchemaUtils {
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
-    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
@@ -559,6 +634,9 @@ public class AvroSchemaUtils {
         } else {
           build(env, s.getValueType(), o.append(",\"values\":"));
         }
+        if (lt != null) {
+          setLogicalProps(o, lt);
+        }
         setSimpleProps(o, s.getObjectProps());
         return o.append("}");
 
@@ -586,11 +664,6 @@ public class AvroSchemaUtils {
           o.append("]");
         } else if (st == Schema.Type.FIXED) {
           o.append(",\"size\":").append(Integer.toString(s.getFixedSize()));
-          lt = s.getLogicalType();
-          // adding the logical property
-          if (lt != null) {
-            setLogicalProps(o, lt);
-          }
         } else { // st == Schema.Type.RECORD
           o.append(",\"fields\":[");
           for (Schema.Field f : s.getFields()) {
@@ -605,6 +678,9 @@ public class AvroSchemaUtils {
             o.append("}");
           }
           o.append("]");
+        }
+        if (lt != null) {
+          setLogicalProps(o, lt);
         }
         setComplexProps(o, s);
         setSimpleProps(o, s.getObjectProps());

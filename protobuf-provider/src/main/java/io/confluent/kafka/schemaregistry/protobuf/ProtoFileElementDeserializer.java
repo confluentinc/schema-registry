@@ -370,7 +370,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
         value = toOption(valueNode);
         break;
       default:
-        throw new IllegalStateException(
+        throw new IllegalArgumentException(
           String.format("Unknown kind '%s' of given option node.",
             node.get("kind").asText()));
     }

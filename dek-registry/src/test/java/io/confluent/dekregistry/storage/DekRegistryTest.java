@@ -156,6 +156,29 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
+    public void testCreateDekWithEmptyKeyMaterialGeneratesDek() throws Exception {
+        // An empty encryptedKeyMaterial must be treated as absent, so that a shared KEK generates
+        // a new DEK instead of trying to unwrap empty ciphertext (which the KMS rejects, producing
+        // a spurious 500). kek (kekName1) from setUp is shared.
+        CreateDekRequest dekRequest = CreateDekRequest.fromJson(
+            "{\"subject\": \"emptyMaterialSubject\", \"version\": \"1\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"\", \"deleted\": false}");
+        DataEncryptionKey dek = dekRegistry.createDek(kek.getName(), false, dekRequest);
+        assertNotNull(dek.getEncryptedKeyMaterial());
+        assertFalse(dek.getEncryptedKeyMaterial().isEmpty());
+    }
+
+    @Test
+    public void testCreateDekWithInvalidKeyMaterialThrowsInvalidKey() throws Exception {
+        // Caller-supplied ciphertext that the KMS cannot unwrap is a client error (422/invalid
+        // key), not a server error (500).
+        String garbage = Base64.getEncoder().encodeToString("not-real-ciphertext".getBytes());
+        CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format(
+            "{\"subject\": \"badMaterialSubject\", \"version\": \"1\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", garbage));
+        assertThrows(InvalidKeyException.class,
+            () -> dekRegistry.createDek(kek.getName(), false, dekRequest));
+    }
+
+    @Test
     public void testDeleteKek() throws SchemaRegistryException  {
         // First soft delete.
         dekRegistry.deleteKek("kekName1", false);

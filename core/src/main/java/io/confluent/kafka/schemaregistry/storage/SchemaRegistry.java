@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -94,8 +95,25 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return register(subject, schema, normalize, false);
   }
 
-  Schema register(String subject, Schema schema, boolean normalize, boolean propagateSchemaTags)
-      throws SchemaRegistryException;
+  default Schema register(String subject, Schema schema, boolean normalize,
+      boolean propagateSchemaTags) throws SchemaRegistryException {
+    return register(subject, schema, normalize, false, propagateSchemaTags);
+  }
+
+  Schema register(String subject, Schema schema, boolean normalize, boolean force,
+      boolean propagateSchemaTags) throws SchemaRegistryException;
+
+  /**
+   * Registers what a request asks for, rather than a schema already extracted from it.
+   *
+   * <p>A request carries operations that a {@link Schema} cannot: the tags to add and remove are
+   * applied to the schema being registered, so a caller holding a request should register it
+   * whole instead of converting it and losing them.
+   */
+  default Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException();
+  }
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
     try {
@@ -137,6 +155,19 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
+
+  /**
+   * Rejects a user-requested permanent delete when the subject's effective compatibilityPolicy
+   * is LOGICAL. Cascading deletes of a STRONG association do not call this.
+   */
+  default void checkPermanentDeleteAllowed(String subject, boolean permanentDelete)
+      throws SchemaRegistryException {
+    if (permanentDelete && CompatibilityPolicy.forName(
+        getConfigInScope(subject).getCompatibilityPolicy()) == CompatibilityPolicy.LOGICAL) {
+      throw new OperationNotPermittedException("Permanent delete is not allowed for subject "
+          + subject + " because compatibilityPolicy=LOGICAL");
+    }
+  }
 
   void deleteContext(String delimitedContext) throws SchemaRegistryException;
 
@@ -183,11 +214,22 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default void setTenant(String tenant) {
   }
 
+  /**
+   * Whether the current registration context allows an empty-string or pure-wildcard
+   * ({@code *}) subject name
+   */
+  default boolean allowEmptySubject() {
+    return true;
+  }
+
   SchemaRegistryConfig config();
 
   // Can be used to pass values between extensions
   Map<String, Object> properties();
 
+  /**
+   * Returns the metadata encoder, or {@code null} if SR-level encoding is disabled.
+   */
   MetadataEncoderService getMetadataEncoder();
 
   void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler);
@@ -217,7 +259,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException;
 
-  ParsedSchema parseSchema(Schema schema, boolean isNew, boolean normalize) throws
+  ParsedSchema parseSchema(Schema schema, boolean validateAsNew, boolean normalize) throws
           InvalidSchemaException;
 
   Set<String> listSubjectsWithPrefix(String prefix, LookupFilter filter) throws
@@ -333,6 +375,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default Schema registerOrForward(String subject, RegisterSchemaRequest request,
                                    boolean normalize, Map<String, String> headerProperties) throws
           SchemaRegistryException {
+    return registerOrForward(subject, request, normalize, false, headerProperties);
+  }
+
+  default Schema registerOrForward(String subject, RegisterSchemaRequest request,
+                                   boolean normalize, boolean force,
+                                   Map<String, String> headerProperties) throws
+          SchemaRegistryException {
     return null;
   }
 
@@ -376,7 +425,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   default AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws SchemaRegistryException {
     return null;
   }
 
@@ -443,6 +493,24 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
       throws SchemaRegistryException {
+  }
+
+  /**
+   * Deletes the associations for a resource. When {@code async} is true, implementations that
+   * support it delete the association entries before returning and complete any cascaded
+   * subject deletes in the background. A queued subject is deleted even if new versions are
+   * registered under it before the background delete runs. Until then the subject still
+   * exists, so recreating the resource with a different schema can fail. By default this runs
+   * synchronously.
+   */
+  default void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun, boolean async,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    deleteAssociationsOrForward(subject, resourceId, resourceType, associationTypes,
+        cascadeLifecycle, dryRun, headerProperties);
   }
 
   default void addLeaderChangeListener(Consumer<Boolean> listener) {}

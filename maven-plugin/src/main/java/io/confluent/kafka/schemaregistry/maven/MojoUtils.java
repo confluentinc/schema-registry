@@ -17,9 +17,9 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalAvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalJsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalProtobufSchemaProvider;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -34,9 +34,17 @@ public class MojoUtils {
     return new String(encoded, encoding);
   }
 
+  /**
+   * The providers used when none are configured. These accept logical types DDL in addition to
+   * the native formats, so that a schema authored as DDL can be validated and compared locally.
+   * Registering one still sends the DDL itself -- see {@code UploadSchemaRegistryMojo} -- so what
+   * gets stored is decided by the registry, not by which providers happen to be configured here.
+   */
   public static List<SchemaProvider> defaultSchemaProviders() {
     return Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+        new LogicalAvroSchemaProvider(),
+        new LogicalJsonSchemaProvider(),
+        new LogicalProtobufSchemaProvider()
     );
   }
 

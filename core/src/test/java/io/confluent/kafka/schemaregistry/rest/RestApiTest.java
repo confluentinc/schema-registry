@@ -25,6 +25,7 @@ import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -61,6 +62,9 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
@@ -77,6 +81,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.apache.avro.Schema.Parser;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -472,6 +477,89 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testNormalizeConfigFallbackNotAppliedInImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setNormalize(true);
+    restApp.restClient.updateConfig(configUpdateRequest, subject);
+    restApp.restClient.setMode("IMPORT", subject);
+
+    // Simulates the exporter's write path: normalize=false request, explicit id/version as
+    // required by IMPORT mode.
+    restApp.restClient.registerSchema(rawSchema, subject, 1, 1);
+
+    assertEquals(
+        rawSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip the normalize "
+            + "config fallback");
+  }
+
+  @Test
+  public void testNormalizeConfigFallbackAppliedOutsideImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setNormalize(true);
+    restApp.restClient.updateConfig(configUpdateRequest, subject);
+
+    // Mode stays READWRITE (default): the normalize config fallback still applies.
+    restApp.restClient.registerSchema(rawSchema, subject);
+
+    assertEquals(
+        normalizedSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be normalized via the config fallback outside IMPORT mode");
+  }
+
+  @Test
+  public void testExplicitNormalizeIgnoredInImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
+
+    restApp.restClient.setMode("IMPORT", subject);
+
+    // IMPORT stores the schema verbatim, so even an explicit normalize=true is skipped.
+    restApp.restClient.registerSchema(rawSchema, subject, 1, 1, true);
+
+    assertEquals(
+        rawSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip normalization even "
+            + "when normalize=true is requested");
+  }
+
   public void testImportSameSchemaDifferentVersion() throws Exception {
     String schema = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -996,6 +1084,16 @@ public abstract class RestApiTest {
           "Invalid subject shouldn't be registered"
       );
     }
+  }
+
+  @Test
+  public void testRegisterSchemaWithWildcardSubjectAllowedByDefault() throws Exception {
+    // schema.reject.empty.subject defaults to false, so the pure-wildcard subject "*"
+    // is still accepted, mirroring the empty-subject default behavior.
+    // Note: this only covers registration; downstream operations against a literal "*"
+    // subject (listSubjects, getSchemaBySubject, deleteSubject) are not exercised here.
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(1), "*");
   }
 
   @Test
@@ -2122,6 +2220,332 @@ public abstract class RestApiTest {
           Errors.INVALID_SCHEMA_ERROR_CODE,
           rce.getErrorCode());
     }
+  }
+
+  @Test
+  public void testSameIdTombstonePreservesReferencedSoftDeletedVersion() throws Exception {
+    // Reproduces the bug where re-registering the content of a soft-deleted version
+    // reuses the same global ID and tombstones the old (subject, version) row, breaking
+    // any schema reference that still points at it (references resolve by subject+version).
+    String userSubject = "user";
+    String orderSubject = "order";
+    restApp.restClient.updateCompatibility(NONE.name, userSubject);
+
+    String userV1 = "{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"long\"}]}";
+    String userV2 = "{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"long\"},"
+        + "{\"name\":\"name\",\"type\":\"string\"}]}";
+
+    int userV1Id = restApp.restClient.registerSchema(userV1, userSubject);
+    int userV2Id = restApp.restClient.registerSchema(userV2, userSubject);
+    assertEquals(expectedSchemaId(1), userV1Id);
+    assertEquals(expectedSchemaId(2), userV2Id);
+
+    String orderSchema = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"buyer\",\"type\":\"ns.User\"}]}";
+    RegisterSchemaRequest orderRequest = new RegisterSchemaRequest();
+    orderRequest.setSchema(orderSchema);
+    SchemaReference ref = new SchemaReference("ns.User", userSubject, 2);
+    orderRequest.setReferences(Collections.singletonList(ref));
+    int orderId = restApp.restClient.registerSchema(orderRequest, orderSubject, false).getId();
+    assertEquals(expectedSchemaId(3), orderId);
+
+    // Soft delete the referrer first, then both referenced versions.
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, orderSubject, "1"));
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, userSubject, "1"));
+    assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, userSubject, "2"));
+
+    // Re-register the same content as user v2; this reuses the global ID of v2 and
+    // creates a new (active) v3 in the same subject.
+    int reRegisteredId = restApp.restClient.registerSchema(userV2, userSubject);
+    assertEquals(userV2Id, reRegisteredId,
+        "Re-registering the same content should reuse the original global ID");
+    Schema userV3 = restApp.restClient.getVersion(userSubject, 3);
+    assertEquals((Integer) 3, userV3.getVersion());
+    assertEquals(Integer.valueOf(userV2Id), userV3.getId());
+
+    // The soft-deleted v2 must NOT have been tombstoned; the (subject, version) the
+    // soft-deleted order schema points at must still be retrievable.
+    Schema softDeletedV2 = restApp.restClient.getVersion(userSubject, 2, true);
+    assertEquals((Integer) 2, softDeletedV2.getVersion());
+    assertEquals(Integer.valueOf(userV2Id), softDeletedV2.getId());
+    assertTrue(softDeletedV2.getDeleted());
+
+    // The soft-deleted referrer is still tracked as a reference of user v2.
+    List<Integer> refs = restApp.restClient.getReferencedBy(userSubject, 2, true);
+    assertTrue(refs.contains(orderId),
+        "Soft-deleted referrer should still be reported as a reference of user v2");
+  }
+
+  @Test
+  public void testSameIdTombstoneStillRunsWhenNoReferences() throws Exception {
+    // The reference-aware guard must not regress the original optimization: when nothing
+    // (active or soft-deleted) references the same-ID soft-deleted version, it should
+    // still be tombstoned during re-registration.
+    String subject = "no_refs";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+
+    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
+    assertEquals(v2Id, reRegisteredId);
+
+    // The old soft-deleted v2 should be gone (tombstoned); only the new v3 remains.
+    try {
+      restApp.restClient.getVersion(subject, 2, true);
+      fail("Soft-deleted v2 should have been tombstoned when no references exist");
+    } catch (RestClientException rce) {
+      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    // v1 (different id) should still be soft-deleted and visible with deleted=true.
+    Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());
+    assertTrue(v1Deleted.getDeleted());
+  }
+
+  @Test
+  public void testUnderLogicalReRegisteringASoftDeletedVersionStampsTheVersion() throws Exception {
+    // Under LOGICAL, re-registering the content of a soft-deleted version stamps confluent:version
+    // into the metadata, so the new version gets a new ID and the soft-deleted version stays:
+    // provenance needs it.
+    String subject = "logical";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+
+    assertEquals((Integer) 1, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals((Integer) 2, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+
+    int v3Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, v3Id);
+
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(v3Id), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+    Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
+    assertTrue(v2Deleted.getDeleted());
+    Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());
+    assertTrue(v1Deleted.getDeleted());
+    assertEquals(Arrays.asList(1, 2, 3), restApp.restClient.getAllVersions(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+
+    // Registering again finds the live version and adds nothing.
+    assertEquals(v3Id, restApp.restClient.registerSchema(v2, subject));
+    assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testUnderLogicalHardDeletingTheStampedVersionKeepsTheSoftDeletedOne()
+      throws Exception {
+    // Once the stamped re-registration is hard-deleted, the soft-deleted v2 still carries its ID,
+    // and re-registering stamps the content again under the next version.
+    String subject = "logical_hard";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+    assertNotEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3");
+    // LOGICAL blocks the hard delete, so switch the policy away first
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    ConfigUpdateRequest strict = new ConfigUpdateRequest();
+    strict.setCompatibilityPolicy("STRICT");
+    restApp.restClient.updateConfig(strict, subject);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true);
+    // The new ID and stamp on re-registration happen only under LOGICAL
+    restApp.restClient.updateConfig(logical, subject);
+
+    assertEquals(v2, restApp.restClient.getId(v2Id, subject).getSchemaString());
+    assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 2, true).getId());
+    int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, reRegisteredId);
+    // v3 was hard-deleted, so its number is the next one.
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(reRegisteredId), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
+  public void testUnderLogicalReRegisteringReusesTheIdOfAnIdenticalStampedSchema()
+      throws Exception {
+    // Another subject holds the content the stamp produces, confluent:version=3 included; under
+    // LOGICAL, re-registering the soft-deleted version's content reuses that schema's ID, and
+    // the soft-deleted version keeps its own.
+    String other = "other";
+    String subject = "logical_reuse";
+    restApp.restClient.updateCompatibility(NONE.name, other);
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    String unrelated = "{\"type\":\"record\",\"name\":\"U\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"u\",\"type\":\"int\"}]}";
+
+    // other v3 is v2's content with confluent:version rewritten to 3
+    restApp.restClient.registerSchema(v1, other);
+    restApp.restClient.registerSchema(unrelated, other);
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v2);
+    request.setMetadata(
+        new Metadata(null, Collections.singletonMap("confluent:version", "1"), null));
+    int stampedId = restApp.restClient.registerSchema(request, other, false).getId();
+    Schema otherV3 = restApp.restClient.getVersion(other, 3);
+    assertEquals(Integer.valueOf(stampedId), otherV3.getId());
+    assertEquals("3", otherV3.getMetadata().getProperties().get("confluent:version"));
+
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, stampedId);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    assertEquals(stampedId, restApp.restClient.registerSchema(v2, subject));
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(stampedId), v3.getId());
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+    Schema v2Deleted = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals(Integer.valueOf(v2Id), v2Deleted.getId());
+    assertTrue(v2Deleted.getDeleted());
+    assertEquals(Integer.valueOf(stampedId), restApp.restClient.getVersion(other, 3).getId());
+  }
+
+  @Test
+  public void testUnderLogicalWithDefaultMetadataReRegisteringTheStampedVersionAddsNothing()
+      throws Exception {
+    // Default metadata skips the lookup before register, so register itself must find the live
+    // stamped version although the confluent:version it inherits was set to the next one.
+    String subject = "logical_defaults";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    logical.setDefaultMetadata(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null));
+    restApp.restClient.updateConfig(logical, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
+        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+    restApp.restClient.registerSchema(v1, subject);
+    int v2Id = restApp.restClient.registerSchema(v2, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    int v3Id = restApp.restClient.registerSchema(v2, subject);
+    assertNotEquals(v2Id, v3Id);
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals("3", v3.getMetadata().getProperties().get("confluent:version"));
+    assertEquals("x", v3.getMetadata().getProperties().get("owner"));
+
+    // The response describes the stored v3, not the request with confluent:version set to 4.
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v2);
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(request, subject, false);
+    assertEquals(v3Id, response.getId());
+    assertEquals(Integer.valueOf(3), response.getVersion());
+    assertEquals(v3.getMetadata(), response.getMetadata());
+    assertEquals(v3.getGuid(), response.getGuid());
+    assertEquals(Arrays.asList(1, 3), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testWithDefaultMetadataReRegisteringAVersionedSchemaAddsNothing() throws Exception {
+    // v1 carries confluent:version=1; registering its content without a version inherits it as
+    // confluent:version=2, which must not keep the lookup from finding v1.
+    String subject = "versioned_defaults";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    ConfigUpdateRequest defaults = new ConfigUpdateRequest();
+    defaults.setDefaultMetadata(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null));
+    restApp.restClient.updateConfig(defaults, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(v1);
+    request.setVersion(1);
+    int v1Id = restApp.restClient.registerSchema(request, subject, false).getId();
+    Schema stored = restApp.restClient.getVersion(subject, 1);
+    assertEquals("1", stored.getMetadata().getProperties().get("confluent:version"));
+
+    // The response describes the stored v1, not the request with confluent:version set to 2.
+    RegisterSchemaRequest unversioned = new RegisterSchemaRequest();
+    unversioned.setSchema(v1);
+    RegisterSchemaResponse response =
+        restApp.restClient.registerSchema(unversioned, subject, false);
+    assertEquals(v1Id, response.getId());
+    assertEquals(Integer.valueOf(1), response.getVersion());
+    assertEquals(stored.getMetadata(), response.getMetadata());
+    assertEquals(stored.getGuid(), response.getGuid());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+  }
+
+  @Test
+  public void testWithoutLogicalReRegisteringASoftDeletedVersionDoesNotStampTheVersion()
+      throws Exception {
+    String subject = "not_logical";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    String v1 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
+    int v1Id = restApp.restClient.registerSchema(v1, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    assertEquals(v1Id, restApp.restClient.registerSchema(v1, subject));
+    Schema v2 = restApp.restClient.getVersion(subject, 2);
+    assertEquals(Integer.valueOf(v1Id), v2.getId());
+    assertNull(v2.getMetadata());
   }
 
   @Test
@@ -3308,5 +3732,66 @@ public abstract class RestApiTest {
   protected String buildRequestUrl(String baseUrl, String path) {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
+  }
+
+  @Test
+  public void testCreateTimestampAfterSoftDelete() throws Exception {
+    String subject = "testSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    int id = restApp.restClient.registerSchema(schema, subject);
+    Schema live = restApp.restClient.getVersion(subject, 1);
+    assertNull(live.getCreateTimestamp());
+    Thread.sleep(10);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    // A soft delete's ts is when it was deleted; createTs is when it was registered.
+    Schema deleted = restApp.restClient.getVersion(subject, 1, true);
+    assertEquals(live.getTimestamp(), deleted.getCreateTimestamp());
+    assertTrue(deleted.getTimestamp() > deleted.getCreateTimestamp());
+    assertEquals(live.getTimestamp(), restApp.restClient.getId(id).getCreateTimestamp());
+
+    // Carried by the delete's own record, all that compaction leaves of the key.
+    SchemaKey key = new SchemaKey(subject, 1);
+    List<ConsumerRecord<byte[], byte[]>> records = TestUtils.schemaRecords(restApp, key);
+    assertEquals(2, records.size());
+    SchemaValue delete = (SchemaValue) new SchemaRegistrySerializer().deserializeValue(
+        key, records.get(1).value());
+    assertEquals(records.get(0).timestamp(), delete.getCreateTimestamp().longValue());
+    assertEquals(records.get(1).timestamp(), deleted.getTimestamp().longValue());
+  }
+
+  @Test
+  public void testLogicalPolicyBlocksPermanentDelete() throws Exception {
+    String subject = "logicalSubject";
+    String other = "plainSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    restApp.restClient.registerSchema(schema, subject);
+    restApp.restClient.registerSchema(schema, other);
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(request, subject);
+
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+
+    // Other subjects are unaffected
+    restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other);
+    restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other, true);
+
+    // A missing target still gets its 404 under an inherited LOGICAL
+    restApp.restClient.updateConfig(request, null);
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, "missing", true));
+    assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true));
+    assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, e.getErrorCode());
   }
 }

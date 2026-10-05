@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -165,8 +166,14 @@ public class AssociationsResource {
     }
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
-      List<Association> associations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType, associationTypes, lifecycle);
+      List<Association> associations;
+      if (SchemaRegistry.RESOURCE_WILDCARD.equals(resourceName)) {
+        associations = schemaRegistry.getAssociationsByResourceNamespace(
+            resourceNamespace, resourceType, associationTypes, lifecycle);
+      } else {
+        associations = schemaRegistry.getAssociationsByResourceName(
+            resourceName, resourceNamespace, resourceType, associationTypes, lifecycle);
+      }
       return associations.stream()
           .skip(offset)
           .limit(limit)
@@ -271,6 +278,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -283,13 +292,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Create association operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Create association operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -361,6 +371,8 @@ public class AssociationsResource {
       throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
       throw Errors.strongAssociationExistsException(e.getMessage());
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -373,13 +385,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Create or update association operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Create or update association operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding create or update association request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -392,7 +405,9 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Batch get associations.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch get response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
+          + "batchGet request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
@@ -411,6 +426,10 @@ public class AssociationsResource {
       AssociationBatchResponse response =
           schemaRegistry.batchGetAssociations(includeSchemas, request);
       return Response.status(207).entity(response).build();
+    } catch (AssociationBatchLimitExceededException e) {
+      log.debug("Associations batchGet request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -422,7 +441,9 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Mutate associations in batch.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
+          + "batchMutate request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-mutate")
   @DocumentedName("mutateAssociations")
@@ -450,14 +471,19 @@ public class AssociationsResource {
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(Response.status(207).entity(response).build());
+    } catch (AssociationBatchLimitExceededException e) {
+      log.debug("Associations batchMutate request rejected for exceeding a configured "
+          + "limit: {}", e.getMessage());
+      throw Errors.associationBatchLimitExceededException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Mutate associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Mutate associations operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding mutate associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
@@ -469,8 +495,13 @@ public class AssociationsResource {
   @Path("/associations/resources/{resourceId}")
   @DELETE
   @Operation(summary = "Delete associations.", responses = {
-      @ApiResponse(responseCode = "200", description = "The delete response",
-          content = @Content(schema = @Schema(implementation = Association.class))),
+      @ApiResponse(responseCode = "204", description = "The associations, and any cascaded "
+          + "subjects, were deleted"),
+      @ApiResponse(responseCode = "202", description = "The associations were deleted; "
+          + "cascaded subject deletes are running in the background (async=true only)"),
+      @ApiResponse(responseCode = "404", description = "No associations found for the resource"),
+      @ApiResponse(responseCode = "409", description = "The association is frozen and "
+          + "cascadeLifecycle is false"),
       @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
   })
   @PerformanceMetric("associations.delete")
@@ -487,7 +518,13 @@ public class AssociationsResource {
       @Parameter(description = "Cascade lifecycle")
       @QueryParam("cascadeLifecycle") boolean cascadeLifecycle,
       @Parameter(description = "Dry run")
-      @QueryParam("dryRun") boolean dryRun) {
+      @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "Delete the associations, return 202, and finish cascaded "
+          + "subject deletes in the background. 202 is returned even if no subject needed "
+          + "deleting. A queued subject is deleted even if new versions are registered under "
+          + "it before the background delete runs. Until then the subject still exists, so "
+          + "recreating the resource with a different schema can fail.")
+      @QueryParam("async") boolean async) {
 
     log.debug("Deleting association for resource {}", resourceId);
 
@@ -510,9 +547,9 @@ public class AssociationsResource {
           QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       schemaRegistry.deleteAssociationsOrForward(qualifiedSubject,
-          resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun,
+          resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun, async,
           headerProperties);
-      asyncResponse.resume(Response.status(204).build());
+      asyncResponse.resume(Response.status(async && !dryRun ? 202 : 204).build());
     } catch (AssociationFrozenException e) {
       throw Errors.associationFrozenException(e.getAssociationType(), e.getSubject());
     } catch (SchemaVersionNotSoftDeletedException e) {
@@ -523,13 +560,14 @@ public class AssociationsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Delete associations operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Delete associations operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
+      throw Errors.requestForwardingFailedException(
+          "Error while forwarding delete associations request"
+              + " to the leader", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {

@@ -488,6 +488,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    * must not be "__GLOBAL" or "__EMPTY", and must not be in the global context
    * unless isConfigOrMode is true.
    *
+   * <p>Note: the pure-wildcard subject {@code *} is always permitted by this overload.
+   *
    * @param tenant the tenant
    * @param qualifiedSubject the subject with a tenant prefix
    * @param isConfigOrMode true if the subject is for config or mode settings
@@ -495,13 +497,33 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    */
   public static boolean isValidSubject(
       String tenant, String qualifiedSubject, boolean isConfigOrMode) {
+    return isValidSubject(tenant, qualifiedSubject, isConfigOrMode, true);
+  }
+
+  /**
+   * Validates the given qualified subject for the given tenant, optionally rejecting the
+   * empty-string or pure-wildcard subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @param isConfigOrMode true if the subject is for config or mode settings
+   * @param allowEmptyOrWildcard if false, reject an empty-string or pure-wildcard
+   *                             subject as invalid
+   * @return true if the qualified subject is valid, false otherwise
+   */
+  public static boolean isValidSubject(
+      String tenant, String qualifiedSubject, boolean isConfigOrMode,
+      boolean allowEmptyOrWildcard) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    // For backward compatibility, we allow an empty subject
+    // For backward compatibility, we allow an empty subject unless the caller opts out.
     if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
         || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
+      return false;
+    }
+    if (!allowEmptyOrWildcard && (qs.getSubject().isEmpty() || qs.getSubject().equals(WILDCARD))) {
       return false;
     }
     if (!isConfigOrMode && qs.getContext().equals(GLOBAL_CONTEXT_NAME)) {

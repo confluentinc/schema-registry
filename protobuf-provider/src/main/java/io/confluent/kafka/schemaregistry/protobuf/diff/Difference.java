@@ -27,6 +27,7 @@ public class Difference {
     REQUIRED_FIELD_ADDED, REQUIRED_FIELD_REMOVED,
     ONEOF_ADDED, ONEOF_REMOVED,
     ONEOF_FIELD_ADDED, ONEOF_FIELD_REMOVED,
+    ONEOF_FIELD_MOVED_TO_TOP_LEVEL,
     MULTIPLE_FIELDS_MOVED_TO_ONEOF, FIELD_MOVED_TO_EXISTING_ONEOF
   }
 
@@ -102,6 +103,10 @@ public class Difference {
       case ONEOF_FIELD_REMOVED:
         errorDescription = "The %s schema is missing a oneof field at path '" + fullPath
                              + "' in the %s schema";
+        break;
+      case ONEOF_FIELD_MOVED_TO_TOP_LEVEL:
+        errorDescription = "The oneof field at path '" + fullPath + "' in the %s schema "
+                             + "was moved out of its oneof to a top-level field in the %s schema";
         break;
       case MULTIPLE_FIELDS_MOVED_TO_ONEOF:
         errorDescription = "Multiple fields in the oneof at path '" + fullPath

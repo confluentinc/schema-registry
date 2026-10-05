@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
@@ -25,29 +26,61 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
+import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -56,9 +89,11 @@ import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHan
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
+import io.confluent.rest.exceptions.RestServerErrorException;
 import java.util.Comparator;
 import java.util.HashSet;
 import org.apache.kafka.common.config.ConfigDef;
@@ -75,8 +110,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -84,10 +121,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.REFERENCE_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestReferenceExistsException.REFERENCE_EXISTS_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
@@ -97,6 +152,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -106,6 +162,36 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         SslFactory.SslFactoryCreated {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractSchemaRegistry.class);
+
+  protected static final Lock NO_OP_LOCK = new Lock() {
+
+    @Override
+    public void lock() {
+    }
+
+    @Override
+    public void lockInterruptibly() {
+    }
+
+    @Override
+    public boolean tryLock() {
+      return true;
+    }
+
+    @Override
+    public boolean tryLock(long time, TimeUnit unit) {
+      return true;
+    }
+
+    @Override
+    public void unlock() {
+    }
+
+    @Override
+    public java.util.concurrent.locks.Condition newCondition() {
+      throw new UnsupportedOperationException();
+    }
+  };
 
   protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
 
@@ -166,12 +252,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
             .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                     TimeUnit.SECONDS)
-            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+            .build(s -> loadSchema(s.getSchema(), s.isValidateAsnew(), s.isNormalize()));
     this.oldSchemaCache = Caffeine.newBuilder()
             .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
             .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                     TimeUnit.SECONDS)
-            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+            .build(s -> loadSchema(s.getSchema(), s.isValidateAsnew(), s.isNormalize()));
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultValidateFields =
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
@@ -247,22 +333,45 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     Map<String, Object> schemaProviderConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    schemaProviderConfigs.put(JsonSchemaProvider.FETCH_REMOTE_REFS,
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG));
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
-    for (SchemaProvider provider : defaultSchemaProviders) {
-      provider.configure(schemaProviderConfigs);
-    }
     Map<String, SchemaProvider> providerMap = new HashMap<>();
-    registerProviders(providerMap, defaultSchemaProviders);
+    registerProviders(providerMap,
+        withLogicalTypes(defaultSchemaProviders, schemaProviderConfigs));
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
     // Allow custom providers to override default providers
-    registerProviders(providerMap, customSchemaProviders);
+    registerProviders(providerMap,
+        withLogicalTypes(customSchemaProviders, schemaProviderConfigs));
     metricsContainer.getCustomSchemaProviderCount().record(customSchemaProviders.size());
     return providerMap;
+  }
+
+  /**
+   * Wraps each provider so that a logical types DDL body is read as the native schema it denotes,
+   * whatever format the provider itself reads. Reading a schema is where that belongs: every path
+   * that parses one -- register, lookup, compatibility -- then accepts DDL alike, and a custom
+   * provider does not have to know about logical types to be usable with them.
+   *
+   * <p>Configuring happens after wrapping, because the wrapper resolves a DDL body's references
+   * itself and so needs the version fetcher too, not only the provider it wraps. A provider that
+   * arrives already configured is configured again, which configuring is expected to tolerate.
+   */
+  private List<SchemaProvider> withLogicalTypes(
+      List<SchemaProvider> providers, Map<String, Object> configs) {
+    List<SchemaProvider> wrapped = new ArrayList<>(providers.size());
+    for (SchemaProvider provider : providers) {
+      SchemaProvider logical = provider instanceof LogicalSchemaProvider
+          ? provider : new LogicalSchemaProvider(provider);
+      logical.configure(configs);
+      wrapped.add(logical);
+    }
+    return wrapped;
   }
 
   protected void registerProviders(
@@ -281,7 +390,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   /**
    * Loads a schema from the cache or parses it if not cached.
    */
-  protected ParsedSchema loadSchema(Schema schema, boolean isNew, boolean normalize)
+  protected ParsedSchema loadSchema(Schema schema, boolean validateAsNew, boolean normalize)
           throws InvalidSchemaException {
     String schemaType = schema.getSchemaType();
     if (schemaType == null) {
@@ -296,30 +405,57 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     final String type = schemaType;
 
     try {
-      return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
+      return provider.parseSchemaOrElseThrow(schema, validateAsNew, normalize);
     } catch (Exception e) {
-      throw new InvalidSchemaException("Invalid schema of type " + type
-              + ", details: " + e.getMessage());
+      // Logged here because this is the last point that holds the cause: the exception below
+      // carries it on, but the resource layer reports only a message to the client. A provider
+      // does not log a parse failure itself, since a caller may be parsing a body it expects to
+      // read another way.
+      String errMsg = "Invalid schema of type " + type + ", details: " + e.getMessage();
+      log.error(errMsg, e);
+      throw new InvalidSchemaException(errMsg, e);
     }
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
           throws SchemaRegistryException {
+    return register(subject, request, normalize, false);
+  }
+
+  public Schema register(String subject, RegisterSchemaRequest request, boolean normalize,
+          boolean force) throws SchemaRegistryException {
+    try {
+      Schema schema = toSchemaWithTags(subject, request);
+      return register(subject, schema, normalize, force, request.doPropagateSchemaTags());
+    } catch (IllegalArgumentException e) {
+      throw new InvalidSchemaException(e);
+    }
+  }
+
+  /**
+   * Converts a request to the schema it asks to be registered, applying any schema tags that the
+   * request adds or removes.  Callers that inspect a requested schema (compatibility checks,
+   * lookups) need to see the same schema that registration would store, otherwise the tags are
+   * silently dropped.
+   */
+  protected Schema toSchemaWithTags(String subject, RegisterSchemaRequest request)
+          throws SchemaRegistryException {
+    // Applying tags throws an unchecked exception when an entity path does not resolve against
+    // the schema, so convert it here rather than at each caller, otherwise a bad tag path
+    // surfaces as a server error instead of an invalid schema.
     try {
       Schema schema = new Schema(subject, request);
-
-      if (request.hasSchemaTagsToAddOrRemove()) {
-        ParsedSchema parsedSchema = parseSchema(schema);
-        ParsedSchema newSchema = parsedSchema
-                .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
-                        TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
-        // If a version was not specified, then use the latest version
-        // to ensure that the confluent:version metadata is added
-        int version = request.getVersion() != null ? request.getVersion() : -1;
-        schema = new Schema(subject, version, schema.getId(), newSchema);
+      if (!request.hasSchemaTagsToAddOrRemove()) {
+        return schema;
       }
-
-      return register(subject, schema, normalize, request.doPropagateSchemaTags());
+      ParsedSchema parsedSchema = parseSchema(schema);
+      ParsedSchema newSchema = parsedSchema
+              .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
+                      TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
+      // If a version was not specified, then use the latest version
+      // to ensure that the confluent:version metadata is added
+      int version = request.getVersion() != null ? request.getVersion() : -1;
+      return new Schema(subject, version, schema.getId(), newSchema);
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }
@@ -525,18 +661,20 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         : defaultValidateNewSchemas;
   }
 
-  private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
-                                                       Schema schema,
-                                                       Config config,
-                                                       boolean normalize)
+  protected ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                         Schema schema,
+                                                         Config config,
+                                                         boolean normalize)
           throws InvalidSchemaException {
     try {
       Mode mode = getModeInScope(schema.getSubject());
       if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
-      }
-      if (normalize) {
-        parsedSchema = parsedSchema.normalize();
+        if (normalize) {
+          parsedSchema = parsedSchema.normalize();
+        }
+      } else {
+        enforceRemoteRefBlockOnImport(parsedSchema);
       }
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
@@ -546,19 +684,46 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     schema.setSchemaType(parsedSchema.schemaType());
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
+    // Merged rather than replaced: a conversion records metadata of its own that has to reach
+    // storage, but a provider that does not carry the requested metadata onto what it parses
+    // must not thereby erase it.
+    schema.setMetadata(mergeMetadata(schema.getMetadata(), parsedSchema.metadata()));
     return parsedSchema;
+  }
+
+  // IMPORT skips validation, so force $ref resolution to fire the block; other parse failures are
+  // swallowed to preserve IMPORT's leniency for storing quirky schemas.
+  private void enforceRemoteRefBlockOnImport(ParsedSchema parsedSchema)
+          throws InvalidSchemaException {
+    if (!"JSON".equals(parsedSchema.schemaType())
+        || config.getBoolean(
+            SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG)) {
+      return;
+    }
+    try {
+      parsedSchema.rawSchema();
+    } catch (RuntimeException e) {
+      if (isBlockedRemoteRef(e)) {
+        throw new InvalidSchemaException("Invalid schema of type " + parsedSchema.schemaType()
+            + ", details: " + e.getMessage(), e);
+      }
+    }
   }
 
   protected ParsedSchema canonicalizeSchema(Schema schema,
                                   Config config,
-                                  boolean isNew,
-                                  boolean normalize) throws InvalidSchemaException {
+                                  boolean validateAsNew,
+                                  boolean normalize) throws SchemaRegistryException {
     if (schema == null
             || schema.getSchema() == null
             || schema.getSchema().trim().isEmpty()) {
       return null;
     }
-    ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
+    if (schema.getId() != null && schema.getId() >= 0
+        && getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      schema.setId(-1);
+    }
+    ParsedSchema parsedSchema = parseSchema(schema, validateAsNew, normalize);
     return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
   }
 
@@ -670,7 +835,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       SchemaRegistryKey key1 = keyCreator.apply(start, MIN_VERSION);
       SchemaRegistryKey key2 = keyCreator.apply(end, MAX_VERSION);
       return filter(transform(store.getAll(key1, key2), v -> {
-        if (v instanceof SchemaValue) {
+        if (v instanceof SchemaValue && metadataEncoder != null) {
           try {
             metadataEncoder.decodeMetadata(((SchemaValue) v));
           } catch (SchemaRegistryStoreException e) {
@@ -1147,6 +1312,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL
+            && (compatibility == CompatibilityLevel.FORWARD
+                || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+      // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
+      // so this pairing can never be satisfied regardless of the schema being registered.
+      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
+              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      return errorMessages;
+    }
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1156,6 +1330,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               .filter(s -> Objects.equals(groupValue,
                       getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
               .collect(Collectors.toList());
+    }
+    if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
+      // Additive: the native check below still runs; LOGICAL layers the Flink/Iceberg logical-type
+      // validity and compatibility checks on top, so it can only make registration stricter.
+      errorMessages.addAll(
+              LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
@@ -1334,11 +1514,45 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Config getConfigInScope(String subject)
           throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
+      // Every scope resolves through one field-by-field merge of the same tiers, so a scope
+      // inherits each unset field independently rather than taking the nearest record whole:
+      // the global context (itself falling back to the deployment default) underneath, then
+      // either the owning custom context or the deployment-wide config, then the scope's own
+      // values on top. A missing record at any tier simply contributes nothing.
+      //
+      // Each record is read with no default of its own, so an unset compatibilityLevel stays
+      // null and falls through the chain instead of being pre-filled with the deployment
+      // default before the inheritance runs.
+      Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
+      String globalContext = QualifiedSubject.createFromUnqualified(
+              tenant(), CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER)
+          .toQualifiedContext();
+      Config resolved = lookupCache.config(globalContext, false, defaultForTopLevel);
+
+      // Only a leaf subject has an intermediate tier; a bare context is itself that tier.
+      QualifiedSubject qs = subject != null ? QualifiedSubject.create(tenant(), subject) : null;
+      if (subject != null && (qs == null || !qs.getSubject().isEmpty())) {
+        resolved = Config.mergeConfigs(resolved, lookupCache.config(midScopeOf(qs), false, null));
+      }
+      return Config.mergeConfigs(resolved, lookupCache.config(subject, false, null));
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
     }
+  }
+
+  /**
+   * The scope a leaf subject inherits from before the global context: its own custom context, or
+   * the deployment-wide config for a subject in the default context.
+   *
+   * <p>Which key holds that deployment-wide config is a deployment concern, not a subject one: a
+   * multi-tenant registry keeps a separate one per tenant rather than the single unqualified
+   * record used here. Subclasses that partition config that way override this.
+   */
+  protected String midScopeOf(QualifiedSubject qs) {
+    return qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())
+        ? qs.toQualifiedContext()
+        : null;
   }
 
   protected QualifiedSubject replaceAlias(String context, String subject) {
@@ -1527,6 +1741,75 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return subjects;
   }
 
+  /**
+   * Whether any version of the subject is a reference target of another schema, counting soft-
+   * deleted versions and referrers since a soft delete can be restored.
+   */
+  protected boolean isSubjectReferenced(String subject) throws SchemaRegistryException {
+    try {
+      // Use getAllVersions rather than getAllSchemaKeysDescending: subclasses can override the
+      // former with a store-native version lookup, whereas the latter's range scan over
+      // SchemaKeys is not implemented by every backing store. Order is irrelevant here.
+      Iterator<SchemaKey> versions = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+      while (versions.hasNext()) {
+        if (!getReferencedBy(versions.next(), true).isEmpty()) {
+          return true;
+        }
+      }
+      return false;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while checking references for subject " + subject, e);
+    }
+  }
+
+  /**
+   * Whether any inline schema in the request declares a reference resolving to the given strong
+   * subject.  A multi-association create validates every association before any of its schemas are
+   * registered, so a referrer added in the same request is not yet visible to
+   * {@link #isSubjectReferenced}; this catches it before the associations are written.
+   */
+  private boolean requestReferencesSubject(
+      AssociationCreateOrUpdateRequest request, String strongSubject) {
+    for (AssociationCreateOrUpdateInfo other : request.getAssociations()) {
+      RegisterSchemaRequest schema = other.getSchema();
+      if (schema == null || schema.getReferences() == null || other.getSubject() == null) {
+        continue;
+      }
+      String referrer = QualifiedSubject.createFromUnqualified(tenant(), other.getSubject())
+          .toQualifiedSubject();
+      for (SchemaReference ref : schema.getReferences()) {
+        // build the tenant-qualified subject
+        QualifiedSubject target = QualifiedSubject.qualifySubjectWithParent(
+            tenant(), referrer, ref.getSubject(), true);
+        if (target != null && strongSubject.equals(target.toQualifiedSubject())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A schema reference and a STRONG (topic-owned) association are mutually exclusive: a subject
+   * claimed by its topic cannot be a reference target. Enforced in every mode, including IMPORT,
+   * so cluster linking cannot replicate a schema into the forbidden state. Shared here so every
+   * concrete registry's {@code register} enforces the same rule.
+   */
+  protected void validateReferencesNotStronglyAssociated(String subject, Schema schema)
+      throws SchemaRegistryException {
+    for (SchemaReference ref : schema.getReferences()) {
+      // build the tenant-qualified subject
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), subject, ref.getSubject(), true);
+      if (refSubject != null && !getAssociationsBySubject(
+          refSubject.toQualifiedSubject(), null, null, LifecyclePolicy.STRONG).isEmpty()) {
+        throw new OperationNotPermittedException("Subject '" + ref.getSubject()
+            + "' has a strong association and cannot be referenced");
+      }
+    }
+  }
+
   @Override
   public List<ContextId> listIdsForGuid(String guid)
           throws SchemaRegistryException {
@@ -1589,7 +1872,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   @Override
   public Schema toSchemaEntity(SchemaValue schemaValue) throws SchemaRegistryStoreException {
-    metadataEncoder.decodeMetadata(schemaValue);
+    if (metadataEncoder != null) {
+      metadataEncoder.decodeMetadata(schemaValue);
+    }
     return schemaValue.toSchemaEntity();
   }
 
@@ -1633,12 +1918,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   @Override
   public ParsedSchema parseSchema(
           Schema schema,
-          boolean isNew,
+          boolean validateAsNew,
           boolean normalize) throws InvalidSchemaException {
     try {
-      AbstractSchemaRegistry.RawSchema rawSchema =
-              new AbstractSchemaRegistry.RawSchema(schema.toHashKey(), isNew, normalize);
-      ParsedSchema parsedSchema = isNew
+      AbstractSchemaRegistry.RawSchema rawSchema = new AbstractSchemaRegistry.RawSchema(
+          schema.toHashKey(!validateAsNew), validateAsNew, normalize);
+      ParsedSchema parsedSchema = validateAsNew
               ? newSchemaCache.get(rawSchema)
               : oldSchemaCache.get(rawSchema);
       if (schema.getVersion() != null) {
@@ -1665,12 +1950,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           throws SchemaRegistryException {
     ParsedSchema parsedSchema = parseSchema(schema);
     boolean isWildcard = tags.contains("*");
-    List<SchemaTags> schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
-            .stream()
-            .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
-            .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
-            .collect(Collectors.toList());
+    List<SchemaTags> schemaTags;
+    try {
+      schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
+              .stream()
+              .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
+              .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
+              .collect(Collectors.toList());
+    } catch (RuntimeException e) {
+      if (isBlockedRemoteRef(e)) {
+        throw new InvalidSchemaException("Invalid schema of type " + schema.getSchemaType()
+            + ", details: " + e.getMessage(), e);
+      }
+      throw e;
+    }
     schema.setSchemaTags(schemaTags);
+  }
+
+  private static boolean isBlockedRemoteRef(Throwable t) {
+    for (Throwable c = t; c != null; c = c.getCause()) {
+      if (c.getMessage() != null
+          && c.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -1733,6 +2037,17 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Governed by {@link SchemaRegistryConfig#SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG}, which despite
+   * its name also gates the pure-wildcard ({@code *}) subject, not just the empty-string subject.
+   */
+  @Override
+  public boolean allowEmptySubject() {
+    return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
+  }
+
   @Override
   public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
     return lookupCache;
@@ -1791,9 +2106,19 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return resourceExtensions;
   }
 
+  /**
+   * Looks a provider up by schema type, falling back to a case-insensitive match. A logical types
+   * body used to reach its converter whatever the case of its declared type, because the
+   * conversion upper-cased it; resolving the provider case-insensitively keeps that true now that
+   * the provider is what converts.
+   */
   @Override
   public SchemaProvider schemaProvider(String schemaType) {
-    return providers.get(schemaType);
+    SchemaProvider provider = providers.get(schemaType);
+    if (provider != null || schemaType == null) {
+      return provider;
+    }
+    return providers.get(schemaType.toUpperCase(Locale.ROOT));
   }
 
   @Override
@@ -1823,17 +2148,1087 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             truststore, metricsContainer.getCertificateExpirationTruststore());
   }
 
+  // --------------- Association hook methods ---------------
+
+  protected void syncBeforeAssociationWrite(String qualifiedSubject)
+      throws SchemaRegistryStoreException {
+  }
+
+  protected void putAssociation(AssociationValue associationValue)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("putAssociation not implemented");
+  }
+
+  protected void deleteAssociationEntry(Association oldAssociation)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("deleteAssociationEntry not implemented");
+  }
+
+  protected Lock lockForAssociation(String context) {
+    return NO_OP_LOCK;
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceName(
+      String resourceName, String resourceNamespace, String resourceType)
+      throws StoreException {
+    String tenant = tenant();
+    String minResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceNamespace(
+      String resourceNamespace, String resourceType) throws StoreException {
+    String tenant = tenant();
+    String minResourceName = String.valueOf(Character.MIN_VALUE);
+    String maxResourceName = String.valueOf(Character.MAX_VALUE);
+    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  // --------------- Association mutation methods ---------------
+
+  public AssociationResponse createAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, true);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, false);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
+      boolean isCreate)
+      throws SchemaRegistryException {
+    String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
+        + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      if (unqualifiedSubject != null) {
+        QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
+        String qualifiedSubject = qs.toQualifiedSubject();
+        if (isReadOnlyMode(qualifiedSubject)) {
+          throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+              + qs.getContext() + " is in read-only mode");
+        }
+
+        info.setSubject(qs.toUnqualifiedSubject());
+
+        syncBeforeAssociationWrite(qualifiedSubject);
+      }
+    }
+
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new LinkedHashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
+        throw new IllegalPropertyException(
+            "associationType",
+            "may only appear once per request, but '" + associationType + "' appears more"
+                + " than once");
+      }
+      infosByType.put(associationType, info);
+    }
+
+    List<Association> associations = getAssociationsByResourceId(
+        request.getResourceId(), request.getResourceType(),
+        new ArrayList<>(infosByType.keySet()), null);
+
+    Map<String, Association> assocsByType;
+    if (associations.isEmpty() && isCreate && dryRun && request.getResourceId() == null) {
+      // At validate-phase the caller may not yet have a resourceId.
+      // Fall back to (name, namespace, type) so the equivalence check below can recognize an
+      // idempotent retry.
+      List<Association> fallback = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
+      // The fallback matches on (name, namespace, type) and so can span resourceIds. Narrow to
+      // a single resource, otherwise the equivalence, subject-change and frozen checks below
+      // could each be comparing against a different one.
+      assocsByType = mostRecentlyUpdatedResource(fallback).stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    } else {
+      // By-resourceId guarantees one row per associationType. Keep fail-fast on duplicates
+      assocsByType = associations.stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    }
+    Set<String> assocTypesToSkip = new HashSet<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+
+      if (association == null && !isCreate) {
+        info.applyDefaults(false);
+      }
+
+      String unqualifiedSubject = info.getSubject();
+      String defaultSubject = defaultSubjectPrefix + associationType;
+      if (unqualifiedSubject == null) {
+        if (association != null) {
+          unqualifiedSubject = association.getSubject();
+        } else if (info.getLifecycle() == LifecyclePolicy.STRONG) {
+          unqualifiedSubject = defaultSubject;
+        } else {
+          throw new IllegalPropertyException(
+              "subject", "must be provided for WEAK associations");
+        }
+        info.setSubject(unqualifiedSubject);
+      }
+
+      String qualifiedSubject = unqualifiedSubject != null
+          ? QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject)
+              .toQualifiedSubject()
+          : null;
+
+      LifecyclePolicy effectiveLifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (effectiveLifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      if (effectiveLifecycle == LifecyclePolicy.WEAK) {
+        if (info.getSchema() != null) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be WEAK when schema is provided");
+        }
+        if (unqualifiedSubject != null && unqualifiedSubject.equals(defaultSubject)) {
+          throw new IllegalPropertyException(
+              "subject", "WEAK associations cannot use subject '" + defaultSubject + "'");
+        }
+      }
+
+      boolean isFrozen = association != null
+          ? association.isFrozen() : Boolean.TRUE.equals(info.getFrozen());
+      // STRONG is frozen and WEAK is not. applyDefaults settles this on create but not on
+      // update, so the invariant is checked here against the state the request asks for.
+      // This is what rejects promoting a WEAK association to a non-frozen STRONG one.
+      boolean requestedFrozen = info.getFrozen() != null ? info.getFrozen() : isFrozen;
+      if (requestedFrozen != (effectiveLifecycle == LifecyclePolicy.STRONG)) {
+        throw new IllegalPropertyException("frozen",
+            String.format("association with lifecycle of %s cannot be frozen=%s",
+                effectiveLifecycle, requestedFrozen));
+      }
+      if (isFrozen && unqualifiedSubject != null
+          && !unqualifiedSubject.equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "frozen associations must use subject '" + defaultSubject + "'");
+      }
+
+      if (association == null) {
+        // A STRONG association is owned by its topic and can only be created together with the
+        // topic, never by an upsert. Subjects in IMPORT mode are exempt, since cluster linking
+        // replicates associations that were already established on the source.
+        if (!isCreate && effectiveLifecycle == LifecyclePolicy.STRONG
+            && (qualifiedSubject == null || getModeInScope(qualifiedSubject) != Mode.IMPORT)) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be STRONG when creating an association; "
+                  + "STRONG associations must be created with the topic");
+        }
+        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
+            && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
+          if (isCreate && info.getSchema() == null) {
+            throw new IllegalPropertyException(
+                "schema", "schema must be provided when creating a frozen association");
+          }
+          Schema latestSchema = getLatestVersion(qualifiedSubject);
+          if (latestSchema != null) {
+            boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+            if (info.getSchema() == null
+                || latestSchema.getVersion() != 1
+                || lookUpSchemaUnderSubject(qualifiedSubject,
+                    toSchemaWithTags(qualifiedSubject, info.getSchema()),
+                    normalize, false) == null) {
+              throw new IllegalPropertyException(
+                  "frozen", "cannot create a frozen association when schemas already exist "
+                      + "in the subject");
+            }
+          }
+        }
+        continue;
+      }
+      if (association.isEquivalent(info)) {
+        if (isCreate && info.getSchema() != null) {
+          boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+          Schema oldSchema = lookUpSchemaUnderSubject(
+              qualifiedSubject, toSchemaWithTags(qualifiedSubject, info.getSchema()),
+              normalize, false);
+          if (oldSchema == null) {
+            throw new AssociationForResourceExistsException(
+                association.getAssociationType(), association.getResourceName());
+          }
+        }
+        assocTypesToSkip.add(info.getAssociationType());
+        continue;
+      }
+      if (isCreate) {
+        throw new AssociationForResourceExistsException(
+            association.getAssociationType(), association.getResourceName());
+      }
+      if (info.getLifecycle() == null && info.getSchema() == null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "at least lifecycle or schema must be provided for update");
+      }
+      if (unqualifiedSubject != null
+          && !association.getSubject().equals(unqualifiedSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "subject of association cannot be changed from '"
+                + association.getSubject() + "' to '" + unqualifiedSubject + "'");
+      }
+      if (association.getLifecycle() == LifecyclePolicy.STRONG
+          && info.getLifecycle() == LifecyclePolicy.WEAK
+          && association.getSubject().equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot change to WEAK when subject matches default format '"
+                + defaultSubject + "'");
+      }
+      if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {
+        throw new IllegalPropertyException(
+            "frozen", "frozen attribute of association cannot be changed");
+      }
+      if (association.isFrozen()) {
+        throw new AssociationFrozenException(
+            association.getAssociationType(), association.getSubject());
+      }
+    }
+
+    checkUniformLifecycle(request);
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+      // A subject in IMPORT mode is being replicated and its versions arrive on their own, so a
+      // schema passed alongside the association would be dropped rather than registered.
+      // Rejecting it here also keeps the check below honest: with no schema to register, the
+      // association is only accepted once the subject's versions have actually landed.
+      if (info.getSchema() != null && getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        log.debug("Rejecting schema for subject '{}' because it is in IMPORT mode",
+            qualifiedSubject);
+        throw new IllegalPropertyException(
+            "schema", "cannot be provided while subject '" + unqualifiedSubject
+                + "' is in IMPORT mode");
+      }
+      if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
+        throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
+      }
+      List<Association> assocsBySubject = getAssociationsBySubject(
+          qualifiedSubject, null, Collections.emptyList(), null).stream()
+          .filter(a -> association == null
+              || !(a.getResourceId().equals(association.getResourceId())
+                   && a.getResourceType().equals(association.getResourceType())
+                   && a.getAssociationType().equals(association.getAssociationType())))
+          .collect(Collectors.toList());
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (lifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      switch (lifecycle) {
+        case STRONG:
+          if (!assocsBySubject.isEmpty()) {
+            throw new AssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          // A STRONG association and a schema reference are mutually exclusive: a referenced
+          // subject cannot be claimed as topic-owned. The frozen guard above has already rejected
+          // subjects with more than one active version, so isSubjectReferenced iterates a single
+          // version here and is O(1) in practice despite the loop. requestReferencesSubject also
+          // catches a referrer added in this same request, which is not registered yet and so is
+          // invisible to isSubjectReferenced. Enforced in every mode, including IMPORT, so
+          // replication cannot introduce the forbidden state.
+          if (isSubjectReferenced(qualifiedSubject)
+              || requestReferencesSubject(request, qualifiedSubject)) {
+            throw new ReferenceExistsException(unqualifiedSubject);
+          }
+          break;
+        case WEAK:
+          if (Boolean.TRUE.equals(info.getFrozen())) {
+            throw new IllegalPropertyException(
+                "frozen", "association with lifecycle of WEAK cannot be frozen");
+          }
+          if (assocsBySubject.stream()
+              .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
+            throw new StrongAssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+
+      List<SchemaKey> previousSchemas = new ArrayList<>();
+      getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
+
+      List<String> errorLogs = isCompatible(qualifiedSubject,
+          toSchemaWithTags(qualifiedSubject, schema), previousSchemas, normalize);
+      if (!errorLogs.isEmpty()) {
+        log.warn("Rejected association schema registration for subject '{}': {}",
+            qualifiedSubject, errorLogs);
+        throw new IncompatibleSchemaException(errorLogs.toString());
+      }
+    }
+
+    if (dryRun) {
+      return new AssociationResponse(
+          request.getResourceName(),
+          request.getResourceNamespace(),
+          request.getResourceId(),
+          request.getResourceType(),
+          Collections.emptyList()
+      );
+    }
+
+    Map<String, Schema> registeredSchemas = new HashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode == Mode.IMPORT) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+      // Register through the request overload so that schemaTagsToAdd/schemaTagsToRemove and
+      // propagateSchemaTags on the request are honored, as they are for a plain registration.
+      Schema registeredSchema = register(qualifiedSubject, schema, normalize);
+      registeredSchemas.put(associationType, registeredSchema);
+    }
+
+    List<AssociationValue> associationValues =
+        AssociationValue.fromAssociationCreateOrUpdateRequest(
+            tenant(), request, associations, assocTypesToSkip);
+    for (AssociationValue associationValue : associationValues) {
+      putAssociation(associationValue);
+    }
+    return Association.toAssociationResponse(
+        request.getResourceName(), request.getResourceNamespace(),
+        request.getResourceId(), request.getResourceType(),
+        associationValues.stream()
+            .map(AssociationValue::toAssociationEntity)
+            .collect(Collectors.toList()),
+        registeredSchemas);
+  }
+
+  /**
+   * Keeps only the associations belonging to the most-recently-updated resource, so that
+   * entries from several resources sharing a name and namespace are never treated as one.
+   */
+  private static List<Association> mostRecentlyUpdatedResource(List<Association> associations) {
+    if (associations.isEmpty()) {
+      return associations;
+    }
+    // Timestamps alone do not order these: two resources can be written within the same
+    // millisecond, and the list arrives sorted by name/type, which would let the winner depend
+    // on association type. Fall through to the creation time and then the id so the choice is
+    // always defined.
+    Comparator<Association> byRecency = Comparator
+        .comparing(Association::getUpdateTimestamp, Comparator.nullsFirst(Long::compareTo))
+        .thenComparing(Association::getCreateTimestamp, Comparator.nullsFirst(Long::compareTo))
+        .thenComparing(Association::getResourceId, Comparator.nullsFirst(String::compareTo));
+    String resourceId = associations.stream()
+        .max(byRecency)
+        .map(Association::getResourceId)
+        .orElse(null);
+    return associations.stream()
+        .filter(a -> Objects.equals(a.getResourceId(), resourceId))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Rejects a request that would leave a resource holding more than one lifecycle: a topic is
+   * either topic-owned (STRONG) or shared (WEAK) across all of its association types.
+   *
+   * <p>Each type is judged by the lifecycle it would end up with — from the request where it
+   * supplies one, otherwise from the stored association — so converting every type at once is
+   * allowed, while converting only one of several is not.
+   */
+  private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    Map<String, LifecyclePolicy> lifecycleByType = currentLifecyclesByType(
+        request.getResourceId(), request.getResourceName(),
+        request.getResourceNamespace(), request.getResourceType());
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : lifecycleByType.get(info.getAssociationType());
+      if (lifecycle != null) {
+        lifecycleByType.put(info.getAssociationType(), lifecycle);
+      }
+    }
+    if (new HashSet<>(lifecycleByType.values()).size() > 1) {
+      String detail = lifecycleByType.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(", "));
+      // The conflict can come from stored associations the caller never sent, so record which
+      // resource it was and what the combined state looked like.
+      log.warn("Rejecting association request for resource '{}' in namespace '{}': "
+              + "mixed lifecycles {}",
+          request.getResourceName(), request.getResourceNamespace(), detail);
+      throw new IllegalPropertyException(
+          "lifecycle", "all associations for a resource must have the same lifecycle, but got "
+              + detail);
+    }
+  }
+
+  /**
+   * Returns the stored lifecycle of every association type on a resource. At the validate phase
+   * the caller may not yet have a resourceId, so the resource is matched by (name, namespace)
+   * instead — narrowed to a single resource, since several can share a name and namespace.
+   */
+  private Map<String, LifecyclePolicy> currentLifecyclesByType(
+      String resourceId, String resourceName, String resourceNamespace, String resourceType)
+      throws SchemaRegistryException {
+    List<Association> existing;
+    if (resourceId != null) {
+      existing = getAssociationsByResourceId(
+          resourceId, resourceType, Collections.emptyList(), null);
+    } else {
+      existing = mostRecentlyUpdatedResource(getAssociationsByResourceName(
+          resourceName, resourceNamespace, resourceType, Collections.emptyList(), null));
+    }
+    Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
+    for (Association association : existing) {
+      lifecycleByType.put(association.getAssociationType(), association.getLifecycle());
+    }
+    return lifecycleByType;
+  }
+
+  protected void checkDeleteAssociation(
+      Association oldAssociation, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (isReadOnlyMode(qualifiedSubject)) {
+      throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+          + qs.getContext() + " is in read-only mode");
+    }
+
+    if (!cascadeLifecycle && oldAssociation.isFrozen()) {
+      throw new AssociationFrozenException(
+          oldAssociation.getAssociationType(), oldAssociation.getSubject());
+    }
+  }
+
+  public void deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun)
+      throws SchemaRegistryException {
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
+    if (dryRun) {
+      return;
+    }
+    for (Association association : associations) {
+      deleteAssociationEntry(association);
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      if (qualifiedSubject != null) {
+        cascadeDeleteSubject(qualifiedSubject);
+      }
+    }
+  }
+
+  /**
+   * Returns the associations to delete for a resource, after checking that every one of them
+   * can be deleted. Shared by the synchronous and asynchronous delete paths.
+   */
+  protected List<Association> validateDeleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    return associations;
+  }
+
+  /**
+   * Deletes the associations for a resource and leaves any cascaded subject deletes to run in
+   * the background. The caller holds the store lock for the resource's tenant
+   * ({@code lockFor(subject)} or {@code lockForAssociation(context)}). By default there is no
+   * background executor, so this deletes everything synchronously. Subclasses that want
+   * background deletes must override this method and provide their own executor.
+   */
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle, false);
+  }
+
+  /**
+   * Returns the qualified subject that should be deleted along with the given association,
+   * or null if the subject should be kept.
+   */
+  protected String subjectToCascadeDelete(Association association, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    if (!cascadeLifecycle || association.getLifecycle() != LifecyclePolicy.STRONG) {
+      return null;
+    }
+    String unqualifiedSubject = association.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+      return null;
+    }
+    return qualifiedSubject;
+  }
+
+  protected void cascadeDeleteSubject(String qualifiedSubject)
+      throws SchemaRegistryException {
+    deleteSubject(qualifiedSubject, false);
+    deleteSubject(qualifiedSubject, true);
+  }
+
+  private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
+    if (response != null && response.getAssociations() != null) {
+      for (AssociationInfo info : response.getAssociations()) {
+        if (info.getSchema() != null) {
+          schemas.put(info.getAssociationType(), info.getSchema());
+        }
+      }
+    }
+  }
+
+  public AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws SchemaRegistryException {
+    checkAssociationBatchGetLimits(includeSchemas, request);
+    metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        String resourceName = query.getResourceName();
+        String resourceNamespace = query.getResourceNamespace();
+        String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        if (!associations.isEmpty()) {
+          Association first = associations.get(0);
+          if (resourceName == null) {
+            resourceName = first.getResourceName();
+          }
+          if (resourceNamespace == null) {
+            resourceNamespace = first.getResourceNamespace();
+          }
+          if (resourceId == null) {
+            resourceId = first.getResourceId();
+          }
+        }
+        Map<String, Schema> schemas = Collections.emptyMap();
+        if (includeSchemas) {
+          schemas = new HashMap<>();
+          for (Association association : associations) {
+            String qualifiedSubject = QualifiedSubject.createFromUnqualified(
+                tenant(), association.getSubject()).toQualifiedSubject();
+            Schema schema = getLatestVersion(qualifiedSubject);
+            if (schema != null) {
+              schemas.put(association.getAssociationType(), schema);
+            }
+          }
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                resourceName, resourceNamespace,
+                resourceId, resourceType,
+                associations, schemas)));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while getting associations: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      }
+    }
+    recordAssociationBatchMetrics(results,
+        metricsContainer.getAssociationBatchGetSuccess(),
+        metricsContainer.getAssociationBatchGetFailure());
+    return new AssociationBatchResponse(results);
+  }
+
+  private void checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      return;
+    }
+    // batchSize is defined as the number of topics (resource entries) in the request; a single
+    // topic may request both a key and a value association without counting as two topics.
+    int numTopics = request.getRequests().size();
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchGet request has %d topics, exceeding the configured maximum of %d"
+              + " topics per batch when includeSchemas is true", numTopics, maxNum));
+    }
+  }
+
+  private void recordAssociationBatchMetrics(
+      List<AssociationResult> results,
+      SchemaRegistryMetric successMetric,
+      SchemaRegistryMetric failureMetric) {
+    for (AssociationResult result : results) {
+      if (result.getError() != null) {
+        failureMetric.record();
+      } else {
+        successMetric.record();
+      }
+    }
+  }
+
+  public AssociationBatchResponse mutateAssociations(
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    checkAssociationBatchLimits(request);
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
+      Lock lock = lockForAssociation(context);
+      lock.lock();
+      try {
+        req.validate(dryRun);
+        Map<String, Schema> schemas = new HashMap<>();
+        List<? extends AssociationOp> ops = req.getAssociations();
+        // A run of adjacent create-or-update ops is applied as one request rather than one at
+        // a time. Validation there sees every association type in the run at once, so a batch
+        // can convert them together, and nothing is written until all of them have passed.
+        int index = 0;
+        while (index < ops.size()) {
+          AssociationOp op = ops.get(index);
+          if (!(op instanceof AssociationCreateOrUpdateOp)) {
+            if (op instanceof AssociationDeleteOp) {
+              AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
+              // An async delete still deletes the association entries here, but leaves its
+              // cascaded subject deletes to run in the background
+              if (Boolean.TRUE.equals(deleteOp.getAsync()) && !dryRun) {
+                deleteAssociationsAndQueueCascade(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle())
+                );
+              } else {
+                deleteAssociations(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
+                );
+              }
+              metricsContainer.getAssociationBatchMutateDelete().record();
+            }
+            index++;
+            continue;
+          }
+          List<AssociationCreateOrUpdateOp> run = new ArrayList<>();
+          run.add((AssociationCreateOrUpdateOp) op);
+          int end = index + 1;
+          while (end < ops.size()
+              && ops.get(end).getType() == op.getType()
+              && ops.get(end) instanceof AssociationCreateOrUpdateOp) {
+            run.add((AssociationCreateOrUpdateOp) ops.get(end));
+            end++;
+          }
+          if (log.isDebugEnabled()) {
+            log.debug("Applying {} {} op(s) as one request for resource '{}'",
+                run.size(), op.getType(), req.getResourceName());
+          }
+          if (op.getType() == OpType.CREATE) {
+            if (run.size() == 1) {
+              metricsContainer.getAssociationBatchMutateCreateSingle().record();
+            } else {
+              metricsContainer.getAssociationBatchMutateCreateMulti().record();
+            }
+            metricsContainer.getAssociationBatchMutateCreateBatchSize().record(run.size());
+          } else {
+            metricsContainer.getAssociationBatchMutateUpsert().record();
+          }
+          AssociationResponse response = createOrUpdateAssociation(context, dryRun,
+              new AssociationCreateOrUpdateRequest(req, run),
+              op.getType() == OpType.CREATE);
+          collectSchemas(response, schemas);
+          index = end;
+        }
+        List<Association> associations = null;
+        if (!dryRun) {
+          associations = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                req.getResourceName(), req.getResourceNamespace(),
+                req.getResourceId(), req.getResourceType(),
+                associations, schemas)));
+      } catch (IllegalPropertyException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForResourceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getResource()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationFrozenException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FROZEN_ERROR_CODE,
+            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getSubject()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (NoActiveSubjectVersionExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
+            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
+                e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (StrongAssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (ReferenceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            REFERENCE_EXISTS_ERROR_CODE,
+            String.format(REFERENCE_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (TooManyAssociationsException e) {
+        // TODO maxKeys
+        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+      } catch (InvalidSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SchemaTooLargeException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SCHEMA_TOO_LARGE_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (IncompatibleSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INCOMPATIBLE_SCHEMA_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while creating association: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } finally {
+        lock.unlock();
+      }
+    }
+    recordAssociationBatchMetrics(results,
+        metricsContainer.getAssociationBatchMutateSuccess(),
+        metricsContainer.getAssociationBatchMutateFailure());
+    return new AssociationBatchResponse(results);
+  }
+
+  private void checkAssociationBatchLimits(AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!config().associationBatchMutateLimitsEnabled()) {
+      return;
+    }
+
+    boolean hasInlineSchema = false;
+    for (AssociationOpRequest req : request.getRequests()) {
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (op instanceof AssociationCreateOrUpdateOp
+            && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
+          hasInlineSchema = true;
+        }
+      }
+    }
+
+    // No inline schema anywhere in the batch means no schema payload to bound, so none of the
+    // limits below apply, regardless of how many topics or associations are in the request.
+    if (!hasInlineSchema) {
+      return;
+    }
+
+    // batchSize is defined as the number of topics (resource entries) in the request, not the
+    // number of individual association ops; a single topic may carry both a key and a value
+    // association without counting as two topics.
+    List<AssociationOpRequest> reqs = request.getRequests();
+    int numTopics = reqs.size();
+    int maxNum = config().maxAssociationNumPerMutateBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has %d topics, exceeding the configured maximum"
+              + " of %d topics per batch when any association in the batch carries an inline"
+              + " schema", numTopics, maxNum));
+    }
+
+    // Check the most granular thing first: each individual association's inline schema payload
+    // (including references, metadata, etc., i.e. the whole RegisterSchemaRequest) against the
+    // per-association limit, so a violation names the exact offending association.
+    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
+    for (int i = 0; i < reqs.size(); i++) {
+      AssociationOpRequest req = reqs.get(i);
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (!(op instanceof AssociationCreateOrUpdateOp)) {
+          continue;
+        }
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        RegisterSchemaRequest schema = createOrUpdateOp.getSchema();
+        if (schema == null) {
+          continue;
+        }
+        long schemaPayloadBytes = jsonPayloadSize(schema);
+        if (schemaPayloadBytes > maxEntryBytes) {
+          throw new AssociationBatchLimitExceededException(String.format(
+              "The '%s' association's schema for resourceId '%s' (topic %d of %d in the"
+                  + " Associations batchMutate request) has a payload size of %d bytes,"
+                  + " exceeding the configured maximum of %d bytes per association schema",
+              createOrUpdateOp.getAssociationType(), req.getResourceId(), i + 1, reqs.size(),
+              schemaPayloadBytes, maxEntryBytes));
+        }
+      }
+    }
+
+    long requestPayloadBytes = jsonPayloadSize(request);
+    long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
+    if (requestPayloadBytes > maxBatchBytes) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has a payload size of %d bytes, exceeding the"
+              + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
+    }
+  }
+
+  private static long jsonPayloadSize(Object obj) {
+    try {
+      return JacksonMapper.INSTANCE.writeValueAsBytes(obj).length;
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException(
+          "Unexpected error measuring payload size of an already-deserialized object", e);
+    }
+  }
+
+  // --------------- Association query methods ---------------
+
+  public Association getAssociationByGuid(String guid)
+      throws SchemaRegistryException {
+    try {
+      AssociationValue associationValue = lookupCache.associationByGuid(guid);
+      return associationValue != null ? associationValue.toAssociationEntity() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting association for guid '"
+          + guid + "' in the backend store", e);
+    }
+  }
+
+  public List<Association> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (subject == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter = lookupCache.associationsBySubject(subject)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for subject '"
+          + subject + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceId == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter =
+        lookupCache.associationsByResourceId(resourceId)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
+          + resourceId + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceName == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceName(resourceName, resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceNamespace == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceNamespace(resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+                || associationTypes.contains(value.getAssociationType()))
+                && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)
+                && (resourceNamespace.equals(RESOURCE_WILDCARD)
+                || value.getResourceNamespace().equals(resourceNamespace))) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
   /**
    * Internal class representing a raw schema with parsing options.
    */
   protected static class RawSchema {
     private final Schema schema;
-    private final boolean isNew;
+    private final boolean validateAsNew;
     private final boolean normalize;
 
-    public RawSchema(Schema schema, boolean isNew, boolean normalize) {
+    public RawSchema(Schema schema, boolean validateAsNew, boolean normalize) {
       this.schema = schema;
-      this.isNew = isNew;
+      this.validateAsNew = validateAsNew;
       this.normalize = normalize;
     }
 
@@ -1841,8 +3236,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return schema;
     }
 
-    public boolean isNew() {
-      return isNew;
+    public boolean isValidateAsnew() {
+      return validateAsNew;
     }
 
     public boolean isNormalize() {
@@ -1858,21 +3253,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         return false;
       }
       RawSchema that = (RawSchema) o;
-      return isNew == that.isNew
+      return validateAsNew == that.validateAsNew
           && normalize == that.normalize
           && Objects.equals(schema, that.schema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(schema, isNew, normalize);
+      return Objects.hash(schema, validateAsNew, normalize);
     }
 
     @Override
     public String toString() {
       return "RawSchema{"
           + "schema=" + schema
-          + ", isNew=" + isNew
+          + ", isNew=" + validateAsNew
           + ", normalize=" + normalize
           + '}';
     }

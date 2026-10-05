@@ -41,6 +41,11 @@
             <excludes>
                 <exclude>io.confluent:common-*</exclude>
                 <exclude>org.apache.kafka:kafka-clients</exclude>
+                <!-- FIPS: these non-FIPS-validated BouncyCastle jars are pulled in transitively
+                     but must not ship, since only the FIPS-validated BC provider is approved. -->
+                <exclude>org.bouncycastle:bcprov-jdk18on</exclude>
+                <exclude>org.bouncycastle:bcpkix-jdk18on</exclude>
+                <exclude>org.bouncycastle:bcutil-jdk18on</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>

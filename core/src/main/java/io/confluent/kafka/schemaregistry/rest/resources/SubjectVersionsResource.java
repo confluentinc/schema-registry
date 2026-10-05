@@ -176,9 +176,13 @@ public class SubjectVersionsResource {
         schemaRegistry.extractSchemaTags(schema, tags);
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         String originalGuid = schema.getGuid();
-        schema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          schema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, schema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+          schema.setSchema(parsedSchema.formattedString(format));
+        }
         schema.setGuid(originalGuid);
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
@@ -452,6 +456,8 @@ public class SubjectVersionsResource {
       @QueryParam("normalize") boolean normalize,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to skip compatibility checks when registering the schema")
+      @QueryParam("force") boolean force,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
@@ -476,7 +482,10 @@ public class SubjectVersionsResource {
       }
     }
     if (subjectName != null
-        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
+        && !QualifiedSubject.isValidSubject(
+               schemaRegistry.tenant(), subjectName, false, schemaRegistry.allowEmptySubject())) {
+      log.warn("Rejecting register: invalid subject name (tenant={}, subject={})",
+          schemaRegistry.tenant(), subjectName);
       throw Errors.invalidSubjectException(subjectName);
     }
 
@@ -487,12 +496,21 @@ public class SubjectVersionsResource {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
-      Schema result =
-          schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
+      Schema result = schemaRegistry.registerOrForward(
+          subjectName, request, normalize, force, headerProperties);
+      // `format` renders the response: `logical` emits the stored native schema as logical-types
+      // DDL, any other value applies the native formatter.
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real (native) guid up front and restore it after
+        // rendering, whether the body is logical DDL or a native-formatter output.
         String originalGuid = result.getGuid();
-        result.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          result.setSchema(LogicalFormat.convertToLogical(schemaRegistry, result));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+          result.setSchema(parsedSchema.formattedString(format));
+        }
         result.setGuid(originalGuid);
       }
       registerSchemaResponse = new RegisterSchemaResponse(result);
@@ -508,7 +526,7 @@ public class SubjectVersionsResource {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Register schema operation failed while writing"
-                                  + " to the Kafka store", e);
+                                  + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
                                                     + " to the leader", e);
@@ -548,7 +566,9 @@ public class SubjectVersionsResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "422",
-          description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+          description = "Unprocessable Entity. "
+                  + "Error code 42202 indicates an invalid version. "
+                  + "Error code 42205 indicates operation not permitted.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
@@ -580,6 +600,11 @@ public class SubjectVersionsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+      // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
+      // since the leader checks the forwarded request again. A missing target falls to the 404.
+      if (permanentDelete && schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+        schemaRegistry.checkPermanentDeleteAllowed(subject, true);
+      }
       int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
               versionId.getVersionId(), permanentDelete);
       asyncResponse.resume(deletedVersion);
@@ -596,7 +621,7 @@ public class SubjectVersionsResource {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Delete Schema Version operation failed while writing"
-                                  + " to the Kafka store", e);
+                                  + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors
           .requestForwardingFailedException("Error while forwarding delete schema version request"
@@ -719,12 +744,12 @@ public class SubjectVersionsResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Modify tags operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
+      throw Errors.storeException("Modify tags operation failed while writing"
+          + " to the backend store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
+      throw Errors.requestForwardingFailedException("Error while forwarding modify tags request"
           + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"

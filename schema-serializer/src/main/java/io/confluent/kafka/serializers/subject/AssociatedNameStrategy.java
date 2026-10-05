@@ -146,6 +146,12 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   }
 
   @Override
+  public boolean usesSchema() {
+    SubjectNameStrategy fallback = getFallbackSubjectNameStrategy();
+    return fallback != null && fallback.usesSchema();
+  }
+
+  @Override
   public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
     if (topic == null) {
       return null;

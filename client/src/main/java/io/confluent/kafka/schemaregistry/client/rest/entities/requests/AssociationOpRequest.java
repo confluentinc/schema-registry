@@ -28,8 +28,10 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -141,6 +143,16 @@ public class AssociationOpRequest {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
+  private static String associationTypeOf(AssociationOp op) {
+    if (op instanceof AssociationCreateOrUpdateOp) {
+      return ((AssociationCreateOrUpdateOp) op).getAssociationType();
+    }
+    if (op instanceof AssociationDeleteOp) {
+      return ((AssociationDeleteOp) op).getAssociationType();
+    }
+    return null;
+  }
+
   // Validates resource fields, then for each op: validates the op, defaults
   // the subject to :.ns:name-type for STRONG associations, and enforces that
   // frozen associations use the default subject.
@@ -161,8 +173,16 @@ public class AssociationOpRequest {
     if (getAssociations() == null || getAssociations().isEmpty()) {
       throw new IllegalPropertyException("associations", "cannot be null or empty");
     }
+    Set<String> associationTypes = new HashSet<>();
     for (AssociationOp op : getAssociations()) {
       op.validate(dryRun);
+      String associationType = associationTypeOf(op);
+      if (associationType != null && !associationTypes.add(associationType)) {
+        throw new IllegalPropertyException(
+            "associationType",
+            "may only appear once per request, but '" + associationType + "' appears more"
+                + " than once");
+      }
       if (op instanceof AssociationCreateOrUpdateOp) {
         AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
         if (op instanceof AssociationCreateOp) {

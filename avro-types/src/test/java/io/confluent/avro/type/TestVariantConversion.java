@@ -23,9 +23,7 @@ import io.confluent.kafka.schemaregistry.type.VariantObjectBuilder;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.Assert;
 import org.junit.Test;
@@ -162,7 +160,7 @@ public class TestVariantConversion {
     Variant decoded = conversion.fromRecord(record, schema, null);
 
     Assert.assertEquals(Variant.Type.OBJECT, decoded.getType());
-    Assert.assertEquals(1, decoded.numObjectElements());
+    Assert.assertEquals(1, decoded.numObjectFields());
     Assert.assertEquals("Alice", decoded.getFieldByKey("name").getString());
   }
 

@@ -30,6 +30,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -46,6 +47,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
@@ -64,6 +66,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean failUnknownProperties;
   protected boolean validate;
   protected boolean validateBeforeDomainRules;
+  protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
@@ -95,6 +98,15 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
     this.validateBeforeDomainRules =
         config.getBoolean(KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
+    this.validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
+        config.getString(KafkaJsonSchemaSerializerConfig.VALIDATION_RULES_EXECUTION)
+            .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaJsonSchemaSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -187,10 +199,19 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       if (validate && validateBeforeDomainRules) {
         object = validateJson(object, schema);
       }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.BEFORE_DOMAIN_RULES) {
+        object = (T) executeValidationRules(subject, topic, headers, schema, object);
+      }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       if (validate && !validateBeforeDomainRules) {
         object = validateJson(object, schema);
       }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.AFTER_DOMAIN_RULES) {
+        object = (T) executeValidationRules(subject, topic, headers, schema, object);
+      }
+
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
         byte[] payload = objectMapper.writeValueAsBytes(object);
         payload = (byte[]) executeRules(

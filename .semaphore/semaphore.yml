@@ -34,7 +34,7 @@ blocks:
     dependencies: []
     run:
       # don't run the tests on non-functional changes...
-      when: "change_in('/', {exclude: ['/.deployed-versions/', '.github/', 'service.yml', 'README.md'], default_branch: 'master'})"
+      when: "change_in('/', {exclude: ['/.deployed-versions/', '/.github/', '/service.yml', '/README.md'], default_branch: 'master'})"
     task:
       jobs:
         - name: Test
@@ -60,9 +60,7 @@ blocks:
           commands:
             - ci-tools ci-update-version --direct-pom-edit
             - ci-tools ci-push-tag
-            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode 
-              -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/ 
-              -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
+            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/ -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
   - name: CP Jar Build CI Gating
     dependencies: []
     run:
@@ -91,6 +89,17 @@ blocks:
               else \
                   echo "PR is targeted to ${SEMAPHORE_GIT_BRANCH} branch which is not CP nightly or master branch. Skipping cp-jar-build task."; \
               fi;
+  # Claude Code based code review in PRs.
+  - name: R2 Code Review
+    dependencies: []
+    run:
+      when: "pull_request =~ '.+' and change_in('/', {exclude: ['/.deployed-versions/'], default_branch: 'master'})"
+    task:
+      jobs:
+        - name: R2 Code Review
+          commands:
+            # || true: code review failures are unrelated to the codebase and should not block CI. Please report issues to Slack channel #r2.
+            - r2 code-review --verbose --timeout=900s || true
 
 after_pipeline:
   task:

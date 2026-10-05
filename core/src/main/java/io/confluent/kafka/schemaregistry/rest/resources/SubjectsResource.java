@@ -128,10 +128,10 @@ public class SubjectsResource {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
-    // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
+      // returns version if the schema exists. Otherwise returns 404
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
@@ -145,9 +145,16 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
         String originalGuid = matchingSchema.getGuid();
-        matchingSchema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+          matchingSchema.setSchema(parsedSchema.formattedString(format));
+        }
         matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
@@ -206,9 +213,16 @@ public class SubjectsResource {
         }
       }
       if (format != null && !format.trim().isEmpty()) {
-        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        // Schema.setSchema(...) nulls the guid, and getGuid() then recomputes it as an MD5 of the
+        // new schema string -- so capture the real guid up front and restore it after rendering,
+        // whether the body is logical DDL or a native-formatter output.
         String originalGuid = matchingSchema.getGuid();
-        matchingSchema.setSchema(parsedSchema.formattedString(format));
+        if (LogicalFormat.isLogical(format)) {
+          matchingSchema.setSchema(LogicalFormat.convertToLogical(schemaRegistry, matchingSchema));
+        } else {
+          ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+          matchingSchema.setSchema(parsedSchema.formattedString(format));
+        }
         matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
@@ -291,6 +305,11 @@ public class SubjectsResource {
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. "
+                  + "Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
@@ -313,6 +332,11 @@ public class SubjectsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+      // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
+      // since the leader checks the forwarded request again. A missing target falls to the 404.
+      if (permanentDelete && schemaRegistry.hasSubjects(subject, true)) {
+        schemaRegistry.checkPermanentDeleteAllowed(subject, true);
+      }
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
               subject,
               permanentDelete);

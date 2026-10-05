@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -48,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.function.Predicate;
 
 import jakarta.inject.Inject;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +116,7 @@ public class SchemasResource {
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
       @Parameter(description = "Lifecycle")
-      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
+      @QueryParam("lifecycle") List<LifecyclePolicyFilter> lifecycles,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -135,25 +137,48 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
+
+    List<String> assocTypes = associationTypes == null ? List.of() : associationTypes;
+    List<LifecyclePolicyFilter> lcs = lifecycles == null ? List.of() : lifecycles;
+    boolean filterByAssociation =
+        !assocTypes.isEmpty() || resourceType != null || !lcs.isEmpty();
+    Set<LifecyclePolicy> requestedLifecycles = lcs.stream()
+        .filter(l -> l != LifecyclePolicyFilter.NONE)
+        .map(l -> LifecyclePolicy.valueOf(l.name()))
+        .collect(Collectors.toSet());
+    boolean includeUnassociated = lcs.contains(LifecyclePolicyFilter.NONE);
+
     limit = schemaRegistry.normalizeSchemaLimit(limit);
     return Streams.stream(schemas)
-      .skip(offset)
-      .limit(limit)
-      .map(s -> {
-        try {
-          if (associationTypes != null && !associationTypes.isEmpty()) {
-            List<Association> associations = schemaRegistry.getAssociationsBySubject(s.getSubject(),
-                resourceType, associationTypes, lifecycle);
-            return s.copy(associations);
-          } else {
-            return s;
+        .flatMap(s -> {
+          try {
+            if (!filterByAssociation) {
+              return Stream.of(s);
+            }
+            // Pass lifecycle=null to storage so we can apply multi-value
+            // semantics (including the NONE sentinel) in-memory.
+            List<Association> assocs = schemaRegistry.getAssociationsBySubject(
+                s.getSubject(), resourceType, assocTypes, null);
+            if (assocs.isEmpty()) {
+              return includeUnassociated ? Stream.of(s) : Stream.empty();
+            }
+            if (requestedLifecycles.isEmpty()) {
+              // No lifecycle filter at all → include with all matching assocs.
+              // Only NONE was requested → subject has assocs, so exclude.
+              return lcs.isEmpty() ? Stream.of(s.copy(assocs)) : Stream.empty();
+            }
+            List<Association> matching = assocs.stream()
+                .filter(a -> requestedLifecycles.contains(a.getLifecycle()))
+                .collect(Collectors.toList());
+            return matching.isEmpty() ? Stream.empty() : Stream.of(s.copy(matching));
+          } catch (SchemaRegistryException e) {
+            throw Errors.schemaRegistryException(
+                "Error while retrieving associations for subject " + s.getSubject(), e);
           }
-        } catch (SchemaRegistryException e) {
-          throw Errors.schemaRegistryException(
-              "Error while retrieving associations for subject " + s.getSubject(), e);
-        }
-      })
-      .collect(Collectors.toList());
+        })
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
   }
 
   @GET
@@ -193,14 +218,22 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      // Storage renders native formats only; for logical DDL, fetch natively and convert further
+      // below -- after extractSchemaTags, which reparses the schema string as its native type.
+      schema = schemaRegistry.get(
+          id, subject, LogicalFormat.isLogical(format) ? "" : format, fetchMaxId);
       if (schema == null) {
         throw Errors.schemaNotFoundException(id);
       }
       if (tags != null && !tags.isEmpty()) {
-        Schema s = new Schema(null, null, null, schema);
+        Schema s = new Schema(schema.getSubject(), schema.getVersion(), id, schema);
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
+      }
+      if (LogicalFormat.isLogical(format)) {
+        // Convert with the stored subject so unqualified references resolve in their own context.
+        schema.setSchemaString(LogicalFormat.convertToLogical(schemaRegistry,
+            new Schema(subjectForId(id, subject, schema), schema.getVersion(), id, schema)));
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
@@ -375,7 +408,14 @@ public class SchemasResource {
             + "schema with id " + id + " from the schema registry";
     String schema ;
     try {
-      schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+      if (LogicalFormat.isLogical(format)) {
+        SchemaString ss = schemaRegistry.get(id, subject, "", false);
+        // A missing id yields null; let the not-found check below handle it rather than NPE.
+        schema = ss == null ? null : LogicalFormat.convertToLogical(
+            schemaRegistry, new Schema(subjectForId(id, subject, ss), null, id, ss));
+      } else {
+        schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+      }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -419,7 +459,18 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
         + "registry";
     try {
-      schema = schemaRegistry.getByGuid(guid, format);
+      if (LogicalFormat.isLogical(format)) {
+        schema = schemaRegistry.getByGuid(guid, "");
+        if (schema != null) {
+          // getByGuid strips subject/version, but unqualified reference subjects resolve against
+          // their parent's context -- so recover the guid's own context as the conversion parent.
+          // Only needed when the schema actually has references.
+          schema.setSchemaString(LogicalFormat.convertToLogical(
+              schemaRegistry, new Schema(contextForGuid(guid, schema), null, null, schema)));
+        }
+      } else {
+        schema = schemaRegistry.getByGuid(guid, format);
+      }
       if (schema == null) {
         throw Errors.schemaNotFoundException(guid);
       }
@@ -432,6 +483,53 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     return schema;
+  }
+
+  private static boolean hasReferences(SchemaString schema) {
+    List<SchemaReference> refs = schema.getReferences();
+    return refs != null && !refs.isEmpty();
+  }
+
+  /**
+   * Returns the subject to use as the parent when resolving the references of a schema fetched by
+   * id. When the caller omits {@code subject}, storage deliberately returns a {@link SchemaString}
+   * with a null subject, but unqualified reference subjects are qualified against their parent's
+   * context -- so an id selected from a non-default context would otherwise resolve its references
+   * in the default context. Recovers a stored subject for the id in that case. Returns
+   * {@code null} when the schema has no references, since the parent is then unused.
+   */
+  private String subjectForId(int id, String subject, SchemaString schema)
+      throws SchemaRegistryException {
+    if (schema.getSubject() != null) {
+      return schema.getSubject();
+    }
+    if (!hasReferences(schema)) {
+      return null;
+    }
+    // returnDeleted=true: fetching by id does not filter soft-deleted schemas, so the id's only
+    // subject versions may be deleted ones -- excluding them would lose the context entirely.
+    Set<String> subjects = schemaRegistry.listSubjectsForId(id, subject, true);
+    return subjects == null || subjects.isEmpty() ? null : subjects.iterator().next();
+  }
+
+  /**
+   * Returns a qualified-context subject standing in for the context the given guid lives in, to be
+   * used as the parent when resolving the schema's references. A schema fetched by guid has had its
+   * subject stripped, but unqualified reference subjects are qualified against their parent's
+   * context, so without this a referenced schema in a non-default context would not be found.
+   * Returns {@code null} when the schema has no references, since the parent is then unused.
+   */
+  private String contextForGuid(String guid, SchemaString schema)
+      throws SchemaRegistryException {
+    if (!hasReferences(schema)) {
+      return null;
+    }
+    List<ContextId> ids = schemaRegistry.listIdsForGuid(guid);
+    if (ids.isEmpty()) {
+      return null;
+    }
+    return new QualifiedSubject(schemaRegistry.tenant(), ids.get(0).getContext(), null)
+        .toQualifiedContext();
   }
 
   @GET

@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -59,12 +60,23 @@ public class AssociationCreateOrUpdateRequest {
 
   public AssociationCreateOrUpdateRequest(
       AssociationOpRequest request, AssociationOp op) {
+    this(request, ImmutableList.of((AssociationCreateOrUpdateOp) op));
+  }
+
+  /**
+   * Builds a single request carrying every op in {@code ops}, so that a batch can apply them
+   * as a unit. Repeated association types are rejected when the request is applied.
+   */
+  public AssociationCreateOrUpdateRequest(
+      AssociationOpRequest request, List<? extends AssociationCreateOrUpdateOp> ops) {
     this(
         request.getResourceName(),
         request.getResourceNamespace(),
         request.getResourceId(),
         request.getResourceType(),
-        ImmutableList.of(new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) op))
+        ops.stream()
+            .map(AssociationCreateOrUpdateInfo::new)
+            .collect(Collectors.toList())
     );
   }
 

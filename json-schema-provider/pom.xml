@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.4.0-0</version>
+        <version>8.5.0-0</version>
     </parent>
 
     <licenses>
@@ -70,16 +70,6 @@
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-scripting-jvm</artifactId>
-            <version>${kotlin.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-scripting-compiler-embeddable</artifactId>
-            <version>${kotlin.version}</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>

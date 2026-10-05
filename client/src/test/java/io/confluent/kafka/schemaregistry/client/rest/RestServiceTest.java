@@ -90,6 +90,39 @@ public class RestServiceTest {
   private URL url;
 
   @Test
+  public void testDeleteAssociationsAsyncAccepted() throws Exception {
+    RestService restServiceSpy = spy(new RestService("http://localhost:8081"));
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+    doReturn(url).when(restServiceSpy).url(urlCaptor.capture());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_ACCEPTED);
+
+    // A 202 is a success and must not throw
+    restServiceSpy.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, "lkc-1",
+        "topic", Arrays.asList("key"), true, null, true);
+
+    assertTrue(urlCaptor.getValue().contains("async=true"));
+  }
+
+  @Test
+  public void testDeleteAssociationsDefaultOmitsAsync() throws Exception {
+    RestService restServiceSpy = spy(new RestService("http://localhost:8081"));
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+    doReturn(url).when(restServiceSpy).url(urlCaptor.capture());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_NO_CONTENT);
+
+    restServiceSpy.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, "lkc-1",
+        "topic", Arrays.asList("key"), true, null);
+
+    assertTrue(!urlCaptor.getValue().contains("async"));
+  }
+
+  @Test
   public void testSetForwardHeader() throws Exception {
     RestService restService = new RestService("http://localhost:8081", true);
     RestService restServiceSpy = spy(restService);
@@ -113,6 +146,91 @@ public class RestServiceTest {
     // Make sure that the X-Forward header is set to true
     verify(httpURLConnection).setRequestProperty(RestService.X_FORWARD_HEADER, "true");
     verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_UNKNOWN_PROPERTIES, "true");
+  }
+
+  /*
+   * A transient connection failure (e.g. connect timed out during a rolling restart) is retried
+   * when a retry policy is configured, so the request ultimately succeeds.
+   */
+  @Test
+  public void testRetriesTransientConnectFailure() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    restService.setRetries(1, 0, 0); // one retry, no backoff
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    // First attempt fails at connect; the retry succeeds.
+    when(httpURLConnection.getResponseCode())
+        .thenThrow(new SocketTimeoutException("Connect timed out"))
+        .thenReturn(HttpURLConnection.HTTP_OK);
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
+
+    assertEquals(Arrays.asList("abc"), restServiceSpy.getAllSubjects());
+    // Connect was attempted twice: the initial failure plus one retry.
+    verify(httpURLConnection, Mockito.times(2)).getResponseCode();
+  }
+
+  /*
+   * Without a retry policy (the default for the forwarding constructor), a transient connect
+   * failure is not retried and propagates immediately.
+   */
+  @Test
+  public void testNoRetriesFailsOnTransientConnectFailure() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode())
+        .thenThrow(new SocketTimeoutException("Connect timed out"));
+
+    try {
+      restServiceSpy.getAllSubjects();
+      fail("Expected the request to fail without retries");
+    } catch (java.io.IOException expected) {
+      // expected
+    }
+    // Connect was attempted exactly once, i.e. no retry.
+    verify(httpURLConnection, Mockito.times(1)).getResponseCode();
+  }
+
+  /*
+   * With a retry policy configured, an HTTP error response (RestClientException) is NOT retried,
+   * even for a status that is retriable by default (503) -- only connection-level IOExceptions are
+   * retried on the leader-forwarding path, so a request that reached the leader is not replayed.
+   */
+  @Test
+  public void testRetriesDoNotApplyToHttpErrorResponse() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    restService.setRetries(1, 0, 0); // retries enabled, but must not apply to RestClientException
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_UNAVAILABLE);
+
+    try {
+      restServiceSpy.getAllSubjects();
+      fail("Expected the request to fail without retrying the HTTP error response");
+    } catch (RestClientException expected) {
+      assertEquals(HttpURLConnection.HTTP_UNAVAILABLE, expected.getStatus());
+    }
+    // The 503 was returned only once: no retry despite retries being enabled.
+    verify(httpURLConnection, Mockito.times(1)).getResponseCode();
   }
 
   /*

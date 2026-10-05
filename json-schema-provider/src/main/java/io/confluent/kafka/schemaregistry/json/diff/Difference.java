@@ -43,7 +43,11 @@ public class Difference {
     ADDITIONAL_PROPERTIES_REMOVED, ADDITIONAL_PROPERTIES_EXTENDED, ADDITIONAL_PROPERTIES_NARROWED,
     DEPENDENCY_ARRAY_ADDED, DEPENDENCY_ARRAY_REMOVED, DEPENDENCY_ARRAY_EXTENDED,
     DEPENDENCY_ARRAY_NARROWED, DEPENDENCY_ARRAY_CHANGED, DEPENDENCY_SCHEMA_ADDED,
-    DEPENDENCY_SCHEMA_REMOVED, PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
+    DEPENDENCY_SCHEMA_REMOVED,
+    @Deprecated PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
+    REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
+    REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL,
+    OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
     PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL,
     REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL,
     REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL,
@@ -115,6 +119,11 @@ public class Difference {
       Type.COMBINED_TYPE_CHANGED, Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED, Type.ENUM_ARRAY_CHANGED));
   Set<Type> typeExtended = new HashSet<>(Arrays.asList(Type.DEPENDENCY_ARRAY_EXTENDED,
       Type.PRODUCT_TYPE_EXTENDED, Type.SUM_TYPE_EXTENDED, Type.NOT_TYPE_EXTENDED));
+  Set<Type> propertyOrItemAddedToOpen = new HashSet<>(Arrays.asList(
+      Type.REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
+      Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL,
+      Type.OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL,
+      Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL));
 
   private String error() {
     String message = "";
@@ -147,8 +156,7 @@ public class Difference {
 
   @SuppressWarnings("CyclomaticComplexity")
   private String propertyOrItemError() {
-    if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
-          || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
+    if (propertyOrItemAddedToOpen.contains(type)) {
       return "The %s schema has an open content model and has a property or item at "
                + "path '" + jsonPath + "' which is missing in the %s schema";
     } else if (type == Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL) {
@@ -156,8 +164,8 @@ public class Difference {
                + "at path '" + jsonPath + "' which is missing in the %s schema";
     } else if (type == Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL
           || type == Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL) {
-      return "The %s has a closed content model and is missing a property or item present at "
-               + "path '" + jsonPath + "' in the %s schema";
+      return "The %s schema has a closed content model and is missing a property or item present "
+               + "at path '" + jsonPath + "' in the %s schema";
     } else if (type == Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
           || type == Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
       return "A property or item is missing in the %s schema but present at path '"
@@ -209,6 +217,6 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "{errorType:\"" + type + "\"" + ", description:\"" + error() + "'}";
+    return "{errorType:\"" + type + "\"" + ", description:\"" + error() + "\"}";
   }
 }

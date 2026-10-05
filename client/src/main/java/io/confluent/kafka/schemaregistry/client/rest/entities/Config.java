@@ -260,6 +260,63 @@ public class Config {
         || overrideRuleSet != null;
   }
 
+  public static Config mergeConfigs(Config globalConfig, Config subjectConfig) {
+    if (subjectConfig == null) {
+      return globalConfig;
+    }
+    if (globalConfig == null || globalConfig == subjectConfig) {
+      return subjectConfig;
+    }
+    Boolean normalize = subjectConfig.isNormalize() != null
+        ? subjectConfig.isNormalize()
+        : globalConfig.isNormalize();
+    Boolean validateFields = subjectConfig.isValidateFields() != null
+        ? subjectConfig.isValidateFields()
+        : globalConfig.isValidateFields();
+    Boolean validateNewSchemas = subjectConfig.isValidateNewSchemas() != null
+        ? subjectConfig.isValidateNewSchemas()
+        : globalConfig.isValidateNewSchemas();
+    Boolean validateRules = subjectConfig.isValidateRules() != null
+        ? subjectConfig.isValidateRules()
+        : globalConfig.isValidateRules();
+    String compatibilityLevel = subjectConfig.getCompatibilityLevel() != null
+        ? subjectConfig.getCompatibilityLevel()
+        : globalConfig.getCompatibilityLevel();
+    String compatibilityPolicy = subjectConfig.getCompatibilityPolicy() != null
+        ? subjectConfig.getCompatibilityPolicy()
+        : globalConfig.getCompatibilityPolicy();
+    String compatibilityGroup = subjectConfig.getCompatibilityGroup() != null
+        ? subjectConfig.getCompatibilityGroup()
+        : globalConfig.getCompatibilityGroup();
+    Metadata defaultMetadata = subjectConfig.getDefaultMetadata() != null
+        ? subjectConfig.getDefaultMetadata()
+        : globalConfig.getDefaultMetadata();
+    Metadata overrideMetadata = subjectConfig.getOverrideMetadata() != null
+        ? subjectConfig.getOverrideMetadata()
+        : globalConfig.getOverrideMetadata();
+    RuleSet defaultRuleSet = subjectConfig.getDefaultRuleSet() != null
+        ? subjectConfig.getDefaultRuleSet()
+        : globalConfig.getDefaultRuleSet();
+    RuleSet overrideRuleSet = subjectConfig.getOverrideRuleSet() != null
+        ? subjectConfig.getOverrideRuleSet()
+        : globalConfig.getOverrideRuleSet();
+    return new Config(
+        subjectConfig.getAlias(),
+        subjectConfig.getAliasForDeks(),
+        normalize,
+        validateFields,
+        validateNewSchemas,
+        validateRules,
+        compatibilityLevel,
+        compatibilityPolicy,
+        compatibilityGroup,
+        defaultMetadata,
+        overrideMetadata,
+        defaultRuleSet,
+        overrideRuleSet
+    );
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

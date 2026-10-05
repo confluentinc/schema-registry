@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
@@ -153,6 +155,21 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>leader.connect.retries</code>*
+   */
+  public static final String LEADER_CONNECT_RETRIES = "leader.connect.retries";
+  public static final int DEFAULT_LEADER_CONNECT_RETRIES = 0;
+  /**
+   * <code>leader.retries.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_WAIT_MS = "leader.retries.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_WAIT_MS = 100;
+  /**
+   * <code>leader.retries.max.wait.ms</code>*
+   */
+  public static final String LEADER_RETRIES_MAX_WAIT_MS = "leader.retries.max.wait.ms";
+  public static final int DEFAULT_LEADER_RETRIES_MAX_WAIT_MS = 1000;
+  /**
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
@@ -168,6 +185,48 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String ASSOCIATIONS_ENABLE = "associations.enable";
   public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
   /**
+   * <code>association.batch.mutate.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG =
+      "association.batch.mutate.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.mutate.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT = 1;
+  /**
+   * <code>association.batch.mutate.max.association.entry.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.entry.payload.bytes";
+  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_100_000;
+  /**
+   * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG =
+      "association.batch.mutate.max.association.batch.payload.bytes";
+  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_100_000;
+  /**
+   * <code>association.batch.get.limits.enabled</code>
+   */
+  public static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG =
+      "association.batch.get.limits.enabled";
+  public static final boolean ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT = false;
+  /**
+   * <code>association.batch.get.max.association.num.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG =
+      "association.batch.get.max.association.num.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 1;
+  /**
+   * <code>association.delete.async.threads</code>
+   */
+  public static final String ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG =
+      "association.delete.async.threads";
+  public static final int ASSOCIATION_DELETE_ASYNC_THREADS_DEFAULT = 4;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -179,7 +238,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String HOST_PORT_CONFIG = "host.port";
 
-  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+  public static final String SCHEMA_PROVIDERS_CONFIG = SchemaProvider.SCHEMA_PROVIDERS_PREFIX;
 
   /**
    * <code>schema.compatibility.level</code>
@@ -194,6 +253,22 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
   public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
 
+  public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
+  public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
+
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG =
+      SCHEMA_PROVIDERS_CONFIG + "." + AbstractSchemaProvider.REFERENCE_VERSIONS_STRICT_CONFIG;
+  public static final boolean REFERENCE_VERSIONS_STRICT_DEFAULT = false;
+
+  public static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG =
+      "schema.providers.json.fetch.remote.schemas";
+  public static final boolean SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT = true;
+  protected static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC =
+      "Determines whether the JSON Schema provider may fetch remote schema references over "
+      + "HTTP/HTTPS. If false, a newly registered JSON Schema must resolve its references from the "
+      + "registered references, the classpath, or the prepopulated meta-schemas, and any attempt "
+      + "to fetch an http/https URL is rejected. The check applies to all schema parsing, "
+      + "including validation against already-stored schemas.";
   /**
    * <code>schema.cache.size</code>
    */
@@ -205,6 +280,19 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
+
+  /**
+   * <code>size.limit.handler.enabled</code>
+   */
+  public static final String SIZE_LIMIT_FILTER_ENABLED_CONFIG = "size.limit.filter.enabled";
+  public static final boolean SIZE_LIMIT_FILTER_ENABLED_DEFAULT = false;
+
+  /**
+   * <code>max.body.size</code>
+   */
+  public static final String MAX_REQ_BODY_SIZE_CONFIG = "size.limit.filter.max.request.body.size";
+  public static final int MAX_REQ_BODY_SIZE_DEFAULT = 1048576; // 1MB
+
 
   /**
    * <code>schema.canonicalize.on.consume</code>
@@ -420,10 +508,24 @@ public class SchemaRegistryConfig extends RestConfig {
       + "beginning with $$";
   protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
       + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
+  protected static final String REJECT_EMPTY_SUBJECT_DOC =
+      "If true, reject schema registration requests whose subject name is the empty string. "
+      + "Defaults to false to preserve backward compatibility with existing deployments that "
+      + "may have schemas registered under an empty subject.";
+  protected static final String REFERENCE_VERSIONS_STRICT_DOC =
+      "If true, reject schema registration when the reference graph contains the same "
+      + "reference name at different versions. This prevents conflicting type definitions "
+      + "from coexisting in the resolved schema graph. Defaults to false.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
+  protected static final String SIZE_LIMIT_HANDLER_ENABLED_DOC =
+      "Enable the size limit handler to enforce request body size limits. "
+      + "When enabled, requests exceeding the configured size will be rejected.";
+  protected static final String MAX_REQ_BODY_SIZE_DOC =
+      "Maximum size in bytes for HTTP request and response bodies. "
+      + "Requests exceeding this limit will be rejected with HTTP 413.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
   protected static final String SCHEMA_SEARCH_DEFAULT_LIMIT_DOC =
@@ -462,6 +564,17 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String LEADER_CONNECT_RETRIES_DOC =
+      "The maximum number of times a request forwarded to the leader is retried on a transient "
+      + "connection failure (e.g. connection refused or connect timed out), such as during a "
+      + "rolling restart when the leader is briefly unreachable. Defaults to 0 (disabled); set to "
+      + "a positive value to enable retries.";
+  protected static final String LEADER_RETRIES_WAIT_MS_DOC =
+      "The initial wait, in milliseconds, before retrying a request forwarded to the leader. "
+      + "Subsequent retries back off exponentially with jitter up to " + LEADER_RETRIES_MAX_WAIT_MS
+      + ".";
+  protected static final String LEADER_RETRIES_MAX_WAIT_MS_DOC =
+      "The maximum wait, in milliseconds, between retries of a request forwarded to the leader.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
@@ -469,6 +582,47 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String ASSOCIATIONS_ENABLE_DOC =
       "If true, enable support for associations between resources and subjects.";
+  protected static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG + ", "
+      + MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG + ", and "
+      + MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchMutate API. "
+      + "When false (the default), batchMutate requests are never rejected for exceeding "
+      + "these limits.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC =
+      "Maximum number of topics (resource entries) allowed across an entire Associations "
+      + "batchMutate request when any association in the request carries an inline schema; a "
+      + "single topic may include both a key and a value association without counting as two "
+      + "topics. Not enforced when the request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC =
+      "Maximum payload size in bytes of a single association's inline schema (the whole "
+      + "RegisterSchemaRequest, including any references and metadata) in an Associations "
+      + "batchMutate request; checked independently per association, so a topic's key and "
+      + "value schemas are each measured and bounded on their own. Not enforced when the "
+      + "request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC =
+      "Maximum cumulative payload size in bytes of the entire Associations batchMutate "
+      + "request (all topics, subjects, and inline schemas combined). Not enforced when the "
+      + "request contains no inline schemas, or when "
+      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC =
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " on the Associations "
+      + "batchGet API. When false (the default), batchGet requests are never rejected for "
+      + "exceeding this limit.";
+  protected static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC =
+      "Maximum number of topics (resource entries) that may be queried across an entire "
+      + "Associations batchGet request (relevant only when the request's includeSchemas "
+      + "parameter is true; a request with includeSchemas=false never retrieves any schemas "
+      + "and is not subject to this limit). A single topic may request both a key and a value "
+      + "association without counting as two topics. Not enforced when "
+      + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String ASSOCIATION_DELETE_ASYNC_THREADS_DOC =
+      "Number of threads the leader uses to run cascaded subject deletes queued by "
+      + "DELETE /associations/resources/{resourceId} with async=true. Deletes that share a "
+      + "store lock run one at a time, in the order they were queued. In a single-tenant "
+      + "deployment all deletes share one store lock and run one at a time, regardless of "
+      + "this setting.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -561,6 +715,25 @@ public class SchemaRegistryConfig extends RestConfig {
       + "are set at the same time, inter.instance.listener.name takes precedence.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
+
+  // rest-utils request.timeout.ms: blanket wall-clock cap after which a request is aborted with
+  // an HTTP 504. Defaulted here (overridable) so a single slow request cannot hold a Jetty
+  // worker thread indefinitely (see INC-11350). The key is referenced as a literal so this
+  // compiles against rest-utils versions that predate the config; it is honored once rest-utils
+  // is upgraded to a version that defines it. The default is injected only into the config
+  // passed up to RestConfig (so the Jetty layer sees it); it is deliberately kept out of
+  // originalProperties so it never reaches Kafka clients, where "request.timeout.ms" is a
+  // distinct client setting.
+  private static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
+  private static final String REQUEST_TIMEOUT_MS_DEFAULT = "600000"; // 10 minutes
+
+  // rest-utils request.timeout.interrupt.enable: on timeout, also interrupt the worker thread.
+  // Enabled here so a timed-out request (e.g. a slow leader-forward or a runaway JSON schema
+  // compatibility check) can be reclaimed, not just abandoned. Same literal-key / inject-only-
+  // into-RestConfig handling as request.timeout.ms above.
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG =
+      "request.timeout.interrupt.enable";
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT = "true";
 
   private static final ConfigDef config;
 
@@ -659,11 +832,30 @@ public class SchemaRegistryConfig extends RestConfig {
         SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
     )
+    .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
+        ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
+    .define(REFERENCE_VERSIONS_STRICT_CONFIG, ConfigDef.Type.BOOLEAN,
+        REFERENCE_VERSIONS_STRICT_DEFAULT,
+        ConfigDef.Importance.LOW, REFERENCE_VERSIONS_STRICT_DOC
+    )
+    .define(SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(SIZE_LIMIT_FILTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        SIZE_LIMIT_FILTER_ENABLED_DEFAULT,
+        ConfigDef.Importance.MEDIUM, SIZE_LIMIT_HANDLER_ENABLED_DOC
+    )
+    .define(MAX_REQ_BODY_SIZE_CONFIG, ConfigDef.Type.INT, MAX_REQ_BODY_SIZE_DEFAULT,
+        ConfigDef.Importance.MEDIUM, MAX_REQ_BODY_SIZE_DOC
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
@@ -725,6 +917,15 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
     )
+    .define(LEADER_CONNECT_RETRIES, ConfigDef.Type.INT, DEFAULT_LEADER_CONNECT_RETRIES,
+        ConfigDef.Importance.LOW, LEADER_CONNECT_RETRIES_DOC
+    )
+    .define(LEADER_RETRIES_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_WAIT_MS_DOC
+    )
+    .define(LEADER_RETRIES_MAX_WAIT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_RETRIES_MAX_WAIT_MS,
+        ConfigDef.Importance.LOW, LEADER_RETRIES_MAX_WAIT_MS_DOC
+    )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
     )
@@ -733,6 +934,34 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
         ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
+    )
+    .define(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC
+    )
+    .define(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC
+    )
+    .define(MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC
+    )
+    .define(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DEFAULT,
+        ConfigDef.Importance.LOW, ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT,
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC
+    )
+    .define(ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG, ConfigDef.Type.INT,
+        ASSOCIATION_DELETE_ASYNC_THREADS_DEFAULT, ConfigDef.Range.atLeast(1),
+        ConfigDef.Importance.LOW, ASSOCIATION_DELETE_ASYNC_THREADS_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -880,7 +1109,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
-    super(configDef, props);
+    super(configDef, applyRequestTimeoutDefaults(props));
     this.originalProperties = props;
     String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
     if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
@@ -891,6 +1120,23 @@ public class SchemaRegistryConfig extends RestConfig {
       throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
     buildMetricsContextLabels();
+  }
+
+  // Returns a copy of the supplied properties with the blanket request-timeout defaults applied
+  // (each only if the operator has not set it explicitly). A copy is used so the defaults are
+  // visible to the rest-utils/Jetty layer via RestConfig without polluting originalProperties,
+  // which is forwarded to Kafka clients.
+  private static Properties applyRequestTimeoutDefaults(Properties props) {
+    if (props.containsKey(REQUEST_TIMEOUT_MS_CONFIG)
+        && props.containsKey(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG)) {
+      return props;
+    }
+    Properties merged = new Properties();
+    merged.putAll(props);
+    merged.putIfAbsent(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS_DEFAULT);
+    merged.putIfAbsent(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG,
+        REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT);
+    return merged;
   }
 
   private static String getDefaultHost() {
@@ -1022,6 +1268,34 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public boolean enableAssociations() {
     return getBoolean(ASSOCIATIONS_ENABLE);
+  }
+
+  public boolean associationBatchMutateLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerMutateBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG);
+  }
+
+  public int maxAssociationMutateEntryPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public int maxAssociationMutateBatchPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG);
+  }
+
+  public boolean associationBatchGetLimitsEnabled() {
+    return getBoolean(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG);
+  }
+
+  public int maxAssociationNumPerGetBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG);
+  }
+
+  public int associationDeleteAsyncThreads() {
+    return getInt(ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG);
   }
 
   public static void main(String[] args) {

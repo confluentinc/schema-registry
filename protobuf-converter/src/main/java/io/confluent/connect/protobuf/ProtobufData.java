@@ -103,6 +103,11 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
   public static final String PROTOBUF_TYPE_PROP = NAMESPACE + ".Type";
+  // Marks an optional scalar that originated from a protobuf wrapper type
+  // (e.g. google.protobuf.StringValue). Used to distinguish a genuine wrapper-typed oneof
+  // member from a plain scalar oneof member: oneof members are always optional, so optionality
+  // alone cannot signal wrapper-ness for them the way it does for ordinary fields.
+  public static final String PROTOBUF_TYPE_WRAPPER = NAMESPACE + ".Wrapper";
 
   public static final String PROTOBUF_PRECISION_PROP = "precision";
   public static final String PROTOBUF_SCALE_PROP = "scale";
@@ -380,6 +385,17 @@ public class ProtobufData {
       Object value,
       ProtobufSchema protobufSchema
   ) {
+    return fromConnectData(ctx, schema, scope, value, protobufSchema, false);
+  }
+
+  private Object fromConnectData(
+      Object ctx,
+      Schema schema,
+      String scope,
+      Object value,
+      ProtobufSchema protobufSchema,
+      boolean oneofMember
+  ) {
     if (value == null) {
       // Ignore missing values
       return null;
@@ -392,8 +408,12 @@ public class ProtobufData {
       }
     }
 
+    // A plain scalar oneof member expresses nullability via the oneof itself, so it must not be
+    // wrapped even when useWrapperForNullables is set. A genuine wrapper-typed oneof member
+    // (carrying the wrapper marker) must still be wrapped so it round-trips faithfully.
     boolean isWrapper = isWrapper(protobufSchema)
-        || (useWrapperForNullables && schema.isOptional());
+        || (useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema)));
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
@@ -463,7 +483,7 @@ public class ProtobufData {
           if (listValue.isEmpty()) {
             return null;
           }
-          List<Object> newListValue = new ArrayList<>();
+          List<Object> newListValue = new ArrayList<>(listValue.size());
           for (Object o : listValue) {
             newListValue.add(fromConnectData(ctx, schema.valueSchema(), scope, o, protobufSchema));
           }
@@ -471,11 +491,11 @@ public class ProtobufData {
         case MAP:
           final Map<?, ?> mapValue = (Map<?, ?>) value;
           String scopedMapName = ((Descriptor) ctx).getFullName();
-          List<Message> newMapValue = new ArrayList<>();
+          List<Message> newMapValue = new ArrayList<>(mapValue.size());
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
             DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
             if (mapBuilder == null) {
-              throw new IllegalStateException("Invalid message name: " + scopedMapName);
+              throw new IllegalArgumentException("Invalid message name: " + scopedMapName);
             }
             Descriptor mapDescriptor = mapBuilder.getDescriptorForType();
             final FieldDescriptor keyDescriptor = mapDescriptor.findFieldByName(KEY_FIELD);
@@ -511,14 +531,17 @@ public class ProtobufData {
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
           if (isUnionSchema(schema)) {
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Object object = ignoreDefaultForNullables
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
                 String fieldName = scrubName(field.name());
                 Object fieldCtx = getFieldType(ctx, fieldName);
                 return new Pair<>(fieldName,
-                    fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema)
+                    fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema, true)
                 );
               }
             }
@@ -530,7 +553,10 @@ public class ProtobufData {
             if (messageBuilder == null) {
               throw new DataException("Invalid message name: " + scopedStructName);
             }
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               Object fieldCtx = getFieldType(ctx, fieldName);
               Object connectFieldVal = ignoreDefaultForNullables
@@ -588,6 +614,13 @@ public class ProtobufData {
       default:
         return false;
     }
+  }
+
+  // True if the schema is an (optional scalar) oneof member that originated from a protobuf
+  // wrapper type and must therefore be re-wrapped on the write side.
+  private boolean hasWrapperMarker(Schema schema) {
+    return schema.parameters() != null
+        && Boolean.parseBoolean(schema.parameters().get(PROTOBUF_TYPE_WRAPPER));
   }
 
   private Object getFieldType(Object ctx, String name) {
@@ -725,7 +758,8 @@ public class ProtobufData {
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(ctx, schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 
@@ -745,7 +779,8 @@ public class ProtobufData {
           message,
           fieldSchema,
           scrubName(field.name()),
-          tag
+          tag,
+          false
       );
       if (fieldDef != null) {
         boolean isProto3Optional = "optional".equals(getLabel(fieldSchema));
@@ -782,7 +817,8 @@ public class ProtobufData {
           message,
           field.schema(),
           scrubName(field.name()),
-          tag
+          tag,
+          true
       );
       if (fieldDef != null) {
         fieldDef.setOneofIndex(oneof.getIdx());
@@ -797,14 +833,15 @@ public class ProtobufData {
       MessageDefinition.Builder message,
       Schema fieldSchema,
       String name,
-      int tag
+      int tag,
+      boolean oneofMember
   ) {
     String label = getLabel(fieldSchema);
     if (fieldSchema.type() == Schema.Type.ARRAY) {
       fieldSchema = fieldSchema.valueSchema();
     }
     Map<String, String> params = new HashMap<>();
-    String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
+    String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params, oneofMember);
     Object defaultVal = null;
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
@@ -938,7 +975,8 @@ public class ProtobufData {
         map,
         mapElem.keySchema(),
         KEY_FIELD,
-        1
+        1,
+        false
     );
     map.addField(key.build());
     FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
@@ -947,7 +985,8 @@ public class ProtobufData {
         map,
         mapElem.valueSchema(),
         VALUE_FIELD,
-        2
+        2,
+        false
     );
     map.addField(val.build());
     return map.build();
@@ -972,7 +1011,8 @@ public class ProtobufData {
   }
 
   private String dataTypeFromConnectSchema(
-      FromConnectContext ctx, Schema schema, String fieldName, Map<String, String> params) {
+      FromConnectContext ctx, Schema schema, String fieldName, Map<String, String> params,
+      boolean oneofMember) {
     if (isDecimalSchema(schema)) {
       if (schema.parameters() != null) {
         String precision = schema.parameters().get(CONNECT_PRECISION_PROP);
@@ -999,10 +1039,12 @@ public class ProtobufData {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT16:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT16);
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
@@ -1013,6 +1055,7 @@ public class ProtobufData {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
         }
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
         defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
@@ -1033,15 +1076,19 @@ public class ProtobufData {
             wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
         }
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? wrapperType : defaultType;
       case FLOAT32:
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
       case FLOAT64:
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_DOUBLE_WRAPPER_TYPE : FieldDescriptor.Type.DOUBLE.toString().toLowerCase();
       case BOOLEAN:
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_BOOL_WRAPPER_TYPE : FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
         if (schema.parameters() != null) {
@@ -1052,9 +1099,11 @@ public class ProtobufData {
           }
         }
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_STRING_WRAPPER_TYPE : FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
         return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_BYTES_WRAPPER_TYPE : FieldDescriptor.Type.BYTES.toString().toLowerCase();
       case ARRAY:
         // Array should not occur here
@@ -1233,7 +1282,10 @@ public class ProtobufData {
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
-          for (OneofDescriptor oneOfDescriptor : descriptor.getRealOneofs()) {
+          List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
+          int numRealOneOfs = oneOfDescriptors.size();
+          for (int i = 0; i < numRealOneOfs; i++) {
+            OneofDescriptor oneOfDescriptor = oneOfDescriptors.get(i);
             if (message.hasOneof(oneOfDescriptor)) {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
@@ -1247,7 +1299,10 @@ public class ProtobufData {
             }
           }
 
-          for (FieldDescriptor fieldDescriptor : descriptor.getFields()) {
+          List<FieldDescriptor> fields = descriptor.getFields();
+          int numFields = fields.size();
+          for (int i = 0; i < numFields; i++) {
+            FieldDescriptor fieldDescriptor = fields.get(i);
             OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
             if (oneOfDescriptor != null) {
               // Already added field as oneof
@@ -1383,7 +1438,7 @@ public class ProtobufData {
         if (flattenUnions) {
           List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
           for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor, true));
           }
         } else {
           String unionFieldName = unionFieldName(oneOfDescriptor);
@@ -1420,13 +1475,18 @@ public class ProtobufData {
     }
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor, true));
     }
     builder.optional();
     return builder.build();
   }
 
   private Schema toConnectSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    return toConnectSchema(ctx, descriptor, false);
+  }
+
+  private Schema toConnectSchema(
+      ToConnectContext ctx, FieldDescriptor descriptor, boolean oneofMember) {
     SchemaBuilder builder;
 
     switch (descriptor.getType()) {
@@ -1568,7 +1628,19 @@ public class ProtobufData {
       builder.optional();
     }
 
-    if (useOptionalForNullables) {
+    if (oneofMember) {
+      // Union (oneof) members are inherently nullable, since at most one is ever set,
+      // so they must be optional regardless of the nullable handling configs.
+      builder.optional();
+      if (useWrapperForNullables
+          && descriptor.getType() == FieldDescriptor.Type.MESSAGE
+          && isWrapperType(descriptor.getMessageType())) {
+        // The member was a genuine wrapper type that got unwrapped to an optional scalar.
+        // Since oneof members are always optional, record this so the write side can re-wrap
+        // it (a plain scalar member, which must stay unwrapped, looks identical otherwise).
+        builder.parameter(PROTOBUF_TYPE_WRAPPER, Boolean.TRUE.toString());
+      }
+    } else if (useOptionalForNullables) {
       if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
@@ -1577,6 +1649,10 @@ public class ProtobufData {
     }
     builder.parameter(PROTOBUF_TYPE_TAG, String.valueOf(descriptor.getNumber()));
     return builder.build();
+  }
+
+  private boolean isWrapperType(Descriptor descriptor) {
+    return toUnwrappedSchema(descriptor) != null;
   }
 
   private SchemaBuilder toUnwrappedOrStructSchema(

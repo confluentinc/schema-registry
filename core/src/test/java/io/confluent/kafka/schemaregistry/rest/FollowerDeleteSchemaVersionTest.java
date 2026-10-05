@@ -305,9 +305,6 @@ public class FollowerDeleteSchemaVersionTest extends ClusterTestHarness {
     Callable<Boolean> condition = () -> {
       try {
         String actualSchema = follower.restClient.getId(schemaId).getSchemaString();
-        System.out.println("actualSchema");
-        System.out.println(actualSchema);
-        System.out.println(expectedSchema);
         return expectedSchema.equals(actualSchema);
       } catch (Exception e) {
         return false;

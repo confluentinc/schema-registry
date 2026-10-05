@@ -234,7 +234,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       }
       return key.toDekEntity();
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -333,7 +333,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       }
       return key.toDekEntity();
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -390,6 +390,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
@@ -423,7 +425,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       dekRegistry.testKek(kek);
       asyncResponse.resume(kek);
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (InvalidKeyException e) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
@@ -505,7 +507,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (InvalidKeyException e) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (TooManyKeysException e) {
@@ -566,6 +568,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while updating key: " + e.getMessage(), e);
     }

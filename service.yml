@@ -26,6 +26,10 @@ sonarqube:
     - "**/*.pb.*"
     - "**/mk-include/**/*"
     - "protobuf-serializer/**"
+    - "**/generated/**"
+    - "**/target/**"
+    - "**/jacoco-aggregate-*/**"
+    - "**/*.html"
 git:
   enable: true
 code_artifact:
@@ -41,4 +45,9 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-json-*
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-*
+    - maven-snapshots/maven/io.confluent/logical-types
     - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
+code_review:
+  agent: true
+  risk:
+    publish: true

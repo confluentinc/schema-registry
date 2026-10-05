@@ -64,7 +64,12 @@ public class Schema implements Comparable<Schema> {
 
   public static final String SCHEMA_TAGS_DESC = "Schema tags";
 
-  public static final String TIMESTAMP_DESC = "Timestamp when the schema was created";
+  public static final String TIMESTAMP_DESC = "Timestamp when the schema version's record was "
+      + "last written; the version was registered then unless createTs is present";
+
+  public static final String CREATE_TIMESTAMP_DESC = "Timestamp when the schema version was "
+      + "first registered. Present only when it differs from ts, i.e. the version's record was "
+      + "rewritten, as by a soft delete or an import; otherwise the version was registered at ts";
 
   public static final String DELETED_DESC = "Whether the schema has been deleted";
 
@@ -85,6 +90,7 @@ public class Schema implements Comparable<Schema> {
   private String schema;
   private List<SchemaTags> schemaTags;
   private Long timestamp;
+  private Long createTimestamp;
   private Boolean deleted;
 
   @JsonCreator
@@ -181,6 +187,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = schemaMetadata.getRuleSet();
     this.schema = schemaMetadata.getSchema();
     this.timestamp = schemaMetadata.getTimestamp();
+    this.createTimestamp = schemaMetadata.getCreateTimestamp();
     this.deleted = schemaMetadata.getDeleted();
   }
 
@@ -197,6 +204,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = schemaString.getRuleSet();
     this.schema = schemaString.getSchemaString();
     this.timestamp = schemaString.getTimestamp();
+    this.createTimestamp = schemaString.getCreateTimestamp();
     this.deleted = schemaString.getDeleted();
   }
 
@@ -250,6 +258,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = response.getRuleSet();
     this.schema = response.getSchema();
     this.timestamp = response.getTimestamp();
+    this.createTimestamp = response.getCreateTimestamp();
     this.deleted = response.getDeleted();
   }
 
@@ -265,12 +274,18 @@ public class Schema implements Comparable<Schema> {
                                                      .collect(Collectors.toList())
                                                : null;
 
-    return new Schema(
+    Schema copy = new Schema(
         subject, version, id, guid, schemaType, referencesCopy, metadata,
         ruleSet, schema, schemaTags, timestamp, deleted);
+    copy.setCreateTimestamp(createTimestamp);
+    return copy;
   }
 
   public Schema toHashKey() {
+    return toHashKey(false);
+  }
+
+  public Schema toHashKey(boolean preserveNonNullId) {
     // Deep copy the references list if it's not null
     List<SchemaReference> referencesCopy = references != null
         ? references.stream()
@@ -278,7 +293,10 @@ public class Schema implements Comparable<Schema> {
         .collect(Collectors.toList())
         : null;
 
-    return new Schema(subject, null, null, schemaType, referencesCopy, metadata, ruleSet, schema);
+    // Retain the fact that id is set, but don't retain the actual value,
+    // since it's not relevant to the hash key and may differ across instances of the same schema
+    Integer id = preserveNonNullId && this.id != null && this.id >= 0 ? 0 : null;
+    return new Schema(subject, null, id, schemaType, referencesCopy, metadata, ruleSet, schema);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -424,6 +442,18 @@ public class Schema implements Comparable<Schema> {
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(
+      description = CREATE_TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return this.createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
       description = DELETED_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("deleted")
   public Boolean getDeleted() {
@@ -473,6 +503,7 @@ public class Schema implements Comparable<Schema> {
                + "schema=" + this.schema + ","
                + "schemaTags=" + this.schemaTags + ","
                + "ts=" + this.timestamp + ","
+               + "createTs=" + this.createTimestamp + ","
                + "deleted=" + this.deleted + "}";
   }
 

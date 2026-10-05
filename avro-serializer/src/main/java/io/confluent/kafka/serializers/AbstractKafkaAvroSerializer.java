@@ -32,6 +32,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -59,15 +60,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+  protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
+  private final Cache<SubjectSchemaId, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
-    // use identity (==) comparison for keys
+    // Key by the subject and schema id (see SubjectSchemaId), not by the schema object, so that
+    // content-identical schemas arriving as distinct instances share a single DatumWriter.
     datumWriterCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .weakKeys()
         .build();
-
   }
 
   protected void configure(KafkaAvroSerializerConfig config) {
@@ -85,6 +86,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
+        config.getString(KafkaAvroSerializerConfig.VALIDATION_RULES_EXECUTION)
+            .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -163,11 +173,31 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(AvroSchema.TYPE, response.getId(), response.getGuid());
       }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.BEFORE_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
+      }
       if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
         AvroSchemaUtils.setThreadLocalData(
             schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
         try {
           object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
+      }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.AFTER_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
         } finally {
           AvroSchemaUtils.clearThreadLocalData();
         }
@@ -189,7 +219,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
                 "Unrecognized bytes object of type: " + value.getClass().getName());
           }
         } else {
-          writeDatum(baos, value, rawSchema);
+          writeDatum(baos, value, rawSchema, subject, schemaId);
         }
         byte[] payload = baos.toByteArray();
         payload = (byte[]) executeRules(
@@ -214,12 +244,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   @SuppressWarnings("unchecked")
-  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
-          throws ExecutionException, IOException {
+  private void writeDatum(
+      ByteArrayOutputStream out, Object value, Schema rawSchema, String subject,
+      SchemaId schemaId) throws ExecutionException, IOException {
     BinaryEncoder encoder = getBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.get(rawSchema,
+    writer = datumWriterCache.get(new SubjectSchemaId(subject, schemaId),
         () -> (DatumWriter<Object>) getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );

@@ -27,6 +27,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -39,7 +40,48 @@ public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest 
   @Before
   public void createMojo() {
     this.mojo = new TestCompatibilitySchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.mojo.client(new MockSchemaRegistryClient(MojoUtils.defaultSchemaProviders()));
+  }
+
+  @Test
+  public void compatibleLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    registerDdl(subject, "TYPE STRUCT<name STRING, age INT, city STRING>");
+
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    // Dropping a field is backward compatible; adding one would not be, since the DDL emits
+    // nullable unions without defaults.
+    writeText(ddlFile, "TYPE STRUCT<name STRING, age INT>");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaCompatibility.get(subject), IsEqual.equalTo(true));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void incompatibleLogicalType() throws Exception {
+    String subject = "TestLogicalSubject-value";
+    registerDdl(subject, "TYPE STRUCT<name STRING, age INT>");
+
+    File ddlFile = new File(this.tempDirectory, subject + ".ddl");
+    // Retyping a field is not a backward compatible change.
+    writeText(ddlFile, "TYPE STRUCT<name INT, age INT>");
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    subjectToFile.put(subject, ddlFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
+  /** Seeds a subject with the native schema the DDL denotes, as registering it would. */
+  private void registerDdl(String subject, String ddl) throws Exception {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchemaType(AvroSchema.TYPE);
+    request.setSchema(ddl);
+    this.mojo.client().registerWithRequestResponse(subject, request, false);
   }
 
   @Test

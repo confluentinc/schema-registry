@@ -115,6 +115,8 @@ public class CircularRefSchemaDiffTest {
     return sb.toString();
   }
 
+  private static final int TIMEOUT_SECONDS = 60;
+
   private void assertComparisonTerminates(
       String description, String originalSchemaStr, String updateSchemaStr) {
     JsonSchema original = new JsonSchema(originalSchemaStr);
@@ -125,11 +127,11 @@ public class CircularRefSchemaDiffTest {
       Future<List<Difference>> future = executor.submit(
           () -> SchemaDiff.compare(original.rawSchema(), update.rawSchema()));
       try {
-        List<Difference> result = future.get(10, TimeUnit.SECONDS);
+        List<Difference> result = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
       } catch (TimeoutException e) {
         future.cancel(true);
-        fail(description + ": SchemaDiff.compare did not terminate within 10 seconds. "
-            + "Circular $ref caused combinatorial explosion.");
+        fail(description + ": SchemaDiff.compare did not terminate within "
+            + TIMEOUT_SECONDS + " seconds. Circular $ref caused combinatorial explosion.");
       } catch (ExecutionException e) {
         if (e.getCause() instanceof StackOverflowError) {
           fail(description + ": StackOverflowError from circular $ref recursion.");

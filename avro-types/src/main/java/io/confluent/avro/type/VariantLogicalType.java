@@ -23,7 +23,7 @@ public class VariantLogicalType extends LogicalType {
   public static final String NAME = "variant";
   private static final VariantLogicalType INSTANCE = new VariantLogicalType();
 
-  static VariantLogicalType get() {
+  public static VariantLogicalType get() {
     return INSTANCE;
   }
 

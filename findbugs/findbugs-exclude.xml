@@ -73,6 +73,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="io.confluent.kafka.schemaregistry.utils.ShutdownableThread"/>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <Match>
         <Class name="io.confluent.connect.avro.AvroData"/>
         <Bug pattern="RC_REF_COMPARISON_BAD_PRACTICE"/>
     </Match>
@@ -94,6 +99,16 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <Class name="~.*Request"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.Association"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
 
@@ -149,6 +164,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <!-- exclude generated code -->
     <Match>
         <Class name="~io.confluent.protobuf.*"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.type.logical.generated.*"/>
     </Match>
 
     <Match>

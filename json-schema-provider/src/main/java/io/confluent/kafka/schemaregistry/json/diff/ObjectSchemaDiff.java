@@ -45,10 +45,10 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PR
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_INCREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_REMOVED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
@@ -58,7 +58,9 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPER
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_WITH_DEFAULT_ADDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_PROPERTIES_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_PROPERTIES_EXTENDED;
@@ -262,9 +264,17 @@ public class ObjectSchemaDiff {
               if (updateSchema instanceof EmptySchema) {
                 // compatible
                 ctx.addDifference(PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
+              } else if (update.getRequiredProperties().contains(propertyKey)) {
+                if (updateSchema.hasDefaultValue()) {
+                  // compatible only under LENIENT
+                  ctx.addDifference(REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL);
+                } else {
+                  // incompatible
+                  ctx.addDifference(REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+                }
               } else {
-                // incompatible
-                ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+                // compatible only under LENIENT
+                ctx.addDifference(OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
               }
             } else {
               Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(original, propertyKey);

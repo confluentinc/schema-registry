@@ -15,13 +15,13 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import kafka.security.minikdc.MiniKdc;
 import kafka.server.KafkaConfig;
-import kafka.security.JaasTestUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
+import org.apache.kafka.security.JaasTestUtils;
+import org.apache.kafka.security.minikdc.MiniKdc;
 import org.junit.jupiter.api.AfterEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

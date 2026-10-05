@@ -305,6 +305,56 @@ class VariantFormat {
   }
 
   /**
+   * Encodes an object field key to the UTF-8 bytes that {@link #compareKeys} orders. Callers that
+   * compare the same key repeatedly - sorting an object, or binary-searching it for one key -
+   * should encode it once and reuse the result rather than re-encoding per comparison.
+   */
+  static byte[] encodeKey(String key) {
+    return key.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Compares two object field keys, given their UTF-8 encodings, by unsigned lexicographic byte
+   * order, as required by the Variant spec for object field ordering.
+   *
+   * <p>This intentionally differs from {@link String#compareTo}, which compares UTF-16 code
+   * units. The two orderings agree for all keys in the Basic Multilingual Plane but diverge for
+   * supplementary-plane characters (U+10000 and above): {@code String#compareTo} orders a leading
+   * high surrogate (0xD800-0xDBFF) before code points in U+E000..U+FFFF, whereas UTF-8 byte order
+   * (and the spec) orders them after. Using UTF-16 order here would produce objects whose field
+   * ids are mis-sorted relative to the spec, breaking binary-search lookups by any reader that
+   * follows the spec's UTF-8 byte ordering.
+   */
+  static int compareKeys(byte[] a, byte[] b) {
+    return Arrays.compareUnsigned(a, b);
+  }
+
+  /**
+   * Fast little-endian unsigned read using bulk ByteBuffer operations.
+   * Requires the buffer to have {@link java.nio.ByteOrder#LITTLE_ENDIAN} byte order.
+   * Adapted from Apache Iceberg's VariantUtil.readLittleEndianUnsigned.
+   */
+  static int readUnsignedLittleEndian(ByteBuffer buffer, int pos, int numBytes) {
+    switch (numBytes) {
+      case 1:
+        return buffer.get(pos) & U8_MAX;
+      case 2:
+        return buffer.getShort(pos) & U16_MAX;
+      case 3:
+        return (buffer.getShort(pos) & U16_MAX) | ((buffer.get(pos + 2) & U8_MAX) << 16);
+      case 4:
+        int v = buffer.getInt(pos);
+        if (v < 0) {
+          throw new IllegalArgumentException(
+              "Failed to read unsigned int. numBytes: " + numBytes);
+        }
+        return v;
+      default:
+        throw new IllegalArgumentException(String.format("Invalid numBytes: %d", numBytes));
+    }
+  }
+
+  /**
    * Returns the value type of Variant value `value[pos...]`. It is only legal to call `get*` if
    * `getType` returns the corresponding type. For example, it is only legal to call
    * `getLong` if this method returns `Type.Long`.
@@ -533,9 +583,9 @@ class VariantFormat {
   }
 
   /**
-   * Similar to getLong(), but for the types: Type.BYTE, SHORT.
+   * Similar to getLong(), but for the type: Type.BYTE.
    * @param value The Variant value
-   * @return The short value
+   * @return The byte value
    */
   static byte getByte(ByteBuffer value) {
     checkIndex(value.position(), value.limit());

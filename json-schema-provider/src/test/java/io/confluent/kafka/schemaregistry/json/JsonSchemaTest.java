@@ -36,6 +36,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -564,6 +565,36 @@ public class JsonSchemaTest {
         + "    }\n"
         + "  }\n"
         + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
+    assertEquals(0, diff.size());
+  }
+
+  @Test
+  public void testRefWithReadOnly() {
+    String schema = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": { \"incidentContext\": { \"$ref\": \"#/$defs/IncidentContext\" } },\n"
+        + "    \"$defs\": {\n"
+        + "      \"IncidentContext\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"incidentInvolvedParties\": {\n"
+        + "          \"type\": \"array\", \"items\": { \"$ref\": \"#/$defs/RelatedPerson\" } } }\n"
+        + "      },\n"
+        + "      \"RelatedPerson\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"sanctionsCheckResult\": { \"readOnly\": true, \"$ref\": \"#/$defs/SanctionsCheckResult\" } },\n"
+        + "        \"discriminator\": {\n"
+        + "          \"propertyName\": \"relatedPersonType\",\n"
+        + "          \"mapping\": { \"NaturalPerson\": \"#/$defs/NaturalPerson\", \"LegalPerson\": \"#/$defs/LegalPerson\" }\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"NaturalPerson\": { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"LegalPerson\":   { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"SanctionsCheckResult\": { \"type\": \"object\", \"properties\": {} }\n"
+        + "    }\n"
+        + "  }";
     JsonSchema jsonSchema = new JsonSchema(schema);
     List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
     assertEquals(0, diff.size());
@@ -1937,17 +1968,230 @@ public class JsonSchemaTest {
     return new JsonSchema(schemaString);
   }
 
-  static class JsonSchemaWithMappings extends JsonSchema {
-    private Map<URI, String> mappings;
-    public JsonSchemaWithMappings(String schema, Map<URI, String> mappings) {
-      super(schema);
-      this.mappings = mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReference() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
 
-    @Override
-    protected Map<URI, String> getPrepopulatedMappings() {
-      return mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReferenceWithDraft_2020_12() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceCrossDraft() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testLenientPolicyWithSimpleAllOf() {
+    String originalSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    // Add optional property to open content model in second subschema
+    String updatedSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}, \"email\": {\"type\": \"string\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+
+    // Strict should reject
+    List<String> strictErrors = updated.isBackwardCompatible(CompatibilityPolicy.STRICT, original);
+    assertFalse("Strict policy should reject", strictErrors.isEmpty());
+
+    // Lenient should allow
+    List<String> lenientErrors = updated.isBackwardCompatible(CompatibilityPolicy.LENIENT, original);
+    assertTrue("Lenient policy should allow adding optional properties. Errors: " + lenientErrors,
+               lenientErrors.isEmpty());
+  }
+
+  // The following tests cover the {add,remove} x {optional,required} x {closed,open} matrix
+  // for backward compatibility under STRICT vs LENIENT policies.
+
+  @Test
+  public void testStrictVsLenientAddOptionalToClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddOptionalToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveOptionalFromClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveOptionalFromOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredToClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertIncompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredWithDefaultToClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},"
+        + "\"email\":{\"type\":\"string\",\"default\":\"unknown\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":false}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertIncompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredWithDefaultToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},"
+        + "\"email\":{\"type\":\"string\",\"default\":\"unknown\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveRequiredFromClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveRequiredFromOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  private static void assertCompatible(
+      String originalSchema, String updatedSchema, CompatibilityPolicy policy) {
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+    List<String> errors = updated.isBackwardCompatible(policy, original);
+    assertTrue(policy + " policy should accept change. Errors: " + errors, errors.isEmpty());
+  }
+
+  private static void assertIncompatible(
+      String originalSchema, String updatedSchema, CompatibilityPolicy policy) {
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+    List<String> errors = updated.isBackwardCompatible(policy, original);
+    assertFalse(policy + " policy should reject change", errors.isEmpty());
   }
 
   static class TestObj {

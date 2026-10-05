@@ -1,0 +1,103 @@
+package io.confluent.protobuf.generated;
+
+message Row {
+  required int32 tinyIntNotNull = 3 [default = 1, (confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int8"
+      }
+    ]
+  }];
+  optional int32 tinyInt = 4 [default = 2, (confluent.field_meta) = {
+    doc: "tinyInt comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int8"
+      }
+    ]
+  }];
+  required int32 smallIntNotNull = 5 [default = 3, (confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int16"
+      }
+    ]
+  }];
+  optional int32 smallInt = 6 [default = 4, (confluent.field_meta) = {
+    doc: "smallInt comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int16"
+      }
+    ]
+  }];
+  required int32 intNotNull = 7 [default = 5];
+  optional int32 int = 8 [default = 6, (confluent.field_meta) = {
+    doc: "int comment"
+  }];
+  required int64 bigintNotNull = 9 [default = 7];
+  optional int64 bigint = 10 [default = 8, (confluent.field_meta) = {
+    doc: "bigint comment"
+  }];
+  required double doubleNotNull = 11 [default = 9.0];
+  optional double double = 12 [default = 10.0, (confluent.field_meta) = {
+    doc: "double comment"
+  }];
+  required float floatNotNull = 13 [default = 11.0];
+  optional float float = 14 [default = 12.0, (confluent.field_meta) = {
+    doc: "float comment"
+  }];
+
+  required nullableMapRepeatedWrapper nullableMap = 15 [(confluent.field_meta) = {
+    doc: "nullableMap comment",
+    params: [
+      {
+        key: "flink.wrapped",
+        value: "true"
+      },
+      {
+        key: "flink.version",
+        value: "1"
+      }
+    ]
+  }];
+
+  optional nestedMessage nested = 16;
+  repeated nestedMessage arr = 17;
+
+  message nullableMapRepeatedWrapper {
+    repeated ValueEntry value = 1;
+    message ValueEntry {
+      required int64 key = 1 [default=15];
+      required int64 value = 2 [default=16];
+    }
+  }
+
+  message nestedMessage {
+    required secondNestedMessage value = 1;
+    message secondNestedMessage {
+      required int64 a = 1 [default=17];
+      required int64 b = 2 [default=18];
+    }
+  }
+}

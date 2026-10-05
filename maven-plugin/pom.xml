@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.4.0-0</version>
+        <version>8.5.0-0</version>
     </parent>
 
     <licenses>
@@ -51,6 +51,11 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-protobuf-provider</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-logical-types</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>

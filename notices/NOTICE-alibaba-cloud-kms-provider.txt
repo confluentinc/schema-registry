@@ -1,0 +1,14 @@
+Alibaba Cloud KMS provider third-party components
+
+This product includes Alibaba Cloud Java SDK components developed by Alibaba
+Cloud and distributed under the Apache License, Version 2.0. The complete
+artifact inventory is in licenses/LICENSE-alibaba-cloud-sdk-java.txt.
+
+The provider also includes these transitive components:
+
+- dom4j 2.0.3, licensed under its BSD-style license. See
+  licenses/LICENSE-dom4j-2.0.3.txt.
+- Bouncy Castle Provider 1.84, licensed under the Bouncy Castle Licence. See
+  licenses/LICENSE-bcprov-jdk18on-1.84.txt.
+- OkHttp 3.12.13, Okio 1.15.0, Gson 2.9.0, and Commons Codec 1.16.1,
+  distributed under the Apache License, Version 2.0.

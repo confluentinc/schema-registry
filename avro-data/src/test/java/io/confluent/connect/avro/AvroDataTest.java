@@ -31,8 +31,13 @@ import java.util.LinkedHashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -48,6 +53,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -74,9 +82,22 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
+  private static final String PROTOBUF_TYPE_TAG = "io.confluent.connect.protobuf.Tag";
+  private static final String PROTOBUF_TYPE_PROP = "io.confluent.connect.protobuf.Type";
+  private static final String AVRO_TYPE_ENUM = "io.confluent.connect.avro.Enum";
+
   private static final int TEST_SCALE = 2;
   private static final BigDecimal TEST_DECIMAL = new BigDecimal(new BigInteger("156"), TEST_SCALE);
   private static final byte[] TEST_DECIMAL_BYTES = new byte[]{0, -100};
+  // TEST_DECIMAL_BYTES left-padded with sign-extension (0x00, since 156 is non-negative) to the
+  // 100-byte fixed size used by the "fixed decimal" tests below.
+  private static final byte[] TEST_DECIMAL_BYTES_FIXED_100 = new byte[100];
+  static {
+    System.arraycopy(
+        TEST_DECIMAL_BYTES, 0,
+        TEST_DECIMAL_BYTES_FIXED_100, TEST_DECIMAL_BYTES_FIXED_100.length - TEST_DECIMAL_BYTES.length,
+        TEST_DECIMAL_BYTES.length);
+  }
 
   private static final GregorianCalendar EPOCH;
   private static final GregorianCalendar EPOCH_PLUS_TEN_THOUSAND_DAYS;
@@ -202,7 +223,7 @@ public class AvroDataTest {
     GenericData.EnumSymbol avroObj = new GenericData.EnumSymbol(avroSchema, "one");
 
     Map connectPropsMap = ImmutableMap.of("connect.enum.doc","null",
-        "io.confluent.connect.avro.Enum","enum",
+        AVRO_TYPE_ENUM,"enum",
         "io.confluent.connect.avro.Enum.one", "one",
         "io.confluent.connect.avro.Enum.two","two",
         "io.confluent.connect.avro.Enum.three","three");
@@ -1253,7 +1274,7 @@ public class AvroDataTest {
   @Test
   public void testFromConnectLogicalDecimalFixedNew() {
     org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64, TEST_SCALE, 100);
-    checkNonRecordConversionNew(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES), Decimal.builder(2)
+    checkNonRecordConversionNew(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES_FIXED_100), Decimal.builder(2)
         .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64")
         .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(), TEST_DECIMAL, avroData);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
@@ -1365,10 +1386,135 @@ public class AvroDataTest {
   @Test
   public void testFromConnectLogicalDecimalFixed() {
     org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64, TEST_SCALE, 100);
-    checkNonRecordConversion(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES), Decimal.builder(2)
+    checkNonRecordConversion(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES_FIXED_100), Decimal.builder(2)
         .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64")
         .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(), TEST_DECIMAL, avroData);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+  }
+
+  // Regression test: a fixed-size decimal whose unscaled value's two's-complement byte array is
+  // shorter than the declared fixed size (e.g. 0, whose unscaled value is a single byte) must be
+  // left-padded/sign-extended before serialization, or Avro's binary encoder throws an
+  // IndexOutOfBoundsException when writing the fixed value.
+  @Test
+  public void testFromConnectLogicalDecimalFixedSerializesShortUnscaledValue() throws IOException {
+    Schema decimalSchema = Decimal.builder(9)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "38")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "16")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("amount", decimalSchema).build();
+    BigDecimal expected = new BigDecimal(BigInteger.ZERO, 9);
+    Struct value = new Struct(schema).put("amount", expected);
+
+    Object converted = avroData.fromConnectData(schema, value);
+    org.apache.avro.Schema avroSchema = ((GenericContainer) converted).getSchema();
+
+    GenericData.Fixed fixed = (GenericData.Fixed)
+        ((GenericRecord) converted).get("amount");
+    assertEquals(16, fixed.bytes().length);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(avroSchema).write(converted, encoder);
+    encoder.flush();
+
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(avroSchema);
+    GenericRecord decoded = reader.read(null,
+        DecoderFactory.get().binaryDecoder(new ByteArrayInputStream(out.toByteArray()), null));
+    SchemaAndValue result = avroData.toConnectData(avroSchema, decoded);
+    assertEquals(expected, ((Struct) result.value()).get("amount"));
+  }
+
+  // Regression test: same as above, but for a negative unscaled value, to exercise the 0xFF
+  // sign-extension branch of padToFixedSize (as opposed to the 0x00 branch exercised by zero).
+  // A mistake in this branch would be silent rather than loud: the value would decode back as a
+  // large positive number instead of throwing.
+  @Test
+  public void testFromConnectLogicalDecimalFixedSerializesNegativeUnscaledValue()
+      throws IOException {
+    Schema decimalSchema = Decimal.builder(9)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "38")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "16")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("amount", decimalSchema).build();
+    BigDecimal expected = new BigDecimal(BigInteger.valueOf(-1), 9);
+    Struct value = new Struct(schema).put("amount", expected);
+
+    Object converted = avroData.fromConnectData(schema, value);
+    org.apache.avro.Schema avroSchema = ((GenericContainer) converted).getSchema();
+
+    GenericData.Fixed fixed = (GenericData.Fixed)
+        ((GenericRecord) converted).get("amount");
+    assertEquals(16, fixed.bytes().length);
+    for (byte b : fixed.bytes()) {
+      assertEquals((byte) 0xFF, b);
+    }
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(avroSchema).write(converted, encoder);
+    encoder.flush();
+
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(avroSchema);
+    GenericRecord decoded = reader.read(null,
+        DecoderFactory.get().binaryDecoder(new ByteArrayInputStream(out.toByteArray()), null));
+    SchemaAndValue result = avroData.toConnectData(avroSchema, decoded);
+    assertEquals(expected, ((Struct) result.value()).get("amount"));
+  }
+
+  // Regression test: padding/sign-extension only makes sense for a Decimal's two's-complement
+  // unscaled value. A non-decimal fixed-byte field (e.g. a UUID or checksum stored as Avro
+  // `fixed`) whose value is shorter than the declared size indicates a genuine data/connector
+  // bug, and must keep failing loudly at serialization time rather than being silently padded.
+  @Test
+  public void testFromConnectNonDecimalFixedDoesNotPadShortValue() throws IOException {
+    Schema fixedSchema = SchemaBuilder.bytes().name("myFixed")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "16")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("id", fixedSchema).build();
+    byte[] shortValue = new byte[]{1, 2, 3, 4};
+    Struct value = new Struct(schema).put("id", shortValue);
+
+    Object converted = avroData.fromConnectData(schema, value);
+    org.apache.avro.Schema avroSchema = ((GenericContainer) converted).getSchema();
+
+    GenericData.Fixed fixed = (GenericData.Fixed) ((GenericRecord) converted).get("id");
+    // Not padded: the short value is passed through unchanged, unlike the decimal case.
+    assertEquals(4, fixed.bytes().length);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    GenericDatumWriter<Object> writer = new GenericDatumWriter<>(avroSchema);
+    try {
+      writer.write(converted, encoder);
+      encoder.flush();
+      fail("Expected serialization to fail for a fixed value shorter than the declared size");
+    } catch (IndexOutOfBoundsException expected) {
+      // Avro correctly rejects the malformed short value instead of it being silently padded.
+    }
+  }
+
+  // Regression test: padToFixedSize fails fast with a DataException when the unscaled value's
+  // byte array is longer than the declared fixed size, instead of silently truncating it (Avro's
+  // GenericDatumWriter.writeFixed always writes exactly `size` bytes starting at offset 0, so an
+  // oversized array would otherwise serialize as silently corrupted data instead of erroring).
+  @Test
+  public void testFromConnectLogicalDecimalFixedTooSmallForUnscaledValueThrows() {
+    Schema decimalSchema = Decimal.builder(0)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "4")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "2")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("amount", decimalSchema).build();
+    // unscaledValue 100000 -> BigInteger.toByteArray() is 3 bytes, exceeding the 2-byte fixed
+    // size declared above.
+    Struct value = new Struct(schema).put("amount", new BigDecimal(BigInteger.valueOf(100000), 0));
+
+    try {
+      avroData.fromConnectData(schema, value);
+      fail("Expected DataException for an unscaled value exceeding the declared fixed size");
+    } catch (DataException expected) {
+      // expected: fail fast instead of silently truncating/corrupting the value
+    }
   }
 
   // test for old way of logical type handling
@@ -2064,6 +2210,182 @@ public class AvroDataTest {
     java.util.Date date = new java.util.Date();
     assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
         avroData.toConnectData(avroSchema, date.getTime()));
+  }
+
+  @Test
+  public void testToConnectTimestampMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectTimestampMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(
+            org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS);
+
+    long microseconds = 1_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", microseconds);
+
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    Struct resultStruct = (Struct) result.value();
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(microseconds, resultStruct.get("ts"));
+  }
+
+  @Test
+  public void testToConnectTimestampNanosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, nanoseconds),
+        avroData.toConnectData(avroSchema, nanoseconds));
+  }
+
+  @Test
+  public void testToConnectTimestampNanosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(
+            org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS);
+
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", nanoseconds);
+
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    Struct resultStruct = (Struct) result.value();
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(nanoseconds, resultStruct.get("ts"));
+  }
+
+  @Test
+  public void testToConnectTimeMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MICROS);
+    long microseconds = 43_200_000_000L; // noon in microseconds
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIME_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectTimeMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("t").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("t").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MICROS);
+    long microseconds = 43_200_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("t", microseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIME_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("t").schema());
+    assertEquals(microseconds, ((Struct) result.value()).get("t"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMillisAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+    long milliseconds = 1_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, milliseconds),
+        avroData.toConnectData(avroSchema, milliseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMillisAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+    long milliseconds = 1_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", milliseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(milliseconds, ((Struct) result.value()).get("ts"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", microseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(microseconds, ((Struct) result.value()).get("ts"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampNanosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, nanoseconds),
+        avroData.toConnectData(avroSchema, nanoseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampNanosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", nanoseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(nanoseconds, ((Struct) result.value()).get("ts"));
   }
 
   // Avro -> Connect: Connect types with no corresponding Avro type
@@ -3098,6 +3420,142 @@ public class AvroDataTest {
     assertEquals(person, genericRecord);
   }
 
+  @Test(expected = DataException.class)
+  public void testToConnectDataFailsFastOnDeeplyNestedRecordExceedingObjectLimit() {
+    // A record whose friends chain is deeper than the configured object limit should be
+    // rejected with a DataException rather than being fully materialized into memory.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 5)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema graphSchema = buildFriendsChainSchema();
+    org.apache.avro.Schema friendsListSchema =
+        graphSchema.getField("friends").schema().getTypes().get(1);
+    GenericRecord person = buildFriendsChain(graphSchema, friendsListSchema, 10);
+
+    graphAvroData.toConnectData(graphSchema, person);
+  }
+
+  @Test
+  public void testToConnectDataSucceedsWhenWithinObjectLimit() {
+    // The same shape of record succeeds when it falls within the configured object limit.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 100)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema graphSchema = buildFriendsChainSchema();
+    org.apache.avro.Schema friendsListSchema =
+        graphSchema.getField("friends").schema().getTypes().get(1);
+    GenericRecord person = buildFriendsChain(graphSchema, friendsListSchema, 10);
+
+    SchemaAndValue schemaAndValue = graphAvroData.toConnectData(graphSchema, person);
+    assertNonNullSchemaValue(schemaAndValue);
+  }
+
+  private org.apache.avro.Schema buildFriendsChainSchema() {
+    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
+    String graphAvroSchema = "{\"type\": \"record\",\"name\": \"Users\",\"fields\" : [{\"name\": " +
+        "\"name\", \"type\": \"string\"},{\"name\": \"friends\", \"type\" : [ \"null\", " +
+        "{\"type\": \"array\", \"items\":\"Users\"}], \"default\" : null}]}";
+    return avroParser.parse(graphAvroSchema);
+  }
+
+  // Builds a chain of `depth` records, each with exactly one friend: the previous record.
+  private GenericRecord buildFriendsChain(
+      org.apache.avro.Schema graphSchema, org.apache.avro.Schema friendsListSchema, int depth) {
+    GenericRecord current = new GenericRecordBuilder(graphSchema)
+        .set("name", "Person 0")
+        .build();
+    for (int i = 1; i < depth; i++) {
+      current = new GenericRecordBuilder(graphSchema)
+          .set("name", "Person " + i)
+          .set("friends", new GenericData.Array(friendsListSchema, Arrays.asList(current)))
+          .build();
+    }
+    return current;
+  }
+
+  @Test(expected = DataException.class)
+  public void testSchemalessToConnectDataFailsFastOnDeeplyNestedRecordExceedingObjectLimit() {
+    // The schemaless (ANYTHING_SCHEMA) array path builds containers directly, bypassing the
+    // ARRAY/MAP/STRUCT cases in the schema-carrying switch, so it needs its own coverage.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 5)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    GenericRecord chain = buildSchemalessArrayChain(10);
+    graphAvroData.toConnectData(AvroData.ANYTHING_SCHEMA, chain);
+  }
+
+  @Test
+  public void testSchemalessToConnectDataSucceedsWhenWithinObjectLimit() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 100)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    GenericRecord chain = buildSchemalessArrayChain(10);
+    SchemaAndValue schemaAndValue = graphAvroData.toConnectData(AvroData.ANYTHING_SCHEMA, chain);
+    assertNotNull(schemaAndValue.value());
+  }
+
+  // Builds a chain of `depth` ANYTHING_SCHEMA records, each one's "array" field containing
+  // exactly the previous record.
+  private GenericRecord buildSchemalessArrayChain(int depth) {
+    GenericRecord current = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
+    for (int i = 1; i < depth; i++) {
+      current = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
+          .set("array", Arrays.asList(current))
+          .build();
+    }
+    return current;
+  }
+
+  @Test(expected = DataException.class)
+  public void testToConnectSchemaFailsFastOnDeeplyNestedDefaultExceedingObjectLimit() {
+    // A field's own Avro-declared default can be deeply nested independent of any record data;
+    // defaultValueFromAvroWithoutLogical materializes containers for it too, so it needs the
+    // same object-count guard as the main record-conversion path.
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 5)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema schema = buildNestedArrayDefaultSchema(10);
+    graphAvroData.toConnectSchema(schema);
+  }
+
+  @Test
+  public void testToConnectSchemaSucceedsWithDefaultWithinObjectLimit() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.MAX_TO_CONNECT_DATA_OBJECTS_CONFIG, 100)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
+    org.apache.avro.Schema schema = buildNestedArrayDefaultSchema(10);
+    Schema connectSchema = graphAvroData.toConnectSchema(schema);
+    assertNotNull(connectSchema);
+  }
+
+  // Builds a record with one field whose Avro type and default value are both nested `depth`
+  // levels of array-of-array-of-...-long, e.g. depth=2 -> type array<array<long>>, default [[1]].
+  private org.apache.avro.Schema buildNestedArrayDefaultSchema(int depth) {
+    String type = "\"long\"";
+    String defaultValue = "1";
+    for (int i = 0; i < depth; i++) {
+      type = "{\"type\":\"array\",\"items\":" + type + "}";
+      defaultValue = "[" + defaultValue + "]";
+    }
+    String schemaJson = "{\"type\":\"record\",\"name\":\"NestedDefaultWrapper\",\"fields\":["
+        + "{\"name\":\"nested\",\"type\":" + type + ",\"default\":" + defaultValue + "}]}";
+    return new org.apache.avro.Schema.Parser().parse(schemaJson);
+  }
+
   private void assertMapCycle(
       Long current, Object value, Map<Long, Map<String, Long>> expectedMap) {
 
@@ -3438,6 +3896,939 @@ public class AvroDataTest {
     byte[] bytes = new byte[buffer.remaining()];
     buffer.duplicate().get(bytes);
     return bytes;
+  }
+
+  @Test
+  public void testFieldLevelParamsPreservedForSharedNamedType() {
+    Schema addressTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addressTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema personSchema = SchemaBuilder.struct()
+        .name("Person")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("home_addr", addressTag2)
+        .field("work_addr", addressTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(personSchema);
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+
+    String homeTag = roundTripped.field("home_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG);
+    String workTag = roundTripped.field("work_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG);
+
+    assertEquals("2", homeTag);
+    assertEquals("3", workTag);
+  }
+
+  @Test
+  public void testFieldLevelParamsSharedTypeAtThreeFields() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("line", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("line", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag4 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "4")
+        .field("line", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema company = SchemaBuilder.struct()
+        .name("Company")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("hq", addrTag2)
+        .field("warehouse", addrTag3)
+        .field("billing", addrTag4)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(company);
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+
+    assertEquals("2", roundTripped.field("hq").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", roundTripped.field("warehouse").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("4", roundTripped.field("billing").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsNestedSharedType() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema customer = SchemaBuilder.struct()
+        .name("Customer")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("billing", addrTag2)
+        .field("shipping", addrTag3)
+        .build();
+    Schema order = SchemaBuilder.struct()
+        .name("Order")
+        .field("id", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("customer", customer)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(order);
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+
+    Schema rtCustomer = roundTripped.field("customer").schema();
+    assertEquals("2", rtCustomer.field("billing").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rtCustomer.field("shipping").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsWithMultipleParams() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .parameter(PROTOBUF_TYPE_PROP, "MESSAGE")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .parameter(PROTOBUF_TYPE_PROP, "MESSAGE")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Parent")
+        .field("addr1", addrTag2)
+        .field("addr2", addrTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+
+    Map<String, String> addr1Params = roundTripped.field("addr1").schema().parameters();
+    Map<String, String> addr2Params = roundTripped.field("addr2").schema().parameters();
+
+    assertEquals("2", addr1Params.get(PROTOBUF_TYPE_TAG));
+    assertEquals("MESSAGE", addr1Params.get(PROTOBUF_TYPE_PROP));
+    assertEquals("3", addr2Params.get(PROTOBUF_TYPE_TAG));
+    assertEquals("MESSAGE", addr2Params.get(PROTOBUF_TYPE_PROP));
+  }
+
+  @Test
+  public void testFieldLevelParamsNoParamsNoChange() {
+    Schema inner = SchemaBuilder.struct()
+        .name("Inner")
+        .field("value", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema outer = SchemaBuilder.struct()
+        .name("Outer")
+        .field("a", inner)
+        .field("b", inner)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(outer);
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+
+    assertNull(roundTripped.field("a").schema().parameters());
+    assertNull(roundTripped.field("b").schema().parameters());
+  }
+
+  @Test
+  public void testFieldLevelParamsDataRoundTrip() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("street", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema personSchema = SchemaBuilder.struct()
+        .name("Person")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("home_addr", addrTag2)
+        .field("work_addr", addrTag3)
+        .build();
+
+    Struct homeAddr = new Struct(addrTag2)
+        .put("street", "123 Home St")
+        .put("city", "Hometown");
+    Struct workAddr = new Struct(addrTag3)
+        .put("street", "456 Work Ave")
+        .put("city", "Workville");
+    Struct person = new Struct(personSchema)
+        .put("name", "Alice")
+        .put("home_addr", homeAddr)
+        .put("work_addr", workAddr);
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(personSchema);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(
+        personSchema, person);
+    assertNotNull(avroRecord);
+
+    SchemaAndValue roundTripped = avroData.toConnectData(avroSchema, avroRecord);
+    Schema rtSchema = roundTripped.schema();
+    Struct rtValue = (Struct) roundTripped.value();
+
+    assertEquals("2", rtSchema.field("home_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rtSchema.field("work_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+
+    assertEquals("Alice", rtValue.getString("name"));
+    Struct rtHome = rtValue.getStruct("home_addr");
+    assertEquals("123 Home St", rtHome.getString("street"));
+    assertEquals("Hometown", rtHome.getString("city"));
+    Struct rtWork = rtValue.getStruct("work_addr");
+    assertEquals("456 Work Ave", rtWork.getString("street"));
+    assertEquals("Workville", rtWork.getString("city"));
+  }
+
+  @Test
+  public void testFieldLevelParamsRepeatedSharedType() {
+    Schema itemTag2 = SchemaBuilder.struct()
+        .name("Item")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema itemTag3 = SchemaBuilder.struct()
+        .name("Item")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema container = SchemaBuilder.struct()
+        .name("Container")
+        .field("primary", itemTag2)
+        .field("secondary", itemTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(container);
+
+    org.apache.avro.Schema.Field primaryField = avroSchema.getField("primary");
+    org.apache.avro.Schema.Field secondaryField = avroSchema.getField("secondary");
+    assertNull("First occurrence should not have field-level connect.parameters",
+        primaryField.getObjectProp("connect.parameters"));
+    assertNotNull("Secondary field should have connect.parameters",
+        secondaryField.getObjectProp("connect.parameters"));
+
+    Schema roundTripped = avroData.toConnectSchema(avroSchema);
+    assertEquals("2", roundTripped.field("primary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", roundTripped.field("secondary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsComplexEnvelopeRoundTrip() {
+    Schema enumSchema = SchemaBuilder.string()
+        .parameter("io.confluent.connect.protobuf.Enum", "Priority")
+        .parameter("io.confluent.connect.protobuf.Enum.PRIORITY_LOW", "0")
+        .parameter("io.confluent.connect.protobuf.Enum.PRIORITY_HIGH", "2")
+        .build();
+
+    Schema addrTag14 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "14")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag15 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "15")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag16 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "16")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+
+    Schema record = SchemaBuilder.struct()
+        .name("MegaRecord")
+        .field("id", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("active", Schema.OPTIONAL_BOOLEAN_SCHEMA)
+        .field("score", Schema.OPTIONAL_FLOAT64_SCHEMA)
+        .field("priority", enumSchema)
+        .field("home_addr", addrTag14)
+        .field("work_addr", addrTag15)
+        .field("billing_addr", addrTag16)
+        .field("tags", SchemaBuilder.array(Schema.STRING_SCHEMA).optional().build())
+        .field("scores", SchemaBuilder.map(Schema.STRING_SCHEMA,
+            Schema.INT32_SCHEMA).optional().build())
+        .field("nickname", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+
+    Struct home = new Struct(addrTag14).put("city", "SF");
+    Struct work = new Struct(addrTag15).put("city", "NYC");
+    Struct billing = new Struct(addrTag16).put("city", "London");
+    Struct value = new Struct(record)
+        .put("id", 1)
+        .put("name", "Alice")
+        .put("active", true)
+        .put("score", 98.5)
+        .put("priority", "PRIORITY_HIGH")
+        .put("home_addr", home)
+        .put("work_addr", work)
+        .put("billing_addr", billing)
+        .put("tags", java.util.Arrays.asList("eng", "sr"))
+        .put("scores", ImmutableMap.of("math", 95))
+        .put("nickname", "Ali");
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(record);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(record, value);
+
+    SchemaAndValue roundTripped = avroData.toConnectData(avroSchema, avroRecord);
+    Schema rtSchema = roundTripped.schema();
+    Struct rtValue = (Struct) roundTripped.value();
+
+    assertEquals("14", rtSchema.field("home_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("15", rtSchema.field("work_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("16", rtSchema.field("billing_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+
+    assertEquals(Integer.valueOf(1), rtValue.getInt32("id"));
+    assertEquals("Alice", rtValue.getString("name"));
+    assertEquals(true, rtValue.getBoolean("active"));
+    assertEquals(98.5, rtValue.getFloat64("score"), 0.001);
+    assertEquals("PRIORITY_HIGH", rtValue.getString("priority"));
+    assertEquals("SF", rtValue.getStruct("home_addr").getString("city"));
+    assertEquals("NYC", rtValue.getStruct("work_addr").getString("city"));
+    assertEquals("London", rtValue.getStruct("billing_addr").getString("city"));
+    assertEquals(java.util.Arrays.asList("eng", "sr"), rtValue.getArray("tags"));
+    assertEquals(Integer.valueOf(95), rtValue.getMap("scores").get("math"));
+    assertEquals("Ali", rtValue.getString("nickname"));
+  }
+
+  @Test
+  public void testFieldLevelParamsSharedTypeInOptionalField() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Parent")
+        .field("home", addrTag2)
+        .field("work", addrTag3)
+        .build();
+
+    Struct value = new Struct(parent)
+        .put("home", new Struct(addrTag2).put("city", "SF"))
+        .put("work", null);
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+    SchemaAndValue rt = avroData.toConnectData(avroSchema, avroRecord);
+    Struct rtValue = (Struct) rt.value();
+
+    assertEquals("2", rt.schema().field("home").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rt.schema().field("work").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("SF", rtValue.getStruct("home").getString("city"));
+    assertNull(rtValue.getStruct("work"));
+  }
+
+  @Test
+  public void testFieldLevelParamsSharedTypeInArray() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Parent")
+        .field("primary", addrTag2)
+        .field("secondary", addrTag3)
+        .field("extras", SchemaBuilder.array(addrTag2).optional().build())
+        .build();
+
+    Struct a1 = new Struct(addrTag2).put("city", "A");
+    Struct a2 = new Struct(addrTag2).put("city", "B");
+    Struct value = new Struct(parent)
+        .put("primary", new Struct(addrTag2).put("city", "SF"))
+        .put("secondary", new Struct(addrTag3).put("city", "NYC"))
+        .put("extras", java.util.Arrays.asList(a1, a2));
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+    SchemaAndValue rt = avroData.toConnectData(avroSchema, avroRecord);
+    Struct rtValue = (Struct) rt.value();
+
+    assertEquals("2", rt.schema().field("primary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rt.schema().field("secondary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("SF", rtValue.getStruct("primary").getString("city"));
+    assertEquals("NYC", rtValue.getStruct("secondary").getString("city"));
+    java.util.List<?> extras = rtValue.getArray("extras");
+    assertEquals(2, extras.size());
+    assertEquals("A", ((Struct) extras.get(0)).getString("city"));
+    assertEquals("B", ((Struct) extras.get(1)).getString("city"));
+  }
+
+  @Test
+  public void testFieldLevelParamsSharedTypeInMapValue() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Parent")
+        .field("primary", addrTag2)
+        .field("secondary", addrTag3)
+        .field("lookup", SchemaBuilder.map(Schema.STRING_SCHEMA, addrTag2).optional().build())
+        .build();
+
+    Struct value = new Struct(parent)
+        .put("primary", new Struct(addrTag2).put("city", "SF"))
+        .put("secondary", new Struct(addrTag3).put("city", "NYC"))
+        .put("lookup", ImmutableMap.of(
+            "hq", new Struct(addrTag2).put("city", "Austin")));
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+    SchemaAndValue rt = avroData.toConnectData(avroSchema, avroRecord);
+    Struct rtValue = (Struct) rt.value();
+
+    assertEquals("2", rt.schema().field("primary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rt.schema().field("secondary").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("Austin", ((Struct) rtValue.getMap("lookup").get("hq")).getString("city"));
+  }
+
+  @Test
+  public void testFieldLevelParamsSharedEnumType() {
+    Schema statusTag5 = SchemaBuilder.string()
+        .name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "5")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".UNKNOWN", "0")
+        .parameter(AVRO_TYPE_ENUM + ".ACTIVE", "1")
+        .parameter(AVRO_TYPE_ENUM + ".INACTIVE", "2")
+        .build();
+    Schema statusTag6 = SchemaBuilder.string()
+        .name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "6")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".UNKNOWN", "0")
+        .parameter(AVRO_TYPE_ENUM + ".ACTIVE", "1")
+        .parameter(AVRO_TYPE_ENUM + ".INACTIVE", "2")
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Order")
+        .field("id", Schema.INT32_SCHEMA)
+        .field("primary_status", statusTag5)
+        .field("secondary_status", statusTag6)
+        .build();
+
+    AvroDataConfig config = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+    AvroData enhancedAvroData = new AvroData(config);
+
+    org.apache.avro.Schema avroSchema = enhancedAvroData.fromConnectSchema(parent);
+    Schema roundTripped = enhancedAvroData.toConnectSchema(avroSchema);
+
+    assertEquals("5", roundTripped.field("primary_status").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("6", roundTripped.field("secondary_status").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsStrictAllTypesRoundTrip() {
+    AvroDataConfig config = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+    AvroData enhanced = new AvroData(config);
+
+    // ── Shared enum at 2 fields (same Status enum, different Tags) ──
+    Schema statusTag5 = SchemaBuilder.string()
+        .name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "5")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".UNKNOWN", "0")
+        .parameter(AVRO_TYPE_ENUM + ".ACTIVE", "1")
+        .parameter(AVRO_TYPE_ENUM + ".INACTIVE", "2")
+        .build();
+    Schema statusTag6 = SchemaBuilder.string()
+        .name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "6")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".UNKNOWN", "0")
+        .parameter(AVRO_TYPE_ENUM + ".ACTIVE", "1")
+        .parameter(AVRO_TYPE_ENUM + ".INACTIVE", "2")
+        .build();
+
+    // ── Shared STRUCT at 3 fields (Address, different Tags) ──
+    Schema addrTag10 = SchemaBuilder.struct().name("Address").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "10")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("zip", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag11 = SchemaBuilder.struct().name("Address").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "11")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("zip", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag12 = SchemaBuilder.struct().name("Address").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "12")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("zip", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+
+    // ── Nested message with its own shared type ──
+    Schema metaSchema = SchemaBuilder.struct().name("Metadata").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "20")
+        .field("source", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("ts", Schema.OPTIONAL_INT64_SCHEMA)
+        .build();
+
+    // ── Build the mega record ──
+    Schema megaRecord = SchemaBuilder.struct().name("MegaRecord")
+        // Primitives
+        .field("f_int32", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("f_int64", Schema.OPTIONAL_INT64_SCHEMA)
+        .field("f_float32", Schema.OPTIONAL_FLOAT32_SCHEMA)
+        .field("f_float64", Schema.OPTIONAL_FLOAT64_SCHEMA)
+        .field("f_bool", Schema.OPTIONAL_BOOLEAN_SCHEMA)
+        .field("f_string", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("f_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
+        // Shared enum at 2 fields
+        .field("primary_status", statusTag5)
+        .field("secondary_status", statusTag6)
+        // Shared struct at 3 fields
+        .field("home_addr", addrTag10)
+        .field("work_addr", addrTag11)
+        .field("billing_addr", addrTag12)
+        // Repeated primitives
+        .field("tags", SchemaBuilder.array(Schema.STRING_SCHEMA).optional().build())
+        .field("scores_list", SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build())
+        // Repeated shared struct
+        .field("extra_addrs", SchemaBuilder.array(addrTag10).optional().build())
+        // Map string→int
+        .field("scores_map", SchemaBuilder.map(
+            Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).optional().build())
+        // Map string→struct
+        .field("addr_lookup", SchemaBuilder.map(
+            Schema.STRING_SCHEMA, addrTag10).optional().build())
+        // Optional fields
+        .field("nickname", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("age", Schema.OPTIONAL_INT32_SCHEMA)
+        // Nested message
+        .field("meta", metaSchema)
+        .build();
+
+    // ── Build data ──
+    Struct home = new Struct(addrTag10).put("city", "SF").put("zip", "94105");
+    Struct work = new Struct(addrTag11).put("city", "NYC").put("zip", "10001");
+    Struct billing = new Struct(addrTag12).put("city", "London").put("zip", "SW1A");
+    Struct extra1 = new Struct(addrTag10).put("city", "Tokyo").put("zip", "100");
+    Struct extra2 = new Struct(addrTag10).put("city", "Berlin").put("zip", "10115");
+    Struct lookupAddr = new Struct(addrTag10).put("city", "Austin").put("zip", "73301");
+    Struct meta = new Struct(metaSchema).put("source", "api").put("ts", 1700000000L);
+
+    Struct value = new Struct(megaRecord)
+        .put("f_int32", 42)
+        .put("f_int64", 123456789L)
+        .put("f_float32", 3.14f)
+        .put("f_float64", 2.718281828)
+        .put("f_bool", true)
+        .put("f_string", "hello")
+        .put("f_bytes", java.nio.ByteBuffer.wrap(new byte[]{1, 2, 3}))
+        .put("primary_status", "ACTIVE")
+        .put("secondary_status", "INACTIVE")
+        .put("home_addr", home)
+        .put("work_addr", work)
+        .put("billing_addr", billing)
+        .put("tags", java.util.Arrays.asList("eng", "sr", "backend"))
+        .put("scores_list", java.util.Arrays.asList(95, 88, 72))
+        .put("extra_addrs", java.util.Arrays.asList(extra1, extra2))
+        .put("scores_map", ImmutableMap.of("math", 95, "science", 88))
+        .put("addr_lookup", ImmutableMap.of("hq", lookupAddr))
+        .put("nickname", "Ali")
+        .put("age", 30)
+        .put("meta", meta);
+
+    // ── Round-trip through AvroData ──
+    org.apache.avro.Schema avroSchema = enhanced.fromConnectSchema(megaRecord);
+    GenericRecord avroRecord = (GenericRecord) enhanced.fromConnectData(megaRecord, value);
+    SchemaAndValue rt = enhanced.toConnectData(avroSchema, avroRecord);
+    Schema rtSchema = rt.schema();
+    Struct rtValue = (Struct) rt.value();
+
+    // ── STRICT ASSERTIONS ──
+
+    // 1. Shared enum tags preserved
+    assertEquals("5", rtSchema.field("primary_status").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("6", rtSchema.field("secondary_status").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("ACTIVE", rtValue.getString("primary_status"));
+    assertEquals("INACTIVE", rtValue.getString("secondary_status"));
+
+    // 2. Shared struct tags preserved (3 fields)
+    assertEquals("10", rtSchema.field("home_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("11", rtSchema.field("work_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("12", rtSchema.field("billing_addr").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("SF", rtValue.getStruct("home_addr").getString("city"));
+    assertEquals("NYC", rtValue.getStruct("work_addr").getString("city"));
+    assertEquals("London", rtValue.getStruct("billing_addr").getString("city"));
+
+    // 3. All primitives
+    assertEquals(Integer.valueOf(42), rtValue.getInt32("f_int32"));
+    assertEquals(Long.valueOf(123456789L), rtValue.getInt64("f_int64"));
+    assertEquals(3.14f, rtValue.getFloat32("f_float32"), 0.001);
+    assertEquals(2.718281828, rtValue.getFloat64("f_float64"), 0.000001);
+    assertEquals(true, rtValue.getBoolean("f_bool"));
+    assertEquals("hello", rtValue.getString("f_string"));
+    assertNotNull(rtValue.getBytes("f_bytes"));
+
+    // 4. Repeated primitives
+    assertEquals(java.util.Arrays.asList("eng", "sr", "backend"), rtValue.getArray("tags"));
+    assertEquals(java.util.Arrays.asList(95, 88, 72), rtValue.getArray("scores_list"));
+
+    // 5. Repeated shared struct
+    java.util.List<?> extras = rtValue.getArray("extra_addrs");
+    assertEquals(2, extras.size());
+    assertEquals("Tokyo", ((Struct) extras.get(0)).getString("city"));
+    assertEquals("Berlin", ((Struct) extras.get(1)).getString("city"));
+
+    // 6. Map string→int
+    assertEquals(Integer.valueOf(95), rtValue.getMap("scores_map").get("math"));
+    assertEquals(Integer.valueOf(88), rtValue.getMap("scores_map").get("science"));
+
+    // 7. Map string→struct
+    Struct hqAddr = (Struct) rtValue.getMap("addr_lookup").get("hq");
+    assertEquals("Austin", hqAddr.getString("city"));
+
+    // 8. Optional fields (set)
+    assertEquals("Ali", rtValue.getString("nickname"));
+    assertEquals(Integer.valueOf(30), rtValue.getInt32("age"));
+
+    // 9. Nested message
+    Struct rtMeta = rtValue.getStruct("meta");
+    assertEquals("api", rtMeta.getString("source"));
+    assertEquals(Long.valueOf(1700000000L), rtMeta.getInt64("ts"));
+  }
+
+  @Test
+  public void testFieldLevelParamsStrictOptionalNullRoundTrip() {
+    AvroDataConfig config = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+    AvroData enhanced = new AvroData(config);
+
+    Schema addrTag2 = SchemaBuilder.struct().name("Address").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct().name("Address").optional()
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema statusTag5 = SchemaBuilder.string().name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "5")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".ON", "0")
+        .parameter(AVRO_TYPE_ENUM + ".OFF", "1")
+        .build();
+    Schema statusTag6 = SchemaBuilder.string().name("Status")
+        .parameter(PROTOBUF_TYPE_TAG, "6")
+        .parameter(AVRO_TYPE_ENUM, "Status")
+        .parameter(AVRO_TYPE_ENUM + ".ON", "0")
+        .parameter(AVRO_TYPE_ENUM + ".OFF", "1")
+        .build();
+
+    Schema record = SchemaBuilder.struct().name("NullTest")
+        .field("home", addrTag2)
+        .field("work", addrTag3)
+        .field("status_a", statusTag5)
+        .field("status_b", statusTag6)
+        .field("name", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+
+    // All optional structs null, enums at defaults
+    Struct value = new Struct(record)
+        .put("home", null)
+        .put("work", null)
+        .put("status_a", "ON")
+        .put("status_b", "OFF")
+        .put("name", null);
+
+    org.apache.avro.Schema avroSchema = enhanced.fromConnectSchema(record);
+    GenericRecord avroRecord = (GenericRecord) enhanced.fromConnectData(record, value);
+    SchemaAndValue rt = enhanced.toConnectData(avroSchema, avroRecord);
+    Schema rtSchema = rt.schema();
+    Struct rtValue = (Struct) rt.value();
+
+    // Struct tags preserved even when values are null
+    assertEquals("2", rtSchema.field("home").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rtSchema.field("work").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertNull(rtValue.getStruct("home"));
+    assertNull(rtValue.getStruct("work"));
+
+    // Enum tags preserved
+    assertEquals("5", rtSchema.field("status_a").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("6", rtSchema.field("status_b").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("ON", rtValue.getString("status_a"));
+    assertEquals("OFF", rtValue.getString("status_b"));
+
+    assertNull(rtValue.getString("name"));
+  }
+
+  @Test
+  public void testFieldLevelParamsNullValueForSharedType() {
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name("Address")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, "2")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name("Address")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .field("city", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Schema parent = SchemaBuilder.struct()
+        .name("Parent")
+        .field("home", addrTag2)
+        .field("work", addrTag3)
+        .build();
+
+    Struct value = new Struct(parent)
+        .put("home", null)
+        .put("work", null);
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+    SchemaAndValue rt = avroData.toConnectData(avroSchema, avroRecord);
+    Struct rtValue = (Struct) rt.value();
+
+    assertEquals("2", rt.schema().field("home").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals("3", rt.schema().field("work").schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertNull(rtValue.getStruct("home"));
+    assertNull(rtValue.getStruct("work"));
+  }
+
+  @Test
+  public void testFieldLevelParametersIgnoredWhenConnectMetaDataDisabled() {
+    final String fieldHome = "home";
+    final String fieldWork = "work";
+    final String fieldStreet = "street";
+    final String valueHomeSt = "Home St";
+    final String valueWorkAve = "Work Ave";
+
+    Schema homeFieldSchema = SchemaBuilder.struct()
+        .name("Address")
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, "7")
+        .build();
+
+    Schema workFieldSchema = SchemaBuilder.struct()
+        .name("Address")
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, "8")
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name("Person")
+        .field(fieldHome, homeFieldSchema)
+        .field(fieldWork, workFieldSchema)
+        .build();
+
+    Struct homeAddr = new Struct(homeFieldSchema).put(fieldStreet, valueHomeSt);
+    Struct workAddr = new Struct(workFieldSchema).put(fieldStreet, valueWorkAve);
+    Struct value = new Struct(parent)
+        .put(fieldHome, homeAddr)
+        .put(fieldWork, workAddr);
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+
+    AvroDataConfig configWithoutMetaData = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroDataNoMeta = new AvroData(configWithoutMetaData);
+
+    SchemaAndValue rt = avroDataNoMeta.toConnectData(avroSchema, avroRecord);
+
+    assertNull(rt.schema().field(fieldHome).schema().parameters());
+    assertNull(rt.schema().field(fieldWork).schema().parameters());
+
+    Struct rtValue = (Struct) rt.value();
+    assertEquals(valueHomeSt, rtValue.getStruct(fieldHome).getString(fieldStreet));
+    assertEquals(valueWorkAve, rtValue.getStruct(fieldWork).getString(fieldStreet));
+  }
+
+  @Test
+  public void testFieldLevelParamsWithScrubInvalidNames() {
+    final String schemaAddress = "com.example.Address-v1";
+    final String schemaPerson = "com.example.Person-v1";
+    final String fieldStreet = "street";
+    final String fieldHomeAddr = "home_addr";
+    final String fieldWorkAddr = "work_addr";
+    final String tag2 = "2";
+    final String tag3 = "3";
+
+    AvroDataConfig config = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .build();
+    AvroData scrubbingAvroData = new AvroData(config);
+
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag2)
+        .build();
+
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag3)
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name(schemaPerson)
+        .field(fieldHomeAddr, addrTag2)
+        .field(fieldWorkAddr, addrTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = scrubbingAvroData.fromConnectSchema(parent);
+    Schema roundTripped = scrubbingAvroData.toConnectSchema(avroSchema);
+
+    assertEquals(tag2, roundTripped.field(fieldHomeAddr).schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals(tag3, roundTripped.field(fieldWorkAddr).schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsNotWrittenOnFirstOccurrence() {
+    final String schemaAddress = "Address";
+    final String schemaPerson = "Person";
+    final String fieldStreet = "street";
+    final String fieldHome = "home";
+    final String fieldWork = "work";
+    final String tag2 = "2";
+    final String tag3 = "3";
+
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag2)
+        .build();
+
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag3)
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name(schemaPerson)
+        .field(fieldHome, addrTag2)
+        .field(fieldWork, addrTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+
+    org.apache.avro.Schema.Field homeField = avroSchema.getField(fieldHome);
+    org.apache.avro.Schema.Field workField = avroSchema.getField(fieldWork);
+
+    assertNull(homeField.getObjectProp(CONNECT_PARAMETERS_PROP));
+    assertNotNull(workField.getObjectProp(CONNECT_PARAMETERS_PROP));
+  }
+
+  @Test
+  public void testFieldLevelParamsNotWrittenWhenEmpty() {
+    final String schemaAddress = "Address";
+    final String schemaPerson = "Person";
+    final String fieldStreet = "street";
+    final String fieldHome = "home";
+    final String fieldWork = "work";
+
+    Schema addrWithInternalParam = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP, "true")
+        .build();
+
+    Schema addrWithRealParam = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, "3")
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name(schemaPerson)
+        .field(fieldHome, addrWithInternalParam)
+        .field(fieldWork, addrWithRealParam)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+
+    org.apache.avro.Schema.Field homeField = avroSchema.getField(fieldHome);
+    org.apache.avro.Schema.Field workField = avroSchema.getField(fieldWork);
+
+    assertNull(homeField.getObjectProp(CONNECT_PARAMETERS_PROP));
+    assertNotNull(workField.getObjectProp(CONNECT_PARAMETERS_PROP));
   }
 
 }

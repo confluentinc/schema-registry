@@ -227,6 +227,12 @@ public class VariantBuilder {
    */
   public void appendDecimal(BigDecimal d) {
     onAppend();
+    // The encoding stores the scale in a single unsigned byte, so a negative scale would wrap
+    // (-1 becomes 255) and change the value on decode.
+    if (d.scale() < 0) {
+      throw new IllegalArgumentException(
+          "decimal scale must be non-negative, got " + d.scale());
+    }
     BigInteger unscaled = d.unscaledValue();
     if (d.precision() <= VariantFormat.MAX_DECIMAL4_PRECISION) {
       checkCapacity(2 /* header and scale size */ + 4);
@@ -403,6 +409,7 @@ public class VariantBuilder {
    * @param bytes a 16-byte value.
    */
   void appendUUIDBytes(ByteBuffer bytes) {
+    onAppend();
     checkCapacity(1 + VariantFormat.UUID_SIZE);
     writeBuffer[writePos++] = VariantFormat.primitiveHeader(VariantFormat.UUID);
     if (bytes.remaining() < VariantFormat.UUID_SIZE) {
@@ -454,7 +461,7 @@ public class VariantBuilder {
 
     // copy values to a new builder
     Variant variant = new Variant(value, metadata);
-    for (int index = 0; index < variant.numObjectElements(); index += 1) {
+    for (int index = 0; index < variant.numObjectFields(); index += 1) {
       Variant.ObjectField field = variant.getFieldAtIndex(index);
       if (!suppressedKeys.contains(field.key)) {
         objectBuilder.appendKey(field.key);
@@ -484,7 +491,6 @@ public class VariantBuilder {
     int numFields = fields.size();
     Collections.sort(fields);
     int maxId = numFields == 0 ? 0 : fields.get(0).id;
-    int dataSize = numFields == 0 ? 0 : fields.get(0).valueSize;
 
     int distinctPos = 0;
     // Maintain a list of distinct keys in-place.
@@ -499,7 +505,6 @@ public class VariantBuilder {
         // Found a distinct key. Add the field to the list.
         distinctPos++;
         fields.set(distinctPos, fields.get(i));
-        dataSize += fields.get(i).valueSize;
       }
     }
 
@@ -507,6 +512,14 @@ public class VariantBuilder {
       numFields = distinctPos + 1;
       // Resize `fields` to `size`.
       fields.subList(numFields, fields.size()).clear();
+    }
+
+    // Compute the data size from the retained fields. This must happen after deduplication,
+    // since a duplicate key keeps the last-written value, whose size may differ from the
+    // first occurrence.
+    int dataSize = 0;
+    for (int i = 0; i < numFields; ++i) {
+      dataSize += fields.get(i).valueSize;
     }
 
     boolean largeSize = numFields > VariantFormat.U8_MAX;
@@ -669,6 +682,12 @@ public class VariantBuilder {
     final int offset;
     int valueSize = 0;
 
+    /**
+     * Lazy cache of the UTF-8 encoding of `key`, which sorting an object compares O(log n) times
+     * per entry. Encoded on demand so single-field objects, which are never compared, skip it.
+     */
+    private byte[] keyBytes;
+
     FieldEntry(String key, int id, int offset) {
       this.key = key;
       this.id = id;
@@ -679,9 +698,16 @@ public class VariantBuilder {
       valueSize = size;
     }
 
+    private byte[] keyBytes() {
+      if (keyBytes == null) {
+        keyBytes = VariantFormat.encodeKey(key);
+      }
+      return keyBytes;
+    }
+
     @Override
     public int compareTo(FieldEntry other) {
-      return key.compareTo(other.key);
+      return VariantFormat.compareKeys(keyBytes(), other.keyBytes());
     }
 
     @Override

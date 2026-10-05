@@ -19,12 +19,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ProtobufSchemaProvider extends AbstractSchemaProvider {
-
-  private static final Logger log = LoggerFactory.getLogger(ProtobufSchemaProvider.class);
 
   @Override
   public String schemaType() {
@@ -32,19 +28,19 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
+  public ParsedSchema parseSchemaOrElseThrow(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
       return new ProtobufSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema, isNew),
+              resolveReferences(schema, validateAsNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null,
               null
       );
     } catch (Exception e) {
-      log.error("Could not parse Protobuf schema", e);
       throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
           + ", details: " + e.getMessage(), e);
     }
