@@ -778,7 +778,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
-      checkPermanentDeleteAllowed(subject, permanentDelete);
       if (isLeader()) {
         return deleteSchemaVersion(subject, version, permanentDelete);
       } else {
@@ -869,7 +868,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
-      checkPermanentDeleteAllowed(subject, permanentDelete);
 
       if (!hasSubjects(subject, true)) {
         throw new SubjectNotFoundException(subject);
