@@ -305,6 +305,11 @@ public class SubjectsResource {
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. "
+                  + "Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
@@ -327,6 +332,9 @@ public class SubjectsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+      // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
+      // since the leader checks the forwarded request again
+      schemaRegistry.checkPermanentDeleteAllowed(subject, permanentDelete);
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
               subject,
               permanentDelete);
