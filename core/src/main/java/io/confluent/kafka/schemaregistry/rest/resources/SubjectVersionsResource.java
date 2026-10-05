@@ -566,7 +566,9 @@ public class SubjectVersionsResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "422",
-          description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+          description = "Unprocessable Entity. "
+                  + "Error code 42202 indicates an invalid version. "
+                  + "Error code 42205 indicates operation not permitted.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",

@@ -2378,6 +2378,14 @@ public abstract class RestApiTest {
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
     assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3");
+    // LOGICAL blocks the hard delete, so switch the policy away first
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    ConfigUpdateRequest strict = new ConfigUpdateRequest();
+    strict.setCompatibilityPolicy("STRICT");
+    restApp.restClient.updateConfig(strict, subject);
     restApp.restClient.deleteSchemaVersion(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true);
 

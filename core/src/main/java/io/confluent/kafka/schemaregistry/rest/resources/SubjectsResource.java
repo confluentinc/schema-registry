@@ -305,6 +305,11 @@ public class SubjectsResource {
           description = "Not Found. Error code 40401 indicates subject not found.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. "
+                  + "Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                  ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
           description = "Internal Server Error. "
                   + "Error code 50001 indicates a failure in the backend data store.",
