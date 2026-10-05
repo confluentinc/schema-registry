@@ -778,6 +778,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
+      checkPermanentDeleteAllowed(subject, permanentDelete);
       if (isLeader()) {
         return deleteSchemaVersion(subject, version, permanentDelete);
       } else {
@@ -798,6 +799,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   @Override
   public List<Integer> deleteSubject(String subject,
                                      boolean permanentDelete) throws SchemaRegistryException {
+    checkPermanentDeleteAllowed(subject, permanentDelete);
     // Ensure cache is up-to-date before any potential writes
     try {
       if (isReadOnlyMode(subject)) {
@@ -867,6 +869,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
+      checkPermanentDeleteAllowed(subject, permanentDelete);
 
       if (!hasSubjects(subject, true)) {
         throw new SubjectNotFoundException(subject);
