@@ -327,6 +327,11 @@ public class SubjectsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+      // Checked on the leader only, since a follower may have a stale config
+      // and the forwarded request is checked when it reaches the leader
+      if (schemaRegistry.isLeader()) {
+        schemaRegistry.checkPermanentDeleteAllowed(subject, permanentDelete);
+      }
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
               subject,
               permanentDelete);
