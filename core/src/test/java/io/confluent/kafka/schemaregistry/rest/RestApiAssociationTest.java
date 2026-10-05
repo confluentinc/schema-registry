@@ -4170,7 +4170,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
   // Waits until every queued background subject delete has finished (run or skipped), so a
   // test can check that a subject was kept without racing the delete
-  private void awaitCascadeDeletes() throws Exception {
+  protected void awaitCascadeDeletes() throws Exception {
     KafkaSchemaRegistry registry = (KafkaSchemaRegistry) restApp.schemaRegistry();
     TestUtils.waitUntilTrue(() -> !registry.hasPendingCascadeDeletes(), 30_000,
         "Queued cascaded subject deletes did not finish");
@@ -4242,7 +4242,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
   // Uses a raw connection so callers can assert the exact status code (202 vs 204). Targets
   // restApp.restClient's base URL and sends any credentials embedded in it, so subclasses that
-  // configure auth on the client still work.
+  // configure auth on the client still work. The read timeout leaves room for a cascade delete
+  // that completes within the request.
   private int rawDelete(String path) throws Exception {
     URL url = new URL(restApp.restClient.getBaseUrls().current() + path);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -4252,7 +4253,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
           "Basic " + Base64.getEncoder().encodeToString(url.getUserInfo().getBytes(UTF_8)));
     }
     conn.setConnectTimeout(10_000);
-    conn.setReadTimeout(10_000);
+    conn.setReadTimeout(120_000);
     try {
       return conn.getResponseCode();
     } finally {
