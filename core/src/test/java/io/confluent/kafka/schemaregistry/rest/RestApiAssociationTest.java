@@ -4169,8 +4169,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   // Waits until every queued background subject delete has finished (run or skipped), so a
-  // test can check that a subject was kept without racing the delete. Subclasses whose registry
-  // completes cascades within the request can override this.
+  // test can check that a subject was kept without racing the delete
   protected void awaitCascadeDeletes() throws Exception {
     KafkaSchemaRegistry registry = (KafkaSchemaRegistry) restApp.schemaRegistry();
     TestUtils.waitUntilTrue(() -> !registry.hasPendingCascadeDeletes(), 30_000,
