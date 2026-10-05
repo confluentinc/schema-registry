@@ -2388,6 +2388,8 @@ public abstract class RestApiTest {
     restApp.restClient.updateConfig(strict, subject);
     restApp.restClient.deleteSchemaVersion(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3", true);
+    // The new ID and stamp on re-registration happen only under LOGICAL
+    restApp.restClient.updateConfig(logical, subject);
 
     assertEquals(v2, restApp.restClient.getId(v2Id, subject).getSchemaString());
     assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 2, true).getId());
