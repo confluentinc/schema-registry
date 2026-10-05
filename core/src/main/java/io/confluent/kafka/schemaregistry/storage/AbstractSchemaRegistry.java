@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
@@ -58,6 +59,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationBatchLimitExceededException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
@@ -87,6 +89,7 @@ import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHan
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -2034,6 +2037,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Governed by {@link SchemaRegistryConfig#SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG}, which despite
+   * its name also gates the pure-wildcard ({@code *}) subject, not just the empty-string subject.
+   */
   @Override
   public boolean allowEmptySubject() {
     return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
@@ -2510,6 +2519,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<String> errorLogs = isCompatible(qualifiedSubject,
           toSchemaWithTags(qualifiedSubject, schema), previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
+        log.warn("Rejected association schema registration for subject '{}': {}",
+            qualifiedSubject, errorLogs);
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
     }
@@ -2665,27 +2676,72 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun)
       throws SchemaRegistryException {
-    List<Association> associations = getAssociationsByResourceId(resourceId,
-        resourceType, associationTypes, null);
-    for (Association association : associations) {
-      checkDeleteAssociation(association, cascadeLifecycle);
-    }
+    List<Association> associations = validateDeleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle);
     if (dryRun) {
       return;
     }
     for (Association association : associations) {
       deleteAssociationEntry(association);
-      String unqualifiedSubject = association.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      Mode subjectMode = getModeInScope(qualifiedSubject);
-      if (subjectMode != Mode.IMPORT
-          && cascadeLifecycle
-          && association.getLifecycle() == LifecyclePolicy.STRONG) {
-        deleteSubject(qualifiedSubject, false);
-        deleteSubject(qualifiedSubject, true);
+      String qualifiedSubject = subjectToCascadeDelete(association, cascadeLifecycle);
+      if (qualifiedSubject != null) {
+        cascadeDeleteSubject(qualifiedSubject);
       }
     }
+  }
+
+  /**
+   * Returns the associations to delete for a resource, after checking that every one of them
+   * can be deleted. Shared by the synchronous and asynchronous delete paths.
+   */
+  protected List<Association> validateDeleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    return associations;
+  }
+
+  /**
+   * Deletes the associations for a resource and leaves any cascaded subject deletes to run in
+   * the background. The caller holds the store lock for the resource's tenant
+   * ({@code lockFor(subject)} or {@code lockForAssociation(context)}). By default there is no
+   * background executor, so this deletes everything synchronously. Subclasses that want
+   * background deletes must override this method and provide their own executor.
+   */
+  protected void deleteAssociationsAndQueueCascade(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle, false);
+  }
+
+  /**
+   * Returns the qualified subject that should be deleted along with the given association,
+   * or null if the subject should be kept.
+   */
+  protected String subjectToCascadeDelete(Association association, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    if (!cascadeLifecycle || association.getLifecycle() != LifecyclePolicy.STRONG) {
+      return null;
+    }
+    String unqualifiedSubject = association.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+      return null;
+    }
+    return qualifiedSubject;
+  }
+
+  protected void cascadeDeleteSubject(String qualifiedSubject)
+      throws SchemaRegistryException {
+    deleteSubject(qualifiedSubject, false);
+    deleteSubject(qualifiedSubject, true);
   }
 
   private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
@@ -2701,6 +2757,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
+    checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
@@ -2768,6 +2825,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
+  private void checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      return;
+    }
+    // batchSize is defined as the number of topics (resource entries) in the request; a single
+    // topic may request both a key and a value association without counting as two topics.
+    int numTopics = request.getRequests().size();
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchGet request has %d topics, exceeding the configured maximum of %d"
+              + " topics per batch when includeSchemas is true", numTopics, maxNum));
+    }
+  }
+
   private void recordAssociationBatchMetrics(
       List<AssociationResult> results,
       SchemaRegistryMetric successMetric,
@@ -2782,7 +2856,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   public AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    checkAssociationBatchLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -2804,12 +2880,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           if (!(op instanceof AssociationCreateOrUpdateOp)) {
             if (op instanceof AssociationDeleteOp) {
               AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
-              deleteAssociations(
-                  req.getResourceId(),
-                  req.getResourceType(),
-                  Collections.singletonList(deleteOp.getAssociationType()),
-                  Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
-              );
+              // An async delete still deletes the association entries here, but leaves its
+              // cascaded subject deletes to run in the background
+              if (Boolean.TRUE.equals(deleteOp.getAsync()) && !dryRun) {
+                deleteAssociationsAndQueueCascade(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle())
+                );
+              } else {
+                deleteAssociations(
+                    req.getResourceId(),
+                    req.getResourceType(),
+                    Collections.singletonList(deleteOp.getAssociationType()),
+                    Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
+                );
+              }
               metricsContainer.getAssociationBatchMutateDelete().record();
             }
             index++;
@@ -2923,6 +3010,94 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         metricsContainer.getAssociationBatchMutateSuccess(),
         metricsContainer.getAssociationBatchMutateFailure());
     return new AssociationBatchResponse(results);
+  }
+
+  private void checkAssociationBatchLimits(AssociationBatchRequest request)
+      throws AssociationBatchLimitExceededException {
+    if (!config().associationBatchMutateLimitsEnabled()) {
+      return;
+    }
+
+    boolean hasInlineSchema = false;
+    for (AssociationOpRequest req : request.getRequests()) {
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (op instanceof AssociationCreateOrUpdateOp
+            && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
+          hasInlineSchema = true;
+        }
+      }
+    }
+
+    // No inline schema anywhere in the batch means no schema payload to bound, so none of the
+    // limits below apply, regardless of how many topics or associations are in the request.
+    if (!hasInlineSchema) {
+      return;
+    }
+
+    // batchSize is defined as the number of topics (resource entries) in the request, not the
+    // number of individual association ops; a single topic may carry both a key and a value
+    // association without counting as two topics.
+    List<AssociationOpRequest> reqs = request.getRequests();
+    int numTopics = reqs.size();
+    int maxNum = config().maxAssociationNumPerMutateBatch();
+    if (numTopics > maxNum) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has %d topics, exceeding the configured maximum"
+              + " of %d topics per batch when any association in the batch carries an inline"
+              + " schema", numTopics, maxNum));
+    }
+
+    // Check the most granular thing first: each individual association's inline schema payload
+    // (including references, metadata, etc., i.e. the whole RegisterSchemaRequest) against the
+    // per-association limit, so a violation names the exact offending association.
+    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
+    for (int i = 0; i < reqs.size(); i++) {
+      AssociationOpRequest req = reqs.get(i);
+      List<? extends AssociationOp> ops = req.getAssociations();
+      if (ops == null) {
+        continue;
+      }
+      for (AssociationOp op : ops) {
+        if (!(op instanceof AssociationCreateOrUpdateOp)) {
+          continue;
+        }
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        RegisterSchemaRequest schema = createOrUpdateOp.getSchema();
+        if (schema == null) {
+          continue;
+        }
+        long schemaPayloadBytes = jsonPayloadSize(schema);
+        if (schemaPayloadBytes > maxEntryBytes) {
+          throw new AssociationBatchLimitExceededException(String.format(
+              "The '%s' association's schema for resourceId '%s' (topic %d of %d in the"
+                  + " Associations batchMutate request) has a payload size of %d bytes,"
+                  + " exceeding the configured maximum of %d bytes per association schema",
+              createOrUpdateOp.getAssociationType(), req.getResourceId(), i + 1, reqs.size(),
+              schemaPayloadBytes, maxEntryBytes));
+        }
+      }
+    }
+
+    long requestPayloadBytes = jsonPayloadSize(request);
+    long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
+    if (requestPayloadBytes > maxBatchBytes) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has a payload size of %d bytes, exceeding the"
+              + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
+    }
+  }
+
+  private static long jsonPayloadSize(Object obj) {
+    try {
+      return JacksonMapper.INSTANCE.writeValueAsBytes(obj).length;
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException(
+          "Unexpected error measuring payload size of an already-deserialized object", e);
+    }
   }
 
   // --------------- Association query methods ---------------
