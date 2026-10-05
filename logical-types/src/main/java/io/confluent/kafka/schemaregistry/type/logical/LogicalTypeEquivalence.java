@@ -145,19 +145,20 @@ final class LogicalTypeEquivalence {
   }
 
   // Fields are paired by name, as every format finds them; a Protobuf field's number, recorded
-  // or implied by its position, must match too, as must each oneof member's.
+  // or implied by its position, must match too, as must each oneof member's. A Protobuf oneof has
+  // no name on the wire: it is paired by its members' numbers instead.
   private boolean fields(Schema a, Schema b) {
     if (a.getFields().size() != b.getFields().size()) {
       return false;
     }
-    List<Schema.Field> xs = sorted(a.getFields(), Schema.Field::getName);
-    List<Schema.Field> ys = sorted(b.getFields(), Schema.Field::getName);
     Map<Object, Integer> impliedA = impliedNumbers(a);
     Map<Object, Integer> impliedB = impliedNumbers(b);
+    List<Schema.Field> xs = sorted(a.getFields(), f -> pairingKey(f, impliedA));
+    List<Schema.Field> ys = sorted(b.getFields(), f -> pairingKey(f, impliedB));
     for (int i = 0; i < xs.size(); i++) {
       Schema.Field x = xs.get(i);
       Schema.Field y = ys.get(i);
-      boolean same = Objects.equals(x.getName(), y.getName())
+      boolean same = Objects.equals(pairingKey(x, impliedA), pairingKey(y, impliedB))
           && Objects.equals(x.getNativeNames(), y.getNativeNames())
           && Objects.equals(number(x.getFieldNumber(), x, impliedA),
               number(y.getFieldNumber(), y, impliedB));
@@ -173,6 +174,21 @@ final class LogicalTypeEquivalence {
       }
     }
     return true;
+  }
+
+  // What a field is paired by: its name, or for a Protobuf oneof, its members' numbers.
+  private String pairingKey(Schema.Field field, Map<Object, Integer> implied) {
+    if (schemaType != SchemaType.PROTOBUF || !isUnion(field.getSchema())
+        || number(field.getFieldNumber(), field, implied) != null) {
+      return field.getName();
+    }
+    // A oneof container has no number of its own; a wrapped union's field does.
+    List<String> numbers = new ArrayList<>();
+    for (Schema.UnionBranch member : field.getSchema().getBranches()) {
+      numbers.add(String.valueOf(number(member.getFieldNumber(), member, implied)));
+    }
+    Collections.sort(numbers);
+    return "\u0000oneof " + String.join(",", numbers);
   }
 
   // A oneof's members are numbered in the enclosing message's sequence.
@@ -229,9 +245,9 @@ final class LogicalTypeEquivalence {
     for (int i = 0; i < xs.size(); i++) {
       Schema.UnionBranch x = xs.get(i);
       Schema.UnionBranch y = ys.get(i);
-      boolean same = Arrays.asList(x.getName(), x.getNativeNames(), x.getNativeAliases(),
-          x.getNativeTitle()).equals(Arrays.asList(y.getName(), y.getNativeNames(),
-          y.getNativeAliases(), y.getNativeTitle()));
+      boolean same = Arrays.asList(x.getName(), x.getNativeNames(), x.getNativeTitle())
+          .equals(Arrays.asList(y.getName(), y.getNativeNames(), y.getNativeTitle()))
+          && sameAliases(x.getNativeAliases(), y.getNativeAliases());
       if (ownNumbers && !Objects.equals(x.getFieldNumber(), y.getFieldNumber())) {
         return false;
       }
@@ -279,6 +295,12 @@ final class LogicalTypeEquivalence {
       }
     }
     return numbers;
+  }
+
+  // An alias list names what a location continued, in whatever order it is declared.
+  private static boolean sameAliases(List<String> a, List<String> b) {
+    return a == null || b == null
+        ? Objects.equals(a, b) : new HashSet<>(a).equals(new HashSet<>(b));
   }
 
   private static boolean isUnion(Schema schema) {

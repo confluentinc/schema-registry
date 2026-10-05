@@ -130,6 +130,21 @@ class LogicalTypeEquivalenceTest {
   }
 
   @Test
+  void aProtobufOneofIsPairedByItsMembersNotItsName() {
+    // A oneof has no name on the wire, so renaming one, or two swapping names, changes nothing.
+    LogicalType plain = proto("int32 id = 1;\n  oneof k {\n    int32 n = 2;\n    string s = 3;\n  }",
+        "");
+    assertThat(plain.equivalent(PROTOBUF, proto("int32 id = 1;\n  oneof kind {\n    int32 n = 2;\n"
+        + "    string s = 3;\n  }", ""))).isTrue();
+    assertThat(proto("oneof a {\n    int32 n = 1;\n  }\n  oneof b {\n    string s = 2;\n  }", "")
+        .equivalent(PROTOBUF, proto("oneof b {\n    int32 n = 1;\n  }\n  oneof a {\n"
+            + "    string s = 2;\n  }", ""))).isTrue();
+    // Its members still count.
+    assertThat(plain.equivalent(PROTOBUF, proto("int32 id = 1;\n  oneof k {\n    int32 n = 2;\n"
+        + "    string t = 3;\n  }", ""))).isFalse();
+  }
+
+  @Test
   void aProtobufRootMessageOfAnotherNameIsNotEquivalent() {
     // Single-message provenance takes another message at the root for another entity.
     assertThat(lt(file("message A {\n  int32 id = 1;\n}\n")).equivalent(PROTOBUF,
@@ -272,6 +287,12 @@ class LogicalTypeEquivalenceTest {
     assertThat(avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"x\",\"z\"]}")
         .equivalent(AVRO, avro("{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"x\"]}")))
         .isFalse();
+    // So too a fixed union branch's, which the logical type carries on the branch.
+    String fixed = "[\"null\",{\"type\":\"fixed\",\"name\":\"F\",\"size\":4,\"aliases\":[%s]},"
+        + "\"int\"]";
+    assertThat(avro(field("f", String.format(fixed, "\"Old\",\"Older\""), "null"))
+        .equivalent(AVRO, avro(field("f", String.format(fixed, "\"Older\",\"Old\""), "null"))))
+        .isTrue();
   }
 
   private static String field(String name, String type, String defaultValue) {
