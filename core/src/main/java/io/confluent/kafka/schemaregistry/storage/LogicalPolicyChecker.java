@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -22,6 +23,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
@@ -33,9 +36,11 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +97,54 @@ public final class LogicalPolicyChecker {
   }
 
   /**
+   * The logical type the policy checks: the {@link LogicalTypeVersion#V1} reading, with a Protobuf
+   * file as Flink reads it rather than as {@code format=logical} shows it.
+   */
+  static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
+    return ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
+        ? protobufLogicalType((ProtobufSchema) parsedSchema)
+        : toLogicalType(parsedSchema, LogicalTypeVersion.V1);
+  }
+
+  /**
+   * A Protobuf file as Flink reads it: a single top-level message is its own row, and a file with
+   * several is a row holding one nullable row per message, named by its simple name, in file order
+   * ({@code ProtoToFlinkSchemaConverter}). So every message is checked, and a file changing between
+   * one and several messages is seen as the reshaping it is.
+   */
+  private static LogicalType protobufLogicalType(ProtobufSchema schema) {
+    LogicalType whole = ProtoToLogicalTypeConverter.toLogicalType(schema);
+    List<Descriptor> messages = schema.toDescriptor().getFile().getMessageTypes();
+    if (messages.size() <= 1) {
+      return whole;
+    }
+    List<Field> fields = new ArrayList<>(messages.size());
+    Map<String, Schema> namedTypes = new LinkedHashMap<>();
+    Set<String> externalTypes = new LinkedHashSet<>();
+    Map<String, String> externalImports = new LinkedHashMap<>();
+    Map<List<Integer>, Object> defaultValues = new LinkedHashMap<>();
+    for (Descriptor message : messages) {
+      int index = message.getIndex();
+      LogicalType perMessage = ProtoToLogicalTypeConverter.toLogicalType(
+          new ProtobufSchema(message));
+      fields.add(new Field(message.getName(), perMessage.getRootSchema().setNullable(true), index));
+      perMessage.getNamedTypes().forEach(namedTypes::putIfAbsent);
+      externalTypes.addAll(perMessage.getExternalTypes());
+      perMessage.getExternalImports().forEach(externalImports::putIfAbsent);
+      // A message's defaults are addressed from the wrapping row, under the message's index.
+      perMessage.getDefaultValues().forEach((path, value) -> {
+        List<Integer> wrapped = new ArrayList<>(path.size() + 1);
+        wrapped.add(index);
+        wrapped.addAll(path);
+        defaultValues.put(wrapped, value);
+      });
+    }
+    return new LogicalType(null, whole.getNamespace(), Schema.createStruct(fields), namedTypes,
+        externalTypes, externalImports, whole.getReferences(), whole.getResolvedReferences(),
+        defaultValues);
+  }
+
+  /**
    * Runs the logical validity and compatibility checks for {@code newSchema} and returns any
    * findings as human-readable error strings (empty if all pass).
    *
@@ -107,7 +160,9 @@ public final class LogicalPolicyChecker {
    * skipped rather than failing the registration -- an old version being unconvertible must not
    * block a new one (per design decision).
    *
-   * <p>Both schemas are derived under {@link LogicalTypeVersion#V1} here, matching provenance --
+   * <p>Both schemas are derived by {@link #toPolicyLogicalType}: under
+   * {@link LogicalTypeVersion#V1}, matching provenance, and with a Protobuf file of several
+   * messages read as Flink reads it --
    * not the {@link LogicalTypeVersion#V2} canonical reading {@link #toLogicalType(ParsedSchema)}
    * uses for {@code format=logical}. The two editions can disagree on structural kind (a singleton
    * JSON {@code oneOf} collapses to its member type under V2 but stays a {@code UNION} under V1),
@@ -126,7 +181,7 @@ public final class LogicalPolicyChecker {
 
     LogicalType newLogical;
     try {
-      newLogical = toLogicalType(newSchema, LogicalTypeVersion.V1);
+      newLogical = toPolicyLogicalType(newSchema);
     } catch (RuntimeException e) {
       errors.add(describeUnconvertible(e.getMessage()));
       return errors;
@@ -141,7 +196,7 @@ public final class LogicalPolicyChecker {
     for (ParsedSchemaHolder holder : toCompare) {
       LogicalType previousLogical;
       try {
-        previousLogical = toLogicalType(holder.schema(), LogicalTypeVersion.V1);
+        previousLogical = toPolicyLogicalType(holder.schema());
       } catch (RuntimeException e) {
         // Skip an unconvertible previous version rather than blocking this registration.
         log.warn("Skipping logical compatibility against a previous version that could not be "
