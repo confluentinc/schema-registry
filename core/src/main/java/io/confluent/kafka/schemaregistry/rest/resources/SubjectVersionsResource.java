@@ -566,7 +566,9 @@ public class SubjectVersionsResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "422",
-          description = "Unprocessable Entity. Error code 42202 indicates an invalid version.",
+          description = "Unprocessable Entity. "
+                  + "Error code 42202 indicates an invalid version. "
+                  + "Error code 42205 indicates operation not permitted.",
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
         @ApiResponse(responseCode = "500",
@@ -598,6 +600,11 @@ public class SubjectVersionsResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+      // Checked on every node: a stale follower may wrongly reject, but never wrongly allow,
+      // since the leader checks the forwarded request again. A missing target falls to the 404.
+      if (permanentDelete && schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+        schemaRegistry.checkPermanentDeleteAllowed(subject, true);
+      }
       int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
               versionId.getVersionId(), permanentDelete);
       asyncResponse.resume(deletedVersion);
