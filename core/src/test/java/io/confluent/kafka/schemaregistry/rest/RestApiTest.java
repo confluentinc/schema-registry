@@ -3599,4 +3599,29 @@ public abstract class RestApiTest {
     assertEquals(records.get(0).timestamp(), delete.getCreateTimestamp().longValue());
     assertEquals(records.get(1).timestamp(), deleted.getTimestamp().longValue());
   }
+
+  @Test
+  public void testLogicalPolicyBlocksPermanentDelete() throws Exception {
+    String subject = "logicalSubject";
+    String other = "plainSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    restApp.restClient.registerSchema(schema, subject);
+    restApp.restClient.registerSchema(schema, other);
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(request, subject);
+
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+    RestClientException e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    e = assertThrows(RestClientException.class, () ->
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+    assertEquals(Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+
+    // Other subjects are unaffected
+    restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other);
+    restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, other, true);
+  }
 }

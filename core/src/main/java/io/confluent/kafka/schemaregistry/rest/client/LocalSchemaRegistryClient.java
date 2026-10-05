@@ -711,6 +711,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (SubjectNotSoftDeletedException e) {
       throw Errors.subjectNotSoftDeletedException(subject);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
           e);
@@ -789,6 +791,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }

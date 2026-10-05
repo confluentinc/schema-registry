@@ -804,6 +804,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   @Override
   public List<Integer> deleteSubject(String subject,
                                      boolean permanentDelete) throws SchemaRegistryException {
+    checkPermanentDeleteAllowed(subject, permanentDelete);
+    return deleteSubjectInternal(subject, permanentDelete);
+  }
+
+  @Override
+  protected List<Integer> deleteSubjectInternal(String subject,
+                                                boolean permanentDelete)
+      throws SchemaRegistryException {
     // Ensure cache is up-to-date before any potential writes
     try {
       if (isReadOnlyMode(subject)) {
