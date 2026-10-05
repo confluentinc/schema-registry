@@ -735,10 +735,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * Rejects a permanent delete when the subject's effective compatibilityPolicy is LOGICAL.
+   */
+  protected void checkPermanentDeleteAllowed(String subject, boolean permanentDelete)
+      throws SchemaRegistryException {
+    if (permanentDelete && CompatibilityPolicy.forName(
+        getConfigInScope(subject).getCompatibilityPolicy()) == CompatibilityPolicy.LOGICAL) {
+      throw new OperationNotPermittedException("Permanent delete is not allowed for subject "
+          + subject + " because compatibilityPolicy=LOGICAL");
+    }
+  }
+
   protected Schema validateDeleteSchemaVersion(String subject,
                                                 int version,
                                                 boolean permanentDelete)
       throws SchemaRegistryException {
+    checkPermanentDeleteAllowed(subject, permanentDelete);
     Schema schema = null;
     // Retrieve and validate schema
     VersionId versionId = new VersionId(version);
