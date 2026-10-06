@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -126,6 +128,15 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A), List.of(), CompatibilityLevel.NONE);
     assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void aJsonDefinitionReferringOnlyToItselfIsReportedRatherThanLooping() {
+    String schema = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    List<String> errors = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        LogicalPolicyChecker.check(new JsonSchema(schema), List.of(), CompatibilityLevel.NONE));
+    assertTrue(errors.stream().anyMatch(e -> e.contains("CYCLIC_TYPE")), errors.toString());
   }
 
   // -- compatibility ------------------------------------------------------------------------------
