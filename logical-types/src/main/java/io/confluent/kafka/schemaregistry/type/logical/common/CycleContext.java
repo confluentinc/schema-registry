@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.common;
 
+import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -65,8 +66,9 @@ public class CycleContext<T> {
   }
 
   /**
-   * Converts a named type's body, first used at {@code path}, keeping its defaults relative to it:
-   * the body is shared by reference, so each use places them with {@link #putTypeDefaults}.
+   * Converts a named type's body at {@code path} (Avro at its first use, the other formats at the
+   * empty path), keeping its defaults relative to it: the body is shared by reference, so each use
+   * places them with {@link #putTypeDefaults}.
    */
   public <R> R convertNamedType(String name, List<Integer> path, Supplier<R> conversion) {
     final Frame outer = frame;
@@ -96,9 +98,16 @@ public class CycleContext<T> {
 
   /**
    * Path-keyed map of field-default values collected during conversion, each named type's placed
-   * at its uses as inlining it would, up to where a type recurs on the path below itself.
+   * at its uses as inlining it would, up to where a type recurs on the path below itself. Read
+   * once conversion is done: the map places them on first access.
    */
   public Map<List<Integer>, Object> getDefaultValues() {
+    // Placed on first read: callers converting only to compare or check types (provenance, the
+    // LOGICAL policy, DDL) never read defaults, and placing them can be exponential in the schema.
+    return new Placed(this::placeDefaults);
+  }
+
+  private Map<List<Integer>, Object> placeDefaults() {
     final Map<String, Integer> components = components();
     final Set<Integer> recursive = recursiveComponents(components);
     final Set<String> withDefaults = typesWithDefaults();
@@ -423,6 +432,51 @@ public class CycleContext<T> {
       for (String type : types) {
         deadWhile.put(type, since);
       }
+    }
+  }
+
+  // The defaults, placed once on first read; the conversion's state is released then.
+  private static final class Placed extends AbstractMap<List<Integer>, Object> {
+    private Supplier<Map<List<Integer>, Object>> placement;
+    private volatile Map<List<Integer>, Object> placed;
+
+    Placed(Supplier<Map<List<Integer>, Object>> placement) {
+      this.placement = placement;
+    }
+
+    private Map<List<Integer>, Object> placed() {
+      Map<List<Integer>, Object> result = placed;
+      if (result == null) {
+        synchronized (this) {
+          result = placed;
+          if (result == null) {
+            result = placement.get();
+            placed = result;
+            placement = null;
+          }
+        }
+      }
+      return result;
+    }
+
+    @Override
+    public Set<Entry<List<Integer>, Object>> entrySet() {
+      return placed().entrySet();
+    }
+
+    @Override
+    public Object get(Object key) {
+      return placed().get(key);
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+      return placed().containsKey(key);
+    }
+
+    @Override
+    public int size() {
+      return placed().size();
     }
   }
 
