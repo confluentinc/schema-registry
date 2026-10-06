@@ -368,9 +368,14 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
   }
 
   protected void assertSchemaIdHeaders(Headers headers, String topic, String context) {
-    assertGuidHeaderRegistered(headers, SchemaId.KEY_SCHEMA_ID_HEADER, topic + "-key",
+    assertSchemaIdHeaders(headers, topic + "-key", topic + "-value", context);
+  }
+
+  protected void assertSchemaIdHeaders(Headers headers, String keySubject, String valueSubject,
+      String context) {
+    assertGuidHeaderRegistered(headers, SchemaId.KEY_SCHEMA_ID_HEADER, keySubject,
         context + " key");
-    assertGuidHeaderRegistered(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, topic + "-value",
+    assertGuidHeaderRegistered(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, valueSubject,
         context + " value");
   }
 
