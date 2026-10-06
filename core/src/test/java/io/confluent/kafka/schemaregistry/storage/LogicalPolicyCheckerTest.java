@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -66,6 +68,20 @@ class LogicalPolicyCheckerTest {
 
   private static ParsedSchemaHolder holder(String avro) {
     return new SimpleParsedSchemaHolder(new AvroSchema(avro));
+  }
+
+  @Test
+  void theCheckOfAMessageSharedAlongManyPathsDoesNotPlaceItsDefaults() {
+    // Each message holds the next twice: 2^30 paths to one default the check never reads.
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 30; i++) {
+      text.append("message M").append(i).append(" { M").append(i + 1).append(" a = 1; M")
+          .append(i + 1).append(" b = 2; }\n");
+    }
+    ProtobufSchema diamond = new ProtobufSchema(text.append("message M30 { int32 x = 1; }\n")
+        .toString());
+    assertTimeoutPreemptively(Duration.ofSeconds(5), () -> LogicalPolicyChecker.check(diamond,
+        List.of(new SimpleParsedSchemaHolder(diamond)), CompatibilityLevel.BACKWARD));
   }
 
   // Protobuf files with one or several top-level messages, as Flink reads them.
