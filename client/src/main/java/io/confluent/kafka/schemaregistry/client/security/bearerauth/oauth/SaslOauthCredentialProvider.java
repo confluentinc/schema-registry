@@ -29,7 +29,6 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -45,6 +44,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * <code>SaslOauthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code> that
@@ -61,6 +62,8 @@ import org.apache.kafka.common.utils.Utils;
 public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider {
 
   public static final String SASL_IDENTITY_POOL_CONFIG = "extension_identityPoolId";
+  private static final String SASL_OAUTHBEARER_ASSERTION_PREFIX = "sasl.oauthbearer.assertion.";
+  private static final Logger log = LoggerFactory.getLogger(SaslOauthCredentialProvider.class);
   private CachedOauthTokenRetriever tokenRetriever;
   private JwtRetriever jwtRetriever;
   private String targetSchemaRegistry;
@@ -160,12 +163,26 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
       sslSocketFactory = new HostSslSocketFactory(jou.createSSLSocketFactory(), url.getHost());
     }
 
+    // Mirrors the selection in Kafka's ClientCredentialsRequestFormatterFactory: a file-based
+    // assertion is used if configured, otherwise one is created locally if an issuer is configured.
+    boolean hasAssertionFile =
+        cu.validateString(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, false) != null;
+    boolean hasAssertionIssuer = cu.containsKey(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS);
+    boolean hasSchemaRegistryClientSecret =
+        cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET) != null;
+
     // An explicitly configured schema registry client secret takes precedence. Otherwise, as in
     // the Kafka client, a configured client assertion is preferred over an inherited client secret.
-    if (cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET) == null
-        && isClientAssertionConfigured(cu)) {
+    if (!hasSchemaRegistryClientSecret && (hasAssertionFile || hasAssertionIssuer)) {
+      if (hasAssertionFile && hasAssertionIssuer) {
+        log.warn("Both {} and {} are configured. Using file-based assertion; locally-generated "
+                + "assertion configs will be ignored.", SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE,
+            SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS);
+      }
+      log.info("Schema Registry client using client assertion authentication with {} assertion",
+          hasAssertionFile ? "file-based" : "locally-generated");
       CloseableSupplier<String> assertionSupplier = AssertionSupplierFactory.create(
-          new ConfigurationUtils(withClientSaslDefaults(configs)), Time.SYSTEM);
+          new ConfigurationUtils(withAssertionConfigDefaults(configs)), Time.SYSTEM);
       try {
         return new HttpJwtRetriever(
             new ClientAssertionRequestFormatter(clientId, scope, assertionSupplier),
@@ -177,6 +194,12 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
       }
     }
 
+    if (hasAssertionFile || hasAssertionIssuer) {
+      log.info("{} is configured, so the client assertion configs are ignored and client secret "
+          + "authentication is used", SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
+    } else {
+      log.info("Schema Registry client using client secret authentication");
+    }
     if (clientId == null) {
       clientId = jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG);
     }
@@ -205,21 +228,22 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
     return cu.get(name) instanceof Password ? cu.validatePassword(name) : cu.validateString(name);
   }
 
-  // Mirrors the selection in Kafka's ClientCredentialsRequestFormatterFactory: a file-based
-  // assertion is used if configured, otherwise one is created locally if an issuer is configured.
-  private static boolean isClientAssertionConfigured(ConfigurationUtils cu) {
-    return cu.validateString(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, false) != null
-        || cu.containsKey(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS);
-  }
-
-  // The configs passed to the schema registry client are unparsed, so apply the Kafka client SASL
-  // defaults (e.g. sasl.oauthbearer.assertion.algorithm) that the assertion supplier relies on.
-  private static Map<String, Object> withClientSaslDefaults(Map<String, ?> configs) {
+  // The configs passed to the schema registry client are unparsed, so parse the
+  // sasl.oauthbearer.assertion.* configs and apply their Kafka client defaults (e.g.
+  // sasl.oauthbearer.assertion.algorithm) that the assertion supplier relies on. Only these configs
+  // are parsed so that unrelated configs are neither revalidated nor overwritten by defaults.
+  private static Map<String, Object> withAssertionConfigDefaults(Map<String, ?> configs) {
     ConfigDef saslConfigDef = new ConfigDef();
     SaslConfigs.addClientSaslSupport(saslConfigDef);
+    Map<String, Object> assertionConfigs = new HashMap<>();
+    configs.forEach((name, value) -> {
+      if (name.startsWith(SASL_OAUTHBEARER_ASSERTION_PREFIX)) {
+        assertionConfigs.put(name, value);
+      }
+    });
     Map<String, Object> parsedConfigs = new HashMap<>(configs);
-    new AbstractConfig(saslConfigDef, configs, false).values().forEach((name, value) -> {
-      if (value != null) {
+    saslConfigDef.parse(assertionConfigs).forEach((name, value) -> {
+      if (name.startsWith(SASL_OAUTHBEARER_ASSERTION_PREFIX) && value != null) {
         parsedConfigs.put(name, value);
       }
     });

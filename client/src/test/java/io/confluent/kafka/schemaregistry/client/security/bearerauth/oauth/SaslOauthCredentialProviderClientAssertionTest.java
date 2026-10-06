@@ -67,7 +67,6 @@ public class SaslOauthCredentialProviderClientAssertionTest {
       "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
   // AKS projects the federated service account token into a file as a JWT
   private static final String FEDERATED_TOKEN = createJwt("system:serviceaccount:ns:sa", 1);
-  private static final String FEDERATED_TOKEN_1 = FEDERATED_TOKEN;
   private static final String FEDERATED_TOKEN_2 = createJwt("system:serviceaccount:ns:sa", 2);
   private static final String JAAS_CONFIG_PREFIX =
       "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ";
@@ -225,12 +224,8 @@ public class SaslOauthCredentialProviderClientAssertionTest {
 
   @Test
   public void testInheritsLocallySignedClientAssertion() throws Exception {
-    KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-    generator.initialize(2048);
-    KeyPair keyPair = generator.generateKeyPair();
-    File privateKeyFile = createAllowedFile("-----BEGIN PRIVATE KEY-----\n"
-        + Base64.getMimeEncoder().encodeToString(keyPair.getPrivate().getEncoded())
-        + "\n-----END PRIVATE KEY-----\n");
+    KeyPair keyPair = generateKeyPair();
+    File privateKeyFile = createPrivateKeyFile(keyPair);
     Map<String, Object> configs = baseConfigs("clientId='my-client';");
     // sasl.oauthbearer.assertion.algorithm and the claim lifetimes are left at their defaults
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE,
@@ -260,8 +255,77 @@ public class SaslOauthCredentialProviderClientAssertionTest {
   }
 
   @Test
+  public void testAssertionFilePreferredOverLocallySignedAssertion() throws IOException {
+    File assertionFile = createAllowedFile(FEDERATED_TOKEN);
+    Map<String, Object> configs = baseConfigs("clientId='my-client';");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath());
+    // no private key is configured, so this would fail if a local assertion were created
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "my-client");
+
+    provider = configure(configs);
+    provider.getBearerToken(new URL("https://sr.example.com"));
+
+    assertEquals(FEDERATED_TOKEN, singleRequest().form.get("client_assertion"));
+  }
+
+  @Test
+  public void testLocallySignedAssertionWithoutPrivateKeyFails() {
+    Map<String, Object> configs = baseConfigs("clientId='my-client';");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "my-client");
+
+    ConfigException e = assertThrows(ConfigException.class, () -> configure(configs));
+    assertTrue(e.getMessage(),
+        e.getMessage().contains(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE));
+  }
+
+  @Test
+  public void testInvalidAssertionAlgorithmFails() throws Exception {
+    File privateKeyFile = createPrivateKeyFile(generateKeyPair());
+    Map<String, Object> configs = baseConfigs("clientId='my-client';");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE,
+        privateKeyFile.getAbsolutePath());
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "my-client");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM, "HS256");
+
+    ConfigException e = assertThrows(ConfigException.class, () -> configure(configs));
+    assertTrue(e.getMessage(),
+        e.getMessage().contains(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM));
+  }
+
+  @Test
+  public void testUnrelatedSaslConfigsAreNotRevalidated() throws IOException {
+    File assertionFile = createAllowedFile(FEDERATED_TOKEN);
+    Map<String, Object> configs = baseConfigs("clientId='my-client';");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath());
+    // a class only visible to the Kafka client's class loader must not be loaded here
+    configs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, "com.example.NotOnClasspath");
+
+    provider = configure(configs);
+    provider.getBearerToken(new URL("https://sr.example.com"));
+
+    assertEquals(FEDERATED_TOKEN, singleRequest().form.get("client_assertion"));
+  }
+
+  @Test
+  public void testKafkaClientConfigsPreferredOverJaasOptions() throws IOException {
+    Map<String, Object> configs = baseConfigs(
+        "clientId='jaas-client' clientSecret='jaas-secret' scope='jaas-scope';");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "kafka-client");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "kafka-secret");
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "kafka-scope");
+
+    provider = configure(configs);
+    provider.getBearerToken(new URL("https://sr.example.com"));
+
+    TokenRequest request = singleRequest();
+    assertEquals("Basic " + Base64.getEncoder().encodeToString(
+            "kafka-client:kafka-secret".getBytes(StandardCharsets.UTF_8)), request.authorization);
+    assertEquals("kafka-scope", request.form.get("scope"));
+  }
+
+  @Test
   public void testRotatedAssertionFileIsReread() throws IOException {
-    File assertionFile = createAllowedFile(FEDERATED_TOKEN_1);
+    File assertionFile = createAllowedFile(FEDERATED_TOKEN);
     Map<String, Object> configs = new HashMap<>();
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath());
 
@@ -276,7 +340,7 @@ public class SaslOauthCredentialProviderClientAssertionTest {
     }
 
     assertEquals(2, requests.size());
-    assertEquals(FEDERATED_TOKEN_1, requests.get(0).form.get("client_assertion"));
+    assertEquals(FEDERATED_TOKEN, requests.get(0).form.get("client_assertion"));
     assertEquals(FEDERATED_TOKEN_2, requests.get(1).form.get("client_assertion"));
   }
 
@@ -308,6 +372,18 @@ public class SaslOauthCredentialProviderClientAssertionTest {
         allowed == null || allowed.isEmpty()
             ? file.getAbsolutePath() : allowed + "," + file.getAbsolutePath());
     return file;
+  }
+
+  private static KeyPair generateKeyPair() throws Exception {
+    KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+    generator.initialize(2048);
+    return generator.generateKeyPair();
+  }
+
+  private File createPrivateKeyFile(KeyPair keyPair) throws IOException {
+    return createAllowedFile("-----BEGIN PRIVATE KEY-----\n"
+        + Base64.getMimeEncoder().encodeToString(keyPair.getPrivate().getEncoded())
+        + "\n-----END PRIVATE KEY-----\n");
   }
 
   private static String createAccessToken() {
