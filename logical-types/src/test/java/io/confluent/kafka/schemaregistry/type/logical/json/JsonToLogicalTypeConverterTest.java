@@ -35,6 +35,7 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.StringSchema;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsonToLogicalTypeConverterTest {
@@ -230,6 +232,62 @@ class JsonToLogicalTypeConverterTest {
       assertEquals(Arrays.asList("A", "B", "C"), result.getEnumValues().stream()
           .map(Schema.EnumValue::getDoc).collect(Collectors.toList()));
     }
+  }
+
+  @Test
+  void aNullMemberBehindARefConvertsAsAnInlineOneInBothEditions() {
+    String body = "{\"type\":\"object\",\"properties\":{"
+        + "\"o\":{\"oneOf\":[%1$s,"
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}]},"
+        + "\"u\":{\"oneOf\":[%1$s,{\"type\":\"string\"},{\"type\":\"integer\"}]},"
+        + "\"k\":{\"oneOf\":[%1$s,{\"const\":\"x\"}]}}%2$s}";
+    String inline = String.format(body, "{\"type\":\"null\"}", "");
+    String ref = String.format(body, "{\"$ref\":\"#/$defs/N\"}",
+        ",\"$defs\":{\"N\":{\"type\":\"null\"}}");
+    assertEquals(rootOf(inline).toDdl(), rootOf(ref).toDdl());
+    assertEquals(v1RootOf(inline).toDdl(), v1RootOf(ref).toDdl());
+  }
+
+  @Test
+  void aNullDefinitionConvertsUnderAModernDraft() {
+    // 2020-12 converts every $defs entry up front: a null one, used or not, has no type to give.
+    String body = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"o\":{\"oneOf\":[%s,{\"type\":\"string\"}]}}%s}";
+    String inline = String.format(body, "{\"type\":\"null\"}", "");
+    String ref = String.format(body, "{\"$ref\":\"#/$defs/N\"}",
+        ",\"$defs\":{\"N\":{\"type\":\"null\"}}");
+    assertEquals(rootOf(inline).toDdl(), rootOf(ref).toDdl());
+  }
+
+  @Test
+  void anUnusedUnconvertibleDefinitionDoesNotFailAModernDraft() {
+    // 2020-12 converts every $defs entry up front: one the logical type cannot express fails only
+    // where it is used, as draft-07's on-demand conversion does.
+    String body = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}%s}"
+        + ",\"$defs\":{\"U\":%s}}";
+    String plain = rootOf(String.format(body, "", "{\"type\":\"string\"}")).toDdl();
+    String[] unconvertible = {
+        "{\"not\":{\"type\":\"string\"}}",
+        "{\"if\":{\"type\":\"string\"},\"then\":{\"minLength\":1}}",
+        "{\"const\":null}",
+        "{\"allOf\":[{\"type\":\"null\"}]}",
+        "{\"type\":\"array\",\"prefixItems\":[{\"type\":\"string\"}]}"};
+    for (String u : unconvertible) {
+      assertEquals(plain, rootOf(String.format(body, "", u)).toDdl(), u);
+      assertThatThrownBy(() -> rootOf(String.format(body, ",\"b\":{\"$ref\":\"#/$defs/U\"}", u)))
+          .as(u).isInstanceOf(ValidationException.class);
+    }
+  }
+
+  @Test
+  void aDefinitionThatFailedLeavesNoPlaceholder() {
+    // U reaches V first, and V fails: what that attempt left, V's empty placeholder included, is
+    // undone, so b's use of V fails rather than reading an empty struct.
+    String schema = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"b\":{\"$ref\":\"#/$defs/V\"}},"
+        + "\"$defs\":{\"U\":{\"$ref\":\"#/$defs/V\"},\"V\":{\"not\":{\"type\":\"string\"}}}}";
+    assertThatThrownBy(() -> rootOf(schema)).isInstanceOf(ValidationException.class);
   }
 
   @Test
@@ -696,5 +754,82 @@ class JsonToLogicalTypeConverterTest {
 
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
     assertThat(lt.getName()).isEqualTo("Order");
+  }
+
+  @Test
+  void aNullEnumMemberMakesTheEnumNullable() {
+    Schema p = convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[\"a\",\"b\",null]}}}").getRootSchema().getField("p").getSchema();
+
+    assertThat(p.getType()).isEqualTo(Schema.Type.ENUM);
+    assertThat(p.isNullable()).isTrue();
+    assertThat(p.getEnumValues()).extracting(Schema.EnumValue::getSymbol).containsExactly("a", "b");
+  }
+
+  @Test
+  void anEnumOfOnlyNullIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"p\":{\"enum\":[null]}}}")).isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void aMapWithNoValueSchemaIsRejected() {
+    assertThatThrownBy(() -> convert("{\"type\":\"object\",\"properties\":"
+        + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"))
+        .isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void malformedConverterMetadataIsRejectedByName() {
+    // Metadata of an unexpected shape is a schema the converter cannot read, named as such; a
+    // ClassCastException would reach the provenance endpoint as a 500.
+    String two = "[{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"integer\"}}}]";
+    String[] properties = {
+        "\"u\":{\"oneOf\":" + two + ",\"confluent:union\":{\"x\":1}}",
+        "\"u\":{\"oneOf\":" + two + ",\"confluent:union\":[{\"name\":1},{\"name\":2}]}",
+        "\"e\":{\"enum\":[\"A\",\"B\"],\"confluent:enum\":[\"a\"]}",
+        "\"n\":{\"type\":\"integer\",\"connect.type\":1}",
+        "\"n\":{\"type\":\"string\",\"connect.type\":null}",
+        "\"n\":{\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+            + "\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"x\"}}",
+        "\"n\":{\"type\":\"integer\",\"title\":\"org.apache.kafka.connect.data.Timestamp\","
+            + "\"connect.type\":\"int64\",\"flink.precision\":\"3\"}",
+        "\"n\":{\"type\":\"string\",\"connect.type\":\"bytes\",\"flink.maxLength\":\"5\"}",
+        "\"a\":{\"type\":\"string\",\"connect.index\":\"1\"},\"b\":{\"type\":\"string\"}",
+        "\"m\":{\"type\":\"array\",\"connect.type\":\"map\",\"items\":{\"type\":\"object\"}}"};
+    for (String property : properties) {
+      assertThatThrownBy(() -> JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+          "{\"type\":\"object\",\"properties\":{" + property + "}}")))
+          .as(property).isInstanceOf(ValidationException.class);
+    }
+  }
+
+
+  @Test
+  void aModernDraftDefaultBesideARefIsTheFieldsDefault() {
+    // 2019-09 and later honour a default beside $ref; it is read against the type the reference
+    // names, not the reference itself.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema("{\"$schema\":"
+        + "\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+        + "\"properties\":{\"t\":{\"$ref\":\"#/$defs/T\",\"default\":\"sib\"}},"
+        + "\"$defs\":{\"T\":{\"type\":\"string\"}}}"));
+    Schema.Field t = lt.getRootSchema().getFields().get(0);
+    assertEquals("sib", t.getDefaultValue());
+  }
+
+  @Test
+  void aDefinitionReferringOnlyToItselfConvertsWithoutLooping() {
+    // D refers only to itself, directly or through Q: a recursive type, still converted.
+    String direct = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    String indirect = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/Q\"},"
+        + "\"Q\":{\"$ref\":\"#/definitions/D\"}}}";
+    for (String schema : Arrays.asList(direct, indirect)) {
+      LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+          JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(schema), LogicalTypeVersion.V1));
+      assertThat(lt.getNamedTypes()).isNotEmpty();
+    }
   }
 }
