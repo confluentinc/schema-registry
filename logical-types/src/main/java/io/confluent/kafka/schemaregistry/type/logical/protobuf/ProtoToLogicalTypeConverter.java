@@ -263,11 +263,11 @@ public class ProtoToLogicalTypeConverter {
     Schema rootBody = namedMessageBody(rootMessage, ctx, Collections.emptyList());
     ctx.putNamedType(rootFqn, rootBody);
     ctx.putTypeDefaults(rootFqn, Collections.emptyList());
-    // Build peer bodies (replacing placeholders) not already built at a use. Iterate every
-    // top-level message and skip whichever one is the root (which may or may not be at file index
-    // 0, depending on which descriptor the caller passed).
+    // Build peer bodies (replacing placeholders). Iterate every top-level message and skip
+    // whichever one is the root (which may or may not be at file index 0, depending on which
+    // descriptor the caller passed).
     for (Descriptor peer : messageTypes) {
-      if (peer == rootMessage || ctx.isNamedTypeConverted(peer.getFullName())) {
+      if (peer == rootMessage) {
         continue;
       }
       ctx.putNamedType(peer.getFullName(),
@@ -355,11 +355,10 @@ public class ProtoToLogicalTypeConverter {
       final FileDescriptor file, final List<Descriptor> messageTypes,
       final ToLogicalContext<String> ctx) {
     for (Descriptor message : messageTypes) {
-      final List<Integer> path = Collections.singletonList(message.getIndex());
-      if (!ctx.isNamedTypeConverted(message.getFullName())) {
-        ctx.putNamedType(message.getFullName(), namedMessageBody(message, ctx, path));
-      }
-      ctx.putTypeDefaults(message.getFullName(), path);
+      ctx.putNamedType(message.getFullName(),
+          namedMessageBody(message, ctx, Collections.emptyList()));
+      ctx.putTypeDefaults(message.getFullName(),
+          Collections.singletonList(message.getIndex()));
     }
     for (com.google.protobuf.Descriptors.EnumDescriptor enm : file.getEnumTypes()) {
       ctx.putNamedType(enm.getFullName(), convertEnumDescriptor(enm));
@@ -577,8 +576,7 @@ public class ProtoToLogicalTypeConverter {
       // Build the body for any nested type that was pre-registered (either
       // user-marked or auto-promoted because it's cyclic). Mirror the
       // pre-registration condition in preRegisterNestedTypes.
-      if ((isUserDeclaredNamedType(nested) || isCyclicMessage(nested))
-          && !ctx.isNamedTypeConverted(nested.getFullName())) {
+      if (isUserDeclaredNamedType(nested) || isCyclicMessage(nested)) {
         // Not used where it's declared: each use places its defaults.
         ctx.putNamedType(nested.getFullName(),
             namedMessageBody(nested, ctx, Collections.emptyList()));
@@ -1151,18 +1149,14 @@ public class ProtoToLogicalTypeConverter {
               if (!ctx.hasNamedType(fullName)) {
                 ctx.putNamedType(fullName, Schema.createStruct(new ArrayList<>()));
                 ctx.putNamedType(fullName,
-                    namedMessageBody(schema.getMessageType(), ctx, indexPath));
+                    namedMessageBody(schema.getMessageType(), ctx, Collections.emptyList()));
               }
               ctx.putTypeDefaults(fullName, indexPath);
               return Schema.createNamedTypeRef(fullName).setNullable(isNullable);
             }
-            // Local named-type message (file-level peer registered up-front), built at its first
-            // use unless that use is within its own body.
+            // Local named-type message (file-level peer registered up-front). Its body is built
+            // apart, so a chain of references adds no depth; its defaults land here when read.
             if (ctx.hasNamedType(fullName)) {
-              if (!ctx.isNamedTypeConverted(fullName) && !ctx.isNamedTypeConverting(fullName)) {
-                ctx.putNamedType(fullName,
-                    namedMessageBody(schema.getMessageType(), ctx, indexPath));
-              }
               ctx.putTypeDefaults(fullName, indexPath);
               return Schema.createNamedTypeRef(fullName).setNullable(isNullable);
             }

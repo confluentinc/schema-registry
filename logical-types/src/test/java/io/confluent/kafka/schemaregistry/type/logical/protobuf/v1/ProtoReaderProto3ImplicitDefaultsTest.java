@@ -24,12 +24,20 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Verifies that proto3 scalar fields without explicit presence get the
@@ -183,6 +191,153 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     assertThat(lt.getDefaultValues()).containsOnly(
         Map.entry(List.of(0), Collections.emptyMap()),
         Map.entry(List.of(1, 0), ""), Map.entry(List.of(1, 1), ""));
+  }
+
+  @Test
+  void aChainOfPeerMessagesConvertsWithItsLastDefaultAtTheEnd() throws Exception {
+    // Each message holds the next: references, not nesting, so no depth limit applies, and
+    // placing the defaults takes no stack per link, even on a small one.
+    ProtobufSchema schema = new ProtobufSchema(chain(10000, ""));
+    AtomicReference<Object> result = new AtomicReference<>();
+    Thread small = new Thread(null, () -> {
+      try {
+        result.set(ProtoToLogicalTypeConverter.toLogicalType(schema).getDefaultValues());
+      } catch (RuntimeException e) {
+        result.set(e);
+      }
+    }, "small-stack", 512 * 1024);
+    small.start();
+    small.join();
+
+    assertThat(result.get()).isEqualTo(Map.of(Collections.nCopies(10001, 0), 0));
+  }
+
+  @Test
+  void aChainWithADefaultAtEveryLinkHasEachOnceAtItsDepth() {
+    // Placed straight into the result: memory follows its size, not every suffix of the chain.
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(30), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(chain(3000, "int32 v = 2; "))));
+
+    Map<List<Integer>, Object> defaults = lt.getDefaultValues();
+    assertThat(defaults).hasSize(3001);
+    // v is each message's field 0 and next its field 1, so M3000's x is 3,000 nexts down.
+    List<Integer> deepest = new ArrayList<>(Collections.nCopies(3000, 1));
+    deepest.add(0);
+    assertThat(defaults).containsEntry(deepest, 0);
+  }
+
+  @Test
+  void mutuallyRecursiveMessagesUsedApartEachStopOnlyWhereTheyRecur() {
+    // Each use of A or B enters their cycle anew: each is placed once there, never below itself.
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Root {\n  A a = 1;\n  B b = 2;\n  int32 n = 3;\n}\n"
+            + "message A {\n  int32 x = 1;\n  B b = 2;\n}\n"
+            + "message B {\n  int32 y = 1;\n  A a = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), 0),
+        Map.entry(List.of(1, 0), 0), Map.entry(List.of(1, 1, 0), 0), Map.entry(List.of(2), 0));
+  }
+
+  @Test
+  void aRecursiveMessageUsedTwiceAsSiblingsHasItsDefaultsAtBoth() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message A {\n  B first = 1;\n  B second = 2;\n}\n"
+            + "message B {\n  int32 x = 1;\n  A back = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(1, 0), 0));
+  }
+
+  @Test
+  void defaultsMatchInliningCutWhereAMessageRecursForRandomFiles() {
+    // An independent oracle: each message inlined at its uses, cut where it recurs on the path.
+    Random random = new Random(20261006);
+    for (int file = 0; file < 500; file++) {
+      int messages = 2 + random.nextInt(5);
+      List<List<Integer>> fields = new ArrayList<>();
+      StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+      for (int m = 0; m < messages; m++) {
+        // Each field an int32 (-1) or the number of the message it holds, itself included.
+        List<Integer> own = new ArrayList<>();
+        text.append("message M").append(m).append(" {");
+        for (int f = 0, count = 1 + random.nextInt(3); f < count; f++) {
+          int held = random.nextInt(messages + 1) - 1;
+          own.add(held);
+          text.append(held < 0 ? " int32" : " M" + held).append(" f").append(f)
+              .append(" = ").append(f + 1).append(";");
+        }
+        fields.add(own);
+        text.append(" }\n");
+      }
+      Map<List<Integer>, Object> expected = new HashMap<>();
+      inline(fields, 0, new ArrayList<>(), new HashSet<>(Collections.singleton(0)), expected);
+
+      assertThat(ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString()))
+          .getDefaultValues()).as(text.toString()).isEqualTo(expected);
+    }
+  }
+
+  private static void inline(List<List<Integer>> fields, int message, List<Integer> path,
+      Set<Integer> onPath, Map<List<Integer>, Object> out) {
+    List<Integer> own = fields.get(message);
+    for (int f = 0; f < own.size(); f++) {
+      List<Integer> at = new ArrayList<>(path);
+      at.add(f);
+      int held = own.get(f);
+      if (held < 0) {
+        out.put(at, 0);
+      } else if (onPath.add(held)) {
+        inline(fields, held, at, onPath, out);
+        onPath.remove(held);
+      }
+    }
+  }
+
+  @Test
+  void aLongCycleWithItsOnlyDefaultAtTheEndIsSearchedOnce() {
+    // M0 holds M1, …, the last holds M0 again and the only default: one path, found once.
+    StringBuilder ring = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 19999; i++) {
+      ring.append("message M").append(i).append(" { M").append(i + 1).append(" next = 1; }\n");
+    }
+    ring.append("message M19999 { M0 next = 1; int32 x = 2; }\n");
+    ProtobufSchema schema = new ProtobufSchema(ring.toString());
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(schema));
+
+    List<Integer> last = new ArrayList<>(Collections.nCopies(19999, 0));
+    last.add(1);
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(last, 0));
+  }
+
+  @Test
+  void aBranchingCycleIsNotWalkedPathByPath() {
+    // A holds B0, each Bi holds the next twice, the last holds A: 2^30 paths, one cycle, whose
+    // types are each placed once.
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n"
+        + "message Root {\n  A a = 1;\n}\nmessage A {\n  int32 x = 1;\n  B0 b = 2;\n}\n");
+    for (int i = 0; i < 30; i++) {
+      String next = i < 29 ? "B" + (i + 1) : "A";
+      text.append("message B").append(i).append(" { ").append(next).append(" l = 1; ")
+          .append(next).append(" r = 2; }\n");
+    }
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString())));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 0));
+  }
+
+  // A file of n messages, each holding the next after its own fields, ending in M<n> { x }.
+  private static String chain(int n, String fields) {
+    StringBuilder chain = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < n; i++) {
+      chain.append("message M").append(i).append(" { ").append(fields)
+          .append("M").append(i + 1).append(" next = 1; }\n");
+    }
+    return chain.append("message M").append(n).append(" { int32 x = 1; }\n").toString();
   }
 
   // A proto3 file in package p importing leaf.proto, whose messages are in package com.
