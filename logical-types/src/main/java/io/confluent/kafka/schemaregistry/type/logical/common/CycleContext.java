@@ -93,42 +93,68 @@ public class CycleContext<T> {
 
   /**
    * Path-keyed map of field-default values collected during conversion, each named type's placed
-   * at its uses. Defaults stop at a type's first recurrence below itself.
+   * at its uses as inlining it would. A type's defaults stop where it recurs below itself.
    */
   public Map<List<Integer>, Object> getDefaultValues() {
-    final Map<String, Map<List<Integer>, Object>> placed = new HashMap<>();
-    return place(frame, new HashSet<>(), placed);
-  }
-
-  private Map<List<Integer>, Object> place(Frame from, Set<String> open,
-      Map<String, Map<List<Integer>, Object>> placed) {
-    final Map<List<Integer>, Object> out = new HashMap<>(from.defaults);
-    for (Map.Entry<String, List<Integer>> use : from.uses) {
-      for (Map.Entry<List<Integer>, Object> entry
-          : typeDefaults(use.getKey(), open, placed).entrySet()) {
-        final List<Integer> at = new ArrayList<>(use.getValue());
-        at.addAll(entry.getKey());
-        out.put(at, entry.getValue());
+    final Set<String> withDefaults = typesWithDefaults();
+    final Map<List<Integer>, Object> out = new HashMap<>();
+    // A work stack, not recursion: a chain of references can be longer than the call stack is
+    // deep. A type is open between its placement and its exit, so a recurrence is on its path.
+    final Set<String> open = new HashSet<>();
+    final Deque<Placement> work = new ArrayDeque<>();
+    work.push(new Placement(null, frame, Collections.emptyList(), false));
+    while (!work.isEmpty()) {
+      final Placement at = work.pop();
+      if (at.exit) {
+        open.remove(at.name);
+        continue;
+      }
+      if (at.name != null) {
+        if (!open.add(at.name)) {
+          continue;
+        }
+        work.push(new Placement(at.name, null, null, true));
+      }
+      for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
+        out.put(concat(at.path, entry.getKey()), entry.getValue());
+      }
+      for (Map.Entry<String, List<Integer>> use : at.frame.uses) {
+        if (withDefaults.contains(use.getKey())) {
+          work.push(new Placement(use.getKey(), typeFrames.get(use.getKey()),
+              concat(at.path, use.getValue()), false));
+        }
       }
     }
     return out;
   }
 
-  // A named type's defaults, its uses placed; none for a type below itself or never converted.
-  private Map<List<Integer>, Object> typeDefaults(String name, Set<String> open,
-      Map<String, Map<List<Integer>, Object>> placed) {
-    final Map<List<Integer>, Object> done = placed.get(name);
-    if (done != null) {
-      return done;
+  // The named types with a default at or below them; the others are not expanded at their uses.
+  private Set<String> typesWithDefaults() {
+    final Map<String, List<String>> usedBy = new HashMap<>();
+    final Deque<String> pending = new ArrayDeque<>();
+    for (Map.Entry<String, Frame> type : typeFrames.entrySet()) {
+      for (Map.Entry<String, List<Integer>> use : type.getValue().uses) {
+        usedBy.computeIfAbsent(use.getKey(), k -> new ArrayList<>()).add(type.getKey());
+      }
+      if (!type.getValue().defaults.isEmpty()) {
+        pending.push(type.getKey());
+      }
     }
-    final Frame own = typeFrames.get(name);
-    if (own == null || !open.add(name)) {
-      return Collections.emptyMap();
+    final Set<String> found = new HashSet<>();
+    while (!pending.isEmpty()) {
+      final String name = pending.pop();
+      if (found.add(name)) {
+        usedBy.getOrDefault(name, Collections.emptyList()).forEach(pending::push);
+      }
     }
-    final Map<List<Integer>, Object> result = place(own, open, placed);
-    open.remove(name);
-    placed.put(name, result);
-    return result;
+    return found;
+  }
+
+  private static List<Integer> concat(List<Integer> prefix, List<Integer> suffix) {
+    final List<Integer> path = new ArrayList<>(prefix.size() + suffix.size());
+    path.addAll(prefix);
+    path.addAll(suffix);
+    return path;
   }
 
   private List<Integer> relative(List<Integer> path) {
@@ -173,5 +199,20 @@ public class CycleContext<T> {
   private static final class Frame {
     final Map<List<Integer>, Object> defaults = new HashMap<>();
     final List<Map.Entry<String, List<Integer>>> uses = new ArrayList<>();
+  }
+
+  // A frame to place at a path, as the named type it belongs to; or that type's exit.
+  private static final class Placement {
+    final String name;
+    final Frame frame;
+    final List<Integer> path;
+    final boolean exit;
+
+    Placement(String name, Frame frame, List<Integer> path, boolean exit) {
+      this.name = name;
+      this.frame = frame;
+      this.path = path;
+      this.exit = exit;
+    }
   }
 }

@@ -24,12 +24,16 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Verifies that proto3 scalar fields without explicit presence get the
@@ -186,16 +190,59 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   }
 
   @Test
-  void aChainOfPeerMessagesConvertsWithItsLastDefaultAtTheEnd() {
-    // Each message holds the next: references, not nesting, so no depth limit applies.
-    StringBuilder chain = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
-    for (int i = 0; i < 2000; i++) {
-      chain.append("message M").append(i).append(" { M").append(i + 1).append(" p = 1; }\n");
-    }
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
-        new ProtobufSchema(chain.append("message M2000 { int32 x = 1; }\n").toString()));
+  void aChainOfPeerMessagesConvertsWithItsLastDefaultAtTheEnd() throws Exception {
+    // Each message holds the next: references, not nesting, so no depth limit applies, and
+    // placing the defaults takes no stack per link, even on a small one.
+    ProtobufSchema schema = new ProtobufSchema(chain(10000, ""));
+    AtomicReference<Object> result = new AtomicReference<>();
+    Thread small = new Thread(null, () -> {
+      try {
+        result.set(ProtoToLogicalTypeConverter.toLogicalType(schema).getDefaultValues());
+      } catch (RuntimeException e) {
+        result.set(e);
+      }
+    }, "small-stack", 512 * 1024);
+    small.start();
+    small.join();
 
-    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(Collections.nCopies(2001, 0), 0));
+    assertThat(result.get()).isEqualTo(Map.of(Collections.nCopies(10001, 0), 0));
+  }
+
+  @Test
+  void aChainWithADefaultAtEveryLinkHasEachOnceAtItsDepth() {
+    // Placed straight into the result: memory follows its size, not every suffix of the chain.
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(30), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(chain(3000, "int32 v = 2; "))));
+
+    Map<List<Integer>, Object> defaults = lt.getDefaultValues();
+    assertThat(defaults).hasSize(3001);
+    // v is each message's field 0 and next its field 1, so M3000's x is 3,000 nexts down.
+    List<Integer> deepest = new ArrayList<>(Collections.nCopies(3000, 1));
+    deepest.add(0);
+    assertThat(defaults).containsEntry(deepest, 0);
+  }
+
+  @Test
+  void mutuallyRecursiveMessagesUsedApartEachStopOnlyWhereTheyRecur() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Root {\n  A a = 1;\n  B b = 2;\n}\n"
+            + "message A {\n  int32 x = 1;\n  B b = 2;\n}\n"
+            + "message B {\n  int32 y = 1;\n  A a = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), 0),
+        Map.entry(List.of(1, 0), 0), Map.entry(List.of(1, 1, 0), 0));
+  }
+
+  // A file of n messages, each holding the next after its own fields, ending in M<n> { x }.
+  private static String chain(int n, String fields) {
+    StringBuilder chain = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < n; i++) {
+      chain.append("message M").append(i).append(" { ").append(fields)
+          .append("M").append(i + 1).append(" next = 1; }\n");
+    }
+    return chain.append("message M").append(n).append(" { int32 x = 1; }\n").toString();
   }
 
   // A proto3 file in package p importing leaf.proto, whose messages are in package com.
