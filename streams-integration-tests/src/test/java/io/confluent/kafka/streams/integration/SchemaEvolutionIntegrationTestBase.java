@@ -23,9 +23,16 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.streams.integration.avro.SensorKey;
+import io.confluent.kafka.streams.integration.avro.SensorReadingV1;
+import io.confluent.kafka.streams.integration.avro.SensorReadingV2;
+import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
+import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.FileVisitResult;
@@ -34,7 +41,9 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -43,9 +52,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -72,6 +84,139 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
 
   protected SchemaEvolutionIntegrationTestBase() {
     super(1, true);
+  }
+
+  // --- Key schemas ---
+  protected static final Schema KEY_SCHEMA_V1 = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorKey\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"fields\":["
+          + "  {\"name\":\"sensorId\",\"type\":\"string\"}"
+          + "]"
+          + "}");
+
+  protected static final Schema KEY_SCHEMA_V2 = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorKey\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"fields\":["
+          + "  {\"name\":\"sensorId\",\"type\":\"string\"},"
+          + "  {\"name\":\"region\",\"type\":\"string\",\"default\":\"us-east\"}"
+          + "]"
+          + "}");
+
+  // Differs from KEY_SCHEMA_V1 only in `doc`. Avro does not write `doc` to the binary,
+  // so the same logical key serializes to identical bytes under either schema.
+  protected static final Schema KEY_SCHEMA_V1_DOC_CHANGED = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorKey\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"doc\":\"Updated documentation for sensor key\","
+          + "\"fields\":["
+          + "  {\"name\":\"sensorId\",\"type\":\"string\"}"
+          + "]"
+          + "}");
+
+  // --- Value schemas ---
+  protected static final Schema VALUE_SCHEMA_V1 = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorReading\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"fields\":["
+          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
+          + "  {\"name\":\"timestamp\",\"type\":\"long\"}"
+          + "]"
+          + "}");
+
+  protected static final Schema VALUE_SCHEMA_V2 = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorReading\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"fields\":["
+          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
+          + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
+          + "  {\"name\":\"humidity\",\"type\":\"double\",\"default\":0.0}"
+          + "]"
+          + "}");
+
+  // v3: adds `pressure` with default — backward-compatible with v2.
+  protected static final Schema VALUE_SCHEMA_V3 = new Schema.Parser().parse(
+      "{"
+          + "\"type\":\"record\","
+          + "\"name\":\"SensorReading\","
+          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
+          + "\"fields\":["
+          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
+          + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
+          + "  {\"name\":\"humidity\",\"type\":\"double\",\"default\":0.0},"
+          + "  {\"name\":\"pressure\",\"type\":\"double\",\"default\":1013.0}"
+          + "]"
+          + "}");
+
+  protected GenericAvroSerde createKeySerde() {
+    GenericAvroSerde serde = new GenericAvroSerde();
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    serde.configure(config, true);
+    return serde;
+  }
+
+  protected GenericAvroSerde createValueSerde() {
+    GenericAvroSerde serde = new GenericAvroSerde();
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    serde.configure(config, false);
+    return serde;
+  }
+
+  protected KafkaProducer<GenericRecord, GenericRecord> createHeaderProducer() {
+    return new KafkaProducer<>(baseProducerProps());
+  }
+
+  protected SpecificAvroSerde<SensorKey> createSpecificKeySerde() {
+    SpecificAvroSerde<SensorKey> serde = new SpecificAvroSerde<>();
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    serde.configure(config, true);
+    return serde;
+  }
+
+  protected SpecificAvroSerde<SensorReadingV2> createSpecificValueSerde() {
+    SpecificAvroSerde<SensorReadingV2> serde = new SpecificAvroSerde<>();
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    // Pin the reader class. Without this, KafkaAvroDeserializer picks the Java
+    // class by the writer schema's full name, so v1 bytes would deserialize to
+    // SensorReadingV1 regardless of the serde's type parameter.
+    config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+    config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
+        SensorReadingV2.class.getName());
+    serde.configure(config, false);
+    return serde;
+  }
+
+  /** Producer that can only send v1 records. */
+  protected KafkaProducer<SensorKey, SensorReadingV1> createV1Producer() {
+    return new KafkaProducer<>(baseProducerProps());
+  }
+
+  /** Producer that can only send v2 records. */
+  protected KafkaProducer<SensorKey, SensorReadingV2> createV2Producer() {
+    return new KafkaProducer<>(baseProducerProps());
   }
 
   protected void createTopics(String... topics) throws Exception {
@@ -220,6 +365,13 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
         return FileVisitResult.CONTINUE;
       }
     });
+  }
+
+  protected void assertSchemaIdHeaders(Headers headers, String topic, String context) {
+    assertGuidHeaderRegistered(headers, SchemaId.KEY_SCHEMA_ID_HEADER, topic + "-key",
+        context + " key");
+    assertGuidHeaderRegistered(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, topic + "-value",
+        context + " value");
   }
 
   protected void assertGuidHeaderRegistered(Headers headers, String headerName, String subject,
