@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1549,6 +1550,53 @@ class JsonProvenanceDeserializerTest {
       return last;
     });
     assertEquals(100_000, read.get("x").size());
+  }
+
+  @Test
+  void aTypedReaderWithNoReaderSchemaGetsNoOldValue() throws Exception {
+    // The application's class is the reader, as Avro's and Protobuf's generated classes are.
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = JsonSchemaUtils.getSchema(new Typed());
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Typed read = new KafkaJsonSchemaDeserializer<>(client, config("v1"), Typed.class)
+        .deserialize(TOPIC, bytes);
+    assertEquals(7, read.id);
+    assertNull(read.note);
+    // Without provenance the class still reads the old value, as before.
+    assertEquals("ada", new KafkaJsonSchemaDeserializer<>(client, config(null), Typed.class)
+        .deserialize(TOPIC, bytes).note);
+  }
+
+  @Test
+  void aWritersJavaTypeIsAReaderToo() throws Exception {
+    // No configured type: the class the writer's javaType names is the reader.
+    String javaType = "\"javaType\": \"" + Named.class.getName() + "\", ";
+    JsonSchema v1 = new JsonSchema("{" + javaType + "\"type\": \"object\", \"properties\": {"
+        + number("id") + ", " + string("note") + "}}");
+    JsonSchema v2 = new JsonSchema("{" + javaType + "\"type\": \"object\", \"properties\": {"
+        + number("id") + "}}");
+    JsonSchema v3 = new JsonSchema("{" + javaType + "\"type\": \"object\", \"properties\": {"
+        + number("id") + ", \"note\": {\"type\": \"string\", \"description\": \"new\"}}}");
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Object read = new KafkaJsonSchemaDeserializer<>(client, config("v1")).deserialize(TOPIC, bytes);
+    assertNull(((Named) read).note);
+  }
+
+  /** A typed reader: the class an application deserializes into. */
+  public static class Typed {
+    public Integer id;
+    public String note;
+  }
+
+  /** The class a writer's javaType names. */
+  public static class Named {
+    public Double id;
+    public String note;
   }
 
   // --- Helpers -----------------------------------------------------------------------------------
