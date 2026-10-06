@@ -76,7 +76,9 @@ public class CycleContext<T> {
     defaultsBase = path;
     try {
       final R body = conversion.get();
-      typeFrames.putIfAbsent(name, own);
+      // The latest complete conversion's, as the body kept is: one re-entered while its body
+      // converted (a JSON definition through another not yet known) can miss what that held.
+      typeFrames.put(name, own);
       return body;
     } finally {
       frame = outer;
@@ -105,21 +107,27 @@ public class CycleContext<T> {
     // deep. A recursive type is open from its placement to its exit marker, below its uses.
     final Set<String> open = new HashSet<>();
     final Deque<Placement> work = new ArrayDeque<>();
-    work.push(new Placement(null, frame, null, Collections.emptyList()));
+    work.push(new Placement(null, frame, null, Collections.emptyList(), null));
     while (!work.isEmpty()) {
       final Placement at = work.pop();
       if (at.frame == null) {
         open.remove(at.name);
         continue;
       }
+      Step witness = null;
       if (at.name != null && recursive.contains(components.get(at.name))) {
         // Skipped where it recurs, or where every default below it is past a recurrence: so
         // each placement made leads to a default, and the walk is bounded by what it emits.
-        if (open.contains(at.name) || !reaches(at.name, open, components, withDefaults)) {
+        if (open.contains(at.name)) {
+          continue;
+        }
+        witness = at.witness != null ? at.witness : reaches(at.name, open, components,
+            withDefaults);
+        if (witness == null) {
           continue;
         }
         open.add(at.name);
-        work.push(new Placement(at.name, null, null, null));
+        work.push(new Placement(at.name, null, null, null, null));
       }
       for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
         out.put(at.pathTo(entry.getKey()), entry.getValue());
@@ -128,7 +136,10 @@ public class CycleContext<T> {
       for (int i = uses.size() - 1; i >= 0; i--) {
         final String used = uses.get(i).getKey();
         if (withDefaults.contains(used)) {
-          work.push(new Placement(used, typeFrames.get(used), at, uses.get(i).getValue()));
+          // The witness's next step needs no search: none of its rest was open, nor is now.
+          final Step rest = witness != null && witness.next != null
+              && witness.next.name.equals(used) ? witness.next : null;
+          work.push(new Placement(used, typeFrames.get(used), at, uses.get(i).getValue(), rest));
         }
       }
     }
@@ -136,21 +147,22 @@ public class CycleContext<T> {
   }
 
   /**
-   * Whether a default is reachable from {@code start}, a recursive type, without passing a type
-   * open on the path: a default of its cycle, or a use leaving the cycle toward one. Outside the
-   * cycle no open type is reachable, so a type with defaults there always has them.
+   * A path from {@code start}, a recursive type, to a default reachable without passing a type
+   * open on the path: a default of its cycle, or a use leaving the cycle toward one; null when
+   * none is. Outside the cycle no open type is reachable, so a type with defaults there has them.
    */
-  private boolean reaches(String start, Set<String> open, Map<String, Integer> components,
+  private Step reaches(String start, Set<String> open, Map<String, Integer> components,
       Set<String> withDefaults) {
     final Integer cycle = components.get(start);
-    final Set<String> seen = new HashSet<>();
+    final Map<String, String> reachedFrom = new HashMap<>();
     final Deque<String> pending = new ArrayDeque<>();
-    seen.add(start);
+    reachedFrom.put(start, null);
     pending.push(start);
     while (!pending.isEmpty()) {
-      final Frame type = typeFrames.get(pending.pop());
+      final String name = pending.pop();
+      final Frame type = typeFrames.get(name);
       if (!type.defaults.isEmpty()) {
-        return true;
+        return pathFrom(name, reachedFrom);
       }
       for (Map.Entry<String, List<Integer>> use : type.uses) {
         final String used = use.getKey();
@@ -158,14 +170,24 @@ public class CycleContext<T> {
           continue;
         }
         if (!components.get(used).equals(cycle)) {
-          return true;
+          return pathFrom(name, reachedFrom);
         }
-        if (!open.contains(used) && seen.add(used)) {
+        if (!open.contains(used) && !reachedFrom.containsKey(used)) {
+          reachedFrom.put(used, name);
           pending.push(used);
         }
       }
     }
-    return false;
+    return null;
+  }
+
+  // The search's path from its start to {@code end}, start first.
+  private static Step pathFrom(String end, Map<String, String> reachedFrom) {
+    Step path = null;
+    for (String name = end; name != null; name = reachedFrom.get(name)) {
+      path = new Step(name, path);
+    }
+    return path;
   }
 
   // The components holding a cycle: some use stays inside them, a type's use of itself included.
@@ -315,18 +337,20 @@ public class CycleContext<T> {
   }
 
   // A frame placed below its parent placement, at its use's path from there; with no frame, the
-  // exit of a recursive type's placement.
+  // exit of a recursive type's placement. A witness, when known, is a path from it to a default.
   private static final class Placement {
     final String name;
     final Frame frame;
     final Placement parent;
     final List<Integer> step;
+    final Step witness;
 
-    Placement(String name, Frame frame, Placement parent, List<Integer> step) {
+    Placement(String name, Frame frame, Placement parent, List<Integer> step, Step witness) {
       this.name = name;
       this.frame = frame;
       this.parent = parent;
       this.step = step;
+      this.witness = witness;
     }
 
     // The full path of a default recorded here: built only when one is, not at every use.
@@ -347,6 +371,17 @@ public class CycleContext<T> {
         }
       }
       return new ArrayList<>(Arrays.asList(path));
+    }
+  }
+
+  // A path of named types, as a list sharing its tails.
+  private static final class Step {
+    final String name;
+    final Step next;
+
+    Step(String name, Step next) {
+      this.name = name;
+      this.next = next;
     }
   }
 

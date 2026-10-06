@@ -149,4 +149,18 @@ class JsonReaderDefaultsTest {
     assertThat(lt.getDefaultValues()).containsOnly(
         Map.entry(List.of(0, 0), 5L), Map.entry(List.of(1), 1L));
   }
+
+  @Test
+  void aDefinitionReenteredWhileItConvertsKeepsItsCompleteDefaults() {
+    // D's f refers to E, whose union holds D again: D converts inside E before E is known, then
+    // again in full; its default is the full conversion's.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+            + "\"properties\":{\"d\":{\"$ref\":\"#/$defs/D\"}},"
+            + "\"$defs\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"f\":{\"$ref\":\"#/$defs/E\",\"default\":7}}},"
+            + "\"E\":{\"oneOf\":[{\"type\":\"integer\"},{\"$ref\":\"#/$defs/D\"}]}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 7L));
+  }
 }

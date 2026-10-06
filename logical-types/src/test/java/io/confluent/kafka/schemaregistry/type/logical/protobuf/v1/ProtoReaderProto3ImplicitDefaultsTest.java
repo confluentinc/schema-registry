@@ -297,6 +297,23 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   }
 
   @Test
+  void aLongCycleWithItsOnlyDefaultAtTheEndIsSearchedOnce() {
+    // M0 holds M1, …, the last holds M0 again and the only default: one path, found once.
+    StringBuilder ring = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 19999; i++) {
+      ring.append("message M").append(i).append(" { M").append(i + 1).append(" next = 1; }\n");
+    }
+    ring.append("message M19999 { M0 next = 1; int32 x = 2; }\n");
+    ProtobufSchema schema = new ProtobufSchema(ring.toString());
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(schema));
+
+    List<Integer> last = new ArrayList<>(Collections.nCopies(19999, 0));
+    last.add(1);
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(last, 0));
+  }
+
+  @Test
   void aBranchingCycleIsNotWalkedPathByPath() {
     // A holds B0, each Bi holds the next twice, the last holds A: 2^30 paths, one cycle, whose
     // types are each placed once.
