@@ -21,10 +21,12 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Verifies that JSON Schema's {@code default} keyword on object properties is
@@ -162,5 +164,23 @@ class JsonReaderDefaultsTest {
             + "\"E\":{\"oneOf\":[{\"type\":\"integer\"},{\"$ref\":\"#/$defs/D\"}]}}}"));
 
     assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 7L));
+  }
+
+  @Test
+  void aConversionPlacesNoDefaultsUntilTheyAreRead() {
+    // Each definition holds the next twice: 2^30 paths to the last one's default.
+    StringBuilder defs = new StringBuilder();
+    for (int i = 0; i < 30; i++) {
+      defs.append("\"D").append(i).append("\":{\"type\":\"object\",\"properties\":{")
+          .append("\"a\":{\"$ref\":\"#/definitions/D").append(i + 1).append("\"},")
+          .append("\"b\":{\"$ref\":\"#/definitions/D").append(i + 1).append("\"}}},");
+    }
+    defs.append("\"D30\":{\"type\":\"object\",\"properties\":{")
+        .append("\"x\":{\"type\":\"integer\",\"default\":1}}}");
+    JsonSchema schema = new JsonSchema("{\"type\":\"object\",\"properties\":{"
+        + "\"p\":{\"$ref\":\"#/definitions/D0\"}},\"definitions\":{" + defs + "}}");
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
+        JsonToLogicalTypeConverter.toLogicalType(schema));
+    assertThat(lt.getNamedTypes()).isNotEmpty();
   }
 }
