@@ -89,6 +89,18 @@ class AvroReaderDefaultsTest {
   }
 
   @Test
+  void aRecordInTheRootsCycleHasItsDefaultsBeforeTheRootRecurs() {
+    // A holds B, B holds A again: B is reached once before A repeats, so its default is placed.
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"A\",\"fields\":["
+            + "{\"name\":\"b\",\"type\":{\"type\":\"record\",\"name\":\"B\",\"fields\":["
+            + "{\"name\":\"y\",\"type\":\"int\",\"default\":7},"
+            + "{\"name\":\"a\",\"type\":[\"null\",\"A\"],\"default\":null}]}}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 7));
+  }
+
+  @Test
   void aRecursiveRecordsDefaultsStopAtItsFirstRecurrence() {
     LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
         "{\"type\":\"record\",\"name\":\"Row\",\"fields\":["

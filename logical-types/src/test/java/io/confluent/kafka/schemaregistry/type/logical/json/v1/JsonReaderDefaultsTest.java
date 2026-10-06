@@ -86,4 +86,81 @@ class JsonReaderDefaultsTest {
     LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(json));
     assertThat(lt.getDefaultValues()).isEmpty();
   }
+
+  @Test
+  void aDefinitionsDefaultsSitUnderThePropertyUsingIt() {
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/definitions/D\"},"
+            + "\"n\":{\"type\":\"integer\",\"default\":1}},"
+            + "\"definitions\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"x\":{\"type\":\"integer\",\"default\":5}}}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 5L), Map.entry(List.of(1), 1L));
+  }
+
+  @Test
+  void aDefinitionUsedTwiceHasItsDefaultsUnderEachUse() {
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/definitions/D\"},"
+            + "\"b\":{\"$ref\":\"#/definitions/D\"}},"
+            + "\"definitions\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"s\":{\"type\":\"string\",\"default\":\"z\"},"
+            + "\"x\":{\"type\":\"integer\",\"default\":5}}}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), "z"), Map.entry(List.of(0, 1), 5L),
+        Map.entry(List.of(1, 0), "z"), Map.entry(List.of(1, 1), 5L));
+  }
+
+  @Test
+  void aChainOfReferencesPutsTheDefaultAtItsEnd() {
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\":\"object\",\"properties\":{\"p\":{\"$ref\":\"#/definitions/D\"}},"
+            + "\"definitions\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"q\":{\"$ref\":\"#/definitions/E\"}}},"
+            + "\"E\":{\"type\":\"object\",\"properties\":{"
+            + "\"y\":{\"type\":\"boolean\",\"default\":true}}}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0, 0), true));
+  }
+
+  @Test
+  void aRecursiveDefinitionsDefaultsStopWhereItRecurs() {
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\":\"object\",\"properties\":{\"p\":{\"$ref\":\"#/definitions/D\"}},"
+            + "\"definitions\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"d\":{\"$ref\":\"#/definitions/D\"},"
+            + "\"x\":{\"type\":\"integer\",\"default\":5}}}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 1), 5L));
+  }
+
+  @Test
+  void aModernDefsDefinitionsDefaultsSitUnderThePropertyUsingIt() {
+    // 2020-12 keeps $defs, so they convert up front rather than at their first $ref.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+            + "\"properties\":{\"a\":{\"$ref\":\"#/$defs/D\"},"
+            + "\"n\":{\"type\":\"integer\",\"default\":1}},"
+            + "\"$defs\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"x\":{\"type\":\"integer\",\"default\":5}}}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 5L), Map.entry(List.of(1), 1L));
+  }
+
+  @Test
+  void aDefinitionReenteredWhileItConvertsKeepsItsCompleteDefaults() {
+    // D's f refers to E, whose union holds D again: D converts inside E before E is known, then
+    // again in full; its default is the full conversion's.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+            + "\"properties\":{\"d\":{\"$ref\":\"#/$defs/D\"}},"
+            + "\"$defs\":{\"D\":{\"type\":\"object\",\"properties\":{"
+            + "\"f\":{\"$ref\":\"#/$defs/E\",\"default\":7}}},"
+            + "\"E\":{\"oneOf\":[{\"type\":\"integer\"},{\"$ref\":\"#/$defs/D\"}]}}}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 7L));
+  }
 }
