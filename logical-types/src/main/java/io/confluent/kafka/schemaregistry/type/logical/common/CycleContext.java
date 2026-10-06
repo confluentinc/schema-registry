@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.common;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -93,48 +94,105 @@ public class CycleContext<T> {
 
   /**
    * Path-keyed map of field-default values collected during conversion, each named type's placed
-   * at its uses as inlining it would. A type's defaults stop where it recurs below itself.
+   * at its uses as inlining it would. Below a recursive type, nothing of its own cycle is placed.
    */
   public Map<List<Integer>, Object> getDefaultValues() {
-    final Set<String> withDefaults = typesWithDefaults();
+    final Map<String, Integer> components = components();
+    final Set<String> withDefaults = typesWithDefaults(components);
     final Map<List<Integer>, Object> out = new HashMap<>();
     // A work stack, not recursion: a chain of references can be longer than the call stack is
-    // deep. A type is open between its placement and its exit, so a recurrence is on its path.
-    final Set<String> open = new HashSet<>();
+    // deep. Uses between cycles form no cycle, so every placement here leads to a default.
     final Deque<Placement> work = new ArrayDeque<>();
-    work.push(new Placement(null, frame, Collections.emptyList(), false));
+    work.push(new Placement(null, frame, null, Collections.emptyList()));
     while (!work.isEmpty()) {
       final Placement at = work.pop();
-      if (at.exit) {
-        open.remove(at.name);
-        continue;
-      }
-      if (at.name != null) {
-        if (!open.add(at.name)) {
-          continue;
-        }
-        work.push(new Placement(at.name, null, null, true));
-      }
       for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
-        out.put(concat(at.path, entry.getKey()), entry.getValue());
+        out.put(at.pathTo(entry.getKey()), entry.getValue());
       }
       for (Map.Entry<String, List<Integer>> use : at.frame.uses) {
-        if (withDefaults.contains(use.getKey())) {
-          work.push(new Placement(use.getKey(), typeFrames.get(use.getKey()),
-              concat(at.path, use.getValue()), false));
+        final String used = use.getKey();
+        if (withDefaults.contains(used) && !sameCycle(components, at.name, used)) {
+          work.push(new Placement(used, typeFrames.get(used), at, use.getValue()));
         }
       }
     }
     return out;
   }
 
-  // The named types with a default at or below them; the others are not expanded at their uses.
-  private Set<String> typesWithDefaults() {
+  // Whether a use stays inside a recursive type's cycle (a self-use included).
+  private static boolean sameCycle(Map<String, Integer> components, String from, String to) {
+    return from != null && components.get(from).equals(components.get(to));
+  }
+
+  /**
+   * Each named type's strongly connected component of the use graph, by Tarjan's algorithm with
+   * a work stack: types in one component reach each other, so they share a cycle.
+   */
+  private Map<String, Integer> components() {
+    final Map<String, Integer> index = new HashMap<>();
+    final Map<String, Integer> low = new HashMap<>();
+    final Map<String, Integer> component = new HashMap<>();
+    final Deque<String> stack = new ArrayDeque<>();
+    final Set<String> onStack = new HashSet<>();
+    for (String start : typeFrames.keySet()) {
+      if (index.containsKey(start)) {
+        continue;
+      }
+      final Deque<Visit> visits = new ArrayDeque<>();
+      visits.push(enter(start, index, low, stack, onStack));
+      while (!visits.isEmpty()) {
+        final Visit visit = visits.peek();
+        final List<Map.Entry<String, List<Integer>>> uses = typeFrames.get(visit.name).uses;
+        if (visit.next < uses.size()) {
+          final String used = uses.get(visit.next++).getKey();
+          if (!typeFrames.containsKey(used)) {
+            continue;
+          }
+          if (!index.containsKey(used)) {
+            visits.push(enter(used, index, low, stack, onStack));
+          } else if (onStack.contains(used)) {
+            low.put(visit.name, Math.min(low.get(visit.name), index.get(used)));
+          }
+          continue;
+        }
+        visits.pop();
+        if (!visits.isEmpty()) {
+          final String parent = visits.peek().name;
+          low.put(parent, Math.min(low.get(parent), low.get(visit.name)));
+        }
+        if (low.get(visit.name).equals(index.get(visit.name))) {
+          final int id = component.size();
+          String member;
+          do {
+            member = stack.pop();
+            onStack.remove(member);
+            component.put(member, id);
+          } while (!member.equals(visit.name));
+        }
+      }
+    }
+    return component;
+  }
+
+  private static Visit enter(String name, Map<String, Integer> index, Map<String, Integer> low,
+      Deque<String> stack, Set<String> onStack) {
+    index.put(name, index.size());
+    low.put(name, index.get(name));
+    stack.push(name);
+    onStack.add(name);
+    return new Visit(name);
+  }
+
+  // The named types with a default at or below them, through uses that leave their cycle.
+  private Set<String> typesWithDefaults(Map<String, Integer> components) {
     final Map<String, List<String>> usedBy = new HashMap<>();
     final Deque<String> pending = new ArrayDeque<>();
     for (Map.Entry<String, Frame> type : typeFrames.entrySet()) {
       for (Map.Entry<String, List<Integer>> use : type.getValue().uses) {
-        usedBy.computeIfAbsent(use.getKey(), k -> new ArrayList<>()).add(type.getKey());
+        if (typeFrames.containsKey(use.getKey())
+            && !sameCycle(components, type.getKey(), use.getKey())) {
+          usedBy.computeIfAbsent(use.getKey(), k -> new ArrayList<>()).add(type.getKey());
+        }
       }
       if (!type.getValue().defaults.isEmpty()) {
         pending.push(type.getKey());
@@ -148,13 +206,6 @@ public class CycleContext<T> {
       }
     }
     return found;
-  }
-
-  private static List<Integer> concat(List<Integer> prefix, List<Integer> suffix) {
-    final List<Integer> path = new ArrayList<>(prefix.size() + suffix.size());
-    path.addAll(prefix);
-    path.addAll(suffix);
-    return path;
   }
 
   private List<Integer> relative(List<Integer> path) {
@@ -201,18 +252,48 @@ public class CycleContext<T> {
     final List<Map.Entry<String, List<Integer>>> uses = new ArrayList<>();
   }
 
-  // A frame to place at a path, as the named type it belongs to; or that type's exit.
+  // A frame placed below its parent placement, at its use's path from there.
   private static final class Placement {
     final String name;
     final Frame frame;
-    final List<Integer> path;
-    final boolean exit;
+    final Placement parent;
+    final List<Integer> step;
 
-    Placement(String name, Frame frame, List<Integer> path, boolean exit) {
+    Placement(String name, Frame frame, Placement parent, List<Integer> step) {
       this.name = name;
       this.frame = frame;
-      this.path = path;
-      this.exit = exit;
+      this.parent = parent;
+      this.step = step;
+    }
+
+    // The full path of a default recorded here: built only when one is, not at every use.
+    List<Integer> pathTo(List<Integer> suffix) {
+      int size = suffix.size();
+      for (Placement p = this; p != null; p = p.parent) {
+        size += p.step.size();
+      }
+      // Filled from the end: the suffix, then each placement's step up to the root.
+      final Integer[] path = new Integer[size];
+      int at = size;
+      for (int i = suffix.size() - 1; i >= 0; i--) {
+        path[--at] = suffix.get(i);
+      }
+      for (Placement p = this; p != null; p = p.parent) {
+        for (int i = p.step.size() - 1; i >= 0; i--) {
+          path[--at] = p.step.get(i);
+        }
+      }
+      return new ArrayList<>(Arrays.asList(path));
+    }
+  }
+
+  // A type being visited by components(), and the next of its uses to follow.
+  private static final class Visit {
+    final String name;
+    int next;
+
+    Visit(String name) {
+      this.name = name;
     }
   }
 }

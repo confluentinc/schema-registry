@@ -223,16 +223,33 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   }
 
   @Test
-  void mutuallyRecursiveMessagesUsedApartEachStopOnlyWhereTheyRecur() {
+  void mutuallyRecursiveMessagesEachKeepTheirOwnDefaultsWhereverUsed() {
+    // Below a recursive type nothing of its own cycle is placed, but each use of A or B has its
+    // own defaults, whichever is reached first.
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
-            + "message Root {\n  A a = 1;\n  B b = 2;\n}\n"
+            + "message Root {\n  A a = 1;\n  B b = 2;\n  int32 n = 3;\n}\n"
             + "message A {\n  int32 x = 1;\n  B b = 2;\n}\n"
             + "message B {\n  int32 y = 1;\n  A a = 2;\n}\n"));
 
     assertThat(lt.getDefaultValues()).containsOnly(
-        Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), 0),
-        Map.entry(List.of(1, 0), 0), Map.entry(List.of(1, 1, 0), 0));
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(1, 0), 0), Map.entry(List.of(2), 0));
+  }
+
+  @Test
+  void aBranchingCycleIsNotWalkedPathByPath() {
+    // A holds B0, each Bi holds the next twice, the last holds A: 2^30 paths, one cycle.
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n"
+        + "message Root {\n  A a = 1;\n}\nmessage A {\n  int32 x = 1;\n  B0 b = 2;\n}\n");
+    for (int i = 0; i < 30; i++) {
+      String next = i < 29 ? "B" + (i + 1) : "A";
+      text.append("message B").append(i).append(" { ").append(next).append(" l = 1; ")
+          .append(next).append(" r = 2; }\n");
+    }
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString())));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 0));
   }
 
   // A file of n messages, each holding the next after its own fields, ending in M<n> { x }.
