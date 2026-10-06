@@ -67,6 +67,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -1183,8 +1184,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       ValueTimestampHeaders<SensorReadingV2> r2 = store.get(new SensorKey("sensor-2"));
       assertNotNull(r2);
       assertSpecificSchemaIdHeaders(r2.headers(), inputTopic, appId, "sensor-2");
-      assertTrue(SensorReadingV2.getClassSchema().getField("humidity") != null,
-          "reader class must be SensorReadingV2 (carries humidity)");
+      assertEquals(SensorReadingV2.class, r2.value().getClass(),
+          "the reader should return the v2 class");
       assertEquals(22.0, r2.value().getTemperature());
       assertEquals(0.0, r2.value().getHumidity());
     } finally {
@@ -1228,6 +1229,14 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
     KafkaStreams streams = startSpecificTableApp(appId, inputTopic, stateDir);
     try {
       waitForStoreToContainKeys(streams, SPECIFIC_STORE_NAME, 2);
+      ReadOnlyKeyValueStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
+          streams.store(StoreQueryParameters.fromNameAndType(
+              SPECIFIC_STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
+      // The v1 bytes are read through the v2 class, so the new field takes its default.
+      assertEquals(35.5, store.get(key1).value().getTemperature());
+      assertEquals(0.0, store.get(key1).value().getHumidity());
+      assertEquals(22.0, store.get(key2).value().getTemperature());
+      assertEquals(0.0, store.get(key2).value().getHumidity());
     } finally {
       streams.close(Duration.ofSeconds(10));
     }
@@ -1247,9 +1256,12 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       v2Producer.flush();
     }
 
-    streams = startSpecificTableApp(appId, inputTopic, stateDir);
+    CountingRestoreListener restoredAfterStep1 = new CountingRestoreListener();
+    streams = startSpecificTableApp(appId, inputTopic, stateDir, restoredAfterStep1);
     try {
       waitForStoreToContainKeys(streams, SPECIFIC_STORE_NAME, 3);
+      assertEquals(2, restoredAfterStep1.restoredRecords(),
+          "sensor-1 and sensor-2 should be restored from the changelog");
 
       ReadOnlyKeyValueStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
           streams.store(StoreQueryParameters.fromNameAndType(
@@ -1297,9 +1309,12 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       v1Producer.flush();
     }
 
-    streams = startSpecificTableApp(appId, inputTopic, stateDir);
+    CountingRestoreListener restoredAfterStep3 = new CountingRestoreListener();
+    streams = startSpecificTableApp(appId, inputTopic, stateDir, restoredAfterStep3);
     try {
       waitForStoreToContainKeys(streams, SPECIFIC_STORE_NAME, 4);
+      assertEquals(4, restoredAfterStep3.restoredRecords(),
+          "the 4 changelog records written so far should be restored");
 
       ReadOnlyKeyValueStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
           streams.store(StoreQueryParameters.fromNameAndType(
@@ -1418,6 +1433,11 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
    */
   private KafkaStreams startSpecificTableApp(String appId, String inputTopic, Path stateDir)
       throws Exception {
+    return startSpecificTableApp(appId, inputTopic, stateDir, null);
+  }
+
+  private KafkaStreams startSpecificTableApp(String appId, String inputTopic, Path stateDir,
+      StateRestoreListener restoreListener) throws Exception {
     StreamsBuilder builder = new StreamsBuilder();
     builder.table(
         inputTopic,
@@ -1426,7 +1446,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
                 Stores.persistentTimestampedKeyValueStoreWithHeaders(SPECIFIC_STORE_NAME))
             .withKeySerde(createSpecificKeySerde())
             .withValueSerde(createSpecificValueSerde()));
-    return startStreams(builder, appId, stateDir);
+    return startStreams(builder, appId, stateDir, restoreListener);
   }
 
   private SpecificAvroSerde<SensorKey> createSpecificKeySerde() {
