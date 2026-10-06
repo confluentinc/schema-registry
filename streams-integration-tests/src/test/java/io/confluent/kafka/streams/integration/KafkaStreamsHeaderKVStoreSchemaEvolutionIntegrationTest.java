@@ -28,14 +28,11 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.integration.avro.SensorKey;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV1;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV2;
-import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
-import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -85,79 +82,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
 
   private static final String STORE_NAME = "schema-evolution-store";
   private static final String SPECIFIC_STORE_NAME = "specific-record-evolution-store";
-
-  // --- Key schemas ---
-  private static final Schema KEY_SCHEMA_V1 = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorKey\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"sensorId\",\"type\":\"string\"}"
-          + "]"
-          + "}");
-
-  private static final Schema KEY_SCHEMA_V2 = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorKey\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"sensorId\",\"type\":\"string\"},"
-          + "  {\"name\":\"region\",\"type\":\"string\",\"default\":\"us-east\"}"
-          + "]"
-          + "}");
-
-  // Differs from KEY_SCHEMA_V1 only in `doc`. Avro does not write `doc` to the binary,
-  // so the same logical key serializes to identical bytes under either schema.
-  private static final Schema KEY_SCHEMA_V1_DOC_CHANGED = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorKey\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"doc\":\"Updated documentation for sensor key\","
-          + "\"fields\":["
-          + "  {\"name\":\"sensorId\",\"type\":\"string\"}"
-          + "]"
-          + "}");
-
-  // --- Value schemas ---
-  private static final Schema VALUE_SCHEMA_V1 = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorReading\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
-          + "  {\"name\":\"timestamp\",\"type\":\"long\"}"
-          + "]"
-          + "}");
-
-  private static final Schema VALUE_SCHEMA_V2 = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorReading\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
-          + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
-          + "  {\"name\":\"humidity\",\"type\":\"double\",\"default\":0.0}"
-          + "]"
-          + "}");
-
-  // v3: adds `pressure` with default — backward-compatible with v2.
-  private static final Schema VALUE_SCHEMA_V3 = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorReading\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
-          + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
-          + "  {\"name\":\"humidity\",\"type\":\"double\",\"default\":0.0},"
-          + "  {\"name\":\"pressure\",\"type\":\"double\",\"default\":1013.0}"
-          + "]"
-          + "}");
 
   // v4: removes `humidity` from v3.
   private static final Schema VALUE_SCHEMA_V4_NO_HUMIDITY = new Schema.Parser().parse(
@@ -1372,30 +1296,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
     return startStreams(builder, appId);
   }
 
-  private GenericAvroSerde createKeySerde() {
-    GenericAvroSerde serde = new GenericAvroSerde();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    serde.configure(config, true);
-    return serde;
-  }
-
-  private GenericAvroSerde createValueSerde() {
-    GenericAvroSerde serde = new GenericAvroSerde();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    serde.configure(config, false);
-    return serde;
-  }
-
-  private KafkaProducer<GenericRecord, GenericRecord> createHeaderProducer() {
-    return new KafkaProducer<>(baseProducerProps());
-  }
-
   private List<ConsumerRecord<byte[], byte[]>> consumeRawChangelog(
       String topic, String group, int count) {
     Properties p = new Properties();
@@ -1416,13 +1316,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       }
     }
     return results;
-  }
-
-  private void assertSchemaIdHeaders(Headers headers, String topic, String context) {
-    assertGuidHeaderRegistered(headers, SchemaId.KEY_SCHEMA_ID_HEADER, topic + "-key",
-        context + " key");
-    assertGuidHeaderRegistered(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, topic + "-value",
-        context + " value");
   }
 
   /**
@@ -1447,42 +1340,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
             .withKeySerde(createSpecificKeySerde())
             .withValueSerde(createSpecificValueSerde()));
     return startStreams(builder, appId, stateDir, restoreListener);
-  }
-
-  private SpecificAvroSerde<SensorKey> createSpecificKeySerde() {
-    SpecificAvroSerde<SensorKey> serde = new SpecificAvroSerde<>();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    serde.configure(config, true);
-    return serde;
-  }
-
-  private SpecificAvroSerde<SensorReadingV2> createSpecificValueSerde() {
-    SpecificAvroSerde<SensorReadingV2> serde = new SpecificAvroSerde<>();
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
-        HeaderSchemaIdSerializer.class.getName());
-    // Pin the reader class. Without this, KafkaAvroDeserializer picks the Java
-    // class by the writer schema's full name, so v1 bytes would deserialize to
-    // SensorReadingV1 regardless of the serde's type parameter.
-    config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-    config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
-        SensorReadingV2.class.getName());
-    serde.configure(config, false);
-    return serde;
-  }
-
-  /** Producer that can only send v1 records. */
-  private KafkaProducer<SensorKey, SensorReadingV1> createV1Producer() {
-    return new KafkaProducer<>(baseProducerProps());
-  }
-
-  /** Producer that can only send v2 records. */
-  private KafkaProducer<SensorKey, SensorReadingV2> createV2Producer() {
-    return new KafkaProducer<>(baseProducerProps());
   }
 
   // The app re-serializes values as SensorReadingV2, so the value GUID is registered under the
