@@ -185,6 +185,19 @@ class ProtoReaderProto3ImplicitDefaultsTest {
         Map.entry(List.of(1, 0), ""), Map.entry(List.of(1, 1), ""));
   }
 
+  @Test
+  void aChainOfPeerMessagesConvertsWithItsLastDefaultAtTheEnd() {
+    // Each message holds the next: references, not nesting, so no depth limit applies.
+    StringBuilder chain = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 2000; i++) {
+      chain.append("message M").append(i).append(" { M").append(i + 1).append(" p = 1; }\n");
+    }
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(chain.append("message M2000 { int32 x = 1; }\n").toString()));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(Collections.nCopies(2001, 0), 0));
+  }
+
   // A proto3 file in package p importing leaf.proto, whose messages are in package com.
   private static ProtobufSchema withLeaf(String messages, String leafMessages) {
     Map<String, String> resolved = new LinkedHashMap<>();
