@@ -324,6 +324,8 @@ public class AvroToLogicalTypeConverter {
     if (avroSchema.getType() == org.apache.avro.Schema.Type.RECORD
         && !isAnonymous(avroSchema)
         && ctx.hasNamedType(avroSchema.getFullName())) {
+      // A later use places the record's defaults as inlining it would; a recursive one adds none.
+      ctx.putTypeDefaults(avroSchema.getFullName(), indexPath);
       return Schema.createNamedTypeRef(avroSchema.getFullName())
           .setNullable(isNullable);
     }
@@ -526,9 +528,10 @@ public class AvroToLogicalTypeConverter {
           String name = avroSchema.getFullName();
           if (!ctx.hasNamedType(name)) {
             ctx.putNamedType(name, Schema.createStruct(new ArrayList<>()));
-            ctx.putNamedType(name,
-                convertRecord(avroSchema, ctx, indexPath));
+            ctx.putNamedType(name, ctx.convertNamedType(name, indexPath,
+                () -> convertRecord(avroSchema, ctx, indexPath)));
           }
+          ctx.putTypeDefaults(name, indexPath);
           return Schema.createNamedTypeRef(name).setNullable(isNullable);
         }
         final List<Field> fields = new ArrayList<>();

@@ -260,19 +260,18 @@ public class ProtoToLogicalTypeConverter {
       return multiMessageLogicalType(schema, file, messageTypes, ctx);
     }
     // Build the root body and replace the placeholder.
-    Schema rootBody = toLogicalTypeNested(
-        false, rootMessage, ctx, Collections.emptyList());
+    Schema rootBody = namedMessageBody(rootMessage, ctx, Collections.emptyList());
     ctx.putNamedType(rootFqn, rootBody);
-    // Build peer bodies (replacing placeholders). Iterate every top-level
-    // message and skip whichever one is the root (which may or may not be at
-    // file index 0, depending on which descriptor the caller passed).
+    ctx.putTypeDefaults(rootFqn, Collections.emptyList());
+    // Build peer bodies (replacing placeholders) not already built at a use. Iterate every
+    // top-level message and skip whichever one is the root (which may or may not be at file index
+    // 0, depending on which descriptor the caller passed).
     for (Descriptor peer : messageTypes) {
-      if (peer == rootMessage) {
+      if (peer == rootMessage || ctx.isNamedTypeConverted(peer.getFullName())) {
         continue;
       }
       ctx.putNamedType(peer.getFullName(),
-          toLogicalTypeNested(false, peer, ctx,
-              Collections.singletonList(peer.getIndex())));
+          namedMessageBody(peer, ctx, Collections.emptyList()));
     }
     for (com.google.protobuf.Descriptors.EnumDescriptor enm : file.getEnumTypes()) {
       ctx.putNamedType(enm.getFullName(), convertEnumDescriptor(enm));
@@ -356,8 +355,11 @@ public class ProtoToLogicalTypeConverter {
       final FileDescriptor file, final List<Descriptor> messageTypes,
       final ToLogicalContext<String> ctx) {
     for (Descriptor message : messageTypes) {
-      ctx.putNamedType(message.getFullName(), toLogicalTypeNested(false, message, ctx,
-          Collections.singletonList(message.getIndex())));
+      final List<Integer> path = Collections.singletonList(message.getIndex());
+      if (!ctx.isNamedTypeConverted(message.getFullName())) {
+        ctx.putNamedType(message.getFullName(), namedMessageBody(message, ctx, path));
+      }
+      ctx.putTypeDefaults(message.getFullName(), path);
     }
     for (com.google.protobuf.Descriptors.EnumDescriptor enm : file.getEnumTypes()) {
       ctx.putNamedType(enm.getFullName(), convertEnumDescriptor(enm));
@@ -575,12 +577,11 @@ public class ProtoToLogicalTypeConverter {
       // Build the body for any nested type that was pre-registered (either
       // user-marked or auto-promoted because it's cyclic). Mirror the
       // pre-registration condition in preRegisterNestedTypes.
-      if (isUserDeclaredNamedType(nested) || isCyclicMessage(nested)) {
-        // Empty index path: nested types' default-value paths aren't tracked
-        // at this layer (they come up only inside the parent's field walk).
-        Schema body = toLogicalTypeNested(
-            false, nested, ctx, Collections.emptyList());
-        ctx.putNamedType(nested.getFullName(), body);
+      if ((isUserDeclaredNamedType(nested) || isCyclicMessage(nested))
+          && !ctx.isNamedTypeConverted(nested.getFullName())) {
+        // Not used where it's declared: each use places its defaults.
+        ctx.putNamedType(nested.getFullName(),
+            namedMessageBody(nested, ctx, Collections.emptyList()));
       }
       buildNestedBodies(nested, ctx);
     }
@@ -635,6 +636,17 @@ public class ProtoToLogicalTypeConverter {
       final Descriptor schema,
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
+    return toLogicalTypeNested(isNullable, schema, ctx, indexPath, false);
+  }
+
+  // asMapEntry: walked as a map's entry, whose key and value Flink reads as types, not columns, so
+  // they record no implicit defaults. The same message used anywhere else is a struct.
+  private static Schema toLogicalTypeNested(
+      final boolean isNullable,
+      final Descriptor schema,
+      final ToLogicalContext<String> ctx,
+      final List<Integer> indexPath,
+      final boolean asMapEntry) {
     if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
       throw new ValidationException(
           "Schema type nesting depth exceeds the maximum of "
@@ -656,7 +668,8 @@ public class ProtoToLogicalTypeConverter {
       if (fieldDescriptor.getRealContainingOneof() != null) {
         continue;
       }
-      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers));
+      fields.add(toField(
+          ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers, asMapEntry));
     }
     for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
@@ -673,6 +686,14 @@ public class ProtoToLogicalTypeConverter {
       readMeta(meta, structSchema);
     }
     return structSchema;
+  }
+
+  // A message's body as a named type, shared by reference: its defaults stay relative to it, for
+  // each use to place (ToLogicalContext#putTypeDefaults).
+  private static Schema namedMessageBody(
+      final Descriptor message, final ToLogicalContext<String> ctx, final List<Integer> path) {
+    return ctx.convertNamedType(message.getFullName(), path,
+        () -> toLogicalTypeNested(false, message, ctx, path));
   }
 
   private static List<Integer> appendToList(final List<Integer> list, final int value) {
@@ -737,6 +758,13 @@ public class ProtoToLogicalTypeConverter {
       // Force nullable since only one branch can be set
       fieldSchema = fieldSchema.setNullable(true);
       ctx.popFieldPath();
+      // A member has presence, so no implicit default; a proto2 one it declares is recorded, as
+      // for a regular field.
+      if (fieldDescriptor.hasDefaultValue()
+          && !getMeta(fieldDescriptor).flatMap(getParam(CommonConstants.LOGICAL_DEFAULT_PROP))
+              .isPresent()) {
+        ctx.putDefaultValue(appendToList(indexPath, i), fieldDescriptor.getDefaultValue());
+      }
       Map<String, Object> branchParams = getBranchParams(fieldDescriptor);
       if (recordNumbers) {
         // A oneof member is a Protobuf field; record its number the same way as a regular field so
@@ -756,7 +784,8 @@ public class ProtoToLogicalTypeConverter {
       final ToLogicalContext<String> ctx,
       final FieldDescriptor field,
       final List<Integer> indexPath,
-      final boolean recordNumber) {
+      final boolean recordNumber,
+      final boolean inMapEntry) {
     final String description = getDescription(field);
     ctx.pushFieldPath(field.getName());
     Schema fieldSchema = fieldToLogicalType(field, ctx, indexPath);
@@ -787,18 +816,18 @@ public class ProtoToLogicalTypeConverter {
       // LT-specific and intentionally not mirrored — Flink's converter
       // doesn't read it.
       ctx.putDefaultValue(indexPath, defaultValue);
-    } else if (!hasDefault && !isInsideMapEntry(field)) {
+    } else if (!hasDefault && !inMapEntry) {
       // proto3 implicit scalar default: 0 / 0L / 0.0f / 0.0 / false / "" /
       // empty bytes / first-declared enum value. Recorded in the path-keyed
       // map ONLY (not on the Field's defaultValue) — the implicit default is
       // a wire-level proto-spec rule, not an explicit user declaration, so
       // DDL roundtrip stays clean.
       //
-      // The {@code isInsideMapEntry} guard is LT-specific: our walker recurses
-      // into synthetic MapEntry structs (via toLogicalTypeNested from
-      // toMapSchema), unlike Flink's converter which reads key/value types
-      // directly. Skip entry-struct sub-fields so their implicit defaults
-      // don't surface as spurious entries below the map's own indexPath.
+      // The {@code inMapEntry} guard is LT-specific: our walker recurses
+      // into the entry struct of a map (toMapSchema), unlike Flink's converter
+      // which reads key/value types directly. Skip its key/value fields so their
+      // implicit defaults don't surface as spurious entries below the map's own
+      // indexPath. The same message used as a struct elsewhere records them.
       final Object implicitDefault = synthesizeProto3ImplicitScalarDefault(field);
       if (implicitDefault != null) {
         ctx.putDefaultValue(indexPath, implicitDefault);
@@ -1121,13 +1150,20 @@ public class ProtoToLogicalTypeConverter {
             if (ctx.isExternalType(fullName)) {
               if (!ctx.hasNamedType(fullName)) {
                 ctx.putNamedType(fullName, Schema.createStruct(new ArrayList<>()));
-                ctx.putNamedType(fullName, toLogicalTypeNested(
-                    false, schema.getMessageType(), ctx, Collections.emptyList()));
+                ctx.putNamedType(fullName,
+                    namedMessageBody(schema.getMessageType(), ctx, indexPath));
               }
+              ctx.putTypeDefaults(fullName, indexPath);
               return Schema.createNamedTypeRef(fullName).setNullable(isNullable);
             }
-            // Local named-type message (file-level peer registered up-front)
+            // Local named-type message (file-level peer registered up-front), built at its first
+            // use unless that use is within its own body.
             if (ctx.hasNamedType(fullName)) {
+              if (!ctx.isNamedTypeConverted(fullName) && !ctx.isNamedTypeConverting(fullName)) {
+                ctx.putNamedType(fullName,
+                    namedMessageBody(schema.getMessageType(), ctx, indexPath));
+              }
+              ctx.putTypeDefaults(fullName, indexPath);
               return Schema.createNamedTypeRef(fullName).setNullable(isNullable);
             }
             if (!ctx.addSeenSchema(fullName)) {
@@ -1420,7 +1456,7 @@ public class ProtoToLogicalTypeConverter {
     // "key" and "value" entries by name (positions are unreliable when a oneof
     // is present because oneof branches flatten into the field list).
     final Schema entryStruct = toLogicalTypeNested(
-        false, descriptor.getMessageType(), ctx, indexPath);
+        false, descriptor.getMessageType(), ctx, indexPath, true);
     final Field keyField = entryStruct.getField(CommonConstants.KEY_FIELD);
     final Field valueField = entryStruct.getField(CommonConstants.VALUE_FIELD);
     final Schema keyType = keyField.getSchema();
@@ -1493,40 +1529,14 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * LT-specific guard for {@link #synthesizeProto3ImplicitScalarDefault}: skip
-   * sub-fields of synthetic MapEntry structs. The LT walker recurses into the
-   * entry struct (via {@link #toLogicalTypeNested} from {@link #toMapSchema}),
-   * unlike Flink's converter which reads key/value types directly. Without
-   * this guard, the entry's {@code key}/{@code value} fields would get
-   * implicit defaults that surface as spurious entries below the map's own
-   * indexPath. Both native map entries (parent option {@code map_entry}) and
-   * Flink-MULTISET-style user-defined entries (matched structurally by
-   * {@link #isMapEntryShape}) are covered.
-   */
-  private static boolean isInsideMapEntry(final FieldDescriptor field) {
-    Descriptor parent = field.getContainingType();
-    if (parent == null) {
-      return false;
-    }
-    return parent.getOptions().getMapEntry() || isMapEntryShape(parent);
-  }
-
-  /**
    * Structural map-entry detection: the descriptor's name ends with
    * {@code Entry} and it has exactly two logical entities, named {@code key}
    * (regular field or oneof) and {@code value} (regular field). A oneof
    * counts as one entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;}
    * entry — where {@code key} is a oneof — still matches.
    *
-   * <p>Two callers depend on this gate:
-   * <ul>
-   *   <li>{@link #isMapDescriptor}, which is the routing gate for
-   *       {@link #toMapSchema}.</li>
-   *   <li>{@link #synthesizeProto3ImplicitScalarDefault}, which uses it to
-   *       exclude entry-struct sub-fields from implicit-default synthesis —
-   *       every descriptor walked as a map entry must also be excluded
-   *       there. Sharing this helper keeps the two checks in lock-step.</li>
-   * </ul>
+   * <p>{@link #isMapDescriptor} uses it to route a repeated field to {@link #toMapSchema}, which
+   * walks the entry with its key and value recording no implicit defaults.
    */
   private static boolean isMapEntryShape(final Descriptor descriptor) {
     if (!descriptor.getName().endsWith(CommonConstants.MAP_ENTRY_SUFFIX)) {

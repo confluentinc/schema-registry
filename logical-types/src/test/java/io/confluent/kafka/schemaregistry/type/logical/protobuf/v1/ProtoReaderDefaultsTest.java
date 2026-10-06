@@ -42,6 +42,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProtoReaderDefaultsTest {
 
   @Test
+  void aOneofMembersProto2DefaultIsRecorded() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto2\";\npackage p;\n"
+            + "message Row {\n  oneof o {\n    int32 val = 1 [default = -42];\n"
+            + "    string s = 2;\n  }\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), -42));
+  }
+
+  @Test
   void testDefaults() {
     String protoText = readResource("schema/proto/defaults.proto");
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
