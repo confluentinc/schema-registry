@@ -21,20 +21,34 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.streams.integration.avro.SensorKey;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV1;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV2;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -108,6 +122,10 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       assertThrows(AvroRuntimeException.class, () -> v1Entry.value().get("humidity"),
           "entry is still v1 bytes, so humidity should not be present");
       assertSchemaIdHeaders(v1Entry.headers(), inputTopic, "key1 window 0 v1");
+
+      // Re-read the same v1 bytes off the input topic with the v2 reader schema; Avro schema
+      // resolution should fill humidity with the v2 default.
+      assertV1BytesReadAsV2(inputTopic, 2);
 
       // v2 write in a new window, and a v2 overwrite of an existing key and window.
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -346,6 +364,72 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
   }
 
   /**
+   * Null for a non-nullable field fails Avro serialization (key and value), and so does a field
+   * left unset on a raw record. A field omitted through the record builder falls back to the
+   * schema default.
+   */
+  @Test
+  public void shouldRejectExplicitNullsAndDefaultOmittedFields() throws Exception {
+    String inputTopic = "window-null-default-evolution-input";
+    String appId = "window-null-default-evolution-test-" + System.currentTimeMillis();
+    createTopics(inputTopic);
+
+    KafkaStreams streams = null;
+    try {
+      streams = startWindowApp(inputTopic, appId, STORE_NAME,
+          createKeySerde(), createValueSerde(), null);
+
+      GenericRecord key1 = sensorKey("sensor-1");
+      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+        send(producer, inputTopic, WINDOW_0, key1, valueV1(35.5, 1000L));
+      }
+      awaitProcessed(1);
+
+      GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
+      nullRegionKey.put("sensorId", "sensor-2");
+      nullRegionKey.put("region", null);
+      GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
+      nullTemperature.put("temperature", null);
+      nullTemperature.put("timestamp", 1500L);
+      GenericRecord unsetHumidity = new GenericData.Record(VALUE_SCHEMA_V2);
+      unsetHumidity.put("temperature", 30.0);
+      unsetHumidity.put("timestamp", 1600L);
+      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+        assertThrows(SerializationException.class, () -> producer.send(
+                new ProducerRecord<>(inputTopic, nullRegionKey, valueV1(41.0, 2100L))),
+            "null for a non-nullable key field should fail Avro serialization");
+        assertThrows(SerializationException.class, () -> producer.send(
+                new ProducerRecord<>(inputTopic, key1, nullTemperature)),
+            "null for a non-nullable value field should fail Avro serialization");
+        assertThrows(SerializationException.class, () -> producer.send(
+                new ProducerRecord<>(inputTopic, key1, unsetHumidity)),
+            "a raw record with an unset field does not get the default and should fail");
+      }
+
+      // The rejected sends never reached the topic, so the store is unchanged.
+      ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+          windowStore(streams, STORE_NAME);
+      assertEquals(35.5, store.fetch(key1, WINDOW_0).value().get("temperature"));
+      assertEquals(1, countEntries(store));
+
+      // The record builder fills omitted fields with their defaults.
+      GenericRecord withDefaults = new GenericRecordBuilder(VALUE_SCHEMA_V3)
+          .set("temperature", 45.0).set("timestamp", 2500L).build();
+      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+        send(producer, inputTopic, WINDOW_5, key1, withDefaults);
+      }
+      awaitProcessed(2);
+      ValueTimestampHeaders<GenericRecord> defaulted = store.fetch(key1, WINDOW_5);
+      assertEquals(45.0, defaulted.value().get("temperature"));
+      assertEquals(0.0, defaulted.value().get("humidity"));
+      assertEquals(1013.0, defaulted.value().get("pressure"));
+      assertSchemaIdHeaders(defaulted.headers(), inputTopic, "defaulted entry");
+    } finally {
+      closeQuietly(streams);
+    }
+  }
+
+  /**
    * Reader upgraded to v2 while the writer still produces v1: the app reads v1 bytes into the v2
    * class and the new field takes its default.
    */
@@ -512,6 +596,39 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
         .stream(inputTopic, Consumed.with(keySerde, valueSerde))
         .process(() -> new PutProcessor<K, V>(storeName, processed), storeName);
     return startStreams(builder, appId, stateDir);
+  }
+
+  /** Reads the v1-written input records and decodes them with the v2 schema as the reader. */
+  private void assertV1BytesReadAsV2(String topic, int count) {
+    Properties props = new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "v2-reader-" + System.currentTimeMillis());
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+    List<ConsumerRecord<byte[], byte[]>> raw = new ArrayList<>();
+    try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
+      consumer.subscribe(Collections.singletonList(topic));
+      long end = System.currentTimeMillis() + 15_000;
+      while (raw.size() < count && System.currentTimeMillis() < end) {
+        consumer.poll(Duration.ofMillis(500)).forEach(raw::add);
+      }
+    }
+    assertEquals(count, raw.size(), "should have consumed the v1-written input records");
+
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+    try (KafkaAvroDeserializer v2Reader = new KafkaAvroDeserializer()) {
+      v2Reader.configure(config, false);
+      for (ConsumerRecord<byte[], byte[]> r : raw) {
+        GenericRecord asV2 = (GenericRecord) v2Reader.deserialize(
+            topic, r.headers(), r.value(), VALUE_SCHEMA_V2);
+        assertNotNull(asV2, "v1 bytes should be decodable with the v2 reader schema");
+        assertEquals(VALUE_SCHEMA_V2, asV2.getSchema(), "projection should be v2-shaped");
+        assertEquals(0.0, asV2.get("humidity"),
+            "humidity should be filled in from the v2 default when reading v1 bytes as v2");
+      }
+    }
   }
 
   private void awaitProcessed(int expected) throws InterruptedException {
