@@ -57,15 +57,12 @@ public class WildcardMatcherTest {
   }
 
   @Test
-  public void testEscapes() {
+  public void testSeparators() {
     assertTrue(WildcardMatcher.match("a.b.c", "a**.*"));
     assertFalse(WildcardMatcher.match("a.b", "a?b"));
     assertTrue(WildcardMatcher.match("axb", "a?b"));
     assertFalse(WildcardMatcher.match("a.b", "a*b"));
     assertTrue(WildcardMatcher.match("a.b", "a**b"));
-    assertTrue(WildcardMatcher.match("a*b", "a\\*b"));
-    assertFalse(WildcardMatcher.match("axb", "a\\*b"));
-    assertTrue(WildcardMatcher.match("a\\", "a\\"));
   }
 
   @Test

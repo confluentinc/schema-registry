@@ -16,12 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.utils;
 
+
+import com.google.re2j.Pattern;
+
 /**
  * A wildcard matcher.
  */
 public class WildcardMatcher {
-
-  private static final char SEPARATOR = '.';
 
   /**
    * Matches fully-qualified names that use dot (.) as the name boundary.
@@ -52,46 +53,70 @@ public class WildcardMatcher {
     if (str == null || wildcardMatcher == null) {
       return false;
     }
-    return globMatch(str, wildcardMatcher.replace("**" + SEPARATOR + "*", "**"));
+    Pattern wildcardRegexp = Pattern.compile(wildcardToRegexp(wildcardMatcher, '.'));
+    return wildcardRegexp.matcher(str).matches();
   }
 
-  // matched[j] is true when the pattern consumed so far matches the first j
-  // characters of str.
-  private static boolean globMatch(String str, String glob) {
-    int n = str.length();
-    boolean[] matched = new boolean[n + 1];
-    matched[0] = true;
+  private static String wildcardToRegexp(String globExp, char separator) {
+    StringBuilder dst = new StringBuilder();
+    char[] src = globExp.replace("**" + separator + "*", "**").toCharArray();
     int i = 0;
-    while (i < glob.length()) {
-      char c = glob.charAt(i++);
-      boolean[] next = new boolean[n + 1];
-      if (c == '*') {
-        // One char lookahead for **
-        boolean crossesSeparator = i < glob.length() && glob.charAt(i) == '*';
-        if (crossesSeparator) {
-          ++i;
-        }
-        next[0] = matched[0];
-        for (int j = 0; j < n; j++) {
-          next[j + 1] = matched[j + 1]
-              || (next[j] && (crossesSeparator || str.charAt(j) != SEPARATOR));
-        }
-      } else {
-        boolean any = c == '?';
-        if (c == '\\') {
-          // Emit the next character without special interpretation;
-          // a backslash at the very end is treated like an escaped backslash
-          if (i < glob.length()) {
-            c = glob.charAt(i++);
+    while (i < src.length) {
+      char c = src[i++];
+      switch (c) {
+        case '*':
+          // One char lookahead for **
+          if (i < src.length && src[i] == '*') {
+            dst.append(".*");
+            ++i;
+          } else {
+            dst.append("[^");
+            dst.append(separator);
+            dst.append("]*");
           }
-        }
-        for (int j = 0; j < n; j++) {
-          char s = str.charAt(j);
-          next[j + 1] = matched[j] && (any ? s != SEPARATOR : s == c);
-        }
+          break;
+        case '?':
+          dst.append("[^");
+          dst.append(separator);
+          dst.append("]");
+          break;
+        case '.':
+        case '+':
+        case '{':
+        case '}':
+        case '(':
+        case ')':
+        case '|':
+        case '^':
+        case '$':
+        case '[':
+        case ']':
+          // These need to be escaped in regular expressions
+          dst.append('\\').append(c);
+          break;
+        case '\\':
+          i = doubleSlashes(dst, src, i);
+          break;
+        default:
+          dst.append(c);
+          break;
       }
-      matched = next;
     }
-    return matched[n];
+    return dst.toString();
+  }
+
+  private static int doubleSlashes(StringBuilder dst, char[] src, int i) {
+    // Emit the next character without special interpretation
+    dst.append('\\');
+    if ((i + 1) < src.length) {
+      dst.append('\\');
+      dst.append(src[i]);
+      i++;
+    } else {
+      // A backslash at the very end is treated like an escaped backslash
+      dst.append('\\');
+    }
+    return i;
   }
 }
+
