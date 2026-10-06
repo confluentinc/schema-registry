@@ -364,11 +364,11 @@ public class JsonToLogicalTypeConverter {
             if (referredSchema != null) {
               ctx.putNamedType(entry.getKey(),
                   Schema.createStruct(new ArrayList<>()));
-              // Named-type body walks start with an empty indexPath; defaults
-              // inside named types aren't part of the root schema's positional
-              // path-keyed map.
-              Schema body = convertWithCycleDetection(
-                  referredSchema, false, ctx, Collections.emptyList());
+              // A named type's body, its defaults kept relative to it: each $ref to it places
+              // them under its own path.
+              Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
+                  () -> convertWithCycleDetection(
+                      referredSchema, false, ctx, Collections.emptyList()));
               ctx.putNamedType(entry.getKey(), body);
             }
           }
@@ -382,7 +382,8 @@ public class JsonToLogicalTypeConverter {
       Runnable undo = ctx.checkpoint();
       Schema converted;
       try {
-        converted = convertWithCycleDetection(defSchema, false, ctx, Collections.emptyList());
+        converted = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
+            () -> convertWithCycleDetection(defSchema, false, ctx, Collections.emptyList()));
       } catch (ValidationException e) {
         // A definition the logical type cannot express fails only where it is used, as under
         // draft-07, which converts definitions on demand; nothing of the attempt is kept.
@@ -478,14 +479,14 @@ public class JsonToLogicalTypeConverter {
         boolean wasKnown = ctx.hasNamedType(typeName);
         if (!wasKnown && refSchema.getReferredSchema() != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));
-          // Named-type body walks start with an empty indexPath; defaults
-          // inside named types aren't part of the root schema's positional
-          // path-keyed map.
-          Schema body = convertWithCycleDetection(
-              refSchema.getReferredSchema(), false, ctx,
-              Collections.emptyList());
+          // A named type's body, its defaults kept relative to it: each $ref to it places them
+          // under its own path, below.
+          Schema body = ctx.convertNamedType(typeName, Collections.emptyList(),
+              () -> convertWithCycleDetection(
+                  refSchema.getReferredSchema(), false, ctx, Collections.emptyList()));
           ctx.putNamedType(typeName, body);
         }
+        ctx.putTypeDefaults(typeName, indexPath);
         // Mark as external only on first-time-seen canonical cross-doc refs.
         // Names already in namedTypes from the $defs walk are either real
         // local types (preserve) or synthetic externals (already marked).
