@@ -18,11 +18,14 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf.v1;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -76,19 +79,17 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void repeatedAndMessageSkipped() {
-    // With two messages declared, Inner is registered first (outer index [0])
-    // and Row is the registered root at outer index [1]. So Row's fields are
-    // at paths [1, N].
+    // Row is the root (first message); Inner is a peer, so its defaults sit under Row.nested.
     String protoText =
         "syntax = \"proto3\";\n"
             + "package test;\n"
-            + "message Inner { int32 x = 1; }\n"
             + "message Row {\n"
             + "  repeated int32 arr = 1;\n"   // repeated -> emptyList default
             + "  map<string, int32> m = 2;\n" // map      -> emptyMap default
             + "  Inner nested = 3;\n"         // MESSAGE -> SKIP (no scalar default)
             + "  int32 scalar = 4;\n"         // implicit 0
-            + "}\n";
+            + "}\n"
+            + "message Inner { int32 x = 1; }\n";
 
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
         new ProtobufSchema(protoText));
@@ -96,14 +97,101 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
     // Empty-collection defaults (verify the proto3-implicit pass doesn't
     // double-write or override the repeated/map empty defaults):
-    assertThat(defaults).containsEntry(List.of(1, 0), java.util.Collections.emptyList());
-    assertThat(defaults).containsEntry(List.of(1, 1), java.util.Collections.emptyMap());
+    assertThat(defaults).containsEntry(List.of(0), Collections.emptyList());
+    assertThat(defaults).containsEntry(List.of(1), Collections.emptyMap());
     // MESSAGE field -> no entry at the field's own indexPath.
-    assertThat(defaults).doesNotContainKey(List.of(1, 2));
+    assertThat(defaults).doesNotContainKey(List.of(2));
     // Scalar implicit default still fires for the proto3 int32.
-    assertThat(defaults).containsEntry(List.of(1, 3), 0);
-    // Inner.x (proto3 scalar) gets the implicit default too.
-    assertThat(defaults).containsEntry(List.of(0), 0);
+    assertThat(defaults).containsEntry(List.of(3), 0);
+    // Inner.x (proto3 scalar) gets the implicit default too, under the field using Inner.
+    assertThat(defaults).containsEntry(List.of(2, 0), 0);
+  }
+
+  @Test
+  void anImportedMessagesDefaultsAreUnderTheFieldUsingIt() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+        "message Row {\n  int32 id = 1;\n  com.Foo foo = 2;\n}\n",
+        "message Foo {\n  string id = 1;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), 0), Map.entry(List.of(1, 0), ""));
+  }
+
+  @Test
+  void aMessageImportedTwiceHasItsDefaultsUnderEachUse() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+        "message Row {\n  int32 id = 1;\n  bool b = 2;\n  com.Foo f1 = 3;\n  com.Foo f2 = 4;\n}\n",
+        "message Foo {\n  string s = 1;\n  int64 n = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), 0), Map.entry(List.of(1), false),
+        Map.entry(List.of(2, 0), ""), Map.entry(List.of(2, 1), 0L),
+        Map.entry(List.of(3, 0), ""), Map.entry(List.of(3, 1), 0L));
+  }
+
+  @Test
+  void aPeerMessagesDefaultsAreUnderTheFieldUsingItNotItsFileIndex() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Row {\n  int32 id = 1;\n  bool b = 2;\n  Foo foo = 3;\n}\n"
+            + "message Foo {\n  string id = 1;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), 0), Map.entry(List.of(1), false), Map.entry(List.of(2, 0), ""));
+  }
+
+  @Test
+  void aSharedMessageAsARepeatedElementOrMapValueHasItsDefaultsWhereInliningPutsThem() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+        "message Row {\n  repeated com.Foo items = 1;\n  map<string, com.Foo> byKey = 2;\n}\n",
+        "message Foo {\n  int32 x = 1;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), Collections.emptyList()), Map.entry(List.of(0, 0), 0),
+        Map.entry(List.of(1), Collections.emptyMap()), Map.entry(List.of(1, 1, 0), 0));
+  }
+
+  @Test
+  void aRecursiveNestedMessagesDefaultsStopAtItsFirstRecurrence() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Row {\n  Node n = 1;\n"
+            + "  message Node {\n    int32 v = 1;\n    Node next = 2;\n  }\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 0));
+  }
+
+  @Test
+  void aMultiMessageRootHasEachMessagesDefaultsUnderItsColumn() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Row {\n  int32 id = 1;\n  Foo foo = 2;\n}\n"
+            + "message Foo {\n  string s = 1;\n}\n"), true);
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), ""),
+        Map.entry(List.of(1, 0), ""));
+  }
+
+  @Test
+  void aMessageShapedLikeAMapEntryRecordsItsFieldsWhereItIsAStruct() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message Row {\n  repeated MapEntry props = 1;\n  MapEntry one = 2;\n}\n"
+            + "message MapEntry {\n  string key = 1;\n  string value = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), Collections.emptyMap()),
+        Map.entry(List.of(1, 0), ""), Map.entry(List.of(1, 1), ""));
+  }
+
+  // A proto3 file in package p importing leaf.proto, whose messages are in package com.
+  private static ProtobufSchema withLeaf(String messages, String leafMessages) {
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("leaf.proto", "syntax = \"proto3\";\npackage com;\n" + leafMessages);
+    return new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nimport \"leaf.proto\";\n" + messages,
+        List.of(new SchemaReference("leaf.proto", "leaf", 1)), resolved, null, null, null, null);
   }
 
   @Test

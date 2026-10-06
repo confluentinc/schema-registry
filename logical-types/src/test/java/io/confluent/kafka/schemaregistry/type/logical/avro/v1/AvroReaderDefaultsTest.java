@@ -67,6 +67,40 @@ class AvroReaderDefaultsTest {
     assertThat(lt.getDefaultValues()).isEmpty();
   }
 
+  @Test
+  void aReusedRecordHasItsDefaultsUnderEachUse() {
+    String foo = "{\"type\":\"record\",\"name\":\"Foo\",\"fields\":["
+        + "{\"name\":\"s\",\"type\":\"string\",\"default\":\"x\"},"
+        + "{\"name\":\"n\",\"type\":\"long\",\"default\":7}]}";
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Row\",\"fields\":["
+            + "{\"name\":\"id\",\"type\":\"int\",\"default\":1},"
+            + "{\"name\":\"f1\",\"type\":" + foo + "},"
+            + "{\"name\":\"f2\",\"type\":\"Foo\"},"
+            + "{\"name\":\"f3\",\"type\":[\"null\",\"Foo\"],\"default\":null},"
+            + "{\"name\":\"f4\",\"type\":{\"type\":\"array\",\"items\":\"Foo\"}}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), 1),
+        Map.entry(List.of(1, 0), "x"), Map.entry(List.of(1, 1), 7L),
+        Map.entry(List.of(2, 0), "x"), Map.entry(List.of(2, 1), 7L),
+        Map.entry(List.of(3, 0), "x"), Map.entry(List.of(3, 1), 7L),
+        Map.entry(List.of(4, 0, 0), "x"), Map.entry(List.of(4, 0, 1), 7L));
+  }
+
+  @Test
+  void aRecursiveRecordsDefaultsStopAtItsFirstRecurrence() {
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Row\",\"fields\":["
+            + "{\"name\":\"t\",\"type\":{\"type\":\"record\",\"name\":\"Tree\",\"fields\":["
+            + "{\"name\":\"v\",\"type\":\"int\",\"default\":3},"
+            + "{\"name\":\"left\",\"type\":[\"null\",\"Tree\"],\"default\":null}]}},"
+            + "{\"name\":\"u\",\"type\":\"Tree\"}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 3), Map.entry(List.of(1, 0), 3));
+  }
+
   /**
    * Mega-schema with nested records, arrays, maps, and per-field defaults
    * across every primitive + composite type. Asserts the path-keyed default
