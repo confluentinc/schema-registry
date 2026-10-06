@@ -16,8 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.common;
 
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,12 +35,12 @@ public class CycleContext<T> {
 
   private final Set<T> seenSchemas = new HashSet<>();
   private final Deque<String> fieldsPath = new ArrayDeque<>();
-  private Map<List<Integer>, Object> defaultValues = new HashMap<>();
-  // While a named type's body converts, defaults are recorded relative to it, from this path.
+  // The defaults and named-type uses recorded where conversion is: the root, or a named type's
+  // body while it converts, relative to it from defaultsBase.
+  private Frame frame = new Frame();
   private List<Integer> defaultsBase = List.of();
-  // Each converted named type's defaults, relative to it; each use places them under its path.
-  private final Map<String, Map<List<Integer>, Object>> typeDefaults = new HashMap<>();
-  private final Set<String> typesConverting = new HashSet<>();
+  // Each converted named type's own defaults and uses, relative to it.
+  private final Map<String, Frame> typeFrames = new HashMap<>();
 
   public boolean addSeenSchema(T schema) {
     return seenSchemas.add(schema);
@@ -58,8 +60,7 @@ public class CycleContext<T> {
 
   /** Records a default value at the given field-index path. */
   public void putDefaultValue(List<Integer> path, Object value) {
-    defaultValues.put(defaultsBase.isEmpty()
-        ? path : new ArrayList<>(path.subList(defaultsBase.size(), path.size())), value);
+    frame.defaults.put(relative(path), value);
   }
 
   /**
@@ -67,52 +68,98 @@ public class CycleContext<T> {
    * the body is shared by reference, so each use places them with {@link #putTypeDefaults}.
    */
   public <R> R convertNamedType(String name, List<Integer> path, Supplier<R> conversion) {
-    final Map<List<Integer>, Object> outer = defaultValues;
+    final Frame outer = frame;
     final List<Integer> outerBase = defaultsBase;
-    final Map<List<Integer>, Object> own = new HashMap<>();
-    defaultValues = own;
+    final Frame own = new Frame();
+    frame = own;
     defaultsBase = path;
-    typesConverting.add(name);
     try {
       final R body = conversion.get();
-      typeDefaults.putIfAbsent(name, own);
+      typeFrames.putIfAbsent(name, own);
       return body;
     } finally {
-      defaultValues = outer;
+      frame = outer;
       defaultsBase = outerBase;
-      typesConverting.remove(name);
     }
-  }
-
-  /** Whether a named type's body has been converted, so its defaults are known. */
-  public boolean isNamedTypeConverted(String name) {
-    return typeDefaults.containsKey(name);
-  }
-
-  /** Whether a named type's body is being converted: a use of it now is recursive. */
-  public boolean isNamedTypeConverting(String name) {
-    return typesConverting.contains(name);
   }
 
   /**
-   * Records a named type's defaults under the path of a use, as inlining it there would. A use
-   * within its own body adds none: defaults stop at the first recurrence.
+   * Records a use of a named type at {@code path}: its defaults land there, as inlining it would.
+   * They are placed when the defaults are read, so its body need not be converted yet.
    */
   public void putTypeDefaults(String name, List<Integer> path) {
-    final Map<List<Integer>, Object> own = typeDefaults.get(name);
-    if (own == null) {
-      return;
-    }
-    for (Map.Entry<List<Integer>, Object> entry : own.entrySet()) {
-      final List<Integer> at = new ArrayList<>(path);
-      at.addAll(entry.getKey());
-      putDefaultValue(at, entry.getValue());
-    }
+    frame.uses.add(new SimpleImmutableEntry<>(name, relative(path)));
   }
 
-  /** Path-keyed map of field-default values collected during conversion. */
+  /**
+   * Path-keyed map of field-default values collected during conversion, each named type's placed
+   * at its uses as inlining it would. A type's defaults stop where it recurs below itself.
+   */
   public Map<List<Integer>, Object> getDefaultValues() {
-    return defaultValues;
+    final Set<String> withDefaults = typesWithDefaults();
+    final Map<List<Integer>, Object> out = new HashMap<>();
+    // A work stack, not recursion: a chain of references can be longer than the call stack is
+    // deep. A type is open between its placement and its exit, so a recurrence is on its path.
+    final Set<String> open = new HashSet<>();
+    final Deque<Placement> work = new ArrayDeque<>();
+    work.push(new Placement(null, frame, Collections.emptyList(), false));
+    while (!work.isEmpty()) {
+      final Placement at = work.pop();
+      if (at.exit) {
+        open.remove(at.name);
+        continue;
+      }
+      if (at.name != null) {
+        if (!open.add(at.name)) {
+          continue;
+        }
+        work.push(new Placement(at.name, null, null, true));
+      }
+      for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
+        out.put(concat(at.path, entry.getKey()), entry.getValue());
+      }
+      for (Map.Entry<String, List<Integer>> use : at.frame.uses) {
+        if (withDefaults.contains(use.getKey())) {
+          work.push(new Placement(use.getKey(), typeFrames.get(use.getKey()),
+              concat(at.path, use.getValue()), false));
+        }
+      }
+    }
+    return out;
+  }
+
+  // The named types with a default at or below them; the others are not expanded at their uses.
+  private Set<String> typesWithDefaults() {
+    final Map<String, List<String>> usedBy = new HashMap<>();
+    final Deque<String> pending = new ArrayDeque<>();
+    for (Map.Entry<String, Frame> type : typeFrames.entrySet()) {
+      for (Map.Entry<String, List<Integer>> use : type.getValue().uses) {
+        usedBy.computeIfAbsent(use.getKey(), k -> new ArrayList<>()).add(type.getKey());
+      }
+      if (!type.getValue().defaults.isEmpty()) {
+        pending.push(type.getKey());
+      }
+    }
+    final Set<String> found = new HashSet<>();
+    while (!pending.isEmpty()) {
+      final String name = pending.pop();
+      if (found.add(name)) {
+        usedBy.getOrDefault(name, Collections.emptyList()).forEach(pending::push);
+      }
+    }
+    return found;
+  }
+
+  private static List<Integer> concat(List<Integer> prefix, List<Integer> suffix) {
+    final List<Integer> path = new ArrayList<>(prefix.size() + suffix.size());
+    path.addAll(prefix);
+    path.addAll(suffix);
+    return path;
+  }
+
+  private List<Integer> relative(List<Integer> path) {
+    return defaultsBase.isEmpty()
+        ? path : new ArrayList<>(path.subList(defaultsBase.size(), path.size()));
   }
 
   /**
@@ -121,18 +168,21 @@ public class CycleContext<T> {
   public Runnable checkpoint() {
     final Set<T> seen = new HashSet<>(seenSchemas);
     final Deque<String> path = new ArrayDeque<>(fieldsPath);
-    final Map<List<Integer>, Object> target = defaultValues;
-    final Map<List<Integer>, Object> defaults = new HashMap<>(defaultValues);
-    final Map<String, Map<List<Integer>, Object>> types = new HashMap<>(typeDefaults);
+    final Frame target = frame;
+    final Map<List<Integer>, Object> defaults = new HashMap<>(frame.defaults);
+    final List<Map.Entry<String, List<Integer>>> uses = new ArrayList<>(frame.uses);
+    final Map<String, Frame> types = new HashMap<>(typeFrames);
     return () -> {
       seenSchemas.clear();
       seenSchemas.addAll(seen);
       fieldsPath.clear();
       fieldsPath.addAll(path);
-      target.clear();
-      target.putAll(defaults);
-      typeDefaults.clear();
-      typeDefaults.putAll(types);
+      target.defaults.clear();
+      target.defaults.putAll(defaults);
+      target.uses.clear();
+      target.uses.addAll(uses);
+      typeFrames.clear();
+      typeFrames.putAll(types);
     };
   }
 
@@ -143,5 +193,26 @@ public class CycleContext<T> {
       joiner.add(it.next());
     }
     return "Cyclic schemas are not supported.\nFound a cycle in the field: " + joiner;
+  }
+
+  // What conversion recorded in one place: defaults, and uses of named types, by path.
+  private static final class Frame {
+    final Map<List<Integer>, Object> defaults = new HashMap<>();
+    final List<Map.Entry<String, List<Integer>>> uses = new ArrayList<>();
+  }
+
+  // A frame to place at a path, as the named type it belongs to; or that type's exit.
+  private static final class Placement {
+    final String name;
+    final Frame frame;
+    final List<Integer> path;
+    final boolean exit;
+
+    Placement(String name, Frame frame, List<Integer> path, boolean exit) {
+      this.name = name;
+      this.frame = frame;
+      this.path = path;
+      this.exit = exit;
+    }
   }
 }
