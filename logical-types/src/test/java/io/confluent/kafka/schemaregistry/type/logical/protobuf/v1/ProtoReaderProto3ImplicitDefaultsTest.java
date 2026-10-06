@@ -336,6 +336,29 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   }
 
   @Test
+  void aConversionPlacesNoDefaultsUntilTheyAreRead() {
+    // Each message holds the next twice: 2^30 paths to the last one's default. Converting costs
+    // nothing for them; callers that never read defaults never pay for them.
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(diamond(30))));
+    assertThat(lt.getRootSchema().getFields()).hasSize(2);
+
+    Map<List<Integer>, Object> small =
+        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(diamond(3))).getDefaultValues();
+    assertThat(small).hasSize(8).containsEntry(List.of(1, 0, 1, 0), 0);
+  }
+
+  // M0 .. M<n-1>, each holding the next as a and b; M<n> holds the only default.
+  private static String diamond(int n) {
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < n; i++) {
+      text.append("message M").append(i).append(" { M").append(i + 1).append(" a = 1; M")
+          .append(i + 1).append(" b = 2; }\n");
+    }
+    return text.append("message M").append(n).append(" { int32 x = 1; }\n").toString();
+  }
+
+  @Test
   void aBranchingCycleIsNotWalkedPathByPath() {
     // A holds B0, each Bi holds the next twice, the last holds A: 2^30 paths, one cycle, whose
     // types are each placed once.
