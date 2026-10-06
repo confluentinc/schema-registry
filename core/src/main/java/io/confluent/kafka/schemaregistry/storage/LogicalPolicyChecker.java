@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -92,6 +93,31 @@ public final class LogicalPolicyChecker {
   }
 
   /**
+   * The logical type the policy checks: the {@link LogicalTypeVersion#V1} reading, with a Protobuf
+   * file as Flink reads it rather than as {@code format=logical} shows it.
+   */
+  static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
+    return ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
+        ? protobufLogicalType((ProtobufSchema) parsedSchema)
+        : toLogicalType(parsedSchema, LogicalTypeVersion.V1);
+  }
+
+  /**
+   * A Protobuf file as Flink reads it: a single top-level message is its own row, and a file with
+   * several wraps each message, in file order, as the converter's multi-message reading does. So
+   * every message is checked, and a file changing between one and several messages is seen as the
+   * reshaping it is.
+   */
+  private static LogicalType protobufLogicalType(ProtobufSchema schema) {
+    // Its own messages: toDescriptor() follows a public import, so a file that only re-exports
+    // another would count that file's.
+    long own = schema.rawSchema().getTypes().stream()
+        .filter(type -> type instanceof MessageElement).count();
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, own > 1);
+  }
+
+
+  /**
    * Runs the logical validity and compatibility checks for {@code newSchema} and returns any
    * findings as human-readable error strings (empty if all pass).
    *
@@ -107,7 +133,9 @@ public final class LogicalPolicyChecker {
    * skipped rather than failing the registration -- an old version being unconvertible must not
    * block a new one (per design decision).
    *
-   * <p>Both schemas are derived under {@link LogicalTypeVersion#V1} here, matching provenance --
+   * <p>Both schemas are derived by {@link #toPolicyLogicalType}: under
+   * {@link LogicalTypeVersion#V1}, matching provenance, and with a Protobuf file of several
+   * messages read as Flink reads it --
    * not the {@link LogicalTypeVersion#V2} canonical reading {@link #toLogicalType(ParsedSchema)}
    * uses for {@code format=logical}. The two editions can disagree on structural kind (a singleton
    * JSON {@code oneOf} collapses to its member type under V2 but stays a {@code UNION} under V1),
@@ -126,7 +154,7 @@ public final class LogicalPolicyChecker {
 
     LogicalType newLogical;
     try {
-      newLogical = toLogicalType(newSchema, LogicalTypeVersion.V1);
+      newLogical = toPolicyLogicalType(newSchema);
     } catch (RuntimeException e) {
       errors.add(describeUnconvertible(e.getMessage()));
       return errors;
@@ -141,7 +169,7 @@ public final class LogicalPolicyChecker {
     for (ParsedSchemaHolder holder : toCompare) {
       LogicalType previousLogical;
       try {
-        previousLogical = toLogicalType(holder.schema(), LogicalTypeVersion.V1);
+        previousLogical = toPolicyLogicalType(holder.schema());
       } catch (RuntimeException e) {
         // Skip an unconvertible previous version rather than blocking this registration.
         log.warn("Skipping logical compatibility against a previous version that could not be "
