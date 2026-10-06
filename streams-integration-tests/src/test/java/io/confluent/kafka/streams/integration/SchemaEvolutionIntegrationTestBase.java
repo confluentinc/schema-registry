@@ -40,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,7 +50,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
@@ -274,20 +277,46 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     }
 
     CountDownLatch startedLatch = new CountDownLatch(1);
+    AtomicReference<KafkaStreams.State> lastState =
+        new AtomicReference<>(KafkaStreams.State.CREATED);
+    AtomicBoolean reachedRunning = new AtomicBoolean(false);
     KafkaStreams streams = new KafkaStreams(builder.build(), streamsProps);
-    if (restoreListener != null) {
-      streams.setGlobalStateRestoreListener(restoreListener);
+    boolean running = false;
+    try {
+      if (restoreListener != null) {
+        streams.setGlobalStateRestoreListener(restoreListener);
+      }
+      // Release the latch on RUNNING and on any shutdown or error state, so a failed start
+      // reports the observed state instead of waiting out the timeout.
+      streams.setStateListener(
+          (newState, oldState) -> {
+            lastState.set(newState);
+            if (newState == KafkaStreams.State.RUNNING) {
+              reachedRunning.set(true);
+              startedLatch.countDown();
+            } else if (newState.hasStartedOrFinishedShuttingDown()) {
+              startedLatch.countDown();
+            }
+          });
+      streams.start();
+      assertTrue(startedLatch.await(60, TimeUnit.SECONDS),
+          "KafkaStreams did not reach RUNNING within 60s (last observed state: "
+              + lastState.get() + ")");
+      assertTrue(reachedRunning.get(),
+          "KafkaStreams shut down before reaching RUNNING (last observed state: "
+              + lastState.get() + ")");
+      running = true;
+      return streams;
+    } finally {
+      // A failed start never hands the instance back, so close it here.
+      if (!running) {
+        try {
+          streams.close(Duration.ofSeconds(10));
+        } catch (Exception ignored) {
+          // The start failure is the error worth reporting.
+        }
+      }
     }
-    streams.setStateListener(
-        (newState, oldState) -> {
-          if (newState == KafkaStreams.State.RUNNING) {
-            startedLatch.countDown();
-          }
-        });
-    streams.start();
-    assertTrue(
-        startedLatch.await(60, TimeUnit.SECONDS), "KafkaStreams should reach RUNNING state");
-    return streams;
   }
 
   protected static <K, V> int countStoreEntries(
