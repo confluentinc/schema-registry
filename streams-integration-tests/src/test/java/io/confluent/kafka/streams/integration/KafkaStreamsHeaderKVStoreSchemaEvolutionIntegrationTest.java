@@ -957,7 +957,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
    * from the record falls back to the schema default.
    */
   @Test
-  public void shouldSwitchToDefaultValueOnNullField() throws Exception {
+  public void shouldRejectExplicitNullsAndDefaultOmittedFields() throws Exception {
     String inputTopic = "null-value-field-evolution-input";
     String appId = "null-value-field-evolution-test-" + System.currentTimeMillis();
 
@@ -1125,7 +1125,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
    * Step 2: the streams app is shut down and its local state is wiped,
    * forcing the next run to rebuild from the changelog.
    * Step 3: the producer is upgraded to v2 and writes new records including {@code humidity};
-   * Step 4: the streams app stup down and local state wiped again.
+   * Step 4: the streams app is shut down and local state wiped again.
    * Step 5: a v1 producer is still writing v1 bytes after the writer upgrade.
    */
   @Test
