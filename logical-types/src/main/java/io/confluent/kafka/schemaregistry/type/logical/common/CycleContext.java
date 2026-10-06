@@ -94,8 +94,7 @@ public class CycleContext<T> {
 
   /**
    * Path-keyed map of field-default values collected during conversion, each named type's placed
-   * at its uses as inlining it would. Within a recursive cycle, each of its types is placed once
-   * each time the cycle is entered, at its first use in field order, so never below itself.
+   * at its uses as inlining it would, up to where a type recurs on the path below itself.
    */
   public Map<List<Integer>, Object> getDefaultValues() {
     final Map<String, Integer> components = components();
@@ -103,13 +102,24 @@ public class CycleContext<T> {
     final Set<String> withDefaults = typesWithDefaults();
     final Map<List<Integer>, Object> out = new HashMap<>();
     // A work stack, not recursion: a chain of references can be longer than the call stack is
-    // deep. Uses are pushed last first, so the first field's are placed first.
+    // deep. A recursive type is open from its placement to its exit marker, below its uses.
+    final Set<String> open = new HashSet<>();
     final Deque<Placement> work = new ArrayDeque<>();
-    work.push(new Placement(null, frame, null, Collections.emptyList(), null));
+    work.push(new Placement(null, frame, null, Collections.emptyList()));
     while (!work.isEmpty()) {
       final Placement at = work.pop();
-      if (at.entered != null && !at.entered.add(at.name)) {
+      if (at.frame == null) {
+        open.remove(at.name);
         continue;
+      }
+      if (at.name != null && recursive.contains(components.get(at.name))) {
+        // Skipped where it recurs, or where every default below it is past a recurrence: so
+        // each placement made leads to a default, and the walk is bounded by what it emits.
+        if (open.contains(at.name) || !reaches(at.name, open, components, withDefaults)) {
+          continue;
+        }
+        open.add(at.name);
+        work.push(new Placement(at.name, null, null, null));
       }
       for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
         out.put(at.pathTo(entry.getKey()), entry.getValue());
@@ -117,16 +127,45 @@ public class CycleContext<T> {
       final List<Map.Entry<String, List<Integer>>> uses = at.frame.uses;
       for (int i = uses.size() - 1; i >= 0; i--) {
         final String used = uses.get(i).getKey();
-        if (!withDefaults.contains(used)) {
-          continue;
+        if (withDefaults.contains(used)) {
+          work.push(new Placement(used, typeFrames.get(used), at, uses.get(i).getValue()));
         }
-        // The types placed since entering this cycle; a use from outside it enters it anew.
-        final Set<String> entered = sameCycle(components, at.name, used) ? at.entered
-            : recursive.contains(components.get(used)) ? new HashSet<>() : null;
-        work.push(new Placement(used, typeFrames.get(used), at, uses.get(i).getValue(), entered));
       }
     }
     return out;
+  }
+
+  /**
+   * Whether a default is reachable from {@code start}, a recursive type, without passing a type
+   * open on the path: a default of its cycle, or a use leaving the cycle toward one. Outside the
+   * cycle no open type is reachable, so a type with defaults there always has them.
+   */
+  private boolean reaches(String start, Set<String> open, Map<String, Integer> components,
+      Set<String> withDefaults) {
+    final Integer cycle = components.get(start);
+    final Set<String> seen = new HashSet<>();
+    final Deque<String> pending = new ArrayDeque<>();
+    seen.add(start);
+    pending.push(start);
+    while (!pending.isEmpty()) {
+      final Frame type = typeFrames.get(pending.pop());
+      if (!type.defaults.isEmpty()) {
+        return true;
+      }
+      for (Map.Entry<String, List<Integer>> use : type.uses) {
+        final String used = use.getKey();
+        if (!withDefaults.contains(used)) {
+          continue;
+        }
+        if (!components.get(used).equals(cycle)) {
+          return true;
+        }
+        if (!open.contains(used) && seen.add(used)) {
+          pending.push(used);
+        }
+      }
+    }
+    return false;
   }
 
   // The components holding a cycle: some use stays inside them, a type's use of itself included.
@@ -143,9 +182,9 @@ public class CycleContext<T> {
     return recursive;
   }
 
-  // Whether a use stays inside a recursive type's cycle (a self-use included).
+  // Whether a use stays inside its type's strongly connected component (a self-use included).
   private static boolean sameCycle(Map<String, Integer> components, String from, String to) {
-    return from != null && components.get(from).equals(components.get(to));
+    return components.get(from).equals(components.get(to));
   }
 
   /**
@@ -275,22 +314,19 @@ public class CycleContext<T> {
     final List<Map.Entry<String, List<Integer>>> uses = new ArrayList<>();
   }
 
-  // A frame placed below its parent placement, at its use's path from there; within a recursive
-  // cycle, with the types placed since the cycle was entered.
+  // A frame placed below its parent placement, at its use's path from there; with no frame, the
+  // exit of a recursive type's placement.
   private static final class Placement {
     final String name;
     final Frame frame;
     final Placement parent;
     final List<Integer> step;
-    final Set<String> entered;
 
-    Placement(String name, Frame frame, Placement parent, List<Integer> step,
-        Set<String> entered) {
+    Placement(String name, Frame frame, Placement parent, List<Integer> step) {
       this.name = name;
       this.frame = frame;
       this.parent = parent;
       this.step = step;
-      this.entered = entered;
     }
 
     // The full path of a default recorded here: built only when one is, not at every use.

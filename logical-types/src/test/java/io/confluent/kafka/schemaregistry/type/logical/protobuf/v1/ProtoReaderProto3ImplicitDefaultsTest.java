@@ -27,9 +27,13 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -234,6 +238,62 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     assertThat(lt.getDefaultValues()).containsOnly(
         Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), 0),
         Map.entry(List.of(1, 0), 0), Map.entry(List.of(1, 1, 0), 0), Map.entry(List.of(2), 0));
+  }
+
+  @Test
+  void aRecursiveMessageUsedTwiceAsSiblingsHasItsDefaultsAtBoth() {
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\n"
+            + "message A {\n  B first = 1;\n  B second = 2;\n}\n"
+            + "message B {\n  int32 x = 1;\n  A back = 2;\n}\n"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 0), Map.entry(List.of(1, 0), 0));
+  }
+
+  @Test
+  void defaultsMatchInliningCutWhereAMessageRecursForRandomFiles() {
+    // An independent oracle: each message inlined at its uses, cut where it recurs on the path.
+    Random random = new Random(20261006);
+    for (int file = 0; file < 500; file++) {
+      int messages = 2 + random.nextInt(5);
+      List<List<Integer>> fields = new ArrayList<>();
+      StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+      for (int m = 0; m < messages; m++) {
+        // Each field an int32 (-1) or the number of the message it holds, itself included.
+        List<Integer> own = new ArrayList<>();
+        text.append("message M").append(m).append(" {");
+        for (int f = 0, count = 1 + random.nextInt(3); f < count; f++) {
+          int held = random.nextInt(messages + 1) - 1;
+          own.add(held);
+          text.append(held < 0 ? " int32" : " M" + held).append(" f").append(f)
+              .append(" = ").append(f + 1).append(";");
+        }
+        fields.add(own);
+        text.append(" }\n");
+      }
+      Map<List<Integer>, Object> expected = new HashMap<>();
+      inline(fields, 0, new ArrayList<>(), new HashSet<>(Collections.singleton(0)), expected);
+
+      assertThat(ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString()))
+          .getDefaultValues()).as(text.toString()).isEqualTo(expected);
+    }
+  }
+
+  private static void inline(List<List<Integer>> fields, int message, List<Integer> path,
+      Set<Integer> onPath, Map<List<Integer>, Object> out) {
+    List<Integer> own = fields.get(message);
+    for (int f = 0; f < own.size(); f++) {
+      List<Integer> at = new ArrayList<>(path);
+      at.add(f);
+      int held = own.get(f);
+      if (held < 0) {
+        out.put(at, 0);
+      } else if (onPath.add(held)) {
+        inline(fields, held, at, onPath, out);
+        onPath.remove(held);
+      }
+    }
   }
 
   @Test
