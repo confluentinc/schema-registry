@@ -40,18 +40,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -109,6 +112,12 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
    */
   protected KafkaStreams startStreams(StreamsBuilder builder, String appId, Path stateDir)
       throws Exception {
+    return startStreams(builder, appId, stateDir, null);
+  }
+
+  /** Same as above, with a listener attached before start to observe changelog restoration. */
+  protected KafkaStreams startStreams(StreamsBuilder builder, String appId, Path stateDir,
+      StateRestoreListener restoreListener) throws Exception {
     Properties streamsProps = new Properties();
     streamsProps.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
     streamsProps.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
@@ -121,6 +130,9 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
 
     CountDownLatch startedLatch = new CountDownLatch(1);
     KafkaStreams streams = new KafkaStreams(builder.build(), streamsProps);
+    if (restoreListener != null) {
+      streams.setGlobalStateRestoreListener(restoreListener);
+    }
     streams.setStateListener(
         (newState, oldState) -> {
           if (newState == KafkaStreams.State.RUNNING) {
@@ -234,6 +246,31 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     assertTrue(registeredGuids.contains(headerGuid),
         context + ": header GUID " + headerGuid + " is not registered under subject " + subject
             + " (registered: " + registeredGuids + ")");
+  }
+
+  /** Counts the records restored from the changelog, to tell a restore from a reprocess. */
+  protected static class CountingRestoreListener implements StateRestoreListener {
+
+    private final AtomicLong restored = new AtomicLong();
+
+    long restoredRecords() {
+      return restored.get();
+    }
+
+    @Override
+    public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
+        long endingOffset) {
+    }
+
+    @Override
+    public void onBatchRestored(TopicPartition topicPartition, String storeName,
+        long batchEndOffset, long numRestored) {
+      restored.addAndGet(numRestored);
+    }
+
+    @Override
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+    }
   }
 
   protected static class TimestampedKeyValueStoreWithHeadersType<K, V>
