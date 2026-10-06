@@ -216,7 +216,8 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   void aChainWithADefaultAtEveryLinkHasEachOnceAtItsDepth() {
     // Placed straight into the result: memory follows its size, not every suffix of the chain.
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(30), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(chain(3000, "int32 v = 2; "))));
+        ProtoToLogicalTypeConverter.toLogicalType(
+            new ProtobufSchema(chain(3000, "int32 v = 2; "))));
 
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
     assertThat(defaults).hasSize(3001);
@@ -311,6 +312,27 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     List<Integer> last = new ArrayList<>(Collections.nCopies(19999, 0));
     last.add(1);
     assertThat(lt.getDefaultValues()).containsOnly(Map.entry(last, 0));
+  }
+
+  @Test
+  void siblingsLeadingOnlyBackToAnOpenTypeAreRejectedOnce() {
+    // A holds the only default and B1..B20000; each Bi leads only back to A: the first search
+    // proves every Bi dead, and the rest are rejected without searching again.
+    StringBuilder fan = new StringBuilder(
+        "syntax = \"proto3\";\npackage p;\nmessage A { int32 x = 1;");
+    for (int i = 1; i <= 20000; i++) {
+      fan.append(" B").append(i).append(" b").append(i).append(" = ").append(i + 1).append(";");
+    }
+    fan.append(" }\n");
+    for (int i = 1; i < 20000; i++) {
+      fan.append("message B").append(i).append(" { B").append(i + 1).append(" next = 1; }\n");
+    }
+    fan.append("message B20000 { A a = 1; }\n");
+    ProtobufSchema schema = new ProtobufSchema(fan.toString());
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+        ProtoToLogicalTypeConverter.toLogicalType(schema));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0), 0));
   }
 
   @Test

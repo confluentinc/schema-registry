@@ -105,13 +105,13 @@ public class CycleContext<T> {
     final Map<List<Integer>, Object> out = new HashMap<>();
     // A work stack, not recursion: a chain of references can be longer than the call stack is
     // deep. A recursive type is open from its placement to its exit marker, below its uses.
-    final Set<String> open = new HashSet<>();
+    final Openings open = new Openings();
     final Deque<Placement> work = new ArrayDeque<>();
     work.push(new Placement(null, frame, null, Collections.emptyList(), null));
     while (!work.isEmpty()) {
       final Placement at = work.pop();
       if (at.frame == null) {
-        open.remove(at.name);
+        open.exit();
         continue;
       }
       Step witness = null;
@@ -126,7 +126,7 @@ public class CycleContext<T> {
         if (witness == null) {
           continue;
         }
-        open.add(at.name);
+        open.enter(at.name);
         work.push(new Placement(at.name, null, null, null, null));
       }
       for (Map.Entry<List<Integer>, Object> entry : at.frame.defaults.entrySet()) {
@@ -151,8 +151,11 @@ public class CycleContext<T> {
    * open on the path: a default of its cycle, or a use leaving the cycle toward one; null when
    * none is. Outside the cycle no open type is reachable, so a type with defaults there has them.
    */
-  private Step reaches(String start, Set<String> open, Map<String, Integer> components,
+  private Step reaches(String start, Openings open, Map<String, Integer> components,
       Set<String> withDefaults) {
+    if (open.isDead(start)) {
+      return null;
+    }
     final Integer cycle = components.get(start);
     final Map<String, String> reachedFrom = new HashMap<>();
     final Deque<String> pending = new ArrayDeque<>();
@@ -172,12 +175,14 @@ public class CycleContext<T> {
         if (!components.get(used).equals(cycle)) {
           return pathFrom(name, reachedFrom);
         }
-        if (!open.contains(used) && !reachedFrom.containsKey(used)) {
+        if (!open.contains(used) && !open.isDead(used) && !reachedFrom.containsKey(used)) {
           reachedFrom.put(used, name);
           pending.push(used);
         }
       }
     }
+    // Nothing reachable from any of them while the types open now stay open.
+    open.markDead(reachedFrom.keySet());
     return null;
   }
 
@@ -371,6 +376,53 @@ public class CycleContext<T> {
         }
       }
       return new ArrayList<>(Arrays.asList(path));
+    }
+  }
+
+  /**
+   * The recursive types open on the current path, opened and closed as a stack, and the types
+   * known to reach no default while some of them stay open. A type found so under the innermost
+   * open type stays so while that one is open: any opened since only blocks more.
+   */
+  private static final class Openings {
+    private final Set<String> open = new HashSet<>();
+    private final Deque<String> order = new ArrayDeque<>();
+    private final Deque<Integer> serials = new ArrayDeque<>();
+    private final Set<Integer> live = new HashSet<>();
+    private final Map<String, Integer> deadWhile = new HashMap<>();
+    private int next = 1;
+
+    boolean contains(String name) {
+      return open.contains(name);
+    }
+
+    void enter(String name) {
+      open.add(name);
+      serials.push(next);
+      live.add(next++);
+      order.push(name);
+    }
+
+    void exit() {
+      live.remove(serials.pop());
+      open.remove(order.pop());
+    }
+
+    // 0 while nothing is open: what holds then holds throughout.
+    private int innermost() {
+      return serials.isEmpty() ? 0 : serials.peek();
+    }
+
+    boolean isDead(String name) {
+      final Integer since = deadWhile.get(name);
+      return since != null && (since == 0 || live.contains(since));
+    }
+
+    void markDead(Set<String> types) {
+      final int since = innermost();
+      for (String type : types) {
+        deadWhile.put(type, since);
+      }
     }
   }
 
