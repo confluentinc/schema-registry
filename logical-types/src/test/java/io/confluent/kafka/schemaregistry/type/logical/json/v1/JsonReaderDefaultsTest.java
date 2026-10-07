@@ -18,7 +18,9 @@ package io.confluent.kafka.schemaregistry.type.logical.json.v1;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -271,6 +273,18 @@ class JsonReaderDefaultsTest {
         + " \"org.apache.kafka.connect.data.Date\", \"connect.type\": \"int32\"},"
         + " {\"type\": \"string\"}], \"default\": 19000}");
     assertThat(date.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+  }
+
+  @Test
+  void aUnionLedByAReferenceKeepsNoFieldDefault() {
+    // The writer encodes a union's default by its first branch as written, not through a
+    // reference: the default is in the map only, and the schema still writes.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [{\"$ref\":"
+            + " \"#/definitions/S\"}, {\"type\": \"integer\"}], \"default\": \"x\"}},"
+            + " \"definitions\": {\"S\": {\"type\": \"string\"}}}"), LogicalTypeVersion.V1);
+    assertThat(lt.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+    LogicalTypeToJsonConverter.fromLogicalType(lt, "R", LogicalTypeVersion.V2);
   }
 
   // A schema whose only property, at path [0], is {@code property}.

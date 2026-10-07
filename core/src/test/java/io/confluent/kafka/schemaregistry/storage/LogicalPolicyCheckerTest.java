@@ -103,7 +103,7 @@ class LogicalPolicyCheckerTest {
     assertTrue(result.get() instanceof List, "the check threw " + result.get());
     List<?> errors = (List<?>) result.get();
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).toString().contains("through named types"), errors.toString());
+    assertTrue(errors.get(0).toString().contains("named types inlined"), errors.toString());
   }
 
   @Test
@@ -114,6 +114,19 @@ class LogicalPolicyCheckerTest {
     assertEquals(1, errors.size(), errors.toString());
     assertTrue(errors.get(0).contains("REQUIRED_FIELD_ADDED")
         && errors.get(0).contains(".next.y"), errors.toString());
+  }
+
+  @Test
+  void aPreviousVersionNestingTooDeepIsSkipped() {
+    // Too deep to convert, as for provenance: compared to nothing, as any unconvertible previous
+    // version is, so the change at its deepest message goes unreported.
+    List<String> errors = LogicalPolicyChecker.check(chain(150, false),
+        List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("named types inlined"), errors.toString());
+    errors = LogicalPolicyChecker.check(chain(90, false),
+        List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
+    assertTrue(errors.isEmpty(), errors.toString());
   }
 
   // A file of n messages, each holding the next: deep by reference, never by inline nesting.

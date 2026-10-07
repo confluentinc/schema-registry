@@ -23,9 +23,10 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
@@ -97,8 +98,8 @@ public final class LogicalPolicyChecker {
    * The logical type the policy checks: the {@link LogicalTypeVersion#V1} reading, with a Protobuf
    * file as Flink reads it rather than as {@code format=logical} shows it.
    *
-   * @throws ValidationException if it nests more than {@link InlinedDepth#MAX_DEPTH} deep with its
-   *     named types inlined
+   * @throws TypeTooDeepException if it nests more than {@link ToLogicalContext#MAX_TYPE_DEPTH} deep
+   *     with its named types inlined
    */
   static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
     LogicalType logicalType = ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
@@ -106,9 +107,9 @@ public final class LogicalPolicyChecker {
         : toLogicalType(parsedSchema, LogicalTypeVersion.V1);
     // The converters bound inline nesting only; the checks also walk through named types, so a
     // chain of references could overflow them.
-    if (InlinedDepth.of(logicalType) > InlinedDepth.MAX_DEPTH) {
-      throw new ValidationException("Schema nests types more than " + InlinedDepth.MAX_DEPTH
-          + " deep through named types");
+    if (InlinedDepth.of(logicalType) > ToLogicalContext.MAX_TYPE_DEPTH) {
+      throw new TypeTooDeepException("Schema nests types more than "
+          + ToLogicalContext.MAX_TYPE_DEPTH + " deep with its named types inlined");
     }
     return logicalType;
   }

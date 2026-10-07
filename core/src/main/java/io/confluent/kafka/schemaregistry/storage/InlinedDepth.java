@@ -30,11 +30,10 @@ import java.util.Set;
 /**
  * How deep a logical type nests once its named types are inlined, a cycle cut where it closes.
  * Iterative over the named types, each body measured once, so a deep or dense graph costs its size.
+ * Every level counts, a leaf's included, so against the shared limit it rejects a level or two
+ * sooner than a count of a location's path.
  */
 final class InlinedDepth {
-
-  /** The deepest nesting the logical checks walk: provenance's limit, so neither accepts more. */
-  static final int MAX_DEPTH = 100;
 
   private InlinedDepth() {
   }
