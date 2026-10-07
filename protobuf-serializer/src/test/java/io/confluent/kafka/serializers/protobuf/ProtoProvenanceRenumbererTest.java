@@ -17,9 +17,11 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -52,23 +54,30 @@ public class ProtoProvenanceRenumbererTest {
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
   }
 
-  @Test(timeout = 2000)
-  public void aFreshNumberJumpsAnExtensionRangeToTheMaximum() {
-    // Stepping through the range number by number takes seconds.
+  @Test
+  public void aFieldWithNoWriterCounterpartIsLeftOutOfTheParse() {
+    // No number is taken for it, so no data under any number can be parsed into it.
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
         + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 100 to max;\n}\n");
     ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
         mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
-    assertEquals(99, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
+    assertNull(renumbered.schema.toDescriptor().findFieldByName("c"));
+    assertEquals(1, renumbered.schema.toDescriptor().findFieldByName("a").getNumber());
+    assertTrue(renumbered.movedAny());
   }
 
   @Test
-  public void aFreshNumberIsNeverOneTheImplementationReserves() {
-    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
-        + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 20000 to max;\n}\n");
+  public void aOneofLeftWithNoMemberIsNoOneof() {
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage Row {\n"
+        + "  int32 a = 1;\n  oneof u { string c = 2; }\n  oneof w { string d = 3; string e = 4; }\n"
+        + "}\n");
     ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
-        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
-    assertEquals(18_999, renumbered.schema.toDescriptor().findFieldByName("c").getNumber());
+        mapping(Arrays.asList(p(1, "a"), p(4, "d")),
+            Arrays.asList(p(1, "a"), p(2, "c"), p(4, "d"), p(5, "e"))), false);
+    Descriptor row = renumbered.schema.toDescriptor();
+    assertEquals(1, row.getOneofs().size());
+    assertEquals("w", row.findFieldByName("d").getContainingOneof().getName());
+    assertNull(row.findFieldByName("e"));
   }
 
   @Test

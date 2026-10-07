@@ -946,6 +946,38 @@ class ProvenanceIdentityRulesTest {
     assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 2)));
   }
 
+  @Test
+  void aTitleAnotherKindSharesStillNamesTheBranch() {
+    // The title is shared with a branch of another kind, which the kind rule never pairs with it:
+    // the object whose members all changed still continues by its title.
+    List<ProvenanceVersion> v = compute(
+        union("{\"title\":\"T\",\"type\":\"number\"}",
+            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}}"),
+        union("{\"title\":\"T\",\"type\":\"integer\"}",
+            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"e\":{\"type\":\"string\"}}}"));
+    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 1));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aBranchKeepsItsContinuationWhenAnotherLosesItsDiscriminator() {
+    // A losing its discriminator leaves its old branch untaken; that branch shares more with A
+    // than with B, so it is A's counterpart, and B, which gained its own discriminator, continues.
+    String g = "\"g\":{\"type\":\"number\"}";
+    String a = g + ",\"g0\":{\"type\":\"number\"}";
+    String b = g + ",\"b\":{\"type\":\"number\"}";
+    String plainA = "{\"type\":\"object\",\"properties\":{" + a + "}}";
+    String plainB = "{\"type\":\"object\",\"properties\":{" + b + "}}";
+    JsonSchema v1 = json("{\"u\":{\"oneOf\":[" + branch("k5", a) + "," + plainB + "]}}", null);
+    List<ProvenanceVersion> kept = compute(v1,
+        json("{\"u\":{\"oneOf\":[" + branch("k5", a) + "," + branch("k6", b) + "]}}", null));
+    List<ProvenanceVersion> lost = compute(v1,
+        json("{\"u\":{\"oneOf\":[" + plainA + "," + branch("k6", b) + "]}}", null));
+    assertThat(pid(kept, 1, 0, 1)).isEqualTo(pid(kept, 0, 0, 1));
+    assertThat(pid(lost, 1, 0, 1)).isEqualTo(pid(kept, 0, 0, 1));
+    assertThat(pid(lost, 1, 0, 0)).isEqualTo(pid(kept, 0, 0, 0));
+  }
+
   private static String branch(String kind, String members) {
     return "{\"type\":\"object\",\"properties\":{\"kind\":{\"enum\":[\"" + kind + "\"]},"
         + members + "}}";
