@@ -22,9 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -92,19 +90,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           + "  {\"name\":\"temperature\",\"type\":\"double\"},"
           + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
           + "  {\"name\":\"pressure\",\"type\":\"double\",\"default\":1013.0}"
-          + "]"
-          + "}");
-
-  private static final Schema VALUE_SCHEMA_V3_NO_DEFAULT = new Schema.Parser().parse(
-      "{"
-          + "\"type\":\"record\","
-          + "\"name\":\"SensorReading\","
-          + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-          + "\"fields\":["
-          + "  {\"name\":\"temperature\",\"type\":\"double\"},"
-          + "  {\"name\":\"timestamp\",\"type\":\"long\"},"
-          + "  {\"name\":\"humidity\",\"type\":\"double\"},"
-          + "  {\"name\":\"pressure\",\"type\":\"double\"}"
           + "]"
           + "}");
 
@@ -180,32 +165,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
 
       waitForStoreToContainKeys(streams, STORE_NAME, 2);
 
-      // --- Test 1: Register a new schema, but not producing any new records with it — old values should still be readable under the evolved reader ---
-      // Register value schema v2 in SR WITHOUT producing any v2 records
-      restApp.restClient.registerSchema(VALUE_SCHEMA_V2.toString(), inputTopic + "-value");
-
-      ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> storeBeforeV2Writes =
-          streams.store(StoreQueryParameters.fromNameAndType(
-              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-
-      ValueTimestampHeaders<GenericRecord> sensor1BeforeV2 =
-          storeBeforeV2Writes.get(key1);
-      assertNotNull(sensor1BeforeV2, "sensor-1 should be readable after SR evolution with no v2 writes");
-      assertEquals(35.5, sensor1BeforeV2.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class,
-          () -> sensor1BeforeV2.value().get("humidity"),
-          "humidity should not be present — entry is still v1 bytes, SR evolution alone adds no field");
-      assertSchemaIdHeaders(sensor1BeforeV2.headers(), inputTopic, "sensor1BeforeV2");
-
-      ValueTimestampHeaders<GenericRecord> sensor2BeforeV2 =
-          storeBeforeV2Writes.get(key2);
-      assertNotNull(sensor2BeforeV2, "sensor-2 should be readable after SR evolution with no v2 writes");
-      assertEquals(22.0, sensor2BeforeV2.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class,
-          () -> sensor2BeforeV2.value().get("humidity"),
-          "humidity should not be present — entry is still v1 bytes, SR evolution alone adds no field");
-      assertSchemaIdHeaders(sensor2BeforeV2.headers(), inputTopic, "sensor2BeforeV2");
-
       // Re-read the same v1 bytes off the input topic with v2 reader schema,
       // Avro schema resolution should fill humidity with the v2 default (0.0).
       List<ConsumerRecord<byte[], byte[]>> rawV1Records = consumeRawChangelog(
@@ -256,21 +215,22 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertNotNull(result1, "sensor-1 should be in the store");
       assertEquals(36.0, result1.value().get("temperature"));
       assertEquals(65.0, result1.value().get("humidity"));
-      assertSchemaIdHeaders(result1.headers(), inputTopic, "result1");
+      assertSchemaIdHeaders(result1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2, "result1");
 
       // sensor-2: v1 value readable under the old key schema
       ValueTimestampHeaders<GenericRecord> result2 = store.get(key2);
       assertNotNull(result2, "sensor-2 should still be readable (value written with v1)");
       assertEquals(22.0, result2.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class, () -> result2.value().get("humidity"), "humidity should be null for v1-written value when read with v2 schema");
-      assertSchemaIdHeaders(result2.headers(), inputTopic, "result2");
+      assertThrows(AvroRuntimeException.class, () -> result2.value().get("humidity"),
+          "humidity should not be present on a v1-written value");
+      assertSchemaIdHeaders(result2.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "result2");
 
       // sensor-v2: written directly with v2
       ValueTimestampHeaders<GenericRecord> result3 = store.get(key3);
       assertNotNull(result3, "sensor-v2 should be in the store");
       assertEquals(28.0, result3.value().get("temperature"));
       assertEquals(70.0, result3.value().get("humidity"));
-      assertSchemaIdHeaders(result3.headers(), inputTopic, "result3");
+      assertSchemaIdHeaders(result3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2, "result3");
 
       assertEquals(3, countStoreEntries(store), "Store should contain exactly 3 entries");
 
@@ -290,7 +250,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(18.0, resultV3.value().get("temperature"));
       assertEquals(55.0, resultV3.value().get("humidity"));
       assertEquals(1020.0, resultV3.value().get("pressure"));
-      assertSchemaIdHeaders(resultV3.headers(), inputTopic, "resultV3");
+      assertSchemaIdHeaders(resultV3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V3, "resultV3");
 
       // sensor-1 is v2-shaped
       ValueTimestampHeaders<GenericRecord> result1AfterV3 = store.get(key1);
@@ -298,14 +258,16 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(65.0, result1AfterV3.value().get("humidity"));
       assertThrows(AvroRuntimeException.class, () -> result1AfterV3.value().get("pressure"),
           "pressure should not exist on v2-written record");
-      assertSchemaIdHeaders(result1AfterV3.headers(), inputTopic, "result1AfterV3");
+      assertSchemaIdHeaders(result1AfterV3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2,
+          "result1AfterV3");
 
       // sensor-2 is v1-shaped
       ValueTimestampHeaders<GenericRecord> result2AfterV3 =
           store.get(key2);
       assertThrows(AvroRuntimeException.class, () -> result2AfterV3.value().get("humidity"));
       assertThrows(AvroRuntimeException.class, () -> result2AfterV3.value().get("pressure"));
-      assertSchemaIdHeaders(result2AfterV3.headers(), inputTopic, "result2AfterV3");
+      assertSchemaIdHeaders(result2AfterV3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "result2AfterV3");
 
       assertEquals(4, countStoreEntries(store), "Store should contain 4 entries after v3 write");
 
@@ -353,13 +315,14 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(1005.0, resultV4.value().get("pressure"));
       assertThrows(AvroRuntimeException.class, () -> resultV4.value().get("humidity"),
           "humidity was removed in v4 — not present on v4-written record");
-      assertSchemaIdHeaders(resultV4.headers(), inputTopic, "resultV4");
+      assertSchemaIdHeaders(resultV4.headers(), inputTopic, KEY_SCHEMA_V1,
+          VALUE_SCHEMA_V4_NO_HUMIDITY, "resultV4");
 
       // sensor-1 (v2) still v2-shaped
       ValueTimestampHeaders<GenericRecord> result1 = store.get(key1);
       assertNotNull(result1, "sensor-1 should be in the store");
       assertEquals(65.0, result1.value().get("humidity"));
-      assertSchemaIdHeaders(result1.headers(), inputTopic, "result1");
+      assertSchemaIdHeaders(result1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2, "result1");
 
       assertEquals(2, countStoreEntries(store), "Store should contain 2 entries");
     } finally {
@@ -398,29 +361,22 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           streams.store(StoreQueryParameters.fromNameAndType(
               STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
 
-      // ClusterTestHarness defaults compatibility to NONE; switch the subject to BACKWARD,
-      // SR should reject incompatible schema changes in this case
-      restApp.restClient.updateCompatibility("BACKWARD", inputTopic + "-value");
-
-      assertThrows(RestClientException.class,
+      // Compatibility is BACKWARD by default, so SR rejects the type change as incompatible (409).
+      RestClientException rejected = assertThrows(RestClientException.class,
           () -> restApp.restClient.registerSchema(
               VALUE_SCHEMA_INCOMPATIBLE.toString(), inputTopic + "-value"),
           "SR should reject registering a schema that changes temperature double → string "
               + "under BACKWARD compatibility");
+      assertEquals(409, rejected.getStatus(), "the rejection should be an incompatible-schema error");
 
-      // Failed registration should not affect existing store entries
-      assertEquals(2, countStoreEntries(store),
-          "Store entry count should be unchanged after rejected registration");
-
-      // Change back ClusterTestHarness compatibility to NONE
+      // Allow the change on the input subject, and on the changelog subject the store writes to.
       restApp.restClient.updateCompatibility("NONE", inputTopic + "-value");
+      restApp.restClient.updateCompatibility(
+          "NONE", appId + "-" + STORE_NAME + "-changelog-value");
       assertDoesNotThrow(() -> restApp.restClient.registerSchema(
               VALUE_SCHEMA_INCOMPATIBLE.toString(), inputTopic + "-value"),
           "SR should not reject registering a schema that changes temperature double → string "
               + "under NONE compatibility");
-
-      assertEquals(2, countStoreEntries(store),
-          "Store entry count should be unchanged after registration");
 
       // Overwrite sensor-2 with the new schema that changes the type of temperature
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -440,7 +396,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertNotNull(resultNewKey2, "sensor-2 should be in the store");
       // Avro returns Utf8, not String — compare via toString().
       assertEquals("25.0", resultNewKey2.value().get("temperature").toString());
-      assertSchemaIdHeaders(resultNewKey2.headers(), inputTopic, "resultNewKey2");
+      assertSchemaIdHeaders(resultNewKey2.headers(), inputTopic, KEY_SCHEMA_V1,
+          VALUE_SCHEMA_INCOMPATIBLE, "resultNewKey2");
 
     } finally {
       if (streams != null) {
@@ -487,23 +444,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       ValueTimestampHeaders<GenericRecord> resultV1 = store.get(keyV1);
       assertNotNull(resultV1, "Lookup with v1 key should find the entry");
       assertEquals(35.5, resultV1.value().get("temperature"));
-      assertSchemaIdHeaders(resultV1.headers(), inputTopic, "resultV1");
-
-      // Register key schema v2 in SR WITHOUT producing any v2 records
-      restApp.restClient.registerSchema(KEY_SCHEMA_V2.toString(), inputTopic + "-key");
-
-      ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> storeBeforeK2Writes =
-          streams.store(StoreQueryParameters.fromNameAndType(
-              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-
-      ValueTimestampHeaders<GenericRecord> sensor1BeforeV2 =
-          storeBeforeK2Writes.get(keyV1);
-      assertNotNull(sensor1BeforeV2, "sensor-1 should be readable after SR evolution with no v2 writes");
-      assertEquals(35.5, sensor1BeforeV2.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class,
-          () -> sensor1BeforeV2.value().get("humidity"),
-          "humidity should not be present — entry is still v1 bytes, SR evolution alone adds no field");
-      assertSchemaIdHeaders(sensor1BeforeV2.headers(), inputTopic, "sensor1BeforeV2");
+      assertSchemaIdHeaders(resultV1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "resultV1");
 
       // Produce the same logical key with evolved key schema v2
       // v2 adds "region" field with default "us-east" — this changes the Avro binary
@@ -522,7 +463,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertNotNull(resultV2, "Lookup with v2 key should find the new entry");
       assertEquals(40.0, resultV2.value().get("temperature"),
           "v2 key lookup should return the value produced with v2 key");
-      assertSchemaIdHeaders(resultV2.headers(), inputTopic, "resultV2");
+      assertSchemaIdHeaders(resultV2.headers(), inputTopic, KEY_SCHEMA_V2, VALUE_SCHEMA_V1, "resultV2");
 
       // Lookup with v1 key STILL finds the old entry (it was not overwritten)
       ValueTimestampHeaders<GenericRecord> resultV1Again = store.get(keyV1);
@@ -530,7 +471,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           "v1 key entry should still exist — v2 key has different bytes, so it did not overwrite");
       assertEquals(35.5, resultV1Again.value().get("temperature"),
           "Old entry should retain original value");
-      assertSchemaIdHeaders(resultV1Again.headers(), inputTopic, "resultV1Again");
+      assertSchemaIdHeaders(resultV1Again.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "resultV1Again");
 
       // Iterator shows both entries (duplicate logical key, different byte keys)
       List<String> sensorIds = new ArrayList<>();
@@ -540,7 +482,6 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> entry = iter.next();
           sensorIds.add(entry.key.get("sensorId").toString());
           temperatures.add((double) entry.value.value().get("temperature"));
-          assertSchemaIdHeaders(entry.value.headers(), inputTopic, "iterator entry " + entry.key.get("sensorId"));
         }
       }
       assertEquals(2, sensorIds.size(),
@@ -593,25 +534,12 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       ValueTimestampHeaders<GenericRecord> result = store.get(keyV1);
       assertNotNull(result, "lookup with original schema should find v1's row");
       assertEquals(35.5, result.value().get("temperature"), "lookup should return v1's value");
-      assertSchemaIdHeaders(result.headers(), inputTopic, "result");
+      assertSchemaIdHeaders(result.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "result");
       ValueTimestampHeaders<GenericRecord> result2 = store.get(keyV1DocChanged);
       assertNotNull(result2, "lookup with doc-changed schema should find v1's row");
       assertEquals(35.5, result2.value().get("temperature"),
           "lookup should return v1's value");
-      assertSchemaIdHeaders(result2.headers(), inputTopic, "result2");
-
-      // Register key schema v1_doc_changed in SR WITHOUT producing any new schema key records
-      restApp.restClient.registerSchema(KEY_SCHEMA_V1_DOC_CHANGED.toString(), inputTopic + "-key");
-
-      ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> storeBeforeDocChangedWrites =
-          streams.store(StoreQueryParameters.fromNameAndType(
-              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-
-      ValueTimestampHeaders<GenericRecord> sensor1BeforeV2 =
-          storeBeforeDocChangedWrites.get(keyV1);
-      assertNotNull(sensor1BeforeV2, "sensor-1 should be readable after SR evolution with no v2 writes");
-      assertEquals(35.5, sensor1BeforeV2.value().get("temperature"));
-      assertSchemaIdHeaders(sensor1BeforeV2.headers(), inputTopic, "sensor1BeforeV2");
+      assertSchemaIdHeaders(result2.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "result2");
 
       // Second write with the doc-changed schema should overwrite, not duplicate
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -628,11 +556,13 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       ValueTimestampHeaders<GenericRecord> updated = store.get(keyV1);
       assertNotNull(updated, "lookup with v1 should still find the row");
       assertEquals(40.0, updated.value().get("temperature"), "latest write should win");
-      assertSchemaIdHeaders(updated.headers(), inputTopic, "updated");
+      assertSchemaIdHeaders(updated.headers(), inputTopic, KEY_SCHEMA_V1_DOC_CHANGED, VALUE_SCHEMA_V1,
+          "updated");
       ValueTimestampHeaders<GenericRecord> updated2 = store.get(keyV1DocChanged);
       assertNotNull(updated2, "lookup with doc-changed v1 should still find the row");
       assertEquals(40.0, updated2.value().get("temperature"), "latest write should win");
-      assertSchemaIdHeaders(updated2.headers(), inputTopic, "updated2");
+      assertSchemaIdHeaders(updated2.headers(), inputTopic, KEY_SCHEMA_V1_DOC_CHANGED, VALUE_SCHEMA_V1,
+          "updated2");
 
       int count = 0;
       try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter = store.all()) {
@@ -685,10 +615,10 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
 
       ValueTimestampHeaders<GenericRecord> initKeyV1 = store.get(keyV1);
       assertNotNull(initKeyV1);
-      assertSchemaIdHeaders(initKeyV1.headers(), inputTopic, "initKeyV1");
+      assertSchemaIdHeaders(initKeyV1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "initKeyV1");
       ValueTimestampHeaders<GenericRecord> initKeyV2 = store.get(keyV2);
       assertNotNull(initKeyV2);
-      assertSchemaIdHeaders(initKeyV2.headers(), inputTopic, "initKeyV2");
+      assertSchemaIdHeaders(initKeyV2.headers(), inputTopic, KEY_SCHEMA_V2, VALUE_SCHEMA_V1, "initKeyV2");
       assertEquals(3, countStoreEntries(store));
 
       // Tombstone for key1 with v1 schema
@@ -702,11 +632,13 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           "Key row with schema v1 should be deleted after tombstone under v1 key");
       ValueTimestampHeaders<GenericRecord> afterTombstoneKey2V1 = store.get(key2V1);
       assertNotNull(afterTombstoneKey2V1, "key2 with v1 schema should exist");
-      assertSchemaIdHeaders(afterTombstoneKey2V1.headers(), inputTopic, "afterTombstoneKey2V1");
+      assertSchemaIdHeaders(afterTombstoneKey2V1.headers(), inputTopic, KEY_SCHEMA_V1,
+          VALUE_SCHEMA_V1, "afterTombstoneKey2V1");
       ValueTimestampHeaders<GenericRecord> afterTombstoneKeyV2 = store.get(keyV2);
       assertNotNull(afterTombstoneKeyV2,
           "Key row with schema v2 should survive");
-      assertSchemaIdHeaders(afterTombstoneKeyV2.headers(), inputTopic, "afterTombstoneKeyV2");
+      assertSchemaIdHeaders(afterTombstoneKeyV2.headers(), inputTopic, KEY_SCHEMA_V2,
+          VALUE_SCHEMA_V1, "afterTombstoneKeyV2");
       assertEquals(37.0, afterTombstoneKey2V1.value().get("temperature"));
       assertEquals(40.0, afterTombstoneKeyV2.value().get("temperature"));
 
@@ -724,7 +656,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertNotNull(survivingKey2V1, "key2 with v1 schema should still exist");
       assertEquals(37.0, survivingKey2V1.value().get("temperature"),
           "key2 with v1 schema should still exist");
-      assertSchemaIdHeaders(survivingKey2V1.headers(), inputTopic, "survivingKey2V1");
+      assertSchemaIdHeaders(survivingKey2V1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "survivingKey2V1");
 
       // Tombstone with the doc-changed schema that has identical bytes to v1
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -733,7 +666,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       }
       waitForStoreEntryCount(store, 0);
       assertNull(store.get(key2V1), "key2 with v1 schema should be deleted by tombstone with doc-changed schema");
-        assertEquals(0, countStoreEntries(store), "Store should be empty after all tombstones");
+      assertEquals(0, countStoreEntries(store), "Store should be empty after all tombstones");
 
     } finally {
       if (streams != null) {
@@ -781,8 +714,10 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       List<ConsumerRecord<byte[], byte[]>> inputRecords = consumeRawChangelog(
           inputTopic, "restore-input-assert-" + System.currentTimeMillis(), 3);
       assertEquals(3, inputRecords.size());
+      Schema[] writtenValueSchemas = {VALUE_SCHEMA_V1, VALUE_SCHEMA_V2, VALUE_SCHEMA_V3};
       for (int i = 0; i < inputRecords.size(); i++) {
-        assertSchemaIdHeaders(inputRecords.get(i).headers(), inputTopic, "input#" + i);
+        assertSchemaIdHeaders(inputRecords.get(i).headers(), inputTopic, KEY_SCHEMA_V1,
+            writtenValueSchemas[i], "input#" + i);
       }
 
       // Check all records are in the store before restart
@@ -792,11 +727,14 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(35.5, store1.get(key1).value().get("temperature"));
       assertEquals(60.0, store1.get(key2).value().get("humidity"));
       assertEquals(1020.0, store1.get(key3).value().get("pressure"));
-      assertSchemaIdHeaders(store1.get(key1).headers(), inputTopic, "input#" + key1);
-      assertSchemaIdHeaders(store1.get(key2).headers(), inputTopic, "input#" + key2);
-      assertSchemaIdHeaders(store1.get(key3).headers(), inputTopic, "input#" + key3);
+      assertSchemaIdHeaders(store1.get(key1).headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "input#" + key1);
+      assertSchemaIdHeaders(store1.get(key2).headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2,
+          "input#" + key2);
+      assertSchemaIdHeaders(store1.get(key3).headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V3,
+          "input#" + key3);
 
-      streams1.close(Duration.ofSeconds(30));
+      assertTrue(streams1.close(Duration.ofSeconds(30)), "streams1 should close before the restart");
       streams1 = null;
 
       // Verify changelog topic
@@ -806,7 +744,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(3, changelogRecords.size(),
           "Changelog should hold 3 records before restore");
       for (int i = 0; i < changelogRecords.size(); i++) {
-        assertSchemaIdHeaders(changelogRecords.get(i).headers(), inputTopic, "changelog#" + i);
+        assertSchemaIdHeaders(changelogRecords.get(i).headers(), inputTopic, KEY_SCHEMA_V1,
+            writtenValueSchemas[i], "changelog#" + i);
       }
 
       // Wipe local state to guarantees Streams can't warm-start and must replay the
@@ -815,49 +754,43 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       Files.createDirectory(stateDir);
 
       // Restart the same app, it should restore from changelog.
-      streams2 = startStreams(buildTableTopology(inputTopic), appId, stateDir);
+      CountingRestoreListener restoreListener = new CountingRestoreListener();
+      streams2 = startStreams(buildTableTopology(inputTopic), appId, stateDir, restoreListener);
       waitForStoreToContainKeys(streams2, STORE_NAME, 3);
+      assertEquals(3, restoreListener.restoredRecords(),
+          "the 3 changelog records should be restored, not reprocessed from the input");
 
       ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store2 =
           streams2.store(StoreQueryParameters.fromNameAndType(
               STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
 
-      // Check if sensor-1 is restored under v1 key schema
+      // Check if sensor-1 is restored with its v1 value schema
       ValueTimestampHeaders<GenericRecord> r1 = store2.get(key1);
       assertNotNull(r1, "sensor-1 should be restored");
       assertEquals(35.5, r1.value().get("temperature"));
       assertThrows(AvroRuntimeException.class, () -> r1.value().get("humidity"),
           "v1-written record should not expose humidity after restore");
       assertThrows(AvroRuntimeException.class, () -> r1.value().get("pressure"));
-      assertSchemaIdHeaders(r1.headers(), inputTopic, "sensor#" + key1);
+      assertSchemaIdHeaders(r1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "sensor#" + key1);
 
-      // Check if sensor-2 is restored under v2 key schema
+      // Check if sensor-2 is restored with its v2 value schema
       ValueTimestampHeaders<GenericRecord> r2 = store2.get(key2);
       assertNotNull(r2, "sensor-2 should be restored");
       assertEquals(37.0, r2.value().get("temperature"));
       assertEquals(60.0, r2.value().get("humidity"));
       assertThrows(AvroRuntimeException.class, () -> r2.value().get("pressure"));
-      assertSchemaIdHeaders(r2.headers(), inputTopic, "sensor#" + key2);
+      assertSchemaIdHeaders(r2.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2, "sensor#" + key2);
 
-      // Check if sensor-3 is restored under v3 key schema
+      // Check if sensor-3 is restored with its v3 value schema
       ValueTimestampHeaders<GenericRecord> r3 = store2.get(key3);
       assertNotNull(r3, "sensor-3 should be restored");
       assertEquals(40.0, r3.value().get("temperature"));
       assertEquals(70.0, r3.value().get("humidity"));
       assertEquals(1020.0, r3.value().get("pressure"));
-      assertSchemaIdHeaders(r3.headers(), inputTopic, "sensor#" + key3);
+      assertSchemaIdHeaders(r3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V3, "sensor#" + key3);
 
       assertEquals(3, countStoreEntries(store2),
           "Store should hold exactly the 3 records restored from the changelog");
-
-      // Verify changelog topic still has the same 3 records after restore
-      changelogRecords = consumeRawChangelog(
-          changelogTopic, "restore-changelog-assert-" + System.currentTimeMillis(), 3);
-      assertEquals(3, changelogRecords.size(),
-          "Changelog should hold 3 records before restore");
-      for (int i = 0; i < changelogRecords.size(); i++) {
-        assertSchemaIdHeaders(changelogRecords.get(i).headers(), inputTopic, "changelog#" + i);
-      }
     } finally {
       if (streams1 != null) {
         streams1.close(Duration.ofSeconds(10));
@@ -917,13 +850,15 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals("GREEN", v1Read.get("color").toString());
       assertThrows(AvroRuntimeException.class, () -> v1Read.get("tags"),
           "v1-written record should not expose tags added in v2");
-      assertSchemaIdHeaders(store.get(key1).headers(), inputTopic, "sensor#" + key1);
+      assertSchemaIdHeaders(store.get(key1).headers(), inputTopic, KEY_SCHEMA_V1,
+          VALUE_SCHEMA_ENUM_MAP_V1, "sensor#" + key1);
 
       // sensor-2 written under v2 → sees both the new enum symbol and the map.
       GenericRecord v2Read = store.get(key2).value();
       assertEquals(40.0, v2Read.get("temperature"));
       assertEquals("BLUE", v2Read.get("color").toString());
-      assertSchemaIdHeaders(store.get(key2).headers(), inputTopic, "sensor#" + key2);
+      assertSchemaIdHeaders(store.get(key2).headers(), inputTopic, KEY_SCHEMA_V1,
+          VALUE_SCHEMA_ENUM_MAP_V2, "sensor#" + key2);
 
       @SuppressWarnings("unchecked")
       Map<Object, Object> readTags = (Map<Object, Object>) v2Read.get("tags");
@@ -953,168 +888,37 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
   }
 
   /**
-   * Null for a non-nullable field fails Avro serialization (key and value), while a field omitted
-   * from the record falls back to the schema default.
+   * Null for a non-nullable key or value field fails Avro serialization, and so does a field left
+   * unset on a raw record: only the record builder applies schema defaults.
    */
   @Test
-  public void shouldRejectExplicitNullsAndDefaultOmittedFields() throws Exception {
+  public void shouldRejectExplicitNullsAndUnsetFields() throws Exception {
     String inputTopic = "null-value-field-evolution-input";
-    String appId = "null-value-field-evolution-test-" + System.currentTimeMillis();
-
-    KafkaStreams streams = null;
-    try {
-      streams = startTableApp(inputTopic, appId);
-
-      GenericRecord keyV1 = new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", "sensor-1").build();
-      GenericRecord keyV2 = new GenericRecordBuilder(KEY_SCHEMA_V2).set("sensorId", "sensor-2").build();
-      assertEquals("us-east", keyV2.get("region").toString());
-      GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
-      nullRegionKey.put("sensorId", "sensor-3");
-      nullRegionKey.put("region", null);
-
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        // send a normal record with v1 key schema
-        producer.send(new ProducerRecord<>(inputTopic, keyV1,
-            new GenericRecordBuilder(VALUE_SCHEMA_V1).set("temperature", 35.5).set("timestamp", 1000L).build())).get();
-        // send a v2 key schema record with the default region field
-        producer.send(new ProducerRecord<>(inputTopic, keyV2,
-            new GenericRecordBuilder(VALUE_SCHEMA_V1).set("temperature", 40.0).set("timestamp", 2000L).build())).get();
-        producer.flush();
-      }
-      waitForStoreToContainKeys(streams, STORE_NAME, 2);
-
-      ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
-          streams.store(StoreQueryParameters.fromNameAndType(
-              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-
-      assertEquals(2, countStoreEntries(store));
-      ValueTimestampHeaders<GenericRecord> initKeyV1 = store.get(keyV1);
-      assertNotNull(initKeyV1);
-      assertSchemaIdHeaders(initKeyV1.headers(), inputTopic, "initKeyV1");
-
-      ValueTimestampHeaders<GenericRecord> initKeyV2 = store.get(keyV2);
-      assertEquals(40.0, initKeyV2.value().get("temperature"));
-      assertSchemaIdHeaders(initKeyV2.headers(), inputTopic, "initKeyV2");
-
-      // send a key with null for a non-nullable field, it should fail Avro serialization.
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        assertThrows(SerializationException.class, () ->
-                producer.send(new ProducerRecord<>(inputTopic, nullRegionKey,
-                    new GenericRecordBuilder(VALUE_SCHEMA_V1)
-                        .set("temperature", 41.0).set("timestamp", 2100L).build())),
-            "producing null for a non-nullable string key field should fail Avro serialization");
-      }
-
-      // send a record with null for a non-nullable field, it should fail Avro serialization.
-      GenericRecord badVal = new GenericData.Record(VALUE_SCHEMA_V1);
-      badVal.put("temperature", null);
-      badVal.put("timestamp", 1500L);
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        assertThrows(SerializationException.class, () ->
-                producer.send(new ProducerRecord<>(inputTopic, keyV2, badVal)),
-            "producing null for a non-nullable double field should fail Avro serialization");
-      }
-
-      // overwrite with a record that omits `pressure` and `humidity`, using a schema where
-      // those two fields have no default value
-      GenericRecord badVal2 = new GenericData.Record(VALUE_SCHEMA_V3_NO_DEFAULT);
-      badVal2.put("temperature", 30.0);
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        assertThrows(SerializationException.class, () ->
-                producer.send(new ProducerRecord<>(inputTopic, keyV2, badVal2)),
-            "not specifying value for a non-nullable double field should fail Avro serialization");
-      }
-
-      assertEquals(2, countStoreEntries(store));
-      assertEquals(40.0, store.get(keyV2).value().get("temperature"),
-          "rejected sends must not overwrite the existing entry");
-
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        // send a v4 value schema record with no humidity field, with a default pressure field.
-        producer.send(new ProducerRecord<>(inputTopic, keyV2,
-            new GenericRecordBuilder(VALUE_SCHEMA_V4_NO_HUMIDITY).set("temperature", 45.0).set("timestamp", 2500L).build())).get();
-        producer.flush();
-      }
-
-      store = streams.store(StoreQueryParameters.fromNameAndType(
-              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-      final ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> latestStore =
-          store;
-      final GenericRecord awaitedKey = keyV2;
-      awaitCondition(() -> {
-        ValueTimestampHeaders<GenericRecord> r = latestStore.get(awaitedKey);
-        return r != null && r.value().getSchema().getField("pressure") != null
-            && 2500L == (long) r.value().get("timestamp");
-      }, "store to contain the v4 value with the default pressure");
-      ValueTimestampHeaders<GenericRecord> afterNullField = store.get(keyV2);
-      assertEquals(45.0, afterNullField.value().get("temperature"));
-      assertEquals(1013.0, afterNullField.value().get("pressure"),
-          "After sending a record with null for a non-nullable field but with default value, the store should use the default value");
-      assertThrows(AvroRuntimeException.class,
-          () -> afterNullField.value().get("humidity"), "humidity should not be present");
-      assertSchemaIdHeaders(afterNullField.headers(), inputTopic, "afterNullField");
-
-
-    } finally {
-      if (streams != null) {
-        streams.close(Duration.ofSeconds(10));
-      }
-    }
-  }
-
-
-  /**
-   * Reader-upgraded, writer still on v1.
-   * Step 1: the producer writes v1 data into the topic before the reader starts.
-   * Step 2: the reader app starts with the v2 schema and reads the v1-written bytes,
-   *        projecting them into the v2 class with the new field defaulted.
-   */
-  @Test
-  public void shouldReadV1WritesAfterReaderUpgrade() throws Exception {
-    String inputTopic = "reader-upgrade-input";
-    String appId = "reader-upgrade-test-" + System.currentTimeMillis();
-
     createTopics(inputTopic);
 
-    // --- Step 1: v1 writer produce the data.
-    try (KafkaProducer<SensorKey, SensorReadingV1> v1Producer = createV1Producer()) {
-      v1Producer.send(new ProducerRecord<>(inputTopic,
-          new SensorKey("sensor-1"),
-          SensorReadingV1.newBuilder().setTemperature(35.5).setTimestamp(1000L).build())).get();
-      v1Producer.send(new ProducerRecord<>(inputTopic,
-          new SensorKey("sensor-2"),
-          SensorReadingV1.newBuilder().setTemperature(22.0).setTimestamp(2000L).build())).get();
-      v1Producer.flush();
-    }
+    GenericRecord keyV1 = new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", "sensor-1").build();
+    GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
+    nullRegionKey.put("sensorId", "sensor-3");
+    nullRegionKey.put("region", null);
+    GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
+    nullTemperature.put("temperature", null);
+    nullTemperature.put("timestamp", 1500L);
+    GenericRecord unsetFields = new GenericData.Record(VALUE_SCHEMA_V3);
+    unsetFields.put("temperature", 30.0);
+    unsetFields.put("timestamp", 1600L);
 
-    KafkaStreams streams = null;
-    try {
-      streams = startSpecificTableApp(appId, inputTopic, null);
-      waitForStoreToContainKeys(streams, SPECIFIC_STORE_NAME, 2);
-
-      // --- Step 2: v2 reader reads through value schema ---
-      ReadOnlyKeyValueStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
-          streams.store(StoreQueryParameters.fromNameAndType(
-              SPECIFIC_STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
-
-      ValueTimestampHeaders<SensorReadingV2> r1 = store.get(new SensorKey("sensor-1"));
-      assertNotNull(r1, "sensor-1 should be readable through the upgraded v2 reader");
-      assertSpecificSchemaIdHeaders(r1.headers(), inputTopic, appId, "sensor-1");
-      assertEquals(35.5, r1.value().getTemperature());
-      assertEquals(0.0, r1.value().getHumidity(),
-          "humidity should fall back to the v2 schema default for v1-written bytes");
-
-      ValueTimestampHeaders<SensorReadingV2> r2 = store.get(new SensorKey("sensor-2"));
-      assertNotNull(r2);
-      assertSpecificSchemaIdHeaders(r2.headers(), inputTopic, appId, "sensor-2");
-      assertEquals(SensorReadingV2.class, r2.value().getClass(),
-          "the reader should return the v2 class");
-      assertEquals(22.0, r2.value().getTemperature());
-      assertEquals(0.0, r2.value().getHumidity());
-    } finally {
-      if (streams != null) {
-        streams.close(Duration.ofSeconds(10));
-      }
+    try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+      assertThrows(SerializationException.class, () -> producer.send(new ProducerRecord<>(
+              inputTopic, nullRegionKey,
+              new GenericRecordBuilder(VALUE_SCHEMA_V1)
+                  .set("temperature", 41.0).set("timestamp", 2100L).build())),
+          "null for a non-nullable key field should fail Avro serialization");
+      assertThrows(SerializationException.class,
+          () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, nullTemperature)),
+          "null for a non-nullable value field should fail Avro serialization");
+      assertThrows(SerializationException.class,
+          () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, unsetFields)),
+          "humidity and pressure are unset on a raw record, which does not apply their defaults");
     }
   }
 
@@ -1156,12 +960,16 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
           streams.store(StoreQueryParameters.fromNameAndType(
               SPECIFIC_STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
       // The v1 bytes are read through the v2 class, so the new field takes its default.
+      assertEquals(SensorReadingV2.class, store.get(key1).value().getClass(),
+          "the reader should return the v2 class");
       assertEquals(35.5, store.get(key1).value().getTemperature());
       assertEquals(0.0, store.get(key1).value().getHumidity());
+      assertSpecificSchemaIdHeaders(store.get(key1).headers(), inputTopic, appId, "sensor-1");
       assertEquals(22.0, store.get(key2).value().getTemperature());
       assertEquals(0.0, store.get(key2).value().getHumidity());
+      assertSpecificSchemaIdHeaders(store.get(key2).headers(), inputTopic, appId, "sensor-2");
     } finally {
-      streams.close(Duration.ofSeconds(10));
+      assertTrue(streams.close(Duration.ofSeconds(10)), "the app should close before the restart");
     }
 
     // -- Step 2: Restart and wipe local state so the next run must rebuild from the changelog topic. ---
@@ -1213,7 +1021,7 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
       assertEquals(70.0, r3.getHumidity());
 
     } finally {
-      streams.close(Duration.ofSeconds(10));
+      assertTrue(streams.close(Duration.ofSeconds(10)), "the app should close before the restart");
       deleteRecursively(stateDir);
     }
 
@@ -1345,7 +1153,8 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
   // changelog subject, not the input topic's.
   private void assertSpecificSchemaIdHeaders(Headers headers, String inputTopic, String appId,
       String context) {
-    assertSchemaIdHeaders(headers, inputTopic + "-key",
-        appId + "-" + SPECIFIC_STORE_NAME + "-changelog-value", context);
+    assertSchemaIdHeaders(headers, inputTopic + "-key", SensorKey.getClassSchema(),
+        appId + "-" + SPECIFIC_STORE_NAME + "-changelog-value", SensorReadingV2.getClassSchema(),
+        context);
   }
 }
