@@ -1605,8 +1605,9 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
-  void aTypedReadIsValidatedAgainstItsClassNotAWriterRequiringWhatWasPruned() throws Exception {
-    // The writer requires note; provenance prunes it for the class, whose note is new.
+  void aTypedReadPrunedOfWhatItsWriterRequiresFailsValidation() throws Exception {
+    // Validated against the writer, as without provenance: note, which the writer requires, is
+    // pruned for the class, whose note is new, so the record fails.
     JsonSchema v1 = new JsonSchema("{\"type\": \"object\", \"properties\": {" + number("id")
         + ", " + string("note") + "}, \"required\": [\"note\"]}");
     JsonSchema v2 = object(number("id"));
@@ -1616,8 +1617,24 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
     Map<String, Object> config = config("v1");
     config.put("json.fail.invalid.schema", true);
-    Typed read = new KafkaJsonSchemaDeserializer<>(client, config, Typed.class)
+    assertThrows(SerializationException.class,
+        () -> new KafkaJsonSchemaDeserializer<>(client, config, Typed.class)
+            .deserialize(TOPIC, bytes));
+  }
+
+  @Test
+  void aValidatedTypedReadAcceptsWhatItsWriterAccepts() throws Exception {
+    // The class requires a primitive its writer never had: validated as without provenance,
+    // against the writer, it reads Jackson's 0.
+    JsonSchema v1 = object(number("id"), string("note"));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, object(number("id")));
+    client.register(SUBJECT, JsonSchemaUtils.getSchema(new WithCount()));
+    Map<String, Object> config = config("v1");
+    config.put("json.fail.invalid.schema", true);
+    WithCount read = new KafkaJsonSchemaDeserializer<>(client, config, WithCount.class)
         .deserialize(TOPIC, bytes);
+    assertEquals(0, read.count);
     assertNull(read.note);
   }
 
@@ -1657,6 +1674,13 @@ class JsonProvenanceDeserializerTest {
       this.id = id;
       this.note = note;
     }
+  }
+
+  /** A typed reader with a primitive, which the generated schema requires. */
+  public static class WithCount {
+    public Integer id;
+    public int count;
+    public String note;
   }
 
   /** A typed reader: the class an application deserializes into. */
