@@ -44,20 +44,20 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
-public class AvroProvenanceRenamerTest {
+public class AvroProvenanceProjectionTest {
 
   @Test
   public void aPairedFieldTakesTheReaderNameAndAnUnpairedOneANameNothingMatches() {
     Schema writer = record("W", field("a", "\"int\""), field("b", "\"int\""));
     Schema reader = record("R", field("x", "\"int\""), field("b", "\"int\"", "0"));
     // a -> x keeps its pid; the reader's b is a new column that happens to share a name.
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(
         writer, reader, mapping(pids(p(1, "a"), p(2, "b")), pids(p(1, "x"), p(3, "b"))));
 
-    assertEquals("R", renamed.writer.getFullName());
-    assertEquals("x", renamed.writer.getFields().get(0).name());
-    assertTrue(renamed.writer.getFields().get(1).name().startsWith("__provenance_unmatched_"));
-    assertEquals(Schema.create(Schema.Type.INT), renamed.writer.getFields().get(1).schema());
+    assertEquals("R", projection.writer.getFullName());
+    assertEquals("x", projection.writer.getFields().get(0).name());
+    assertTrue(projection.writer.getFields().get(1).name().startsWith("__provenance_unmatched_"));
+    assertEquals(Schema.create(Schema.Type.INT), projection.writer.getFields().get(1).schema());
   }
 
   @Test
@@ -68,24 +68,24 @@ public class AvroProvenanceRenamerTest {
     Schema reader = record("R",
         "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]}",
         field("name", "\"string\"", "\"unknown\""));
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(
         writer, reader, mapping(pids(p(1, "name")), pids(p(1, "full_name"), p(2, "name"))));
 
-    assertEquals("full_name", renamed.writer.getFields().get(0).name());
-    assertTrue(renamed.reader.getField("full_name").aliases().isEmpty());
+    assertEquals("full_name", projection.writer.getFields().get(0).name());
+    assertTrue(projection.reader.getField("full_name").aliases().isEmpty());
     assertEquals("full_name",
-        Schema.applyAliases(renamed.writer, renamed.reader).getFields().get(0).name());
+        Schema.applyAliases(projection.writer, projection.reader).getFields().get(0).name());
   }
 
   @Test
   public void aSharedRecordIsRenamedTheSameWayAtEverySite() {
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(
         shared("city", null), shared("town", null),
         mapping(sites(1, 2, 3, 4, "city"), sites(1, 2, 3, 4, "town")));
 
-    Schema home = renamed.writer.getField("home").schema();
+    Schema home = projection.writer.getField("home").schema();
     assertEquals("town", home.getFields().get(0).name());
-    assertEquals(home, renamed.writer.getField("work").schema());
+    assertEquals(home, projection.writer.getField("work").schema());
   }
 
   @Test
@@ -93,12 +93,12 @@ public class AvroProvenanceRenamerTest {
     // work.city has no counterpart, home.city does: one Address, two definitions. Outside a union
     // the resolver ignores record names, so the second is a clone.
     // work.town is new, so it needs a default for there to be anything to read.
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(
         shared("city", null), shared("town", "\"\""),
         mapping(sites(1, 2, 3, 4, "city"), sites(1, 2, 3, 5, "town")));
 
-    assertEquals("town", renamed.writer.getField("home").schema().getFields().get(0).name());
-    assertTrue(renamed.writer.getField("work").schema().getFields().get(0).name()
+    assertEquals("town", projection.writer.getField("home").schema().getFields().get(0).name());
+    assertTrue(projection.writer.getField("work").schema().getFields().get(0).name()
         .startsWith("__provenance_unmatched_"));
   }
 
@@ -111,14 +111,14 @@ public class AvroProvenanceRenamerTest {
         + "]"), field("v", "[\"string\",\"A\"]"));
     Schema reader = record("R", field("u", "[\"string\","
         + record("A", field("x", "\"int\"", "0")) + "]"), field("v", "[\"string\",\"A\"]"));
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader, mapping(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(writer, reader, mapping(
         pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
             p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(8, "v", "A", "x")),
         pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "A"), p(4, "u", "A", "x"),
             p(5, "v"), p(6, "v", "string"), p(7, "v", "A"), p(9, "v", "A", "x"))));
 
     Schema a = writer.getField("u").schema().getTypes().get(1);
-    GenericRecord read = decode(writer, renamed, new GenericRecordBuilder(writer)
+    GenericRecord read = decode(writer, projection, new GenericRecordBuilder(writer)
         .set("u", new GenericRecordBuilder(a).set("x", 5).build())
         .set("v", new GenericRecordBuilder(a).set("x", 9).build()).build());
     assertEquals(5, ((GenericRecord) read.get("u")).get("x"));
@@ -138,7 +138,7 @@ public class AvroProvenanceRenamerTest {
         field("v", "[\"string\",\"n1.A\"]"));
     Schema reader = record("R", field("u", "[\"string\"," + n1 + "]"),
         field("v", "[\"string\",\"n1.A\"," + n2 + "]"));
-    assertThrows(ProvenanceUnavailableException.class, () -> AvroProvenanceRenamer.rename(
+    assertThrows(ProvenanceUnavailableException.class, () -> AvroProvenanceProjection.of(
         writer, reader, mapping(
             pids(p(1, "u"), p(2, "u", "string"), p(3, "u", "n1.A"), p(4, "u", "n1.A", "x"),
                 p(5, "v"), p(6, "v", "string"), p(7, "v", "n1.A"), p(8, "v", "n1.A", "x")),
@@ -153,7 +153,7 @@ public class AvroProvenanceRenamerTest {
     Schema reader = record("R", field("id", "\"int\""), field("name", "\"string\""));
 
     SerializationException e = assertThrows(SerializationException.class,
-        () -> AvroProvenanceRenamer.rename(
+        () -> AvroProvenanceProjection.of(
             writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name")))));
     assertTrue(e.getMessage(), e.getMessage().contains("Field 'name'"));
   }
@@ -162,18 +162,18 @@ public class AvroProvenanceRenamerTest {
   public void aReaderFieldWithADefaultPasses() {
     Schema writer = record("R", field("id", "\"int\""));
     Schema reader = record("R", field("id", "\"int\""), field("name", "\"string\"", "\"x\""));
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(
         writer, reader, mapping(pids(p(1, "id")), pids(p(1, "id"), p(2, "name"))));
     // name has no writer source: the writer stays as it was, and the reader's default stands in.
-    assertEquals(1, renamed.writer.getFields().size());
-    assertEquals("id", renamed.writer.getFields().get(0).name());
-    assertEquals("x", renamed.reader.getField("name").defaultVal());
+    assertEquals(1, projection.writer.getFields().size());
+    assertEquals("id", projection.writer.getFields().get(0).name());
+    assertEquals("x", projection.reader.getField("name").defaultVal());
   }
 
   @Test
   public void aLocationWithoutNamesFailsEveryRecord() {
     Schema schema = record("R", field("a", "\"int\""));
-    assertThrows(SerializationException.class, () -> AvroProvenanceRenamer.rename(schema, schema,
+    assertThrows(SerializationException.class, () -> AvroProvenanceProjection.of(schema, schema,
         mapping(pids(p(1, "a")), pids(new ProvenanceField(Arrays.asList(1), null, 1)))));
   }
 
@@ -181,7 +181,7 @@ public class AvroProvenanceRenamerTest {
   public void aLocationNotInTheSchemaFailsEveryRecord() {
     Schema schema = record("R", field("a", "\"int\""));
     SerializationException e = assertThrows(SerializationException.class,
-        () -> AvroProvenanceRenamer.rename(schema, schema,
+        () -> AvroProvenanceProjection.of(schema, schema,
             mapping(pids(p(1, "a"), p(2, "ghost")), pids(p(1, "a")))));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 1"));
   }
@@ -192,7 +192,7 @@ public class AvroProvenanceRenamerTest {
     Schema schema = record("R", field("a", record("A", field("x", "\"int\"")).toString()),
         field("b", record("B", field("y", "\"int\"")).toString()));
     SerializationException e = assertThrows(SerializationException.class,
-        () -> AvroProvenanceRenamer.rename(schema, schema, mapping(
+        () -> AvroProvenanceProjection.of(schema, schema, mapping(
             pids(p(1, "a"), p(2, "a", "x"), p(3, "b"), p(4, "b", "y")),
             pids(p(1, "a"), p(4, "a", "x"), p(3, "b"), p(2, "b", "y")))));
     assertTrue(e.getMessage(), e.getMessage().contains("different parents"));
@@ -211,14 +211,14 @@ public class AvroProvenanceRenamerTest {
         p(4, "u", "A"), p(5, "u", "A", "q"));
     List<ProvenanceField> readerLocated = new ArrayList<>(located);
     readerLocated.add(p(6, "extra"));
-    AvroProvenanceRenamer.Renamed renamed =
-        AvroProvenanceRenamer.rename(writer, reader, mapping(located, readerLocated));
+    AvroProvenanceProjection projection =
+        AvroProvenanceProjection.of(writer, reader, mapping(located, readerLocated));
 
-    assertTrue(renamed.reader.getField("u").schema().getTypes().get(1).getAliases().isEmpty());
+    assertTrue(projection.reader.getField("u").schema().getTypes().get(1).getAliases().isEmpty());
     Schema a2 = writer.getField("u").schema().getTypes().get(1);
     GenericRecord value = new GenericRecordBuilder(writer)
         .set("u", new GenericRecordBuilder(a2).set("x", 7).build()).build();
-    GenericRecord read = decode(writer, renamed, value);
+    GenericRecord read = decode(writer, projection, value);
     assertEquals(7, ((GenericRecord) read.get("u")).get("x"));
   }
 
@@ -230,10 +230,10 @@ public class AvroProvenanceRenamerTest {
         field("d", "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":5,"
             + "\"scale\":2}", "\"\\u0001\""),
         field("f", "{\"type\":\"fixed\",\"name\":\"F\",\"size\":2}", "\"ab\""));
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader,
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(writer, reader,
         mapping(pids(p(1, "a")), pids(p(1, "a"), p(2, "d"), p(3, "f"))));
 
-    GenericRecord read = decode(writer, renamed,
+    GenericRecord read = decode(writer, projection,
         new GenericRecordBuilder(writer).set("a", 1).build());
     assertEquals(ByteBuffer.wrap(new byte[] {1}), read.get("d"));
     assertArrayEquals("ab".getBytes(StandardCharsets.ISO_8859_1),
@@ -247,22 +247,22 @@ public class AvroProvenanceRenamerTest {
     Schema reader = new Schema.Parser().setValidateDefaults(false).parse("{\"type\":\"record\","
         + "\"name\":\"R\",\"fields\":[" + field("a", "\"int\"") + ","
         + field("d", "\"int\"", "\"x\"") + "]}");
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(writer, reader,
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(writer, reader,
         mapping(pids(p(1, "a"), p(2, "d")), pids(p(1, "a"), p(2, "d"))));
 
-    GenericRecord read = decode(writer, renamed,
+    GenericRecord read = decode(writer, projection,
         new GenericRecordBuilder(writer).set("a", 1).set("d", 2).build());
     assertEquals(2, read.get("d"));
   }
 
   // Written under writer, read through the renamed pair, as the deserializer reads it.
-  private static GenericRecord decode(Schema writer, AvroProvenanceRenamer.Renamed renamed,
+  private static GenericRecord decode(Schema writer, AvroProvenanceProjection projection,
       GenericRecord value) throws Exception {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
     new GenericDatumWriter<GenericRecord>(writer).write(value, encoder);
     encoder.flush();
-    return new GenericDatumReader<GenericRecord>(renamed.writer, renamed.reader)
+    return new GenericDatumReader<GenericRecord>(projection.writer, projection.reader)
         .read(null, DecoderFactory.get().binaryDecoder(out.toByteArray(), null));
   }
 

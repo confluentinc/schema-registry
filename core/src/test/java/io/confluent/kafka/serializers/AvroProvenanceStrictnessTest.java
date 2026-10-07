@@ -655,10 +655,10 @@ class AvroProvenanceStrictnessTest {
     }
   }
 
-  private AvroProvenanceRenamer.Renamed rename(Schema writer, Schema reader) throws Exception {
+  private AvroProvenanceProjection rename(Schema writer, Schema reader) throws Exception {
     int writerId = client.getId(SUBJECT, new AvroSchema(writer));
     int readerId = client.getId(SUBJECT, new AvroSchema(reader));
-    return AvroProvenanceRenamer.rename(writer, reader, ProvenanceMapping.join(
+    return AvroProvenanceProjection.of(writer, reader, ProvenanceMapping.join(
         client.getProvenanceById(SUBJECT, writerId, readerId, false, false, null),
         writerId, readerId));
   }

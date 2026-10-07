@@ -34,14 +34,14 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 /** A response the reader cannot follow fails every record from that writer. */
-public class ProtoProvenanceRenumbererTest {
+public class ProtoProvenanceProjectionTest {
 
   private static final ProtobufSchema READER = new ProtobufSchema(
       "syntax = \"proto3\";\npackage p;\nmessage Row {\n  int32 a = 1;\n}\n");
 
   @Test
   public void aLocationWithoutNamesFailsEveryRecord() {
-    assertThrows(SerializationException.class, () -> ProtoProvenanceRenumberer.renumber(READER, null,
+    assertThrows(SerializationException.class, () -> ProtoProvenanceProjection.of(READER, null,
         mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, 2))), false));
   }
@@ -49,7 +49,7 @@ public class ProtoProvenanceRenumbererTest {
   @Test
   public void aLocationNotInTheReaderFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
-        () -> ProtoProvenanceRenumberer.renumber(READER, null, mapping(Arrays.asList(p(1, "a")),
+        () -> ProtoProvenanceProjection.of(READER, null, mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), p(2, "ghost"))), false));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
   }
@@ -59,11 +59,11 @@ public class ProtoProvenanceRenumbererTest {
     // No number is taken for it, so no data under any number can be parsed into it.
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
         + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 100 to max;\n}\n");
-    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
+    ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, null,
         mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
-    assertNull(renumbered.schema.toDescriptor().findFieldByName("c"));
-    assertEquals(1, renumbered.schema.toDescriptor().findFieldByName("a").getNumber());
-    assertTrue(renumbered.movedAny());
+    assertNull(projection.schema.toDescriptor().findFieldByName("c"));
+    assertEquals(1, projection.schema.toDescriptor().findFieldByName("a").getNumber());
+    assertTrue(projection.movedAny());
   }
 
   @Test
@@ -71,10 +71,10 @@ public class ProtoProvenanceRenumbererTest {
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage Row {\n"
         + "  int32 a = 1;\n  oneof u { string c = 2; }\n  oneof w { string d = 3; string e = 4; }\n"
         + "}\n");
-    ProtoProvenanceRenumberer.Renumbered renumbered = ProtoProvenanceRenumberer.renumber(reader, null,
+    ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, null,
         mapping(Arrays.asList(p(1, "a"), p(4, "d")),
             Arrays.asList(p(1, "a"), p(2, "c"), p(4, "d"), p(5, "e"))), false);
-    Descriptor row = renumbered.schema.toDescriptor();
+    Descriptor row = projection.schema.toDescriptor();
     assertEquals(1, row.getOneofs().size());
     assertEquals("w", row.findFieldByName("d").getContainingOneof().getName());
     assertNull(row.findFieldByName("e"));
@@ -88,7 +88,7 @@ public class ProtoProvenanceRenumbererTest {
         + "  message Inner {\n    string memo = 1;\n  }\n}\n";
     ProtobufSchema unused = new ProtobufSchema(String.format(file, ""));
     ProtobufSchema reader = new ProtobufSchema(unused.toDescriptor("p.A.Inner"));
-    assertThrows(ProvenanceUnavailableException.class, () -> ProtoProvenanceRenumberer.renumber(
+    assertThrows(ProvenanceUnavailableException.class, () -> ProtoProvenanceProjection.of(
         reader, unused, mapping(Arrays.asList(p(1, "p.A", "id")),
             Arrays.asList(p(1, "p.A", "id"))), true));
 
@@ -97,7 +97,7 @@ public class ProtoProvenanceRenumbererTest {
     ProtobufSchema usedReader = new ProtobufSchema(used.toDescriptor("p.A.Inner"));
     List<ProvenanceField> both = Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "inner"),
         p(3, "p.A", "inner", "memo"));
-    assertEquals(usedReader, ProtoProvenanceRenumberer.renumber(usedReader, used,
+    assertEquals(usedReader, ProtoProvenanceProjection.of(usedReader, used,
         mapping(both, both), true).schema);
   }
 
@@ -116,7 +116,7 @@ public class ProtoProvenanceRenumbererTest {
               p(4, "p.A", "i", "memo"))
           : Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "m"),
               p(3, "p.A", "m", "value", "memo"));
-      assertEquals(use[1], reader, ProtoProvenanceRenumberer.renumber(reader, writer,
+      assertEquals(use[1], reader, ProtoProvenanceProjection.of(reader, writer,
           mapping(locations, locations), true).schema);
     }
   }
@@ -127,7 +127,7 @@ public class ProtoProvenanceRenumbererTest {
         new ProvenanceVersion(1, 1, writer), new ProvenanceVersion(2, 2, reader))), 1, 2);
   }
 
-  // The renumberer reads only pids and names; the path just has to be unique.
+  // The projection reads only pids and names; the path just has to be unique.
   private static ProvenanceField p(int pid, String... names) {
     return new ProvenanceField(Arrays.asList(pid), Arrays.asList(names), pid);
   }
