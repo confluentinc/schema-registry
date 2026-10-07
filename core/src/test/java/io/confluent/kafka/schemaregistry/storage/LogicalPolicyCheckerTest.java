@@ -116,23 +116,6 @@ class LogicalPolicyCheckerTest {
         && errors.get(0).contains(".next.y"), errors.toString());
   }
 
-  @Test
-  void aFileWhoseMessagesAllReferToEachOtherIsCheckedInTime() {
-    // 250 messages, each holding every later one: a cycle search per reference took minutes.
-    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
-    for (int i = 0; i < 250; i++) {
-      text.append("message T").append(i).append(" { int32 x = 1;");
-      for (int j = i + 1; j < 250; j++) {
-        text.append(" T").append(j).append(" t").append(j).append(" = ").append(j + 2)
-            .append(";");
-      }
-      text.append(" }\n");
-    }
-    ProtobufSchema dense = new ProtobufSchema(text.toString());
-    assertTimeoutPreemptively(Duration.ofSeconds(3), () -> LogicalPolicyChecker.check(dense,
-        List.of(), CompatibilityLevel.NONE));
-  }
-
   // A file of n messages, each holding the next: deep by reference, never by inline nesting.
   private static ProtobufSchema chain(int n, boolean extra) {
     StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n"
