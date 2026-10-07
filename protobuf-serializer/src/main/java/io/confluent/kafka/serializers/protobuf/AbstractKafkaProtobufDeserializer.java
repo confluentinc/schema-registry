@@ -398,11 +398,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   /**
-   * {@code bytes} parsed with the renumbered reader, less the writer data the renumbering left in
-   * unknown fields, and back in {@code reader}'s own numbers. A moved field took no writer data,
-   * so nothing is lost moving back. Done before the domain rules: a value they write to a moved
-   * field must land under its own number, and a caller handed the renumbered descriptor could not
-   * address its fields with the reader's, and would write them out under the wrong numbers.
+   * {@code bytes} parsed with the reader less its new fields, less the data that left in unknown
+   * fields, and back in {@code reader}'s own descriptor, where the new fields read as unset. Done
+   * before the domain rules: a value they write to a new field must land under its own number, and
+   * a caller handed the parse descriptor could not address the fields it leaves out.
    */
   private static Message parseRenumbered(ProtoProvenanceRenumberer.Renumbered renumbered,
       ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {

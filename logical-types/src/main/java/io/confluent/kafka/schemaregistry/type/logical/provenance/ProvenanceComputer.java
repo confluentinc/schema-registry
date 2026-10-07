@@ -1217,8 +1217,8 @@ public final class ProvenanceComputer {
             // After equal content: a title only documents, and validation reads by content.
             found = peer.title == null ? null : mutual(peer, unresolved(peers, matched),
                 previous,
-                (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
-                    && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
+                (a, p) -> !taken.contains(p) && sameTitledKind(a, p) && !otherHints(a, p)
+                    && !namesOtherwise(a.content, p.content));
           } else if (phase == 4) {
             List<Node> unresolved = unresolved(peers, matched);
             Set<String> envelope = envelope(previous, taken);
@@ -1486,15 +1486,17 @@ public final class ProvenanceComputer {
           otherPeers.add(other);
         }
       }
-      return hasCounterpart(peer, candidate, otherPrevious)
-          || hasCounterpart(candidate, peer, otherPeers);
+      return hasCounterpart(peer, candidate, otherPrevious, peers)
+          || hasCounterpart(candidate, peer, otherPeers, previous);
     }
 
     /**
-     * Whether one of {@code alternatives} shares a member with {@code side} and has a
-     * discriminator key {@code side} has and {@code other} lacks.
+     * Whether one of {@code alternatives} shares a member with {@code side}, has a discriminator
+     * key {@code side} has and {@code other} lacks, and shares no more with another of
+     * {@code sides}, the branches of {@code side}'s version, than with {@code side}.
      */
-    private static boolean hasCounterpart(Node side, Node other, List<Node> alternatives) {
+    private static boolean hasCounterpart(Node side, Node other, List<Node> alternatives,
+        List<Node> sides) {
       Set<String> missing = new HashSet<>(side.keys);
       missing.removeAll(other.keys);
       if (missing.isEmpty()) {
@@ -1504,11 +1506,40 @@ public final class ProvenanceComputer {
       for (Node alternative : alternatives) {
         // The key test first: it is the cheaper, and fails for most alternatives.
         if (!Collections.disjoint(alternative.keys, missing)
-            && related(side.content, alternative.content)) {
+            && related(side.content, alternative.content)
+            && closest(side, alternative, sides)) {
           return true;
         }
       }
       return false;
+    }
+
+    // Whether no branch of side's version shares more members with the alternative than side
+    // does: an alternative closer to another branch is that one's counterpart, not side's.
+    private static boolean closest(Node side, Node alternative, List<Node> sides) {
+      int mine = relatedCount(side.content, alternative.content);
+      for (Node other : sides) {
+        if (other != side && other.content != null
+            && relatedCount(other.content, alternative.content) > mine) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // The members two branches share, discriminators left out.
+    private static int relatedCount(Set<String> mine, Set<String> theirs) {
+      Set<String> myKeys = discriminatorKeys(mine);
+      Set<String> theirKeys = discriminatorKeys(theirs);
+      int shared = 0;
+      for (String entry : mine) {
+        String key = DISCRIMINATOR + entry.substring(MEMBER.length()) + "=";
+        if (entry.startsWith(MEMBER) && theirs.contains(entry)
+            && !myKeys.contains(key) && !theirKeys.contains(key)) {
+          shared++;
+        }
+      }
+      return shared;
     }
 
     /**
@@ -1548,18 +1579,15 @@ public final class ProvenanceComputer {
       return -1;
     }
 
+    // The same title, of the same kind: a title another kind shares names no counterpart, as the
+    // kind rule would make that pairing new.
+    private static boolean sameTitledKind(Node a, Node b) {
+      return Objects.equals(a.title, b.title) && a.kinds.equals(b.kinds);
+    }
+
     /** Whether two branches share a member other than a discriminator, whatever their values. */
     private static boolean related(Set<String> mine, Set<String> theirs) {
-      Set<String> myKeys = discriminatorKeys(mine);
-      Set<String> theirKeys = discriminatorKeys(theirs);
-      for (String entry : mine) {
-        String key = DISCRIMINATOR + entry.substring(MEMBER.length()) + "=";
-        if (entry.startsWith(MEMBER) && theirs.contains(entry)
-            && !myKeys.contains(key) && !theirKeys.contains(key)) {
-          return true;
-        }
-      }
-      return false;
+      return relatedCount(mine, theirs) > 0;
     }
 
     /**
