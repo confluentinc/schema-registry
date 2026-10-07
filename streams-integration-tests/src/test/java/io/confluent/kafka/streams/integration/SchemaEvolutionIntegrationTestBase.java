@@ -88,8 +88,6 @@ import org.junit.jupiter.api.AfterEach;
 public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarness {
 
   protected SchemaEvolutionIntegrationTestBase() {
-    // BACKWARD, so every evolution the tests register is compatibility-checked. A test that needs
-    // an incompatible change switches the affected subjects to NONE itself.
     super(1, true, "BACKWARD");
   }
 
@@ -289,8 +287,6 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     streamsProps.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
     streamsProps.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
     streamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-    // close(Duration) does not leave the consumer group on the classic protocol, so a restart under
-    // the same app id would wait for the old member's session to expire (45s by default).
     streamsProps.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10_000);
     streamsProps.put(
         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
