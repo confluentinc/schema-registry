@@ -61,7 +61,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int SCHEMA_ID_NOT_IN_SUBJECT = 40411;
   private static final int INVALID_SCHEMA = 42201;
   private static final int INVALID_VERSION = 42202;
-  private static final int RECURSIVE_SCHEMA = 42213;
+  private static final int RECURSIVE_SCHEMA = 42220;
   private static final int UNRESOLVABLE_REFERENCE = 42214;
   private static final int UNKNOWN_ALGORITHM = 42216;
   private static final int AMBIGUOUS_PROVENANCE = 42217;

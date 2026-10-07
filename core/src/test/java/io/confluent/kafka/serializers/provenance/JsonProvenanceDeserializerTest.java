@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
@@ -1585,6 +1587,76 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
     Object read = new KafkaJsonSchemaDeserializer<>(client, config("v1")).deserialize(TOPIC, bytes);
     assertNull(((Named) read).note);
+  }
+
+  @Test
+  void aTypedReaderWithoutADefaultConstructorGetsNoOldValue() throws Exception {
+    // Jackson builds it through its creator; its schema comes from the class, not an instance.
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = JsonSchemaUtils.getSchema(new Created(1, "x"));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Created read = new KafkaJsonSchemaDeserializer<>(client, config("v1"), Created.class)
+        .deserialize(TOPIC, bytes);
+    assertEquals(7, read.id);
+    assertNull(read.note);
+  }
+
+  @Test
+  void aTypedReadIsValidatedAgainstItsClassNotAWriterRequiringWhatWasPruned() throws Exception {
+    // The writer requires note; provenance prunes it for the class, whose note is new.
+    JsonSchema v1 = new JsonSchema("{\"type\": \"object\", \"properties\": {" + number("id")
+        + ", " + string("note") + "}, \"required\": [\"note\"]}");
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = JsonSchemaUtils.getSchema(new Typed());
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Map<String, Object> config = config("v1");
+    config.put("json.fail.invalid.schema", true);
+    Typed read = new KafkaJsonSchemaDeserializer<>(client, config, Typed.class)
+        .deserialize(TOPIC, bytes);
+    assertNull(read.note);
+  }
+
+  @Test
+  void aFirstTypedReadRacingAReconfigureCompletes() throws Exception {
+    // The reconfigure holds the deserializer's monitor while the read first derives its class's
+    // schema: neither may wait for the other.
+    JsonSchema v1 = object(number("id"), string("note"));
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    Map<String, Object> config = config("v1");
+    KafkaJsonSchemaDeserializer<Typed> deserializer =
+        new KafkaJsonSchemaDeserializer<>(client, config, Typed.class);
+    Thread reader = new Thread(() -> deserializer.deserialize(TOPIC, bytes), "reader");
+    Thread reconfigure = new Thread(() -> {
+      synchronized (deserializer) {
+        reader.start();
+        while (reader.getState() != Thread.State.BLOCKED && reader.isAlive()) {
+          Thread.onSpinWait();
+        }
+        deserializer.configure(config, false);
+      }
+    }, "reconfigure");
+    reconfigure.start();
+    reconfigure.join(5000);
+    reader.join(5000);
+    assertFalse(reconfigure.isAlive() || reader.isAlive(),
+        "the read and the reconfigure deadlocked");
+  }
+
+  /** A typed reader built through a creator, with no default constructor. */
+  public static class Created {
+    public final Integer id;
+    public final String note;
+
+    @JsonCreator
+    public Created(@JsonProperty("id") Integer id, @JsonProperty("note") String note) {
+      this.id = id;
+      this.note = note;
+    }
   }
 
   /** A typed reader: the class an application deserializes into. */

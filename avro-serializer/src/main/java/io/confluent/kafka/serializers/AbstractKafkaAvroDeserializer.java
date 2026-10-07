@@ -112,8 +112,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * version adds besides — metadata, rules — so for provenance it is the latest version it equals.
    */
   private AvroSchema classReader(Schema schema) {
-    return classReaders.asMap().computeIfAbsent(schema, s -> provenanceAlgorithm == null
-        ? new AvroSchema(s) : (AvroSchema) provenanceProjector().derivedReader(new AvroSchema(s)));
+    // The projector first: a load holding the cache's lock must not wait for the monitor a reset,
+    // invalidating the cache, holds.
+    ProvenanceProjector<AvroProvenanceRenamer.Renamed> projector =
+        provenanceAlgorithm == null ? null : provenanceProjector();
+    return classReaders.asMap().computeIfAbsent(schema, s -> projector == null
+        ? new AvroSchema(s) : (AvroSchema) projector.derivedReader(new AvroSchema(s)));
   }
 
   // The configured class's schema, or a generated class's own passed in, is a class reader; any

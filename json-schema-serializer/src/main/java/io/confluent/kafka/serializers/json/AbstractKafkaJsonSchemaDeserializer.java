@@ -215,14 +215,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       final JsonSchema writerSchema = schema;
       // Pruned first: validation and the domain rules see only what the reader may, validation's
       // defaults reach a pruned property as one never written, and a rule's value is not undone.
-      jsonNode = byProvenance(subject, schemaId, writerSchema,
-          provenanceReader(readerSchema, migrations, writerSchema), migrations, jsonNode, buffer,
-          start, length);
+      ParsedSchema prunedFor = provenanceReader(readerSchema, migrations, writerSchema);
+      jsonNode = byProvenance(subject, schemaId, writerSchema, prunedFor, migrations, jsonNode,
+          buffer, start, length);
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
       if (validate && validateBeforeDomainRules) {
-        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
+        jsonNode = validateJson(jsonNode, buffer, start, length, validating(prunedFor, schema));
       }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
@@ -235,7 +235,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       if (validate && !validateBeforeDomainRules) {
-        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
+        jsonNode = validateJson(jsonNode, buffer, start, length, validating(prunedFor, schema));
       }
 
       Object value;
@@ -450,12 +450,21 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   private synchronized void resetProvenance() {
     provenanceProjector = null;
     classSchemas.clear();
+    javaTypes.clear();
   }
 
   /**
    * The reader provenance prunes for: the reader schema, else a typed read's class, as a generated
    * class is in Avro and Protobuf. None after migrations, which provenance does not apply to.
    */
+  /**
+   * The schema a read is validated against: the reader provenance pruned for, a class's included,
+   * so what was pruned is absent, as never written, rather than missing from the writer.
+   */
+  private static JsonSchema validating(ParsedSchema prunedFor, JsonSchema schema) {
+    return prunedFor != null ? (JsonSchema) prunedFor : schema;
+  }
+
   private ParsedSchema provenanceReader(ParsedSchema readerSchema, List<Migration> migrations,
       JsonSchema writer) {
     return readerSchema != null || !migrations.isEmpty() ? readerSchema : classSchema(writer);
@@ -476,8 +485,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     if (cls == null || !isApplicationClass(cls)) {
       return null;
     }
-    return classSchemas.computeIfAbsent(cls, c -> Optional.ofNullable(loadClassSchema(c)))
-        .orElse(null);
+    // The projector first: a load holding the map's lock must not wait for the monitor a reset,
+    // clearing the map, holds.
+    ProvenanceProjector<JsonProvenancePruner> projector = provenanceProjector();
+    return classSchemas.computeIfAbsent(cls,
+        c -> Optional.ofNullable(loadClassSchema(c, projector))).orElse(null);
   }
 
   // A class with properties of its own: not a tree, map, collection, primitive or JDK type.
@@ -491,12 +503,13 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return !cls.getName().startsWith("java.");
   }
 
-  private JsonSchema loadClassSchema(Class<?> cls) {
+  private JsonSchema loadClassSchema(Class<?> cls,
+      ProvenanceProjector<JsonProvenancePruner> projector) {
     try {
-      Object instance = cls.getDeclaredConstructor().newInstance();
+      // From the class, as the serializer derives it, without constructing one.
       boolean failUnknown =
           objectMapper.isEnabled(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-      return (JsonSchema) provenanceProjector().derivedReader(JsonSchemaUtils.getSchema(instance,
+      return (JsonSchema) projector.derivedReader(JsonSchemaUtils.getSchemaOfClass(cls,
           null, null, true, failUnknown, objectMapper, schemaRegistry));
     } catch (Exception | LinkageError e) {
       // Once per class: without its schema, its reads have no provenance.
@@ -506,17 +519,22 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
   }
 
+  // The class a writer's javaType names, looked up once per name: reads need no class lookup.
+  private final Map<String, Optional<Class<?>>> javaTypes = new ConcurrentHashMap<>();
+
   private Class<?> javaTypeOf(JsonSchema writer) {
     String name = writer.getString(typeProperty);
     if (name == null) {
       return null;
     }
-    try {
-      checkTypeAllowed(name);
-      return Class.forName(name);
-    } catch (ClassNotFoundException | SerializationException e) {
-      return null;
-    }
+    return javaTypes.computeIfAbsent(name, n -> {
+      try {
+        checkTypeAllowed(n);
+        return Optional.of(Class.forName(n));
+      } catch (ClassNotFoundException | SerializationException e) {
+        return Optional.empty();
+      }
+    }).orElse(null);
   }
 
   @Override
