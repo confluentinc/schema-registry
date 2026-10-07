@@ -268,6 +268,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String EDITION_DEPRECATED = "edition_deprecated";
   private static final String DEPRECATION_WARNING = "deprecation_warning";
   private static final String EDITION_REMOVED = "edition_removed";
+  private static final String REMOVAL_ERROR = "removal_error";
 
   private static final String VERIFICATION = "verification";
 
@@ -1351,6 +1352,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (featureSupport.hasEditionRemoved()) {
       map.put(EDITION_REMOVED, toOptionValue(featureSupport.getEditionRemoved(), true));
     }
+    if (featureSupport.hasRemovalError()) {
+      map.put(REMOVAL_ERROR, toOptionValue(featureSupport.getRemovalError(), true));
+    }
     return new OptionElement(FEATURE_SUPPORT, Kind.MAP, map, false);
   }
 
@@ -2092,6 +2096,10 @@ public class ProtobufSchema implements ParsedSchema {
       } catch (IllegalArgumentException e) {
         builder.setEditionRemoved(Edition.EDITION_UNKNOWN);
       }
+    }
+    Object removalError = map.get(REMOVAL_ERROR);
+    if (removalError != null) {
+      builder.setRemovalError((String) toPrimitiveValue(removalError));
     }
     return builder.build();
   }
