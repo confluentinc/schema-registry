@@ -1822,6 +1822,33 @@ class ProtobufProvenanceDeserializerTest {
     assertNull(System.getProperty(NotAMessage.INITIALIZED));
   }
 
+  @Test
+  void aDroppedFieldsDataUnderTheHighestNumberDoesNotFailANewMessageField() throws Exception {
+    // A producer still on v1 writes big under v2's id; v3's new message field nu used to move to
+    // the highest number, where big's string then failed to parse as a message.
+    String p = "syntax = \"proto3\";\npackage r;\n";
+    ProtobufSchema v1 =
+        new ProtobufSchema(p + "message R { string k = 1; string big = 536870911; }");
+    ProtobufSchema v2 = new ProtobufSchema(p + "message R { string k = 1; }");
+    ProtobufSchema v3 = new ProtobufSchema(
+        p + "message R { string k = 1; N nu = 3; } message N { string x = 1; }");
+    client.register(SUBJECT, v1);
+    int id = client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Descriptor d = v1.toDescriptor();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id).array());
+    out.write(0);
+    out.write(DynamicMessage.newBuilder(d).setField(d.findFieldByName("k"), "K")
+        .setField(d.findFieldByName("big"), "old").build().toByteArray());
+    DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(client,
+        config("v1")).deserializeWithSchema(TOPIC, new RecordHeaders(), out.toByteArray(),
+            w -> v3).getValue();
+    assertEquals("K", read.getField(read.getDescriptorForType().findFieldByName("k")));
+    assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("nu")));
+  }
+
   // --- Helpers -----------------------------------------------------------------------------------
 
   private DynamicMessage sameBothWays(ProtobufSchema writer, ProtobufSchema reader,
