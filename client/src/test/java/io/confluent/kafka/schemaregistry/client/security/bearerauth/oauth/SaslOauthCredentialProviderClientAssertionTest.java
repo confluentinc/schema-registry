@@ -220,6 +220,18 @@ public class SaslOauthCredentialProviderClientAssertionTest {
 
     ConfigException e = assertThrows(ConfigException.class, () -> configure(configs));
     assertTrue(e.getMessage(), e.getMessage().contains("clientSecret"));
+    assertTrue(e.getMessage(),
+        e.getMessage().contains(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE));
+  }
+
+  @Test
+  public void testMissingCredentialsReportedBeforeMissingClientId() {
+    // clientId is optional for client assertion, so a missing assertion is the more likely cause
+    Map<String, Object> configs = baseConfigs(";");
+
+    ConfigException e = assertThrows(ConfigException.class, () -> configure(configs));
+    assertTrue(e.getMessage(),
+        e.getMessage().contains(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE));
   }
 
   @Test

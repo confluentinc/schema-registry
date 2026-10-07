@@ -194,19 +194,31 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
       }
     }
 
+    String clientSecret = getConfigOrJaas(cu, jou,
+        SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET,
+        SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
+        OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG, false);
+    if (clientSecret == null) {
+      throw new ConfigException(String.format("No OAuth client credentials are configured for the "
+              + "Schema Registry client. Configure either a client secret (%s, %s or the %s JAAS "
+              + "option) or a client assertion (%s, or %s with %s)",
+          SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET,
+          SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
+          OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG,
+          SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE,
+          SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS,
+          SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE));
+    }
+    if (clientId == null) {
+      clientId = jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG);
+    }
+
     if (hasAssertionFile || hasAssertionIssuer) {
       log.info("{} is configured, so the client assertion configs are ignored and client secret "
           + "authentication is used", SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
     } else {
       log.info("Schema Registry client using client secret authentication");
     }
-    if (clientId == null) {
-      clientId = jou.validateString(OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG);
-    }
-    String clientSecret = getConfigOrJaas(cu, jou,
-        SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET,
-        SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
-        OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG, true);
 
     return new HttpJwtRetriever(clientId, clientSecret, scope, sslSocketFactory,
         url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
