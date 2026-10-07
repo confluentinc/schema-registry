@@ -217,7 +217,7 @@ public class JsonToLogicalTypeConverter {
       }
       // In the path-keyed map only, as Flink's converter had them: the JSON writer encodes no
       // composite default, nor a Connect date or time as the number it was.
-      return isMapOnly(named(ctx, fieldType), rawDefault) ? null : defaultValue;
+      return isMapOnly(named(ctx, fieldType), ctx, rawDefault) ? null : defaultValue;
     } catch (RuntimeException e) {
       LOG.warn(
           "Skipping unconvertible JSON Schema default at field index path {} "
@@ -227,8 +227,13 @@ public class JsonToLogicalTypeConverter {
     }
   }
 
-  private static boolean isMapOnly(final Schema type, final Object rawDefault) {
+  private static boolean isMapOnly(
+      final Schema type, final ToLogicalContext<String> ctx, final Object rawDefault) {
     switch (type.getType()) {
+      case UNION:
+        // Decoded by its first branch, so map-only as that branch would be.
+        return !type.getBranches().isEmpty()
+            && isMapOnly(named(ctx, type.getBranches().get(0).getSchema()), ctx, rawDefault);
       case ARRAY:
       case MAP:
       case MULTISET:

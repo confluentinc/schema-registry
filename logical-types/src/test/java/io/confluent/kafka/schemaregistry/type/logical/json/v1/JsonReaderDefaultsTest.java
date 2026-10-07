@@ -261,6 +261,18 @@ class JsonReaderDefaultsTest {
     assertThat(lt.getDefaultValues().get(List.of(0))).isEqualTo(List.of(Map.of("x", 1L)));
   }
 
+  @Test
+  void aUnionsCompositeOrConnectDateDefaultIsNotTheFields() {
+    // Decoded by the union's first branch, it is as map-only as that branch's own would be.
+    LogicalType array = property("{\"oneOf\": [{\"type\": \"array\", \"items\": {\"type\":"
+        + " \"string\"}}], \"default\": [\"x\"]}");
+    assertThat(array.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+    LogicalType date = property("{\"oneOf\": [{\"type\": \"integer\", \"title\":"
+        + " \"org.apache.kafka.connect.data.Date\", \"connect.type\": \"int32\"},"
+        + " {\"type\": \"string\"}], \"default\": 19000}");
+    assertThat(date.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+  }
+
   // A schema whose only property, at path [0], is {@code property}.
   private static LogicalType property(String property) {
     return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
