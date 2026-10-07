@@ -3137,13 +3137,13 @@ paths:
         "422":
           description: Unprocessable Entity. Error code 42201 indicates a schema with
             no logical form. Error code 42202 indicates an invalid version. Error
-            code 42213 indicates a recursive schema. Error code 42214 indicates a
-            schema that could not be parsed. Error code 42215 indicates an invalid
-            range. Error code 42216 indicates an unknown algorithm. Error code 42217
-            indicates a history whose names and aliases do not determine one provenance.
-            Error code 42218 indicates a version with too many locations to compute,
-            or nesting them too deep. Error code 42219 indicates a range with includeInterior
-            covering more versions than one request may.
+            code 42214 indicates a schema that could not be parsed. Error code 42215
+            indicates an invalid range. Error code 42216 indicates an unknown algorithm.
+            Error code 42217 indicates a history whose names and aliases do not determine
+            one provenance. Error code 42218 indicates a version with too many locations
+            to compute, or nesting them too deep. Error code 42219 indicates a range
+            with includeInterior covering more versions than one request may. Error
+            code 42220 indicates a recursive schema.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
