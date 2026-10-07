@@ -420,15 +420,15 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return node;
     }
-    JsonProvenancePruner pruner = provenanceProjector()
+    JsonProvenanceProjection projection = provenanceProjector()
         .project(subject, writerId, writer, reader, false,
-            mapping -> JsonProvenancePruner.plan(mapping, (JsonSchema) reader, writer))
+            mapping -> JsonProvenanceProjection.of(mapping, (JsonSchema) reader, writer))
         .orElse(null);
-    if (pruner == null || pruner.isEmpty()) {
+    if (projection == null || projection.isEmpty()) {
       return node;
     }
     JsonNode document = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
-    pruner.prune(document);
+    projection.prune(document);
     return document;
   }
 
@@ -441,7 +441,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return provenanceProjector().readerSchemas(readers);
   }
 
-  private volatile ProvenanceProjector<JsonProvenancePruner> provenanceProjector;
+  private volatile ProvenanceProjector<JsonProvenanceProjection> provenanceProjector;
 
   /**
    * Forgets the projector: it belongs to the configuration it was built under. Under the lock it
@@ -479,7 +479,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
     // The projector first: a load holding the map's lock must not wait for the monitor a reset,
     // clearing the map, holds.
-    ProvenanceProjector<JsonProvenancePruner> projector = provenanceProjector();
+    ProvenanceProjector<JsonProvenanceProjection> projector = provenanceProjector();
     return classSchemas.computeIfAbsent(cls,
         c -> Optional.ofNullable(loadClassSchema(c, projector))).orElse(null);
   }
@@ -496,7 +496,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private JsonSchema loadClassSchema(Class<?> cls,
-      ProvenanceProjector<JsonProvenancePruner> projector) {
+      ProvenanceProjector<JsonProvenanceProjection> projector) {
     try {
       // From the class, as the serializer derives it, without constructing one.
       boolean failUnknown =
@@ -538,8 +538,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.
-  private ProvenanceProjector<JsonProvenancePruner> provenanceProjector() {
-    ProvenanceProjector<JsonProvenancePruner> projector = provenanceProjector;
+  private ProvenanceProjector<JsonProvenanceProjection> provenanceProjector() {
+    ProvenanceProjector<JsonProvenanceProjection> projector = provenanceProjector;
     if (projector == null) {
       synchronized (this) {
         projector = provenanceProjector;

@@ -200,10 +200,9 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aRenumberedReadComesBackInTheReadersOwnNumbers() throws Exception {
-    // Renumbering is only for parsing. A message handed over in the renumbered descriptor could
-    // not be addressed by the reader's own field descriptors, and would forward memo under the
-    // throwaway number.
+  void aProjectedReadComesBackInTheReadersOwnNumbers() throws Exception {
+    // The projected descriptor is only for parsing. A message handed over in it could not be
+    // addressed by the reader's own field descriptors, and would forward memo as unknown data.
     ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
     ProtobufSchema v2 = row("int32 id = 1;");
     ProtobufSchema v3 = row("int32 id = 1;", "string memo = 2;");
@@ -415,7 +414,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aNewOneofInARepeatedMessageStillRenumbersItsMembers() throws Exception {
+  void aNewOneofInARepeatedMessageStillProjectsItsMembers() throws Exception {
     // The oneof is new, so it moves, but it is no field: its member memo reuses note's number.
     ProtobufSchema v1 = row("repeated E es = 1;", "message E { int32 x = 1; string note = 2; }");
     ProtobufSchema v2 = row("repeated E es = 1;", "message E { int32 x = 1; }");
@@ -604,7 +603,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aNestedMessageOfTheSecondMessageIsRenumbered() throws Exception {
+  void aNestedMessageOfTheSecondMessageIsProjected() throws Exception {
     String box = "message Box { message Item { int32 x = 1; %s } Item i = 1; }";
     ProtobufSchema v1 = file(ORDER, String.format(box, "string y = 2;"));
     ProtobufSchema v2 = file(ORDER, String.format(box, ""));
@@ -620,7 +619,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void eachMessageOfAFileKeepsItsOwnRenumbering() throws Exception {
+  void eachMessageOfAFileKeepsItsOwnProjection() throws Exception {
     // Records of two messages share the writer's schema id, and one deserializer caches what it
     // made of each; Refund's number 2 is reused, Order's continues.
     ProtobufSchema v1 = file(ORDER, "message Refund { int32 id = 1; string note = 2; }");
@@ -669,7 +668,7 @@ class ProtobufProvenanceDeserializerTest {
 
   @Test
   void aGeneratedClassReaderGetsNoOldValue() throws Exception {
-    // A renumbered read ends in the reader's own numbers, which the class parses as any record;
+    // A projected read ends in the reader's own numbers, which the class parses as any record;
     // with no reader configured, the class's own schema is the reader.
     String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
         + "option java_outer_classname = \"ReaddedProto\";\n";
@@ -1046,7 +1045,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aWriterRuleSeesARenumberedClassReadInTheWritersNumbers() throws Exception {
+  void aWriterRuleSeesAProjectedClassReadInTheWritersNumbers() throws Exception {
     // With no reader configured the rules are the writer's; they must not reach the class's new
     // field through the number its own field used to have.
     String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
