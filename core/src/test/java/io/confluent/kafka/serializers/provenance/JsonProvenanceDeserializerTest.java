@@ -36,10 +36,15 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
@@ -1639,6 +1644,54 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void aTypedReadARacingReconfigureInterruptsGetsNoOldValue() throws Exception {
+    // A reconfigure replaces the projector while the read derives its class's schema: the read's
+    // projection must still take the class as derived, not as v1, whose text it shares.
+    String text = JsonSchemaUtils.getSchemaOfClass(Twin.Pojo.class, null, null, true, true,
+        MAPPER, null).canonicalString();
+    JsonSchema v1 = new JsonSchema(text);
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\", \"kind\": \"A\"}");
+    String note = ",\"note\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}";
+    client.register(SUBJECT, new JsonSchema(text.replace(note, "")));
+    // Equivalent to the class, so the version it stands for, in text unlike v1's.
+    client.register(SUBJECT, new JsonSchema(text.replace("{\"type\":\"string\"}]}",
+        "{\"type\":\"string\",\"description\":\"re-added\"}]}")));
+    Map<String, Object> config = config("v1");
+    // Named in the config too, so the reconfigure keeps it.
+    config.put("json.value.type", Gated.Pojo.class.getName());
+    KafkaJsonSchemaDeserializer<Gated.Pojo> deserializer =
+        new KafkaJsonSchemaDeserializer<>(client, config, Gated.Pojo.class);
+    AtomicReference<Gated.Pojo> read = new AtomicReference<>();
+    Gated.armed = true;
+    Thread reader = new Thread(() -> read.set(deserializer.deserialize(TOPIC, bytes)), "reader");
+    reader.start();
+    Gated.entered.await();
+    Thread reconfigure = new Thread(() -> deserializer.configure(config, false), "reconfigure");
+    reconfigure.start();
+    Thread.sleep(200);
+    Gated.release.countDown();
+    reader.join(5000);
+    reconfigure.join(5000);
+    assertNull(read.get().note);
+  }
+
+  @Test
+  void aWritersJavaTypeIsNotInitializedForAPayloadTheReadRefuses() throws Exception {
+    // As without provenance: a scalar payload is refused before its javaType is loaded.
+    int id = client.register(SUBJECT, new JsonSchema("{\"type\": \"string\", \"javaType\": \""
+        + Marked.class.getName() + "\"}"));
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id).array());
+    out.write("\"x\"".getBytes(StandardCharsets.UTF_8));
+    assertThrows(SerializationException.class,
+        () -> new KafkaJsonSchemaDeserializer<>(client, config("v1"))
+            .deserialize(TOPIC, out.toByteArray()));
+    assertNull(System.getProperty(Marked.INITIALIZED));
+  }
+
+  @Test
   void aFirstTypedReadRacingAReconfigureCompletes() throws Exception {
     // The reconfigure holds the deserializer's monitor while the read first derives its class's
     // schema: neither may wait for the other.
@@ -1681,6 +1734,58 @@ class JsonProvenanceDeserializerTest {
     public Integer id;
     public int count;
     public String note;
+  }
+
+  /** A typed reader whose schema's derivation initializes an enum, held at a gate when armed. */
+  public static class Gated {
+    static volatile boolean armed;
+    static final CountDownLatch entered = new CountDownLatch(1);
+    static final CountDownLatch release = new CountDownLatch(1);
+
+    /** Initialized while the reader's schema is derived. */
+    public enum Kind {
+      A, B;
+
+      static {
+        if (armed) {
+          entered.countDown();
+          try {
+            release.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+    }
+
+    /** The typed reader. */
+    public static class Pojo {
+      public Integer id;
+      public String note;
+      public Kind kind;
+    }
+  }
+
+  /** Gated's shape, to derive v1's text from without touching the gate. */
+  public static class Twin {
+    /** The same values. */
+    public enum Kind { A, B }
+
+    /** The same properties. */
+    public static class Pojo {
+      public Integer id;
+      public String note;
+      public Kind kind;
+    }
+  }
+
+  /** A class a writer's javaType names: initializing it is recorded. */
+  public static class Marked {
+    static final String INITIALIZED = "provenance.test.marked.initialized";
+
+    static {
+      System.setProperty(INITIALIZED, "true");
+    }
   }
 
   /** A typed reader: the class an application deserializes into. */
