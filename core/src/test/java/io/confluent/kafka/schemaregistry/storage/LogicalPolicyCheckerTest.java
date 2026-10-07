@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
@@ -82,6 +83,66 @@ class LogicalPolicyCheckerTest {
         .toString());
     assertTimeoutPreemptively(Duration.ofSeconds(5), () -> LogicalPolicyChecker.check(diamond,
         List.of(new SimpleParsedSchemaHolder(diamond)), CompatibilityLevel.BACKWARD));
+  }
+
+  @Test
+  void aChainOfMessagesNestingTooDeepIsRejectedRatherThanOverflowing() throws Exception {
+    // Deep only by reference, on a request thread's small stack: the walk overflowed into a 500.
+    AtomicReference<Object> result = new AtomicReference<>();
+    Thread check = new Thread(null, () -> {
+      try {
+        result.set(LogicalPolicyChecker.check(chain(2000, true),
+            List.of(new SimpleParsedSchemaHolder(chain(2000, false))),
+            CompatibilityLevel.BACKWARD_TRANSITIVE));
+      } catch (Throwable e) {
+        result.set(e);
+      }
+    }, "check", 512 << 10);
+    check.start();
+    check.join();
+    assertTrue(result.get() instanceof List, "the check threw " + result.get());
+    List<?> errors = (List<?>) result.get();
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).toString().contains("through named types"), errors.toString());
+  }
+
+  @Test
+  void aChainOfMessagesWithinTheDepthLimitIsChecked() {
+    // Compared to its end: the field added at the deepest message is found.
+    List<String> errors = LogicalPolicyChecker.check(chain(90, true),
+        List.of(new SimpleParsedSchemaHolder(chain(90, false))), CompatibilityLevel.BACKWARD);
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("REQUIRED_FIELD_ADDED")
+        && errors.get(0).contains(".next.y"), errors.toString());
+  }
+
+  @Test
+  void aFileWhoseMessagesAllReferToEachOtherIsCheckedInTime() {
+    // 250 messages, each holding every later one: a cycle search per reference took minutes.
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 250; i++) {
+      text.append("message T").append(i).append(" { int32 x = 1;");
+      for (int j = i + 1; j < 250; j++) {
+        text.append(" T").append(j).append(" t").append(j).append(" = ").append(j + 2)
+            .append(";");
+      }
+      text.append(" }\n");
+    }
+    ProtobufSchema dense = new ProtobufSchema(text.toString());
+    assertTimeoutPreemptively(Duration.ofSeconds(3), () -> LogicalPolicyChecker.check(dense,
+        List.of(), CompatibilityLevel.NONE));
+  }
+
+  // A file of n messages, each holding the next: deep by reference, never by inline nesting.
+  private static ProtobufSchema chain(int n, boolean extra) {
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n"
+        + "message Root { int32 id = 1; M1 c = 2; }\n");
+    for (int i = 1; i <= n; i++) {
+      text.append("message M").append(i).append(" { ")
+          .append(i < n ? "M" + (i + 1) + " next = 1; " : "").append("int32 x = 2; ")
+          .append(extra && i == n ? "int32 y = 3; " : "").append("}\n");
+    }
+    return new ProtobufSchema(text.toString());
   }
 
   // Protobuf files with one or several top-level messages, as Flink reads them.

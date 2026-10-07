@@ -22,6 +22,9 @@ import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConv
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -182,5 +185,85 @@ class JsonReaderDefaultsTest {
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
         JsonToLogicalTypeConverter.toLogicalType(schema));
     assertThat(lt.getNamedTypes()).isNotEmpty();
+  }
+
+  // -- Composite and Connect date/time defaults, as Flink's JSON converter read them ------------
+
+  @Test
+  void anArrayDefaultIsInTheMapOnly() {
+    LogicalType lt = property(
+        "{\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"default\": [\"x\", null]}");
+    assertThat(lt.getDefaultValues().get(List.of(0))).isEqualTo(Arrays.asList("x", null));
+    // No writer encodes one, so the field keeps none and a round trip stays as it was.
+    assertThat(lt.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+  }
+
+  @Test
+  void aMapDefaultIsKeyedByItsKeyType() {
+    LogicalType byObject = property("{\"type\": \"object\", \"connect.type\": \"map\","
+        + " \"additionalProperties\": {\"type\": \"integer\"}, \"default\": {\"k\": 1}}");
+    assertThat(byObject.getDefaultValues().get(List.of(0))).isEqualTo(Map.of("k", 1L));
+    // A map whose keys are not strings is an array of entries, and so is its default.
+    LogicalType byEntries = property("{\"type\": \"array\", \"connect.type\": \"map\","
+        + " \"items\": {\"type\": \"object\", \"properties\": {\"key\": {\"type\": \"integer\"},"
+        + " \"value\": {\"type\": \"string\"}}}, \"default\": [{\"key\": 1, \"value\": \"a\"}]}");
+    assertThat(byEntries.getDefaultValues().get(List.of(0))).isEqualTo(Map.of(1L, "a"));
+  }
+
+  @Test
+  void aMultisetDefaultCountsItsElements() {
+    LogicalType lt = property("{\"type\": \"object\", \"connect.type\": \"map\","
+        + " \"flink.type\": \"multiset\", \"additionalProperties\": {\"type\": \"integer\","
+        + " \"connect.type\": \"int32\"}, \"default\": {\"a\": 2}}");
+    assertThat(lt.getDefaultValues().get(List.of(0))).isEqualTo(Map.of("a", 2));
+  }
+
+  @Test
+  void aStructDefaultHoldsItsMembersByName() {
+    // Members the literal lacks or sets to null are left out, as Flink's converter left them.
+    LogicalType lt = property("{\"type\": \"object\", \"properties\": {"
+        + "\"z\": {\"type\": \"integer\"}, \"n\": {\"type\": [\"string\", \"null\"]},"
+        + " \"m\": {\"type\": \"string\"}},"
+        + " \"default\": {\"z\": 4, \"n\": null}}");
+    assertThat(lt.getDefaultValues().get(List.of(0))).isEqualTo(Map.of("z", 4L));
+    assertThat(lt.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+  }
+
+  @Test
+  void aCompositeDefaultWithAMemberOfAnotherTypeIsDropped() {
+    LogicalType lt = property(
+        "{\"type\": \"array\", \"items\": {\"type\": \"integer\"}, \"default\": [\"x\"]}");
+    assertThat(lt.getDefaultValues()).isEmpty();
+  }
+
+  @Test
+  void aConnectDateOrTimeDefaultIsInTheMapOnly() {
+    // Days since the epoch and milliseconds of the day, as Connect writes them.
+    LogicalType date = property("{\"type\": \"integer\", \"title\":"
+        + " \"org.apache.kafka.connect.data.Date\", \"connect.type\": \"int32\","
+        + " \"default\": 19000}");
+    assertThat(date.getDefaultValues().get(List.of(0))).isEqualTo(LocalDate.ofEpochDay(19000));
+    assertThat(date.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+    LogicalType time = property("{\"type\": \"integer\", \"title\":"
+        + " \"org.apache.kafka.connect.data.Time\", \"connect.type\": \"int32\","
+        + " \"default\": 1000}");
+    assertThat(time.getDefaultValues().get(List.of(0))).isEqualTo(LocalTime.ofSecondOfDay(1));
+  }
+
+  @Test
+  void aCompositeDefaultReadsItsMembersThroughReferences() {
+    // The members' type is a definition, a named type in the LT: read as the type it names.
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\": \"object\", \"properties\": {\"p\": {\"type\": \"array\","
+        + " \"items\": {\"$ref\": \"#/definitions/Pt\"}, \"default\": [{\"x\": 1}]}},"
+        + " \"definitions\": {\"Pt\": {\"type\": \"object\","
+        + " \"properties\": {\"x\": {\"type\": \"integer\"}}}}}"));
+    assertThat(lt.getDefaultValues().get(List.of(0))).isEqualTo(List.of(Map.of("x", 1L)));
+  }
+
+  // A schema whose only property, at path [0], is {@code property}.
+  private static LogicalType property(String property) {
+    return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\": \"object\", \"properties\": {\"p\": " + property + "}}"));
   }
 }

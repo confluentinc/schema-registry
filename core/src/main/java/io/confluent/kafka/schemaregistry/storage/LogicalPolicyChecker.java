@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
@@ -95,11 +96,21 @@ public final class LogicalPolicyChecker {
   /**
    * The logical type the policy checks: the {@link LogicalTypeVersion#V1} reading, with a Protobuf
    * file as Flink reads it rather than as {@code format=logical} shows it.
+   *
+   * @throws ValidationException if it nests more than {@link InlinedDepth#MAX_DEPTH} deep with its
+   *     named types inlined
    */
   static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
-    return ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
+    LogicalType logicalType = ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
         ? protobufLogicalType((ProtobufSchema) parsedSchema)
         : toLogicalType(parsedSchema, LogicalTypeVersion.V1);
+    // The converters bound inline nesting only; the checks also walk through named types, so a
+    // chain of references could overflow them.
+    if (InlinedDepth.of(logicalType) > InlinedDepth.MAX_DEPTH) {
+      throw new ValidationException("Schema nests types more than " + InlinedDepth.MAX_DEPTH
+          + " deep through named types");
+    }
+    return logicalType;
   }
 
   /**
