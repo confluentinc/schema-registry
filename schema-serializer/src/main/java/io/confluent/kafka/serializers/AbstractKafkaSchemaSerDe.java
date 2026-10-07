@@ -107,6 +107,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.provenance.strategy.ProvenanceStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,6 +137,13 @@ public abstract class AbstractKafkaSchemaSerDe
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
+  // The provenance algorithm version deserializers project with; null when provenance is off.
+  protected String provenanceAlgorithm;
+  protected int provenanceCacheSize;
+  protected ProvenanceStrategy provenanceStrategy;
+  private static final String LOGICAL_TYPE_CLASS =
+      "io.confluent.kafka.schemaregistry.type.logical.LogicalType";
+  protected int provenanceCacheTtlSec;
   protected Map<String, String> metadata;
   protected ExecutionEnvironment executionEnv;
   protected boolean enableRuleServiceLoader;
@@ -219,6 +227,15 @@ public abstract class AbstractKafkaSchemaSerDe
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
+    // Only a deserializer reads by provenance: a serializer sharing its config ignores it.
+    provenanceAlgorithm = readsByProvenance() ? config.getProvenanceAlgorithm() : null;
+    if (provenanceAlgorithm != null) {
+      requireLogicalTypes();
+    }
+    provenanceCacheSize = config.getProvenanceCacheSize();
+    provenanceCacheTtlSec = config.getProvenanceCacheTtl();
+    closeQuietly(provenanceStrategy, "provenance strategy");
+    provenanceStrategy = provenanceAlgorithm != null ? config.provenanceStrategy() : null;
     validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();
@@ -1174,6 +1191,7 @@ public abstract class AbstractKafkaSchemaSerDe
   public void close() throws IOException {
     closeRuleObjects(ruleActions);
     closeRuleObjects(ruleExecutors);
+    closeQuietly(provenanceStrategy, "provenance strategy");
     if (schemaRegistry != null) {
       schemaRegistry.close();
     }
@@ -1191,6 +1209,23 @@ public abstract class AbstractKafkaSchemaSerDe
 
   }
 
+  /**
+   * Whether this serde reads by provenance when {@code provenance.algorithm} is set.
+   */
+  protected boolean readsByProvenance() {
+    return false;
+  }
+
+  // Reading by provenance compares schemas as logical types, which a separate artifact provides.
+  private static void requireLogicalTypes() {
+    try {
+      Class.forName(LOGICAL_TYPE_CLASS, false, AbstractKafkaSchemaSerDe.class.getClassLoader());
+    } catch (ClassNotFoundException | LinkageError e) {
+      throw new ConfigException(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM
+          + " requires kafka-schema-registry-logical-types on the classpath");
+    }
+  }
+
   private static void closeQuietly(AutoCloseable closeable, String name) {
     if (closeable != null) {
       try {
@@ -1199,6 +1234,18 @@ public abstract class AbstractKafkaSchemaSerDe
         log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
       }
     }
+  }
+
+  /**
+   * {@code e} as a record's deserialization failure: a {@code SerializationException}, but for an
+   * authentication or authorization failure, which stays one, as a schema fetch's does.
+   */
+  protected static RuntimeException toDeserializationException(Exception e,
+      String errorMessage) {
+    if (e instanceof AuthenticationException || e instanceof AuthorizationException) {
+      return (RuntimeException) e;
+    }
+    return new SerializationException(errorMessage, e);
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {

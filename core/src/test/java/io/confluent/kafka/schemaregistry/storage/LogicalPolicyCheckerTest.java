@@ -144,6 +144,15 @@ class LogicalPolicyCheckerTest {
     assertTrue(errors.isEmpty(), errors.toString());
   }
 
+  @Test
+  void aJsonDefinitionReferringOnlyToItselfIsReportedRatherThanLooping() {
+    String schema = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    List<String> errors = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        LogicalPolicyChecker.check(new JsonSchema(schema), List.of(), CompatibilityLevel.NONE));
+    assertTrue(errors.stream().anyMatch(e -> e.contains("CYCLIC_TYPE")), errors.toString());
+  }
+
   // -- compatibility ------------------------------------------------------------------------------
 
   @Test
