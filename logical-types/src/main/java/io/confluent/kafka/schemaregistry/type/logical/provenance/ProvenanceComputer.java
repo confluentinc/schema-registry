@@ -1217,8 +1217,8 @@ public final class ProvenanceComputer {
             // After equal content: a title only documents, and validation reads by content.
             found = peer.title == null ? null : mutual(peer, unresolved(peers, matched),
                 previous,
-                (a, p) -> !taken.contains(p) && sameTitledKind(a, p) && !otherHints(a, p)
-                    && !namesOtherwise(a.content, p.content));
+                (a, p) -> !taken.contains(p) && Objects.equals(a.title, p.title)
+                    && !otherHints(a, p) && !namesOtherwise(a.content, p.content));
           } else if (phase == 4) {
             List<Node> unresolved = unresolved(peers, matched);
             Set<String> envelope = envelope(previous, taken);
@@ -1577,12 +1577,6 @@ public final class ProvenanceComputer {
         }
       }
       return -1;
-    }
-
-    // The same title, of the same kind: a title another kind shares names no counterpart, as the
-    // kind rule would make that pairing new.
-    private static boolean sameTitledKind(Node a, Node b) {
-      return Objects.equals(a.title, b.title) && a.kinds.equals(b.kinds);
     }
 
     /** Whether two branches share a member other than a discriminator, whatever their values. */
