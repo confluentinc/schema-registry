@@ -169,8 +169,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   /**
-   * Forgets the projector, and the class readers it marked: they belong to the configuration they
-   * were built under. Under the lock the projector is built under.
+   * Forgets the projector, and the class readers built with it: they belong to the configuration
+   * they were built under. Under the lock the projector is built under.
    */
   private synchronized void resetProvenance() {
     provenanceProjector = null;
