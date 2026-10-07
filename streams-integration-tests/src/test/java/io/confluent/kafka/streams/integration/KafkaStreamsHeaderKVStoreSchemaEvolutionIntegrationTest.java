@@ -888,37 +888,75 @@ public class KafkaStreamsHeaderKVStoreSchemaEvolutionIntegrationTest extends Sch
   }
 
   /**
-   * Null for a non-nullable key or value field fails Avro serialization, and so does a field left
-   * unset on a raw record: only the record builder applies schema defaults.
+   * Null for a non-nullable key or value field, and a field left unset on a raw record, fail Avro
+   * serialization on the client. The failures must not poison anything: the same producer can send
+   * a valid record afterwards and it reaches the store with the right schema-id headers.
    */
   @Test
-  public void shouldRejectExplicitNullsAndUnsetFields() throws Exception {
+  public void shouldRejectExplicitNullsAndUnsetFieldsWithoutAffectingLaterWrites()
+      throws Exception {
     String inputTopic = "null-value-field-evolution-input";
-    createTopics(inputTopic);
+    String appId = "null-value-field-evolution-test-" + System.currentTimeMillis();
 
-    GenericRecord keyV1 = new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", "sensor-1").build();
-    GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
-    nullRegionKey.put("sensorId", "sensor-3");
-    nullRegionKey.put("region", null);
-    GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
-    nullTemperature.put("temperature", null);
-    nullTemperature.put("timestamp", 1500L);
-    GenericRecord unsetFields = new GenericData.Record(VALUE_SCHEMA_V3);
-    unsetFields.put("temperature", 30.0);
-    unsetFields.put("timestamp", 1600L);
+    KafkaStreams streams = null;
+    try {
+      streams = startTableApp(inputTopic, appId);
 
-    try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-      assertThrows(SerializationException.class, () -> producer.send(new ProducerRecord<>(
-              inputTopic, nullRegionKey,
-              new GenericRecordBuilder(VALUE_SCHEMA_V1)
-                  .set("temperature", 41.0).set("timestamp", 2100L).build())),
-          "null for a non-nullable key field should fail Avro serialization");
-      assertThrows(SerializationException.class,
-          () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, nullTemperature)),
-          "null for a non-nullable value field should fail Avro serialization");
-      assertThrows(SerializationException.class,
-          () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, unsetFields)),
-          "humidity and pressure are unset on a raw record, which does not apply their defaults");
+      GenericRecord keyV1 = new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", "sensor-1").build();
+      GenericRecord keyV2 = new GenericRecordBuilder(KEY_SCHEMA_V2)
+          .set("sensorId", "sensor-1").set("region", "us-east").build();
+      GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
+      nullRegionKey.put("sensorId", "sensor-3");
+      nullRegionKey.put("region", null);
+      GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
+      nullTemperature.put("temperature", null);
+      nullTemperature.put("timestamp", 1500L);
+      GenericRecord unsetFields = new GenericData.Record(VALUE_SCHEMA_V3);
+      unsetFields.put("temperature", 30.0);
+      unsetFields.put("timestamp", 1600L);
+
+      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+        producer.send(new ProducerRecord<>(inputTopic, keyV1,
+            new GenericRecordBuilder(VALUE_SCHEMA_V1)
+                .set("temperature", 35.5).set("timestamp", 1000L).build())).get();
+
+        assertThrows(SerializationException.class, () -> producer.send(new ProducerRecord<>(
+                inputTopic, nullRegionKey,
+                new GenericRecordBuilder(VALUE_SCHEMA_V1)
+                    .set("temperature", 41.0).set("timestamp", 2100L).build())),
+            "null for a non-nullable key field should fail Avro serialization");
+        assertThrows(SerializationException.class,
+            () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, nullTemperature)),
+            "null for a non-nullable value field should fail Avro serialization");
+        assertThrows(SerializationException.class,
+            () -> producer.send(new ProducerRecord<>(inputTopic, keyV1, unsetFields)),
+            "humidity and pressure are unset on a raw record, which does not apply their defaults");
+
+        // The same producer still works after the failures.
+        producer.send(new ProducerRecord<>(inputTopic, keyV2,
+            new GenericRecordBuilder(VALUE_SCHEMA_V1)
+                .set("temperature", 40.0).set("timestamp", 2000L).build())).get();
+        producer.flush();
+      }
+      waitForStoreToContainKeys(streams, STORE_NAME, 2);
+
+      ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+          streams.store(StoreQueryParameters.fromNameAndType(
+              STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
+      ValueTimestampHeaders<GenericRecord> beforeFailures = store.get(keyV1);
+      assertNotNull(beforeFailures, "the record written before the failures should be in the store");
+      assertEquals(35.5, beforeFailures.value().get("temperature"));
+      assertSchemaIdHeaders(beforeFailures.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "before the failures");
+      ValueTimestampHeaders<GenericRecord> afterFailures = store.get(keyV2);
+      assertNotNull(afterFailures, "the record written after the failures should be in the store");
+      assertEquals(40.0, afterFailures.value().get("temperature"));
+      assertSchemaIdHeaders(afterFailures.headers(), inputTopic, KEY_SCHEMA_V2, VALUE_SCHEMA_V1,
+          "after the failures");
+    } finally {
+      if (streams != null) {
+        streams.close(Duration.ofSeconds(10));
+      }
     }
   }
 
