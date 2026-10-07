@@ -41,12 +41,12 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -65,6 +65,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -78,6 +79,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
+import org.junit.jupiter.api.AfterEach;
 
 /**
  * Shared setup for the header-based schema-evolution integration tests: a 1-broker cluster with an
@@ -86,7 +88,18 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
 public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarness {
 
   protected SchemaEvolutionIntegrationTestBase() {
-    super(1, true);
+    super(1, true, "BACKWARD");
+  }
+
+  /** Serdes handed to topologies; Streams does not close them, so they are closed after each test. */
+  private final List<Serde<?>> createdSerdes = new ArrayList<>();
+
+  @AfterEach
+  public void closeCreatedSerdes() {
+    for (Serde<?> serde : createdSerdes) {
+      serde.close();
+    }
+    createdSerdes.clear();
   }
 
   // --- Key schemas ---
@@ -169,6 +182,7 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
         HeaderSchemaIdSerializer.class.getName());
     serde.configure(config, true);
+    createdSerdes.add(serde);
     return serde;
   }
 
@@ -179,6 +193,7 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
         HeaderSchemaIdSerializer.class.getName());
     serde.configure(config, false);
+    createdSerdes.add(serde);
     return serde;
   }
 
@@ -193,6 +208,7 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
         HeaderSchemaIdSerializer.class.getName());
     serde.configure(config, true);
+    createdSerdes.add(serde);
     return serde;
   }
 
@@ -209,6 +225,7 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
         SensorReadingV2.class.getName());
     serde.configure(config, false);
+    createdSerdes.add(serde);
     return serde;
   }
 
@@ -270,6 +287,7 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     streamsProps.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
     streamsProps.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
     streamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+    streamsProps.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10_000);
     streamsProps.put(
         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
     if (stateDir != null) {
@@ -396,20 +414,26 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     });
   }
 
-  protected void assertSchemaIdHeaders(Headers headers, String topic, String context) {
-    assertSchemaIdHeaders(headers, topic + "-key", topic + "-value", context);
+  /**
+   * Asserts the record's key and value schema-id headers are well-formed GUIDs and equal the GUIDs
+   * of the schemas that were written, looked up under {@code topic}'s subjects.
+   */
+  protected void assertSchemaIdHeaders(Headers headers, String topic, Schema keySchema,
+      Schema valueSchema, String context) {
+    assertSchemaIdHeaders(headers, topic + "-key", keySchema, topic + "-value", valueSchema,
+        context);
   }
 
-  protected void assertSchemaIdHeaders(Headers headers, String keySubject, String valueSubject,
-      String context) {
-    assertGuidHeaderRegistered(headers, SchemaId.KEY_SCHEMA_ID_HEADER, keySubject,
+  protected void assertSchemaIdHeaders(Headers headers, String keySubject, Schema keySchema,
+      String valueSubject, Schema valueSchema, String context) {
+    assertHeaderGuid(headers, SchemaId.KEY_SCHEMA_ID_HEADER, keySubject, keySchema,
         context + " key");
-    assertGuidHeaderRegistered(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, valueSubject,
+    assertHeaderGuid(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, valueSubject, valueSchema,
         context + " value");
   }
 
-  protected void assertGuidHeaderRegistered(Headers headers, String headerName, String subject,
-      String context) {
+  private void assertHeaderGuid(Headers headers, String headerName, String subject,
+      Schema expectedSchema, String context) {
     Header header = headers.lastHeader(headerName);
     assertNotNull(header, context + ": should have " + headerName + " header");
     byte[] bytes = header.value();
@@ -419,19 +443,16 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
     ByteBuffer bb = ByteBuffer.wrap(bytes, 1, 16);
     String headerGuid = new UUID(bb.getLong(), bb.getLong()).toString();
 
-    // Older records keep their schema version's GUID, so check every version of the subject.
-    Set<String> registeredGuids = new HashSet<>();
+    String expectedGuid = null;
     try {
-      for (int version : restApp.restClient.getAllVersions(subject)) {
-        registeredGuids.add(restApp.restClient.getVersion(subject, version).getGuid());
-      }
+      expectedGuid = restApp.restClient.lookUpSubjectVersion(expectedSchema.toString(), subject)
+          .getGuid();
     } catch (Exception e) {
-      fail(context + ": failed to look up subject " + subject + " in Schema Registry: "
+      fail(context + ": failed to look up the written schema under subject " + subject + ": "
           + e.getMessage());
     }
-    assertTrue(registeredGuids.contains(headerGuid),
-        context + ": header GUID " + headerGuid + " is not registered under subject " + subject
-            + " (registered: " + registeredGuids + ")");
+    assertEquals(expectedGuid, headerGuid,
+        context + ": header GUID should be the GUID of the schema that was written");
   }
 
   /** Counts the records restored from the changelog, to tell a restore from a reprocess. */
