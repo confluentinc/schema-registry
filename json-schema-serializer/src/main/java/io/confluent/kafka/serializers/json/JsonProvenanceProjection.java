@@ -65,7 +65,7 @@ import org.json.JSONObject;
  * where it stays ambiguous — several such branches fit, or none does, as when the value to prune
  * is itself what fails them — it is pruned.
  */
-final class JsonProvenancePruner {
+final class JsonProvenanceProjection {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int MAX_INTEGRAL_DIGITS = 1000;
@@ -81,7 +81,7 @@ final class JsonProvenancePruner {
   private final Schema writer;
   private final List<Target> targets;
 
-  private JsonProvenancePruner(Schema reader, Schema writer, List<Target> targets) {
+  private JsonProvenanceProjection(Schema reader, Schema writer, List<Target> targets) {
     this.reader = reader;
     this.writer = writer;
     this.targets = targets;
@@ -145,15 +145,15 @@ final class JsonProvenancePruner {
    * @throws SerializationException if a location's names are missing, or a property to prune is
    *     not declared by the reader
    */
-  static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader) {
-    return plan(mapping, reader, null);
+  static JsonProvenanceProjection of(ProvenanceMapping mapping, JsonSchema reader) {
+    return of(mapping, reader, null);
   }
 
   /**
-   * As {@link #plan(ProvenanceMapping, JsonSchema)}; with {@code writer}, a value read at a
+   * As {@link #of(ProvenanceMapping, JsonSchema)}; with {@code writer}, a value read at a
    * location continuing another than it can be read as under the writer is pruned too.
    */
-  static JsonProvenancePruner plan(ProvenanceMapping mapping, JsonSchema reader,
+  static JsonProvenanceProjection of(ProvenanceMapping mapping, JsonSchema reader,
       JsonSchema writer) {
     // A property the walk cannot find would keep a value provenance says is new.
     mapping.requireNames();
@@ -234,7 +234,7 @@ final class JsonProvenancePruner {
     }
     // Outermost first: a property removed takes whatever lay under it along.
     targets.sort(Comparator.comparingInt(t -> t.names.size()));
-    return new JsonProvenancePruner(raw, writer != null ? writer.rawSchema() : null,
+    return new JsonProvenanceProjection(raw, writer != null ? writer.rawSchema() : null,
         Collections.unmodifiableList(targets));
   }
 
