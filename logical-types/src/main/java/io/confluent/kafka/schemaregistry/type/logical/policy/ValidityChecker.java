@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity.Rule;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -136,6 +137,9 @@ final class ValidityChecker {
      * inlined by the conversion to a Flink type, so its contents cannot break a consumer.
      */
     private final Set<String> walkedNamedTypes = new HashSet<>();
+    // Whether each named type is cyclic, found once: a search per reference costs the whole
+    // graph each time, so dense references made the walk quartic.
+    private final Map<String, Boolean> cyclic = new HashMap<>();
 
     Walk(Mode mode, LogicalType logicalType) {
       this.mode = mode;
@@ -207,7 +211,7 @@ final class ValidityChecker {
             "named type '" + name + "' is referenced but not defined");
         return;
       }
-      if (logicalType.isCyclic(name)) {
+      if (cyclic.computeIfAbsent(name, logicalType::isCyclic)) {
         add(Rule.CYCLIC_TYPE, path,
             "named type '" + name + "' refers to itself, and cannot be represented by a "
                 + "non-recursive type system");
