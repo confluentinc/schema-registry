@@ -55,35 +55,4 @@ public class WildcardMatcherTest {
     assertFalse(WildcardMatcher.match("alice.bob.eve", "alice.bob*"));
     assertTrue(WildcardMatcher.match("alice.bob.eve", "alice.bob**"));
   }
-
-  @Test
-  public void testSeparators() {
-    assertTrue(WildcardMatcher.match("a.b.c", "a**.*"));
-    assertFalse(WildcardMatcher.match("a.b", "a?b"));
-    assertTrue(WildcardMatcher.match("axb", "a?b"));
-    assertFalse(WildcardMatcher.match("a.b", "a*b"));
-    assertTrue(WildcardMatcher.match("a.b", "a**b"));
-  }
-
-  @Test
-  public void testSpecialCharacters() {
-    assertTrue(WildcardMatcher.match("a[b]", "a[b]"));
-    assertFalse(WildcardMatcher.match("ab", "a[b]"));
-    assertTrue(WildcardMatcher.match("a[", "a["));
-    assertTrue(WildcardMatcher.match("a(b)|c+$^{1}", "a(b)|c+$^{1}"));
-  }
-
-  @Test(timeout = 1000)
-  public void testLongNames() {
-    StringBuilder name = new StringBuilder("foo.");
-    for (int i = 0; i < 1000; i++) {
-      name.append('b');
-    }
-    StringBuilder wildcard = new StringBuilder();
-    for (int i = 0; i < 20; i++) {
-      wildcard.append("**b");
-    }
-    assertTrue(WildcardMatcher.match(name.toString(), wildcard.toString()));
-    assertFalse(WildcardMatcher.match(name.toString(), wildcard + "c"));
-  }
 }

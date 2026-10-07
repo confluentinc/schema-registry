@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
@@ -44,7 +43,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -54,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -103,8 +102,6 @@ public class JsonToLogicalTypeConverter {
    * JSON Schema {@code default} keyword.
    */
   private static final String DEFAULT_KEYWORD = "default";
-  // The namespace of the titles marking a Connect logical type (Date, Time, Timestamp, Decimal).
-  private static final String CONNECT_DATA_PREFIX = "org.apache.kafka.connect.data.";
 
   private static final int MAX_LENGTH = Integer.MAX_VALUE;
   private static final int DEFAULT_DECIMAL_PRECISION = 38;
@@ -123,7 +120,7 @@ public class JsonToLogicalTypeConverter {
     try {
       return toLogicalTypeInternal(schema, version);
     } catch (StackOverflowError e) {
-      throw new TypeTooDeepException("JSON schema nests types too deeply to convert");
+      throw new ValidationException("JSON schema nests types too deeply to convert");
     }
   }
 
@@ -198,27 +195,21 @@ public class JsonToLogicalTypeConverter {
       final org.everit.json.schema.Schema fieldSchema,
       final Schema fieldType,
       final List<Integer> fieldIndex) {
-    // A reference's own default (2019-09 and later honour one beside $ref) comes first.
-    final Object ownDefault =
-        fieldSchema instanceof ReferenceSchema && fieldSchema.hasDefaultValue()
-            ? fieldSchema.getDefaultValue() : null;
-    final Object rawDefault = ownDefault != null
-        ? ownDefault : extractDefault(resolveReference(fieldSchema));
+    final org.everit.json.schema.Schema resolved = resolveReference(fieldSchema);
+    final Object rawDefault = extractDefault(resolved);
     if (rawDefault == null || rawDefault == JSONObject.NULL) {
       return null;
     }
     try {
       final Object defaultValue =
-          JsonDefaultValueConverter.toJavaData(fieldType, rawDefault, type -> named(ctx, type));
+          JsonDefaultValueConverter.toJavaData(fieldType, rawDefault);
       if (defaultValue == null) {
         return null;
       }
       if (!isMultiNonNullUnion(fieldType)) {
         ctx.putDefaultValue(fieldIndex, defaultValue);
       }
-      // In the path-keyed map only, as Flink's converter had them: the JSON writer encodes no
-      // composite default, nor a Connect date or time as the number it was.
-      return isMapOnly(named(ctx, fieldType), ctx, rawDefault) ? null : defaultValue;
+      return defaultValue;
     } catch (RuntimeException e) {
       LOG.warn(
           "Skipping unconvertible JSON Schema default at field index path {} "
@@ -226,46 +217,6 @@ public class JsonToLogicalTypeConverter {
           fieldIndex, fieldType.getType(), e.getClass().getSimpleName());
       return null;
     }
-  }
-
-  private static boolean isMapOnly(
-      final Schema type, final ToLogicalContext<String> ctx, final Object rawDefault) {
-    switch (type.getType()) {
-      case UNION:
-        // Decoded by its first branch, so map-only as that branch would be; the writer encodes
-        // that branch as written, so one that is a reference keeps no Field default either.
-        if (type.getBranches().isEmpty()) {
-          return false;
-        }
-        Schema first = type.getBranches().get(0).getSchema();
-        return first.getType() == Schema.Type.NAMED_TYPE_REF
-            || isMapOnly(named(ctx, first), ctx, rawDefault);
-      case ARRAY:
-      case MAP:
-      case MULTISET:
-      case STRUCT:
-        return true;
-      case DATE:
-      case TIME:
-        return rawDefault instanceof Number;
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * {@code type}, a reference to a named type resolved to the type it names, as far as it has been
-   * converted, so a default can be read as a value of it.
-   */
-  private static Schema named(final ToLogicalContext<String> ctx, final Schema type) {
-    Schema current = type;
-    Set<String> seen = new HashSet<>();
-    while (current != null && current.getType() == Schema.Type.NAMED_TYPE_REF
-        && seen.add(current.getQualifiedName())
-        && ctx.getNamedTypes().get(current.getQualifiedName()) != null) {
-      current = ctx.getNamedTypes().get(current.getQualifiedName());
-    }
-    return current;
   }
 
   private static Object extractDefault(final org.everit.json.schema.Schema schema) {
@@ -287,10 +238,8 @@ public class JsonToLogicalTypeConverter {
    */
   private static org.everit.json.schema.Schema resolveReference(
       org.everit.json.schema.Schema schema) {
-    // A definition that only refers to itself, however indirectly, resolves to no schema.
-    Set<org.everit.json.schema.Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     org.everit.json.schema.Schema current = schema;
-    while (current instanceof ReferenceSchema && seen.add(current)) {
+    while (current instanceof ReferenceSchema) {
       org.everit.json.schema.Schema referred =
           ((ReferenceSchema) current).getReferredSchema();
       if (referred == null) {
@@ -392,32 +341,19 @@ public class JsonToLogicalTypeConverter {
             if (referredSchema != null) {
               ctx.putNamedType(entry.getKey(),
                   Schema.createStruct(new ArrayList<>()));
-              // A named type's body, its defaults kept relative to it: each $ref to it places
-              // them under its own path.
-              Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
-                  () -> convertWithCycleDetection(
-                      referredSchema, false, ctx, Collections.emptyList()));
+              // Named-type body walks start with an empty indexPath; defaults
+              // inside named types aren't part of the root schema's positional
+              // path-keyed map.
+              Schema body = convertWithCycleDetection(
+                  referredSchema, false, ctx, Collections.emptyList());
               ctx.putNamedType(entry.getKey(), body);
             }
           }
           continue;
         }
       }
-      if (resolveReference(defSchema) instanceof NullSchema) {
-        // A null definition has no type of its own: a union reads it as its null member.
-        continue;
-      }
-      Runnable undo = ctx.checkpoint();
-      Schema converted;
-      try {
-        converted = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
-            () -> convertWithCycleDetection(defSchema, false, ctx, Collections.emptyList()));
-      } catch (ValidationException e) {
-        // A definition the logical type cannot express fails only where it is used, as under
-        // draft-07, which converts definitions on demand; nothing of the attempt is kept.
-        undo.run();
-        continue;
-      }
+      Schema converted = convertWithCycleDetection(
+          defSchema, false, ctx, Collections.emptyList());
       ctx.putNamedType(entry.getKey(), converted);
     }
   }
@@ -426,7 +362,7 @@ public class JsonToLogicalTypeConverter {
       final org.everit.json.schema.Schema schema, boolean isNullable,
       ToLogicalContext<String> ctx, final List<Integer> indexPath) {
     if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
-      throw new TypeTooDeepException(
+      throw new ValidationException(
           "Schema type nesting depth exceeds the maximum of "
               + ToLogicalContext.MAX_TYPE_DEPTH);
     }
@@ -507,14 +443,14 @@ public class JsonToLogicalTypeConverter {
         boolean wasKnown = ctx.hasNamedType(typeName);
         if (!wasKnown && refSchema.getReferredSchema() != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));
-          // A named type's body, its defaults kept relative to it: each $ref to it places them
-          // under its own path, below.
-          Schema body = ctx.convertNamedType(typeName, Collections.emptyList(),
-              () -> convertWithCycleDetection(
-                  refSchema.getReferredSchema(), false, ctx, Collections.emptyList()));
+          // Named-type body walks start with an empty indexPath; defaults
+          // inside named types aren't part of the root schema's positional
+          // path-keyed map.
+          Schema body = convertWithCycleDetection(
+              refSchema.getReferredSchema(), false, ctx,
+              Collections.emptyList());
           ctx.putNamedType(typeName, body);
         }
-        ctx.putTypeDefaults(typeName, indexPath);
         // Mark as external only on first-time-seen canonical cross-doc refs.
         // Names already in namedTypes from the $defs walk are either real
         // local types (preserve) or synthetic externals (already marked).
@@ -546,7 +482,9 @@ public class JsonToLogicalTypeConverter {
    */
   private static Schema convertPermittedValues(
       org.everit.json.schema.Schema schema, List<?> possibleValues, boolean isNullable) {
-    List<Map<String, Object>> enumMeta = hints(schema, "confluent:enum");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> enumMeta =
+        (List<Map<String, Object>>) schema.getUnprocessedProperties().get("confluent:enum");
     List<EnumValue> values = new ArrayList<>();
     Set<String> seenSymbols = new HashSet<>();
     for (int i = 0; i < possibleValues.size(); i++) {
@@ -589,7 +527,7 @@ public class JsonToLogicalTypeConverter {
 
   private static Schema convertNumberSchema(
       NumberSchema numberSchema, boolean isNullable, String title) {
-    String type = stringProp(numberSchema, CONNECT_TYPE_PROP);
+    String type = (String) numberSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
     if (type == null) {
       return numberSchema.requiresInteger()
           ? Schema.create(Schema.Type.BIGINT).setNullable(isNullable)
@@ -612,15 +550,16 @@ public class JsonToLogicalTypeConverter {
         if (!CONNECT_TYPE_DECIMAL.equals(title)) {
           throw new ValidationException("Expected decimal type");
         }
-        final Object parameters = numberSchema.getUnprocessedProperties()
-            .getOrDefault(CONNECT_PARAMETERS, Collections.emptyMap());
-        if (!(parameters instanceof Map)) {
-          throw new ValidationException(CONNECT_PARAMETERS + " must be an object: " + parameters);
-        }
-        final int scale = decimalParameter((Map<?, ?>) parameters, CONNECT_TYPE_DECIMAL_SCALE,
-            DEFAULT_DECIMAL_SCALE);
-        final int precision = decimalParameter((Map<?, ?>) parameters,
-            CONNECT_TYPE_DECIMAL_PRECISION, DEFAULT_DECIMAL_PRECISION);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> properties =
+            (Map<String, Object>) numberSchema.getUnprocessedProperties()
+                .getOrDefault(CONNECT_PARAMETERS, Collections.emptyMap());
+        final int scale = Optional.ofNullable(properties.get(CONNECT_TYPE_DECIMAL_SCALE))
+            .map(prop -> Integer.parseInt((String) prop))
+            .orElse(DEFAULT_DECIMAL_SCALE);
+        final int precision = Optional.ofNullable(properties.get(CONNECT_TYPE_DECIMAL_PRECISION))
+            .map(prop -> Integer.parseInt((String) prop))
+            .orElse(DEFAULT_DECIMAL_PRECISION);
         return Schema.createDecimal(precision, scale).setNullable(isNullable);
       default:
         throw new ValidationException("Unsupported type " + type);
@@ -653,15 +592,15 @@ public class JsonToLogicalTypeConverter {
 
   @SuppressWarnings("unchecked")
   private static int getTimestampPrecision(org.everit.json.schema.Schema schema) {
-    Integer precision = intProp(schema, FLINK_PRECISION);
-    return precision != null ? precision : 3;
+    return (int) schema.getUnprocessedProperties().getOrDefault(FLINK_PRECISION, 3);
   }
 
   private static Schema convertStringSchema(StringSchema schema, boolean isNullable) {
-    String type = stringProp(schema, CONNECT_TYPE_PROP);
+    final Map<String, Object> props = schema.getUnprocessedProperties();
+    String type = (String) props.get(CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_BYTES.equals(type)) {
-      final Integer minLength = intProp(schema, FLINK_MIN_LENGTH);
-      final Integer maxLength = intProp(schema, FLINK_MAX_LENGTH);
+      final Integer minLength = (Integer) props.getOrDefault(FLINK_MIN_LENGTH, null);
+      final Integer maxLength = (Integer) props.getOrDefault(FLINK_MAX_LENGTH, null);
       if (minLength != null && Objects.equals(minLength, maxLength)) {
         return Schema.createBinary(maxLength).setNullable(isNullable);
       } else if (maxLength != null) {
@@ -782,31 +721,13 @@ public class JsonToLogicalTypeConverter {
     return null;
   }
 
-  /**
-   * A union branch's title, or, where it has none, that of the definition it refers to; none for
-   * a title marking a Connect type, which names no branch.
-   */
-  private static String branchTitle(org.everit.json.schema.Schema branch) {
-    Set<org.everit.json.schema.Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-    org.everit.json.schema.Schema current = branch;
-    while (current != null && seen.add(current)) {
-      String title = current.getTitle();
-      if (title != null) {
-        return title.startsWith(CONNECT_DATA_PREFIX) ? null : title;
-      }
-      current = current instanceof ReferenceSchema
-          ? ((ReferenceSchema) current).getReferredSchema() : null;
-    }
-    return null;
-  }
-
   // The one non-null value an enum or const permits, or a nullable one, as a oneOf or anyOf of it
   // and null, converts to a one-value enum; null for anything else.
   private static Object singleValue(org.everit.json.schema.Schema schema) {
     if (schema instanceof CombinedSchema
         && ((CombinedSchema) schema).getCriterion() != CombinedSchema.ALL_CRITERION) {
       List<org.everit.json.schema.Schema> nonNull = ((CombinedSchema) schema).getSubschemas()
-          .stream().filter(subschema -> !(resolveReference(subschema) instanceof NullSchema))
+          .stream().filter(subschema -> !(subschema instanceof NullSchema))
           .collect(Collectors.toList());
       return nonNull.size() == 1 ? singleValue(unwrap(nonNull.get(0))) : null;
     }
@@ -849,8 +770,7 @@ public class JsonToLogicalTypeConverter {
     List<org.everit.json.schema.Schema> nonNullSubschemas = new ArrayList<>();
     boolean hasNullMember = false;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      // A null member behind a $ref is a null member all the same.
-      if (resolveReference(subSchema) instanceof NullSchema) {
+      if (subSchema instanceof NullSchema) {
         hasNullMember = true;
       } else {
         nonNullSubschemas.add(subSchema);
@@ -862,14 +782,16 @@ public class JsonToLogicalTypeConverter {
     }
 
     // Proper union: oneOf/anyOf with multiple non-null types
-    List<Map<String, Object>> unionMeta = hints(combinedSchema, "confluent:union");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> unionMeta = (List<Map<String, Object>>)
+        combinedSchema.getUnprocessedProperties().get("confluent:union");
     List<String> branchNames = branchNames(nonNullSubschemas, unionMeta, ctx);
     int index = 0;
     boolean isNullableUnion = isNullable;
     final List<UnionBranch> branches = new ArrayList<>();
 
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (resolveReference(subSchema) instanceof NullSchema) {
+      if (subSchema instanceof NullSchema) {
         isNullableUnion = true;
       } else {
         Map<String, Object> hint = unionMeta != null && index < unionMeta.size()
@@ -886,10 +808,7 @@ public class JsonToLogicalTypeConverter {
         }
         Schema branchType = convertWithCycleDetection(
             subSchema, true, ctx, appendToList(indexPath, index));
-        // A document has no step for a union branch.
-        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams)
-            .setNativeNames(Collections.emptyList())
-            .setNativeTitle(branchTitle(subSchema)));
+        branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));
         index++;
       }
     }
@@ -907,14 +826,9 @@ public class JsonToLogicalTypeConverter {
       }
       throw new ValidationException("Array schema did not specify the items type");
     }
-    String type = stringProp(arraySchema, CONNECT_TYPE_PROP);
+    String type = (String) arraySchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_MAP.equals(type) && allItemSchema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) allItemSchema;
-      if (!objectSchema.getPropertySchemas().containsKey(KEY_FIELD)
-          || !objectSchema.getPropertySchemas().containsKey(VALUE_FIELD)) {
-        throw new ValidationException(
-            "A map (connect.type: map) array's items must declare key and value");
-      }
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           arraySchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
@@ -925,9 +839,7 @@ public class JsonToLogicalTypeConverter {
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getPropertySchemas().get(VALUE_FIELD), false,
           ctx, appendToList(indexPath, 1));
-      // Natively an array of entries: an element, then its key or value property.
-      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
-          Arrays.asList(null, KEY_FIELD), Arrays.asList(null, VALUE_FIELD));
+      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
     } else {
       // ARRAY appends [0] for the element type, matching upstream Flink's
       // JSON convention (Avro-style). Proto's ARRAY adds no index, which is
@@ -936,43 +848,28 @@ public class JsonToLogicalTypeConverter {
       return Schema.createArray(
           convertWithCycleDetection(
               allItemSchema, false, ctx, appendToList(indexPath, 0)))
-          .setNullable(isNullable)
-          .setElementNativeNames(Collections.singletonList(null));
+          .setNullable(isNullable);
     }
   }
 
   private static Schema convertObjectSchema(
       ObjectSchema objectSchema, boolean isNullable, ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
-    String type = stringProp(objectSchema, CONNECT_TYPE_PROP);
+    String type = (String) objectSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_MAP.equals(type)) {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           objectSchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
-      if (objectSchema.getSchemaOfAdditionalProperties() == null) {
-        throw new ValidationException(
-            "A map (connect.type: map) must declare its values with additionalProperties");
-      }
       // MAP value at appendToList(indexPath, 1); key type read from
       // unprocessedProperties (no schema body to walk for default capture).
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getSchemaOfAdditionalProperties(), false,
           ctx, appendToList(indexPath, 1));
       final Schema keyType = readMapKeyType(objectSchema);
-      // An object keyed by string: its keys hold nothing, its values are one unnamed step.
-      return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultiset),
-          Collections.emptyList(), Collections.singletonList(null));
+      return createMapLikeType(isNullable, keyType, valueType, isMultiset);
     } else {
       return convertRowType(isNullable, ctx, objectSchema, indexPath);
     }
-  }
-
-  /** Records the native steps to a map's key and value, or to a multiset's element (its key). */
-  private static Schema withMapSteps(
-      Schema mapLike, List<String> keySteps, List<String> valueSteps) {
-    return mapLike.getType() == Schema.Type.MULTISET
-        ? mapLike.setElementNativeNames(keySteps)
-        : mapLike.setKeyNativeNames(keySteps).setValueNativeNames(valueSteps);
   }
 
   private static Schema createMapLikeType(
@@ -995,7 +892,9 @@ public class JsonToLogicalTypeConverter {
     final Comparator<Entry<String, org.everit.json.schema.Schema>> indexComparator =
         Comparator.comparing(
             e -> {
-              return intProp(e.getValue(), CONNECT_INDEX_PROP);
+              final Object index =
+                  e.getValue().getUnprocessedProperties().get(CONNECT_INDEX_PROP);
+              return index != null ? (Integer) index : null;
             },
             Comparator.nullsLast(Comparator.comparing(Function.identity())));
     final List<Entry<String, org.everit.json.schema.Schema>> sortedFields =
@@ -1026,8 +925,7 @@ public class JsonToLogicalTypeConverter {
           readRules(subSchema);
       fields.add(new Field(subFieldName, fieldType, pos,
           defaultValue, hasDefault, subSchema.getDescription(),
-          fieldTags, fieldParams, fieldRules)
-          .setNativeNames(Collections.singletonList(subFieldName)));
+          fieldTags, fieldParams, fieldRules));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     structSchema.setDoc(objectSchema.getDescription());
@@ -1037,76 +935,11 @@ public class JsonToLogicalTypeConverter {
     return structSchema;
   }
 
-  /** A metadata property as a string, or null; any other value is rejected by name. */
-  private static String stringProp(org.everit.json.schema.Schema schema, String name) {
-    Object value = schema.getUnprocessedProperties().get(name);
-    if (value == null || value instanceof String) {
-      return (String) value;
-    }
-    throw new ValidationException(name + " must be a string: " + value);
-  }
-
-  /** A metadata property as an integer, or null; any other value is rejected by name. */
-  private static Integer intProp(org.everit.json.schema.Schema schema, String name) {
-    Object value = schema.getUnprocessedProperties().get(name);
-    if (value == null || value instanceof Integer) {
-      return (Integer) value;
-    }
-    throw new ValidationException(name + " must be an integer: " + value);
-  }
-
-  private static int decimalParameter(Map<?, ?> parameters, String name, int otherwise) {
-    Object value = parameters.get(name);
-    if (value == null) {
-      return otherwise;
-    }
-    if (value instanceof String) {
-      try {
-        return Integer.parseInt((String) value);
-      } catch (NumberFormatException e) {
-        // Rejected below, with any other shape.
-      }
-    }
-    throw new ValidationException(CONNECT_PARAMETERS + "." + name
-        + " must be an integer as a string: " + value);
-  }
-
-  /**
-   * A {@code confluent:union} or {@code confluent:enum} hint, one object per member with a string
-   * name and doc and an object of params; any other shape is rejected by name.
-   */
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> hints(org.everit.json.schema.Schema schema,
-      String name) {
-    Object value = schema.getUnprocessedProperties().get(name);
-    if (value == null) {
-      return null;
-    }
-    boolean valid = value instanceof List;
-    for (Object member : valid ? (List<?>) value : Collections.emptyList()) {
-      valid &= member instanceof Map && isHint((Map<?, ?>) member);
-    }
-    if (!valid) {
-      throw new ValidationException(name + " must be a list of member objects: " + value);
-    }
-    return (List<Map<String, Object>>) value;
-  }
-
-  private static boolean isHint(Map<?, ?> member) {
-    Object params = member.get("params");
-    return isStringOrAbsent(member.get("name")) && isStringOrAbsent(member.get("doc"))
-        && (params == null || params instanceof Map);
-  }
-
-  private static boolean isStringOrAbsent(Object value) {
-    return value == null || value instanceof String;
-  }
-
   private static Schema readMapKeyType(ObjectSchema objectSchema) {
     Map<String, Object> unprocessed = objectSchema.getUnprocessedProperties();
     Object keyLength = unprocessed.get(CommonConstants.LOGICAL_KEY_LENGTH_PROP);
     if (keyLength instanceof Integer) {
-      String keyTypeName = stringProp(objectSchema, CommonConstants.LOGICAL_KEY_TYPE_PROP);
+      String keyTypeName = (String) unprocessed.get(CommonConstants.LOGICAL_KEY_TYPE_PROP);
       if ("CHAR".equals(keyTypeName)) {
         return Schema.createChar((int) keyLength).setNullable(false);
       }

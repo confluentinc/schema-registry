@@ -638,22 +638,6 @@ public class LogicalType {
     return defaultValues;
   }
 
-  /**
-   * Whether {@code other} describes the same data, as {@code schemaType} finds a location:
-   * the same types, nullability, names, enum symbols and named types, the same native steps and
-   * titles its converter recorded, and the same aliases and Protobuf numbers. Members are paired
-   * by name, as each format finds them, except JSON union branches, which are found by position;
-   * a Protobuf member's number, recorded or implied by its position, must match too, and a Flink
-   * wrapper union's branches by the numbers they record. A JSON {@code $ref} and the same body
-   * inline are equivalent, as is a def that only references another. Unlike {@link #equals}, docs,
-   * tags, rules, defaults and every other param are ignored, as are the root's own name and
-   * namespace, except a Protobuf root message's: they document the data, and do not change it.
-   */
-  public boolean equivalent(SchemaType schemaType, LogicalType other) {
-    requireNonNull(schemaType, "schemaType");
-    return other != null && LogicalTypeEquivalence.equivalent(schemaType, this, other);
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {

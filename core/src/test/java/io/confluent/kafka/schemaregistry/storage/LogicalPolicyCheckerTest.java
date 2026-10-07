@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,16 +27,8 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
-import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class LogicalPolicyCheckerTest {
@@ -71,84 +62,6 @@ class LogicalPolicyCheckerTest {
     return new SimpleParsedSchemaHolder(new AvroSchema(avro));
   }
 
-  @Test
-  void theCheckOfAMessageSharedAlongManyPathsDoesNotPlaceItsDefaults() {
-    // Each message holds the next twice: 2^30 paths to one default the check never reads.
-    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
-    for (int i = 0; i < 30; i++) {
-      text.append("message M").append(i).append(" { M").append(i + 1).append(" a = 1; M")
-          .append(i + 1).append(" b = 2; }\n");
-    }
-    ProtobufSchema diamond = new ProtobufSchema(text.append("message M30 { int32 x = 1; }\n")
-        .toString());
-    assertTimeoutPreemptively(Duration.ofSeconds(5), () -> LogicalPolicyChecker.check(diamond,
-        List.of(new SimpleParsedSchemaHolder(diamond)), CompatibilityLevel.BACKWARD));
-  }
-
-  @Test
-  void aChainOfMessagesNestingTooDeepIsRejectedRatherThanOverflowing() throws Exception {
-    // Deep only by reference, on a request thread's small stack: the walk overflowed into a 500.
-    AtomicReference<Object> result = new AtomicReference<>();
-    Thread check = new Thread(null, () -> {
-      try {
-        result.set(LogicalPolicyChecker.check(chain(2000, true),
-            List.of(new SimpleParsedSchemaHolder(chain(2000, false))),
-            CompatibilityLevel.BACKWARD_TRANSITIVE));
-      } catch (Throwable e) {
-        result.set(e);
-      }
-    }, "check", 512 << 10);
-    check.start();
-    check.join();
-    assertTrue(result.get() instanceof List, "the check threw " + result.get());
-    List<?> errors = (List<?>) result.get();
-    assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).toString().contains("named types inlined"), errors.toString());
-  }
-
-  @Test
-  void aChainOfMessagesWithinTheDepthLimitIsChecked() {
-    // Compared to its end: the field added at the deepest message is found.
-    List<String> errors = LogicalPolicyChecker.check(chain(90, true),
-        List.of(new SimpleParsedSchemaHolder(chain(90, false))), CompatibilityLevel.BACKWARD);
-    assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("REQUIRED_FIELD_ADDED")
-        && errors.get(0).contains(".next.y"), errors.toString());
-  }
-
-  @Test
-  void aPreviousVersionNestingTooDeepIsSkipped() {
-    // Too deep to convert, as for provenance: compared to nothing, as any unconvertible previous
-    // version is, so the change at its deepest message goes unreported.
-    List<String> errors = LogicalPolicyChecker.check(chain(150, false),
-        List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
-    assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("named types inlined"), errors.toString());
-    errors = LogicalPolicyChecker.check(chain(90, false),
-        List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
-    assertTrue(errors.isEmpty(), errors.toString());
-  }
-
-  // A file of n messages, each holding the next: deep by reference, never by inline nesting.
-  private static ProtobufSchema chain(int n, boolean extra) {
-    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n"
-        + "message Root { int32 id = 1; M1 c = 2; }\n");
-    for (int i = 1; i <= n; i++) {
-      text.append("message M").append(i).append(" { ")
-          .append(i < n ? "M" + (i + 1) + " next = 1; " : "").append("int32 x = 2; ")
-          .append(extra && i == n ? "int32 y = 3; " : "").append("}\n");
-    }
-    return new ProtobufSchema(text.toString());
-  }
-
-  // Protobuf files with one or several top-level messages, as Flink reads them.
-  private static final String ORDER = "message Order { int32 id = 1; }\n";
-  private static final String SHIP = "message Ship { string to = 1; }\n";
-
-  private static ProtobufSchema proto(String... messages) {
-    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("", messages));
-  }
-
   // -- toLogicalType ------------------------------------------------------------------------------
 
   @Test
@@ -162,26 +75,6 @@ class LogicalPolicyCheckerTest {
     when(unknown.schemaType()).thenReturn("XML");
     assertThrows(IllegalArgumentException.class,
         () -> LogicalPolicyChecker.toLogicalType(unknown));
-  }
-
-  @Test
-  void thePolicyReadsAMultiMessageProtobufFileAsFlinkDoes() {
-    // As Flink wraps them: one field per top-level message, by its full name, in file order.
-    LogicalType logical = LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER, SHIP));
-    assertEquals(List.of("p.Order", "p.Ship"), names(logical));
-    // A file with one message is that message, unwrapped.
-    assertEquals(List.of("id"), names(LogicalPolicyChecker.toPolicyLogicalType(proto(ORDER))));
-  }
-
-  @Test
-  void formatLogicalShowsAMultiMessageProtobufFilesFirstMessage() {
-    // Only the policy wraps the messages; format=logical keeps its reading.
-    assertEquals(List.of("id"), names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
-  }
-
-  private static List<String> names(LogicalType logical) {
-    return logical.getRootSchema().getFields().stream().map(Field::getName)
-        .collect(Collectors.toList());
   }
 
   // -- validity runs regardless of level / previous versions -------------------------------------
@@ -209,46 +102,6 @@ class LogicalPolicyCheckerTest {
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
     assertFalse(errors.isEmpty());
     assertTrue(errors.stream().anyMatch(e -> e.contains("REQUIRED_FIELD_ADDED")), errors.toString());
-  }
-
-  @Test
-  void aProtobufFileGainingOrLosingAMessageIsRejected() {
-    // Flink's row reshapes between one message and several: every field moves under a row.
-    assertFalse(LogicalPolicyChecker.check(proto(ORDER, SHIP),
-        List.of(new SimpleParsedSchemaHolder(proto(ORDER))), CompatibilityLevel.BACKWARD).isEmpty());
-    assertFalse(LogicalPolicyChecker.check(proto(ORDER),
-        List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FORWARD)
-        .isEmpty());
-  }
-
-  @Test
-  void aProtobufFileThatOnlyReExportsAnotherIsReadAsItsOwnFile() {
-    // Its own file declares no message, whatever the file it re-exports declares: it is not read
-    // as a multi-message file, and converts as format=logical shows it.
-    String dependency = "syntax = \"proto3\";\npackage d;\n" + ORDER + SHIP;
-    ProtobufSchema reExporting = new ProtobufSchema(
-        "syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
-        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", dependency), null, null);
-    assertEquals(LogicalPolicyChecker.toLogicalType(reExporting).getRootSchema(),
-        LogicalPolicyChecker.toPolicyLogicalType(reExporting).getRootSchema());
-  }
-
-  @Test
-  void aChangeToAProtobufFilesSecondMessageIsChecked() {
-    // Every message is a row of the table, so narrowing a field of the second one is caught.
-    ProtobufSchema wide = proto(ORDER, "message Ship { int64 weight = 1; }\n");
-    ProtobufSchema narrow = proto(ORDER, "message Ship { int32 weight = 1; }\n");
-    List<String> errors = LogicalPolicyChecker.check(
-        narrow, List.of(new SimpleParsedSchemaHolder(wide)), CompatibilityLevel.BACKWARD);
-    assertFalse(errors.isEmpty());
-    assertTrue(errors.stream().anyMatch(e -> e.contains("weight")), errors.toString());
-  }
-
-  @Test
-  void aProtobufFilesMessagesReorderedAreCompatible() {
-    List<String> errors = LogicalPolicyChecker.check(proto(SHIP, ORDER),
-        List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FULL);
-    assertTrue(errors.isEmpty(), errors.toString());
   }
 
   @Test

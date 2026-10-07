@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 
-import com.google.re2j.Pattern;
+import java.util.regex.Pattern;
 
 /**
  * A wildcard matcher.
@@ -89,8 +89,6 @@ public class WildcardMatcher {
         case '|':
         case '^':
         case '$':
-        case '[':
-        case ']':
           // These need to be escaped in regular expressions
           dst.append('\\').append(c);
           break;
