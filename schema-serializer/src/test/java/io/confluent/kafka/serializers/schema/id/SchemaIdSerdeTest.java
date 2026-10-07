@@ -19,9 +19,15 @@ package io.confluent.kafka.serializers.schema.id;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+import io.confluent.kafka.serializers.schema.id.SchemaId.SchemaMessageIndexes;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Test;
 
 public class SchemaIdSerdeTest {
@@ -88,6 +94,32 @@ public class SchemaIdSerdeTest {
     // Serialize same key again - should not add duplicate
     serializer.serialize("topic", true, headers, payload, schemaId);
     assertEquals(1, countHeaders(headers, SchemaId.KEY_SCHEMA_ID_HEADER));
+  }
+
+  @Test
+  public void testMessageIndexesRoundTrip() {
+    List<Integer> indexes = Arrays.asList(1, 0, 3);
+    byte[] bytes = new SchemaMessageIndexes(indexes).toByteArray();
+    assertEquals(indexes, SchemaMessageIndexes.readFrom(bytes).indexes());
+    assertEquals(Arrays.asList(0), SchemaMessageIndexes.readFrom(new byte[]{0}).indexes());
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesCountExceedsRemaining() {
+    SchemaMessageIndexes.readFrom(varints(100, 1, 2));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesNegativeCount() {
+    SchemaMessageIndexes.readFrom(varints(-1, 1));
+  }
+
+  private static byte[] varints(int... values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * 5);
+    for (int value : values) {
+      ByteUtils.writeVarint(value, buffer);
+    }
+    return Arrays.copyOf(buffer.array(), buffer.position());
   }
 
   private int countHeaders(Headers headers, String key) {

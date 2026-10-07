@@ -219,6 +219,10 @@ public class SchemaId {
 
     public static SchemaMessageIndexes readFrom(ByteBuffer buffer) {
       int size = ByteUtils.readVarint(buffer);
+      // each index takes at least one byte
+      if (size < 0 || size > buffer.remaining()) {
+        throw new SerializationException("Invalid message index count: " + size);
+      }
       if (size == 0) {
         // optimization
         return new SchemaMessageIndexes(DEFAULT_INDEX);
