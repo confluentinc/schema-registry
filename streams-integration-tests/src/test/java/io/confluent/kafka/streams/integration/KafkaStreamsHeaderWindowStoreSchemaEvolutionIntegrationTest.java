@@ -39,7 +39,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
@@ -81,8 +80,6 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
   private static final long WINDOW_5 = 300_000L;
   private static final long WINDOW_10 = 600_000L;
 
-  // Number of records written to the store so far; tests wait for it before reading the store.
-  private final AtomicInteger processed = new AtomicInteger();
 
   /**
    * Value schema evolves v1 to v2 to v3 across windows. Each window keeps the shape it was written
@@ -586,10 +583,6 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
     return startStreams(builder, appId, stateDir, restoreListener);
   }
 
-  private void awaitProcessed(int expected) throws InterruptedException {
-    awaitCondition(() -> processed.get() >= expected, expected + " records to be processed");
-  }
-
   /** Polls until the entry is visible, then returns the queryable store. */
   private <K, V> ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> awaitWindowEntry(
       KafkaStreams streams, String storeName, K key, long windowStart)
@@ -625,33 +618,6 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       }
     }
     return count;
-  }
-
-  private static <K, V> void send(KafkaProducer<K, V> producer, String topic, long timestamp,
-      K key, V value) throws Exception {
-    producer.send(new ProducerRecord<>(topic, null, timestamp, key, value)).get();
-    producer.flush();
-  }
-
-  private static void closeQuietly(KafkaStreams streams) {
-    if (streams != null) {
-      streams.close(Duration.ofSeconds(10));
-    }
-  }
-
-  private static GenericRecord sensorKey(String sensorId) {
-    return new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", sensorId).build();
-  }
-
-  private static GenericRecord valueV1(double temperature, long timestamp) {
-    return new GenericRecordBuilder(VALUE_SCHEMA_V1)
-        .set("temperature", temperature).set("timestamp", timestamp).build();
-  }
-
-  private static GenericRecord valueV2(double temperature, long timestamp, double humidity) {
-    return new GenericRecordBuilder(VALUE_SCHEMA_V2)
-        .set("temperature", temperature).set("timestamp", timestamp)
-        .set("humidity", humidity).build();
   }
 
   /** Writes every input record into the window store, or deletes the row on a null value. */
