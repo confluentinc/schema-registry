@@ -30,8 +30,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.base.Ticker;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.protobuf.Descriptors.Descriptor;
