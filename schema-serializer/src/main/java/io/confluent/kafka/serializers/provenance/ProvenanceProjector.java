@@ -198,9 +198,10 @@ public final class ProvenanceProjector<T> {
 
 
   /**
-   * {@code reader}, marked as derived from a generated class. Its text is synthesized from the
-   * class, so it is matched to the latest version whose logical type is equivalent to it, never
-   * by an exact spelling an older version may share by accident.
+   * {@code reader}, marked as derived from an application class (an Avro or Protobuf generated
+   * class, a JSON Schema POJO). Its text is synthesized from the class, so it is matched to the
+   * latest version whose logical type is equivalent to it, never by an exact spelling an older
+   * version may share by accident.
    */
   public ParsedSchema derivedReader(ParsedSchema reader) {
     derivedReaders.put(reader, Boolean.TRUE);
