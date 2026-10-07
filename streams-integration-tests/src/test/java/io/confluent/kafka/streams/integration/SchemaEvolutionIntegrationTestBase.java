@@ -70,6 +70,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -375,8 +376,8 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
         if (countStoreEntries(store) >= expectedCount) {
           return;
         }
-      } catch (Exception e) {
-        // Store may not be ready yet
+      } catch (InvalidStateStoreException e) {
+        // Store is not queryable yet; any other exception fails the test.
       }
       Thread.sleep(200);
     }
