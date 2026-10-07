@@ -3141,7 +3141,7 @@ paths:
             indicates an invalid range. Error code 42216 indicates an unknown algorithm.
             Error code 42217 indicates a history whose names and aliases do not determine
             one provenance. Error code 42218 indicates a version with too many locations
-            to compute, or nesting them too deep. Error code 42219 indicates a range
+            to compute, or nesting its types too deep. Error code 42219 indicates a range
             with includeInterior covering more versions than one request may. Error
             code 42220 indicates a recursive schema.
           content:

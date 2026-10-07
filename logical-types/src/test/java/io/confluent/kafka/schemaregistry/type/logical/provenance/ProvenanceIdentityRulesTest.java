@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import java.time.Duration;
 import java.util.Collections;
@@ -316,8 +317,24 @@ class ProvenanceIdentityRulesTest {
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), text)),
         ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(text))), false))
-        .isInstanceOf(TooManyLocationsException.class)
-        .hasMessageContaining("Version 7 nests locations more than 100 deep");
+        .isInstanceOf(TypeTooDeepException.class)
+        .hasMessageContaining("Version 7: Schema nests types more than 100 deep");
+  }
+
+  @Test
+  void aVersionTooDeepToConvertHasNoProvenance() {
+    // Text nesting past the same limit fails in the converter, named as the same failure.
+    StringBuilder text = new StringBuilder("\"string\"");
+    for (int i = 0; i < 150; i++) {
+      text.insert(0, "{\"type\":\"record\",\"name\":\"R" + i
+          + "\",\"fields\":[{\"name\":\"f\",\"type\":").append("}]}");
+    }
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
+        new SchemaMetadata(17, 7, "AVRO", Collections.emptyList(), text.toString())),
+        ProvenanceHistory.held(Collections.singletonList(new AvroSchema(text.toString()))),
+        false))
+        .isInstanceOf(TypeTooDeepException.class)
+        .hasMessageStartingWith("Version 7: ");
   }
 
   @Test
