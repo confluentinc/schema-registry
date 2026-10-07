@@ -148,10 +148,10 @@ class AvroProvenancePathConformanceTest {
     Schema schema = new Schema.Parser().parse(json);
     ProvenanceMapping identity = ProvenanceMapping.join(provenanceOf(schema), 1, 1);
 
-    AvroProvenanceRenamer.Renamed renamed = AvroProvenanceRenamer.rename(schema, schema, identity);
+    AvroProvenanceProjection projection = AvroProvenanceProjection.of(schema, schema, identity);
 
-    assertFalse(renamed.writer.toString().contains("__provenance_unmatched_"),
-        renamed.writer.toString());
+    assertFalse(projection.writer.toString().contains("__provenance_unmatched_"),
+        projection.writer.toString());
   }
 
   // -------------------------------------------------------------------------------------------

@@ -212,7 +212,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
       // With no reader configured, a generated class's schema is the reader.
       ProtobufSchema provenanceReader = readerSchema != null ? readerSchema : classSchema(schema);
-      ProtoProvenanceRenumberer.Renumbered renumbered =
+      ProtoProvenanceProjection projection =
           byProvenance(subject, schemaId, schema, provenanceReader, name, migrations);
 
       int length = buffer.remaining();
@@ -225,8 +225,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
-      } else if (parsesRenumbered(renumbered, readerSchema, schema)) {
-        message = parseRenumbered(renumbered, provenanceReader, buffer, start, length);
+      } else if (parsesProjected(projection, readerSchema, schema)) {
+        message = parseProjected(projection, provenanceReader, buffer, start, length);
       }
 
       ProtobufSchema writerSchema = schema;
@@ -239,7 +239,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
               CodedInputStream.newInstance(buffer.array(), start, length),
               ProtobufSchema.EXTENSION_REGISTRY);
         }
-        message = renumberRuled(renumbered, readerSchema, provenanceReader, executeRules(
+        message = projectedRuled(projection, readerSchema, provenanceReader, executeRules(
             subject, topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
             schema, message, ruleResults
         ));
@@ -327,13 +327,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
     // The projector first: a load holding the map's lock must not wait for the monitor a reset,
     // clearing the map, holds.
-    ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector = provenanceProjector();
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector();
     return classSchemas.computeIfAbsent(name,
         n -> Optional.ofNullable(loadClassSchema(n, projector))).orElse(null);
   }
 
   private ProtobufSchema loadClassSchema(String name,
-      ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector) {
+      ProvenanceProjector<ProtoProvenanceProjection> projector) {
     try {
       // As deriveType resolves it: not initialized until it is known to be a message class.
       Class<?> cls = parseMethod != null ? specificProtobufClass : Class.forName(
@@ -353,26 +353,26 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   private final Map<String, Optional<ProtobufSchema>> classSchemas = new ConcurrentHashMap<>();
 
   /**
-   * Whether a renumbered read is parsed before the domain rules: it is, except for the writer's
+   * Whether a projected read is parsed before the domain rules: it is, except for the writer's
    * own rules with no reader configured, which read the writer's record; what the class does not
    * pair with it is dropped after them.
    */
-  private static boolean parsesRenumbered(ProtoProvenanceRenumberer.Renumbered renumbered,
+  private static boolean parsesProjected(ProtoProvenanceProjection projection,
       ProtobufSchema reader, ProtobufSchema writer) {
-    return renumbered != null && renumbered.movedAny() && (reader != null || !hasReadRules(writer));
+    return projection != null && projection.movedAny() && (reader != null || !hasReadRules(writer));
   }
 
   /**
    * {@code ruled} in the class's own numbers, when the writer's rules ran in the writer's: what
    * they wrote under a moved number is the writer's field, which the class does not have.
    */
-  private static Object renumberRuled(ProtoProvenanceRenumberer.Renumbered renumbered,
+  private static Object projectedRuled(ProtoProvenanceProjection projection,
       ProtobufSchema reader, ProtobufSchema provenanceReader, Object ruled) throws IOException {
-    if (reader != null || renumbered == null || !renumbered.movedAny()) {
+    if (reader != null || projection == null || !projection.movedAny()) {
       return ruled;
     }
     byte[] bytes = ((Message) ruled).toByteArray();
-    return parseRenumbered(renumbered, provenanceReader, ByteBuffer.wrap(bytes), 0, bytes.length);
+    return parseProjected(projection, provenanceReader, ByteBuffer.wrap(bytes), 0, bytes.length);
   }
 
   private static boolean hasReadRules(ProtobufSchema schema) {
@@ -403,14 +403,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * before the domain rules: a value they write to a new field must land under its own number, and
    * a caller handed the parse descriptor could not address the fields it leaves out.
    */
-  private static Message parseRenumbered(ProtoProvenanceRenumberer.Renumbered renumbered,
+  private static Message parseProjected(ProtoProvenanceProjection projection,
       ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
-    Message parsed = parseDynamic(renumbered.schema, bytes, start, length);
+    Message parsed = parseDynamic(projection.schema, bytes, start, length);
     return DynamicMessage.parseFrom(reader.toDescriptor(),
-        renumbered.dropMoved(parsed).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
+        projection.dropMoved(parsed).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
   }
 
-  private ProtoProvenanceRenumberer.Renumbered byProvenance(String subject, SchemaId writerId,
+  private ProtoProvenanceProjection byProvenance(String subject, SchemaId writerId,
       ProtobufSchema writer, ProtobufSchema reader, String name, List<Migration> migrations) {
     if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
       return null;
@@ -440,11 +440,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             throw new ProvenanceUnavailableException("The record was written as message " + name
                 + ", not its file's first, which single-message provenance has no locations for");
           }
-          return ProtoProvenanceRenumberer.renumber(reader, named, mapping, multi);
+          return ProtoProvenanceProjection.of(reader, named, mapping, multi);
         }).orElse(null);
   }
 
-  private volatile ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector;
+  private volatile ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector;
 
   /**
    * {@code readers} as a reader function, with any registered id a reader comes with used for
@@ -471,8 +471,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   // Created on first use, once the deserializer is configured, and only once: it holds the ids
   // readers were supplied with and which readers a class derived.
-  private ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> provenanceProjector() {
-    ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector = provenanceProjector;
+  private ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector() {
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector;
     if (projector == null) {
       synchronized (this) {
         projector = provenanceProjector;

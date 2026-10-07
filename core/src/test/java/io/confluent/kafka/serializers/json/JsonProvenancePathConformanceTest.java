@@ -140,7 +140,7 @@ class JsonProvenancePathConformanceTest {
         ProvenanceHistory.held(schemas), false);
     JsonNode read = MAPPER.readTree(document);
 
-    JsonProvenancePruner.plan(ProvenanceMapping.join(provenance, 1, 3), v1, v1).prune(read);
+    JsonProvenanceProjection.of(ProvenanceMapping.join(provenance, 1, 3), v1, v1).prune(read);
 
     assertEquals(MAPPER.readTree(expected), read);
   }

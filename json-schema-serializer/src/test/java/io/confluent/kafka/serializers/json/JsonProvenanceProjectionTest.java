@@ -33,7 +33,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 /** A response the reader cannot follow fails every record from that writer. */
-public class JsonProvenancePrunerTest {
+public class JsonProvenanceProjectionTest {
 
   private static final JsonSchema READER = new JsonSchema("{\"type\":\"object\",\"properties\":"
       + "{\"a\":{\"type\":\"integer\"},\"u\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":"
@@ -41,7 +41,7 @@ public class JsonProvenancePrunerTest {
 
   @Test
   public void aLocationWithoutNamesFailsEveryRecord() {
-    assertThrows(SerializationException.class, () -> JsonProvenancePruner.plan(
+    assertThrows(SerializationException.class, () -> JsonProvenanceProjection.of(
         mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, "SCALAR", 2))),
         READER));
@@ -50,7 +50,7 @@ public class JsonProvenancePrunerTest {
   @Test
   public void aLocationWithoutAKindFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
-        () -> JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"),
+        () -> JsonProvenanceProjection.of(mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"),
             new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), 2))), READER));
     assertTrue(e.getMessage(), e.getMessage().contains("no kind for location [2]"));
   }
@@ -58,7 +58,7 @@ public class JsonProvenancePrunerTest {
   @Test
   public void aNewPropertyTheReaderDoesNotDeclareFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
-        () -> JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")),
+        () -> JsonProvenanceProjection.of(mapping(Arrays.asList(p(1, "a")),
             Arrays.asList(p(1, "a"), p(2, "ghost"))), READER));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
   }
@@ -66,10 +66,10 @@ public class JsonProvenancePrunerTest {
   @Test
   public void aNewPropertyInAUnionBranchIsDeclared() throws Exception {
     // u.b is declared by u's object branch only; the plan follows it, and prunes the new u.
-    JsonProvenancePruner pruner = JsonProvenancePruner.plan(mapping(Arrays.asList(p(1, "a")),
+    JsonProvenanceProjection projection = JsonProvenanceProjection.of(mapping(Arrays.asList(p(1, "a")),
         Arrays.asList(p(1, "a"), p(2, "u"), p(3, "u", "b"))), READER);
     JsonNode document = new ObjectMapper().readTree("{\"a\":1,\"u\":{\"b\":2}}");
-    pruner.prune(document);
+    projection.prune(document);
     assertEquals("{\"a\":1}", document.toString());
   }
 
@@ -77,7 +77,7 @@ public class JsonProvenancePrunerTest {
   public void aRootKindTheReaderContradictsFailsEveryRecord() {
     // Read as a union, the reader's properties would pass for branches: nothing would be pruned.
     SerializationException e = assertThrows(SerializationException.class,
-        () -> JsonProvenancePruner.plan(ProvenanceMapping.join(new SchemaProvenance("s",
+        () -> JsonProvenanceProjection.of(ProvenanceMapping.join(new SchemaProvenance("s",
             Arrays.asList(new ProvenanceVersion(1, 1, "STRUCT", Arrays.asList(p(1, "a"))),
                 new ProvenanceVersion(2, 2, "UNION", Arrays.asList(p(1, "a"), p(2, "u"))))),
             1, 2), READER));

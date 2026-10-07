@@ -79,9 +79,9 @@ class JsonProvenanceBranchNumberingTest {
         .filter(f -> names.equals(f.getNames())).findFirst().orElse(null);
     assertNotNull(location, "no location spelled " + names);
 
-    assertEquals(expected, JsonProvenancePruner.branchChoicesAt(
+    assertEquals(expected, JsonProvenanceProjection.branchChoicesAt(
         ProvenanceMapping.join(provenance, 1, 1), location.getPath()), label + ": the response");
-    assertEquals(expected, JsonProvenancePruner.branchesTaken(
+    assertEquals(expected, JsonProvenanceProjection.branchesTaken(
         reader, MAPPER.readTree(document), names), label + ": the pruner");
   }
 
