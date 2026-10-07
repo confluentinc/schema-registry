@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Verifies that LT's Avro reader extracts per-field default values into the
@@ -65,6 +67,71 @@ class AvroReaderDefaultsTest {
     LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(
         new AvroSchema(avroSchemaString));
     assertThat(lt.getDefaultValues()).isEmpty();
+  }
+
+  @Test
+  void aReusedRecordHasItsDefaultsUnderEachUse() {
+    String foo = "{\"type\":\"record\",\"name\":\"Foo\",\"fields\":["
+        + "{\"name\":\"s\",\"type\":\"string\",\"default\":\"x\"},"
+        + "{\"name\":\"n\",\"type\":\"long\",\"default\":7}]}";
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Row\",\"fields\":["
+            + "{\"name\":\"id\",\"type\":\"int\",\"default\":1},"
+            + "{\"name\":\"f1\",\"type\":" + foo + "},"
+            + "{\"name\":\"f2\",\"type\":\"Foo\"},"
+            + "{\"name\":\"f3\",\"type\":[\"null\",\"Foo\"],\"default\":null},"
+            + "{\"name\":\"f4\",\"type\":{\"type\":\"array\",\"items\":\"Foo\"}}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0), 1),
+        Map.entry(List.of(1, 0), "x"), Map.entry(List.of(1, 1), 7L),
+        Map.entry(List.of(2, 0), "x"), Map.entry(List.of(2, 1), 7L),
+        Map.entry(List.of(3, 0), "x"), Map.entry(List.of(3, 1), 7L),
+        Map.entry(List.of(4, 0, 0), "x"), Map.entry(List.of(4, 0, 1), 7L));
+  }
+
+  @Test
+  void aRecordInTheRootsCycleHasItsDefaultsBeforeTheRootRecurs() {
+    // A holds B, B holds A again: B is reached once before A repeats, so its default is placed.
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"A\",\"fields\":["
+            + "{\"name\":\"b\",\"type\":{\"type\":\"record\",\"name\":\"B\",\"fields\":["
+            + "{\"name\":\"y\",\"type\":\"int\",\"default\":7},"
+            + "{\"name\":\"a\",\"type\":[\"null\",\"A\"],\"default\":null}]}}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 7));
+  }
+
+  @Test
+  void aConversionPlacesNoDefaultsUntilTheyAreRead() {
+    // Each record holds the next twice: 2^30 paths to the last one's default.
+    StringBuilder text = new StringBuilder();
+    for (int i = 0; i < 30; i++) {
+      text.append("{\"type\":\"record\",\"name\":\"R").append(i).append("\",\"fields\":[")
+          .append("{\"name\":\"a\",\"type\":");
+    }
+    text.append("{\"type\":\"record\",\"name\":\"R30\",\"fields\":[")
+        .append("{\"name\":\"x\",\"type\":\"int\",\"default\":1}]}");
+    for (int i = 29; i >= 0; i--) {
+      text.append("},{\"name\":\"b\",\"type\":\"R").append(i + 1).append("\"}]}");
+    }
+    AvroSchema schema = new AvroSchema(text.toString());
+    LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
+        AvroToLogicalTypeConverter.toLogicalType(schema));
+    assertThat(lt.getNamedTypes()).isNotEmpty();
+  }
+
+  @Test
+  void aRecursiveRecordsDefaultsStopAtItsFirstRecurrence() {
+    LogicalType lt = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\":\"record\",\"name\":\"Row\",\"fields\":["
+            + "{\"name\":\"t\",\"type\":{\"type\":\"record\",\"name\":\"Tree\",\"fields\":["
+            + "{\"name\":\"v\",\"type\":\"int\",\"default\":3},"
+            + "{\"name\":\"left\",\"type\":[\"null\",\"Tree\"],\"default\":null}]}},"
+            + "{\"name\":\"u\",\"type\":\"Tree\"}]}"));
+
+    assertThat(lt.getDefaultValues()).containsOnly(
+        Map.entry(List.of(0, 0), 3), Map.entry(List.of(1, 0), 3));
   }
 
   /**
