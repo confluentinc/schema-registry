@@ -522,7 +522,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return javaTypes.computeIfAbsent(name, n -> {
       try {
         checkTypeAllowed(n);
-        return Optional.of(Class.forName(n));
+        // Not initialized: the read loads it so only for an object or array payload.
+        return Optional.of(Class.forName(n, false,
+            AbstractKafkaJsonSchemaDeserializer.class.getClassLoader()));
       } catch (ClassNotFoundException | SerializationException e) {
         return Optional.empty();
       }
