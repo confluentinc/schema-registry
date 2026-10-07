@@ -215,14 +215,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       final JsonSchema writerSchema = schema;
       // Pruned first: validation and the domain rules see only what the reader may, validation's
       // defaults reach a pruned property as one never written, and a rule's value is not undone.
-      ParsedSchema prunedFor = provenanceReader(readerSchema, migrations, writerSchema);
-      jsonNode = byProvenance(subject, schemaId, writerSchema, prunedFor, migrations, jsonNode,
-          buffer, start, length);
+      jsonNode = byProvenance(subject, schemaId, writerSchema,
+          provenanceReader(readerSchema, migrations, writerSchema), migrations, jsonNode, buffer,
+          start, length);
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
       if (validate && validateBeforeDomainRules) {
-        jsonNode = validateJson(jsonNode, buffer, start, length, validating(prunedFor, schema));
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
@@ -235,7 +235,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       if (validate && !validateBeforeDomainRules) {
-        jsonNode = validateJson(jsonNode, buffer, start, length, validating(prunedFor, schema));
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
 
       Object value;
@@ -457,14 +457,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    * The reader provenance prunes for: the reader schema, else a typed read's class, as a generated
    * class is in Avro and Protobuf. None after migrations, which provenance does not apply to.
    */
-  /**
-   * The schema a read is validated against: the reader provenance pruned for, a class's included,
-   * so what was pruned is absent, as never written, rather than missing from the writer.
-   */
-  private static JsonSchema validating(ParsedSchema prunedFor, JsonSchema schema) {
-    return prunedFor != null ? (JsonSchema) prunedFor : schema;
-  }
-
   private ParsedSchema provenanceReader(ParsedSchema readerSchema, List<Migration> migrations,
       JsonSchema writer) {
     return readerSchema != null || !migrations.isEmpty() ? readerSchema : classSchema(writer);
