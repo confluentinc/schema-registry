@@ -45,9 +45,9 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The Protobuf renumberer finds fields by the names the converter records, so every location's
- * names must reach a field of the descriptor, and a renumbering moves only the outermost fields
- * that have no writer counterpart.
+ * The Protobuf projection finds fields by the names the converter records, so every location's
+ * names must reach a field of the descriptor, and it leaves out only the outermost fields that
+ * have no writer counterpart.
  */
 class ProtoProvenancePathConformanceTest {
 
@@ -117,7 +117,7 @@ class ProtoProvenancePathConformanceTest {
             new SchemaMetadata(2, 2, "PROTOBUF", Collections.emptyList(), "")),
         ProvenanceHistory.held(Arrays.<ParsedSchema>asList(writer, reader)), multi);
 
-    ProtobufSchema renumbered = ProtoProvenanceRenumberer.renumber(
+    ProtobufSchema projected = ProtoProvenanceProjection.of(
         reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
 
     // Nothing under a moving field is read, and a record never parses another top-level message:
@@ -126,7 +126,7 @@ class ProtoProvenancePathConformanceTest {
     Map<String, Integer> before = numbers(root);
     Map<String, Boolean> moved = new TreeMap<>();
     Map<String, Boolean> expected = new TreeMap<>();
-    numbers(renumbered.toDescriptor()).forEach((name, number) -> {
+    numbers(projected.toDescriptor()).forEach((name, number) -> {
       moved.put(name, !number.equals(before.get(name)));
       expected.put(name, root.findFieldByName(simple(name)) != null
           && name.equals(root.getFullName() + "." + simple(name)));
@@ -134,7 +134,7 @@ class ProtoProvenancePathConformanceTest {
     assertEquals(expected, moved);
   }
 
-  /** The field {@code names} reach, walking as the renumberer does; null if they do not. */
+  /** The field {@code names} reach, walking as the projection does; null if they do not. */
   private static FieldDescriptor walk(Descriptor root, List<String> names, boolean multi) {
     Descriptor message = root;
     int i = 0;
