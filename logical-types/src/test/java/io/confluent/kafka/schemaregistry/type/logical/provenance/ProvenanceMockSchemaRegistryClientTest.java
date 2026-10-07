@@ -182,6 +182,18 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aVersionNestingTooDeepIsA42218() throws Exception {
+    // Too deep to convert is a version too large for provenance, as too many locations is.
+    StringBuilder text = new StringBuilder("\"string\"");
+    for (int i = 0; i < 150; i++) {
+      text.insert(0, "{\"type\":\"record\",\"name\":\"R" + i
+          + "\",\"fields\":[{\"name\":\"f\",\"type\":").append("}]}");
+    }
+    int v1 = register(text.toString());
+    assertCode(422, 42218, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, null));
+  }
+
+  @Test
   void aVersionOutsideTheRangePlaysNoPart() throws Exception {
     register("{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");

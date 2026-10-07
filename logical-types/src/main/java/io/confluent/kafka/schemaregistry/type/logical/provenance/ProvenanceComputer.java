@@ -19,9 +19,11 @@ package io.confluent.kafka.schemaregistry.type.logical.provenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayDeque;
@@ -109,13 +111,6 @@ public final class ProvenanceComputer {
   /** The most locations the versions of one report may hold together, kept in it or not. */
   public static final int MAX_REPORT_LOCATIONS = 500_000;
 
-  /**
-   * The deepest a location may nest; past it, the history has no provenance. A chain of named
-   * types nests with no text nesting, and the walk descends once per level: up to about 3 KB of
-   * stack a level once compiled, so 100 levels need about 300 KB beside the caller's frames.
-   */
-  public static final int MAX_DEPTH = 100;
-
   // The name V1 gives an unhinted JSON union branch, followed by its position.
   private static final String POSITIONAL_BRANCH = "connect_union_field_";
   // A JSON branch's content entries: a member's path, a discriminator's value, a scalar's type.
@@ -169,9 +164,10 @@ public final class ProvenanceComputer {
    * @throws IllegalArgumentException if a version or schema type is null, or an entity has no name
    * @throws AmbiguousProvenanceException if names and aliases determine no single match
    * @throws RecursiveTypeException for a recursive type
-   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or
-   *     nests them more than {@link #MAX_DEPTH} deep, or the versions walked more than
-   *     {@link #MAX_REPORT_LOCATIONS}
+   * @throws TooManyLocationsException if a version has more than {@link #MAX_LOCATIONS}, or the
+   *     versions walked more than {@link #MAX_REPORT_LOCATIONS}
+   * @throws TypeTooDeepException if a version's locations nest more than
+   *     {@link ToLogicalContext#MAX_TYPE_DEPTH} deep
    */
   public static ProvenanceReport report(List<SchemaType> schemaTypes,
       IntFunction<LogicalType> versionAt, IntPredicate reported) {
@@ -493,8 +489,11 @@ public final class ProvenanceComputer {
             throw new TooManyLocationsException(version, MAX_LOCATIONS);
           }
         }
-        if (peer.where.path.size() > MAX_DEPTH) {
-          throw new TooManyLocationsException(version, MAX_DEPTH, true);
+        // A chain of named types nests locations with no text nesting, one walk frame a level:
+        // the converters' limit, counted with named types inlined, bounds the stack.
+        if (peer.where.path.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
+          throw new TypeTooDeepException("Schema nests types more than "
+              + ToLogicalContext.MAX_TYPE_DEPTH + " deep with its named types inlined");
         }
         processType(peer.body, peer, "", peer.where, peer.childDerived);
       }
