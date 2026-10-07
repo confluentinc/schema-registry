@@ -90,6 +90,10 @@ import org.slf4j.LoggerFactory;
 public final class ProvenanceProjector<T> {
 
   private static final Logger log = LoggerFactory.getLogger(ProvenanceProjector.class);
+  // Readers derived from an application class, by identity: matched to the latest version they
+  // equal. Shared by every projector: a reset during a read must not unmark the read's reader.
+  private static final Cache<ParsedSchema, Boolean> DERIVED_READERS =
+      CacheBuilder.newBuilder().weakKeys().build();
 
   private final SchemaRegistryClient client;
   private final String algorithm;
@@ -103,9 +107,6 @@ public final class ProvenanceProjector<T> {
       CacheBuilder.newBuilder().weakKeys().build();
   // Copies of a caller's pinned reader, by its instance, then by pin.
   private final Cache<ParsedSchema, Map<Pin, ParsedSchema>> pinnedCopies =
-      CacheBuilder.newBuilder().weakKeys().build();
-  // Readers derived from a generated class, by identity: matched to the latest version they equal.
-  private final Cache<ParsedSchema, Boolean> derivedReaders =
       CacheBuilder.newBuilder().weakKeys().build();
   // Where provenance comes from.
   private final ProvenanceStrategy strategy;
@@ -204,7 +205,7 @@ public final class ProvenanceProjector<T> {
    * version may share by accident.
    */
   public ParsedSchema derivedReader(ParsedSchema reader) {
-    derivedReaders.put(reader, Boolean.TRUE);
+    DERIVED_READERS.put(reader, Boolean.TRUE);
     return reader;
   }
 
@@ -248,7 +249,7 @@ public final class ProvenanceProjector<T> {
     // So are the writer's and reader's names: a Protobuf file's messages share its schema id, and
     // its schemas are equal whichever message they name. A reader derived from a class equals its
     // text, so which of the two it is counts too.
-    boolean derived = derivedReaders.getIfPresent(reader) != null;
+    boolean derived = DERIVED_READERS.getIfPresent(reader) != null;
     // Read once: the key and the computation must see the same pin.
     Pin pin = derived ? null : pinOf(reader);
     List<Object> key = Arrays.asList(subject,
@@ -442,7 +443,7 @@ public final class ProvenanceProjector<T> {
       throws IOException, RestClientException {
     // A derived reader carries no pin: it is the latest version it equals.
     return pin != null && pin.id != null ? pin.id
-        : registeredId(subject, reader, derivedReaders.getIfPresent(reader) != null);
+        : registeredId(subject, reader, DERIVED_READERS.getIfPresent(reader) != null);
   }
 
   /**
