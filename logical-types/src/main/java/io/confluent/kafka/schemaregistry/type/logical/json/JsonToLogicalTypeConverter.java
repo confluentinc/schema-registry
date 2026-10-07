@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
@@ -122,7 +123,7 @@ public class JsonToLogicalTypeConverter {
     try {
       return toLogicalTypeInternal(schema, version);
     } catch (StackOverflowError e) {
-      throw new ValidationException("JSON schema nests types too deeply to convert");
+      throw new TypeTooDeepException("JSON schema nests types too deeply to convert");
     }
   }
 
@@ -208,20 +209,47 @@ public class JsonToLogicalTypeConverter {
     }
     try {
       final Object defaultValue =
-          JsonDefaultValueConverter.toJavaData(named(ctx, fieldType), rawDefault);
+          JsonDefaultValueConverter.toJavaData(fieldType, rawDefault, type -> named(ctx, type));
       if (defaultValue == null) {
         return null;
       }
       if (!isMultiNonNullUnion(fieldType)) {
         ctx.putDefaultValue(fieldIndex, defaultValue);
       }
-      return defaultValue;
+      // In the path-keyed map only, as Flink's converter had them: the JSON writer encodes no
+      // composite default, nor a Connect date or time as the number it was.
+      return isMapOnly(named(ctx, fieldType), ctx, rawDefault) ? null : defaultValue;
     } catch (RuntimeException e) {
       LOG.warn(
           "Skipping unconvertible JSON Schema default at field index path {} "
               + "(target type root: {}, exception: {})",
           fieldIndex, fieldType.getType(), e.getClass().getSimpleName());
       return null;
+    }
+  }
+
+  private static boolean isMapOnly(
+      final Schema type, final ToLogicalContext<String> ctx, final Object rawDefault) {
+    switch (type.getType()) {
+      case UNION:
+        // Decoded by its first branch, so map-only as that branch would be; the writer encodes
+        // that branch as written, so one that is a reference keeps no Field default either.
+        if (type.getBranches().isEmpty()) {
+          return false;
+        }
+        Schema first = type.getBranches().get(0).getSchema();
+        return first.getType() == Schema.Type.NAMED_TYPE_REF
+            || isMapOnly(named(ctx, first), ctx, rawDefault);
+      case ARRAY:
+      case MAP:
+      case MULTISET:
+      case STRUCT:
+        return true;
+      case DATE:
+      case TIME:
+        return rawDefault instanceof Number;
+      default:
+        return false;
     }
   }
 
@@ -398,7 +426,7 @@ public class JsonToLogicalTypeConverter {
       final org.everit.json.schema.Schema schema, boolean isNullable,
       ToLogicalContext<String> ctx, final List<Integer> indexPath) {
     if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
-      throw new ValidationException(
+      throw new TypeTooDeepException(
           "Schema type nesting depth exceeds the maximum of "
               + ToLogicalContext.MAX_TYPE_DEPTH);
     }

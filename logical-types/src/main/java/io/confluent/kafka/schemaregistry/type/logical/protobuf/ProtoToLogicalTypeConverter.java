@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -164,7 +165,7 @@ public class ProtoToLogicalTypeConverter {
     try {
       return toLogicalTypeInternal(schema, includeMultipleMessages);
     } catch (StackOverflowError e) {
-      throw new ValidationException("Protobuf schema nests types too deeply to convert");
+      throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
     }
   }
 
@@ -646,7 +647,7 @@ public class ProtoToLogicalTypeConverter {
       final List<Integer> indexPath,
       final boolean asMapEntry) {
     if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
-      throw new ValidationException(
+      throw new TypeTooDeepException(
           "Schema type nesting depth exceeds the maximum of "
               + ToLogicalContext.MAX_TYPE_DEPTH);
     }
