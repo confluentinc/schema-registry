@@ -21,8 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.streams.integration.avro.SensorKey;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV1;
 import io.confluent.kafka.streams.integration.avro.SensorReadingV2;
@@ -30,23 +28,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -253,7 +243,10 @@ public class KafkaStreamsHeaderSessionStoreSchemaEvolutionIntegrationTest
         send(producer, inputTopic, TIME_0, keyDocChanged, valueV1(40.0, 2000L));
       }
       awaitProcessed(2);
-      assertEquals(40.0, onlySession(store, keyV1).aggregation().get("temperature"));
+      AggregationWithHeaders<GenericRecord> replaced = onlySession(store, keyV1);
+      assertEquals(40.0, replaced.aggregation().get("temperature"));
+      assertSchemaIdHeaders(replaced.headers(), inputTopic, KEY_SCHEMA_V1_DOC_CHANGED,
+          VALUE_SCHEMA_V1, "session replaced under the doc-changed schema");
       assertEquals(40.0, onlySession(store, keyDocChanged).aggregation().get("temperature"));
     } finally {
       closeQuietly(streams);
@@ -548,38 +541,6 @@ public class KafkaStreamsHeaderSessionStoreSchemaEvolutionIntegrationTest
         .stream(inputTopic, Consumed.with(keySerde, valueSerde))
         .process(() -> new PutProcessor<K, V>(storeName, processed), storeName);
     return startStreams(builder, appId, stateDir, restoreListener);
-  }
-
-  private void assertV1BytesReadAsV2(String topic, int count) {
-    Properties props = new Properties();
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, "v2-reader-" + System.currentTimeMillis());
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-    List<ConsumerRecord<byte[], byte[]>> raw = new ArrayList<>();
-    try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
-      consumer.subscribe(Collections.singletonList(topic));
-      long end = System.currentTimeMillis() + 15_000;
-      while (raw.size() < count && System.currentTimeMillis() < end) {
-        consumer.poll(Duration.ofMillis(500)).forEach(raw::add);
-      }
-    }
-    assertEquals(count, raw.size(), "should have consumed the v1-written input records");
-
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-    try (KafkaAvroDeserializer v2Reader = new KafkaAvroDeserializer()) {
-      v2Reader.configure(config, false);
-      for (ConsumerRecord<byte[], byte[]> r : raw) {
-        GenericRecord asV2 = (GenericRecord) v2Reader.deserialize(
-            topic, r.headers(), r.value(), VALUE_SCHEMA_V2);
-        assertNotNull(asV2, "v1 bytes should be decodable with the v2 reader schema");
-        assertEquals(VALUE_SCHEMA_V2, asV2.getSchema(), "projection should be v2-shaped");
-        assertEquals(0.0, asV2.get("humidity"),
-            "humidity should be filled in from the v2 default when reading v1 bytes as v2");
-      }
-    }
   }
 
   /** Polls until the key has the expected number of sessions, then returns the queryable store. */
