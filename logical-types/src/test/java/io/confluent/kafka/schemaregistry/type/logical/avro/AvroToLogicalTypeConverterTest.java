@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.avro;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
@@ -286,9 +287,9 @@ class AvroToLogicalTypeConverterTest {
   @Test
   void testDeeplyNestedRecordIsRejected() {
     // A finite but deeply nested (non-cyclic) record would recurse until the JVM
-    // stack overflows; the depth guard turns it into a ValidationException well
-    // before that. Depth is a little past MAX_TYPE_DEPTH (256) so the guard fires
-    // after only a few hundred frames — deterministic on any reasonable stack.
+    // stack overflows; the depth guard turns it into a TypeTooDeepException well
+    // before that. Depth is past MAX_TYPE_DEPTH (100) so the guard fires after a
+    // few hundred frames — deterministic on any reasonable stack.
     org.apache.avro.Schema inner =
         org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING);
     for (int i = 0; i < 300; i++) {
@@ -301,7 +302,7 @@ class AvroToLogicalTypeConverterTest {
     // Build the wrapper outside the assertion: constructing a 300-deep schema is
     // cheap, so any thrown ValidationException comes from the conversion guard.
     final AvroSchema deep = new AvroSchema(inner);
-    assertThrows(ValidationException.class,
+    assertThrows(TypeTooDeepException.class,
         () -> AvroToLogicalTypeConverter.toRootSchema(deep));
   }
 

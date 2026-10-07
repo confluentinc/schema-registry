@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -93,6 +95,23 @@ class ValidityCheckerEndToEndTest {
     for (Mode mode : Mode.values()) {
       assertThat(ValidityChecker.validate(mode, type).isValid()).isTrue();
     }
+  }
+
+  @Test
+  void aFileWhoseMessagesAllReferToEachOtherIsValidatedInTime() {
+    // 250 messages, each holding every later one: a cycle search per reference took minutes.
+    StringBuilder text = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    for (int i = 0; i < 250; i++) {
+      text.append("message T").append(i).append(" { int32 x = 1;");
+      for (int j = i + 1; j < 250; j++) {
+        text.append(" T").append(j).append(" t").append(j).append(" = ").append(j + 2)
+            .append(";");
+      }
+      text.append(" }\n");
+    }
+    LogicalType dense = fromProto(text.toString());
+    assertTimeoutPreemptively(Duration.ofSeconds(3),
+        () -> ValidityChecker.validate(Mode.FLINK, dense));
   }
 
   private static List<Rule> rulesOf(Mode mode, LogicalType type) {

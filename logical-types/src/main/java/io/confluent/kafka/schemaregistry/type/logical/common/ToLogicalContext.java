@@ -55,8 +55,12 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
    * so this cap sits well below the stack's frame budget to fire deterministically
    * before exhaustion. A StackOverflowError backstop at each converter entry
    * covers environments whose stack is smaller still.
+   *
+   * <p>The one nesting limit: the logical policy check applies it with named types inlined, and
+   * provenance to a location's path. Each counts levels a little differently, so one may reject a
+   * level or two sooner; none accepts what another rejects by more.
    */
-  public static final int MAX_TYPE_DEPTH = 256;
+  public static final int MAX_TYPE_DEPTH = 100;
 
   private final ParsedSchema parsedSchema;
   private final LogicalTypeVersion version;
