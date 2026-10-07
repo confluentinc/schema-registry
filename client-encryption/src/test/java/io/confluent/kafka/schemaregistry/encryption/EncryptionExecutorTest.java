@@ -431,22 +431,13 @@ public abstract class EncryptionExecutorTest {
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
   }
 
-  /**
-   * Both SchemaRegistryClient and DekRegistryClient declare default close() and ticker(), so a
-   * type that implements both must override them. Mocking this interface (instead of
-   * SchemaRegistryClient with DekRegistryClient as an extra interface) gives Mockito a single,
-   * unambiguous implementation of each; with extraInterfaces, Mockito 5's mock class is left
-   * without close() and calling it throws AbstractMethodError.
-   */
+  /** Mockable as both clients; redeclares the defaults both interfaces provide. */
   interface SchemaAndDekRegistryClient extends SchemaRegistryClient, DekRegistryClient {
     @Override
-    default Ticker ticker() {
-      return Ticker.systemTicker();
-    }
+    Ticker ticker();
 
     @Override
-    default void close() throws IOException {
-    }
+    void close() throws IOException;
   }
 
   @Test
