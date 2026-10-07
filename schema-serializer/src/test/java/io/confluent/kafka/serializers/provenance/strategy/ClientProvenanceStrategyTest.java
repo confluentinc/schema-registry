@@ -75,7 +75,7 @@ public class ClientProvenanceStrategyTest {
   @Test
   public void anyOtherErrorOrAClientWithoutProvenanceIsUnavailable() {
     assertFails(ProvenanceUnavailableException.class,
-        new RestClientException("recursive", 422, 42213));
+        new RestClientException("recursive", 422, 42220));
     assertFails(ProvenanceUnavailableException.class,
         new UnsupportedOperationException("not implemented"));
   }

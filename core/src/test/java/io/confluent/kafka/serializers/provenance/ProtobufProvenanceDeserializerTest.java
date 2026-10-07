@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,6 +47,7 @@ import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.protobuf.test.Root.ReferrerMessage;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Method;
@@ -1798,6 +1800,26 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
 
     assertEquals(7, get(read(v2, bytes, "v1"), "id"));
+  }
+
+  @Test
+  void aDerivedTypeThatIsNoMessageIsNotInitializedUnderProvenance() throws Exception {
+    // The writer names a class that is no message: as without provenance, it is never initialized.
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "option java_package = \"io.confluent.kafka.serializers.provenance\";\n"
+        + "option java_multiple_files = true;\nmessage NotAMessage {\n  int32 id = 1;\n}\n");
+    int id = client.register(SUBJECT, schema);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id).array());
+    out.write(0);
+    out.write(new byte[] {8, 7});
+    Map<String, Object> config = config("v1");
+    config.put("derive.type", true);
+    KafkaProtobufDeserializer<Message> deserializer = new KafkaProtobufDeserializer<>(client, config);
+    assertThrows(SerializationException.class,
+        () -> deserializer.deserialize(TOPIC, out.toByteArray()));
+    assertNull(System.getProperty(NotAMessage.INITIALIZED));
   }
 
   // --- Helpers -----------------------------------------------------------------------------------
