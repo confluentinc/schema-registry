@@ -87,13 +87,14 @@ public class Errors {
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
-  public static final int RECURSIVE_SCHEMA_ERROR_CODE = 42213;
   public static final int UNRESOLVABLE_REFERENCE_ERROR_CODE = 42214;
   public static final int INVALID_PROVENANCE_REQUEST_ERROR_CODE = 42215;
   public static final int UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE = 42216;
   public static final int AMBIGUOUS_PROVENANCE_ERROR_CODE = 42217;
   public static final int PROVENANCE_TOO_LARGE_ERROR_CODE = 42218;
   public static final int PROVENANCE_RANGE_TOO_LONG_ERROR_CODE = 42219;
+  // Not 42213: later releases use it for ASSOCIATION_BATCH_LIMIT_EXCEEDED.
+  public static final int RECURSIVE_SCHEMA_ERROR_CODE = 42220;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
