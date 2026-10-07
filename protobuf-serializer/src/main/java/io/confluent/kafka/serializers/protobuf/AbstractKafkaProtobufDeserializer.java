@@ -322,16 +322,27 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       return null;
     }
     String name = parseMethod != null ? specificProtobufClass.getName() : writer.fullName();
-    return name == null ? null
-        : classSchemas.computeIfAbsent(name, n -> Optional.ofNullable(loadClassSchema(n)))
-            .orElse(null);
+    if (name == null) {
+      return null;
+    }
+    // The projector first: a load holding the map's lock must not wait for the monitor a reset,
+    // clearing the map, holds.
+    ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector = provenanceProjector();
+    return classSchemas.computeIfAbsent(name,
+        n -> Optional.ofNullable(loadClassSchema(n, projector))).orElse(null);
   }
 
-  private ProtobufSchema loadClassSchema(String name) {
+  private ProtobufSchema loadClassSchema(String name,
+      ProvenanceProjector<ProtoProvenanceRenumberer.Renumbered> projector) {
     try {
-      Class<?> cls = parseMethod != null ? specificProtobufClass : Class.forName(name);
+      // As deriveType resolves it: not initialized until it is known to be a message class.
+      Class<?> cls = parseMethod != null ? specificProtobufClass : Class.forName(
+          name, false, AbstractKafkaProtobufDeserializer.class.getClassLoader());
+      if (!Message.class.isAssignableFrom(cls)) {
+        return null;
+      }
       Message instance = (Message) cls.getMethod("getDefaultInstance").invoke(null);
-      return (ProtobufSchema) provenanceProjector().derivedReader(
+      return (ProtobufSchema) projector.derivedReader(
           new ProtobufSchema(instance.getDescriptorForType()));
     } catch (ReflectiveOperationException e) {
       return null;

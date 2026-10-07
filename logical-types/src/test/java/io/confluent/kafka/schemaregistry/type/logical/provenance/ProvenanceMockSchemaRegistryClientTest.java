@@ -178,7 +178,7 @@ class ProvenanceMockSchemaRegistryClientTest {
   void aRecursiveSchemaHasNoProvenance() throws Exception {
     int v1 = register("{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
-    assertCode(422, 42213, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, null));
+    assertCode(422, 42220, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, null));
   }
 
   @Test
