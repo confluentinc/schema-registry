@@ -55,12 +55,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
    * so this cap sits well below the stack's frame budget to fire deterministically
    * before exhaustion. A StackOverflowError backstop at each converter entry
    * covers environments whose stack is smaller still.
-   *
-   * <p>The one nesting limit: the logical policy check applies it with named types inlined, and
-   * provenance to a location's path. Each counts levels a little differently, so one may reject a
-   * level or two sooner; none accepts what another rejects by more.
    */
-  public static final int MAX_TYPE_DEPTH = 100;
+  public static final int MAX_TYPE_DEPTH = 256;
 
   private final ParsedSchema parsedSchema;
   private final LogicalTypeVersion version;
@@ -215,31 +211,5 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
 
   public Map<String, String> getExternalImports() {
     return externalImports;
-  }
-
-  /**
-   * Captures what a conversion attempt can change, named types and their placeholders included;
-   * running the result undoes the attempt.
-   */
-  @Override
-  public Runnable checkpoint() {
-    final Runnable cycle = super.checkpoint();
-    final Map<String, Schema> types = new LinkedHashMap<>(namedTypes);
-    final Set<String> externals = new LinkedHashSet<>(externalTypes);
-    final Map<String, String> imports = new LinkedHashMap<>(externalImports);
-    final Map<String, String> assigned = new LinkedHashMap<>(assignedRefNameByUri);
-    final int next = nextRefIndex;
-    return () -> {
-      cycle.run();
-      namedTypes.clear();
-      namedTypes.putAll(types);
-      externalTypes.clear();
-      externalTypes.addAll(externals);
-      externalImports.clear();
-      externalImports.putAll(imports);
-      assignedRefNameByUri.clear();
-      assignedRefNameByUri.putAll(assigned);
-      nextRefIndex = next;
-    };
   }
 }

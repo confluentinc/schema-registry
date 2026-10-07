@@ -27,16 +27,13 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -73,7 +70,7 @@ public class AvroToLogicalTypeConverter {
     try {
       return toLogicalTypeInternal(avroSchema);
     } catch (StackOverflowError e) {
-      throw new TypeTooDeepException("Avro schema nests types too deeply to convert");
+      throw new ValidationException("Avro schema nests types too deeply to convert");
     }
   }
 
@@ -97,10 +94,6 @@ public class AvroToLogicalTypeConverter {
     // named-root shape shared with the DDL visitor and the other format readers.
     final LogicalType.RootUnwrap unwrap = LogicalType.unwrapLeafNamedRoot(
         schema, ctx.getNamedTypes(), ctx.getExternalTypes(), namespace);
-    // A nullable-union root enters its record through the branch; keep that on the new root.
-    if (unwrap.getRootSchema() != schema && !schema.getNativeEntryNames().isEmpty()) {
-      unwrap.getRootSchema().setNativeEntryNames(schema.getNativeEntryNames());
-    }
     return new LogicalType(
         unwrap.getName(),
         namespace,
@@ -236,35 +229,6 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
-   * A {@code confluent:union} hint as the union reads it, one object per branch with a string
-   * name and doc; any other shape is rejected by name, rather than failing on a cast.
-   */
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> unionHints(Object hint) {
-    if (hint == null) {
-      return null;
-    }
-    boolean valid = hint instanceof List;
-    for (Object branch : valid ? (List<?>) hint : Collections.emptyList()) {
-      valid &= branch instanceof Map && isHint((Map<?, ?>) branch);
-    }
-    if (!valid) {
-      throw new ValidationException("confluent:union must be a list of branch objects: " + hint);
-    }
-    return (List<Map<String, Object>>) hint;
-  }
-
-  private static boolean isHint(Map<?, ?> branch) {
-    Object params = branch.get("params");
-    return isStringOrAbsent(branch.get("name")) && isStringOrAbsent(branch.get("doc"))
-        && (params == null || params instanceof Map);
-  }
-
-  private static boolean isStringOrAbsent(Object value) {
-    return value == null || value instanceof String;
-  }
-
-  /**
    * Recursively walks an Avro schema and registers every RECORD and ENUM
    * full name as an external reference. Cycle guard via visited set.
    */
@@ -312,7 +276,7 @@ public class AvroToLogicalTypeConverter {
       ToLogicalContext<org.apache.avro.Schema> ctx,
       List<Integer> indexPath) {
     if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
-      throw new TypeTooDeepException(
+      throw new ValidationException(
           "Schema type nesting depth exceeds the maximum of "
               + ToLogicalContext.MAX_TYPE_DEPTH);
     }
@@ -325,8 +289,6 @@ public class AvroToLogicalTypeConverter {
     if (avroSchema.getType() == org.apache.avro.Schema.Type.RECORD
         && !isAnonymous(avroSchema)
         && ctx.hasNamedType(avroSchema.getFullName())) {
-      // A later use places the record's defaults as inlining it would; a recursive one adds none.
-      ctx.putTypeDefaults(avroSchema.getFullName(), indexPath);
       return Schema.createNamedTypeRef(avroSchema.getFullName())
           .setNullable(isNullable);
     }
@@ -385,7 +347,9 @@ public class AvroToLogicalTypeConverter {
           return Schema.createBinary(avroSchema.getFixedSize()).setNullable(isNullable);
         } else {
           final int maxLength =
-              intProp(avroSchema, CommonConstants.FLINK_MAX_LENGTH).orElse(MAX_LENGTH);
+              Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MAX_LENGTH))
+                  .map(i -> (Integer) i)
+                  .orElse(MAX_LENGTH);
           if (maxLength == MAX_LENGTH) {
             return Schema.createBytes().setNullable(isNullable);
           }
@@ -424,10 +388,12 @@ public class AvroToLogicalTypeConverter {
 
       case STRING:
         final int maxLength =
-            intProp(avroSchema, CommonConstants.FLINK_MAX_LENGTH).orElse(MAX_LENGTH);
-        return intProp(avroSchema, CommonConstants.FLINK_MIN_LENGTH)
-            .filter(minLength -> minLength == maxLength)
-            .map(minLength -> Schema.createChar(minLength).setNullable(isNullable))
+            Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MAX_LENGTH))
+                .map(i -> (Integer) i)
+                .orElse(MAX_LENGTH);
+        return Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_MIN_LENGTH))
+            .filter(minLength -> (int) minLength == maxLength)
+            .map(minLength -> Schema.createChar((int) minLength).setNullable(isNullable))
             .orElseGet(() -> {
               if (maxLength == MAX_LENGTH) {
                 return Schema.createString().setNullable(isNullable);
@@ -453,7 +419,9 @@ public class AvroToLogicalTypeConverter {
           return Schema.createNamedTypeRef(name).setNullable(isNullable);
         }
         List<String> symbols = avroSchema.getEnumSymbols();
-        List<Map<String, Object>> enumMeta = enumHints(avroSchema);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> enumMeta =
+            (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
         List<EnumValue> enumValues = new ArrayList<>();
         for (int i = 0; i < symbols.size(); i++) {
           enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
@@ -487,16 +455,12 @@ public class AvroToLogicalTypeConverter {
               convertWithCycleDetection(
                   elemSchema.getField(CommonConstants.VALUE_FIELD).schema(),
                   false, ctx, appendToList(indexPath, 1));
-          // Natively an array element, then the entry record's key or value field.
-          return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultisetType),
-              Arrays.asList(null, CommonConstants.KEY_FIELD),
-              Arrays.asList(null, CommonConstants.VALUE_FIELD));
+          return createMapLikeType(isNullable, keyType, valueType, isMultisetType);
         } else {
           return Schema.createArray(
               convertWithCycleDetection(
                   avroSchema.getElementType(), false, ctx, appendToList(indexPath, 0)))
-              .setNullable(isNullable)
-              .setElementNativeNames(Collections.singletonList(null));
+              .setNullable(isNullable);
         }
 
       case MAP:
@@ -504,15 +468,12 @@ public class AvroToLogicalTypeConverter {
             Objects.equals(
                 CommonConstants.FLINK_MULTISET_TYPE,
                 avroSchema.getProp(CommonConstants.FLINK_TYPE));
-        // A native map's keys have no schema to step into; its values are one unnamed step.
-        return withMapSteps(createMapLikeType(
+        return createMapLikeType(
             isNullable,
             readMapKeyType(avroSchema),
             convertWithCycleDetection(
                 avroSchema.getValueType(), false, ctx, appendToList(indexPath, 1)),
-            isMultisetType2),
-            Collections.emptyList(),
-            Collections.singletonList(null));
+            isMultisetType2);
 
       case RECORD: {
         if (isVariantRecord(avroSchema)) {
@@ -529,10 +490,9 @@ public class AvroToLogicalTypeConverter {
           String name = avroSchema.getFullName();
           if (!ctx.hasNamedType(name)) {
             ctx.putNamedType(name, Schema.createStruct(new ArrayList<>()));
-            ctx.putNamedType(name, ctx.convertNamedType(name, indexPath,
-                () -> convertRecord(avroSchema, ctx, indexPath)));
+            ctx.putNamedType(name,
+                convertRecord(avroSchema, ctx, indexPath));
           }
-          ctx.putTypeDefaults(name, indexPath);
           return Schema.createNamedTypeRef(name).setNullable(isNullable);
         }
         final List<Field> fields = new ArrayList<>();
@@ -554,7 +514,7 @@ public class AvroToLogicalTypeConverter {
             ctx.popFieldPath();
           }
 
-          Object defaultValue = defaultOf(field);
+          Object defaultValue = field.defaultVal();
           boolean hasDefault = defaultValue != null;
           if (defaultValue instanceof JsonProperties.Null) {
             defaultValue = null;
@@ -572,8 +532,7 @@ public class AvroToLogicalTypeConverter {
           List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
               readFieldRules(field);
           fields.add(new Field(field.name(), fieldType, pos++,
-              defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules)
-              .setNativeNames(Collections.singletonList(field.name())));
+              defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules));
         }
         Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
         structSchema.setDoc(avroSchema.getDoc());
@@ -593,13 +552,8 @@ public class AvroToLogicalTypeConverter {
 
         // Nullable type: union of null and one other type
         if (memberSchemas.size() == 1) {
-          // The logical type collapses the union; natively its branch is still a step.
-          final Schema collapsed = convertWithCycleDetection(
+          return convertWithCycleDetection(
               memberSchemas.get(0), hasNull, ctx, indexPath);
-          final List<String> entry = new ArrayList<>();
-          entry.add(memberSchemas.get(0).getFullName());
-          entry.addAll(collapsed.getNativeEntryNames());
-          return collapsed.setNativeEntryNames(entry);
         }
 
         // Proper union with multiple non-null types
@@ -613,14 +567,13 @@ public class AvroToLogicalTypeConverter {
           unionMembers.add(new UnionMember(
               memberSchema.getName(),
               memberSchema.getFullName(),
-              memberType,
-              memberSchema.getType() == org.apache.avro.Schema.Type.FIXED
-                  ? memberSchema.getAliases() : Collections.emptySet()));
+              memberType));
         }
 
         // Use branch metadata if available, otherwise fall back to type-derived names
+        @SuppressWarnings("unchecked")
         List<Map<String, Object>> unionMeta =
-            unionHints(ctx.getUnionMetadata().get("confluent:union"));
+            (List<Map<String, Object>>) ctx.getUnionMetadata().get("confluent:union");
         final Map<String, Long> simpleNameFreq =
             unionMembers.stream()
                 .collect(Collectors.groupingBy(
@@ -647,14 +600,7 @@ public class AvroToLogicalTypeConverter {
           if (hintParams != null) {
             hintParams = Schema.stripFormatNativeParams(hintParams);
           }
-          // Natively a branch is found by its type's full name, which Avro keeps unique.
-          UnionBranch branch = new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
-              .setNativeNames(Collections.singletonList(member.getNativeName()));
-          if (!member.getAliases().isEmpty()) {
-            // A fixed's logical type is a binary, with no named type to carry its aliases.
-            branch.setNativeAliases(new ArrayList<>(member.getAliases()));
-          }
-          branches.add(branch);
+          branches.add(new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams));
         }
         return Schema.createUnion(branches).setNullable(hasNull);
       }
@@ -690,7 +636,7 @@ public class AvroToLogicalTypeConverter {
         ctx.popFieldPath();
       }
 
-      Object defaultValue = defaultOf(field);
+      Object defaultValue = field.defaultVal();
       boolean hasDefault = defaultValue != null;
       if (defaultValue instanceof JsonProperties.Null) {
         defaultValue = null;
@@ -704,8 +650,7 @@ public class AvroToLogicalTypeConverter {
       List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
           readFieldRules(field);
       fields.add(new Field(field.name(), fieldType, pos++,
-          defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules)
-          .setNativeNames(Collections.singletonList(field.name())));
+          defaultValue, hasDefault, field.doc(), fieldTags, fieldParams, fieldRules));
     }
     Schema structSchema = Schema.createStruct(fields).setNullable(false);
     structSchema.setDoc(avroSchema.getDoc());
@@ -715,9 +660,11 @@ public class AvroToLogicalTypeConverter {
     return structSchema;
   }
 
+  @SuppressWarnings("unchecked")
   private static Schema convertEnum(org.apache.avro.Schema avroSchema) {
     List<String> symbols = avroSchema.getEnumSymbols();
-    List<Map<String, Object>> enumMeta = enumHints(avroSchema);
+    List<Map<String, Object>> enumMeta =
+        (List<Map<String, Object>>) avroSchema.getObjectProp("confluent:enum");
     List<EnumValue> enumValues = new ArrayList<>();
     for (int i = 0; i < symbols.size(); i++) {
       enumValues.add(readEnumValue(symbols.get(i), enumMeta, i));
@@ -749,69 +696,10 @@ public class AvroToLogicalTypeConverter {
     return new EnumValue(symbol, doc, params);
   }
 
-  /**
-   * A {@code confluent:enum} hint as the enum reads it, one object per symbol with a string doc
-   * and object params; any other shape is rejected by name, rather than failing on a cast.
-   */
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> enumHints(org.apache.avro.Schema avroSchema) {
-    Object hint = avroSchema.getObjectProp("confluent:enum");
-    if (hint == null) {
-      return null;
-    }
-    boolean valid = hint instanceof List;
-    for (Object entry : valid ? (List<?>) hint : Collections.emptyList()) {
-      valid &= entry instanceof Map && isEnumHint((Map<?, ?>) entry);
-    }
-    if (!valid) {
-      throw new ValidationException("confluent:enum must be a list of symbol objects: " + hint);
-    }
-    return (List<Map<String, Object>>) hint;
-  }
-
-  private static boolean isEnumHint(Map<?, ?> entry) {
-    Object doc = entry.get("doc");
-    Object params = entry.get("params");
-    return (doc == null || doc instanceof String) && (params == null || params instanceof Map);
-  }
-
-  /**
-   * An integer annotation, if present; one that is no JSON integer is rejected by name, rather
-   * than failing on a cast.
-   */
-  private static Optional<Integer> intProp(org.apache.avro.Schema avroSchema, String name) {
-    Object value = avroSchema.getObjectProp(name);
-    if (value != null && !(value instanceof Integer)) {
-      throw new ValidationException(name + " must be a JSON integer: " + value);
-    }
-    return Optional.ofNullable((Integer) value);
-  }
-
-  /**
-   * {@code field}'s default as Avro reads it. One of a JSON shape its type cannot take — accepted
-   * only from a schema registered before defaults were validated — is rejected by name.
-   */
-  private static Object defaultOf(org.apache.avro.Schema.Field field) {
-    try {
-      return field.defaultVal();
-    } catch (AvroRuntimeException e) {
-      throw new ValidationException(
-          "Field " + field.name() + " has a default its type cannot take: " + e.getMessage(), e);
-    }
-  }
-
   private static <V> List<V> appendToList(final List<V> list, final V value) {
     final List<V> newList = new ArrayList<>(list);
     newList.add(value);
     return newList;
-  }
-
-  /** Records the native steps to a map's key and value, or to a multiset's element (its key). */
-  private static Schema withMapSteps(
-      Schema mapLike, List<String> keySteps, List<String> valueSteps) {
-    return mapLike.getType() == Schema.Type.MULTISET
-        ? mapLike.setElementNativeNames(keySteps)
-        : mapLike.setKeyNativeNames(keySteps).setValueNativeNames(valueSteps);
   }
 
   private static Schema createMapLikeType(
@@ -949,12 +837,8 @@ public class AvroToLogicalTypeConverter {
   private static Schema readMapKeyType(org.apache.avro.Schema avroSchema) {
     Object keyLength = avroSchema.getObjectProp(CommonConstants.LOGICAL_KEY_LENGTH_PROP);
     if (keyLength instanceof Integer) {
-      Object keyType = avroSchema.getObjectProp(CommonConstants.LOGICAL_KEY_TYPE_PROP);
-      if (keyType != null && !(keyType instanceof String)) {
-        throw new ValidationException(
-            CommonConstants.LOGICAL_KEY_TYPE_PROP + " must be a JSON string: " + keyType);
-      }
-      String keyTypeName = (String) keyType;
+      String keyTypeName = (String) avroSchema.getObjectProp(
+          CommonConstants.LOGICAL_KEY_TYPE_PROP);
       if ("CHAR".equals(keyTypeName)) {
         return Schema.createChar((int) keyLength).setNullable(false);
       }
@@ -1101,24 +985,13 @@ public class AvroToLogicalTypeConverter {
 
   private static final class UnionMember {
     private final String simpleName;
-    // The branch name when simple names collide: the full name, dots made underscores.
     private final String fullName;
-    // The full name as Avro spells it, which finds the branch natively.
-    private final String nativeName;
     private final Schema schema;
-    // A fixed's aliases, as full names; a record's and an enum's are on their named types.
-    private final Set<String> aliases;
 
-    private UnionMember(String simpleName, String fullName, Schema schema, Set<String> aliases) {
+    private UnionMember(String simpleName, String fullName, Schema schema) {
       this.simpleName = simpleName;
       this.fullName = fullName.replace('.', '_');
-      this.nativeName = fullName;
       this.schema = schema;
-      this.aliases = aliases;
-    }
-
-    public Set<String> getAliases() {
-      return aliases;
     }
 
     public String getSimpleName() {
@@ -1127,10 +1000,6 @@ public class AvroToLogicalTypeConverter {
 
     public String getFullName() {
       return fullName;
-    }
-
-    public String getNativeName() {
-      return nativeName;
     }
 
     public Schema getSchema() {

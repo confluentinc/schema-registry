@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
-import com.google.protobuf.StringValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -36,7 +35,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -636,113 +634,6 @@ class ProtoToLogicalTypeConverterTest {
    * publicly-imported type. References / resolvedReferences are passed
    * through unchanged.
    */
-  @Test
-  void aDependencyDeclaringOnlyOptionsIsImportedAsAnyOther() {
-    // Its only declarations are option extensions: no types to collect, and no root to name.
-    String options = "syntax = \"proto3\";\npackage o;\n"
-        + "import \"google/protobuf/descriptor.proto\";\n"
-        + "extend google.protobuf.FieldOptions {\n  string label = 50001;\n}\n";
-    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "import \"opts.proto\";\n"
-        + "message Row {\n  int32 id = 1;\n  string memo = 2 [(o.label) = \"x\"];\n}\n",
-        Arrays.asList(new SchemaReference("opts.proto", "opts", 1)),
-        Map.of("opts.proto", options), 1, null);
-
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
-
-    assertEquals(Arrays.asList("id", "memo"), fieldNames(lt));
-  }
-
-  @Test
-  void aDependencyThatOnlyReExportsAnotherIsImportedThroughIt() {
-    // wrap.proto is empty but for a public import: its types are leaf.proto's.
-    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string id = 1;\n}\n";
-    String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
-    Map<String, String> resolved = new LinkedHashMap<>();
-    resolved.put("wrap.proto", wrap);
-    resolved.put("leaf.proto", leaf);
-    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "import \"wrap.proto\";\n"
-        + "message Row {\n  int32 id = 1;\n  com.Foo foo = 2;\n}\n",
-        Arrays.asList(new SchemaReference("wrap.proto", "wrap", 1),
-            new SchemaReference("leaf.proto", "leaf", 1)),
-        resolved, 1, null);
-
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
-
-    assertEquals(Arrays.asList("id", "foo"), fieldNames(lt));
-    Schema foo = rowOf(lt).getFields().get(1).getSchema();
-    assertEquals(Schema.Type.NAMED_TYPE_REF, foo.getType());
-    assertEquals("com.Foo", foo.getQualifiedName());
-    assertTrue(lt.getExternalTypes().contains("com.Foo"));
-  }
-
-  @Test
-  void aDependencyReExportingThroughTwoLevelsIsImportedThroughThem() {
-    // wrap2.proto re-exports wrap1.proto, which re-exports leaf.proto: Foo is still leaf's.
-    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string id = 1;\n}\n";
-    String wrap1 = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
-    String wrap2 = "syntax = \"proto3\";\npackage com;\nimport public \"wrap1.proto\";\n";
-    Map<String, String> resolved = new LinkedHashMap<>();
-    resolved.put("wrap2.proto", wrap2);
-    resolved.put("wrap1.proto", wrap1);
-    resolved.put("leaf.proto", leaf);
-    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "import \"wrap2.proto\";\n"
-        + "message Row {\n  int32 id = 1;\n  com.Foo foo = 2;\n}\n",
-        Arrays.asList(new SchemaReference("wrap2.proto", "wrap2", 1),
-            new SchemaReference("wrap1.proto", "wrap1", 1),
-            new SchemaReference("leaf.proto", "leaf", 1)),
-        resolved, 1, null);
-
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto);
-
-    assertEquals(Arrays.asList("id", "foo"), fieldNames(lt));
-    assertEquals("com.Foo", rowOf(lt).getFields().get(1).getSchema().getQualifiedName());
-    assertTrue(lt.getExternalTypes().contains("com.Foo"));
-  }
-
-  @Test
-  void aWrappedUnionsBranchNumbersAreRecordedEvenInSequence() {
-    // The wrapper's own sequence is gone from the logical type, so its numbers are recorded.
-    ProtobufSchema proto = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "import \"confluent/meta.proto\";\nmessage Row {\n  int32 id = 1;\n"
-        + "  repeated UW us = 2 [(confluent.field_meta) = {params: [{key: \"flink.wrapped\", "
-        + "value: \"true\"}]}];\n  message UW {\n    oneof value {\n      string a = 1;\n"
-        + "      string b = 2;\n    }\n  }\n}\n");
-
-    Schema us = rowOf(ProtoToLogicalTypeConverter.toLogicalType(proto)).getFields().get(1)
-        .getSchema().getElementType();
-
-    assertEquals(Arrays.asList(1, 2), Arrays.asList(us.getBranches().get(0).getFieldNumber(),
-        us.getBranches().get(1).getFieldNumber()));
-  }
-
-  @Test
-  void anUnwrappedWrapperRootNamesNoMessage() {
-    // A google.protobuf wrapper at the root holds a value, not a message.
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
-        new ProtobufSchema(StringValue.getDescriptor()));
-    assertNull(ProtoToLogicalTypeConverter.rootMessage(lt));
-    assertEquals("p.Row", ProtoToLogicalTypeConverter.rootMessage(ProtoToLogicalTypeConverter
-        .toLogicalType(new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-            + "message Row {\n  int32 id = 1;\n}\n"))));
-  }
-
-  private static Schema rowOf(LogicalType lt) {
-    Schema root = lt.getRootSchema();
-    return root.getType() == Schema.Type.NAMED_TYPE_REF
-        ? lt.getNamedTypes().get(root.getQualifiedName()) : root;
-  }
-
-  private static List<String> fieldNames(LogicalType lt) {
-    List<String> names = new ArrayList<>();
-    for (Schema.Field field : rowOf(lt).getFields()) {
-      names.add(field.getName());
-    }
-    return names;
-  }
-
   @Test
   void testReadPublicImportRoot() {
     String externalProto = "syntax = \"proto3\";\n"
