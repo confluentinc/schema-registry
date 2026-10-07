@@ -76,7 +76,7 @@ class ProvenanceHistoryTest {
 
   @Test
   void aVersionWithNoLogicalFormOrARecursiveTypeIsNamed() {
-    // v2 fails: a Struct field (no logical form, 42201) or a recursive message (42213). The
+    // v2 fails: a Struct field (no logical form, 42201) or a recursive message (42220). The
     // error names the version to fix, as an ambiguity or a limit already does.
     String v1 = "message R { int32 id = 1; }\n";
     String struct = "import \"google/protobuf/struct.proto\";\n"
