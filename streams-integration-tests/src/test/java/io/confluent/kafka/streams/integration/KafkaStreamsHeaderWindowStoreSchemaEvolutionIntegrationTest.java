@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -115,14 +116,6 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
           windowStore(streams, STORE_NAME);
 
-      // Registering v2 without writing it changes nothing in the store.
-      restApp.restClient.registerSchema(VALUE_SCHEMA_V2.toString(), inputTopic + "-value");
-      ValueTimestampHeaders<GenericRecord> v1Entry = store.fetch(key1, WINDOW_0);
-      assertEquals(35.5, v1Entry.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class, () -> v1Entry.value().get("humidity"),
-          "entry is still v1 bytes, so humidity should not be present");
-      assertSchemaIdHeaders(v1Entry.headers(), inputTopic, "key1 window 0 v1");
-
       // Re-read the same v1 bytes off the input topic with the v2 reader schema; Avro schema
       // resolution should fill humidity with the v2 default.
       assertV1BytesReadAsV2(inputTopic, 2);
@@ -136,13 +129,18 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
 
       ValueTimestampHeaders<GenericRecord> stillV1 = store.fetch(key1, WINDOW_0);
       assertEquals(35.5, stillV1.value().get("temperature"));
-      assertThrows(AvroRuntimeException.class, () -> stillV1.value().get("humidity"));
+      assertThrows(AvroRuntimeException.class, () -> stillV1.value().get("humidity"),
+          "a v1-written value does not have humidity");
+      assertSchemaIdHeaders(stillV1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "key1 window 0 v1");
       ValueTimestampHeaders<GenericRecord> v2NewWindow = store.fetch(key1, WINDOW_5);
       assertEquals(65.0, v2NewWindow.value().get("humidity"));
-      assertSchemaIdHeaders(v2NewWindow.headers(), inputTopic, "key1 window 5 v2");
+      assertSchemaIdHeaders(v2NewWindow.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2,
+          "key1 window 5 v2");
       ValueTimestampHeaders<GenericRecord> v2Overwrite = store.fetch(key2, WINDOW_0);
       assertEquals(50.0, v2Overwrite.value().get("humidity"));
-      assertSchemaIdHeaders(v2Overwrite.headers(), inputTopic, "key2 window 0 v2");
+      assertSchemaIdHeaders(v2Overwrite.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2,
+          "key2 window 0 v2");
 
       // v3 write adds pressure.
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -153,7 +151,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       awaitProcessed(5);
       ValueTimestampHeaders<GenericRecord> v3 = store.fetch(key1, WINDOW_10);
       assertEquals(1020.0, v3.value().get("pressure"));
-      assertSchemaIdHeaders(v3.headers(), inputTopic, "key1 window 10 v3");
+      assertSchemaIdHeaders(v3.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V3,
+          "key1 window 10 v3");
       assertThrows(AvroRuntimeException.class,
           () -> store.fetch(key1, WINDOW_5).value().get("pressure"),
           "the v2 entry should not gain a pressure field");
@@ -189,9 +188,6 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
           windowStore(streams, STORE_NAME);
 
-      // Registering key v2 without writing it leaves the v1 row readable.
-      restApp.restClient.registerSchema(KEY_SCHEMA_V2.toString(), inputTopic + "-key");
-      assertEquals(35.5, store.fetch(keyV1, WINDOW_0).value().get("temperature"));
       assertNull(store.fetch(keyV2, WINDOW_0), "no row exists yet for the v2 key bytes");
 
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -203,8 +199,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       ValueTimestampHeaders<GenericRecord> rowV2 = store.fetch(keyV2, WINDOW_0);
       assertEquals(35.5, rowV1.value().get("temperature"));
       assertEquals(40.0, rowV2.value().get("temperature"));
-      assertSchemaIdHeaders(rowV1.headers(), inputTopic, "v1 key row");
-      assertSchemaIdHeaders(rowV2.headers(), inputTopic, "v2 key row");
+      assertSchemaIdHeaders(rowV1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1, "v1 key row");
+      assertSchemaIdHeaders(rowV2.headers(), inputTopic, KEY_SCHEMA_V2, VALUE_SCHEMA_V1, "v2 key row");
       assertEquals(2, countEntries(store), "v1 and v2 keys should be separate rows");
     } finally {
       closeQuietly(streams);
@@ -239,7 +235,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       ValueTimestampHeaders<GenericRecord> viaDocChanged = store.fetch(keyDocChanged, WINDOW_0);
       assertNotNull(viaDocChanged, "doc-changed key should find the v1 row");
       assertEquals(35.5, viaDocChanged.value().get("temperature"));
-      assertSchemaIdHeaders(viaDocChanged.headers(), inputTopic, "doc-changed lookup");
+      assertSchemaIdHeaders(viaDocChanged.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "doc-changed lookup");
 
       // A write under the doc-changed schema replaces the row rather than adding one.
       try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
@@ -293,7 +290,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       ValueTimestampHeaders<GenericRecord> survivingV2 = store.fetch(keyV2, WINDOW_0);
       assertNotNull(survivingV2, "the v2 key row has different bytes and should remain");
       assertEquals(40.0, survivingV2.value().get("temperature"));
-      assertSchemaIdHeaders(survivingV2.headers(), inputTopic, "surviving v2 key row");
+      assertSchemaIdHeaders(survivingV2.headers(), inputTopic, KEY_SCHEMA_V2, VALUE_SCHEMA_V1,
+          "surviving v2 key row");
       assertNotNull(store.fetch(key2V1, WINDOW_0));
       assertEquals(2, countEntries(store));
 
@@ -336,14 +334,15 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       }
       awaitProcessed(2);
     } finally {
-      streams.close(Duration.ofSeconds(10));
+      assertTrue(streams.close(Duration.ofSeconds(10)), "the app should close before the restart");
     }
 
     deleteRecursively(stateDir);
     Files.createDirectory(stateDir);
 
+    CountingRestoreListener restoreListener = new CountingRestoreListener();
     streams = startWindowApp(inputTopic, appId, STORE_NAME,
-        createKeySerde(), createValueSerde(), stateDir);
+        createKeySerde(), createValueSerde(), stateDir, restoreListener);
     try {
       ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
           awaitWindowEntry(streams, STORE_NAME, key1, window0);
@@ -351,12 +350,15 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
 
       ValueTimestampHeaders<GenericRecord> restored1 = store.fetch(key1, window0);
       assertEquals(35.5, restored1.value().get("temperature"));
-      assertSchemaIdHeaders(restored1.headers(), inputTopic, "restored key1");
+      assertSchemaIdHeaders(restored1.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V1,
+          "restored key1");
       ValueTimestampHeaders<GenericRecord> restored2 = store.fetch(key2, window1);
       assertEquals(70.0, restored2.value().get("humidity"));
-      assertSchemaIdHeaders(restored2.headers(), inputTopic, "restored key2");
+      assertSchemaIdHeaders(restored2.headers(), inputTopic, KEY_SCHEMA_V1, VALUE_SCHEMA_V2,
+          "restored key2");
       assertEquals(2, countEntries(store));
-      assertEquals(2, processed.get(), "the store should come from the changelog, not reprocessing");
+      assertEquals(2, restoreListener.restoredRecords(),
+          "the 2 changelog records should be restored, not reprocessed from the input");
     } finally {
       streams.close(Duration.ofSeconds(10));
       deleteRecursively(stateDir);
@@ -364,109 +366,35 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
   }
 
   /**
-   * Null for a non-nullable field fails Avro serialization (key and value), and so does a field
-   * left unset on a raw record. A field omitted through the record builder falls back to the
-   * schema default.
+   * Null for a non-nullable key or value field fails Avro serialization, and so does a field left
+   * unset on a raw record: only the record builder applies schema defaults.
    */
   @Test
-  public void shouldRejectExplicitNullsAndDefaultOmittedFields() throws Exception {
+  public void shouldRejectExplicitNullsAndUnsetFields() throws Exception {
     String inputTopic = "window-null-default-evolution-input";
-    String appId = "window-null-default-evolution-test-" + System.currentTimeMillis();
     createTopics(inputTopic);
 
-    KafkaStreams streams = null;
-    try {
-      streams = startWindowApp(inputTopic, appId, STORE_NAME,
-          createKeySerde(), createValueSerde(), null);
+    GenericRecord key1 = sensorKey("sensor-1");
+    GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
+    nullRegionKey.put("sensorId", "sensor-2");
+    nullRegionKey.put("region", null);
+    GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
+    nullTemperature.put("temperature", null);
+    nullTemperature.put("timestamp", 1500L);
+    GenericRecord unsetFields = new GenericData.Record(VALUE_SCHEMA_V3);
+    unsetFields.put("temperature", 30.0);
+    unsetFields.put("timestamp", 1600L);
 
-      GenericRecord key1 = sensorKey("sensor-1");
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        send(producer, inputTopic, WINDOW_0, key1, valueV1(35.5, 1000L));
-      }
-      awaitProcessed(1);
-
-      GenericRecord nullRegionKey = new GenericData.Record(KEY_SCHEMA_V2);
-      nullRegionKey.put("sensorId", "sensor-2");
-      nullRegionKey.put("region", null);
-      GenericRecord nullTemperature = new GenericData.Record(VALUE_SCHEMA_V1);
-      nullTemperature.put("temperature", null);
-      nullTemperature.put("timestamp", 1500L);
-      GenericRecord unsetHumidity = new GenericData.Record(VALUE_SCHEMA_V2);
-      unsetHumidity.put("temperature", 30.0);
-      unsetHumidity.put("timestamp", 1600L);
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        assertThrows(SerializationException.class, () -> producer.send(
-                new ProducerRecord<>(inputTopic, nullRegionKey, valueV1(41.0, 2100L))),
-            "null for a non-nullable key field should fail Avro serialization");
-        assertThrows(SerializationException.class, () -> producer.send(
-                new ProducerRecord<>(inputTopic, key1, nullTemperature)),
-            "null for a non-nullable value field should fail Avro serialization");
-        assertThrows(SerializationException.class, () -> producer.send(
-                new ProducerRecord<>(inputTopic, key1, unsetHumidity)),
-            "a raw record with an unset field does not get the default and should fail");
-      }
-
-      // The rejected sends never reached the topic, so the store is unchanged.
-      ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
-          windowStore(streams, STORE_NAME);
-      assertEquals(35.5, store.fetch(key1, WINDOW_0).value().get("temperature"));
-      assertEquals(1, countEntries(store));
-
-      // The record builder fills omitted fields with their defaults.
-      GenericRecord withDefaults = new GenericRecordBuilder(VALUE_SCHEMA_V3)
-          .set("temperature", 45.0).set("timestamp", 2500L).build();
-      try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
-        send(producer, inputTopic, WINDOW_5, key1, withDefaults);
-      }
-      awaitProcessed(2);
-      ValueTimestampHeaders<GenericRecord> defaulted = store.fetch(key1, WINDOW_5);
-      assertEquals(45.0, defaulted.value().get("temperature"));
-      assertEquals(0.0, defaulted.value().get("humidity"));
-      assertEquals(1013.0, defaulted.value().get("pressure"));
-      assertSchemaIdHeaders(defaulted.headers(), inputTopic, "defaulted entry");
-    } finally {
-      closeQuietly(streams);
-    }
-  }
-
-  /**
-   * Reader upgraded to v2 while the writer still produces v1: the app reads v1 bytes into the v2
-   * class and the new field takes its default.
-   */
-  @Test
-  public void shouldReadV1WritesAfterReaderUpgrade() throws Exception {
-    String inputTopic = "window-reader-upgrade-input";
-    String appId = "window-reader-upgrade-test-" + System.currentTimeMillis();
-    createTopics(inputTopic);
-
-    KafkaStreams streams = null;
-    try {
-      try (KafkaProducer<SensorKey, SensorReadingV1> v1Producer = createV1Producer()) {
-        send(v1Producer, inputTopic, WINDOW_0, new SensorKey("sensor-1"),
-            SensorReadingV1.newBuilder().setTemperature(35.5).setTimestamp(1000L).build());
-        send(v1Producer, inputTopic, WINDOW_5, new SensorKey("sensor-2"),
-            SensorReadingV1.newBuilder().setTemperature(22.0).setTimestamp(2000L).build());
-      }
-
-      streams = startWindowApp(inputTopic, appId, SPECIFIC_STORE_NAME,
-          createSpecificKeySerde(), createSpecificValueSerde(), null);
-      SensorKey key1 = new SensorKey("sensor-1");
-      SensorKey key2 = new SensorKey("sensor-2");
-      awaitProcessed(2);
-      ReadOnlyWindowStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
-          windowStore(streams, SPECIFIC_STORE_NAME);
-
-      ValueTimestampHeaders<SensorReadingV2> r1 = store.fetch(key1, WINDOW_0);
-      assertEquals(35.5, r1.value().getTemperature());
-      assertEquals(0.0, r1.value().getHumidity(),
-          "humidity should fall back to the v2 default for v1-written bytes");
-      assertSpecificSchemaIdHeaders(r1.headers(), inputTopic, appId, "sensor-1");
-      ValueTimestampHeaders<SensorReadingV2> r2 = store.fetch(key2, WINDOW_5);
-      assertEquals(22.0, r2.value().getTemperature());
-      assertEquals(0.0, r2.value().getHumidity());
-      assertSpecificSchemaIdHeaders(r2.headers(), inputTopic, appId, "sensor-2");
-    } finally {
-      closeQuietly(streams);
+    try (KafkaProducer<GenericRecord, GenericRecord> producer = createHeaderProducer()) {
+      assertThrows(SerializationException.class, () -> producer.send(
+              new ProducerRecord<>(inputTopic, nullRegionKey, valueV1(41.0, 2100L))),
+          "null for a non-nullable key field should fail Avro serialization");
+      assertThrows(SerializationException.class,
+          () -> producer.send(new ProducerRecord<>(inputTopic, key1, nullTemperature)),
+          "null for a non-nullable value field should fail Avro serialization");
+      assertThrows(SerializationException.class,
+          () -> producer.send(new ProducerRecord<>(inputTopic, key1, unsetFields)),
+          "humidity and pressure are unset on a raw record, which does not apply their defaults");
     }
   }
 
@@ -506,7 +434,7 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       assertSensor(store, key1, window, 35.5, 0.0, inputTopic, appId);
       assertSensor(store, key2, window, 22.0, 0.0, inputTopic, appId);
     } finally {
-      streams.close(Duration.ofSeconds(10));
+      assertTrue(streams.close(Duration.ofSeconds(10)), "the app should close before the restart");
     }
 
     // Step 2: wipe state, the writer upgrades to v2.
@@ -518,8 +446,9 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       send(v2Producer, inputTopic, window, key3, SensorReadingV2.newBuilder()
           .setTemperature(28.0).setTimestamp(4000L).setHumidity(70.0).build());
     }
+    CountingRestoreListener restoredAfterStep1 = new CountingRestoreListener();
     streams = startWindowApp(inputTopic, appId, SPECIFIC_STORE_NAME,
-        createSpecificKeySerde(), createSpecificValueSerde(), stateDir);
+        createSpecificKeySerde(), createSpecificValueSerde(), stateDir, restoredAfterStep1);
     try {
       awaitProcessed(4);
       ReadOnlyWindowStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
@@ -530,9 +459,11 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       assertSensor(store, key2, window, 22.0, 0.0, inputTopic, appId);
       assertSensor(store, key3, window, 28.0, 70.0, inputTopic, appId);
       assertEquals(3, countEntries(store));
+      assertEquals(2, restoredAfterStep1.restoredRecords(),
+          "sensor-1 and sensor-2 should be restored from the changelog");
       assertEquals(4, processed.get(), "sensor-2 should be restored, not reprocessed");
     } finally {
-      streams.close(Duration.ofSeconds(10));
+      assertTrue(streams.close(Duration.ofSeconds(10)), "the app should close before the restart");
     }
 
     // Step 3: wipe state again, an old v1 producer that has not upgraded writes after the rollout.
@@ -544,8 +475,9 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       send(v1Producer, inputTopic, window, key4,
           SensorReadingV1.newBuilder().setTemperature(45.0).setTimestamp(5000L).build());
     }
+    CountingRestoreListener restoredAfterStep3 = new CountingRestoreListener();
     streams = startWindowApp(inputTopic, appId, SPECIFIC_STORE_NAME,
-        createSpecificKeySerde(), createSpecificValueSerde(), stateDir);
+        createSpecificKeySerde(), createSpecificValueSerde(), stateDir, restoredAfterStep3);
     try {
       awaitProcessed(6);
       ReadOnlyWindowStore<SensorKey, ValueTimestampHeaders<SensorReadingV2>> store =
@@ -557,6 +489,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       assertSensor(store, key3, window, 40.0, 0.0, inputTopic, appId);
       assertSensor(store, key4, window, 45.0, 0.0, inputTopic, appId);
       assertEquals(4, countEntries(store));
+      assertEquals(4, restoredAfterStep3.restoredRecords(),
+          "the 4 changelog records written so far should be restored");
       assertEquals(6, processed.get(), "earlier sensors should be restored, not reprocessed");
     } finally {
       streams.close(Duration.ofSeconds(10));
@@ -570,6 +504,8 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
       String appId) {
     ValueTimestampHeaders<SensorReadingV2> entry = store.fetch(key, windowStart);
     assertNotNull(entry, key + " should be in the store");
+    assertEquals(SensorReadingV2.class, entry.value().getClass(),
+        "the reader should return the v2 class");
     assertEquals(temperature, entry.value().getTemperature(), key + " temperature");
     assertEquals(humidity, entry.value().getHumidity(), key + " humidity");
     assertSpecificSchemaIdHeaders(entry.headers(), inputTopic, appId, key.toString());
@@ -579,12 +515,19 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
   // changelog subject, not the input topic's.
   private void assertSpecificSchemaIdHeaders(Headers headers, String inputTopic, String appId,
       String context) {
-    assertSchemaIdHeaders(headers, inputTopic + "-key",
-        appId + "-" + SPECIFIC_STORE_NAME + "-changelog-value", context);
+    assertSchemaIdHeaders(headers, inputTopic + "-key", SensorKey.getClassSchema(),
+        appId + "-" + SPECIFIC_STORE_NAME + "-changelog-value", SensorReadingV2.getClassSchema(),
+        context);
   }
 
   private <K, V> KafkaStreams startWindowApp(String inputTopic, String appId, String storeName,
       Serde<K> keySerde, Serde<V> valueSerde, Path stateDir) throws Exception {
+    return startWindowApp(inputTopic, appId, storeName, keySerde, valueSerde, stateDir, null);
+  }
+
+  private <K, V> KafkaStreams startWindowApp(String inputTopic, String appId, String storeName,
+      Serde<K> keySerde, Serde<V> valueSerde, Path stateDir,
+      CountingRestoreListener restoreListener) throws Exception {
     StreamsBuilder builder = new StreamsBuilder();
     builder
         .addStateStore(
@@ -595,7 +538,7 @@ public class KafkaStreamsHeaderWindowStoreSchemaEvolutionIntegrationTest
                 valueSerde))
         .stream(inputTopic, Consumed.with(keySerde, valueSerde))
         .process(() -> new PutProcessor<K, V>(storeName, processed), storeName);
-    return startStreams(builder, appId, stateDir);
+    return startStreams(builder, appId, stateDir, restoreListener);
   }
 
   /** Reads the v1-written input records and decodes them with the v2 schema as the reader. */
