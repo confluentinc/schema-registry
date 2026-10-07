@@ -312,6 +312,20 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aVersionNestingTooDeepIsTooLarge() throws Exception {
+    // Too deep to convert is a version too large for provenance, as too many locations is.
+    StringBuilder text = new StringBuilder("\"string\"");
+    for (int i = 0; i < 150; i++) {
+      text.insert(0, "{\"type\":\"record\",\"name\":\"R" + i
+          + "\",\"fields\":[{\"name\":\"f\",\"type\":").append("}]}");
+    }
+    restApp.restClient.registerSchema(text.toString(), AvroSchema.TYPE,
+        Collections.emptyList(), SUBJECT);
+    assertError(422, Errors.PROVENANCE_TOO_LARGE_ERROR_CODE,
+        () -> byVersion(SUBJECT, "1", "1", false));
+  }
+
+  @Test
   public void aBrokenVersionOutsideTheRangeDoesNotFailIt() throws Exception {
     register(SUBJECT, "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");

@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
@@ -300,7 +301,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException(e.getMessage(), 422, RECURSIVE_SCHEMA);
     } catch (AmbiguousProvenanceException e) {
       throw new RestClientException(e.getMessage(), 422, AMBIGUOUS_PROVENANCE);
-    } catch (TooManyLocationsException e) {
+    } catch (TooManyLocationsException | TypeTooDeepException e) {
       throw new RestClientException(e.getMessage(), 422, PROVENANCE_TOO_LARGE);
     } catch (UnsupportedProvenanceAlgorithmException e) {
       throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);

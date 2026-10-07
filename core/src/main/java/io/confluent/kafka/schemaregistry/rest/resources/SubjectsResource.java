@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.TooManyLocationsException;
@@ -360,7 +361,7 @@ public class SubjectsResource {
                   + "indicates an invalid range. Error code 42216 indicates an unknown "
                   + "algorithm. Error code 42217 indicates a history whose names and aliases do "
                   + "not determine one provenance. Error code 42218 indicates a version with too "
-                  + "many locations to compute, or nesting them too deep. Error code 42219 "
+                  + "many locations to compute, or nesting its types too deep. Error code 42219 "
                   + "indicates a range with includeInterior covering more versions than one "
                   + "request may. Error code 42220 indicates a recursive schema.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -646,7 +647,7 @@ public class SubjectsResource {
       throw Errors.recursiveSchemaException(e.getMessage());
     } catch (AmbiguousProvenanceException e) {
       throw Errors.ambiguousProvenanceException(e.getMessage());
-    } catch (TooManyLocationsException e) {
+    } catch (TooManyLocationsException | TypeTooDeepException e) {
       throw Errors.provenanceTooLargeException(e.getMessage());
     } catch (UnsupportedProvenanceAlgorithmException e) {
       throw Errors.unknownProvenanceAlgorithmException(e.getMessage());

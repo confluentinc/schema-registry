@@ -30,29 +30,18 @@ public class TooManyLocationsException extends IllegalStateException {
   // versions from 0, and a caller knowing them by number names the version again.
   private final int version;
   private final int limit;
-  // Whether the limit is on how deep locations nest, rather than how many there are.
-  private final boolean depth;
 
   public TooManyLocationsException(int version, int limit) {
-    this(version, limit, false);
-  }
-
-  public TooManyLocationsException(int version, int limit, boolean depth) {
-    super(depth
-        ? "Version " + version + " nests locations more than " + limit + " deep, too deep to "
-            + "compute provenance for"
-        : "Version " + version + " has more than " + limit + " locations, too many to compute "
-            + "provenance for");
+    super("Version " + version + " has more than " + limit + " locations, too many to compute "
+        + "provenance for");
     this.version = version;
     this.limit = limit;
-    this.depth = depth;
   }
 
   public TooManyLocationsException(int limit) {
     super("The history has more than " + limit + " locations, too many to compute provenance for");
     this.version = -1;
     this.limit = limit;
-    this.depth = false;
   }
 
   // The version it names, as its thrower counted it; -1 for the history as a whole.
@@ -62,6 +51,6 @@ public class TooManyLocationsException extends IllegalStateException {
 
   // As this, naming the version number instead.
   TooManyLocationsException withVersion(int number) {
-    return version < 0 ? this : new TooManyLocationsException(number, limit, depth);
+    return version < 0 ? this : new TooManyLocationsException(number, limit);
   }
 }
