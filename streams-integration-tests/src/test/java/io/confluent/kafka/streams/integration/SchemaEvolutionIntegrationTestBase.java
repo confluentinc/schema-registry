@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.streams.integration;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -437,11 +438,10 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
       Schema expectedSchema, String context) {
     Header header = headers.lastHeader(headerName);
     assertNotNull(header, context + ": should have " + headerName + " header");
-    int headerCount = 0;
-    for (Header ignored : headers.headers(headerName)) {
-      headerCount++;
+    for (Header h : headers.headers(headerName)) {
+      assertArrayEquals(header.value(), h.value(),
+          context + ": every " + headerName + " header should carry the same GUID");
     }
-    assertEquals(1, headerCount, context + ": should have exactly one " + headerName + " header");
     byte[] bytes = header.value();
     assertEquals(17, bytes.length, context + ": GUID header should be 17 bytes");
     assertEquals(SchemaId.MAGIC_BYTE_V1, bytes[0], context + ": header should have V1 magic byte");
