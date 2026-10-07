@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
@@ -139,6 +140,7 @@ public final class ProvenanceHistory {
    * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
    *     identity per location
    * @throws TooManyLocationsException if a version has more locations than provenance computes
+   * @throws TypeTooDeepException if a version nests its types too deep, as converted or walked
    * @throws IllegalArgumentException if no version of the algorithm has that name, or there is not
    *     one schema per version
    * @throws UnsupportedProvenanceAlgorithmException if a dynamic range's transitions fall to an
@@ -213,6 +215,10 @@ public final class ProvenanceHistory {
       report = ProvenanceComputer.report(schemaTypes, tracked, reported);
     } catch (RecursiveTypeException e) {
       throw e.atVersion(versionNumber(versions, reached[0]));
+    } catch (TypeTooDeepException e) {
+      int number = versionNumber(versions, reached[0]);
+      throw number < 0 ? e
+          : new TypeTooDeepException("Version " + number + ": " + e.getMessage(), e);
     } catch (ValidationException e) {
       int number = versionNumber(versions, reached[0]);
       throw number < 0 ? e
