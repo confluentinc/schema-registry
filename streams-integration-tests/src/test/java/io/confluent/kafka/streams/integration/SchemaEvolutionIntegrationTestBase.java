@@ -23,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
@@ -51,17 +50,20 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -91,6 +93,9 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
   protected SchemaEvolutionIntegrationTestBase() {
     super(1, true, "BACKWARD");
   }
+
+  // Number of records written to the store so far; tests wait for it before reading the store.
+  protected final AtomicInteger processed = new AtomicInteger();
 
   /** Serdes handed to topologies; Streams does not close them, so they are closed after each test. */
   private final List<Serde<?>> createdSerdes = new ArrayList<>();
@@ -394,6 +399,37 @@ public abstract class SchemaEvolutionIntegrationTestBase extends ClusterTestHarn
       }
       Thread.sleep(200);
     }
+  }
+
+  protected void awaitProcessed(int expected) throws InterruptedException {
+    awaitCondition(() -> processed.get() >= expected, expected + " records to be processed");
+  }
+
+  protected static <K, V> void send(KafkaProducer<K, V> producer, String topic, long timestamp,
+      K key, V value) throws Exception {
+    producer.send(new ProducerRecord<>(topic, null, timestamp, key, value)).get();
+    producer.flush();
+  }
+
+  protected static void closeQuietly(KafkaStreams streams) {
+    if (streams != null) {
+      streams.close(Duration.ofSeconds(10));
+    }
+  }
+
+  protected static GenericRecord sensorKey(String sensorId) {
+    return new GenericRecordBuilder(KEY_SCHEMA_V1).set("sensorId", sensorId).build();
+  }
+
+  protected static GenericRecord valueV1(double temperature, long timestamp) {
+    return new GenericRecordBuilder(VALUE_SCHEMA_V1)
+        .set("temperature", temperature).set("timestamp", timestamp).build();
+  }
+
+  protected static GenericRecord valueV2(double temperature, long timestamp, double humidity) {
+    return new GenericRecordBuilder(VALUE_SCHEMA_V2)
+        .set("temperature", temperature).set("timestamp", timestamp)
+        .set("humidity", humidity).build();
   }
 
   protected static void deleteRecursively(Path root) throws IOException {
