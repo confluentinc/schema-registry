@@ -683,6 +683,19 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aTitleIsSharedAcrossKindsAsAName() {
+    // A title is a name, whatever the kind: a branch of another kind holding it is a rival, so the
+    // object whose members all changed is ambiguous by its title and new (kept 2026-10-07, so that
+    // titles can later name renames).
+    List<ProvenanceVersion> v = compute(
+        union("{\"title\":\"T\",\"type\":\"number\"}",
+            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}}"),
+        union("{\"title\":\"T\",\"type\":\"integer\"}",
+            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"e\":{\"type\":\"string\"}}}"));
+    assertThat(pid(v, 1, 0, 1)).isNotEqualTo(pid(v, 0, 0, 1));
+  }
+
+  @Test
   void aTitleSharedByTwoNewBranchesContinuesNeither() {
     // One title, two branches holding it: the title tells neither apart, and neither continues
     // by order.
@@ -944,19 +957,6 @@ class ProvenanceIdentityRulesTest {
     Map<List<Integer>, Integer> after = pids(v, 1);
     assertThat(after.get(path(0, 0))).isNotIn(before.values());
     assertThat(after.get(path(0, 1))).isEqualTo(before.get(path(0, 2)));
-  }
-
-  @Test
-  void aTitleAnotherKindSharesStillNamesTheBranch() {
-    // The title is shared with a branch of another kind, which the kind rule never pairs with it:
-    // the object whose members all changed still continues by its title.
-    List<ProvenanceVersion> v = compute(
-        union("{\"title\":\"T\",\"type\":\"number\"}",
-            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}}"),
-        union("{\"title\":\"T\",\"type\":\"integer\"}",
-            "{\"title\":\"T\",\"type\":\"object\",\"properties\":{\"e\":{\"type\":\"string\"}}}"));
-    assertThat(pid(v, 1, 0, 1)).isEqualTo(pid(v, 0, 0, 1));
-    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
   }
 
   @Test
