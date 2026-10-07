@@ -1,0 +1,9 @@
+syntax = "proto3";
+package io.confluent.kafka.serializers.protobuf.test;
+
+option java_outer_classname = "ReaddedProto";
+
+message Readded {
+  int32 id = 1;
+  string memo = 2;
+}

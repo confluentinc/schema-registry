@@ -3046,6 +3046,128 @@ paths:
         "500":
           description: |
             Error code 50001 -- Error in the backend data store
+  /subjects/{subject}/provenance:
+    get:
+      tags:
+      - Subjects (v1)
+      summary: Get column provenance between two versions
+      description: "Retrieves, for the range's two ends (or, with includeInterior,\
+        \ every version between them), every column's inlined path and a provenance\
+        \ id that is stable across renames. Address each end of the range either by\
+        \ version (fromVersion, toVersion) or by schema id (fromId, toId), in any\
+        \ mix, and in either order."
+      operationId: getProvenance
+      parameters:
+      - name: subject
+        in: path
+        description: Name of the subject
+        required: true
+        schema:
+          type: string
+      - name: fromVersion
+        in: query
+        description: "Version at one end of the range, or \"latest\""
+        schema:
+          type: string
+      - name: toVersion
+        in: query
+        description: "Version at the other end of the range, or \"latest\""
+        schema:
+          type: string
+      - name: fromId
+        in: query
+        description: Schema id at one end of the range
+        schema:
+          type: integer
+          format: int32
+      - name: toId
+        in: query
+        description: Schema id at the other end of the range
+        schema:
+          type: integer
+          format: int32
+      - name: includeInterior
+        in: query
+        description: "Whether to return every version in the range, not only its ends;\
+          \ such a range may cover at most provenance.interior.max.versions versions"
+        schema:
+          type: boolean
+          default: false
+      - name: includeMultipleMessages
+        in: query
+        description: Whether to root each Protobuf version at a struct over all its
+          top-level messages; ignored for other formats
+        schema:
+          type: boolean
+          default: false
+      - name: algorithm
+        in: query
+        description: "Version of the provenance algorithm, such as v1; the latest\
+          \ when omitted or latest; dynamic for each version matched to the one before\
+          \ it by the version released when it was registered"
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The provenance.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/SchemaProvenance"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/SchemaProvenance"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/SchemaProvenance"
+        "404":
+          description: Not Found. Error code 40401 indicates subject not found. Error
+            code 40402 indicates version not found. Error code 40411 indicates a schema
+            id with no version under the subject.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "422":
+          description: Unprocessable Entity. Error code 42201 indicates a schema with
+            no logical form. Error code 42202 indicates an invalid version. Error
+            code 42214 indicates a schema that could not be parsed. Error code 42215
+            indicates an invalid range. Error code 42216 indicates an unknown algorithm.
+            Error code 42217 indicates a history whose names and aliases do not determine
+            one provenance. Error code 42218 indicates a version with too many locations
+            to compute, or nesting its types too deep. Error code 42219 indicates a range
+            with includeInterior covering more versions than one request may. Error
+            code 42220 indicates a recursive schema.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store. Error code 500 indicates a failure computing
+            provenance that no other code names.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -3887,3 +4009,97 @@ components:
           type: array
           items:
             type: string
+    ProvenanceField:
+      type: object
+      properties:
+        path:
+          type: array
+          description: "The inlined index path from the schema root. A struct field\
+            \ or union branch appends its index, an array element 0, a map key 0 and\
+            \ a map value 1"
+          example:
+          - 1
+          - 0
+          items:
+            type: integer
+            description: "The inlined index path from the schema root. A struct field\
+              \ or union branch appends its index, an array element 0, a map key 0\
+              \ and a map value 1"
+            format: int32
+        names:
+          type: array
+          description: "The location in the native schema's or document's own names,\
+            \ one per native step: a field, property or union branch name, or null\
+            \ for an array element or map value. Steps the logical type hides are\
+            \ included and steps with no native form left out, so it need not match\
+            \ path step for step"
+          example:
+          - items
+          - null
+          - sku
+          items:
+            type: string
+            description: "The location in the native schema's or document's own names,\
+              \ one per native step: a field, property or union branch name, or null\
+              \ for an array element or map value. Steps the logical type hides are\
+              \ included and steps with no native form left out, so it need not match\
+              \ path step for step"
+            example: "[\"items\",null,\"sku\"]"
+        kind:
+          type: string
+          description: "What a location's type is, references resolved: SCALAR (a\
+            \ type with no locations under it: a primitive, an enum, a fixed or a\
+            \ variant), STRUCT, UNION, or ARRAY, MULTISET or MAP of the kinds they\
+            \ hold. A location whose kind changes takes a new pid, as does everything\
+            \ under it"
+          example: "MAP<SCALAR, STRUCT>"
+        pid:
+          type: integer
+          description: "The provenance id: unique per location, stable across versions\
+            \ while the field keeps its identity"
+          format: int32
+          example: 3
+      description: One field's provenance
+    ProvenanceVersion:
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Version number
+          format: int32
+          example: 1
+        id:
+          type: integer
+          description: Globally unique identifier of the schema
+          format: int32
+          example: 100001
+        kind:
+          type: string
+          description: "The root's kind, as a field's kind is spelled: the fields\
+            \ directly under a STRUCT root are its fields, and those directly under\
+            \ a UNION root its branches"
+          example: STRUCT
+        fields:
+          type: array
+          description: "The version's fields, in path order"
+          items:
+            $ref: "#/components/schemas/ProvenanceField"
+      description: One version's column provenance
+    SchemaProvenance:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Name of the subject
+          example: User
+        algorithm:
+          type: string
+          description: The version of the provenance algorithm that computed this
+            response
+          example: v1
+        versions:
+          type: array
+          description: "The versions returned, in ascending version order"
+          items:
+            $ref: "#/components/schemas/ProvenanceVersion"
+      description: Column provenance across versions
