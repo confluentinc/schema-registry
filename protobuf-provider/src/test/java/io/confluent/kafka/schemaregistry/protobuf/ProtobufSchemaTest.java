@@ -52,6 +52,7 @@ import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -63,6 +64,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
@@ -3819,5 +3822,31 @@ public class ProtobufSchemaTest {
 
     assertEquals("the rule was evaluated against the wrong names: " + errors,
         Collections.emptyList(), errors);
+  }
+
+  @Test
+  public void testMessageIndexesRoundTrip() {
+    List<Integer> indexes = Arrays.asList(1, 0, 3);
+    byte[] bytes = new MessageIndexes(indexes).toByteArray();
+    assertEquals(indexes, MessageIndexes.readFrom(bytes).indexes());
+    assertEquals(MessageIndexes.DEFAULT_INDEX, MessageIndexes.readFrom(new byte[]{0}).indexes());
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesCountExceedsRemaining() {
+    MessageIndexes.readFrom(varints(100, 1, 2));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesNegativeCount() {
+    MessageIndexes.readFrom(varints(-1, 1));
+  }
+
+  private static byte[] varints(int... values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * 5);
+    for (int value : values) {
+      ByteUtils.writeVarint(value, buffer);
+    }
+    return Arrays.copyOf(buffer.array(), buffer.position());
   }
 }
