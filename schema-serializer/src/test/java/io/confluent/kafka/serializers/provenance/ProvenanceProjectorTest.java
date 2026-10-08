@@ -93,13 +93,7 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
-  public void latestAsksWithoutNamingAVersion() throws Exception {
-    // So a registry answers with its own latest, whether or not it knows the name.
-    for (String latest : Arrays.asList("latest", "LATEST")) {
-      CountingClient client = new CountingClient();
-      ask(new ProvenanceProjector<>(client, latest, 10, -1), client);
-      assertNull(client.lastAlgorithm);
-    }
+  public void theAlgorithmIsAskedForByName() throws Exception {
     CountingClient client = new CountingClient();
     ask(new ProvenanceProjector<>(client, "v1", 10, -1), client);
     assertEquals("v1", client.lastAlgorithm);

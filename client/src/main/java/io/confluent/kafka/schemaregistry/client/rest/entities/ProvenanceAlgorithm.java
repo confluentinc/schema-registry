@@ -34,14 +34,10 @@ public enum ProvenanceAlgorithm {
   V1("v1", 0L);
 
   /**
-   * The version a request that names none, or names {@link #LATEST_NAME}, is answered with.
+   * The version a request that names none is answered with. It never changes: a newer version is
+   * only ever asked for by name, so no upgrade moves a caller's pairings.
    */
-  public static final ProvenanceAlgorithm LATEST = V1;
-
-  /**
-   * The name asking for {@link #LATEST}, whichever version that is where the question is answered.
-   */
-  public static final String LATEST_NAME = "latest";
+  public static final ProvenanceAlgorithm DEFAULT = V1;
 
   /**
    * The name asking for each version to be matched to its predecessor by the version effective
@@ -90,14 +86,13 @@ public enum ProvenanceAlgorithm {
   }
 
   /**
-   * The version called {@code name}, in any case, or {@link #LATEST} when none is named or it is
-   * {@link #LATEST_NAME}.
+   * The version called {@code name}, in any case, or {@link #DEFAULT} when none is named.
    *
    * @throws IllegalArgumentException if no version has that name
    */
   public static ProvenanceAlgorithm of(String name) {
-    if (name == null || name.isEmpty() || LATEST_NAME.equalsIgnoreCase(name)) {
-      return LATEST;
+    if (name == null || name.isEmpty()) {
+      return DEFAULT;
     }
     for (ProvenanceAlgorithm algorithm : values()) {
       if (algorithm.name.equals(name.toLowerCase(Locale.ROOT))) {
