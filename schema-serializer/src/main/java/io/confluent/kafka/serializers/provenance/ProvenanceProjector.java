@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -118,8 +117,6 @@ public final class ProvenanceProjector<T> {
   /**
    * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
    * entries of each kind for {@code cacheTtlSec} seconds, or indefinitely when that is negative.
-   * {@code latest} names no version in the request, so the registry answers with its own latest,
-   * whether or not it knows the name.
    */
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
       int cacheTtlSec) {
@@ -134,7 +131,7 @@ public final class ProvenanceProjector<T> {
       int cacheTtlSec, ProvenanceStrategy strategy) {
     this.client = client;
     this.strategy = strategy != null ? strategy : new ClientProvenanceStrategy();
-    this.algorithm = ProvenanceAlgorithm.LATEST_NAME.equalsIgnoreCase(algorithm) ? null : algorithm;
+    this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
   }

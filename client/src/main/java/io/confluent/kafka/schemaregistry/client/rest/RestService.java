@@ -1601,7 +1601,7 @@ public class RestService implements Closeable, Configurable {
    * across renames — addressed by version number. {@code "latest"} is accepted as a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
    * top-level messages; other formats ignore it. {@code algorithm} names the version of the
-   * provenance algorithm, such as {@code "v1"}; null asks for the latest.
+   * provenance algorithm, such as {@code "v1"}; null asks for the default, v1.
    */
   public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
                                                  String subject,
