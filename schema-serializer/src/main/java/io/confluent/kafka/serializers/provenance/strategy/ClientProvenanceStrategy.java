@@ -72,7 +72,10 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
     }
   }
 
-  private static RuntimeException translate(RestClientException e, String pair) {
+  /**
+   * What a registry error, on a request about {@code pair}, means under the strategy contract.
+   */
+  static RuntimeException translate(RestClientException e, String pair) {
     if (isTransient(e.getStatus())) {
       return new ProvenanceRetriableException(
           "Schema Registry could not serve provenance: " + e.getMessage(), e);
