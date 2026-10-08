@@ -78,7 +78,7 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * @param includeInterior whether to include the versions between the two
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
-   * @param algorithm the provenance algorithm asked for; null for the latest
+   * @param algorithm the provenance algorithm asked for; null for the default, v1
    */
   SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId, int toId,
       boolean includeInterior, boolean includeMultipleMessages, String algorithm);
@@ -93,7 +93,7 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * @param includeInterior whether to include the versions between the two
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
-   * @param algorithm the provenance algorithm asked for; null for the latest
+   * @param algorithm the provenance algorithm asked for; null for the default, v1
    */
   default SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
       int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,

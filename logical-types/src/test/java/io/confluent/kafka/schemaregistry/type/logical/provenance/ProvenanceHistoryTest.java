@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
@@ -103,9 +102,9 @@ class ProvenanceHistoryTest {
         "{\"name\":\"b\",\"type\":\"long\"}"));
 
     SchemaProvenance whole = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, true, ProvenanceAlgorithm.LATEST_NAME);
+        ProvenanceHistory.held(versions), false, true, null);
     SchemaProvenance ends = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, false, ProvenanceAlgorithm.LATEST_NAME);
+        ProvenanceHistory.held(versions), false, false, null);
     assertThat(ends.getVersions()).containsExactly(
         whole.getVersions().get(0), whole.getVersions().get(3));
   }
