@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.provenance.strategy.StablePidProvenanceStrategy;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -175,6 +176,20 @@ class AvroProvenanceDeserializerTest {
     // into the int branch, provenance does not, and with no default the record fails.
     assertNewColumn(field("int"), field("[\"int\",\"string\"]"), 7, null);
     assertNewColumn(field("int"), defaulted("[\"int\",\"string\"]", "0"), 7, 0);
+  }
+
+  @Test
+  void aStablePidStrategyReadsByTheColumnIdsItIsGiven() throws Exception {
+    // note dropped and re-added: a new column id reads the default, as the registry's pids do;
+    // ids claiming note continued would read the old value, so the ids decide.
+    Schema v1 = record(idField(), string("note"));
+    Schema v3 = record(idField(), "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    byte[] bytes = write(v1, new GenericRecordBuilder(v1).set("id", 7).set("note", "old"));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    client.register(SUBJECT, new AvroSchema(v3));
+
+    assertEquals("", readByColumnIds(v3, bytes, 3).get("note").toString());
+    assertEquals("old", readByColumnIds(v3, bytes, 2).get("note").toString());
   }
 
   @Test
@@ -826,6 +841,20 @@ class AvroProvenanceDeserializerTest {
         TOPIC, new RecordHeaders(), bytes, reader).getValue();
   }
 
+  // v1 [id, note], v2 [id], v3 [id, note], with v3's note under column id noteId.
+  private GenericRecord readByColumnIds(Schema reader, byte[] bytes, int noteId) {
+    Map<Integer, Map<List<Integer>, Integer>> pids = new HashMap<>();
+    pids.put(1, ColumnIds.of(1, 2));
+    pids.put(2, ColumnIds.of(1));
+    pids.put(3, ColumnIds.of(1, noteId));
+    Map<String, Object> config = config("v1");
+    config.put("provenance.strategy", ColumnIds.class);
+    config.put(ColumnIds.PIDS, pids);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+    return (GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, reader).getValue();
+  }
+
   private static Map<String, Object> config(String provenance) {
     Map<String, Object> config = new HashMap<>();
     config.put("schema.registry.url", "bogus");
@@ -869,5 +898,33 @@ class AvroProvenanceDeserializerTest {
   private static Schema record(String... fields) {
     return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MyRecord\","
         + "\"namespace\":\"io.confluent\",\"fields\":[" + String.join(",", fields) + "]}");
+  }
+
+  /** Column ids handed over through the deserializer's configs, as a Metastore's might be. */
+  public static final class ColumnIds extends StablePidProvenanceStrategy {
+
+    static final String PIDS = "test.column.ids";
+
+    private Map<Integer, Map<List<Integer>, Integer>> pids;
+
+    // Top-level paths [0], [1], ... to the given column ids.
+    static Map<List<Integer>, Integer> of(int... columnIds) {
+      Map<List<Integer>, Integer> byPath = new HashMap<>();
+      for (int i = 0; i < columnIds.length; i++) {
+        byPath.put(Collections.singletonList(i), columnIds[i]);
+      }
+      return byPath;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void configure(Map<String, ?> configs) {
+      pids = (Map<Integer, Map<List<Integer>, Integer>>) configs.get(PIDS);
+    }
+
+    @Override
+    protected Map<List<Integer>, Integer> pids(String subject, int version) {
+      return pids.get(version);
+    }
   }
 }
