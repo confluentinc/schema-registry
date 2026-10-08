@@ -107,7 +107,7 @@
         <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.6.4</jsonata-version>
-        <jackson3.version>3.2.2</jackson3.version>
+        <jackson3.version>3.2.3</jackson3.version>
         <json-schema.version>1.14.6</json-schema.version>
         <json-skema.version>0.30.0</json-skema.version>
         <kcache.version>5.2.3</kcache.version>
