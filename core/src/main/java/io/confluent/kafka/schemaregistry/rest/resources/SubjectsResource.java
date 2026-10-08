@@ -392,9 +392,9 @@ public class SubjectsResource {
           + "top-level messages; ignored for other formats")
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
       boolean includeMultipleMessages,
-      @Parameter(description = "Version of the provenance algorithm, such as v1; the latest when "
-          + "omitted or latest; dynamic for each version matched to the one before it by the "
-          + "version released when it was registered")
+      @Parameter(description = "Version of the provenance algorithm, such as v1; v1 when "
+          + "omitted, whatever later versions are released; dynamic for each version matched to "
+          + "the one before it by the version released when it was registered")
       @QueryParam("algorithm") String algorithm) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);

@@ -111,19 +111,18 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The provenance of {@code history}, every version reported, by the latest algorithm.
+   * The provenance of {@code history}, every version reported, by the default algorithm.
    *
    * @see #compute(String, List, List, boolean, boolean, String)
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
       List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages) {
-    return compute(subject, history, schemas, includeMultipleMessages, true,
-        ProvenanceAlgorithm.LATEST_NAME);
+    return compute(subject, history, schemas, includeMultipleMessages, true, null);
   }
 
   /**
    * The provenance of {@code history}, by the version of the algorithm named {@code algorithm}: a
-   * version's name, {@link ProvenanceAlgorithm#LATEST_NAME} or none for the latest, or
+   * version's name, none for {@link ProvenanceAlgorithm#DEFAULT}, or
    * {@link ProvenanceAlgorithm#DYNAMIC_NAME}, under which each version is matched to its
    * predecessor by the version effective when it was registered. A version of the algorithm
    * changes the matching rules, never the logical type's edition, which is the Metastore's.

@@ -384,16 +384,13 @@ public abstract class RestApiProvenanceTest {
   public void theResponseNamesTheAlgorithmThatComputedIt() throws Exception {
     int id = register(SUBJECT, record(field("id", "int")));
 
-    SchemaProvenance latest = restApp.restClient.getProvenanceById(
+    SchemaProvenance omitted = restApp.restClient.getProvenanceById(
         RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, null);
     SchemaProvenance v1 = restApp.restClient.getProvenanceById(
         RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v1");
-    SchemaProvenance named = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "latest");
 
-    assertEquals("v1", latest.getAlgorithm());
-    assertEquals(latest, v1);
-    assertEquals(latest, named);
+    assertEquals("v1", omitted.getAlgorithm());
+    assertEquals(omitted, v1);
   }
 
   @Test
@@ -403,6 +400,10 @@ public abstract class RestApiProvenanceTest {
     assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
             RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v9"));
+    // Omitted is v1 for good; no name asks for whichever version is newest.
+    assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
+        () -> restApp.restClient.getProvenanceById(
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "latest"));
   }
 
   @Test
