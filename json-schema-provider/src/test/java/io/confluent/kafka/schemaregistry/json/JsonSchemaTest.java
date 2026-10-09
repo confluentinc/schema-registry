@@ -891,30 +891,46 @@ public class JsonSchemaTest {
   }
 
   @Test
-  public void testComparatorWithMutuallyRecursiveRefs() {
-    JsonSchema schema = new JsonSchema(mutuallyRecursiveSchema("null", "null"));
-    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
-    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
-    assertNotNull(schema.inlineTaggedEntities());
+  public void testComparatorOrderingOnAcyclicSchemas() {
+    JsonSchema schema = new JsonSchema("{"
+        + "\"definitions\": {"
+        + "  \"a\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/definitions/b\"}},"
+        + "  \"b\": {\"oneOf\": [{\"type\": \"string\"}, {\"enum\": [\"x\", \"y\"]}]}"
+        + "},"
+        + "\"anyOf\": ["
+        + "  {\"$ref\": \"#/definitions/a\"},"
+        + "  {\"$ref\": \"#/definitions/b\"},"
+        + "  {\"type\": \"string\", \"title\": \"t\"},"
+        + "  {\"type\": \"string\"},"
+        + "  {\"const\": 1},"
+        + "  {\"not\": {\"type\": \"null\"}},"
+        + "  {\"if\": {\"type\": \"string\"}, \"then\": {\"$ref\": \"#/definitions/a\"}},"
+        + "  {\"type\": \"object\", \"properties\": {\"p\": {}}, \"required\": [\"p\"]},"
+        + "  {\"allOf\": [{\"$ref\": \"#/definitions/b\"}, {\"type\": \"number\"}]},"
+        + "  {\"type\": \"array\", \"items\": {\"type\": \"null\"}},"
+        + "  {\"type\": \"array\"}"
+        + "]}");
+    assertConsistentOrdering(rootSubschemas(schema));
   }
 
   @Test
-  public void testComparatorDistinguishesMutuallyRecursiveRefs() {
-    List<org.everit.json.schema.Schema> subschemas =
-        rootSubschemas(new JsonSchema(mutuallyRecursiveSchema("null", "string")));
-    JsonSchemaComparator comparator = new JsonSchemaComparator();
-    int cmp = comparator.compare(subschemas.get(0), subschemas.get(1));
-    assertNotEquals(0, cmp);
-    assertEquals(-Integer.signum(cmp),
-        Integer.signum(comparator.compare(subschemas.get(1), subschemas.get(0))));
+  public void testComparatorWithMutuallyRecursiveRefs() {
+    JsonSchema schema = new JsonSchema("{"
+        + "\"definitions\": {"
+        + "  \"a\": {\"anyOf\": [{\"$ref\": \"#/definitions/b\"}, {\"type\": \"null\"}]},"
+        + "  \"b\": {\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"type\": \"null\"}]}"
+        + "},"
+        + "\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"$ref\": \"#/definitions/b\"}]"
+        + "}");
+    assertConsistentOrdering(rootSubschemas(schema));
+    assertNotNull(schema.inlineTaggedEntities());
   }
 
   @Test
   public void testComparatorWithSiblingRefCycle() {
     String schemaString = "{\"oneOf\": [{\"$ref\": \"#/oneOf/1\"}, {\"$ref\": \"#/oneOf/0\"}]}";
     JsonSchema schema = new JsonSchema(schemaString);
-    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
-    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    assertConsistentOrdering(rootSubschemas(schema));
     assertNotNull(schema.inlineTaggedEntities());
 
     JsonNode node1 = schema.toJsonNode();
@@ -924,46 +940,174 @@ public class JsonSchemaTest {
 
   @Test(timeout = 10000)
   public void testComparatorWithDenseRefCycle() {
-    // Each definition refers to the next two, wrapping around, so the reference graph is
-    // dense and cyclic.
-    int n = 30;
+    // Each definition refers to every definition, so the reference graph is dense and cyclic.
+    int n = 40;
+    StringBuilder defs = new StringBuilder();
+    StringBuilder anyOf = new StringBuilder();
+    for (int i = 0; i < n; i++) {
+      if (i > 0) {
+        defs.append(",");
+        anyOf.append(",");
+      }
+      defs.append("\"d").append(i).append("\": {\"anyOf\": [");
+      for (int j = 0; j < n; j++) {
+        if (j > 0) {
+          defs.append(",");
+        }
+        defs.append("{\"$ref\": \"#/definitions/d").append(j).append("\"}");
+      }
+      defs.append("]}");
+      anyOf.append("{\"$ref\": \"#/definitions/d").append(i).append("\"}");
+    }
+    JsonSchema schema =
+        new JsonSchema("{\"definitions\": {" + defs + "}, \"anyOf\": [" + anyOf + "]}");
+    assertConsistentOrdering(rootSubschemas(schema));
+    assertNotNull(schema.inlineTaggedEntities());
+  }
+
+  @Test
+  public void testComparatorWithDeeplyNestedRefCycle() {
+    // Each definition nests the next reference, wrapping around, 100 levels deep.
+    int n = 4;
     StringBuilder defs = new StringBuilder();
     for (int i = 0; i < n; i++) {
       if (i > 0) {
         defs.append(",");
       }
-      defs.append("\"d").append(i).append("\": {\"anyOf\": [")
-          .append("{\"$ref\": \"#/definitions/d").append((i + 1) % n).append("\"},")
-          .append("{\"$ref\": \"#/definitions/d").append((i + 2) % n).append("\"}]}");
+      String nested = "{\"$ref\": \"#/definitions/d" + ((i + 1) % n) + "\"}";
+      for (int k = 0; k < 100; k++) {
+        nested = "{\"anyOf\": [" + nested + ", {\"type\": \"null\"}]}";
+      }
+      defs.append("\"d").append(i).append("\": ").append(nested);
     }
     JsonSchema schema = new JsonSchema("{\"definitions\": {" + defs + "},"
         + "\"anyOf\": [{\"$ref\": \"#/definitions/d0\"}, {\"$ref\": \"#/definitions/d1\"}]}");
-    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
-    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    assertConsistentOrdering(rootSubschemas(schema));
     assertNotNull(schema.inlineTaggedEntities());
   }
 
   @Test
-  public void testComparatorHonorsInterrupt() {
-    List<org.everit.json.schema.Schema> subschemas =
-        rootSubschemas(new JsonSchema(mutuallyRecursiveSchema("null", "null")));
-    Thread.currentThread().interrupt();
-    try {
-      assertThrows(java.util.concurrent.CancellationException.class,
-          () -> new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
-    } finally {
-      Thread.interrupted();
+  public void testComparatorFollowsAcyclicRefs() {
+    // The two members differ only at the end of 100 acyclic reference hops.
+    int n = 100;
+    StringBuilder defs = new StringBuilder();
+    for (String chain : new String[] {"a", "b"}) {
+      for (int i = 0; i < n; i++) {
+        if (defs.length() > 0) {
+          defs.append(",");
+        }
+        String next = i + 1 < n
+            ? "{\"$ref\": \"#/definitions/" + chain + (i + 1) + "\"}"
+            : "{\"type\": \"" + (chain.equals("a") ? "null" : "string") + "\"}";
+        defs.append("\"").append(chain).append(i).append("\": {\"type\": \"array\", \"items\": ")
+            .append(next).append("}");
+      }
     }
+    JsonSchema schema = new JsonSchema("{\"definitions\": {" + defs + "},"
+        + "\"anyOf\": [{\"$ref\": \"#/definitions/a0\"}, {\"$ref\": \"#/definitions/b0\"}]}");
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    JsonSchemaComparator comparator = new JsonSchemaComparator();
+    assertTrue(comparator.compare(subschemas.get(0), subschemas.get(1)) < 0);
+    assertTrue(comparator.compare(subschemas.get(1), subschemas.get(0)) > 0);
+    assertConsistentOrdering(subschemas);
   }
 
-  private static String mutuallyRecursiveSchema(String typeA, String typeB) {
-    return "{"
+  @Test
+  public void testComparatorKeepsStructuralOrderAcrossRefCycles() {
+    // The items of "cyclic" refer back to it; the items of "finite" refer to a schema that ends.
+    // Comparing them still terminates by structure two levels down (null items sort before
+    // reference items), and that order must be kept.
+    JsonSchema schema = new JsonSchema("{"
         + "\"definitions\": {"
-        + "  \"a\": {\"anyOf\": [{\"$ref\": \"#/definitions/b\"}, {\"type\": \"" + typeA + "\"}]},"
-        + "  \"b\": {\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"type\": \"" + typeB + "\"}]}"
+        + "  \"cyclic\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/definitions/cyclic\"}},"
+        + "  \"finite\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/definitions/leaf\"}},"
+        + "  \"leaf\": {\"type\": \"array\", \"items\": {\"type\": \"null\"}}"
         + "},"
-        + "\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"$ref\": \"#/definitions/b\"}]"
-        + "}";
+        + "\"anyOf\": [{\"$ref\": \"#/definitions/cyclic\"}, {\"$ref\": \"#/definitions/finite\"}]"
+        + "}");
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    JsonSchemaComparator comparator = new JsonSchemaComparator();
+    assertTrue(comparator.compare(subschemas.get(1), subschemas.get(0)) < 0);
+    assertTrue(comparator.compare(subschemas.get(0), subschemas.get(1)) > 0);
+    assertConsistentOrdering(subschemas);
+  }
+
+  @Test
+  public void testComparatorWithNonConvergingRefCycle() {
+    // Comparing these members by successively deeper truncations never settles on one order.
+    JsonSchema schema = new JsonSchema("{"
+        + "\"definitions\": {"
+        + "  \"d0\": {\"anyOf\": [{\"$ref\": \"#/definitions/d1\"}, {\"$ref\": \"#/definitions/d2\"}]},"
+        + "  \"d1\": {\"oneOf\": [{\"$ref\": \"#/definitions/d1\"}]},"
+        + "  \"d2\": {\"anyOf\": [{\"$ref\": \"#/definitions/d0\"}, "
+        + "{\"type\": \"string\", \"title\": \"t1\"}]}"
+        + "},"
+        + "\"anyOf\": [{\"not\": {\"not\": {\"$ref\": \"#/definitions/d2\"}}}, "
+        + "{\"not\": {\"not\": {\"$ref\": \"#/definitions/d0\"}}}]"
+        + "}");
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    assertConsistentOrdering(subschemas);
+    assertNotNull(schema.inlineTaggedEntities());
+  }
+
+  @Test
+  public void testComparatorIsConsistentOnCyclicRefs() {
+    String[] members = {
+        "{\"anyOf\": [{\"$ref\": \"#/definitions/d0\"}, {\"$ref\": \"#/definitions/d2\"}]}",
+        "{\"$ref\": \"#/definitions/d1\"}",
+        "{\"type\": \"array\", \"items\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}",
+        "{\"type\": \"array\", \"items\": {\"$ref\": \"#/definitions/d1\"}}",
+        "{\"$ref\": \"#/definitions/d3\"}",
+        "{\"type\": \"string\", \"title\": \"t0\"}",
+        "{\"$ref\": \"#/definitions/d2\"}"
+    };
+    StringBuilder anyOf = new StringBuilder();
+    for (int i = 0; i < 6 * members.length; i++) {
+      if (i > 0) {
+        anyOf.append(",");
+      }
+      anyOf.append(members[i % members.length]);
+    }
+    JsonSchema schema = new JsonSchema("{"
+        + "\"definitions\": {"
+        + "  \"d0\": {\"anyOf\": [{\"$ref\": \"#/definitions/d2\"}, {\"$ref\": \"#/definitions/d1\"}]},"
+        + "  \"d1\": {\"anyOf\": [{\"$ref\": \"#/definitions/d2\"}, {\"type\": \"string\"}]},"
+        + "  \"d2\": {\"anyOf\": [{\"$ref\": \"#/definitions/d3\"}, {\"$ref\": \"#/definitions/d1\"}]},"
+        + "  \"d3\": {\"anyOf\": [{\"$ref\": \"#/definitions/d0\"}, {\"$ref\": \"#/definitions/d3\"}]}"
+        + "},"
+        + "\"anyOf\": [" + anyOf + "]}");
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    assertConsistentOrdering(subschemas);
+    subschemas.sort(new JsonSchemaComparator());
+    assertNotNull(schema.inlineTaggedEntities());
+  }
+
+  /**
+   * Asserts that the comparator is antisymmetric and transitive over {@code schemas}, and that
+   * comparing by direct recursion and comparing iteratively give the same results.
+   */
+  private static void assertConsistentOrdering(List<org.everit.json.schema.Schema> schemas) {
+    JsonSchemaComparator comparator = new JsonSchemaComparator();
+    JsonSchemaComparator iterative = new JsonSchemaComparator(0);
+    int n = schemas.size();
+    int[][] cmp = new int[n][n];
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        cmp[i][j] = Integer.signum(comparator.compare(schemas.get(i), schemas.get(j)));
+        assertEquals(cmp[i][j],
+            Integer.signum(iterative.compare(schemas.get(i), schemas.get(j))));
+      }
+    }
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        assertEquals(-cmp[j][i], cmp[i][j]);
+        for (int k = 0; k < n; k++) {
+          if (cmp[i][j] <= 0 && cmp[j][k] <= 0) {
+            assertTrue(cmp[i][k] <= 0);
+          }
+        }
+      }
+    }
   }
 
   private static List<org.everit.json.schema.Schema> rootSubschemas(JsonSchema schema) {
