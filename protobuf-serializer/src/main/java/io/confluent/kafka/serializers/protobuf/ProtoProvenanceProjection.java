@@ -60,10 +60,145 @@ final class ProtoProvenanceProjection {
 
   final ProtobufSchema schema;
   private final Map<String, Set<Integer>> moved;
+  // The messages, by full name, holding a moved number or leading to one through their fields:
+  // only these are visited for data under one.
+  private final Set<String> leading;
 
-  private ProtoProvenanceProjection(ProtobufSchema schema, Map<String, Set<Integer>> moved) {
+  // Whether the writer declares none of the moved numbers, as where the reader only adds fields:
+  // data under one is then data beyond the writer, rarely there.
+  private final boolean direct;
+
+  private ProtoProvenanceProjection(ProtobufSchema schema, Map<String, Set<Integer>> moved,
+      boolean direct) {
     this.schema = schema;
     this.moved = moved;
+    this.leading = moved.isEmpty() ? Collections.emptySet() : leading(schema.toDescriptor(), moved);
+    this.direct = direct;
+  }
+
+  /**
+   * Whether the reader's own parse is worth trying first: see {@link #holdsMoved}.
+   */
+  boolean triesDirect() {
+    return direct;
+  }
+
+  private static boolean declaresNone(ProtobufSchema writer, Map<String, Set<Integer>> moved) {
+    if (writer == null) {
+      return false;
+    }
+    Map<String, Descriptor> all = new HashMap<>();
+    collectFile(writer.toDescriptor().getFile(), all, new HashSet<>());
+    for (Map.Entry<String, Set<Integer>> e : moved.entrySet()) {
+      Descriptor message = all.get(e.getKey());
+      if (message == null) {
+        // Renamed, perhaps: the writer may well declare the number.
+        return false;
+      }
+      for (int number : e.getValue()) {
+        if (message.findFieldByNumber(number) != null) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private static void collectFile(FileDescriptor file, Map<String, Descriptor> all,
+      Set<String> files) {
+    if (!files.add(file.getName())) {
+      return;
+    }
+    for (Descriptor message : file.getMessageTypes()) {
+      collectNested(message, all);
+    }
+    for (FileDescriptor dependency : file.getDependencies()) {
+      collectFile(dependency, all, files);
+    }
+  }
+
+  private static void collectNested(Descriptor message, Map<String, Descriptor> all) {
+    all.put(message.getFullName(), message);
+    for (Descriptor nested : message.getNestedTypes()) {
+      collectNested(nested, all);
+    }
+  }
+
+  private static Set<String> leading(Descriptor root, Map<String, Set<Integer>> moved) {
+    Map<String, Descriptor> all = new HashMap<>();
+    collect(root, all);
+    Set<String> leads = new HashSet<>(moved.keySet());
+    boolean changed = true;
+    while (changed) {
+      changed = false;
+      for (Descriptor message : all.values()) {
+        if (leads.contains(message.getFullName())) {
+          continue;
+        }
+        for (FieldDescriptor field : message.getFields()) {
+          if (field.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+              && leads.contains(field.getMessageType().getFullName())) {
+            leads.add(message.getFullName());
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    return leads;
+  }
+
+  private static void collect(Descriptor message, Map<String, Descriptor> all) {
+    if (all.putIfAbsent(message.getFullName(), message) != null) {
+      return;
+    }
+    for (FieldDescriptor field : message.getFields()) {
+      if (field.getJavaType() == FieldDescriptor.JavaType.MESSAGE) {
+        collect(field.getMessageType(), all);
+      }
+    }
+  }
+
+  /**
+   * Whether {@code message}, parsed with the reader's own descriptor, holds anything under a moved
+   * number: a field set, or unknown data. Where it holds nothing, it is what the projected parse
+   * gives, as the reader's fields are the parse descriptor's and the moved ones, unset.
+   */
+  boolean holdsMoved(Message message) {
+    Descriptor type = message.getDescriptorForType();
+    if (!leading.contains(type.getFullName())) {
+      return false;
+    }
+    Set<Integer> numbers = moved.get(type.getFullName());
+    if (numbers != null) {
+      for (int number : numbers) {
+        if (message.getUnknownFields().hasField(number)) {
+          return true;
+        }
+        FieldDescriptor field = type.findFieldByNumber(number);
+        if (field != null && (field.isRepeated()
+            ? message.getRepeatedFieldCount(field) > 0 : message.hasField(field))) {
+          return true;
+        }
+      }
+    }
+    for (FieldDescriptor field : type.getFields()) {
+      if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+          || !leading.contains(field.getMessageType().getFullName())
+          || numbers != null && numbers.contains(field.getNumber())) {
+        continue;
+      }
+      if (field.isRepeated()) {
+        for (int i = 0; i < message.getRepeatedFieldCount(field); i++) {
+          if (holdsMoved((Message) message.getRepeatedField(field, i))) {
+            return true;
+          }
+        }
+      } else if (message.hasField(field) && holdsMoved((Message) message.getField(field))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   boolean movedAny() {
@@ -83,7 +218,8 @@ final class ProtoProvenanceProjection {
       builder.setUnknownFields(unknown.build());
     }
     for (FieldDescriptor field : message.getDescriptorForType().getFields()) {
-      if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
+      if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+          || !leading.contains(field.getMessageType().getFullName())) {
         continue;
       }
       if (field.isRepeated()) {
@@ -183,13 +319,15 @@ final class ProtoProvenanceProjection {
     }
     FileDescriptor pruned = walk.build();
     if (pruned == root.getFile()) {
-      return new ProtoProvenanceProjection(reader, Collections.emptyMap());
+      return new ProtoProvenanceProjection(reader, Collections.emptyMap(), false);
     }
     Descriptor prunedRoot = messageNamed(pruned, root.getFullName());
     ProtobufSchema schema = new ProtobufSchema(prunedRoot != null ? prunedRoot : root,
         reader.references());
+    Map<String, Set<Integer>> moved = walk.movedNumbers();
     return new ProtoProvenanceProjection(
-        (ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet()), walk.movedNumbers());
+        (ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet()), moved,
+        declaresNone(writer, moved));
   }
 
   /**
