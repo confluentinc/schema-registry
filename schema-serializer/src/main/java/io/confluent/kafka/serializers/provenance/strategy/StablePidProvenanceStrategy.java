@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Pairs a writer with a reader by pids that are stable across versions, such as the Metastore's
@@ -44,10 +45,11 @@ import java.util.concurrent.TimeUnit;
  * algorithm asked for is ignored too: the pids already decide every pairing, though
  * {@code provenance.algorithm} must still be set for a deserializer to read by provenance.
  *
- * <p>The registry's answers are cached as the deserializer's provenance is, by
- * {@code provenance.cache.size} and {@code provenance.cache.ttl.sec}, so a record retried while
- * its version waits for pids asks only the subclass again. A subclass that overrides
- * {@link #configure} calls {@code super.configure}.
+ * <p>While a version waits for its pids, the registry's answer is kept, bounded by
+ * {@code provenance.cache.size} and {@code provenance.cache.ttl.sec}, so a retried record asks
+ * only the subclass again; once the pids arrive the registry is asked again, so the record pairs
+ * by its answer of now. A subclass that overrides {@link #configure} calls
+ * {@code super.configure}.
  */
 public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrategy {
 
@@ -71,8 +73,9 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
    * reports them with {@code includeMultipleMessages}; null if the version has none yet.
    *
    * @throws ProvenanceRetriableException if the pids cannot be looked up now: the record fails
-   *     and the next asks again; anything else fails every record of the writer until the
-   *     deserializer's provenance cache expires
+   *     and the next asks again. Anything else means what {@link ProvenanceStrategy} lists: a
+   *     ProvenanceUnavailableException reads the writer without provenance until the outcome
+   *     expires, so it is never thrown for pids that are only late
    */
   protected abstract Map<List<Integer>, Integer> pids(String subject, int version,
       boolean includeMultipleMessages);
@@ -80,29 +83,37 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
       int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
-    List<Object> key = Arrays.asList(subject, fromId, toId, null, includeMultipleMessages);
-    SchemaProvenance answer = answers.getIfPresent(key);
-    if (answer == null) {
-      // Only the ends are paired, and the registry's pids are replaced whatever its algorithm.
-      answer = super.provenance(
-          client, subject, fromId, toId, false, includeMultipleMessages, null);
-      answers.put(key, answer);
-    }
-    return restamped(subject, answer, includeMultipleMessages);
+    // Only the ends are paired, and the registry's pids are replaced whatever its algorithm.
+    return answered(Arrays.asList(subject, fromId, toId, null, includeMultipleMessages), subject,
+        includeMultipleMessages, () -> super.provenance(
+            client, subject, fromId, toId, false, includeMultipleMessages, null));
   }
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
       int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) {
-    List<Object> key = Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages);
-    SchemaProvenance answer = answers.getIfPresent(key);
-    if (answer == null) {
-      answer = super.provenanceToVersion(
-          client, subject, fromId, toVersion, false, includeMultipleMessages, null);
-      answers.put(key, answer);
+    return answered(Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages),
+        subject, includeMultipleMessages, () -> super.provenanceToVersion(
+            client, subject, fromId, toVersion, false, includeMultipleMessages, null));
+  }
+
+  // An answer is kept only while its versions wait for pids; once they have them, the registry is
+  // asked again, so the record pairs by its answer of now, as one that never waited does.
+  private SchemaProvenance answered(List<Object> key, String subject,
+      boolean includeMultipleMessages, Supplier<SchemaProvenance> ask) {
+    SchemaProvenance waiting = answers.getIfPresent(key);
+    if (waiting != null) {
+      restamped(subject, waiting, includeMultipleMessages);
+      answers.invalidate(key);
     }
-    return restamped(subject, answer, includeMultipleMessages);
+    SchemaProvenance answer = ask.get();
+    try {
+      return restamped(subject, answer, includeMultipleMessages);
+    } catch (ProvenanceRetriableException e) {
+      answers.put(key, answer);
+      throw e;
+    }
   }
 
   /**

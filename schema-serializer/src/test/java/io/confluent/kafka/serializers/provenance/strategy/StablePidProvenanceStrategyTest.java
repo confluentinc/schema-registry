@@ -163,7 +163,8 @@ public class StablePidProvenanceStrategyTest {
   }
 
   @Test
-  public void aRecordRetriedUntilItsPidsArriveAsksTheRegistryOnce() {
+  public void aRecordRetriedUntilItsPidsArriveAsksTheRegistryOnceWhileItWaits() {
+    // Once while it waits, and once more when the pids arrive.
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
     for (int i = 0; i < 3; i++) {
       assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
@@ -171,7 +172,20 @@ public class StablePidProvenanceStrategyTest {
     }
     columnIds.pids.putAll(ColumnIds.of(client, ids[0], 3).pids);
     columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, false, null);
-    assertEquals(1, client.provenanceCalls);
+    assertEquals(2, client.provenanceCalls);
+  }
+
+  @Test
+  public void aRecordWaitingForItsPidsIsPairedByTheRegistrysAnswerOfNow() {
+    // While v2's record waits for v3's pids, its schema id comes to stand for a v4 the table has
+    // not reached: once v3's pids arrive, it waits for v4's, as a record asked about now does.
+    ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
+    assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
+        client, SUBJECT, ids[1], ids[2], false, false, null));
+    client.alsoUnder(4, ids[1]);
+    columnIds.pids.putAll(ColumnIds.of(client, ids[0], 3).pids);
+    assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
+        client, SUBJECT, ids[1], ids[2], false, false, null));
   }
 
   @Test
