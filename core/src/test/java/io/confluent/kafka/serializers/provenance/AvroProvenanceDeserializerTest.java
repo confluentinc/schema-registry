@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.io.UncheckedIOException;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -207,6 +208,26 @@ class AvroProvenanceDeserializerTest {
     gated.release.countDown();
     thread.join(5000);
     assertEquals("", ((GenericRecord) read[0]).get("note").toString());
+  }
+
+  @Test
+  void aTransientFailureOfTheClientsOwnLookupIsNotCached() throws Exception {
+    // The reader's exact lookup fails once, unchecked: that record fails, and the next reads.
+    Gated gated = new Gated();
+    Schema v1 = record(idField());
+    gated.register(SUBJECT, new AvroSchema(v1));
+    AvroSchema v2 = new AvroSchema(record(idField(), "{\"name\":\"n\",\"type\":\"int\","
+        + "\"default\":0}"));
+    gated.register(SUBJECT, v2);
+    byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
+    gated.failVersionLookup = true;
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> v2));
+    GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> v2).getValue();
+    assertEquals(7, read.get("id"));
   }
 
   @Test
@@ -931,10 +952,12 @@ class AvroProvenanceDeserializerTest {
         + "\"namespace\":\"io.confluent\",\"fields\":[" + String.join(",", fields) + "]}");
   }
 
-  // Blocks the next writer fetch once armed, until released.
+  // Blocks the next writer fetch once armed, until released; fails the next version lookup,
+  // unchecked, once asked to.
   private static final class Gated extends ProvenanceMockSchemaRegistryClient {
 
     volatile boolean armed;
+    volatile boolean failVersionLookup;
     final CountDownLatch entered = new CountDownLatch(1);
     final CountDownLatch release = new CountDownLatch(1);
 
@@ -951,6 +974,16 @@ class AvroProvenanceDeserializerTest {
         }
       }
       return super.getSchemaBySubjectAndId(subject, id);
+    }
+
+    @Override
+    public int getVersion(String subject, ParsedSchema schema)
+        throws IOException, RestClientException {
+      if (failVersionLookup) {
+        failVersionLookup = false;
+        throw new UncheckedIOException(new IOException("connection reset"));
+      }
+      return super.getVersion(subject, schema);
     }
   }
 

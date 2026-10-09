@@ -341,6 +341,11 @@ public final class ProvenanceProjector<T> {
     } catch (ProvenanceRetriableException e) {
       throw new SerializationException(
           "Could not get the provenance of " + written + ": " + e.getMessage(), e);
+    } catch (UncheckedIOException | RetriableException | InterruptException e) {
+      // The deserializer's client failing transiently, as the strategy's contract counts it:
+      // the record fails, uncached, and the next asks again.
+      throw new SerializationException(
+          "Could not reach Schema Registry for the provenance of " + written, e);
     } catch (AuthenticationException | AuthorizationException e) {
       throw e;
     } catch (ProvenanceUnavailableException | ProvenanceUnknownWriterException
