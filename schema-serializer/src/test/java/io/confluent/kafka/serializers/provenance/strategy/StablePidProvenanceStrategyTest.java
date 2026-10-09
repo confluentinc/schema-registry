@@ -21,7 +21,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -34,14 +33,13 @@ import io.confluent.kafka.serializers.provenance.ProvenanceUnknownWriterExceptio
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 
-/** Pairing by the Metastore's column ids, its names and kinds computed locally. */
+/** Pairing by the Metastore's column ids in place of the registry's pids. */
 public class StablePidProvenanceStrategyTest {
 
   private static final String SUBJECT = "orders-value";
@@ -146,8 +144,8 @@ public class StablePidProvenanceStrategyTest {
 
   @Test
   public void anIdAlsoUnderAVersionWithoutColumnIdsWaitsForIt() throws Exception {
-    // v2's schema id also sits under v4, which the table has not reached: the id stands for v4,
-    // the latest carrying it, so its records wait for the refresh rather than read as v2.
+    // The registry resolves v2's schema id to v4, which the table has not reached: its records
+    // wait for the refresh rather than read as v2.
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
     client.alsoUnder(4, ids[1]);
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
@@ -178,7 +176,7 @@ public class StablePidProvenanceStrategyTest {
         + "[{\"name\":\"" + field + "\",\"type\":\"string\"" + aliases + "}]}}";
   }
 
-  // A schema id that can also sit under one later version, as after a re-registration.
+  // A registry that resolves one schema id to a later version, as after a re-registration.
   private static final class Reregistering extends ProvenanceMockSchemaRegistryClient {
 
     private int extraVersion = -1;
@@ -190,21 +188,17 @@ public class StablePidProvenanceStrategyTest {
     }
 
     @Override
-    public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+    public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
         throws IOException, RestClientException {
-      List<Integer> versions = new ArrayList<>(super.getAllVersions(subject, lookupDeletedSchema));
-      if (extraVersion > 0) {
-        versions.add(extraVersion);
+      SchemaProvenance provenance = super.getProvenanceById(
+          subject, fromId, toId, includeInterior, includeMultipleMessages, algorithm);
+      List<ProvenanceVersion> versions = new ArrayList<>();
+      for (ProvenanceVersion v : provenance.getVersions()) {
+        versions.add(v.getId() == extraId
+            ? new ProvenanceVersion(extraVersion, v.getId(), v.getKind(), v.getFields()) : v);
       }
-      return versions;
-    }
-
-    @Override
-    public SchemaMetadata getSchemaMetadata(String subject, int version,
-        boolean lookupDeletedSchema) throws IOException, RestClientException {
-      return version == extraVersion
-          ? new SchemaMetadata(extraId, version, AvroSchema.TYPE, Collections.emptyList(), "")
-          : super.getSchemaMetadata(subject, version, lookupDeletedSchema);
+      return new SchemaProvenance(subject, versions);
     }
   }
 
