@@ -888,6 +888,20 @@ class ProvenanceIdentityRulesTest {
     assertThat(pid(v, 1, 0, 1, 0)).isNotIn(pids(v, 0).values());
   }
 
+  @Test
+  void aHintSpelledAsAnotherPositionsNameCountsAsNone() {
+    // A hint spelled connect_union_field_2 at index 0 is no hint: position decides, by index, as
+    // without it, not by the spelling naming the third branch.
+    String three = "{\"u\":{\"oneOf\":[" + idBranch("a") + "," + idBranch("b") + ","
+        + idBranch("c") + "]}}";
+    List<ProvenanceVersion> spelled = compute(json(three, null),
+        json(idUnion("{\"name\":\"connect_union_field_2\"},{}", null, null), null));
+    List<ProvenanceVersion> plain =
+        compute(json(three, null), json(idUnion(null, null, null), null));
+    assertThat(pid(spelled, 1, 0, 0)).isEqualTo(pid(spelled, 0, 0, 0));
+    assertThat(pids(spelled, 1)).isEqualTo(pids(plain, 1));
+  }
+
   // u: oneOf [{id, extra0?}, {id, extra1?}], hinted when hints is given.
   private static String idUnion(String hints, String extra0, String extra1) {
     return "{\"u\":{\"oneOf\":[" + idBranch(extra0) + "," + idBranch(extra1) + "]"
