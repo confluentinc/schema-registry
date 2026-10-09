@@ -43,7 +43,7 @@ public final class ProvenanceReport {
   }
 
   /**
-   * One entry per supplied version, in order.
+   * The reported versions, in the order supplied, each with its index in the supplied history.
    */
   public List<Version> getVersions() {
     return versions;
