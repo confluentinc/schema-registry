@@ -891,6 +891,87 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testComparatorWithMutuallyRecursiveRefs() {
+    JsonSchema schema = new JsonSchema(mutuallyRecursiveSchema("null", "null"));
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    assertNotNull(schema.inlineTaggedEntities());
+  }
+
+  @Test
+  public void testComparatorDistinguishesMutuallyRecursiveRefs() {
+    List<org.everit.json.schema.Schema> subschemas =
+        rootSubschemas(new JsonSchema(mutuallyRecursiveSchema("null", "string")));
+    JsonSchemaComparator comparator = new JsonSchemaComparator();
+    int cmp = comparator.compare(subschemas.get(0), subschemas.get(1));
+    assertNotEquals(0, cmp);
+    assertEquals(-Integer.signum(cmp),
+        Integer.signum(comparator.compare(subschemas.get(1), subschemas.get(0))));
+  }
+
+  @Test
+  public void testComparatorWithSiblingRefCycle() {
+    String schemaString = "{\"oneOf\": [{\"$ref\": \"#/oneOf/1\"}, {\"$ref\": \"#/oneOf/0\"}]}";
+    JsonSchema schema = new JsonSchema(schemaString);
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    assertNotNull(schema.inlineTaggedEntities());
+
+    JsonNode node1 = schema.toJsonNode();
+    JsonNode node2 = schema.toJsonNode().deepCopy();
+    assertEquals(0, new JsonNodeComparator().compare(node1, node2));
+  }
+
+  @Test(timeout = 10000)
+  public void testComparatorWithDenseRefCycle() {
+    // Each definition refers to the next two, wrapping around, so the reference graph is
+    // dense and cyclic.
+    int n = 30;
+    StringBuilder defs = new StringBuilder();
+    for (int i = 0; i < n; i++) {
+      if (i > 0) {
+        defs.append(",");
+      }
+      defs.append("\"d").append(i).append("\": {\"anyOf\": [")
+          .append("{\"$ref\": \"#/definitions/d").append((i + 1) % n).append("\"},")
+          .append("{\"$ref\": \"#/definitions/d").append((i + 2) % n).append("\"}]}");
+    }
+    JsonSchema schema = new JsonSchema("{\"definitions\": {" + defs + "},"
+        + "\"anyOf\": [{\"$ref\": \"#/definitions/d0\"}, {\"$ref\": \"#/definitions/d1\"}]}");
+    List<org.everit.json.schema.Schema> subschemas = rootSubschemas(schema);
+    assertEquals(0, new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    assertNotNull(schema.inlineTaggedEntities());
+  }
+
+  @Test
+  public void testComparatorHonorsInterrupt() {
+    List<org.everit.json.schema.Schema> subschemas =
+        rootSubschemas(new JsonSchema(mutuallyRecursiveSchema("null", "null")));
+    Thread.currentThread().interrupt();
+    try {
+      assertThrows(java.util.concurrent.CancellationException.class,
+          () -> new JsonSchemaComparator().compare(subschemas.get(0), subschemas.get(1)));
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  private static String mutuallyRecursiveSchema(String typeA, String typeB) {
+    return "{"
+        + "\"definitions\": {"
+        + "  \"a\": {\"anyOf\": [{\"$ref\": \"#/definitions/b\"}, {\"type\": \"" + typeA + "\"}]},"
+        + "  \"b\": {\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"type\": \"" + typeB + "\"}]}"
+        + "},"
+        + "\"anyOf\": [{\"$ref\": \"#/definitions/a\"}, {\"$ref\": \"#/definitions/b\"}]"
+        + "}";
+  }
+
+  private static List<org.everit.json.schema.Schema> rootSubschemas(JsonSchema schema) {
+    return new ArrayList<>(
+        ((org.everit.json.schema.CombinedSchema) schema.rawSchema()).getSubschemas());
+  }
+
+  @Test
   public void testInlineTagsForRefInArray() {
     String schemaString = "{\n"
         + "  \"definitions\": {\n"
