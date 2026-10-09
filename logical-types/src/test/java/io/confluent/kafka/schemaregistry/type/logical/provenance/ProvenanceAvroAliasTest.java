@@ -356,6 +356,63 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
+  void aSwapsAliasesKeptInTheNextVersionAreCarriedForward() {
+    // avro_aliases.md §6: kept unchanged, the swap's aliases continue each name.
+    List<Map<String, Integer>> pids = pids(avro(f("a", I), f("b", I)),
+        avro(fa("b", I, "a"), fa("a", I, "b")),
+        avro(fa("b", I, "a"), fa("a", I, "b"), "{\"name\":\"z\",\"type\":\"int\",\"default\":0}"));
+    assertThat(pids.get(2).get("b")).isEqualTo(pids.get(1).get("b"));
+    assertThat(pids.get(2).get("a")).isEqualTo(pids.get(1).get("a"));
+  }
+
+  @Test
+  void aRenameAfterASwapKeepingTheOtherNameAsAnAliasIsAmbiguous() {
+    // §5: after a swap, a later rename drops an earlier alias that now names another field.
+    assertAmbiguous(avro(f("a", I), f("b", I)), avro(fa("b", I, "a"), fa("a", I, "b")),
+        avro(fa("c", I, "b", "a"), fa("a", I, "b")));
+    List<Map<String, Integer>> pids = pids(avro(f("a", I), f("b", I)),
+        avro(fa("b", I, "a"), fa("a", I, "b")), avro(fa("c", I, "b"), fa("a", I, "b")));
+    assertThat(pids.get(2).get("c")).isEqualTo(pids.get(1).get("b"));
+  }
+
+  @Test
+  void aRenameKeepingAnAliasAFormerNameReusedIsAmbiguousAndDroppingItContinues() {
+    // §6 (cross pass Q3-1): an earlier name reused for another field loses its alias.
+    String a = "{\"name\":\"a\",\"type\":\"int\",\"default\":0}";
+    String b = "{\"name\":\"b\",\"type\":\"int\",\"default\":0}";
+    assertAmbiguous(avro(f("a", I)), avro(fa("b", I, "a"), a), avro(fa("c", I, "a", "b"), a, b));
+    List<Map<String, Integer>> pids = pids(avro(f("a", I)), avro(fa("b", I, "a"), a),
+        avro(fa("c", I, "b"), a, b));
+    assertThat(pids.get(2).get("c")).isEqualTo(pids.get(0).get("a"));
+    assertThat(pids.get(2).get("a")).isEqualTo(pids.get(1).get("a"));
+    assertThat(pids.get(2).get("b")).isNotIn(pids.get(1).values());
+  }
+
+  @Test
+  void aRenameUndoneContinuesOnlyIfTheRollbackAliasesTheNameItLeaves() {
+    // §5 (cross pass Q1-1): an alias counts on the newer side only.
+    List<Map<String, Integer>> plain =
+        pids(avro(f("x", I)), avro(fa("y", I, "x")), avro(f("x", I)));
+    assertThat(plain.get(2).get("x")).isNotIn(plain.get(1).values());
+    List<Map<String, Integer>> aliased =
+        pids(avro(f("x", I)), avro(fa("y", I, "x")), avro(fa("x", I, "y")));
+    assertThat(aliased.get(2).get("x")).isEqualTo(aliased.get(0).get("x"));
+  }
+
+  @Test
+  void aNestedRecordRenamedByAnUnqualifiedAliasAsItsNamespaceMovesRestarts() {
+    // §5 (cross pass Q2-1): the unqualified alias names the new namespace; .Inner the old one.
+    AvroSchema v1 = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + f("n", rec("Inner", f("x", I))) + "]}");
+    for (String alias : new String[] {"Inner", ".Inner"}) {
+      List<Map<String, Integer>> pids = pids(v1, new AvroSchema("{\"type\":\"record\","
+          + "\"name\":\"R\",\"namespace\":\"com.acme\",\"fields\":["
+          + f("n", rec("Inner2", f("x", I), alias)) + "]}"));
+      assertThat(same(pids, "n.x", "n.x")).as(alias).isEqualTo(alias.startsWith("."));
+    }
+  }
+
+  @Test
   void aMalformedUnionHintIsRejectedByName() {
     for (String hint : new String[] {"{\"x\":1}", "\"text\"", "[\"a\",\"b\"]",
         "[{\"name\":1},{\"name\":2}]", "[null,null]", "[{\"name\":\"a\",\"doc\":5},{}]"}) {

@@ -443,7 +443,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   /**
    * As {@link #createDatumReader(String, SchemaId, Schema, Schema)}; a generic reader of a
-   * provenance rename builds its records under the caller's reader types, not the renamer's
+   * provenance rename builds its records under the caller's reader types, not the projection's
    * reader copy.
    */
   private DatumReader<?> createDatumReader(String subject, SchemaId writerSchemaId,
