@@ -37,10 +37,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -89,24 +87,15 @@ import org.slf4j.LoggerFactory;
 public final class ProvenanceProjector<T> {
 
   private static final Logger log = LoggerFactory.getLogger(ProvenanceProjector.class);
-  // Readers derived from an application class, by identity: matched to the latest version they
-  // equal. Shared by every projector: a reset during a read must not unmark the read's reader.
-  private static final Cache<ParsedSchema, Boolean> DERIVED_READERS =
-      CacheBuilder.newBuilder().weakKeys().build();
 
   private final SchemaRegistryClient client;
   private final String algorithm;
   private final Cache<List<Object>, Outcome<T>> outcomes;
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
-  // Readers whose registered version the caller named, by the schema handed over, by identity:
-  // an equal reader may stand for another version, or for none. Each is a copy of the caller's
-  // (pinnedCopies); a deserializer handing over a copy of its own says so (sameReader).
-  private final Cache<ParsedSchema, Pin> suppliedReaderInstances =
-      CacheBuilder.newBuilder().weakKeys().build();
-  // Copies of a caller's pinned reader, by its instance, then by pin.
-  private final Cache<ParsedSchema, Map<Pin, ParsedSchema>> pinnedCopies =
-      CacheBuilder.newBuilder().weakKeys().build();
+  // Which readers were pinned or derived: the deserializer's, outliving this projector. A
+  // deserializer handing over a copy of a pinned reader of its own says so (sameReader).
+  private final ProvenanceReaderMarks marks;
   // Where provenance comes from.
   private final ProvenanceStrategy strategy;
   // Schemas' logical types, by identity, as compared to find the version a schema stands for;
@@ -129,7 +118,18 @@ public final class ProvenanceProjector<T> {
    */
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
       int cacheTtlSec, ProvenanceStrategy strategy) {
+    this(client, algorithm, cacheSize, cacheTtlSec, strategy, new ProvenanceReaderMarks());
+  }
+
+  /**
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int, ProvenanceStrategy)},
+   * keeping which readers were pinned or derived in {@code marks}, which a deserializer keeps
+   * across reconfigures.
+   */
+  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
+      int cacheTtlSec, ProvenanceStrategy strategy, ProvenanceReaderMarks marks) {
     this.client = client;
+    this.marks = marks;
     this.strategy = strategy != null ? strategy : new ClientProvenanceStrategy();
     this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
@@ -150,25 +150,9 @@ public final class ProvenanceProjector<T> {
       if (reader.getId() == null && reader.getVersion() == null) {
         return reader.getSchema();
       }
-      return pinnedCopy(reader.getSchema(),
+      return marks.pinnedCopy(reader.getSchema(),
           new Pin(reader.getId(), reader.getSubject(), reader.getVersion()));
     };
-  }
-
-  /**
-   * The copy of {@code schema} kept for {@code pin}, pinned. The instance itself is never marked:
-   * handed over later without a pin, or with another, it must not read as pinned to this one.
-   */
-  private ParsedSchema pinnedCopy(ParsedSchema schema, Pin pin) {
-    ParsedSchema copy;
-    try {
-      copy = pinnedCopies.get(schema, ConcurrentHashMap::new)
-          .computeIfAbsent(pin, p -> schema.copy());
-    } catch (ExecutionException e) {
-      throw new IllegalStateException(e.getCause());
-    }
-    suppliedReaderInstances.put(copy, pin);
-    return copy;
   }
 
   /**
@@ -179,7 +163,7 @@ public final class ProvenanceProjector<T> {
   }
 
   private Pin pinOf(ParsedSchema reader) {
-    return suppliedReaderInstances.getIfPresent(reader);
+    return marks.pinOf(reader);
   }
 
   /**
@@ -191,7 +175,7 @@ public final class ProvenanceProjector<T> {
     Pin pin = pinOf(reader);
     // The deserializer may share copy among equal readers, pinned otherwise or not at all: the
     // pin goes on a copy of it kept for this pin.
-    return pin == null || copy == reader ? copy : pinnedCopy(copy, pin);
+    return pin == null || copy == reader ? copy : marks.pinnedCopy(copy, pin);
   }
 
 
@@ -202,7 +186,7 @@ public final class ProvenanceProjector<T> {
    * version may share by accident.
    */
   public ParsedSchema derivedReader(ParsedSchema reader) {
-    DERIVED_READERS.put(reader, Boolean.TRUE);
+    marks.markDerived(reader);
     return reader;
   }
 
@@ -246,7 +230,7 @@ public final class ProvenanceProjector<T> {
     // So are the writer's and reader's names: a Protobuf file's messages share its schema id, and
     // its schemas are equal whichever message they name. A reader derived from a class equals its
     // text, so which of the two it is counts too.
-    boolean derived = DERIVED_READERS.getIfPresent(reader) != null;
+    boolean derived = marks.isDerived(reader);
     // Read once: the key and the computation must see the same pin.
     Pin pin = derived ? null : pinOf(reader);
     List<Object> key = Arrays.asList(subject,
@@ -440,7 +424,7 @@ public final class ProvenanceProjector<T> {
       throws IOException, RestClientException {
     // A derived reader carries no pin: it is the latest version it equals.
     return pin != null && pin.id != null ? pin.id
-        : registeredId(subject, reader, DERIVED_READERS.getIfPresent(reader) != null);
+        : registeredId(subject, reader, marks.isDerived(reader));
   }
 
   /**
@@ -613,7 +597,7 @@ public final class ProvenanceProjector<T> {
   }
 
   // The registered version a caller named for a reader: a schema id, or a subject version.
-  private static final class Pin {
+  static final class Pin {
     private final Integer id;
     private final String subject;
     private final Integer version;

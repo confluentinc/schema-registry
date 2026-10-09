@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -176,6 +177,36 @@ class AvroProvenanceDeserializerTest {
     // into the int branch, provenance does not, and with no default the record fails.
     assertNewColumn(field("int"), field("[\"int\",\"string\"]"), 7, null);
     assertNewColumn(field("int"), defaulted("[\"int\",\"string\"]", "0"), 7, 0);
+  }
+
+  @Test
+  void aReaderPinnedByVersionKeepsItsPinThroughAReconfigureDuringTheRead() throws Exception {
+    // v3 re-adds note: the reader, v1 with a rule merged onto it, is pinned to v1, so v3's note
+    // is new to it; unpinned, it would be found by structure as v3 and read v3's note.
+    Gated gated = new Gated();
+    Schema v1 = record(idField(), "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    gated.register(SUBJECT, new AvroSchema(v1));
+    gated.register(SUBJECT, new AvroSchema(record(idField())));
+    Schema v3 = record(idField(), "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\","
+        + "\"doc\":\"re-added\"}");
+    gated.register(SUBJECT, new AvroSchema(v3));
+    byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v3).set("id", 7).set("note", "v3's").build());
+    AvroSchema reader = new AvroSchema(v1).copy(null, new RuleSet(null, Collections.singletonList(
+        new Rule("r", null, RuleKind.CONDITION, RuleMode.READ, "CEL", null, null, "true", null,
+            null, false))));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
+    Object[] read = new Object[1];
+    gated.armed = true;
+    Thread thread = new Thread(() -> read[0] = deserializer.deserializeWithReaderSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, SUBJECT, 1), false).getValue());
+    thread.start();
+    gated.entered.await();
+    // The reconfigure lands while the read is fetching its writer.
+    deserializer.configure(config("v1"), false);
+    gated.release.countDown();
+    thread.join(5000);
+    assertEquals("", ((GenericRecord) read[0]).get("note").toString());
   }
 
   @Test
@@ -898,6 +929,29 @@ class AvroProvenanceDeserializerTest {
   private static Schema record(String... fields) {
     return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MyRecord\","
         + "\"namespace\":\"io.confluent\",\"fields\":[" + String.join(",", fields) + "]}");
+  }
+
+  // Blocks the next writer fetch once armed, until released.
+  private static final class Gated extends ProvenanceMockSchemaRegistryClient {
+
+    volatile boolean armed;
+    final CountDownLatch entered = new CountDownLatch(1);
+    final CountDownLatch release = new CountDownLatch(1);
+
+    @Override
+    public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+        throws IOException, RestClientException {
+      if (armed) {
+        armed = false;
+        entered.countDown();
+        try {
+          release.await();
+        } catch (InterruptedException e) {
+          throw new IllegalStateException(e);
+        }
+      }
+      return super.getSchemaBySubjectAndId(subject, id);
+    }
   }
 
   /** Column ids handed over through the deserializer's configs, as a Metastore's might be. */

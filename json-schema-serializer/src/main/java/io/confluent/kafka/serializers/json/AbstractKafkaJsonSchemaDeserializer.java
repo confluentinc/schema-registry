@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ProvenanceReaderMarks;
 import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -442,6 +443,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private volatile ProvenanceProjector<JsonProvenanceProjection> provenanceProjector;
+  // Which readers were pinned or derived: kept for the deserializer's life, as a reset during a
+  // read must not unmark its reader.
+  private final ProvenanceReaderMarks provenanceReaderMarks = new ProvenanceReaderMarks();
 
   /**
    * Forgets the projector: it belongs to the configuration it was built under. Under the lock it
@@ -545,7 +549,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         projector = provenanceProjector;
         if (projector == null) {
           projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
-              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy);
+              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy,
+              provenanceReaderMarks);
           provenanceProjector = projector;
         }
       }
