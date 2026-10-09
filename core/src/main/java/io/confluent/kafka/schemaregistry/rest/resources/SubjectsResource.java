@@ -109,10 +109,6 @@ public class SubjectsResource {
   private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  /** Provenance ranges retained. Each holds a report over many versions, so the bound is low. */
-  // Locations the provenance cache holds across its ranges: one range may hold far more than
-  // another, so they are weighed, not counted.
-  private static final long MAX_CACHED_PROVENANCE_LOCATIONS = 1_000_000L;
 
   /**
    * Provenance over one requested range, keyed by the subject, the mode, the algorithm, and every
@@ -126,7 +122,7 @@ public class SubjectsResource {
    * Weighed by the locations each range holds.
    */
   private final AsyncCache<List<Object>, Computed> provenanceCache = Caffeine.newBuilder()
-      .maximumWeight(MAX_CACHED_PROVENANCE_LOCATIONS)
+      .maximumWeight(maxCachedLocations(Runtime.getRuntime().maxMemory()))
       .weigher((List<Object> key, Computed computed) -> cacheWeight(key, computed.locations()))
       .buildAsync();
 
@@ -660,6 +656,13 @@ public class SubjectsResource {
       log.error(message, e);
       throw Errors.schemaRegistryException(message, e);
     }
+  }
+
+  // Locations the provenance cache holds across its ranges, weighed rather than counted, as one
+  // range may hold far more than another. About 320 bytes each, so at most an eighth of the heap:
+  // the rest must hold the computations filling it, each up to the report bound (review 35).
+  static long maxCachedLocations(long maxHeapBytes) {
+    return Math.max(10_000L, Math.min(1_000_000L, maxHeapBytes / 8 / 320));
   }
 
   // An entry's weight in the provenance cache. The key pins every version of the range, so an
