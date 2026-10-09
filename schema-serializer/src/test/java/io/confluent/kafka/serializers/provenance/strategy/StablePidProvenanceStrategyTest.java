@@ -152,6 +152,36 @@ public class StablePidProvenanceStrategyTest {
         client, SUBJECT, ids[1], ids[2], false, false, null));
   }
 
+  @Test
+  public void pidsAreLookedUpByTheCallersSubject() {
+    client.normalizing();
+    ColumnIds columnIds = ColumnIds.of(client, ids[0], 3).under(":.:" + SUBJECT);
+    SchemaProvenance stable = columnIds.provenance(
+        client, ":.:" + SUBJECT, ids[0], ids[2], false, false, null);
+    assertEquals(":.:" + SUBJECT, stable.getSubject());
+    assertEquals(2, stable.getVersions().size());
+  }
+
+  @Test
+  public void aRecordRetriedUntilItsPidsArriveAsksTheRegistryOnce() {
+    ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
+    for (int i = 0; i < 3; i++) {
+      assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
+          client, SUBJECT, ids[0], ids[2], false, false, null));
+    }
+    columnIds.pids.putAll(ColumnIds.of(client, ids[0], 3).pids);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, false, null);
+    assertEquals(1, client.provenanceCalls);
+  }
+
+  @Test
+  public void thePidsAreAskedForInTheModeAsked() {
+    ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, true, null);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[1], false, false, null);
+    assertEquals(Arrays.asList(true, true, false, false), columnIds.modes);
+  }
+
   private static void assertSameJoin(ProvenanceMapping expected, ProvenanceMapping actual) {
     assertEquals(expected.readerPaths(), actual.readerPaths());
     assertEquals(expected.writerPaths(), actual.writerPaths());
@@ -181,16 +211,27 @@ public class StablePidProvenanceStrategyTest {
 
     private int extraVersion = -1;
     private int extraId;
+    private boolean normalizing;
+    private int provenanceCalls;
 
     void alsoUnder(int version, int schemaId) {
       extraVersion = version;
       extraId = schemaId;
     }
 
+    // Answers with the subject normalized, as the registry drops the default context's prefix.
+    void normalizing() {
+      normalizing = true;
+    }
+
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
         boolean includeInterior, boolean includeMultipleMessages, String algorithm)
         throws IOException, RestClientException {
+      provenanceCalls++;
+      if (normalizing && subject.startsWith(":.:")) {
+        subject = subject.substring(3);
+      }
       SchemaProvenance provenance = super.getProvenanceById(
           subject, fromId, toId, includeInterior, includeMultipleMessages, algorithm);
       List<ProvenanceVersion> versions = new ArrayList<>();
@@ -207,6 +248,8 @@ public class StablePidProvenanceStrategyTest {
   private static final class ColumnIds extends StablePidProvenanceStrategy {
 
     private final Map<Integer, Map<List<Integer>, Integer>> pids = new HashMap<>();
+    private final List<Boolean> modes = new ArrayList<>();
+    private String subject = SUBJECT;
 
     static ColumnIds of(ProvenanceMockSchemaRegistryClient client, int firstId, int last) {
       ColumnIds columnIds = new ColumnIds();
@@ -224,9 +267,17 @@ public class StablePidProvenanceStrategyTest {
       return columnIds;
     }
 
+    // Held under the subject the deserializer asks by.
+    ColumnIds under(String subject) {
+      this.subject = subject;
+      return this;
+    }
+
     @Override
-    protected Map<List<Integer>, Integer> pids(String subject, int version) {
-      return pids.get(version);
+    protected Map<List<Integer>, Integer> pids(String subject, int version,
+        boolean includeMultipleMessages) {
+      modes.add(includeMultipleMessages);
+      return subject.equals(this.subject) ? pids.get(version) : null;
     }
   }
 }

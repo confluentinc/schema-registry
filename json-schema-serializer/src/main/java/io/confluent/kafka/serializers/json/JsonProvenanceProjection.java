@@ -729,7 +729,7 @@ final class JsonProvenanceProjection {
 
   /**
    * The union branches {@code document} takes on the way to the property spelled {@code names},
-   * as the pruner resolves them; null if it does not reach one.
+   * as the projection resolves them; null if it does not reach one.
    */
   static List<Integer> branchesTaken(JsonSchema reader, JsonNode document, List<String> names) {
     List<List<Integer>> taken = new ArrayList<>();
@@ -1353,7 +1353,7 @@ final class JsonProvenanceProjection {
 
   /**
    * {@code node} as everit validates it, as {@code JsonSchema.validate} converts it. Converted
-   * once per union step, and never converted back: the pruner wants only whether it validates.
+   * once per union step, and never converted back: the projection wants only whether it validates.
    */
   private static Object validatable(JsonNode node) {
     try {

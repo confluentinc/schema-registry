@@ -96,8 +96,8 @@ final class JsonValidationShape {
     }
   }
 
-  // Through $ref, allOf, anyOf and oneOf, as the pruner walks, and an unnamed step through items
-  // and additionalProperties.
+  // Through $ref, allOf, anyOf and oneOf, as the projection walks, and an unnamed step through
+  // items and additionalProperties.
   private void collect(JsonNode schema, List<String> names, int step, ArrayNode found) {
     count();
     if (step == names.size()) {

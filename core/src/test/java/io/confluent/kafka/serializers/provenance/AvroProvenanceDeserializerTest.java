@@ -919,11 +919,13 @@ class AvroProvenanceDeserializerTest {
     @Override
     @SuppressWarnings("unchecked")
     public void configure(Map<String, ?> configs) {
+      super.configure(configs);
       pids = (Map<Integer, Map<List<Integer>, Integer>>) configs.get(PIDS);
     }
 
     @Override
-    protected Map<List<Integer>, Integer> pids(String subject, int version) {
+    protected Map<List<Integer>, Integer> pids(String subject, int version,
+        boolean includeMultipleMessages) {
       return pids.get(version);
     }
   }

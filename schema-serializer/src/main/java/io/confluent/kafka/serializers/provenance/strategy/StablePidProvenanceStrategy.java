@@ -16,14 +16,19 @@
 
 package io.confluent.kafka.serializers.provenance.strategy;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.provenance.ProvenanceRetriableException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Pairs a writer with a reader by pids that are stable across versions, such as the Metastore's
@@ -31,49 +36,91 @@ import java.util.Map;
  * registry still reports the versions, with their locations, names and kinds; a subclass looks up
  * each version's pids on their own, by path, and they replace the registry's.
  *
- * <p>The pids must be keyed by the paths provenance reports for the version, computed with the
- * {@code includeMultipleMessages} the deserializer uses, and be equal across versions exactly
- * where a location continues. Paths provenance does not report, such as collection nodes', are
- * ignored. The algorithm asked for is ignored too: the pids already decide every pairing, though
+ * <p>The pids must be keyed by the paths provenance reports for the version in the mode asked
+ * for, and be equal across versions exactly where a location continues. A Protobuf deserializer
+ * picks the mode by its reader's file, so one subject may be asked in both: a single-message path
+ * {@code p} is the multi-message path {@code [0] + p}, as each version is rooted at its file's
+ * first message. Paths provenance does not report, such as collection nodes', are ignored. The
+ * algorithm asked for is ignored too: the pids already decide every pairing, though
  * {@code provenance.algorithm} must still be set for a deserializer to read by provenance.
+ *
+ * <p>The registry's answers are cached as the deserializer's provenance is, by
+ * {@code provenance.cache.size} and {@code provenance.cache.ttl.sec}, so a record retried while
+ * its version waits for pids asks only the subclass again. A subclass that overrides
+ * {@link #configure} calls {@code super.configure}.
  */
 public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrategy {
 
+  private Cache<List<Object>, SchemaProvenance> answers =
+      cache(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_SIZE_DEFAULT,
+          AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_TTL_DEFAULT);
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    Object size = configs.get(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_SIZE);
+    Object ttl = configs.get(AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_TTL);
+    answers = cache(
+        size != null ? Integer.parseInt(size.toString().trim())
+            : AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_SIZE_DEFAULT,
+        ttl != null ? Integer.parseInt(ttl.toString().trim())
+            : AbstractKafkaSchemaSerDeConfig.PROVENANCE_CACHE_TTL_DEFAULT);
+  }
+
   /**
-   * The pid of each located path of {@code version} of {@code subject}; null if the version has
-   * none yet.
+   * The pid of each located path of {@code version} of {@code subject}, the paths as provenance
+   * reports them with {@code includeMultipleMessages}; null if the version has none yet.
+   *
+   * @throws ProvenanceRetriableException if the pids cannot be looked up now: the record fails
+   *     and the next asks again; anything else fails every record of the writer until the
+   *     deserializer's provenance cache expires
    */
-  protected abstract Map<List<Integer>, Integer> pids(String subject, int version);
+  protected abstract Map<List<Integer>, Integer> pids(String subject, int version,
+      boolean includeMultipleMessages);
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
       int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
-    // Only the ends are paired, and the registry's pids are replaced whatever its algorithm.
-    return restamped(super.provenance(
-        client, subject, fromId, toId, false, includeMultipleMessages, null));
+    List<Object> key = Arrays.asList(subject, fromId, toId, null, includeMultipleMessages);
+    SchemaProvenance answer = answers.getIfPresent(key);
+    if (answer == null) {
+      // Only the ends are paired, and the registry's pids are replaced whatever its algorithm.
+      answer = super.provenance(
+          client, subject, fromId, toId, false, includeMultipleMessages, null);
+      answers.put(key, answer);
+    }
+    return restamped(subject, answer, includeMultipleMessages);
   }
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
       int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) {
-    return restamped(super.provenanceToVersion(
-        client, subject, fromId, toVersion, false, includeMultipleMessages, null));
+    List<Object> key = Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages);
+    SchemaProvenance answer = answers.getIfPresent(key);
+    if (answer == null) {
+      answer = super.provenanceToVersion(
+          client, subject, fromId, toVersion, false, includeMultipleMessages, null);
+      answers.put(key, answer);
+    }
+    return restamped(subject, answer, includeMultipleMessages);
   }
 
   /**
-   * {@code provenance} with each location's pid replaced by the one of its path.
+   * {@code provenance} with each location's pid replaced by the one of its path, looked up by the
+   * caller's {@code subject}: the registry answers with it normalized, such as without a default
+   * context's prefix.
    *
    * @throws ProvenanceRetriableException if a version has no pids yet, as for a writer newer than
    *     the table: the record fails, and is read once the pids arrive
    * @throws IllegalStateException if a location has no pid: the subclass broke the contract, and
    *     every record of the writer fails
    */
-  private SchemaProvenance restamped(SchemaProvenance provenance) {
-    String subject = provenance.getSubject();
+  private SchemaProvenance restamped(String subject, SchemaProvenance provenance,
+      boolean includeMultipleMessages) {
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
-      Map<List<Integer>, Integer> pids = pids(subject, version.getVersion());
+      Map<List<Integer>, Integer> pids =
+          pids(subject, version.getVersion(), includeMultipleMessages);
       if (pids == null) {
         throw new ProvenanceRetriableException(
             "Version " + version.getVersion() + " of subject " + subject + " has no pids yet");
@@ -91,5 +138,14 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
           version.getVersion(), version.getId(), version.getKind(), fields));
     }
     return new SchemaProvenance(subject, versions);
+  }
+
+  // As the deserializer's provenance caches: indefinitely when the TTL is negative.
+  private static Cache<List<Object>, SchemaProvenance> cache(int size, int ttlSec) {
+    CacheBuilder<Object, Object> builder = CacheBuilder.newBuilder().maximumSize(size);
+    if (ttlSec >= 0) {
+      builder = builder.expireAfterWrite(ttlSec, TimeUnit.SECONDS);
+    }
+    return builder.build();
   }
 }

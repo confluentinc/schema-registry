@@ -404,7 +404,7 @@ public class SubjectsResource {
     }
     String version;
     try {
-      // dynamic, or the name of the version asked for, or of the latest.
+      // dynamic, or the name of the version asked for, v1 when none is named.
       version = ProvenanceAlgorithm.isDynamic(algorithm) ? ProvenanceAlgorithm.DYNAMIC_NAME
           : ProvenanceAlgorithm.of(algorithm).getName();
     } catch (IllegalArgumentException e) {
