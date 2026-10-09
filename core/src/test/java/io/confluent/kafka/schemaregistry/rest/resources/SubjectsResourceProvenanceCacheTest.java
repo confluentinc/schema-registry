@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,5 +46,14 @@ class SubjectsResourceProvenanceCacheTest {
     assertTrue(SubjectsResource.cacheWeight(Collections.nCopies(604, 0), 5) >= 604);
     // A failure counts one location, but its key still pins the range.
     assertTrue(SubjectsResource.cacheWeight(Collections.nCopies(604, 0), 1) >= 604);
+  }
+
+  @Test
+  void theCacheTakesAtMostAnEighthOfTheHeap() {
+    // The default -Xmx512M: room left for a computation up to the report bound beside it.
+    assertEquals(209_715, SubjectsResource.maxCachedLocations(512L << 20));
+    assertEquals(838_860, SubjectsResource.maxCachedLocations(2L << 30));
+    assertEquals(1_000_000, SubjectsResource.maxCachedLocations(4L << 30));
+    assertEquals(10_000, SubjectsResource.maxCachedLocations(16L << 20));
   }
 }
