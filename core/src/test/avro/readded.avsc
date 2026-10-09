@@ -1,0 +1,2 @@
+{"type": "record", "name": "Readded", "namespace": "io.confluent.kafka.serializers.test",
+ "fields": [{"name": "name", "type": "string"}, {"name": "note", "type": "string", "default": "new"}]}
