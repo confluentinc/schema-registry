@@ -36,7 +36,6 @@ import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConv
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.function.IntFunction;
@@ -234,25 +233,6 @@ public final class ProvenanceHistory {
     SchemaProvenance encoded = SchemaProvenanceEncoder.encode(subject, report, ids, versions);
     encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
     return encoded;
-  }
-
-  /**
-   * The locations of one version, as any range holding it reports them: a location's path, names
-   * and kind follow from its own schema, never its history. Its pids are allocated from it alone.
-   *
-   * @throws RecursiveTypeException if the schema refers to itself
-   * @throws TooManyLocationsException if it has more locations than provenance computes
-   * @throws TypeTooDeepException if it nests its types too deep, as converted or walked
-   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if it has no
-   *     logical form
-   */
-  public static ProvenanceVersion locations(String subject, int version, int schemaId,
-      ParsedSchema schema, boolean includeMultipleMessages) {
-    // Only the type, id and version of the metadata are read.
-    SchemaMetadata metadata =
-        new SchemaMetadata(schemaId, version, schema.schemaType(), schema.references(), "");
-    return compute(subject, Collections.singletonList(metadata),
-        held(Collections.singletonList(schema)), includeMultipleMessages).getVersions().get(0);
   }
 
   /**
