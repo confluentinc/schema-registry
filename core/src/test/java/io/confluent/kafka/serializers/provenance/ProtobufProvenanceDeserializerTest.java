@@ -28,10 +28,13 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -39,6 +42,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.provenance.strategy.StablePidProvenanceStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
@@ -521,6 +525,25 @@ class ProtobufProvenanceDeserializerTest {
     DynamicMessage row = read(reader, bytes, "v1");
     assertEquals("p.Refund", row.getDescriptorForType().getFullName());
     assertEquals(42, get(row, "amount"));
+  }
+
+  @Test
+  void stablePidsHeldForMultipleMessagesReadAOneMessageReader() throws Exception {
+    // Column ids held in multi-message mode, asked for in the one-message reader's: b reuses a's
+    // number after a was dropped, so it is a new column and must not read a's 42.
+    ProtobufSchema v1 = row("int32 a = 1;");
+    ProtobufSchema v3 = row("int32 b = 1;");
+    byte[] bytes = write(v1, set("a", 42));
+    client.register(SUBJECT, row());
+    client.register(SUBJECT, v3);
+    Map<String, Object> config = config("v1");
+    config.put("provenance.strategy", MultiMessageColumnIds.class);
+    config.put(MultiMessageColumnIds.HELD,
+        client.getProvenanceByVersion(SUBJECT, "1", "3", true, true, null));
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(client, config);
+
+    assertEquals(0, get(readPinned(deserializer, bytes, v3, 3), "b"));
   }
 
   @Test
@@ -2060,6 +2083,42 @@ class ProtobufProvenanceDeserializerTest {
       DynamicMessage m = (DynamicMessage) message;
       return m.toBuilder().clearField(m.getDescriptorForType().findFieldByName("id"))
           .buildPartial();
+    }
+  }
+
+  /** Column ids held in multi-message mode, offset from the registry's pids. */
+  public static final class MultiMessageColumnIds extends StablePidProvenanceStrategy {
+
+    static final String HELD = "test.column.ids";
+
+    private SchemaProvenance held;
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+      super.configure(configs);
+      held = (SchemaProvenance) configs.get(HELD);
+    }
+
+    @Override
+    protected Map<List<Integer>, Integer> pids(String subject, int version,
+        boolean includeMultipleMessages) {
+      for (ProvenanceVersion entry : held.getVersions()) {
+        if (entry.getVersion() != version) {
+          continue;
+        }
+        Map<List<Integer>, Integer> pids = new HashMap<>();
+        for (ProvenanceField field : entry.getFields()) {
+          // A one-message path p is the multi-message path [0] + p.
+          List<Integer> path = field.getPath();
+          if (includeMultipleMessages) {
+            pids.put(path, field.getPid() + 100);
+          } else if (path.size() > 1 && path.get(0) == 0) {
+            pids.put(path.subList(1, path.size()), field.getPid() + 100);
+          }
+        }
+        return pids;
+      }
+      return null;
     }
   }
 }
