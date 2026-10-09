@@ -18,8 +18,12 @@ package io.confluent.kafka.schemaregistry.json;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -83,7 +87,20 @@ public class JsonSchemaComparator implements Comparator<Schema> {
   private static final Comparator<String> STRING_COMPARATOR =
       Comparator.<String>nullsFirst(Comparator.<String>naturalOrder());
 
+  @Override
   public int compare(Schema schema1, Schema schema2) {
+    return compare(schema1, schema2, null);
+  }
+
+  /**
+   * Compares two schemas. Everit schemas are immutable apart from a ReferenceSchema's referred
+   * schema, so every cycle in the schema graph passes through a pair of references. Reference
+   * pairs are therefore the only state tracked: a pair already being compared higher up the
+   * stack is treated as equal, and a finished pair's result is reused, which bounds the work on
+   * shared and cyclic references. {@code refs} is created on the first reference pair and scoped
+   * to one top-level comparison, which keeps this comparator stateless and thread-safe.
+   */
+  private int compare(Schema schema1, Schema schema2, RefState refs) {
     if (schema1 == schema2) {
       return 0;
     }
@@ -147,10 +164,11 @@ public class JsonSchemaComparator implements Comparator<Schema> {
         }
         List<Schema> comb1Schemas = new ArrayList<>(comb1.getSubschemas());
         List<Schema> comb2Schemas = new ArrayList<>(comb2.getSubschemas());
-        comb1Schemas.sort(this);
-        comb2Schemas.sort(this);
+        Comparator<Schema> subschemaComparator = (s1, s2) -> compare(s1, s2, refs);
+        comb1Schemas.sort(subschemaComparator);
+        comb2Schemas.sort(subschemaComparator);
         for (int i = 0; i < comb1Schemas.size(); i++) {
-          cmp = compare(comb1Schemas.get(i), comb2Schemas.get(i));
+          cmp = compare(comb1Schemas.get(i), comb2Schemas.get(i), refs);
           if (cmp != 0) {
             return cmp;
           }
@@ -159,22 +177,22 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       case NOT:
         NotSchema not1 = (NotSchema) schema1;
         NotSchema not2 = (NotSchema) schema2;
-        return compare(not1.getMustNotMatch(), not2.getMustNotMatch());
+        return compare(not1.getMustNotMatch(), not2.getMustNotMatch(), refs);
       case CONDITIONAL:
         ConditionalSchema cond1 = (ConditionalSchema) schema1;
         ConditionalSchema cond2 = (ConditionalSchema) schema2;
         cmp = compare(cond1.getIfSchema().orElse(EmptySchema.INSTANCE),
-          cond2.getIfSchema().orElse(EmptySchema.INSTANCE));
+          cond2.getIfSchema().orElse(EmptySchema.INSTANCE), refs);
         if (cmp != 0) {
           return cmp;
         }
         cmp = compare(cond1.getThenSchema().orElse(EmptySchema.INSTANCE),
-          cond2.getThenSchema().orElse(EmptySchema.INSTANCE));
+          cond2.getThenSchema().orElse(EmptySchema.INSTANCE), refs);
         if (cmp != 0) {
           return cmp;
         }
         return compare(cond1.getElseSchema().orElse(EmptySchema.INSTANCE),
-          cond2.getElseSchema().orElse(EmptySchema.INSTANCE));
+          cond2.getElseSchema().orElse(EmptySchema.INSTANCE), refs);
       case OBJECT:
         ObjectSchema obj1 = (ObjectSchema) schema1;
         ObjectSchema obj2 = (ObjectSchema) schema2;
@@ -187,14 +205,34 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       case ARRAY:
         ArraySchema arr1 = (ArraySchema) schema1;
         ArraySchema arr2 = (ArraySchema) schema2;
-        return compare(arr1.getAllItemSchema(), arr2.getAllItemSchema());
+        return compare(arr1.getAllItemSchema(), arr2.getAllItemSchema(), refs);
       case REFERENCE:
         ReferenceSchema ref1 = (ReferenceSchema) schema1;
         ReferenceSchema ref2 = (ReferenceSchema) schema2;
-        return compare(ref1.getReferredSchema(), ref2.getReferredSchema());
+        return compareReferences(ref1, ref2, refs != null ? refs : new RefState());
       default:
         return 0;
     }
+  }
+
+  private int compareReferences(ReferenceSchema ref1, ReferenceSchema ref2, RefState refs) {
+    JsonSchemaCancellation.throwIfInterrupted();
+    SchemaPair pair = new SchemaPair(ref1, ref2);
+    Integer cached = refs.results.get(pair);
+    if (cached != null) {
+      return cached;
+    }
+    if (!refs.inProgress.add(pair)) {
+      return 0;
+    }
+    int cmp;
+    try {
+      cmp = compare(ref1.getReferredSchema(), ref2.getReferredSchema(), refs);
+    } finally {
+      refs.inProgress.remove(pair);
+    }
+    refs.results.put(pair, cmp);
+    return cmp;
   }
 
   private int compareCollections(Collection<?> coll1, Collection<?> coll2) {
@@ -228,6 +266,38 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       return "oneof";
     } else {
       return null;
+    }
+  }
+
+  private static final class RefState {
+    private final Set<SchemaPair> inProgress = new HashSet<>();
+    private final Map<SchemaPair, Integer> results = new HashMap<>();
+  }
+
+  /**
+   * An ordered pair of schemas compared by identity.
+   */
+  private static final class SchemaPair {
+    private final Schema first;
+    private final Schema second;
+
+    SchemaPair(Schema first, Schema second) {
+      this.first = first;
+      this.second = second;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof SchemaPair)) {
+        return false;
+      }
+      SchemaPair other = (SchemaPair) o;
+      return first == other.first && second == other.second;
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * System.identityHashCode(first) + System.identityHashCode(second);
     }
   }
 }
