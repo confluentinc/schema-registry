@@ -48,7 +48,10 @@ import java.util.function.Supplier;
  * <p>While a version waits for its pids, the registry's answer is kept, bounded by
  * {@code provenance.cache.size} and {@code provenance.cache.ttl.sec}, so a retried record asks
  * only the subclass again; once the pids arrive the registry is asked again, so the record pairs
- * by its answer of now. A subclass that overrides {@link #configure} calls
+ * by its answer of now. A kept answer waits for its own versions only: one removed from the
+ * history before the table reaches it, by a hard delete or a tombstone (a soft-deleted schema
+ * registered again without LOGICAL, or in IMPORT mode), holds the record until the answer
+ * expires, and indefinitely with no TTL. A subclass that overrides {@link #configure} calls
  * {@code super.configure}.
  */
 public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrategy {
