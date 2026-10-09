@@ -117,6 +117,10 @@ public class JsonSchemaComparator implements Comparator<Schema> {
    */
   @Override
   public int compare(Schema schema1, Schema schema2) {
+    if (schema1 != null && schema2 != null && childCount(schema1) == 0) {
+      // Schemas without subschemas compare by label alone.
+      return schema1 == schema2 ? 0 : compareLabels(schema1, schema2);
+    }
     try {
       return compare(schema1, schema2, new Memo(this), 0);
     } catch (DepthExceeded e) {
