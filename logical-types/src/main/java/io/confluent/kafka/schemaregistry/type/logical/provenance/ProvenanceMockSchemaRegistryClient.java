@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,7 +53,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * live ones alone, so a version registered after the latest was deleted takes its number, and
  * replaces it here; a permanent delete forgets a soft-deleted version here, though the base
  * mock still resolves its schema id; and a deleted subject, soft or not, is forgotten entirely, as
- * the base mock forgets it and its schemas.
+ * the base mock forgets it and its schemas. A soft-deleted schema registered again keeps its id
+ * and its soft-deleted version, which models neither of the registry's policies since #4658:
+ * without LOGICAL the registry tombstones the soft-deleted version, and under LOGICAL it gives
+ * the schema a new id.
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
@@ -232,6 +236,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws IOException, RestClientException {
+    // As the registry: the request checked before the history, the subject as it names it.
+    checkAlgorithm(algorithm);
+    subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     List<SchemaMetadata> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
@@ -242,6 +249,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior,
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+    // As the registry: the request checked before the history, the subject as it names it.
+    checkAlgorithm(algorithm);
+    subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     List<SchemaMetadata> history = history(subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
         includeInterior, includeMultipleMessages, algorithm);
@@ -251,15 +261,16 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
       boolean includeInterior, boolean includeMultipleMessages,
       String algorithm) throws IOException, RestClientException {
+    // As the registry: the request checked before the history, the subject as it names it.
+    checkAlgorithm(algorithm);
+    subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     List<SchemaMetadata> history = history(subject);
     return provenance(subject, history, carrying(history, fromId, subject),
         named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages,
         algorithm);
   }
 
-  private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
-      int from, int to, boolean includeInterior,
-      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+  private static void checkAlgorithm(String algorithm) throws RestClientException {
     if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
       try {
         ProvenanceAlgorithm.of(algorithm);
@@ -267,6 +278,11 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
       }
     }
+  }
+
+  private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
+      int from, int to, boolean includeInterior,
+      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
     if (includeInterior && range.size() > interiorMaxVersions) {
       throw new RestClientException("The range covers " + range.size() + " versions, more than "
