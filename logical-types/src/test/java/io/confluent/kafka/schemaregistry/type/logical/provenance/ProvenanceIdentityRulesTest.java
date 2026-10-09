@@ -864,6 +864,42 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
+  void aHintAddedOrRemovedWherePositionDecidesKeepsTheBranches() {
+    // Every branch has id, so content cannot tell them apart and position decides, as without
+    // hints: hints added or removed change nothing.
+    String hints = "{\"name\":\"H1\"},{\"name\":\"H2\"}";
+    String before = idUnion(null, "a", "b");
+    String after = idUnion(null, null, null);
+    for (String[] pair : new String[][] {
+        {idUnion(hints, "a", "b"), after}, {before, idUnion(hints, null, null)}}) {
+      List<ProvenanceVersion> v = compute(json(pair[0], null), json(pair[1], null));
+      assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+      assertThat(pid(v, 1, 0, 0, 0)).isEqualTo(pid(v, 0, 0, 0, 1));
+      assertThat(pid(v, 1, 0, 1, 0)).isEqualTo(pid(v, 0, 0, 1, 1));
+    }
+  }
+
+  @Test
+  void branchesHintedOtherwiseStayNewWherePositionDecides() {
+    List<ProvenanceVersion> v = compute(
+        json(idUnion("{\"name\":\"H1\"},{\"name\":\"H2\"}", "a", "b"), null),
+        json(idUnion("{\"name\":\"K1\"},{\"name\":\"K2\"}", null, null), null));
+    assertThat(pid(v, 1, 0, 0, 0)).isNotIn(pids(v, 0).values());
+    assertThat(pid(v, 1, 0, 1, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  // u: oneOf [{id, extra0?}, {id, extra1?}], hinted when hints is given.
+  private static String idUnion(String hints, String extra0, String extra1) {
+    return "{\"u\":{\"oneOf\":[" + idBranch(extra0) + "," + idBranch(extra1) + "]"
+        + (hints == null ? "" : ",\"confluent:union\":[" + hints + "]") + "}}";
+  }
+
+  private static String idBranch(String extra) {
+    return "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"number\"}"
+        + (extra == null ? "" : ",\"" + extra + "\":{\"type\":\"number\"}") + "}}";
+  }
+
+  @Test
   void jsonBranchesSharingMemberNamesAreToldApartByTheirDiscriminator() {
     String a = branch("a", "\"x\":{\"type\":\"number\"}");
     String b = branch("b", "\"x\":{\"type\":\"number\"}");
@@ -1124,6 +1160,77 @@ class ProvenanceIdentityRulesTest {
     assertThat(pid(v, 1, 0)).isEqualTo(pid(v, 0, 0));
     assertThat(pid(v, 1, 1)).isEqualTo(pid(v, 0, 1));
     assertThat(pid(v, 1, 1, 1)).isEqualTo(pid(v, 0, 1, 1));
+  }
+
+  @Test
+  void aProtobufScalarBecomingRepeatedRestarts() {
+    // The kind rule: SCALAR and ARRAY<SCALAR> are different columns, though the wire reads both.
+    List<ProvenanceVersion> v = compute(proto("int32 a = 1;"), proto("repeated int32 a = 1;"),
+        proto("int32 a = 1;"));
+    assertThat(pid(v, 1, 0)).isNotIn(pids(v, 0).values());
+    assertThat(pid(v, 2, 0)).isNotIn(pids(v, 1).values());
+  }
+
+  @Test
+  void aProtobufMapAndARepeatedEntryMessageAreOneColumnOnlyByTheEntryShape() {
+    // A repeated ...Entry of key and value only is a MAP, as Flink reads it; else ARRAY<STRUCT>.
+    String entry = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  repeated %1$s m = 1;\n}\n"
+        + "message %1$s {\n  string key = 1;\n  int32 value = 2;\n}\n";
+    for (String name : new String[] {"Entry", "Pair"}) {
+      List<ProvenanceVersion> v = compute(proto("map<string, int32> m = 1;"),
+          new ProtobufSchema(String.format(entry, name)));
+      assertThat(pids(v, 0).values().contains(pid(v, 1, 0))).as(name)
+          .isEqualTo(name.equals("Entry"));
+    }
+  }
+
+  @Test
+  void aSingleMessagePathIsTheMultiMessagePathUnderTheFirstMessage() {
+    ProtobufSchema file = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message Order {\n  int32 id = 1;\n  oneof o { string a = 4; }\n  Line line = 3;\n"
+        + "  map<string, Line> m = 6;\n  repeated Line r = 7;\n}\n"
+        + "message Refund {\n  int32 amount = 1;\n}\nmessage Line {\n  string sku = 1;\n}\n");
+    List<SchemaMetadata> history = Collections.singletonList(
+        new SchemaMetadata(1, 1, file.schemaType(), Collections.emptyList(), ""));
+    Map<Boolean, List<List<Integer>>> paths = new HashMap<>();
+    for (boolean multi : new boolean[] {false, true}) {
+      List<List<Integer>> found = new ArrayList<>();
+      ProvenanceHistory.compute("s", history, ProvenanceHistory.held(Arrays.asList(file)), multi)
+          .getVersions().get(0).getFields().forEach(f -> found.add(f.getPath()));
+      paths.put(multi, found);
+    }
+    for (List<Integer> single : paths.get(false)) {
+      List<Integer> prefixed = new ArrayList<>(single);
+      prefixed.add(0, 0);
+      assertThat(paths.get(true)).contains(prefixed);
+    }
+  }
+
+  @Test
+  void swappedHintsSwapTheBranchesAndRestartTheirMembers() {
+    // json_resolution §12: a hint is the branch's name, so the branches follow their hints.
+    String b = "{\"type\":\"object\",\"properties\":{\"%s\":{\"type\":\"number\"}}}";
+    String u = "{\"u\":{\"oneOf\":[" + String.format(b, "x") + "," + String.format(b, "y")
+        + "],\"confluent:union\":[{\"name\":\"%s\"},{\"name\":\"%s\"}]}}";
+    List<ProvenanceVersion> v = compute(json(String.format(u, "H1", "H2"), null),
+        json(String.format(u, "H2", "H1"), null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 1));
+    assertThat(pid(v, 1, 0, 0, 0)).isNotIn(pids(v, 0).values());
+  }
+
+  @Test
+  void aTitleContinuesABranchWhoseTagACloserBranchKeepsTheKeyOf() {
+    // The title phase refuses only a discriminator the two name differently, not a crossing.
+    String n = "{\"type\":\"number\"}";
+    String before = "{\"u\":{\"oneOf\":[{\"type\":\"object\",\"title\":\"T\",\"properties\":"
+        + "{\"kind\":{\"enum\":[\"a\"]},\"x\":" + n + "}},{\"type\":\"object\",\"properties\":"
+        + "{\"y\":" + n + "}}]}}";
+    String after = "{\"u\":{\"oneOf\":[{\"type\":\"object\",\"title\":\"T\",\"properties\":"
+        + "{\"x\":" + n + "}},{\"type\":\"object\",\"properties\":{\"kind\":{\"enum\":[\"b\"]},"
+        + "\"x\":" + n + ",\"z\":" + n + "}},{\"type\":\"object\",\"properties\":{\"y\":" + n
+        + "}}]}}";
+    List<ProvenanceVersion> v = compute(json(before, null), json(after, null));
+    assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
   }
 
   // --- What a collection holds ----------------------------------------------------------------

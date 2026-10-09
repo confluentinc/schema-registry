@@ -1242,8 +1242,9 @@ public final class ProvenanceComputer {
                 previous, (a, p) -> !taken.contains(p) && a.strings != null
                     && a.strings.equals(p.strings) && !otherHints(a, p));
           } else {
-            found = previousBranch(previous, taken, p -> peer.name.equals(p.name)
-                && overlaps(peer.content, p.content)
+            // By position, not by name: a hint added or removed leaves the branch at its place.
+            found = previousBranch(previous, taken, p -> position(peer) == position(p)
+                && !otherHints(peer, p) && overlaps(peer.content, p.content)
                 && !crosses(peer, p, peers, matched, previous, taken));
           }
           if (found != null) {
@@ -1329,6 +1330,11 @@ public final class ProvenanceComputer {
         }
       }
       return tags;
+    }
+
+    // A branch's index in its union.
+    private static int position(Node branch) {
+      return branch.where.path.get(branch.where.path.size() - 1);
     }
 
     /** Whether two branches are both hinted, and hinted otherwise. */
