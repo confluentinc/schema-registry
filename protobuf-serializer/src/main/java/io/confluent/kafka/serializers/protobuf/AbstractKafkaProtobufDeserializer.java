@@ -405,6 +405,20 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   private static Message parseProjected(ProtoProvenanceProjection projection,
       ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
+    // Where the reader only adds fields, a record rarely holds anything under a moved number:
+    // the reader's own parse is then the projected one.
+    if (projection.triesDirect()) {
+      Message direct = null;
+      try {
+        direct = parseDynamic(reader, bytes, start, length);
+      } catch (IOException | RuntimeException e) {
+        // As a moved field's type may not parse what lies under its number.
+      }
+      // Outside the catch: a failure of the check itself fails the record rather than hiding.
+      if (direct != null && !projection.holdsMoved(direct)) {
+        return direct;
+      }
+    }
     Message parsed = parseDynamic(projection.schema, bytes, start, length);
     return DynamicMessage.parseFrom(reader.toDescriptor(),
         projection.dropMoved(parsed).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);

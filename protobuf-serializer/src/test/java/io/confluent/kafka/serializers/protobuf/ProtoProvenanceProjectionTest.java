@@ -17,11 +17,14 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -119,6 +122,48 @@ public class ProtoProvenanceProjectionTest {
       assertEquals(use[1], reader, ProtoProvenanceProjection.of(reader, writer,
           mapping(locations, locations), true).schema);
     }
+  }
+
+  @Test
+  public void aReaderThatOnlyAddsFieldsKeepsItsOwnParseUnlessDataSitsUnderOne() {
+    // The writer declares none of the left-out numbers, so the reader's own parse is tried first,
+    // and kept where nothing, at any depth, sits under a left-out number.
+    ProtobufSchema writer = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message Row {\n  int32 a = 1;\n  In in = 3;\n}\nmessage In {\n  int32 x = 1;\n}\n");
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message Row {\n  int32 a = 1;\n  int32 c = 2;\n  In in = 3;\n}\n"
+        + "message In {\n  int32 x = 1;\n  int32 y = 2;\n}\n");
+    ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
+        mapping(Arrays.asList(p(1, "a"), p(3, "in"), p(4, "in", "x")),
+            Arrays.asList(p(1, "a"), p(2, "c"), p(3, "in"), p(4, "in", "x"), p(5, "in", "y"))),
+        false);
+    assertTrue(projection.triesDirect());
+    Descriptor row = reader.toDescriptor();
+    Descriptor in = row.findFieldByName("in").getMessageType();
+    DynamicMessage plain = DynamicMessage.newBuilder(row).setField(row.findFieldByName("a"), 7)
+        .setField(row.findFieldByName("in"), DynamicMessage.newBuilder(in)
+            .setField(in.findFieldByName("x"), 8).build()).build();
+    assertFalse(projection.holdsMoved(plain));
+    assertTrue(projection.holdsMoved(plain.toBuilder()
+        .setField(row.findFieldByName("c"), 9).build()));
+    assertTrue(projection.holdsMoved(plain.toBuilder().setField(row.findFieldByName("in"),
+        DynamicMessage.newBuilder(in).setField(in.findFieldByName("y"), 9).build()).build()));
+    assertTrue(projection.holdsMoved(plain.toBuilder().setUnknownFields(UnknownFieldSet
+        .newBuilder().addField(2, UnknownFieldSet.Field.newBuilder().addFixed32(9).build())
+        .build()).build()));
+  }
+
+  @Test
+  public void aReaderReusingANumberTheWriterDeclaresParsesAsBefore() {
+    // c is new, under b's number: data under it is the writer's own, so always the projected parse.
+    ProtobufSchema writer = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nmessage Row {\n  int32 a = 1;\n  int32 b = 2;\n}\n");
+    ProtobufSchema reader = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nmessage Row {\n  int32 a = 1;\n  int32 c = 2;\n}\n");
+    ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
+        mapping(Arrays.asList(p(1, "a"), p(2, "b")), Arrays.asList(p(1, "a"), p(3, "c"))), false);
+    assertTrue(projection.movedAny());
+    assertFalse(projection.triesDirect());
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,

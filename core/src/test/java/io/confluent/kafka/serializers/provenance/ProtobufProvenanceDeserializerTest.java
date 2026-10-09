@@ -1845,6 +1845,106 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderThatOnlyAddsAFieldStillLeavesOutDataBeyondTheWriterUnderItsNumber() throws Exception {
+    // The reader's own parse is tried first, where the writer declares none of the new numbers;
+    // data a producer wrote under c's number anyway is still left out, as c is new.
+    ProtobufSchema v1 = row("int32 a = 1;");
+    ProtobufSchema v2 = row("int32 a = 1;", "int32 c = 2;");
+    Descriptor d = v1.toDescriptor();
+    byte[] beyond = write(v1, DynamicMessage.newBuilder(d).setField(d.findFieldByName("a"), 7)
+        .setUnknownFields(UnknownFieldSet.newBuilder().addField(2, UnknownFieldSet.Field
+            .newBuilder().addVarint(9).build()).build()).build());
+    byte[] plain = write(v1, set("a", 8));
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, beyond, "v1");
+    assertEquals(7, get(read, "a"));
+    assertEquals(0, get(read, "c"));
+    assertEquals(8, get(read(v2, plain, "v1"), "a"));
+  }
+
+  @Test
+  void aReaderThatOnlyAddsAFieldReadsARecordItsOwnParseRejects() throws Exception {
+    // A producer's stray bytes under the new s's number are no valid UTF-8, so the reader's own
+    // parse fails; the projected one leaves them out and reads the record, as before.
+    ProtobufSchema v1 = row("int32 a = 1;");
+    ProtobufSchema v2 = row("int32 a = 1;", "string s = 3;");
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, v2);
+    byte[] body = {0x08, 0x07, 0x1a, 0x02, (byte) 0xc3, 0x28};
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id).put((byte) 0)
+        .put(body).array();
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "a"));
+    assertEquals("", get(read, "s"));
+  }
+
+  @Test
+  void aNewFieldsDataOfAnotherWireTypeBeyondTheWriterIsStillLeftOut() throws Exception {
+    // Under c's number but not c's wire type: the reader's own parse keeps it as unknown data,
+    // which the projected read drops, as c is new.
+    ProtobufSchema v1 = row("int32 a = 1;");
+    ProtobufSchema v2 = row("int32 a = 1;", "int32 c = 2;");
+    Descriptor d = v1.toDescriptor();
+    byte[] bytes = write(v1, DynamicMessage.newBuilder(d).setField(d.findFieldByName("a"), 7)
+        .setUnknownFields(UnknownFieldSet.newBuilder().addField(2, UnknownFieldSet.Field
+            .newBuilder().addFixed32(9).build()).build()).build());
+    client.register(SUBJECT, v2);
+
+    DynamicMessage read = read(v2, bytes, "v1");
+    assertEquals(7, get(read, "a"));
+    assertEquals(0, get(read, "c"));
+    assertFalse(read.getUnknownFields().hasField(2));
+  }
+
+  @Test
+  void aNewNestedFieldsDataBeyondTheWriterIsStillLeftOut() throws Exception {
+    ProtobufSchema v1 = file("message Row {\n  int32 a = 1;\n  In in = 3;\n}",
+        "message In {\n  int32 x = 1;\n}");
+    ProtobufSchema v2 = file("message Row {\n  int32 a = 1;\n  In in = 3;\n}",
+        "message In {\n  int32 x = 1;\n  int32 y = 2;\n}");
+    Descriptor row = v1.toDescriptor();
+    Descriptor in = row.findFieldByName("in").getMessageType();
+    byte[] bytes = write(v1, DynamicMessage.newBuilder(row).setField(row.findFieldByName("a"), 7)
+        .setField(row.findFieldByName("in"), DynamicMessage.newBuilder(in)
+            .setField(in.findFieldByName("x"), 8).setUnknownFields(UnknownFieldSet.newBuilder()
+                .addField(2, UnknownFieldSet.Field.newBuilder().addVarint(9).build()).build())
+            .build())
+        .build());
+    client.register(SUBJECT, v2);
+
+    DynamicMessage nested = (DynamicMessage) get(read(v2, bytes, "v1"), "in");
+    assertEquals(8, get(nested, "x"));
+    assertEquals(0, get(nested, "y"));
+  }
+
+  @Test
+  void aGeneratedClassReaderOfAWriterWithReadRulesLeavesOutDataBeyondTheWriter() throws Exception {
+    // The writer's read rule runs on its own bytes before the projection; stray data under the
+    // class's new memo is still left out.
+    String head = "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n"
+        + "option java_outer_classname = \"ReaddedProto\";\n";
+    Rule inc = new Rule("inc", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
+        "name == 'id' ; value + 1", null, null, false);
+    ProtobufSchema v1 = new ProtobufSchema(head + "message Readded {\n  int32 id = 1;\n}\n")
+        .copy(null, new RuleSet(null, Collections.singletonList(inc)));
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
+    Descriptor d = v1.toDescriptor();
+    byte[] body = DynamicMessage.newBuilder(d).setField(d.findFieldByName("id"), 7)
+        .setUnknownFields(UnknownFieldSet.newBuilder().addField(2, UnknownFieldSet.Field
+            .newBuilder().addLengthDelimited(ByteString.copyFromUtf8("old")).build()).build())
+        .build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id).put((byte) 0)
+        .put(body).array();
+
+    Readded read = readClass(Readded.class, bytes, "v1", false);
+    assertEquals(8, read.getId());
+    assertEquals("", read.getMemo());
+  }
+
+  @Test
   void aDroppedFieldsDataUnderTheHighestNumberDoesNotFailANewMessageField() throws Exception {
     // A producer still on v1 writes big under v2's id; v3's new message field nu used to move to
     // the highest number, where big's string then failed to parse as a message.
