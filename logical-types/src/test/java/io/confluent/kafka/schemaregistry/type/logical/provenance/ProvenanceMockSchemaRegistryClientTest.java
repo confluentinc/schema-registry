@@ -130,6 +130,21 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void anUnknownAlgorithmIsRejectedBeforeTheSubjectIsLookedUp() throws Exception {
+    // As the registry: the request, its algorithm included, is checked before the history.
+    assertCode(422, 42216, () -> client.getProvenanceByVersion("nope-value", "1", "1", false,
+        false, "v9"));
+  }
+
+  @Test
+  void theDefaultContextsPrefixNamesTheSameSubject() throws Exception {
+    // As the registry: ":.:orders-value" is orders-value, and the answer names it so.
+    int v1 = register(record(field("id", "int")));
+    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false, false, null)
+        .getSubject()).isEqualTo(SUBJECT);
+  }
+
+  @Test
   void aMapWithNoValueSchemaHasNoLogicalForm() throws Exception {
     int v1 = client.register(SUBJECT, new JsonSchema("{\"type\":\"object\",\"properties\":"
         + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"));
@@ -312,7 +327,8 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v3 = register(record(field("a", "int"), field("b", "int"), field("c", "int")));
     client.deleteSchemaVersion(SUBJECT, "1");
 
-    // As the registry: v1's text again is version 4, and v1's id now names it (latest wins).
+    // v1's text again is version 4, and v1's id now names it (latest wins). The registry since
+    // #4658 differs: it tombstones v1 without LOGICAL, and gives the copy a new id under it.
     assertThat(register(record(field("a", "int"), field("b", "int")))).isEqualTo(v1);
     assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3, 4);
     assertThat(client.getProvenanceById(SUBJECT, v1, v3, false, false, null).getVersions())
