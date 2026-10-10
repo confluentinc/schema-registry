@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -66,7 +68,7 @@ public class CombinedSchemaUtils {
     CombinedSchema combinedSubschema = null;
     Map<String, Schema> properties = new LinkedHashMap<>();
     Map<String, Boolean> required = new HashMap<>();
-    Collection<Schema> subschemas = combinedSchema.getSubschemas();
+    Collection<Schema> subschemas = inStableOrder(combinedSchema);
     for (Schema subSchema : subschemas) {
       if (subSchema instanceof ConstSchema) {
         constSchema = (ConstSchema) subSchema;
@@ -268,7 +270,7 @@ public class CombinedSchemaUtils {
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       if (combinedSchema.getCriterion() == CombinedSchema.ALL_CRITERION) {
-        for (Schema subSchema : combinedSchema.getSubschemas()) {
+        for (Schema subSchema : inStableOrder(combinedSchema)) {
           collectPropertySchemas(subSchema, properties, required, visited);
         }
       }
@@ -283,6 +285,29 @@ public class CombinedSchemaUtils {
       ReferenceSchema refSchema = (ReferenceSchema) schema;
       collectPropertySchemas(refSchema.getReferredSchema(), properties, required, visited);
     }
+  }
+
+  /**
+   * An allOf's parts in an order that does not change from parse to parse. everit gathers one
+   * object's own keywords into a synthetic allOf, its parts unlocated, in identity-hash order: they
+   * are ordered by kind, the combinators first, so the object's own keywords are read last.
+   */
+  static List<Schema> inStableOrder(CombinedSchema allOf) {
+    List<Schema> parts = new ArrayList<>(allOf.getSubschemas());
+    if (parts.stream().anyMatch(p -> p.getSchemaLocation() != null || p.getLocation() != null)) {
+      return parts;
+    }
+    parts.sort(Comparator.comparingInt(CombinedSchemaUtils::rank));
+    return parts;
+  }
+
+  private static int rank(Schema part) {
+    if (part instanceof CombinedSchema) {
+      ValidationCriterion criterion = ((CombinedSchema) part).getCriterion();
+      return criterion == CombinedSchema.ALL_CRITERION ? 0
+          : criterion == CombinedSchema.ANY_CRITERION ? 1 : 2;
+    }
+    return 3;
   }
 
   private CombinedSchemaUtils() {}
