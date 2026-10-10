@@ -71,7 +71,8 @@ public class ProvenanceField {
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "The location in the native schema's "
       + "or document's own names, one per native step: a field, property or union branch name, "
-      + "or null for an array element or map value. Steps the logical type hides are included "
+      + "or null for an Avro or JSON array element or map value (a Protobuf map value's step is "
+      + "the entry's value field). Steps the logical type hides are included "
       + "and steps with no native form left out, so it need not match path step for step",
       example = "[\"items\", null, \"sku\"]")
   // An empty list is a location with no native step of its own, as a oneof or a root union's

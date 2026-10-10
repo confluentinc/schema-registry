@@ -74,7 +74,8 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
 
   /**
    * What a registry error, on a request about {@code pair}, means under the strategy contract.
-   * Internal to Schema Registry's deserializers: not a supported API.
+   * Internal to Schema Registry's deserializers: not a supported API, and it may change in any
+   * release.
    */
   public static RuntimeException translate(RestClientException e, String pair) {
     if (isTransient(e.getStatus())) {
@@ -105,7 +106,8 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
   }
 
   /**
-   * Whether a response with {@code status} may succeed if asked again.
+   * Whether a response with {@code status} may succeed if asked again. Internal to Schema
+   * Registry's deserializers: not a supported API, and it may change in any release.
    */
   public static boolean isTransient(int status) {
     return status >= 500 || status == 408 || status == 429;

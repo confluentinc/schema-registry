@@ -45,9 +45,10 @@ import org.apache.kafka.common.errors.RetriableException;
  *   <li>a {@link ProvenanceRetriableException}, an {@link UncheckedIOException}, Kafka's
  *       {@link RetriableException} or {@link InterruptException}, a
  *       {@link SchemaRegistryOauthTokenRetrieverException}, or a raw {@code KafkaException} as
- *       the client's token retrievers and SSL factory throw it: the source is unreachable,
- *       overloaded or timed out, or a credential cannot be had now; the record fails, and the
- *       next asks again;
+ *       the client's token retrievers and SSL factory throw it, or an {@code InterruptedException}
+ *       or {@code TimeoutException} let through undeclared: the source is unreachable, overloaded
+ *       or timed out, or a credential cannot be had now; the record fails, an interrupt is kept,
+ *       and the next asks again;
  *   <li>an {@link AuthenticationException} or {@link AuthorizationException}: the record fails
  *       with it, and the next asks again;
  *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for an unknown
@@ -60,8 +61,9 @@ import org.apache.kafka.common.errors.RetriableException;
  *   <li>a {@code RestClientException} or {@code IOException} the interface does not declare, as a
  *       strategy written without checked exceptions may let through: read as
  *       {@link ClientProvenanceStrategy} reads the registry's;
- *   <li>anything else, an {@code Error} included, or a null response: the strategy broke this
- *       contract; every record of the writer fails until the outcome expires.
+ *   <li>anything else, an {@code Error} included but not one of the JVM's own, or a null
+ *       response: the strategy broke this contract; every record of the writer fails until the
+ *       outcome expires.
  * </ul>
  *
  * <p>A strategy is called from any thread reading a record, possibly several at once, so it must
