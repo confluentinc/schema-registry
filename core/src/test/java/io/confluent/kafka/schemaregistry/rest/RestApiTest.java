@@ -3751,6 +3751,55 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testUnderLogicalATypeChangeAcrossASoftDeletedVersionIsRejected() throws Exception {
+    // A soft-deleted version's records are still read, and its tables applied it: under LOGICAL
+    // b's change from string to int is checked against it, though it is soft-deleted.
+    String subject = "logical_soft_deleted";
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
+    ConfigUpdateRequest logical = new ConfigUpdateRequest();
+    logical.setCompatibilityPolicy("LOGICAL");
+    restApp.restClient.updateConfig(logical, subject);
+    restApp.restClient.registerSchema(idOnly(), subject);
+    restApp.restClient.registerSchema(nullableB("\"string\""), subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    String retyped = nullableB("\"int\"");
+    assertFalse(restApp.restClient.testCompatibility(retyped, subject, "latest").isEmpty());
+    assertFalse(restApp.restClient.testCompatibility(retyped, subject, false).isEmpty());
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> restApp.restClient.registerSchema(retyped, subject));
+    assertEquals(Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void testWithoutLogicalASoftDeletedVersionIsNotCheckedAgainst() throws Exception {
+    // Outside LOGICAL a soft-deleted version still leaves the compatibility checks.
+    String subject = "plain_soft_deleted";
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
+    restApp.restClient.registerSchema(idOnly(), subject);
+    restApp.restClient.registerSchema(nullableB("\"string\""), subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    String retyped = nullableB("\"int\"");
+    assertTrue(restApp.restClient.testCompatibility(retyped, subject, "latest").isEmpty());
+    assertTrue(restApp.restClient.testCompatibility(retyped, subject, false).isEmpty());
+    restApp.restClient.registerSchema(retyped, subject);
+  }
+
+  // A record R with id alone.
+  private static String idOnly() {
+    return "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"}]}";
+  }
+
+  // A record R with id, and a nullable b of the given type, defaulting to null.
+  private static String nullableB(String type) {
+    return "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"b\",\"type\":[\"null\","
+        + type + "],\"default\":null}]}";
+  }
+
+  @Test
   public void testLogicalPolicyBlocksPermanentDelete() throws Exception {
     String subject = "logicalSubject";
     String other = "plainSubject";
