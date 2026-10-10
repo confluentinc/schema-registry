@@ -114,8 +114,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         return new SchemaMetadata(new Schema(subject, version, deleted,
             getSchemaBySubjectAndId(subject, deleted)));
       }
-      // Soft-deleted versions count: a subject they alone hold is still the registry's subject.
-      if (e.getErrorCode() == 40401 && !getAllVersions(subject, true).isEmpty()) {
+      // Soft-deleted versions count where looked up: a subject they alone hold is the registry's
+      // subject then, and not found when only live versions are.
+      if (e.getErrorCode() == 40401 && !getAllVersions(subject, lookupDeletedSchema).isEmpty()) {
         throw new RestClientException("Version " + version + " not found.", 404, 40402);
       }
       throw e;
