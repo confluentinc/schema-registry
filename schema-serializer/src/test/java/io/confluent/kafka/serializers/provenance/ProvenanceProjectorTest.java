@@ -44,6 +44,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -259,6 +260,27 @@ public class ProvenanceProjectorTest {
       assertTrue(e.getCause() instanceof ProvenanceRetriableException);
     }
     assertEquals(2, transientOnly.asked);
+  }
+
+  @Test
+  public void aStrategysWaitCutShortFailsTheRecordKeepsTheInterruptAndIsAskedAgain()
+      throws Exception {
+    // As at shutdown, in a strategy written without checked exceptions.
+    for (Exception cut : Arrays.asList(new InterruptedException("stopping"),
+        new java.util.concurrent.TimeoutException("too slow"))) {
+      CountingClient client = new CountingClient();
+      RecordingStrategy strategy = new RecordingStrategy();
+      strategy.failure = cut;
+      ProvenanceProjector<String> projector =
+          new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
+      for (int record = 0; record < 2; record++) {
+        SerializationException e = assertThrows(SerializationException.class,
+            () -> ask(projector, client));
+        assertTrue(e.getCause() instanceof ProvenanceRetriableException);
+        assertEquals(cut instanceof InterruptedException, Thread.interrupted());
+      }
+      assertEquals(2, strategy.asked);
+    }
   }
 
   @Test
@@ -558,6 +580,28 @@ public class ProvenanceProjectorTest {
           }));
     }
     assertEquals(1, client.asked);
+  }
+
+  @Test
+  public void aStackOverflowIsNotCachedAsTheWritersFailure() throws Exception {
+    // The overflow is the thread's: another with more stack builds the same projection.
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
+        client.writerSchema, client.reader, false, mapping -> {
+          throw new StackOverflowError();
+        }));
+    AtomicReference<Optional<String>> built = new AtomicReference<>();
+    Thread larger = new Thread(() -> built.set(projector.project(SUBJECT, id,
+        client.writerSchema, client.reader, false, mapping -> "built")));
+    larger.start();
+    larger.join(10_000);
+    assertFalse(larger.isAlive());
+    assertEquals(Optional.of("built"), built.get());
   }
 
   @Test

@@ -111,8 +111,9 @@ public class SubjectsResource {
 
 
   /**
-   * Provenance over one requested range, keyed by the subject, the mode, the algorithm, and every
-   * (version, schema id, registration time) in the range, soft-deleted versions included. It is
+   * Provenance over one requested range, keyed by the subject, the mode, whether the interior is
+   * kept, the algorithm, and every (version, schema id, registration time) in the range,
+   * soft-deleted versions included. It is
    * computed over the range alone — its ends and everything between — so a version outside it,
    * however old or however broken, has no effect. Any registration, or a version's removal, inside
    * the range changes the key, so nothing needs invalidating; a soft delete changes nothing
