@@ -341,32 +341,36 @@ class AvroProvenanceDeserializerTest {
   void aTypeRenamedOntoOneKeptElsewhereInAUnionStillReadsByProvenance() throws Exception {
     // T is kept at p and A renamed onto it at q. Matched as copies are, q's T is no clone the
     // resolver would read into o.T: the pair reads by provenance, and the re-added k is new.
-    String t = "\"name\":\"T\",\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}";
-    String other = "{\"type\":\"record\",\"namespace\":\"o\"," + t;
-    String head = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"n\",\"fields\":["
-        + "{\"name\":\"id\",\"type\":\"int\"},";
-    String rest = "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"record\",\"aliases\":[\"A\"],"
-        + t + "],\"default\":null},"
-        + "{\"name\":\"q\",\"type\":[\"null\",\"string\",\"T\"," + other + "],\"default\":null}]}";
-    Schema v1 = new Schema.Parser().parse(head + "{\"name\":\"k\",\"type\":\"int\"},"
-        + "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"record\"," + t + "],\"default\":null},"
-        + "{\"name\":\"q\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"A\",\"fields\":"
-        + "[{\"name\":\"x\",\"type\":\"int\"}]},\"string\"," + other + "],\"default\":null}]}");
-    Schema v3 = new Schema.Parser().parse(
-        head + "{\"name\":\"k\",\"type\":\"int\",\"default\":0}," + rest);
-    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
-    client.updateCompatibility(SUBJECT, "NONE");
-    client.register(SUBJECT, new AvroSchema(v1));
-    client.register(SUBJECT, new AvroSchema(new Schema.Parser().parse(head + rest)));
-    client.register(SUBJECT, new AvroSchema(v3));
-    Schema a = v1.getField("q").schema().getTypes().get(1);
-    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
-        new GenericRecordBuilder(v1).set("id", 1).set("k", 5).set("p", null)
-            .set("q", new GenericRecordBuilder(a).set("x", 7).build()).build());
-    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
-        .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, v3).getValue();
-    assertEquals(0, read.get("k"));
-    assertEquals(7, ((GenericRecord) read.get("q")).get("x"));
+    // An error type too: Avro's equality and resolver ignore that it is one.
+    for (String kind : Arrays.asList("record", "error")) {
+      String t = "\"name\":\"T\",\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}";
+      String other = "{\"type\":\"" + kind + "\",\"namespace\":\"o\"," + t;
+      String head = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"n\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},";
+      String rest = "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"" + kind
+          + "\",\"aliases\":[\"A\"]," + t + "],\"default\":null},"
+          + "{\"name\":\"q\",\"type\":[\"null\",\"string\",\"T\"," + other + "],\"default\":null}]}";
+      Schema v1 = new Schema.Parser().parse(head + "{\"name\":\"k\",\"type\":\"int\"},"
+          + "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"" + kind + "\"," + t
+          + "],\"default\":null},"
+          + "{\"name\":\"q\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"A\",\"fields\":"
+          + "[{\"name\":\"x\",\"type\":\"int\"}]},\"string\"," + other + "],\"default\":null}]}");
+      Schema v3 = new Schema.Parser().parse(
+          head + "{\"name\":\"k\",\"type\":\"int\",\"default\":0}," + rest);
+      ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+      client.updateCompatibility(SUBJECT, "NONE");
+      client.register(SUBJECT, new AvroSchema(v1));
+      client.register(SUBJECT, new AvroSchema(new Schema.Parser().parse(head + rest)));
+      client.register(SUBJECT, new AvroSchema(v3));
+      Schema a = v1.getField("q").schema().getTypes().get(1);
+      byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+          new GenericRecordBuilder(v1).set("id", 1).set("k", 5).set("p", null)
+              .set("q", new GenericRecordBuilder(a).set("x", 7).build()).build());
+      GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+          .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, v3).getValue();
+      assertEquals(0, read.get("k"), kind);
+      assertEquals(7, ((GenericRecord) read.get("q")).get("x"), kind);
+    }
   }
 
   @Test
