@@ -482,7 +482,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     try {
       Schema schema = new Schema(subject, toNativeRequest(subject, request));
-      Schema latest = schemaRegistry.getLatestVersion(subject);
+      // As registration checks it: under LOGICAL, the latest version soft-deleted or not.
+      Schema latest = schemaRegistry.latestVersionToCheck(subject);
       List<SchemaKey> previousSchemas = latest != null
           ? Collections.singletonList(new SchemaKey(subject, latest.getVersion()))
           : Collections.emptyList();
