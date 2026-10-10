@@ -157,8 +157,10 @@ final class AvroProvenanceProjection {
    *     it with nothing the writer wrote and it declares no default
    */
   static AvroProvenanceProjection of(Schema writer, Schema reader, ProvenanceMapping mapping) {
-    // A location the walk cannot find would escape provenance without a trace.
+    // A location the walk cannot find, or a response without kinds, would escape provenance
+    // without a trace.
     mapping.requireNames();
+    mapping.requireKinds();
     requireReachable(writer, mapping.writerPaths(), mapping::writerNamesOf, mapping.writerId());
     requireReachable(reader, mapping.readerPaths(), mapping::readerNamesOf, mapping.readerId());
     final Walk walk = new Walk(mapping);

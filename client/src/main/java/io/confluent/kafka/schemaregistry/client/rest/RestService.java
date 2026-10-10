@@ -1597,8 +1597,9 @@ public class RestService implements Closeable, Configurable {
   }
 
   /**
-   * The provenance of {@code subject}'s columns between two versions — every column's id, stable
-   * across renames — addressed by version number. {@code "latest"} is accepted as a version.
+   * The provenance of {@code subject}'s columns between two versions — every column's id, equal
+   * within the response wherever a column continues — addressed by version number.
+   * {@code "latest"} is accepted as a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
    * top-level messages; other formats ignore it. {@code algorithm} names the version of the
    * provenance algorithm, such as {@code "v1"}; null asks for the default, v1.

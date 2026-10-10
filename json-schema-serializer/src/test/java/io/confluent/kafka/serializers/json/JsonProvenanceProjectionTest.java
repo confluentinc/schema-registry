@@ -51,7 +51,7 @@ public class JsonProvenanceProjectionTest {
   public void aLocationWithoutAKindFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
         () -> JsonProvenanceProjection.of(mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"),
-            new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), 2))), READER));
+            new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), null, 2))), READER));
     assertTrue(e.getMessage(), e.getMessage().contains("no kind for location [2]"));
   }
 

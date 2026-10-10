@@ -24,6 +24,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
@@ -163,6 +165,20 @@ class ProvenanceMockSchemaRegistryClientTest {
     client.register(SUBJECT, new ProtobufSchema(p + "message M { int32 a = 1; string b = 2; }"));
     assertCode(422, 42201,
         () -> client.getProvenanceByVersion(SUBJECT, "1", "3", false, false, null));
+  }
+
+  @Test
+  void aMockUrlScopeAnswersProvenanceWhereThisModuleIsPresent() throws Exception {
+    // So a deserializer reading by provenance against mock:// reads as against a registry.
+    try {
+      SchemaRegistryClient scoped = MockSchemaRegistry.getClientForScope("provenance-scope");
+      assertThat(scoped).isInstanceOf(ProvenanceMockSchemaRegistryClient.class);
+      int v1 = scoped.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
+      assertThat(scoped.getProvenanceById(SUBJECT, v1, v1, false, false, null).getVersions())
+          .hasSize(1);
+    } finally {
+      MockSchemaRegistry.dropScope("provenance-scope");
+    }
   }
 
   @Test

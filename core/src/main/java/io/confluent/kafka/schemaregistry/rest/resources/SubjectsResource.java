@@ -337,9 +337,12 @@ public class SubjectsResource {
   @PerformanceMetric("subjects.provenance.get")
   @Operation(summary = "Get column provenance between two versions",
       description = "Retrieves, for the range's two ends (or, with includeInterior, every version "
-          + "between them), every column's inlined path and a provenance id that is stable "
-          + "across renames. Address each end of the range either by version (fromVersion, "
-          + "toVersion) or by schema id (fromId, toId), in any mix, and in either order.",
+          + "between them), every column's inlined path and a provenance id, equal across the "
+          + "versions wherever a column continues, renames included; ids are numbered per "
+          + "response, so compare them only within one. Address each end of the range either by "
+          + "version (fromVersion, toVersion) or by schema id (fromId, toId), in any mix, and in "
+          + "either order. Soft-deleted versions are always included, and the response names the "
+          + "subject as the registry normalizes it.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(

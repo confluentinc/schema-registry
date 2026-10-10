@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.provenance.strategy;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import io.confluent.kafka.serializers.provenance.ProvenanceRejectedException;
 import io.confluent.kafka.serializers.provenance.ProvenanceRetriableException;
 import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
@@ -41,9 +42,12 @@ import org.apache.kafka.common.errors.RetriableException;
  *
  * <p>What a failure is thrown as decides what the record gets:
  * <ul>
- *   <li>a {@link ProvenanceRetriableException}, or an {@link UncheckedIOException} or Kafka's
- *       {@link RetriableException} or {@link InterruptException}: the source is unreachable,
- *       overloaded or timed out; the record fails, and the next asks again;
+ *   <li>a {@link ProvenanceRetriableException}, an {@link UncheckedIOException}, Kafka's
+ *       {@link RetriableException} or {@link InterruptException}, a
+ *       {@link SchemaRegistryOauthTokenRetrieverException}, or a raw {@code KafkaException} as
+ *       the client's token retrievers and SSL factory throw it: the source is unreachable,
+ *       overloaded or timed out, or a credential cannot be had now; the record fails, and the
+ *       next asks again;
  *   <li>an {@link AuthenticationException} or {@link AuthorizationException}: the record fails
  *       with it, and the next asks again;
  *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for an unknown
@@ -75,13 +79,12 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * and {@code toId}, as {@code GET /subjects/{subject}/provenance} answers it.
    *
    * @param client the deserializer's Schema Registry client
-   * @param includeInterior whether to include the versions between the two
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
    * @param algorithm the provenance algorithm asked for; null for the default, v1
    */
   SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages, String algorithm);
+      boolean includeMultipleMessages, String algorithm);
 
   /**
    * The provenance of {@code subject} from the version carrying schema id {@code fromId} to
@@ -90,14 +93,12 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * fail, rather than be read against whichever version carries the reader's schema id.
    *
    * @param client the deserializer's Schema Registry client
-   * @param includeInterior whether to include the versions between the two
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
    * @param algorithm the provenance algorithm asked for; null for the default, v1
    */
   default SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) {
+      int fromId, int toVersion, boolean includeMultipleMessages, String algorithm) {
     throw new ProvenanceRejectedException(
         "The provenance strategy cannot pin a reader to a version");
   }

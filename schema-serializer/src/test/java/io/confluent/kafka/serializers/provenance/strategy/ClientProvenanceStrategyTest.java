@@ -110,12 +110,12 @@ public class ClientProvenanceStrategyTest {
   }
 
   private static SchemaProvenance ask(FailingClient client) {
-    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false, false, "v1");
+    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false, "v1");
   }
 
   private static SchemaProvenance askToVersion(FailingClient client) {
     return new ClientProvenanceStrategy().provenanceToVersion(
-        client, "s", 1, 2, false, false, "v1");
+        client, "s", 1, 2, false, "v1");
   }
 
   // Answers the provenance request with a response, or fails as set.

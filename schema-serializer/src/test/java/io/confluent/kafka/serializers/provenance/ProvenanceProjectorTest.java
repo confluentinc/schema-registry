@@ -105,7 +105,7 @@ public class ProvenanceProjectorTest {
     RecordingStrategy strategy = new RecordingStrategy();
     ask(new ProvenanceProjector<>(client, "dynamic", 10, -1, strategy), client);
     assertEquals(0, client.asked);
-    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false, false, "dynamic"),
+    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false, "dynamic"),
         strategy.lastRequest);
     assertTrue(strategy.client == client);
   }
@@ -309,8 +309,8 @@ public class ProvenanceProjectorTest {
     // One schema id may sit under several versions: the version, not the id, says which.
     CountingClient client = new CountingClient();
     client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
-        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
-        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
     ParsedSchema handedOver = projector.readerSchemas(
         writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
@@ -331,7 +331,7 @@ public class ProvenanceProjectorTest {
   public void aWriterOfThePinnedVersionItselfIsReadAsWritten() throws Exception {
     CountingClient client = new CountingClient();
     client.provenance = new SchemaProvenance(SUBJECT, Collections.singletonList(
-        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
     ParsedSchema handedOver = projector.readerSchemas(
         writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.reader);
@@ -382,7 +382,7 @@ public class ProvenanceProjectorTest {
 
       @Override
       public SchemaProvenance provenance(SchemaRegistryClient c, String subject, int fromId,
-          int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
+          int toId, boolean includeMultipleMessages, String algorithm) {
         throw new AssertionError("asked by schema id");
       }
     };
@@ -402,8 +402,8 @@ public class ProvenanceProjectorTest {
     // fail the records, never fall back to reading without provenance.
     CountingClient client = new CountingClient();
     client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
-        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
-        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
     client.schemaByIdFailure = new RestClientException("Schema not found", 404, 40403);
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
     ParsedSchema handedOver = projector.readerSchemas(
@@ -482,8 +482,8 @@ public class ProvenanceProjectorTest {
   public void aBuildThatFindsTheResponseInconsistentFailsEveryRecord() throws Exception {
     CountingClient client = new CountingClient();
     client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
-        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
-        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     for (int record = 0; record < 2; record++) {
@@ -500,8 +500,8 @@ public class ProvenanceProjectorTest {
     // A deep schema may overflow the stack: the record fails, named. An out of memory is the JVM's.
     CountingClient client = new CountingClient();
     client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
-        new ProvenanceVersion(1, client.writer, Collections.emptyList()),
-        new ProvenanceVersion(3, client.readerId, Collections.emptyList())));
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     SerializationException e = assertThrows(SerializationException.class, () ->
@@ -586,11 +586,10 @@ public class ProvenanceProjectorTest {
 
     @Override
     public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-        int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
+        int toId, boolean includeMultipleMessages, String algorithm) {
       asked++;
       this.client = client;
-      lastRequest = Arrays.asList(subject, fromId, toId, includeInterior,
-          includeMultipleMessages, algorithm);
+      lastRequest = Arrays.asList(subject, fromId, toId, includeMultipleMessages, algorithm);
       try {
         if (knownIn != null && !knownIn.idsOf(subject).contains(fromId)) {
           throw new ProvenanceUnknownWriterException("not a version");

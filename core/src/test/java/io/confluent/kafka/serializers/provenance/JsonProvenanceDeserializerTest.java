@@ -87,6 +87,26 @@ class JsonProvenanceDeserializerTest {
   }
 
   @Test
+  void theLatestVersionAsReaderPrunesAPropertyReAddedSinceTheWriter() throws Exception {
+    // use.latest.version: the reader is the latest version, v3, whose note is new to v1's record.
+    JsonSchema v1 = object(number("id"), string("note"));
+    JsonSchema v2 = object(number("id"));
+    JsonSchema v3 = object(number("id"),
+        "\"note\": {\"type\": \"string\", \"description\": \"new\"}");
+    byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    Map<String, Object> config = config("v1");
+    config.put("use.latest.version", true);
+    config.put("latest.compatibility.strict", false);
+
+    JsonNode read = new KafkaJsonSchemaDeserializer<JsonNode>(client, config)
+        .deserialize(TOPIC, bytes);
+    assertEquals(7, read.get("id").asInt());
+    assertFalse(read.has("note"));
+  }
+
+  @Test
   void aRecordNamingItsSchemaByGuidAloneIsReadByProvenance() throws Exception {
     JsonSchema v1 = object(number("id"), string("note"));
     JsonSchema v2 = object(number("id"));

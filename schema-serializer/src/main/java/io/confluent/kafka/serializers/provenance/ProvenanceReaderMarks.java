@@ -29,6 +29,9 @@ import java.util.concurrent.ExecutionException;
  * pinned to a registered version, and which it derived from an application class. These are facts
  * about instances, not results of a configuration, so a deserializer keeps one for its life and
  * hands it to every projector it builds: a reconfigure during a read never unmarks its reader.
+ *
+ * <p>Internal to Schema Registry's deserializers: not a supported API, and it may change in
+ * any release.
  */
 public final class ProvenanceReaderMarks {
 

@@ -43,7 +43,7 @@ public class ProvenanceMappingTest {
   @Test
   public void aLocationWithoutNamesIsRejected() {
     ProvenanceMapping mapping = ProvenanceMapping.join(
-        response(field(1, "a"), new ProvenanceField(Arrays.asList(7), null, 1)), 1, 2);
+        response(field(1, "a"), new ProvenanceField(Arrays.asList(7), null, "SCALAR", 1)), 1, 2);
     SerializationException e = assertThrows(SerializationException.class, mapping::requireNames);
     assertTrue(e.getMessage(), e.getMessage().contains("location [7] of schema id 2"));
   }
@@ -52,7 +52,7 @@ public class ProvenanceMappingTest {
   public void aLocationWithoutAPidIsRejected() {
     SerializationException e = assertThrows(SerializationException.class,
         () -> ProvenanceMapping.join(response(field(1, "a"),
-            new ProvenanceField(Arrays.asList(0), Arrays.asList("a"), null)), 1, 2));
+            new ProvenanceField(Arrays.asList(0), Arrays.asList("a"), "SCALAR", null)), 1, 2));
     assertTrue(e.getMessage(), e.getMessage().contains("has no provenance id"));
   }
 
@@ -60,9 +60,9 @@ public class ProvenanceMappingTest {
   public void aPidSharedByTwoLocationsIsRejected() {
     // Pairing is by pid: two writer locations sharing one would pair the reader with either.
     SchemaProvenance response = new SchemaProvenance("s", Arrays.asList(
-        new ProvenanceVersion(1, 1, Arrays.asList(field(1, "a"),
-            new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), 1))),
-        new ProvenanceVersion(2, 2, Collections.singletonList(field(1, "a")))));
+        new ProvenanceVersion(1, 1, "STRUCT", Arrays.asList(field(1, "a"),
+            new ProvenanceField(Arrays.asList(2), Arrays.asList("b"), "SCALAR", 1))),
+        new ProvenanceVersion(2, 2, "STRUCT", Collections.singletonList(field(1, "a")))));
     SerializationException e = assertThrows(SerializationException.class,
         () -> ProvenanceMapping.join(response, 1, 2));
     assertTrue(e.getMessage(), e.getMessage().contains("shares provenance id 1"));
@@ -99,14 +99,17 @@ public class ProvenanceMappingTest {
   @Test
   public void aLocationOrARootWithoutAKindIsRejected() {
     ProvenanceMapping location = ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
-        new ProvenanceVersion(1, 1, "STRUCT", Collections.singletonList(field(1, "a"))),
+        new ProvenanceVersion(1, 1, "STRUCT", Collections.singletonList(
+            new ProvenanceField(Arrays.asList(1), Arrays.asList("a"), null, 1))),
         new ProvenanceVersion(2, 2, "STRUCT", Collections.singletonList(
             kinded(path(0), "SCALAR", 1))))), 1, 2);
     SerializationException e = assertThrows(SerializationException.class, location::requireKinds);
     assertTrue(e.getMessage(), e.getMessage().contains("location [1] of schema id 1"));
 
-    ProvenanceMapping root = ProvenanceMapping.join(response(
-        kinded(path(0), "SCALAR", 1), kinded(path(0), "SCALAR", 1)), 1, 2);
+    ProvenanceMapping root = ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
+        new ProvenanceVersion(1, 1, null, Collections.singletonList(kinded(path(0), "SCALAR", 1))),
+        new ProvenanceVersion(2, 2, null, Collections.singletonList(
+            kinded(path(0), "SCALAR", 1))))), 1, 2);
     e = assertThrows(SerializationException.class, root::requireKinds);
     assertTrue(e.getMessage(), e.getMessage().contains("root of schema id 1"));
   }
@@ -133,11 +136,11 @@ public class ProvenanceMappingTest {
 
   private static SchemaProvenance response(ProvenanceField writer, ProvenanceField reader) {
     return new SchemaProvenance("s", Arrays.asList(
-        new ProvenanceVersion(1, 1, Collections.singletonList(writer)),
-        new ProvenanceVersion(2, 2, Collections.singletonList(reader))));
+        new ProvenanceVersion(1, 1, "STRUCT", Collections.singletonList(writer)),
+        new ProvenanceVersion(2, 2, "STRUCT", Collections.singletonList(reader))));
   }
 
   private static ProvenanceField field(int pid, String name) {
-    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(name), pid);
+    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(name), "SCALAR", pid);
   }
 }
