@@ -79,7 +79,9 @@ import org.slf4j.LoggerFactory;
  * pair. Provenance that is unavailable for the pair — a reader that is not a version of the
  * subject, a pairing no single schema can express — is cached and warned about, and the writer is
  * read as without provenance. Anything else the build or the strategy throws fails the record,
- * and is cached so that one unreadable writer costs one build rather than one per record. Cached
+ * and is cached so that one unreadable writer costs one build rather than one per record: a
+ * build's {@code UnsupportedOperationException} too, and an {@code Error} but the JVM's own,
+ * a stack overflow excepted. Cached
  * outcomes expire after {@code provenance.cache.ttl.sec} and are then worked out afresh, warning
  * included, so a fallback is not permanent; with no TTL, a fallback or failure lasts until the
  * deserializer is reconfigured.
@@ -323,9 +325,10 @@ public final class ProvenanceProjector<T> {
           : ProvenanceMapping.join(provenance, writerId, readerId);
       if (mapping == null) {
         // One and the same version: nothing to pair.
-        return sameVersion != null ? Outcome.of(sameVersion.get()) : Outcome.unavailable();
+        return sameVersion != null ? Outcome.of(built(sameVersion)) : Outcome.unavailable();
       }
-      return Outcome.of(build.apply(mapping));
+      ProvenanceMapping paired = mapping;
+      return Outcome.of(built(() -> build.apply(paired)));
     } catch (IOException e) {
       throw new SerializationException(
           "Could not reach Schema Registry for the provenance of " + written, e);
@@ -368,6 +371,26 @@ public final class ProvenanceProjector<T> {
           ? (SerializationException) e
           : new SerializationException("Could not project " + written
               + " by provenance: " + e.getMessage(), e));
+    } catch (Error e) {
+      // As anything else breaking the contract, cached: a stack overflow, say, recurs for every
+      // record of the writer. Any other error of the JVM is its own.
+      if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) {
+        throw e;
+      }
+      return failed(subject, written, new SerializationException("Could not project " + written
+          + " by provenance: " + e, e));
+    }
+  }
+
+  /**
+   * What {@code build} makes, its UnsupportedOperationException a failure of its own rather than
+   * a client lacking support: read without provenance, its records would take what they must not.
+   */
+  private static <T> T built(Supplier<T> build) {
+    try {
+      return build.get();
+    } catch (UnsupportedOperationException e) {
+      throw new SerializationException("The projection could not be built: " + e.getMessage(), e);
     }
   }
 
@@ -413,6 +436,23 @@ public final class ProvenanceProjector<T> {
     } catch (RuntimeException e) {
       if (e.getClass() == KafkaException.class) {
         // The client's own failure, as its token retrievers and SSL factory throw it.
+        throw new ProvenanceRetriableException(e.getMessage(), e);
+      }
+      throw new SerializationException(
+          "The provenance strategy failed for " + pair + ": " + e.getMessage(), e);
+    } catch (Exception e) {
+      // A checked exception the interface does not declare, as a strategy written without them
+      // may let through: the client's own, read as ClientProvenanceStrategy reads it.
+      if (e instanceof RestClientException) {
+        RuntimeException translated =
+            ClientProvenanceStrategy.translate((RestClientException) e, pair);
+        if (translated instanceof ProvenanceRejectedException) {
+          throw new SerializationException("The provenance request for " + pair
+              + " was rejected: " + translated.getMessage(), translated);
+        }
+        throw translated;
+      }
+      if (e instanceof IOException) {
         throw new ProvenanceRetriableException(e.getMessage(), e);
       }
       throw new SerializationException(
