@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,7 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
-import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -238,8 +238,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       String algorithm) throws IOException, RestClientException {
     // As the registry: the request checked before the history, the subject as it names it.
     checkAlgorithm(algorithm);
+    List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
-    List<SchemaMetadata> history = history(subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
         includeInterior, includeMultipleMessages, algorithm);
@@ -251,8 +251,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
     // As the registry: the request checked before the history, the subject as it names it.
     checkAlgorithm(algorithm);
+    List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
-    List<SchemaMetadata> history = history(subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
         includeInterior, includeMultipleMessages, algorithm);
   }
@@ -263,11 +263,26 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       String algorithm) throws IOException, RestClientException {
     // As the registry: the request checked before the history, the subject as it names it.
     checkAlgorithm(algorithm);
+    List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
-    List<SchemaMetadata> history = history(subject);
     return provenance(subject, history, carrying(history, fromId, subject),
         named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages,
         algorithm);
+  }
+
+  // The subject's history as the registry names it, without the default context's prefix; else as
+  // given, as the base mock keeps a subject registered under the prefix as spelled.
+  private List<SchemaMetadata> historyAsNamed(String subject)
+      throws IOException, RestClientException {
+    String named = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
+    try {
+      return history(named);
+    } catch (RestClientException e) {
+      if (named.equals(subject) || e.getErrorCode() != SUBJECT_NOT_FOUND) {
+        throw e;
+      }
+      return history(subject);
+    }
   }
 
   private static void checkAlgorithm(String algorithm) throws RestClientException {

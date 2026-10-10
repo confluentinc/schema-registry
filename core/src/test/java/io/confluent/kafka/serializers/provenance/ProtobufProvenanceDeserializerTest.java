@@ -27,6 +27,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -36,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
@@ -52,6 +54,7 @@ import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.protobuf.test.Root.ReferrerMessage;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Method;
@@ -65,6 +68,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -544,6 +548,56 @@ class ProtobufProvenanceDeserializerTest {
         new KafkaProtobufDeserializer<>(client, config);
 
     assertEquals(0, get(readPinned(deserializer, bytes, v3, 3), "b"));
+  }
+
+  @Test
+  void aReaderPinnedByVersionKeepsItsPinThroughAReconfigureDuringTheRead() throws Exception {
+    // v3 re-adds b under its old number: the reader, v1 with a rule merged onto it, is pinned to
+    // v1, so v3's b is new to it; unpinned, it would be found by structure as v3.
+    ProtobufSchema v1 = row("int32 id = 1;", "string b = 2;");
+    ProtobufSchema v3 = row("int32 id = 1;", "string b = 2 [deprecated = true];");
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    boolean[] armed = {false};
+    ProvenanceMockSchemaRegistryClient gated = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+          throws IOException, RestClientException {
+        if (armed[0]) {
+          armed[0] = false;
+          entered.countDown();
+          try {
+            release.await();
+          } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+          }
+        }
+        return super.getSchemaBySubjectAndId(subject, id);
+      }
+    };
+    gated.register(SUBJECT, v1);
+    gated.register(SUBJECT, row("int32 id = 1;"));
+    int id3 = gated.register(SUBJECT, v3);
+    Descriptor d = v3.toDescriptor();
+    byte[] body = DynamicMessage.newBuilder(d).setField(d.findFieldByName("id"), 7)
+        .setField(d.findFieldByName("b"), "v3's").build().toByteArray();
+    byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id3).put((byte) 0)
+        .put(body).array();
+    ProtobufSchema reader = (ProtobufSchema) v1.copy(null, new RuleSet(null,
+        Collections.singletonList(new Rule("r", null, RuleKind.CONDITION, RuleMode.READ, "CEL",
+            null, null, "true", null, null, false))));
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(gated, config("v1"));
+    DynamicMessage[] read = new DynamicMessage[1];
+    armed[0] = true;
+    Thread thread = new Thread(() -> read[0] = readPinned(deserializer, bytes, reader, 1));
+    thread.start();
+    entered.await();
+    // The reconfigure lands while the read is fetching its writer.
+    deserializer.configure(config("v1"), false);
+    release.countDown();
+    thread.join(5000);
+    assertEquals("", get(read[0], "b"));
   }
 
   @Test
