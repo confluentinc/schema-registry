@@ -49,14 +49,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>It lives here rather than in the client because computing provenance needs this module, and
  * this module depends on the client. A soft-deleted version stays in the history, and is found
- * when deleted versions are looked up, as in the registry. The base mock numbers versions by the
- * live ones alone, so a version registered after the latest was deleted takes its number, and
- * replaces it here; a permanent delete forgets a soft-deleted version here, though the base
- * mock still resolves its schema id; and a deleted subject, soft or not, is forgotten entirely, as
- * the base mock forgets it and its schemas. A soft-deleted schema registered again keeps its id
- * and its soft-deleted version, which models neither of the registry's policies since #4658:
- * without LOGICAL the registry tombstones the soft-deleted version, and under LOGICAL it gives
- * the schema a new id.
+ * when deleted versions are looked up, as in the registry. A permanent delete forgets a
+ * soft-deleted version here, though the base mock still resolves its schema id; and a deleted
+ * subject, soft or not, is forgotten entirely, as the base mock forgets it and its schemas. A
+ * soft-deleted schema registered again keeps its id and its soft-deleted version, which models
+ * neither of the registry's policies since #4658: without LOGICAL the registry tombstones the
+ * soft-deleted version, and under LOGICAL it gives the schema a new id.
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
@@ -116,7 +114,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
         return new SchemaMetadata(new Schema(subject, version, deleted,
             getSchemaBySubjectAndId(subject, deleted)));
       }
-      if (e.getErrorCode() == 40401 && !getAllVersions(subject).isEmpty()) {
+      // Soft-deleted versions count: a subject they alone hold is still the registry's subject.
+      if (e.getErrorCode() == 40401 && !getAllVersions(subject, true).isEmpty()) {
         throw new RestClientException("Version " + version + " not found.", 404, 40402);
       }
       throw e;
@@ -153,6 +152,11 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     RegisterSchemaResponse response = super.getIdWithResponse(subject, schema, normalize);
     if (softDeletedOf(subject).containsValue(response.getId())
         && liveVersion(subject, schema, normalize) == null) {
+      // As the registry: a subject whose every version is soft-deleted is not found at all.
+      if (liveVersions(subject).isEmpty()) {
+        throw new RestClientException("Subject '" + subject + "' not found.", 404,
+            SUBJECT_NOT_FOUND);
+      }
       throw new RestClientException("Schema not found", 404, 40403);
     }
     return response;
@@ -180,6 +184,17 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
     return found;
+  }
+
+  private List<Integer> liveVersions(String subject) throws IOException, RestClientException {
+    try {
+      return getAllVersions(subject);
+    } catch (RestClientException e) {
+      if (e.getErrorCode() != SUBJECT_NOT_FOUND) {
+        throw e;
+      }
+      return Collections.emptyList();
+    }
   }
 
   private Integer liveVersion(String subject, ParsedSchema schema, boolean normalize)
