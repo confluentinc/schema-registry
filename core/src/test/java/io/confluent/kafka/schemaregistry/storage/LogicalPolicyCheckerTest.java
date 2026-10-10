@@ -99,7 +99,8 @@ class LogicalPolicyCheckerTest {
       }
     }, "check", 512 << 10);
     check.start();
-    check.join();
+    check.join(30_000);
+    assertFalse(check.isAlive(), "the check did not finish");
     assertTrue(result.get() instanceof List, "the check threw " + result.get());
     List<?> errors = (List<?>) result.get();
     assertEquals(1, errors.size(), errors.toString());
@@ -199,6 +200,15 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A), List.of(), CompatibilityLevel.NONE);
     assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void aJsonDefinitionReferringOnlyToItselfIsReportedRatherThanLooping() {
+    String schema = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    List<String> errors = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        LogicalPolicyChecker.check(new JsonSchema(schema), List.of(), CompatibilityLevel.NONE));
+    assertTrue(errors.stream().anyMatch(e -> e.contains("CYCLIC_TYPE")), errors.toString());
   }
 
   // -- compatibility ------------------------------------------------------------------------------
