@@ -711,7 +711,8 @@ final class AvroProvenanceProjection {
       }
       switch (a.getType()) {
         case RECORD:
-          if (!a.getFullName().equals(b.getFullName()) || a.isError() != b.isError()
+          // Not isError: Avro's equality and resolver ignore it, and a renamed copy takes its own.
+          if (!a.getFullName().equals(b.getFullName())
               || a.getFields().size() != b.getFields().size()) {
             return false;
           }

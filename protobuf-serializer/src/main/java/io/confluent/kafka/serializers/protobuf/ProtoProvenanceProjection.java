@@ -66,17 +66,74 @@ final class ProtoProvenanceProjection {
   // The messages, by full name, holding a moved number or leading to one through their fields:
   // only these are visited for data under one.
   private final Set<String> leading;
+  // The oneofs, by full name, whose kept message member a moved member's data may split: one
+  // whose moved number the writer's message declares, or may, renamed.
+  private final Set<String> splittable;
   // The reader less its moved fields, for the records its own parse cannot serve: built once to
   // fail the pairing as before, then again only when a record needs it, and kept.
   private final Supplier<ProtobufSchema> prune;
   private volatile ProtobufSchema pruned;
 
   private ProtoProvenanceProjection(ProtobufSchema pruned, Supplier<ProtobufSchema> prune,
-      Descriptor reader, Map<String, Set<Integer>> moved) {
+      Descriptor reader, Map<String, Set<Integer>> moved, Set<String> splittable) {
     this.pruned = pruned;
     this.prune = prune;
     this.moved = moved;
     this.leading = moved.isEmpty() ? Collections.emptySet() : leading(reader, moved);
+    this.splittable = splittable;
+  }
+
+  private static Set<String> splittable(Descriptor root, ProtobufSchema writer,
+      Map<String, Set<Integer>> moved) {
+    Map<String, Descriptor> all = new HashMap<>();
+    collect(root, all);
+    Map<String, Descriptor> written = new HashMap<>();
+    if (writer != null) {
+      collectFile(writer.toDescriptor().getFile(), written, new HashSet<>());
+    }
+    Set<String> split = new HashSet<>();
+    for (Map.Entry<String, Set<Integer>> e : moved.entrySet()) {
+      Descriptor message = all.get(e.getKey());
+      if (message == null) {
+        continue;
+      }
+      Descriptor was = written.get(e.getKey());
+      for (OneofDescriptor oneof : message.getRealOneofs()) {
+        boolean kept = false;
+        boolean declared = false;
+        for (FieldDescriptor member : oneof.getFields()) {
+          if (!e.getValue().contains(member.getNumber())) {
+            kept |= member.getJavaType() == FieldDescriptor.JavaType.MESSAGE;
+          } else {
+            declared |= was == null || was.findFieldByNumber(member.getNumber()) != null;
+          }
+        }
+        if (kept && declared) {
+          split.add(oneof.getFullName());
+        }
+      }
+    }
+    return split;
+  }
+
+  private static void collectFile(FileDescriptor file, Map<String, Descriptor> all,
+      Set<String> files) {
+    if (!files.add(file.getName())) {
+      return;
+    }
+    for (Descriptor message : file.getMessageTypes()) {
+      collectNested(message, all);
+    }
+    for (FileDescriptor dependency : file.getDependencies()) {
+      collectFile(dependency, all, files);
+    }
+  }
+
+  private static void collectNested(Descriptor message, Map<String, Descriptor> all) {
+    all.put(message.getFullName(), message);
+    for (Descriptor nested : message.getNestedTypes()) {
+      collectNested(nested, all);
+    }
   }
 
   /**
@@ -137,7 +194,8 @@ final class ProtoProvenanceProjection {
    * Clears from {@code builder}, the reader's own parse, every moved field and the unknown data
    * under a moved number, at any depth. False, with the builder half cleared, where a oneof holding
    * a moved member may have lost a kept one's data: a moved member is set, its data may have
-   * displaced a kept one's; a kept message member is set, a moved one may have split its halves.
+   * displaced a kept one's; a kept message member is set, a moved one the writer declares may have
+   * split its halves.
    */
   boolean clearMoved(Message.Builder builder) {
     Descriptor type = builder.getDescriptorForType();
@@ -147,12 +205,12 @@ final class ProtoProvenanceProjection {
     Set<Integer> numbers = moved.get(type.getFullName());
     if (numbers != null) {
       for (OneofDescriptor oneof : type.getRealOneofs()) {
-        // A kept message member split by a moved one is reset by the reader's parse, where the
-        // projected parse merges its halves.
+        // A kept message member split by a moved one the writer declares is reset by the reader's
+        // parse, where the projected parse merges its halves.
         FieldDescriptor set = builder.getOneofFieldDescriptor(oneof);
         if (set != null && set.getJavaType() == FieldDescriptor.JavaType.MESSAGE
             && !numbers.contains(set.getNumber())
-            && !Collections.disjoint(numbers, numbersOf(oneof))) {
+            && splittable.contains(oneof.getFullName())) {
           return false;
         }
       }
@@ -329,11 +387,13 @@ final class ProtoProvenanceProjection {
     // Built here so a pairing fails as before; only what moves is kept to build it again.
     ProtobufSchema pruned = pruned(walk.build(), root, reader);
     if (pruned == reader) {
-      return new ProtoProvenanceProjection(reader, null, root, Collections.emptyMap());
+      return new ProtoProvenanceProjection(reader, null, root, Collections.emptyMap(),
+          Collections.emptySet());
     }
     walk.keepMovedOnly();
+    Map<String, Set<Integer>> moved = walk.movedNumbers();
     return new ProtoProvenanceProjection(null, () -> pruned(walk.build(), root, reader), root,
-        walk.movedNumbers());
+        moved, splittable(root, writer, moved));
   }
 
   private static ProtobufSchema pruned(FileDescriptor file, Descriptor root,

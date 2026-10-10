@@ -234,6 +234,24 @@ public class ProtoProvenanceProjectionTest {
   }
 
   @Test
+  public void aMemberAddedToAOneofOfMessagesKeepsTheSingleParse() throws Exception {
+    // The writer declares no c: data under its number is data beyond the writer, never the
+    // writer's own between two halves of a, so a record holding a needs no projected parse.
+    String file = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  oneof o {\n    In a = 1;\n"
+        + "    In b = 2;\n%s  }\n}\nmessage In {\n  int32 x = 1;\n}\n";
+    ProtobufSchema writer = new ProtobufSchema(String.format(file, ""));
+    ProtobufSchema reader = new ProtobufSchema(String.format(file, "    In c = 3;\n"));
+    ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
+        mapping(Arrays.asList(p(1, "a"), p(2, "b")),
+            Arrays.asList(p(1, "a"), p(2, "b"), p(3, "c"))), false);
+    byte[] record = bytes(1, varint(1, 7));
+    for (int i = 0; i < 100; i++) {
+      parse(projection, reader, record);
+    }
+    assertFalse(projection.prunedBuilt());
+  }
+
+  @Test
   public void theReaderLessItsMovedFieldsIsBuiltOnlyForARecordNeedingIt() throws Exception {
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
         + "message Row {\n  int32 a = 1;\n  oneof o {\n    int32 u = 4;\n    string s = 5;\n"
