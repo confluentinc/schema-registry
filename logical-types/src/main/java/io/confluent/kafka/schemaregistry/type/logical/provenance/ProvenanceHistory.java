@@ -253,9 +253,18 @@ public final class ProvenanceHistory {
     if (schema instanceof JsonSchema) {
       return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
-    return includeMultipleMessages && schema instanceof ProtobufSchema
-        ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
-        : LogicalTypeConversion.toLogicalType(schema);
+    try {
+      return includeMultipleMessages && schema instanceof ProtobufSchema
+          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
+          : LogicalTypeConversion.toLogicalType(schema);
+    } catch (IllegalArgumentException e) {
+      // A Protobuf file declaring no type has no root, as one declaring only enums has none:
+      // ProtobufSchema says so with an IllegalArgumentException, which would answer a plain 500.
+      if (schema instanceof ProtobufSchema) {
+        throw new ValidationException(e.getMessage(), e);
+      }
+      throw e;
+    }
   }
 
   /**

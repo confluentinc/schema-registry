@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import java.time.Duration;
 import java.util.Collections;
@@ -1245,6 +1246,18 @@ class ProvenanceIdentityRulesTest {
         + "}}]}}";
     List<ProvenanceVersion> v = compute(json(before, null), json(after, null));
     assertThat(pid(v, 1, 0, 0)).isEqualTo(pid(v, 0, 0, 0));
+  }
+
+  @Test
+  void aProtobufFileDeclaringNoTypeHasNoLogicalForm() {
+    // As one declaring only enums, it has no root: in either mode, a ValidationException naming it.
+    ProtobufSchema empty = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n");
+    for (boolean multi : new boolean[] {false, true}) {
+      assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
+          new SchemaMetadata(1, 1, empty.schemaType(), Collections.emptyList(), "")),
+          ProvenanceHistory.held(Arrays.asList(empty)), multi))
+          .isInstanceOf(ValidationException.class).hasMessageContaining("Version 1");
+    }
   }
 
   // --- What a collection holds ----------------------------------------------------------------
