@@ -80,6 +80,21 @@ class JsonProvenanceStrictnessTest {
   // -------------------------------------------------------------------------------------------
 
   /** {@code document}, written under the first version, pruned for reading under the last. */
+  @Test
+  void aValueNoWriterBranchHoldsIsNotReadAsTheBranchContinuingIt() throws Exception {
+    // a's string branch continues, a new array branch lands before it. "abc" fits no branch of the
+    // writer, whose string is two characters, so it was never the continuing branch's value.
+    JsonSchema v1 = new JsonSchema("{\"type\":\"object\",\"properties\":{\"id\":{\"type\":"
+        + "\"integer\"},\"a\":{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"string\","
+        + "\"minLength\":2,\"maxLength\":2}]}}}");
+    JsonSchema v2 = new JsonSchema("{\"type\":\"object\",\"properties\":{\"id\":{\"type\":"
+        + "\"integer\"},\"a\":{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":"
+        + "{\"type\":\"string\"}},{\"type\":\"string\"}]}}}");
+    assertEquals(MAPPER.readTree("{\"id\":1}"), prune("{\"id\":1,\"a\":\"abc\"}", v1, v2));
+    assertEquals(MAPPER.readTree("{\"id\":1,\"a\":\"ab\"}"),
+        prune("{\"id\":1,\"a\":\"ab\"}", v1, v2));
+  }
+
   private static JsonNode prune(String document, JsonSchema... versions) throws Exception {
     List<SchemaMetadata> history = new ArrayList<>();
     for (int i = 0; i < versions.length; i++) {
