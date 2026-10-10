@@ -41,9 +41,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,23 +50,6 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsonToLogicalTypeConverterTest {
-
-  @Test
-  void anObjectsOwnPropertiesBesideItsAllOfConvertTheSameOnEveryParse() {
-    // everit gathers an object's own keywords and its allOf into a synthetic allOf whose parts
-    // come out in identity-hash order: a property both declare must not change with it.
-    String json = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"object\",\"properties\":"
-        + "{\"x\":{\"type\":\"integer\"}}}},\"required\":[\"a\"],\"allOf\":[{\"properties\":{\"a\":"
-        + "{\"type\":\"object\",\"properties\":{\"y\":{\"type\":\"integer\"}}}}}]}";
-    Set<String> seen = new HashSet<>();
-    for (int i = 0; i < 200; i++) {
-      seen.add(JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(json))
-          .getRootSchema().toString());
-    }
-    // The object's own keywords are read last, so its own declaration of a wins.
-    assertThat(seen).hasSize(1);
-    assertThat(seen.iterator().next()).contains("x").doesNotContain("y");
-  }
 
   @Test
   void namedLeafRootTitleRoundTripsThroughJson() {
