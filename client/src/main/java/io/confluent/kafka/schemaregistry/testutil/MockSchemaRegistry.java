@@ -43,10 +43,36 @@ import java.util.Map;
  * Schema Registry listening on a local port. For example,
  * {@code schema.registry.url: 'mock://my-scope-name'} corresponds to
  * {@code MockSchemaRegistry.getClientForScope("my-scope-name")}.
+ *
+ * <p>Where kafka-schema-registry-logical-types is on the classpath, the client also answers
+ * provenance, and keeps soft-deleted versions as the registry does: a lookup by schema skips them
+ * (40403), a version lookup finds them, and a missing version is 40402. A subject whose every
+ * version is soft-deleted is not found (40401), but when deleted versions are looked up.
  */
 public final class MockSchemaRegistry {
   private static final String MOCK_URL_PREFIX = "mock://";
   private static final Map<String, MockSchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
+  // A mock that also answers provenance, where logical-types is on the classpath: provenance needs
+  // that module anyway, and against the plain mock a deserializer reading by it reads natively.
+  private static final String PROVENANCE_MOCK = "io.confluent.kafka.schemaregistry.type.logical"
+      + ".provenance.ProvenanceMockSchemaRegistryClient";
+
+  private static MockSchemaRegistryClient newClient(List<SchemaProvider> providers) {
+    Class<?> type;
+    try {
+      type = Class.forName(PROVENANCE_MOCK);
+    } catch (ClassNotFoundException e) {
+      return providers == null
+          ? new MockSchemaRegistryClient() : new MockSchemaRegistryClient(providers);
+    }
+    try {
+      return (MockSchemaRegistryClient) (providers == null
+          ? type.getConstructor().newInstance()
+          : type.getConstructor(List.class).newInstance(providers));
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException("Could not create " + PROVENANCE_MOCK, e);
+    }
+  }
 
   // Not instantiable. All access is via static methods.
   private MockSchemaRegistry() {
@@ -66,7 +92,7 @@ public final class MockSchemaRegistry {
   public static SchemaRegistryClient getClientForScope(final String scope) {
     synchronized (SCOPED_CLIENTS) {
       if (!SCOPED_CLIENTS.containsKey(scope)) {
-        SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient());
+        SCOPED_CLIENTS.put(scope, newClient(null));
       }
     }
     return SCOPED_CLIENTS.get(scope);
@@ -89,7 +115,7 @@ public final class MockSchemaRegistry {
       if (SCOPED_CLIENTS.containsKey(scope)) {
         SCOPED_CLIENTS.get(scope).addProviders(providers);
       } else {
-        SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
+        SCOPED_CLIENTS.put(scope, newClient(providers));
       }
     }
     return SCOPED_CLIENTS.get(scope);
@@ -113,7 +139,7 @@ public final class MockSchemaRegistry {
         if (SCOPED_CLIENTS.containsKey(scope)) {
           SCOPED_CLIENTS.get(scope).addProviders(providers);
         } else {
-          SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
+          SCOPED_CLIENTS.put(scope, newClient(providers));
         }
       }
     }

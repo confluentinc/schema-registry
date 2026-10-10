@@ -19,12 +19,15 @@ package io.confluent.kafka.schemaregistry.type.logical.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
+import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -38,7 +41,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,6 +52,23 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsonToLogicalTypeConverterTest {
+
+  @Test
+  void anObjectsOwnPropertiesBesideItsAllOfConvertTheSameOnEveryParse() {
+    // everit gathers an object's own keywords and its allOf into a synthetic allOf whose parts
+    // come out in identity-hash order: a property both declare must not change with it.
+    String json = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"object\",\"properties\":"
+        + "{\"x\":{\"type\":\"integer\"}}}},\"required\":[\"a\"],\"allOf\":[{\"properties\":{\"a\":"
+        + "{\"type\":\"object\",\"properties\":{\"y\":{\"type\":\"integer\"}}}}}]}";
+    Set<String> seen = new HashSet<>();
+    for (int i = 0; i < 200; i++) {
+      seen.add(JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(json))
+          .getRootSchema().toString());
+    }
+    // The object's own keywords are read last, so its own declaration of a wins.
+    assertThat(seen).hasSize(1);
+    assertThat(seen.iterator().next()).contains("x").doesNotContain("y");
+  }
 
   @Test
   void namedLeafRootTitleRoundTripsThroughJson() {
@@ -820,7 +842,7 @@ class JsonToLogicalTypeConverterTest {
 
   @Test
   void aDefinitionReferringOnlyToItselfConvertsWithoutLooping() {
-    // D refers only to itself, directly or through Q: a recursive type, still converted.
+    // D refers only to itself, directly or through Q: a recursive type, so no provenance.
     String direct = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
         + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
     String indirect = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
@@ -830,6 +852,10 @@ class JsonToLogicalTypeConverterTest {
       LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
           JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(schema), LogicalTypeVersion.V1));
       assertThat(lt.getNamedTypes()).isNotEmpty();
+      assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
+          new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), schema)),
+          ProvenanceHistory.held(Collections.singletonList(new JsonSchema(schema))), false))
+          .isInstanceOf(RecursiveTypeException.class);
     }
   }
 }

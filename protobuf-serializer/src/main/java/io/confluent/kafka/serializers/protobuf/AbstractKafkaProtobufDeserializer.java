@@ -31,13 +31,19 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.provenance.ProvenanceProjector;
+import io.confluent.kafka.serializers.provenance.ProvenanceReaderMarks;
+import io.confluent.kafka.serializers.provenance.ProvenanceUnavailableException;
+import io.confluent.kafka.serializers.provenance.ReaderSchema;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
@@ -65,7 +71,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
-  protected boolean deriveType;
+  protected volatile boolean deriveType;
   private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
@@ -91,6 +97,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new ConfigException("Class " + specificProtobufClass.getCanonicalName()
           + " is not a valid protobuf message class", e);
     }
+    // Last, once every flag a projection and its reader are built under is set: one built by a read
+    // in between would keep the old ones.
+    resetProvenance();
   }
 
   protected KafkaProtobufDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -202,8 +211,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           migrations = getMigrations(subject, schema, readerSchema);
         }
       } else if (readerSchema.toDescriptor(name) != null) {
-        readerSchema = schemaWithName(readerSchema, name);
+        readerSchema = namedReader(readerSchema, name);
       }
+      // With no reader configured, a generated class's schema is the reader.
+      ProtobufSchema provenanceReader = readerSchema != null ? readerSchema : classSchema(schema);
+      ProtoProvenanceProjection projection =
+          byProvenance(subject, schemaId, schema, provenanceReader, name, migrations);
 
       int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
@@ -215,6 +228,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
+      } else if (parsesProjected(projection, readerSchema, schema)) {
+        message = parseProjected(projection, provenanceReader, buffer, start, length);
       }
 
       ProtobufSchema writerSchema = schema;
@@ -227,14 +242,15 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
               CodedInputStream.newInstance(buffer.array(), start, length),
               ProtobufSchema.EXTENSION_REGISTRY);
         }
-        message = executeRules(
+        message = projectedRuled(projection, readerSchema, provenanceReader, executeRules(
             subject, topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
             schema, message, ruleResults
-        );
+        ));
       }
 
+      boolean parsed = parseMethod == null && !deriveType && isParsed(message, schema);
       ByteBuffer protobufBytes = buffer;
-      if (message != null) {
+      if (message != null && !parsed) {
         protobufBytes = ByteBuffer.wrap(((Message) message).toByteArray());
         length = protobufBytes.limit();
         start = 0;
@@ -250,14 +266,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(protobufBytes, schema);
       } else {
-        Descriptor descriptor = schema.toDescriptor();
-        if (descriptor == null) {
-          throw new SerializationException("Could not find descriptor with name " + schema.name());
-        }
-        value = DynamicMessage.parseFrom(descriptor,
-            CodedInputStream.newInstance(protobufBytes.array(), start, length),
-            ProtobufSchema.EXTENSION_REGISTRY
-        );
+        value = parsed ? message : parseDynamic(schema, protobufBytes, start, length);
       }
 
       if (includeSchemaAndVersion) {
@@ -287,13 +296,221 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error deserializing Protobuf message for id " + schemaId, e);
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException(
-          "Error deserializing Protobuf message for id " + schemaId, e);
+      throw toDeserializationException(
+          e, "Error deserializing Protobuf message for id " + schemaId);
     } catch (RestClientException e) {
       throw toKafkaException(e, "Error retrieving Protobuf schema for id " + schemaId);
     } finally {
       postOp(payload);
     }
+  }
+
+  /**
+   * Whether {@code message} is already what a dynamic read into {@code schema} returns, so needs no
+   * second parse: in its own descriptor, and with no required field a rule left unset, which the
+   * parse would reject.
+   */
+  private static boolean isParsed(Object message, ProtobufSchema schema) {
+    return message instanceof DynamicMessage
+        && ((Message) message).getDescriptorForType() == schema.toDescriptor()
+        && ((Message) message).isInitialized();
+  }
+
+  /**
+   * With provenance, the schema of the generated class a specific or derived read parses into;
+   * null for a dynamic read, or with no class to be found.
+   */
+  private ProtobufSchema classSchema(ProtobufSchema writer) {
+    if (provenanceAlgorithm == null || (parseMethod == null && !deriveType)) {
+      return null;
+    }
+    String name = parseMethod != null ? specificProtobufClass.getName() : writer.fullName();
+    if (name == null) {
+      return null;
+    }
+    // The projector first: a load holding the map's lock must not wait for the monitor a reset,
+    // clearing the map, holds.
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector();
+    return classSchemas.computeIfAbsent(name,
+        n -> Optional.ofNullable(loadClassSchema(n, projector))).orElse(null);
+  }
+
+  private ProtobufSchema loadClassSchema(String name,
+      ProvenanceProjector<ProtoProvenanceProjection> projector) {
+    try {
+      // As deriveType resolves it: not initialized until it is known to be a message class.
+      Class<?> cls = parseMethod != null ? specificProtobufClass : Class.forName(
+          name, false, AbstractKafkaProtobufDeserializer.class.getClassLoader());
+      if (!Message.class.isAssignableFrom(cls)) {
+        return null;
+      }
+      Message instance = (Message) cls.getMethod("getDefaultInstance").invoke(null);
+      return (ProtobufSchema) projector.derivedReader(
+          new ProtobufSchema(instance.getDescriptorForType()));
+    } catch (ReflectiveOperationException e) {
+      return null;
+    }
+  }
+
+  // Built once per class, by name: a class's schema never changes, nor does a class not there.
+  private final Map<String, Optional<ProtobufSchema>> classSchemas = new ConcurrentHashMap<>();
+
+  /**
+   * Whether a projected read is parsed before the domain rules: it is, except for the writer's
+   * own rules with no reader configured, which read the writer's record; what the class does not
+   * pair with it is dropped after them.
+   */
+  private static boolean parsesProjected(ProtoProvenanceProjection projection,
+      ProtobufSchema reader, ProtobufSchema writer) {
+    return projection != null && projection.movedAny() && (reader != null || !hasReadRules(writer));
+  }
+
+  /**
+   * {@code ruled} in the class's own numbers, when the writer's rules ran in the writer's: what
+   * they wrote under a moved number is the writer's field, which the class does not have.
+   */
+  private static Object projectedRuled(ProtoProvenanceProjection projection,
+      ProtobufSchema reader, ProtobufSchema provenanceReader, Object ruled) throws IOException {
+    if (reader != null || projection == null || !projection.movedAny()) {
+      return ruled;
+    }
+    byte[] bytes = ((Message) ruled).toByteArray();
+    return parseProjected(projection, provenanceReader, ByteBuffer.wrap(bytes), 0, bytes.length);
+  }
+
+  private static boolean hasReadRules(ProtobufSchema schema) {
+    return schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ);
+  }
+
+  // A copy naming the written message: a supplied id stands for it too.
+  private ProtobufSchema namedReader(ProtobufSchema reader, String name) {
+    ProtobufSchema named = schemaWithName(reader, name);
+    return provenanceAlgorithm == null ? named
+        : (ProtobufSchema) provenanceProjector().sameReader(reader, named);
+  }
+
+  private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
+      int length) throws IOException {
+    return DynamicMessage.parseFrom(descriptorOf(schema),
+        CodedInputStream.newInstance(bytes.array(), start, length),
+        ProtobufSchema.EXTENSION_REGISTRY);
+  }
+
+  private static Descriptor descriptorOf(ProtobufSchema schema) {
+    Descriptor descriptor = schema.toDescriptor();
+    if (descriptor == null) {
+      throw new SerializationException("Could not find descriptor with name " + schema.name());
+    }
+    return descriptor;
+  }
+
+  /**
+   * {@code bytes} parsed as {@code reader} with its new fields unset, and none of the data under
+   * their numbers. Done before the domain rules: a value they write to a new field must land under
+   * its own number, and a caller handed the parse descriptor could not address the fields it
+   * leaves out. Package-private for tests.
+   */
+  static Message parseProjected(ProtoProvenanceProjection projection,
+      ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
+    // The reader's own parse less the new fields and the unknown data under their numbers, save
+    // where a new oneof member may have displaced a kept one.
+    DynamicMessage.Builder direct = DynamicMessage.newBuilder(descriptorOf(reader));
+    boolean parsed = false;
+    try {
+      direct.mergeFrom(CodedInputStream.newInstance(bytes.array(), start, length),
+          ProtobufSchema.EXTENSION_REGISTRY);
+      parsed = true;
+    } catch (IOException | RuntimeException e) {
+      // As a new field's type may not parse what lies under its number.
+    }
+    // Outside the catch: a failure of the clearing itself fails the record rather than hiding.
+    if (parsed && projection.clearMoved(direct) && direct.isInitialized()) {
+      return direct.buildPartial();
+    }
+    // Else parsed with the reader less its new fields, and back in the reader's own descriptor.
+    Message pruned = parseDynamic(projection.schema(), bytes, start, length);
+    return DynamicMessage.parseFrom(reader.toDescriptor(),
+        projection.dropMoved(pruned).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
+  }
+
+  private ProtoProvenanceProjection byProvenance(String subject, SchemaId writerId,
+      ProtobufSchema writer, ProtobufSchema reader, String name, List<Migration> migrations) {
+    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
+      return null;
+    }
+    // As Flink chooses its row: every top-level message when the reader's file has several, else
+    // its one message.
+    boolean multi = reader.toDescriptor().getFile().getMessageTypes().size() > 1;
+    if (multi && reader.toDescriptor(name) == null) {
+      throw new SerializationException("The record was written as message " + name
+          + ", which the reader schema does not declare");
+    }
+    // The writer named at the record's message: it may come back unnamed, as its file's first,
+    // and its name tells each record's message apart, here and in the projector's cache.
+    ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
+    // Single-message provenance roots each version at its file's first message: a record written
+    // as another has no locations there, so it is read without provenance.
+    Descriptor written = named.toDescriptor();
+    boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
+    if (!placed && reader.toDescriptor(name) == null) {
+      // Read without provenance, the record would be parsed as the reader's first message.
+      throw new SerializationException("The record was written as message " + name
+          + ", which the reader schema does not declare");
+    }
+    return provenanceProjector().project(subject, writerId, named, reader, multi,
+        mapping -> {
+          if (!placed) {
+            throw new ProvenanceUnavailableException("The record was written as message " + name
+                + ", not its file's first, which single-message provenance has no locations for");
+          }
+          return ProtoProvenanceProjection.of(reader, named, mapping, multi);
+        }).orElse(null);
+  }
+
+  private volatile ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector;
+  // Which readers were pinned or derived: kept for the deserializer's life, as a reset during a
+  // read must not unmark its reader.
+  private final ProvenanceReaderMarks provenanceReaderMarks = new ProvenanceReaderMarks();
+
+  /**
+   * {@code readers} as a reader function, with any registered id a reader comes with used for
+   * provenance instead of being looked up.
+   */
+  protected Function<ParsedSchema, ParsedSchema> readerSchemas(
+      Function<ParsedSchema, ReaderSchema> readers) {
+    return provenanceProjector().readerSchemas(readers);
+  }
+
+  /**
+   * Forgets the projector, and the class schemas it marked: they belong to the configuration they
+   * were built under. Under the lock the projector is built under.
+   */
+  private synchronized void resetProvenance() {
+    provenanceProjector = null;
+    classSchemas.clear();
+  }
+
+  @Override
+  protected boolean readsByProvenance() {
+    return true;
+  }
+
+  // Created on first use, once the deserializer is configured, and only once: it holds the ids
+  // readers were supplied with and which readers a class derived.
+  private ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector() {
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector;
+    if (projector == null) {
+      synchronized (this) {
+        projector = provenanceProjector;
+        if (projector == null) {
+          projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
+              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy,
+              provenanceReaderMarks);
+          provenanceProjector = projector;
+        }
+      }
+    }
+    return projector;
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
