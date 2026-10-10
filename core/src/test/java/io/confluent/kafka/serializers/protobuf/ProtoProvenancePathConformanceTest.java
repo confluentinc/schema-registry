@@ -118,7 +118,7 @@ class ProtoProvenancePathConformanceTest {
         ProvenanceHistory.held(Arrays.<ParsedSchema>asList(writer, reader)), multi);
 
     ProtobufSchema projected = ProtoProvenanceProjection.of(
-        reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema;
+        reader, null, ProvenanceMapping.join(provenance, 1, 2), multi).schema();
 
     // Nothing under a moving field is read, and a record never parses another top-level message:
     // only the record's own outermost fields move, in either mode.

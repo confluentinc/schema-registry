@@ -99,7 +99,8 @@ class LogicalPolicyCheckerTest {
       }
     }, "check", 512 << 10);
     check.start();
-    check.join();
+    check.join(30_000);
+    assertFalse(check.isAlive(), "the check did not finish");
     assertTrue(result.get() instanceof List, "the check threw " + result.get());
     List<?> errors = (List<?>) result.get();
     assertEquals(1, errors.size(), errors.toString());
