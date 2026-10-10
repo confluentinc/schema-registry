@@ -261,7 +261,8 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   /**
    * The provenance of {@code subject}'s columns between the versions carrying two schema ids —
-   * every column's inlined path and an id stable across renames — in either order. The form a
+   * every column's inlined path and an id, equal within the response wherever a column
+   * continues, renames included — in either order. The form a
    * deserializer uses, since a record carries a schema id and never a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
    * top-level messages, so paths gain one leading step; ids from the two modes are not comparable.

@@ -29,6 +29,8 @@ import java.util.List;
  * <p>The one place the in-process result becomes the wire contract, shared by the endpoint and by
  * anything standing in for it in-process, so a test double speaks exactly the production shape
  * rather than a shortcut around it.
+ *
+ * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
  */
 public final class SchemaProvenanceEncoder {
 

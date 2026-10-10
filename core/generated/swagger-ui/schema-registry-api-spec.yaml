@@ -3053,9 +3053,12 @@ paths:
       summary: Get column provenance between two versions
       description: "Retrieves, for the range's two ends (or, with includeInterior,\
         \ every version between them), every column's inlined path and a provenance\
-        \ id that is stable across renames. Address each end of the range either by\
-        \ version (fromVersion, toVersion) or by schema id (fromId, toId), in any\
-        \ mix, and in either order."
+        \ id, equal across the versions wherever a column continues, renames included;\
+        \ ids are numbered per response, so compare them only within one. Address\
+        \ each end of the range either by version (fromVersion, toVersion) or by schema\
+        \ id (fromId, toId), in any mix, and in either order. Soft-deleted versions\
+        \ are always included, and the response names the subject as the registry\
+        \ normalizes it."
       operationId: getProvenance
       parameters:
       - name: subject
@@ -4049,14 +4052,17 @@ components:
           type: string
           description: "What a location's type is, references resolved: SCALAR (a\
             \ type with no locations under it: a primitive, an enum, a fixed or a\
-            \ variant), STRUCT, UNION, or ARRAY, MULTISET or MAP of the kinds they\
-            \ hold. A location whose kind changes takes a new pid, as does everything\
+            \ variant), STRUCT, UNION, or ARRAY<k>, MULTISET<k> or MAP<k, k> of the kinds\
+            \ they hold, nested, a map's key kind first and the two separated by a comma\
+            \ and a space. A location whose kind changes takes a new pid, as does everything\
             \ under it"
           example: "MAP<SCALAR, STRUCT>"
         pid:
           type: integer
-          description: "The provenance id: unique per location, stable across versions\
-            \ while the field keeps its identity"
+          description: "The provenance id: unique per location within a version, and\
+            \ equal across the response's versions exactly where the location continues.\
+            \ Ids are numbered per response, so compare them only within one; a metastore\
+            \ derives persistent column ids from them"
           format: int32
           example: 3
       description: One field's provenance

@@ -31,6 +31,8 @@ import java.util.List;
  * <p>Versions are identified by their index in the supplied history, not by a registry version
  * number. Mapping one to the other belongs to whoever assembled the history, and keeping it out of
  * here is what makes the ids a function of the history alone.
+ *
+ * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
  */
 public final class ProvenanceReport {
 

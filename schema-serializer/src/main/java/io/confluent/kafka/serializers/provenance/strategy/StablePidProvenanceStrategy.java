@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
- * Pairs a writer with a reader by pids that are stable across versions, such as the Metastore's
+ * Pairs a writer with a reader by pids that are stable across responses, such as the Metastore's
  * column ids, rather than by Schema Registry's, which are comparable only within one response. The
  * registry still reports the versions, with their locations, names and kinds; a subclass looks up
  * each version's pids on their own, by path, and they replace the registry's.
@@ -85,20 +85,19 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-      int toId, boolean includeInterior, boolean includeMultipleMessages, String algorithm) {
-    // Only the ends are paired, and the registry's pids are replaced whatever its algorithm.
+      int toId, boolean includeMultipleMessages, String algorithm) {
+    // The registry's pids are replaced, whatever its algorithm.
     return answered(Arrays.asList(subject, fromId, toId, null, includeMultipleMessages), subject,
         includeMultipleMessages, () -> super.provenance(
-            client, subject, fromId, toId, false, includeMultipleMessages, null));
+            client, subject, fromId, toId, includeMultipleMessages, null));
   }
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) {
+      int fromId, int toVersion, boolean includeMultipleMessages, String algorithm) {
     return answered(Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages),
         subject, includeMultipleMessages, () -> super.provenanceToVersion(
-            client, subject, fromId, toVersion, false, includeMultipleMessages, null));
+            client, subject, fromId, toVersion, includeMultipleMessages, null));
   }
 
   // An answer is kept only while its versions wait for pids; once they have them, the registry is

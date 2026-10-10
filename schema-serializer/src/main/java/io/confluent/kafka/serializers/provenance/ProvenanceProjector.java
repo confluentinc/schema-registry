@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -82,6 +83,9 @@ import org.slf4j.LoggerFactory;
  * outcomes expire after {@code provenance.cache.ttl.sec} and are then worked out afresh, warning
  * included, so a fallback is not permanent; with no TTL, a fallback or failure lasts until the
  * deserializer is reconfigured.
+ *
+ * <p>Internal to Schema Registry's deserializers: not a supported API, and it may change in
+ * any release.
  *
  * @param <T> what the build produces
  */
@@ -354,6 +358,12 @@ public final class ProvenanceProjector<T> {
         | UnsupportedOperationException e) {
       return unavailable(subject, written, e);
     } catch (RuntimeException e) {
+      if (e.getClass() == KafkaException.class) {
+        // The client's own failure, as its token retrievers and SSL factory throw it: the record
+        // fails, uncached, as a schema fetch failing the same way does.
+        throw new SerializationException(
+            "Could not reach Schema Registry for the provenance of " + written, e);
+      }
       return failed(subject, written, e instanceof SerializationException
           ? (SerializationException) e
           : new SerializationException("Could not project " + written
@@ -386,10 +396,10 @@ public final class ProvenanceProjector<T> {
     SchemaProvenance provenance;
     try {
       provenance = readerVersion != null
-          ? strategy.provenanceToVersion(client, subject, writerId, readerVersion, false,
+          ? strategy.provenanceToVersion(client, subject, writerId, readerVersion,
               includeMultipleMessages, algorithm)
           : strategy.provenance(
-              client, subject, writerId, readerId, false, includeMultipleMessages, algorithm);
+              client, subject, writerId, readerId, includeMultipleMessages, algorithm);
     } catch (ProvenanceRejectedException e) {
       throw new SerializationException(
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);
@@ -401,6 +411,10 @@ public final class ProvenanceProjector<T> {
       // So is an OAuth token not had now, which fails a schema fetch the same way.
       throw new ProvenanceRetriableException(e.getMessage(), e);
     } catch (RuntimeException e) {
+      if (e.getClass() == KafkaException.class) {
+        // The client's own failure, as its token retrievers and SSL factory throw it.
+        throw new ProvenanceRetriableException(e.getMessage(), e);
+      }
       throw new SerializationException(
           "The provenance strategy failed for " + pair + ": " + e.getMessage(), e);
     }

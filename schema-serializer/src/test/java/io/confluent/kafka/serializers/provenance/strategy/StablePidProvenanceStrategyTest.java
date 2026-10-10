@@ -67,9 +67,9 @@ public class StablePidProvenanceStrategyTest {
       int reader = ids[pair[1] - 1];
       // The algorithm asked for is ignored: the column ids already decide the pairing.
       SchemaProvenance stable = columnIds.provenance(
-          client, SUBJECT, writer, reader, false, false, "bogus");
+          client, SUBJECT, writer, reader, false, "bogus");
       SchemaProvenance registry = new ClientProvenanceStrategy().provenance(
-          client, SUBJECT, writer, reader, false, false, "v1");
+          client, SUBJECT, writer, reader, false, "v1");
       assertSameJoin(ProvenanceMapping.join(registry, writer, reader),
           ProvenanceMapping.join(stable, writer, reader));
       for (ProvenanceVersion version : stable.getVersions()) {
@@ -83,7 +83,7 @@ public class StablePidProvenanceStrategyTest {
   @Test
   public void aReAddedFieldHasANewColumnId() {
     SchemaProvenance stable = ColumnIds.of(client, ids[0], 3).provenance(
-        client, SUBJECT, ids[0], ids[2], false, false, null);
+        client, SUBJECT, ids[0], ids[2], false, null);
     ProvenanceMapping mapping = ProvenanceMapping.join(stable, ids[0], ids[2]);
     assertEquals(null, mapping.writerPathOf(Arrays.asList(1)));
     assertEquals(Arrays.asList(0), mapping.writerPathOf(Arrays.asList(0)));
@@ -93,13 +93,13 @@ public class StablePidProvenanceStrategyTest {
   public void aReaderPinnedByVersionIsThatVersion() {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
     SchemaProvenance stable = columnIds.provenanceToVersion(
-        client, SUBJECT, ids[0], 3, false, false, null);
+        client, SUBJECT, ids[0], 3, false, null);
     assertSameJoin(ProvenanceMapping.joinToVersion(new ClientProvenanceStrategy()
-            .provenanceToVersion(client, SUBJECT, ids[0], 3, false, false, null), 3),
+            .provenanceToVersion(client, SUBJECT, ids[0], 3, false, null), 3),
         ProvenanceMapping.joinToVersion(stable, 3));
     // A writer of the pinned version itself: one version, nothing to project.
     assertEquals(1, columnIds.provenanceToVersion(
-        client, SUBJECT, ids[2], 3, false, false, null).getVersions().size());
+        client, SUBJECT, ids[2], 3, false, null).getVersions().size());
   }
 
   @Test
@@ -107,21 +107,21 @@ public class StablePidProvenanceStrategyTest {
     // The table has not been refreshed past version 2.
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
-        client, SUBJECT, ids[2], ids[1], false, false, null));
+        client, SUBJECT, ids[2], ids[1], false, null));
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenanceToVersion(
-        client, SUBJECT, ids[0], 3, false, false, null));
+        client, SUBJECT, ids[0], 3, false, null));
   }
 
   @Test
   public void aSchemaIdUnderNoVersionIsAnUnknownWriter() {
     assertThrows(ProvenanceUnknownWriterException.class, () -> ColumnIds.of(client, ids[0], 3)
-        .provenance(client, SUBJECT, 999, ids[2], false, false, null));
+        .provenance(client, SUBJECT, 999, ids[2], false, null));
   }
 
   @Test
   public void aVersionTheRegistryLacksIsRejected() {
     assertThrows(ProvenanceRejectedException.class, () -> ColumnIds.of(client, ids[0], 3)
-        .provenanceToVersion(client, SUBJECT, ids[0], 9, false, false, null));
+        .provenanceToVersion(client, SUBJECT, ids[0], 9, false, null));
   }
 
   @Test
@@ -129,9 +129,9 @@ public class StablePidProvenanceStrategyTest {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
     columnIds.pids.get(3).put(Arrays.asList(2, 0, 0), 999);
     assertSameJoin(ProvenanceMapping.join(new ClientProvenanceStrategy().provenance(
-            client, SUBJECT, ids[0], ids[2], false, false, null), ids[0], ids[2]),
+            client, SUBJECT, ids[0], ids[2], false, null), ids[0], ids[2]),
         ProvenanceMapping.join(columnIds.provenance(
-            client, SUBJECT, ids[0], ids[2], false, false, null), ids[0], ids[2]));
+            client, SUBJECT, ids[0], ids[2], false, null), ids[0], ids[2]));
   }
 
   @Test
@@ -139,7 +139,7 @@ public class StablePidProvenanceStrategyTest {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
     columnIds.pids.get(3).remove(Arrays.asList(1));
     assertThrows(IllegalStateException.class, () -> columnIds.provenance(
-        client, SUBJECT, ids[0], ids[2], false, false, null));
+        client, SUBJECT, ids[0], ids[2], false, null));
   }
 
   @Test
@@ -149,7 +149,7 @@ public class StablePidProvenanceStrategyTest {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
     client.alsoUnder(4, ids[1]);
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
-        client, SUBJECT, ids[1], ids[2], false, false, null));
+        client, SUBJECT, ids[1], ids[2], false, null));
   }
 
   @Test
@@ -157,7 +157,7 @@ public class StablePidProvenanceStrategyTest {
     client.normalizing();
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3).under(":.:" + SUBJECT);
     SchemaProvenance stable = columnIds.provenance(
-        client, ":.:" + SUBJECT, ids[0], ids[2], false, false, null);
+        client, ":.:" + SUBJECT, ids[0], ids[2], false, null);
     assertEquals(":.:" + SUBJECT, stable.getSubject());
     assertEquals(2, stable.getVersions().size());
   }
@@ -168,10 +168,10 @@ public class StablePidProvenanceStrategyTest {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
     for (int i = 0; i < 3; i++) {
       assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
-          client, SUBJECT, ids[0], ids[2], false, false, null));
+          client, SUBJECT, ids[0], ids[2], false, null));
     }
     columnIds.pids.putAll(ColumnIds.of(client, ids[0], 3).pids);
-    columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, false, null);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, null);
     assertEquals(2, client.provenanceCalls);
   }
 
@@ -181,18 +181,18 @@ public class StablePidProvenanceStrategyTest {
     // not reached: once v3's pids arrive, it waits for v4's, as a record asked about now does.
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 2);
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
-        client, SUBJECT, ids[1], ids[2], false, false, null));
+        client, SUBJECT, ids[1], ids[2], false, null));
     client.alsoUnder(4, ids[1]);
     columnIds.pids.putAll(ColumnIds.of(client, ids[0], 3).pids);
     assertThrows(ProvenanceRetriableException.class, () -> columnIds.provenance(
-        client, SUBJECT, ids[1], ids[2], false, false, null));
+        client, SUBJECT, ids[1], ids[2], false, null));
   }
 
   @Test
   public void thePidsAreAskedForInTheModeAsked() {
     ColumnIds columnIds = ColumnIds.of(client, ids[0], 3);
-    columnIds.provenance(client, SUBJECT, ids[0], ids[2], false, true, null);
-    columnIds.provenance(client, SUBJECT, ids[0], ids[1], false, false, null);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[2], true, null);
+    columnIds.provenance(client, SUBJECT, ids[0], ids[1], false, null);
     assertEquals(Arrays.asList(true, true, false, false), columnIds.modes);
   }
 
