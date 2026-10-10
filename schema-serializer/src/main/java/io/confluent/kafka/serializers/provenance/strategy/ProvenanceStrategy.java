@@ -57,8 +57,11 @@ import org.apache.kafka.common.errors.RetriableException;
  *       through the deserializer's client, and asked about again, or else read without it;
  *   <li>a {@link ProvenanceUnavailableException}: no provenance for the pair; the writer is read
  *       without it, with one warning, until the outcome expires;
- *   <li>anything else, or a null response: the strategy broke this contract; every record of the
- *       writer fails until the outcome expires.
+ *   <li>a {@code RestClientException} or {@code IOException} the interface does not declare, as a
+ *       strategy written without checked exceptions may let through: read as
+ *       {@link ClientProvenanceStrategy} reads the registry's;
+ *   <li>anything else, an {@code Error} included, or a null response: the strategy broke this
+ *       contract; every record of the writer fails until the outcome expires.
  * </ul>
  *
  * <p>A strategy is called from any thread reading a record, possibly several at once, so it must
