@@ -290,6 +290,19 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aSubjectWhoseEveryVersionIsSoftDeletedAnswersAsTheRegistryDoes() throws Exception {
+    // A missing version is 40402, and a schema looked up finds no subject at all (40401).
+    String a = record(field("a", "int"));
+    register(a);
+    register(record(field("a", "int"), field("b", "int")));
+    client.deleteSchemaVersion(SUBJECT, "1");
+    client.deleteSchemaVersion(SUBJECT, "2");
+
+    assertCode(404, 40402, () -> client.getSchemaMetadata(SUBJECT, 3, true));
+    assertCode(404, 40401, () -> client.getIdWithResponse(SUBJECT, new AvroSchema(a), false));
+  }
+
+  @Test
   void aSoftDeletedSchemaLookedUpThenRegisteredAgainIsANewVersion() throws Exception {
     String ab = record(field("a", "int"), field("b", "int"));
     int v1 = register(ab);

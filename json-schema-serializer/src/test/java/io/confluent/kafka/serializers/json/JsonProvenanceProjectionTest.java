@@ -22,11 +22,14 @@ import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.management.ThreadMXBean;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.serializers.provenance.ProvenanceMapping;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.kafka.common.errors.SerializationException;
@@ -82,6 +85,36 @@ public class JsonProvenanceProjectionTest {
                 new ProvenanceVersion(2, 2, "UNION", Arrays.asList(p(1, "a"), p(2, "u"))))),
             1, 2), READER));
     assertTrue(e.getMessage(), e.getMessage().contains("a root of kind UNION"));
+  }
+
+  @Test
+  public void aRecordHoldingNoneOfManyNewPropertiesAllocatesLittleToPrune() throws Exception {
+    // 25 properties new to the reader, none in the record: the writer is never walked for them,
+    // and no walk keeps state. About 55 KB a record before, 8 KB after.
+    StringBuilder properties = new StringBuilder("{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"integer\"}");
+    List<ProvenanceField> reader = new ArrayList<>(Arrays.asList(p(1, "a")));
+    for (int i = 0; i < 25; i++) {
+      properties.append(",\"n").append(i).append("\":{\"type\":\"integer\"}");
+      reader.add(p(2 + i, "n" + i));
+    }
+    JsonProvenanceProjection projection = JsonProvenanceProjection.of(
+        mapping(Arrays.asList(p(1, "a")), reader),
+        new JsonSchema(properties.append("}}").toString()),
+        new JsonSchema("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}}"));
+    JsonNode document = new ObjectMapper().readTree("{\"a\":1}");
+    ThreadMXBean threads = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+    long self = Thread.currentThread().getId();
+    for (int i = 0; i < 1000; i++) {
+      projection.prune(document);
+    }
+    long before = threads.getThreadAllocatedBytes(self);
+    for (int i = 0; i < 1000; i++) {
+      projection.prune(document);
+    }
+    long perRecord = (threads.getThreadAllocatedBytes(self) - before) / 1000;
+    assertEquals("{\"a\":1}", document.toString());
+    assertTrue("allocated " + perRecord + " bytes a record", perRecord < 20_000);
   }
 
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,

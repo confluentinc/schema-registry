@@ -89,13 +89,13 @@ final class JsonProvenanceProjection {
 
   /** A property to prune, spelled by its names, and every reader location spelled the same. */
   private static final class Target {
-    final List<String> names;
-    final List<Candidate> candidates = new ArrayList<>();
+    List<String> names;
+    List<Candidate> candidates = new ArrayList<>();
     // The branches of the property's own union, by branch choices: a primitive lives there.
-    final Map<List<Integer>, Candidate> branches = new HashMap<>();
+    Map<List<Integer>, Candidate> branches = new HashMap<>();
     // Each side's branches under the property, by its own branch choices, to their kinds.
-    final Map<List<Integer>, String> readerKinds = new HashMap<>();
-    final Map<List<Integer>, String> writerKinds = new HashMap<>();
+    Map<List<Integer>, String> readerKinds = new HashMap<>();
+    Map<List<Integer>, String> writerKinds = new HashMap<>();
     // Indexed once planned: a value reaches the property once per path, so look-ups add up.
     private Map<List<Integer>, List<Candidate>> byChoices;
     private boolean clashes;
@@ -120,6 +120,20 @@ final class JsonProvenanceProjection {
     boolean clashes() {
       return clashes;
     }
+
+    // Kept for every record of a pairing: held in the least the planning left, as most targets
+    // are a plain property new to the reader, with one location and no union.
+    Target compact() {
+      names = Collections.unmodifiableList(new ArrayList<>(names));
+      candidates = List.copyOf(candidates);
+      branches = Map.copyOf(branches);
+      readerKinds = Map.copyOf(readerKinds);
+      writerKinds = Map.copyOf(writerKinds);
+      Map<List<Integer>, List<Candidate>> compact = new HashMap<>();
+      byChoices.forEach((choices, matches) -> compact.put(choices, List.copyOf(matches)));
+      byChoices = Map.copyOf(compact);
+      return this;
+    }
   }
 
   /**
@@ -133,9 +147,9 @@ final class JsonProvenanceProjection {
     final List<Integer> writerChoices;
 
     Candidate(List<Integer> choices, List<Integer> writerChoices) {
-      this.choices = choices;
+      this.choices = List.copyOf(choices);
       this.continues = writerChoices != null;
-      this.writerChoices = writerChoices;
+      this.writerChoices = writerChoices != null ? List.copyOf(writerChoices) : null;
     }
   }
 
@@ -229,7 +243,7 @@ final class JsonProvenanceProjection {
           throw new SerializationException("Property " + target.names + " of schema id "
               + mapping.readerId() + " is not declared by the reader schema");
         }
-        targets.add(target);
+        targets.add(target.compact());
       }
     }
     // Outermost first: a property removed takes whatever lay under it along.
@@ -538,10 +552,15 @@ final class JsonProvenanceProjection {
     Map<Target, Map<ObjectNode, Set<List<Integer>>>> written = new IdentityHashMap<>();
     if (writer != null) {
       for (Target target : targets) {
-        Map<ObjectNode, Set<List<Integer>>> readings = new IdentityHashMap<>();
-        walk(target.names, writer, document, 0, new ArrayList<>(), false, Collections.emptyList(),
-            new Reached(), (node, object, name, choices, ambiguous, alternatives) -> {
-              Set<List<Integer>> as = readings.computeIfAbsent(node, n -> new HashSet<>());
+        if (target.anyNew && !target.clashes()) {
+          // Every location spelled so is new: keeps() prunes it however it was written.
+          continue;
+        }
+        walk(target.names, writer, document, 0, Collections.emptyList(), false,
+            Collections.emptyList(), new Reached(),
+            (node, object, name, choices, ambiguous, alternatives) -> {
+              Set<List<Integer>> as = written.computeIfAbsent(target, t -> new IdentityHashMap<>())
+                  .computeIfAbsent(node, n -> new HashSet<>());
               as.add(choices);
               if (!target.branches.isEmpty()) {
                 for (List<Integer> branches
@@ -552,7 +571,6 @@ final class JsonProvenanceProjection {
                 }
               }
             });
-        written.put(target, readings);
       }
     }
     // Required only by a sibling's presence: decided once pruning settles, as the sibling may be
@@ -567,9 +585,9 @@ final class JsonProvenanceProjection {
       changed = false;
       for (Target target : targets) {
         // allOf parts and ambiguous branches reach one value more than once: decided together.
-        Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>();
+        Map<ObjectNode, List<Reach>> reached = new IdentityHashMap<>(4);
         Map<ObjectNode, Set<List<Integer>>> readings = written.get(target);
-        walk(target.names, reader, document, 0, new ArrayList<>(), false,
+        walk(target.names, reader, document, 0, Collections.emptyList(), false,
             Collections.emptyList(), new Reached(),
             (node, object, name, choices, ambiguous, alternatives) -> {
               if (!ambiguous && !defaults.contains(node)
@@ -863,7 +881,7 @@ final class JsonProvenanceProjection {
         walk(names, part, node, step, choices, ambiguous, alternatives, reached, at);
       }
       // A visit repeats only within one allOf's walk: once out of every allOf, none can.
-      if (--reached.allOfs == 0) {
+      if (--reached.allOfs == 0 && reached.walked != null) {
         reached.walked.clear();
       }
       return;
@@ -1099,6 +1117,9 @@ final class JsonProvenanceProjection {
   // Whether walking the value under schema reaches a declaration of the property.
   private static boolean reaches(List<String> names, Schema schema, JsonNode node, int step,
       Reached reached) {
+    if (reached.answers == null) {
+      reached.answers = new IdentityHashMap<>();
+    }
     Map<Integer, Boolean> bySteps = reached.answers
         .computeIfAbsent(schema, k -> new IdentityHashMap<>())
         .computeIfAbsent(node, k -> new HashMap<>());
@@ -1118,9 +1139,9 @@ final class JsonProvenanceProjection {
   // value and step, and the visits made: a union nested k deep, or allOf parts naming one
   // definition k deep, is then walked once rather than 2^k times.
   private static final class Reached {
-    private final Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers =
-        new IdentityHashMap<>();
-    private final Map<AtProperty, Set<Visit>> walked = new IdentityHashMap<>();
+    // Made on first use: most walks meet no nested union and no allOf.
+    private Map<Schema, Map<JsonNode, Map<Integer, Boolean>>> answers;
+    private Map<AtProperty, Set<Visit>> walked;
     // allOf parts being walked: only under one can two paths reach the same visit.
     private int allOfs;
 
@@ -1129,6 +1150,9 @@ final class JsonProvenanceProjection {
         boolean ambiguous, List<Alternative> alternatives) {
       if (allOfs == 0) {
         return true;
+      }
+      if (walked == null) {
+        walked = new IdentityHashMap<>();
       }
       return walked.computeIfAbsent(at, k -> new HashSet<>())
           .add(new Visit(schema, node, step, choices, ambiguous, alternatives));
