@@ -26,8 +26,8 @@ import java.util.Objects;
 
 /**
  * The provenance of every column across a range of a subject's versions: for each version, each
- * field's inlined index path and an id that is stable for as long as that field keeps its
- * identity at that location.
+ * field's inlined index path and an id equal across the versions exactly where the field
+ * continues. Ids are numbered per response, so compare them only within one.
  *
  * <p>Versions are in ascending version order whatever order the request named them in, and each
  * carries its schema id, so a caller that asked by schema id finds its writer and reader by id

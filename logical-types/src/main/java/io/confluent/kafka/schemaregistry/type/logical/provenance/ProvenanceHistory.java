@@ -52,6 +52,8 @@ import java.util.stream.Collectors;
  * ranges: what a consumer relies on is the pairing within a response. Resolving a request to
  * versions is here too, so that "latest" and a schema id mean the same thing on both sides;
  * turning a failure into an error is left to the caller, which knows its own error model.
+ *
+ * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
  */
 public final class ProvenanceHistory {
 

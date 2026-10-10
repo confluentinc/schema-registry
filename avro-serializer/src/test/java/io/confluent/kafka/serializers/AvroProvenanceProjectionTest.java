@@ -174,7 +174,8 @@ public class AvroProvenanceProjectionTest {
   public void aLocationWithoutNamesFailsEveryRecord() {
     Schema schema = record("R", field("a", "\"int\""));
     assertThrows(SerializationException.class, () -> AvroProvenanceProjection.of(schema, schema,
-        mapping(pids(p(1, "a")), pids(new ProvenanceField(Arrays.asList(1), null, 1)))));
+        mapping(pids(p(1, "a")),
+            pids(new ProvenanceField(Arrays.asList(1), null, "SCALAR", 1)))));
   }
 
   @Test
@@ -269,7 +270,8 @@ public class AvroProvenanceProjectionTest {
   private static ProvenanceMapping mapping(List<ProvenanceField> writer,
       List<ProvenanceField> reader) {
     return ProvenanceMapping.join(new SchemaProvenance("s", Arrays.asList(
-        new ProvenanceVersion(1, 1, writer), new ProvenanceVersion(2, 2, reader))), 1, 2);
+        new ProvenanceVersion(1, 1, "STRUCT", writer),
+        new ProvenanceVersion(2, 2, "STRUCT", reader))), 1, 2);
   }
 
   private static List<ProvenanceField> pids(ProvenanceField... fields) {
@@ -278,7 +280,7 @@ public class AvroProvenanceProjectionTest {
 
   // The renamer reads only pids and names; the path just has to be unique.
   private static ProvenanceField p(int pid, String... names) {
-    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(names), pid);
+    return new ProvenanceField(Arrays.asList(pid), Arrays.asList(names), "SCALAR", pid);
   }
 
   // home and work, each an Address with one field.

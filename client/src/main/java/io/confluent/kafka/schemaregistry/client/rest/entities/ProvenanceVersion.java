@@ -39,10 +39,6 @@ public class ProvenanceVersion {
   private String kind;
   private List<ProvenanceField> fields;
 
-  public ProvenanceVersion(Integer version, Integer id, List<ProvenanceField> fields) {
-    this(version, id, null, fields);
-  }
-
   @JsonCreator
   public ProvenanceVersion(@JsonProperty("version") Integer version,
                            @JsonProperty("id") Integer id,

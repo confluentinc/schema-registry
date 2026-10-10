@@ -245,8 +245,10 @@ final class ProtoProvenanceProjection {
    */
   static ProtoProvenanceProjection of(ProtobufSchema reader, ProtobufSchema writer,
       ProvenanceMapping mapping, boolean includeMultipleMessages) {
-    // A location the walk cannot find would escape provenance without a trace.
+    // A location the walk cannot find, or a response without kinds, would escape provenance
+    // without a trace.
     mapping.requireNames();
+    mapping.requireKinds();
     Descriptor root = reader.toDescriptor();
     Walk walk = new Walk(root.getFile(), mapping.readerId());
     Set<List<Integer>> moving = new HashSet<>();

@@ -37,7 +37,8 @@
  *
  * <p>A persistent column ID is a centrally allocated identifier serving the same correspondence
  * role as provenance. Each version is matched against the one before it alone, so the ids over any
- * range of versions pair them exactly as the whole history does: a metastore can derive and
+ * range of versions pair them exactly as the whole history does, though their numbers are the
+ * range's own and compare only within it: a metastore can derive and
  * persist column IDs from them, while a disconnected compute engine computes the correspondence
  * over just the window it cares about and projects without coordinating with anyone.
  *

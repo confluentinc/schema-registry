@@ -33,6 +33,9 @@ import org.apache.kafka.common.errors.SerializationException;
  * SchemaProvenance} on the provenance id. Paths are the endpoint's inlined index paths; names are
  * each location in the native schema's own names, with {@code null} for an unnamed step; kinds
  * are what each location's type is, as the endpoint spells it.
+ *
+ * <p>Internal to Schema Registry's deserializers: not a supported API, and it may change in
+ * any release.
  */
 public final class ProvenanceMapping {
 
