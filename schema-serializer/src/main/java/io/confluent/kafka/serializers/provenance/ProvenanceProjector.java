@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
@@ -341,9 +342,10 @@ public final class ProvenanceProjector<T> {
     } catch (ProvenanceRetriableException e) {
       throw new SerializationException(
           "Could not get the provenance of " + written + ": " + e.getMessage(), e);
-    } catch (UncheckedIOException | RetriableException | InterruptException e) {
-      // The deserializer's client failing transiently, as the strategy's contract counts it:
-      // the record fails, uncached, and the next asks again.
+    } catch (UncheckedIOException | RetriableException | InterruptException
+        | SchemaRegistryOauthTokenRetrieverException e) {
+      // The deserializer's client failing transiently, as the strategy's contract counts it,
+      // its OAuth token included: the record fails, uncached, and the next asks again.
       throw new SerializationException(
           "Could not reach Schema Registry for the provenance of " + written, e);
     } catch (AuthenticationException | AuthorizationException e) {
@@ -393,8 +395,10 @@ public final class ProvenanceProjector<T> {
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);
     } catch (ProvenanceException | AuthenticationException | AuthorizationException e) {
       throw e;
-    } catch (UncheckedIOException | RetriableException | InterruptException e) {
+    } catch (UncheckedIOException | RetriableException | InterruptException
+        | SchemaRegistryOauthTokenRetrieverException e) {
       // Transient by nature, whichever strategy threw it: the record fails, the next asks again.
+      // So is an OAuth token not had now, which fails a schema fetch the same way.
       throw new ProvenanceRetriableException(e.getMessage(), e);
     } catch (RuntimeException e) {
       throw new SerializationException(

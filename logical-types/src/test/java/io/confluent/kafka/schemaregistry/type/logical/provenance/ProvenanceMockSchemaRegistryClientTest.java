@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -142,6 +143,26 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v1 = register(record(field("id", "int")));
     assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false, false, null)
         .getSubject()).isEqualTo(SUBJECT);
+  }
+
+  @Test
+  void aSubjectRegisteredUnderTheDefaultContextsPrefixIsFoundByIt() throws Exception {
+    // The base mock keeps the subject as spelled; the answer still names it as the registry does.
+    int v1 = client.register(":.:" + SUBJECT, new AvroSchema(record(field("id", "int"))));
+    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false, false, null)
+        .getSubject()).isEqualTo(SUBJECT);
+  }
+
+  @Test
+  void aRangeThroughAProtobufFileDeclaringNoTypeIsA42201() throws Exception {
+    // As one declaring only enums, it has no root: no logical form, not a 500.
+    String p = "syntax = \"proto3\";\npackage p;\n";
+    client.updateCompatibility(SUBJECT, "NONE");
+    client.register(SUBJECT, new ProtobufSchema(p + "message M { int32 a = 1; }"));
+    client.register(SUBJECT, new ProtobufSchema(p));
+    client.register(SUBJECT, new ProtobufSchema(p + "message M { int32 a = 1; string b = 2; }"));
+    assertCode(422, 42201,
+        () -> client.getProvenanceByVersion(SUBJECT, "1", "3", false, false, null));
   }
 
   @Test

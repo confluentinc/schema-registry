@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -223,6 +224,26 @@ class AvroProvenanceDeserializerTest {
         new GenericRecordBuilder(v1).set("id", 7).build());
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
     gated.failVersionLookup = true;
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> v2));
+    GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, w -> v2).getValue();
+    assertEquals(7, read.get("id"));
+  }
+
+  @Test
+  void anOauthTokenNotHadNowFailsTheRecordUncached() throws Exception {
+    // As a schema fetch failing for its token: that record fails, and the next reads.
+    Gated gated = new Gated();
+    Schema v1 = record(idField());
+    gated.register(SUBJECT, new AvroSchema(v1));
+    AvroSchema v2 = new AvroSchema(record(idField(), "{\"name\":\"n\",\"type\":\"int\","
+        + "\"default\":0}"));
+    gated.register(SUBJECT, v2);
+    byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
+    gated.failVersionLookupForItsToken = true;
     assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
         new RecordHeaders(), bytes, w -> v2));
     GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
@@ -953,11 +974,12 @@ class AvroProvenanceDeserializerTest {
   }
 
   // Blocks the next writer fetch once armed, until released; fails the next version lookup,
-  // unchecked, once asked to.
+  // unchecked or for its OAuth token, once asked to.
   private static final class Gated extends ProvenanceMockSchemaRegistryClient {
 
     volatile boolean armed;
     volatile boolean failVersionLookup;
+    volatile boolean failVersionLookupForItsToken;
     final CountDownLatch entered = new CountDownLatch(1);
     final CountDownLatch release = new CountDownLatch(1);
 
@@ -982,6 +1004,11 @@ class AvroProvenanceDeserializerTest {
       if (failVersionLookup) {
         failVersionLookup = false;
         throw new UncheckedIOException(new IOException("connection reset"));
+      }
+      if (failVersionLookupForItsToken) {
+        failVersionLookupForItsToken = false;
+        throw new SchemaRegistryOauthTokenRetrieverException(
+            "Failed to Retrieve OAuth Token for Schema Registry", new RuntimeException("idp"));
       }
       return super.getVersion(subject, schema);
     }

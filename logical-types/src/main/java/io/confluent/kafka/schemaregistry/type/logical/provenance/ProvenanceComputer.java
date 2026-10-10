@@ -795,8 +795,8 @@ public final class ProvenanceComputer {
     }
 
     /**
-     * JSON: a property by name; a union branch by hint, discriminators, title, content, compatible
-     * values, then position.
+     * JSON: a property by name; a union branch by hint, discriminators, equal content, title, most
+     * shared members, compatible values, then position.
      */
     private static void matchJson(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
@@ -1183,9 +1183,10 @@ public final class ProvenanceComputer {
      * or an array or map whose items or values are — each the other's only such branch, as a
      * property's scalar change continues, then, of those left, a character with a binary branch,
      * both strings in a document; one at the same position sharing a member with it, where overlap
-     * alone cannot tell; else it is new. None continues another across a discriminator a branch
-     * related to them has (see {@link #crosses}), nor across a hint: two branches hinted otherwise
-     * are different branches, as an Avro type renamed without an alias is.
+     * alone cannot tell; else it is new. None pairs two branches hinted otherwise, which are
+     * different branches, as an Avro type renamed without an alias is. The title refuses a
+     * discriminator the two name otherwise; from most shared on, none crosses one a related branch
+     * has (see {@link #crosses}).
      */
     private static void matchJsonBranches(List<Node> peers, List<Node> previous,
         Map<Node, Node> matched) {
