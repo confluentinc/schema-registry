@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.common.KafkaException;
@@ -80,8 +81,8 @@ import org.slf4j.LoggerFactory;
  * subject, a pairing no single schema can express — is cached and warned about, and the writer is
  * read as without provenance. Anything else the build or the strategy throws fails the record,
  * and is cached so that one unreadable writer costs one build rather than one per record: a
- * build's {@code UnsupportedOperationException} too, and an {@code Error} but the JVM's own,
- * a stack overflow excepted. Cached
+ * build's {@code UnsupportedOperationException} too, and an {@code Error} but the JVM's own: a
+ * stack overflow, say, is the thread's, and fails only the record. Cached
  * outcomes expire after {@code provenance.cache.ttl.sec} and are then worked out afresh, warning
  * included, so a fallback is not permanent; with no TTL, a fallback or failure lasts until the
  * deserializer is reconfigured.
@@ -372,9 +373,9 @@ public final class ProvenanceProjector<T> {
           : new SerializationException("Could not project " + written
               + " by provenance: " + e.getMessage(), e));
     } catch (Error e) {
-      // As anything else breaking the contract, cached: a stack overflow, say, recurs for every
-      // record of the writer. Any other error of the JVM is its own.
-      if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) {
+      // As anything else breaking the contract, cached. Not an error of the JVM: a stack overflow
+      // is the thread's, and another thread with more stack may build the same projection.
+      if (e instanceof VirtualMachineError) {
         throw e;
       }
       return failed(subject, written, new SerializationException("Could not project " + written
@@ -443,6 +444,13 @@ public final class ProvenanceProjector<T> {
     } catch (Exception e) {
       // A checked exception the interface does not declare, as a strategy written without them
       // may let through: the client's own, read as ClientProvenanceStrategy reads it.
+      if (e instanceof InterruptedException || e instanceof TimeoutException) {
+        // A wait cut short, as a blocking read's: the interrupt is the thread's to keep.
+        if (e instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+        }
+        throw new ProvenanceRetriableException(e.getMessage(), e);
+      }
       if (e instanceof RestClientException) {
         RuntimeException translated =
             ClientProvenanceStrategy.translate((RestClientException) e, pair);
