@@ -218,8 +218,9 @@ public class ProvenanceProjectorTest {
 
   @Test
   public void aStrategyBreakingItsContractFailsEveryRecordFromThatWriter() throws Exception {
-    for (RuntimeException broken : Arrays.asList(null,
-        new UnsupportedOperationException("not here"), new IllegalStateException("bug"))) {
+    // An Error too: cached, so a strategy missing a class is not asked for every record.
+    for (Throwable broken : Arrays.asList(null, new UnsupportedOperationException("not here"),
+        new IllegalStateException("bug"), new AssertionError("broken"))) {
       CountingClient client = new CountingClient();
       RecordingStrategy strategy = new RecordingStrategy();
       strategy.failure = broken;
@@ -230,6 +231,34 @@ public class ProvenanceProjectorTest {
       assertThrows(SerializationException.class, () -> ask(projector, client));
       assertEquals(1, strategy.asked);
     }
+  }
+
+  @Test
+  public void aStrategyLettingTheClientsOwnFailureThroughIsReadAsTheClientsStrategyReadsIt()
+      throws Exception {
+    // A rejection fails every record from the writer, rather than reading it without provenance.
+    CountingClient client = new CountingClient();
+    RecordingStrategy strategy = new RecordingStrategy();
+    strategy.failure = new RestClientException("bad version", 422, 42202);
+    ProvenanceProjector<String> projector =
+        new ProvenanceProjector<>(client, "v1", 10, -1, strategy);
+    for (int record = 0; record < 2; record++) {
+      SerializationException e = assertThrows(SerializationException.class,
+          () -> ask(projector, client));
+      assertTrue(e.getMessage(), e.getMessage().contains("was rejected"));
+    }
+    assertEquals(1, strategy.asked);
+    // An unreachable registry fails the record, and the next asks again.
+    RecordingStrategy transientOnly = new RecordingStrategy();
+    transientOnly.failure = new IOException("unreachable");
+    ProvenanceProjector<String> retrying =
+        new ProvenanceProjector<>(client, "v1", 10, -1, transientOnly);
+    for (int record = 0; record < 2; record++) {
+      SerializationException e = assertThrows(SerializationException.class,
+          () -> ask(retrying, client));
+      assertTrue(e.getCause() instanceof ProvenanceRetriableException);
+    }
+    assertEquals(2, transientOnly.asked);
   }
 
   @Test
@@ -513,6 +542,25 @@ public class ProvenanceProjectorTest {
   }
 
   @Test
+  public void aBuildFailingWithUnsupportedOperationFailsEveryRecord() throws Exception {
+    // A defect of the build, not a client lacking support: read without provenance, a new pid
+    // would take the writer's value.
+    CountingClient client = new CountingClient();
+    client.provenance = new SchemaProvenance(SUBJECT, Arrays.asList(
+        new ProvenanceVersion(1, client.writer, "STRUCT", Collections.emptyList()),
+        new ProvenanceVersion(3, client.readerId, "STRUCT", Collections.emptyList())));
+    ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
+    SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
+    for (int record = 0; record < 2; record++) {
+      assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
+          client.writerSchema, client.reader, false, mapping -> {
+            throw new UnsupportedOperationException("immutable");
+          }));
+    }
+    assertEquals(1, client.asked);
+  }
+
+  @Test
   public void aStackOverflowInABuildFailsTheRecordAndOtherErrorsOfTheJvmPass() throws Exception {
     // A deep schema may overflow the stack: the record fails, named. An out of memory is the JVM's.
     CountingClient client = new CountingClient();
@@ -596,7 +644,8 @@ public class ProvenanceProjectorTest {
 
     SchemaRegistryClient client;
     List<Object> lastRequest;
-    RuntimeException failure;
+    // Thrown unchecked, as a strategy written without checked exceptions may throw anything.
+    Throwable failure;
     boolean returnsNull;
     // Where set, a writer id under no version of the subject there is unknown.
     CountingClient knownIn;
@@ -620,13 +669,18 @@ public class ProvenanceProjectorTest {
         throw new IllegalStateException(e);
       }
       if (failure != null) {
-        throw failure;
+        throw ProvenanceProjectorTest.<RuntimeException>uncheckedOf(failure);
       }
       if (returnsNull) {
         return null;
       }
       throw new ProvenanceUnavailableException("no provenance here");
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <E extends Throwable> E uncheckedOf(Throwable t) throws E {
+    throw (E) t;
   }
 
   // Answers every provenance request as unavailable, or as set, counting how often it is asked.
