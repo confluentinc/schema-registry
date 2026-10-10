@@ -86,7 +86,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
-    resetProvenance();
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
@@ -98,6 +97,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new ConfigException("Class " + specificProtobufClass.getCanonicalName()
           + " is not a valid protobuf message class", e);
     }
+    // Last, once every flag a projection and its reader are built under is set: one built by a read
+    // in between would keep the old ones.
+    resetProvenance();
   }
 
   protected KafkaProtobufDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -389,40 +391,46 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private static Message parseDynamic(ProtobufSchema schema, ByteBuffer bytes, int start,
       int length) throws IOException {
-    Descriptor descriptor = schema.toDescriptor();
-    if (descriptor == null) {
-      throw new SerializationException("Could not find descriptor with name " + schema.name());
-    }
-    return DynamicMessage.parseFrom(descriptor,
+    return DynamicMessage.parseFrom(descriptorOf(schema),
         CodedInputStream.newInstance(bytes.array(), start, length),
         ProtobufSchema.EXTENSION_REGISTRY);
   }
 
-  /**
-   * {@code bytes} parsed with the reader less its new fields, less the data that left in unknown
-   * fields, and back in {@code reader}'s own descriptor, where the new fields read as unset. Done
-   * before the domain rules: a value they write to a new field must land under its own number, and
-   * a caller handed the parse descriptor could not address the fields it leaves out.
-   */
-  private static Message parseProjected(ProtoProvenanceProjection projection,
-      ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
-    // Where the reader only adds fields, a record rarely holds anything under a moved number:
-    // the reader's own parse is then the projected one.
-    if (projection.triesDirect()) {
-      Message direct = null;
-      try {
-        direct = parseDynamic(reader, bytes, start, length);
-      } catch (IOException | RuntimeException e) {
-        // As a moved field's type may not parse what lies under its number.
-      }
-      // Outside the catch: a failure of the check itself fails the record rather than hiding.
-      if (direct != null && !projection.holdsMoved(direct)) {
-        return direct;
-      }
+  private static Descriptor descriptorOf(ProtobufSchema schema) {
+    Descriptor descriptor = schema.toDescriptor();
+    if (descriptor == null) {
+      throw new SerializationException("Could not find descriptor with name " + schema.name());
     }
-    Message parsed = parseDynamic(projection.schema, bytes, start, length);
+    return descriptor;
+  }
+
+  /**
+   * {@code bytes} parsed as {@code reader} with its new fields unset, and none of the data under
+   * their numbers. Done before the domain rules: a value they write to a new field must land under
+   * its own number, and a caller handed the parse descriptor could not address the fields it
+   * leaves out. Package-private for tests.
+   */
+  static Message parseProjected(ProtoProvenanceProjection projection,
+      ProtobufSchema reader, ByteBuffer bytes, int start, int length) throws IOException {
+    // The reader's own parse less the new fields and the unknown data under their numbers, save
+    // where a new oneof member may have displaced a kept one.
+    DynamicMessage.Builder direct = DynamicMessage.newBuilder(descriptorOf(reader));
+    boolean parsed = false;
+    try {
+      direct.mergeFrom(CodedInputStream.newInstance(bytes.array(), start, length),
+          ProtobufSchema.EXTENSION_REGISTRY);
+      parsed = true;
+    } catch (IOException | RuntimeException e) {
+      // As a new field's type may not parse what lies under its number.
+    }
+    // Outside the catch: a failure of the clearing itself fails the record rather than hiding.
+    if (parsed && projection.clearMoved(direct) && direct.isInitialized()) {
+      return direct.buildPartial();
+    }
+    // Else parsed with the reader less its new fields, and back in the reader's own descriptor.
+    Message pruned = parseDynamic(projection.schema(), bytes, start, length);
     return DynamicMessage.parseFrom(reader.toDescriptor(),
-        projection.dropMoved(parsed).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
+        projection.dropMoved(pruned).toByteString(), ProtobufSchema.EXTENSION_REGISTRY);
   }
 
   private ProtoProvenanceProjection byProvenance(String subject, SchemaId writerId,

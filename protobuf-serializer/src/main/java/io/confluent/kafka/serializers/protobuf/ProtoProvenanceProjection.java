@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -37,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.apache.kafka.common.errors.SerializationException;
 
 /**
@@ -52,76 +54,48 @@ import org.apache.kafka.common.errors.SerializationException;
  * it is.
  *
  * <p>Fields are found by the names the provenance response carries, which the converter recorded
- * as the descriptor's own route to each location. A projection holds the reader to parse with, and
- * the numbers left out of each message: data under one of them sits in that message's unknown
- * fields, and is dropped from there.
+ * as the descriptor's own route to each location. A projection holds the numbers left out of each
+ * message. A record is parsed with the reader's own descriptor and cleared of whatever lies under
+ * them, which is the same message. It is parsed with the reader less them, built when first
+ * needed, where that parse throws or leaves the message uninitialized, or where a oneof holding a
+ * left-out member may have lost a kept member's data.
  */
 final class ProtoProvenanceProjection {
 
-  final ProtobufSchema schema;
   private final Map<String, Set<Integer>> moved;
   // The messages, by full name, holding a moved number or leading to one through their fields:
   // only these are visited for data under one.
   private final Set<String> leading;
+  // The reader less its moved fields, for the records its own parse cannot serve: built once to
+  // fail the pairing as before, then again only when a record needs it, and kept.
+  private final Supplier<ProtobufSchema> prune;
+  private volatile ProtobufSchema pruned;
 
-  // Whether the writer declares none of the moved numbers, as where the reader only adds fields:
-  // data under one is then data beyond the writer, rarely there.
-  private final boolean direct;
-
-  private ProtoProvenanceProjection(ProtobufSchema schema, Map<String, Set<Integer>> moved,
-      boolean direct) {
-    this.schema = schema;
+  private ProtoProvenanceProjection(ProtobufSchema pruned, Supplier<ProtobufSchema> prune,
+      Descriptor reader, Map<String, Set<Integer>> moved) {
+    this.pruned = pruned;
+    this.prune = prune;
     this.moved = moved;
-    this.leading = moved.isEmpty() ? Collections.emptySet() : leading(schema.toDescriptor(), moved);
-    this.direct = direct;
+    this.leading = moved.isEmpty() ? Collections.emptySet() : leading(reader, moved);
   }
 
   /**
-   * Whether the reader's own parse is worth trying first: see {@link #holdsMoved}.
+   * The reader less every field provenance gives no writer counterpart; the reader itself when
+   * there is none.
    */
-  boolean triesDirect() {
-    return direct;
+  ProtobufSchema schema() {
+    ProtobufSchema schema = pruned;
+    if (schema == null) {
+      // A race builds two equal schemas; either serves.
+      schema = prune.get();
+      pruned = schema;
+    }
+    return schema;
   }
 
-  private static boolean declaresNone(ProtobufSchema writer, Map<String, Set<Integer>> moved) {
-    if (writer == null) {
-      return false;
-    }
-    Map<String, Descriptor> all = new HashMap<>();
-    collectFile(writer.toDescriptor().getFile(), all, new HashSet<>());
-    for (Map.Entry<String, Set<Integer>> e : moved.entrySet()) {
-      Descriptor message = all.get(e.getKey());
-      if (message == null) {
-        // Renamed, perhaps: the writer may well declare the number.
-        return false;
-      }
-      for (int number : e.getValue()) {
-        if (message.findFieldByNumber(number) != null) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  private static void collectFile(FileDescriptor file, Map<String, Descriptor> all,
-      Set<String> files) {
-    if (!files.add(file.getName())) {
-      return;
-    }
-    for (Descriptor message : file.getMessageTypes()) {
-      collectNested(message, all);
-    }
-    for (FileDescriptor dependency : file.getDependencies()) {
-      collectFile(dependency, all, files);
-    }
-  }
-
-  private static void collectNested(Descriptor message, Map<String, Descriptor> all) {
-    all.put(message.getFullName(), message);
-    for (Descriptor nested : message.getNestedTypes()) {
-      collectNested(nested, all);
-    }
+  // For tests: whether the reader less its moved fields is held.
+  boolean prunedBuilt() {
+    return pruned != null;
   }
 
   private static Set<String> leading(Descriptor root, Map<String, Set<Integer>> moved) {
@@ -160,45 +134,78 @@ final class ProtoProvenanceProjection {
   }
 
   /**
-   * Whether {@code message}, parsed with the reader's own descriptor, holds anything under a moved
-   * number: a field set, or unknown data. Where it holds nothing, it is what the projected parse
-   * gives, as the reader's fields are the parse descriptor's and the moved ones, unset.
+   * Clears from {@code builder}, the reader's own parse, every moved field and the unknown data
+   * under a moved number, at any depth. False, with the builder half cleared, where a oneof holding
+   * a moved member may have lost a kept one's data: a moved member is set, its data may have
+   * displaced a kept one's; a kept message member is set, a moved one may have split its halves.
    */
-  boolean holdsMoved(Message message) {
-    Descriptor type = message.getDescriptorForType();
+  boolean clearMoved(Message.Builder builder) {
+    Descriptor type = builder.getDescriptorForType();
     if (!leading.contains(type.getFullName())) {
-      return false;
+      return true;
     }
     Set<Integer> numbers = moved.get(type.getFullName());
     if (numbers != null) {
-      for (int number : numbers) {
-        if (message.getUnknownFields().hasField(number)) {
-          return true;
+      for (OneofDescriptor oneof : type.getRealOneofs()) {
+        // A kept message member split by a moved one is reset by the reader's parse, where the
+        // projected parse merges its halves.
+        FieldDescriptor set = builder.getOneofFieldDescriptor(oneof);
+        if (set != null && set.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+            && !numbers.contains(set.getNumber())
+            && !Collections.disjoint(numbers, numbersOf(oneof))) {
+          return false;
         }
+      }
+      UnknownFieldSet.Builder unknown = null;
+      for (int number : numbers) {
         FieldDescriptor field = type.findFieldByNumber(number);
         if (field != null && (field.isRepeated()
-            ? message.getRepeatedFieldCount(field) > 0 : message.hasField(field))) {
-          return true;
+            ? builder.getRepeatedFieldCount(field) > 0 : builder.hasField(field))) {
+          OneofDescriptor oneof = field.getRealContainingOneof();
+          if (oneof != null && !numbers.containsAll(numbersOf(oneof))) {
+            return false;
+          }
+          builder.clearField(field);
         }
+        if (builder.getUnknownFields().hasField(number)) {
+          unknown = unknown != null ? unknown : builder.getUnknownFields().toBuilder();
+          unknown.clearField(number);
+        }
+      }
+      if (unknown != null) {
+        builder.setUnknownFields(unknown.build());
       }
     }
     for (FieldDescriptor field : type.getFields()) {
       if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE
-          || !leading.contains(field.getMessageType().getFullName())
-          || numbers != null && numbers.contains(field.getNumber())) {
+          || !leading.contains(field.getMessageType().getFullName())) {
         continue;
       }
       if (field.isRepeated()) {
-        for (int i = 0; i < message.getRepeatedFieldCount(field); i++) {
-          if (holdsMoved((Message) message.getRepeatedField(field, i))) {
-            return true;
+        for (int i = 0; i < builder.getRepeatedFieldCount(field); i++) {
+          Message.Builder nested = ((Message) builder.getRepeatedField(field, i)).toBuilder();
+          if (!clearMoved(nested)) {
+            return false;
           }
+          builder.setRepeatedField(field, i, nested.buildPartial());
         }
-      } else if (message.hasField(field) && holdsMoved((Message) message.getField(field))) {
-        return true;
+      } else if (builder.hasField(field)) {
+        Message.Builder nested = ((Message) builder.getField(field)).toBuilder();
+        if (!clearMoved(nested)) {
+          return false;
+        }
+        builder.setField(field, nested.buildPartial());
       }
     }
-    return false;
+    return true;
+  }
+
+  private static Set<Integer> numbersOf(OneofDescriptor oneof) {
+    Set<Integer> numbers = new HashSet<>();
+    for (FieldDescriptor member : oneof.getFields()) {
+      numbers.add(member.getNumber());
+    }
+    return numbers;
   }
 
   boolean movedAny() {
@@ -235,9 +242,9 @@ final class ProtoProvenanceProjection {
   }
 
   /**
-   * {@code reader} without every field provenance gives no writer counterpart, to parse with;
-   * {@code reader} itself when there is nothing to leave out. A field of an imported message is
-   * left out of a copy of its file, which the reader's file is built against.
+   * The fields of {@code reader} provenance gives no writer counterpart, left out of the parse:
+   * none when there is nothing to leave out. A field of an imported message is left out of a copy
+   * of its file, which the reader's file is built against.
    *
    * @throws ProvenanceUnavailableException if a message used at several locations would need
    *     different fields left out, or the record's message is a nested one no location reaches
@@ -319,17 +326,25 @@ final class ProtoProvenanceProjection {
       throw new ProvenanceUnavailableException("The record's message " + root.getFullName()
           + " is nested, and no location of the subject's provenance reaches it");
     }
-    FileDescriptor pruned = walk.build();
-    if (pruned == root.getFile()) {
-      return new ProtoProvenanceProjection(reader, Collections.emptyMap(), false);
+    // Built here so a pairing fails as before; only what moves is kept to build it again.
+    ProtobufSchema pruned = pruned(walk.build(), root, reader);
+    if (pruned == reader) {
+      return new ProtoProvenanceProjection(reader, null, root, Collections.emptyMap());
     }
-    Descriptor prunedRoot = messageNamed(pruned, root.getFullName());
+    walk.keepMovedOnly();
+    return new ProtoProvenanceProjection(null, () -> pruned(walk.build(), root, reader), root,
+        walk.movedNumbers());
+  }
+
+  private static ProtobufSchema pruned(FileDescriptor file, Descriptor root,
+      ProtobufSchema reader) {
+    if (file == root.getFile()) {
+      return reader;
+    }
+    Descriptor prunedRoot = messageNamed(file, root.getFullName());
     ProtobufSchema schema = new ProtobufSchema(prunedRoot != null ? prunedRoot : root,
         reader.references());
-    Map<String, Set<Integer>> moved = walk.movedNumbers();
-    return new ProtoProvenanceProjection(
-        (ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet()), moved,
-        declaresNone(writer, moved));
+    return (ProtobufSchema) schema.copy(reader.metadata(), reader.ruleSet());
   }
 
   /**
@@ -456,6 +471,12 @@ final class ProtoProvenanceProjection {
         }
       }
       return false;
+    }
+
+    // A pairing then holds one entry a moved field, not one a field of every message reached.
+    private void keepMovedOnly() {
+      moves.values().forEach(decided -> decided.values().removeIf(move -> !move));
+      moves.values().removeIf(Map::isEmpty);
     }
 
     private Map<String, Set<Integer>> movedNumbers() {

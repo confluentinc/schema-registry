@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -33,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericFixed;
@@ -61,6 +64,55 @@ public class AvroProvenanceProjectionTest {
   }
 
   @Test
+  public void aPairRenamingNothingReusesTheCallersTypes() {
+    String in = record("In", field("x", "\"int\"")).toString();
+    String e = "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}";
+    String tags = "{\"type\":\"array\",\"items\":\"string\"}";
+    Schema writer = record("R", field("a", "\"int\""), field("in", in), field("e", e),
+        field("tags", tags));
+    Schema reader = record("R", field("a", "\"int\""), field("in", in), field("e", e),
+        field("tags", tags), field("b", "\"int\"", "0"));
+    List<ProvenanceField> both = pids(p(1, "a"), p(2, "in"), p(3, "in", "x"), p(4, "e"),
+        p(5, "tags"));
+    List<ProvenanceField> added = new ArrayList<>(both);
+    added.add(p(6, "b"));
+    AvroProvenanceProjection projection =
+        AvroProvenanceProjection.of(writer, reader, mapping(both, added));
+    assertSame(writer, projection.writer);
+    assertSame(reader, projection.reader);
+
+    // A nullable field with no default is given one, so the reader is copied; the writer is not.
+    Schema nullable = record("R", field("a", "\"int\""), field("n", "[\"null\",\"int\"]"));
+    projection = AvroProvenanceProjection.of(record("R", field("a", "\"int\"")), nullable,
+        mapping(pids(p(1, "a")), pids(p(1, "a"), p(2, "n"))));
+    assertNotSame(nullable, projection.reader);
+  }
+
+  @Test
+  public void aRenamedEnumOrFixedTakesTheReadersName() throws Exception {
+    // The writer's own type is reused only where its name is kept: a renamed one would fail
+    // every record, the reader's aliases being stripped.
+    Schema writer = record("R",
+        field("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"),
+        field("f", "{\"type\":\"fixed\",\"name\":\"F\",\"size\":2}"));
+    Schema reader = record("R", field("e", "{\"type\":\"enum\",\"name\":\"E2\","
+        + "\"aliases\":[\"E\"],\"symbols\":[\"A\",\"B\"]}"),
+        field("f", "{\"type\":\"fixed\",\"name\":\"F2\",\"aliases\":[\"F\"],\"size\":2}"));
+    List<ProvenanceField> both = pids(p(1, "e"), p(2, "f"));
+    AvroProvenanceProjection projection =
+        AvroProvenanceProjection.of(writer, reader, mapping(both, both));
+    assertEquals("E2", projection.writer.getField("e").schema().getFullName());
+    assertEquals("F2", projection.writer.getField("f").schema().getFullName());
+
+    GenericRecord read = decode(writer, projection, new GenericRecordBuilder(writer)
+        .set("e", new GenericData.EnumSymbol(writer.getField("e").schema(), "B"))
+        .set("f", new GenericData.Fixed(writer.getField("f").schema(), new byte[] {1, 2}))
+        .build());
+    assertEquals("B", read.get("e").toString());
+    assertArrayEquals(new byte[] {1, 2}, ((GenericFixed) read.get("f")).bytes());
+  }
+
+  @Test
   public void theReadersAliasesDoNotMoveAFieldProvenancePlaced() {
     // v1 {name} read under v3 {full_name aliases [name], name}: provenance pairs v1's name with
     // full_name. Left in place, the alias would rename it again.
@@ -72,6 +124,7 @@ public class AvroProvenanceProjectionTest {
         writer, reader, mapping(pids(p(1, "name")), pids(p(1, "full_name"), p(2, "name"))));
 
     assertEquals("full_name", projection.writer.getFields().get(0).name());
+    assertNotSame(reader, projection.reader);
     assertTrue(projection.reader.getField("full_name").aliases().isEmpty());
     assertEquals("full_name",
         Schema.applyAliases(projection.writer, projection.reader).getFields().get(0).name());
@@ -176,6 +229,15 @@ public class AvroProvenanceProjectionTest {
     assertThrows(SerializationException.class, () -> AvroProvenanceProjection.of(schema, schema,
         mapping(pids(p(1, "a")),
             pids(new ProvenanceField(Arrays.asList(1), null, "SCALAR", 1)))));
+  }
+
+  @Test
+  public void aLocationWithoutAKindFailsEveryRecord() {
+    Schema schema = record("R", field("a", "\"int\""));
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> AvroProvenanceProjection.of(schema, schema, mapping(pids(p(1, "a")),
+            pids(new ProvenanceField(Arrays.asList(1), Arrays.asList("a"), null, 1)))));
+    assertTrue(e.getMessage(), e.getMessage().contains("no kind for location"));
   }
 
   @Test

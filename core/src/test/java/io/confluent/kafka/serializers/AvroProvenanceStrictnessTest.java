@@ -592,8 +592,10 @@ class AvroProvenanceStrictnessTest {
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
     AvroSchema reader = new AvroSchema(v3);
 
-    assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
-        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, foreign), false));
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> deserializer.deserializeWithReaderSchema(TOPIC, new RecordHeaders(), bytes,
+            w -> ReaderSchema.of(reader, foreign), false));
+    assertTrue(causes(e).contains("pinned to schema id " + foreign), causes(e));
   }
 
   @Test
@@ -711,4 +713,14 @@ class AvroProvenanceStrictnessTest {
     return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"R\",\"doc\":\"" + doc
         + "\",\"fields\":[{\"name\":\"f\",\"type\":" + fieldType + "}]}");
   }
+
+  // Every message in the cause chain, so a test can name the failure it expects.
+  private static String causes(Throwable e) {
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      chain.append(t.getClass().getSimpleName()).append(": ").append(t.getMessage()).append('\n');
+    }
+    return chain.toString();
+  }
+
 }

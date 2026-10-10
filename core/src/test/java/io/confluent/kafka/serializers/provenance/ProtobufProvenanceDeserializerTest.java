@@ -73,6 +73,8 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -231,7 +233,7 @@ class ProtobufProvenanceDeserializerTest {
   @Test
   void aReadRuleWritingToAMovedFieldWritesUnderItsOwnNumber() throws Exception {
     // Domain rules run once the read is back in the reader's own numbers: a value they write to a
-    // moved field would otherwise sit under the throwaway number, and be lost to unknown fields.
+    // field left out of the parse would otherwise be lost to unknown fields.
     ProtobufSchema v1 = row("int32 id = 1;", "string note = 2;");
     ProtobufSchema v2 = row("int32 id = 1;");
     Rule fill = new Rule("fill", null, RuleKind.TRANSFORM, RuleMode.READ, "CEL_FIELD", null, null,
@@ -501,7 +503,9 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     // memo moves, so the record has no value for a field the reader requires.
-    assertThrows(Exception.class, () -> read(v3, bytes, "v1"));
+    SerializationException e =
+        assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    assertTrue(trace(e).contains("missing required fields: memo"), trace(e));
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
   }
 
@@ -567,7 +571,7 @@ class ProtobufProvenanceDeserializerTest {
           armed[0] = false;
           entered.countDown();
           try {
-            release.await();
+            release.await(10, TimeUnit.SECONDS);
           } catch (InterruptedException e) {
             throw new IllegalStateException(e);
           }
@@ -588,16 +592,16 @@ class ProtobufProvenanceDeserializerTest {
             null, null, "true", null, null, false))));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
         new KafkaProtobufDeserializer<>(gated, config("v1"));
-    DynamicMessage[] read = new DynamicMessage[1];
     armed[0] = true;
-    Thread thread = new Thread(() -> read[0] = readPinned(deserializer, bytes, reader, 1));
-    thread.start();
-    entered.await();
+    // A FutureTask bounds the wait for the read and rethrows its own failure.
+    FutureTask<DynamicMessage> read =
+        new FutureTask<>(() -> readPinned(deserializer, bytes, reader, 1));
+    new Thread(read).start();
+    assertTrue(entered.await(10, TimeUnit.SECONDS), "the read never reached the gate");
     // The reconfigure lands while the read is fetching its writer.
     deserializer.configure(config("v1"), false);
     release.countDown();
-    thread.join(5000);
-    assertEquals("", get(read[0], "b"));
+    assertEquals("", get(read.get(10, TimeUnit.SECONDS), "b"));
   }
 
   @Test
@@ -738,9 +742,10 @@ class ProtobufProvenanceDeserializerTest {
     config.put("rule.executors", "clear");
     config.put("rule.executors.clear.class", ClearId.class.getName());
 
-    assertThrows(SerializationException.class, () ->
+    SerializationException e = assertThrows(SerializationException.class, () ->
         new KafkaProtobufDeserializer<>(client, config)
             .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> reader));
+    assertTrue(trace(e).contains("missing required fields: id"), trace(e));
   }
 
   @Test
@@ -1303,13 +1308,13 @@ class ProtobufProvenanceDeserializerTest {
         List<Future<Object>> built = new ArrayList<>();
         for (int i = 0; i < 16; i++) {
           built.add(threads.submit(() -> {
-            start.await();
+            start.await(10, TimeUnit.SECONDS);
             return projector.invoke(deserializer);
           }));
         }
         Set<Object> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Future<Object> future : built) {
-          distinct.add(future.get());
+          distinct.add(future.get(10, TimeUnit.SECONDS));
         }
         assertEquals(1, distinct.size());
       }
@@ -1319,7 +1324,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberIsNoneTheWriterWritesUnder() throws Exception {
+  void aFieldLeftOutOfTheParseTakesNothingTheWriterWritesUnderItsNumber() throws Exception {
     // c moves off b's number to a fresh one; the writer writes z there, which must not be parsed
     // into c, a message it does not parse as.
     String n = "message N { int32 x = 1; }";
@@ -1352,7 +1357,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWriterUnderAMessageRenamedSinceIt() throws Exception {
+  void aFieldLeftOutOfTheParseUnderAMessageRenamedSinceTheWriterReadsUnset() throws Exception {
     // A was renamed B, so B's members are new and move; the writer's A still writes z at the top
     // number, which must not be parsed into x, a message it does not parse as.
     String n = "message N { int32 q = 1; }";
@@ -1374,7 +1379,8 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWritersExtensionsUnderAMessageRenamedSinceIt() throws Exception {
+  void aFieldLeftOutOfTheParseUnderARenamedMessageTakesNothingFromTheWritersExtensions()
+      throws Exception {
     // A was renamed B, so x moves; the writer's A keeps extension data at the top number, which
     // must not be parsed into x, a message it does not parse as.
     String head = "syntax = \"proto2\";\npackage p;\n";
@@ -1734,7 +1740,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWriterUnderAFieldRetypedToAnExistingMessage() throws Exception {
+  void aFieldLeftOutOfTheParseUnderAFieldRetypedToAnExistingMessageReadsUnset() throws Exception {
     // f's type changes from A to B, both declared all along: f's data is still an A, so B's new b
     // must take no number A writes under, here A's hi at the highest.
     String messages = "message A { int32 x = 1; string hi = 536870911; }\n"
@@ -1753,9 +1759,9 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWriterOfAMessageMovedOutOfAnImport() throws Exception {
+  void aFieldLeftOutOfTheParseOfAMessageMovedOutOfAnImportReadsUnset() throws Exception {
     // A moves from an import into the file, dropping hi and adding b: the writer's A is the
-    // imported one, so b's fresh number must avoid its numbers too.
+    // imported one, whose data under b's number must not reach b.
     String dep = "syntax = \"proto3\";\npackage p;\n"
         + "message A { int32 x = 1; string hi = 536870911; }\n";
     client.register("dep", new ProtobufSchema(dep));
@@ -1781,7 +1787,8 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWriterUnderAMapValueRetypedToAnExistingMessage() throws Exception {
+  void aFieldLeftOutOfTheParseUnderAMapValueRetypedToAnExistingMessageReadsUnset()
+      throws Exception {
     // A map value's type changes from A to B: the value has no location of its own, yet its data
     // is still an A's, so B's new b must take no number A writes under.
     String messages = "message A { int32 x = 1; string hi = 536870911; }\n"
@@ -1808,7 +1815,7 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aFreshNumberAvoidsTheWriterUnderARetypeInASingleMessageFile() throws Exception {
+  void aFieldLeftOutOfTheParseUnderARetypeInASingleMessageFileReadsUnset() throws Exception {
     // As above with the file's one message, so locations name no message: A and B are named
     // nested types of Row.
     String named = "option (confluent.message_meta) = "

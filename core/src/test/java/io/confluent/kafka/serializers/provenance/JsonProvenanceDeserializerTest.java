@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -44,6 +45,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -1642,9 +1644,12 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
     Map<String, Object> config = config("v1");
     config.put("json.fail.invalid.schema", true);
-    assertThrows(SerializationException.class,
+    SerializationException e = assertThrows(SerializationException.class,
         () -> new KafkaJsonSchemaDeserializer<>(client, config, Typed.class)
             .deserialize(TOPIC, bytes));
+    // Failed by validation for the pruned note, not by a failure to project.
+    assertTrue(causes(e).contains("ValidationException") && causes(e).contains("note"),
+        causes(e));
   }
 
   @Test
@@ -1686,13 +1691,19 @@ class JsonProvenanceDeserializerTest {
     Gated.armed = true;
     Thread reader = new Thread(() -> read.set(deserializer.deserialize(TOPIC, bytes)), "reader");
     reader.start();
-    Gated.entered.await();
+    assertTrue(Gated.entered.await(10, TimeUnit.SECONDS), "the read never reached the gate");
     Thread reconfigure = new Thread(() -> deserializer.configure(config, false), "reconfigure");
     reconfigure.start();
-    Thread.sleep(200);
+    // The race is only run once the reconfigure is parked behind the read.
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (reconfigure.getState() == Thread.State.RUNNABLE && System.nanoTime() < deadline) {
+      Thread.onSpinWait();
+    }
     Gated.release.countDown();
-    reader.join(5000);
-    reconfigure.join(5000);
+    reader.join(10_000);
+    reconfigure.join(10_000);
+    assertFalse(reader.isAlive() || reconfigure.isAlive(), "a thread did not finish");
+    assertNotNull(read.get(), "the read failed");
     assertNull(read.get().note);
   }
 
@@ -1770,7 +1781,7 @@ class JsonProvenanceDeserializerTest {
         if (armed) {
           entered.countDown();
           try {
-            release.await();
+            release.await(10, TimeUnit.SECONDS);
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
           }
@@ -1879,4 +1890,14 @@ class JsonProvenanceDeserializerTest {
         + "\"type\": \"object\", \"title\": \"Row\", \"properties\": {"
         + String.join(", ", properties) + "}}");
   }
+
+  // Every message in the cause chain, so a test can name the failure it expects.
+  private static String causes(Throwable e) {
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      chain.append(t.getClass().getSimpleName()).append(": ").append(t.getMessage()).append('\n');
+    }
+    return chain.toString();
+  }
+
 }

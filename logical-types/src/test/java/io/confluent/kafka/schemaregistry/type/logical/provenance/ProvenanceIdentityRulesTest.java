@@ -550,7 +550,8 @@ class ProvenanceIdentityRulesTest {
       v1.append(i > 0 ? "," : "").append(branch).append("}}");
       v2.append(i > 0 ? "," : "").append(branch).append(",\"added\":{\"type\":\"string\"}}}");
     }
-    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(12),
+    // About 4 s idle and 6 s on a loaded machine; a matcher cubic in the width takes minutes.
+    List<ProvenanceVersion> versions = assertTimeoutPreemptively(Duration.ofSeconds(30),
         () -> compute(json("{\"e\":{\"oneOf\":[" + v1 + "]}}", null),
             json("{\"e\":{\"oneOf\":[" + v2 + "]}}", null)));
     for (int i = 0; i < 1600; i++) {
@@ -992,6 +993,8 @@ class ProvenanceIdentityRulesTest {
         json("{\"u\":{\"oneOf\":[" + branch("z", x) + "," + b + "," + c + "]}}", null));
     Map<List<Integer>, Integer> before = pids(v, 0);
     Map<List<Integer>, Integer> after = pids(v, 1);
+    // A' lost A's discriminator, so it is new too, and C is no continuation of A.
+    assertThat(after.get(path(0, 0))).isNotIn(before.values());
     assertThat(after.get(path(0, 2))).isNotIn(before.values());
     assertThat(after.get(path(0, 2, 0))).isNotIn(before.values());
   }
@@ -1184,6 +1187,26 @@ class ProvenanceIdentityRulesTest {
         proto("int32 a = 1;"));
     assertThat(pid(v, 1, 0)).isNotIn(pids(v, 0).values());
     assertThat(pid(v, 2, 0)).isNotIn(pids(v, 1).values());
+  }
+
+  @Test
+  void aProtobufFieldWhoseMessageChangesAndChangesBackStartsOver() {
+    // u's message is a named type: B's x is not A's, and A's x on return is new again.
+    String file = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  %s u = 1;\n}\n"
+        + "message A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n";
+    List<ProvenanceVersion> v = compute(new ProtobufSchema(String.format(file, "A")),
+        new ProtobufSchema(String.format(file, "B")), new ProtobufSchema(String.format(file, "A")));
+    assertThat(pid(v, 1, 0, 0)).isNotIn(pids(v, 0).values());
+    assertThat(pid(v, 2, 0, 0)).isNotIn(pids(v, 0).values()).isNotIn(pids(v, 1).values());
+  }
+
+  @Test
+  void aRenamedProtobufRootMessageRestartsItsFields() {
+    // Single-message provenance cannot tell a renamed root from another message placed first.
+    String file = "syntax = \"proto3\";\npackage p;\nmessage %s {\n  int32 id = 1;\n}\n";
+    List<ProvenanceVersion> v = compute(new ProtobufSchema(String.format(file, "A")),
+        new ProtobufSchema(String.format(file, "B")));
+    assertThat(pid(v, 1, 0)).isNotIn(pids(v, 0).values());
   }
 
   @Test
