@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.provenance.strategy.StablePidProvenanceStrategy;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -61,6 +62,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -223,7 +225,7 @@ class AvroProvenanceDeserializerTest {
     byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
         new GenericRecordBuilder(v1).set("id", 7).build());
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
-    gated.failVersionLookup = true;
+    gated.nextVersionLookupFailure = new UncheckedIOException(new IOException("connection reset"));
     assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
         new RecordHeaders(), bytes, w -> v2));
     GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
@@ -243,12 +245,107 @@ class AvroProvenanceDeserializerTest {
     byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
         new GenericRecordBuilder(v1).set("id", 7).build());
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
-    gated.failVersionLookupForItsToken = true;
+    gated.nextVersionLookupFailure = oauthTokenNotHad();
     assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
         new RecordHeaders(), bytes, w -> v2));
     GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
         new RecordHeaders(), bytes, w -> v2).getValue();
     assertEquals(7, read.get("id"));
+  }
+
+  @Test
+  void anOauthTokenNotHadNowForTheProvenanceRequestFailsTheRecordUncached() throws Exception {
+    Gated gated = new Gated();
+    byte[] bytes = idOnlyThenDefaultedN(gated);
+    gated.nextProvenanceFailure = oauthTokenNotHad();
+    assertSecondRecordReads(gated, bytes);
+  }
+
+  @Test
+  void aRawKafkaExceptionFromTheClientsOwnLookupFailsTheRecordUncached() throws Exception {
+    // As the client's token retrievers throw on an identity provider's 4xx, and its SSL factory
+    // on a keystore it cannot load: that record fails, and the next reads.
+    Gated gated = new Gated();
+    byte[] bytes = idOnlyThenDefaultedN(gated);
+    gated.nextVersionLookupFailure = rawKafkaException();
+    assertSecondRecordReads(gated, bytes);
+  }
+
+  @Test
+  void aRawKafkaExceptionFromTheProvenanceRequestFailsTheRecordUncached() throws Exception {
+    Gated gated = new Gated();
+    byte[] bytes = idOnlyThenDefaultedN(gated);
+    gated.nextProvenanceFailure = rawKafkaException();
+    assertSecondRecordReads(gated, bytes);
+  }
+
+  @Test
+  void aServerWithoutTheProvenanceEndpointReadsNatively() throws Exception {
+    // An older server answers 404: the pair reads as without provenance, asked once, not per record.
+    Gated gated = new Gated();
+    Schema v1 = record(idField(), string("note"));
+    Schema v3 = record(idField(), "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    gated.register(SUBJECT, new AvroSchema(v1));
+    gated.register(SUBJECT, new AvroSchema(record(idField())));
+    gated.register(SUBJECT, new AvroSchema(v3));
+    byte[] bytes = new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "old").build());
+    gated.provenanceAnswer = new RestClientException("HTTP 404 Not Found", 404, 404);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
+    for (int i = 0; i < 2; i++) {
+      assertEquals("old", ((GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+          new RecordHeaders(), bytes, v3).getValue()).get("note").toString());
+    }
+    assertEquals(1, gated.provenanceCalls);
+  }
+
+  @Test
+  void aRecordNameStrategySubjectIsReadByProvenance() throws Exception {
+    // The subject is the record's full name; note, re-added, takes its default.
+    Schema v1 = record(idField(), string("note"));
+    Schema v3 = record(idField(), "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    String subject = v1.getFullName();
+    client.register(subject, new AvroSchema(v1));
+    client.register(subject, new AvroSchema(record(idField())));
+    client.register(subject, new AvroSchema(v3));
+    Map<String, Object> config = config(null);
+    config.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
+    byte[] bytes = new KafkaAvroSerializer(client, config).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "old").build());
+    config.put("provenance.algorithm", "v1");
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, v3).getValue();
+    assertEquals("", read.get("note").toString());
+  }
+
+  // v1 {id}, v2 {id, n = 0}: a v1 record, read with v2 by provenance.
+  private static byte[] idOnlyThenDefaultedN(Gated gated) throws Exception {
+    Schema v1 = record(idField());
+    gated.register(SUBJECT, new AvroSchema(v1));
+    gated.register(SUBJECT, new AvroSchema(record(idField(),
+        "{\"name\":\"n\",\"type\":\"int\",\"default\":0}")));
+    return new KafkaAvroSerializer(gated, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).build());
+  }
+
+  // The first record fails, as the failure set for it; the next reads, as nothing was cached.
+  private static void assertSecondRecordReads(Gated gated, byte[] bytes) throws Exception {
+    Schema v2 = record(idField(), "{\"name\":\"n\",\"type\":\"int\",\"default\":0}");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
+    assertThrows(SerializationException.class, () -> deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, v2));
+    GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+        new RecordHeaders(), bytes, v2).getValue();
+    assertEquals(7, read.get("id"));
+  }
+
+  private static RuntimeException oauthTokenNotHad() {
+    return new SchemaRegistryOauthTokenRetrieverException(
+        "Failed to Retrieve OAuth Token for Schema Registry", new RuntimeException("idp"));
+  }
+
+  private static RuntimeException rawKafkaException() {
+    return new KafkaException(new IOException("The response code 401 was encountered"));
   }
 
   @Test
@@ -973,13 +1070,16 @@ class AvroProvenanceDeserializerTest {
         + "\"namespace\":\"io.confluent\",\"fields\":[" + String.join(",", fields) + "]}");
   }
 
-  // Blocks the next writer fetch once armed, until released; fails the next version lookup,
-  // unchecked or for its OAuth token, once asked to.
+  // Blocks the next writer fetch once armed, until released; fails the next version lookup or
+  // provenance request with what it is given, once; answers every provenance request with an
+  // error, as a server without the endpoint does, once given one.
   private static final class Gated extends ProvenanceMockSchemaRegistryClient {
 
     volatile boolean armed;
-    volatile boolean failVersionLookup;
-    volatile boolean failVersionLookupForItsToken;
+    volatile RuntimeException nextVersionLookupFailure;
+    volatile RuntimeException nextProvenanceFailure;
+    volatile RestClientException provenanceAnswer;
+    volatile int provenanceCalls;
     final CountDownLatch entered = new CountDownLatch(1);
     final CountDownLatch release = new CountDownLatch(1);
 
@@ -1001,16 +1101,29 @@ class AvroProvenanceDeserializerTest {
     @Override
     public int getVersion(String subject, ParsedSchema schema)
         throws IOException, RestClientException {
-      if (failVersionLookup) {
-        failVersionLookup = false;
-        throw new UncheckedIOException(new IOException("connection reset"));
-      }
-      if (failVersionLookupForItsToken) {
-        failVersionLookupForItsToken = false;
-        throw new SchemaRegistryOauthTokenRetrieverException(
-            "Failed to Retrieve OAuth Token for Schema Registry", new RuntimeException("idp"));
+      RuntimeException failure = nextVersionLookupFailure;
+      if (failure != null) {
+        nextVersionLookupFailure = null;
+        throw failure;
       }
       return super.getVersion(subject, schema);
+    }
+
+    @Override
+    public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        throws IOException, RestClientException {
+      provenanceCalls++;
+      RuntimeException failure = nextProvenanceFailure;
+      if (failure != null) {
+        nextProvenanceFailure = null;
+        throw failure;
+      }
+      if (provenanceAnswer != null) {
+        throw provenanceAnswer;
+      }
+      return super.getProvenanceById(
+          subject, fromId, toId, includeInterior, includeMultipleMessages, algorithm);
     }
   }
 

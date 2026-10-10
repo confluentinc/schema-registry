@@ -129,7 +129,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
           + "versions registered before it; unset or 'none' to pair them as usual. A version "
           + "newer than this "
           + "client knows needs a newer client; one the registry does not know fails every "
-          + "record. Requires kafka-schema-registry-logical-types on the classpath";
+          + "record. Requires kafka-schema-registry-logical-types on the classpath; a client that "
+          + "does not support provenance reads as without it, with a warning";
 
   public static final String PROVENANCE_STRATEGY = "provenance.strategy";
   public static final Class<?> PROVENANCE_STRATEGY_DEFAULT = ClientProvenanceStrategy.class;

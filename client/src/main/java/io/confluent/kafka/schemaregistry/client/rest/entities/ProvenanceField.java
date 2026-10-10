@@ -45,10 +45,6 @@ public class ProvenanceField {
   private String kind;
   private Integer pid;
 
-  public ProvenanceField(List<Integer> path, List<String> names, Integer pid) {
-    this(path, names, null, pid);
-  }
-
   @JsonCreator
   public ProvenanceField(@JsonProperty("path") List<Integer> path,
                           @JsonProperty("names") List<String> names,
@@ -93,7 +89,8 @@ public class ProvenanceField {
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "What a location's type is, references "
       + "resolved: SCALAR (a type with no locations under it: a primitive, an enum, a fixed or "
-      + "a variant), STRUCT, UNION, or ARRAY, MULTISET or MAP of the kinds they hold. A location "
+      + "a variant), STRUCT, UNION, or ARRAY<k>, MULTISET<k> or MAP<k, k> of the kinds they hold, "
+      + "nested, a map's key kind first and the two separated by a comma and a space. A location "
       + "whose kind changes takes a new pid, as does everything under it",
       example = "MAP<SCALAR, STRUCT>")
   @JsonProperty("kind")
@@ -107,7 +104,9 @@ public class ProvenanceField {
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "The provenance id: unique per "
-      + "location, stable across versions while the field keeps its identity", example = "3")
+      + "location within a version, and equal across the response's versions exactly where the "
+      + "location continues. Ids are numbered per response, so compare them only within one; a "
+      + "metastore derives persistent column ids from them", example = "3")
   @JsonProperty("pid")
   public Integer getPid() {
     return pid;

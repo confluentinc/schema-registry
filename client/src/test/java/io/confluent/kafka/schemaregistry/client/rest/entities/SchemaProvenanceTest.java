@@ -60,7 +60,7 @@ public class SchemaProvenanceTest {
 
   @Test
   public void namesAreOmittedWhenNotVerbose() {
-    JsonNode json = MAPPER.valueToTree(field(path(0), null, 1));
+    JsonNode json = MAPPER.valueToTree(field(path(0), null, "SCALAR", 1));
     assertFalse(json.has("names"));
   }
 
@@ -75,7 +75,8 @@ public class SchemaProvenanceTest {
 
   @Test
   public void aVersionWithNoMembersSaysSo() {
-    JsonNode json = MAPPER.valueToTree(new ProvenanceVersion(1, 1001, Collections.emptyList()));
+    JsonNode json = MAPPER.valueToTree(
+        new ProvenanceVersion(1, 1001, "STRUCT", Collections.emptyList()));
     assertTrue(json.get("fields").isArray());
     assertEquals(0, json.get("fields").size());
   }
@@ -91,10 +92,6 @@ public class SchemaProvenanceTest {
     assertEquals(new SchemaProvenance("s", Collections.singletonList(
         new ProvenanceVersion(3, 7, "UNION", Collections.singletonList(
             field(path(0, 1), null, "ARRAY<STRUCT>", 2))))), read);
-  }
-
-  private static ProvenanceField field(List<Integer> path, List<String> names, int id) {
-    return new ProvenanceField(path, names, id);
   }
 
   private static ProvenanceField field(List<Integer> path, List<String> names, String kind,

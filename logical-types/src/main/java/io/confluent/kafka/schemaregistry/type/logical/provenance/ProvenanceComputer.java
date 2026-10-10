@@ -102,6 +102,8 @@ import java.util.function.ToIntFunction;
  *
  * <p>Ids are allocated walking versions in order and, within a version, members in path order —
  * the pre-order walk — taking the next integer for each member matched to nothing.
+ *
+ * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
  */
 public final class ProvenanceComputer {
 
