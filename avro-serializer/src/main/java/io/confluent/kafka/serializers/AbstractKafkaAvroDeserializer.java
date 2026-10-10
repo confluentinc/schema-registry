@@ -215,7 +215,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected void configure(KafkaAvroDeserializerConfig config,  Class<?> type) {
     configureClientProperties(config, new AvroSchemaProvider());
-    resetProvenance();
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
 
@@ -240,6 +239,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
     avroFailOnTrailingData = config
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_FAIL_ON_TRAILING_DATA_CONFIG);
+    // Last, once every flag a projection and its reader are built under is set: one built by a read
+    // in between would keep the old ones.
+    resetProvenance();
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -779,7 +781,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           AvroProvenanceProjection r = projection;
           reader = r == null
               ? getDatumReader(getSubject(), schemaId, writerSchema, readerSchema)
-              : datumReaderCache.get(new DatumReaderKey(getSubject(), schemaId, r.reader, r.writer),
+              : r.datumReader(
                   () -> createDatumReader(getSubject(), schemaId, r.writer, r.reader, r));
         }
         int length = buffer.remaining();
@@ -864,18 +866,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   static class DatumReaderKey {
     private final SubjectSchemaId writerKey;
     private final Schema readerSchema;
-    // The writer schema decoded as in place of the true one, when provenance renamed it.
-    private final Schema resolvingWriterSchema;
 
     DatumReaderKey(String subject, SchemaId writerSchemaId, Schema readerSchema) {
-      this(subject, writerSchemaId, readerSchema, null);
-    }
-
-    DatumReaderKey(String subject, SchemaId writerSchemaId, Schema readerSchema,
-        Schema resolvingWriterSchema) {
       this.writerKey = new SubjectSchemaId(subject, writerSchemaId);
       this.readerSchema = readerSchema;
-      this.resolvingWriterSchema = resolvingWriterSchema;
     }
 
     @Override
@@ -889,13 +883,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       DatumReaderKey that = (DatumReaderKey) o;
       // Writer dimension compared by subject and schema id, reader dimension by schema content.
       return Objects.equals(writerKey, that.writerKey)
-          && Objects.equals(readerSchema, that.readerSchema)
-          && Objects.equals(resolvingWriterSchema, that.resolvingWriterSchema);
+          && Objects.equals(readerSchema, that.readerSchema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(writerKey, readerSchema, resolvingWriterSchema);
+      return Objects.hash(writerKey, readerSchema);
     }
 
     @Override

@@ -16,7 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -25,7 +31,9 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -118,10 +126,20 @@ class ProvenanceHistorySweepTest {
       entries.add(new SchemaMetadata(i + 1, i + 1, versions.get(i).schemaType(),
           Collections.emptyList(), ""));
     }
+    SchemaProvenance provenance;
     try {
-      ProvenanceHistory.compute("s", entries, ProvenanceHistory.held(versions), false);
+      provenance = ProvenanceHistory.compute("s", entries, ProvenanceHistory.held(versions), false);
     } catch (ValidationException | RecursiveTypeException | AmbiguousProvenanceException e) {
       // Rejected by name: the registry answers 422, and the reader falls back.
+      return;
+    }
+    // Every version answers, and no pid sits at two locations of one version.
+    assertEquals(versions.size(), provenance.getVersions().size(), label);
+    for (ProvenanceVersion version : provenance.getVersions()) {
+      Set<Integer> pids = new HashSet<>();
+      for (ProvenanceField field : version.getFields()) {
+        assertTrue(pids.add(field.getPid()), label + ": pid " + field.getPid() + " is shared");
+      }
     }
   }
 

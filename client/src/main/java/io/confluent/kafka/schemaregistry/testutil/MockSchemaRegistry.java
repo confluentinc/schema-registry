@@ -43,6 +43,10 @@ import java.util.Map;
  * Schema Registry listening on a local port. For example,
  * {@code schema.registry.url: 'mock://my-scope-name'} corresponds to
  * {@code MockSchemaRegistry.getClientForScope("my-scope-name")}.
+ *
+ * <p>Where kafka-schema-registry-logical-types is on the classpath, the client also answers
+ * provenance, and keeps soft-deleted versions as the registry does: a lookup by schema skips them
+ * (40403), a version lookup finds them, and a missing version is 40402.
  */
 public final class MockSchemaRegistry {
   private static final String MOCK_URL_PREFIX = "mock://";

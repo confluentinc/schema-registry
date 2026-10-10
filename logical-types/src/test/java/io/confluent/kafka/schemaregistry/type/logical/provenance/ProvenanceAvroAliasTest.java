@@ -105,7 +105,8 @@ class ProvenanceAvroAliasTest {
   void anAliasKeptWhileANewFieldTakesTheAliasedName() {
     List<Map<String, Integer>> pids = pids(avro(fa("b", I, "a")), avro(fa("b", I, "a"), f("a", I)));
     assertThat(pids.get(1).get("b")).isEqualTo(pids.get(0).get("b"));
-    assertThat(pids.get(1)).containsKey("a");
+    // a is new: neither b's pid nor any other earlier one.
+    assertThat(pids.get(1).get("a")).isNotIn(pids.get(0).values());
     assertThat(pids.get(0)).doesNotContainKey("a");
   }
 
@@ -307,7 +308,7 @@ class ProvenanceAvroAliasTest {
   }
 
   @Test
-  void aShortNameSharedByTwoBranchesContinuesNeither() {
+  void aShortNameSharedByTwoBranchesLeavesTheRenamedOneNew() {
     // n2.A continues by its name; n3.A could be n1.A only by a short name n2.A shares.
     List<Map<String, Integer>> pids = pids(
         avro(f("u", "[\"null\"," + nsRec("n1", "A") + "," + nsRec("n2", "A") + "]")),

@@ -81,7 +81,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    */
   protected void configure(KafkaJsonSchemaDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new JsonSchemaProvider());
-    resetProvenance();
     this.type = type;
 
     boolean failUnknownProperties =
@@ -96,6 +95,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
     this.allowedTypePackages =
         config.getList(KafkaJsonSchemaDeserializerConfig.TYPE_ALLOWED_PACKAGES);
+    // Last, once every flag a projection and its reader are built under is set: one built by a read
+    // in between would keep the old ones.
+    resetProvenance();
   }
 
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {

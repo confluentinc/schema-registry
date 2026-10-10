@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -147,7 +148,13 @@ class ProvenanceConverterSweepTest {
 
   private static void fixtures(String dir, String suffix, Function<String, ParsedSchema> parse,
       List<Arguments> corpus) throws IOException {
-    Path root = Paths.get("src/test/resources", dir);
+    // From test-classes, so the sweep runs from any working directory.
+    Path root;
+    try {
+      root = Paths.get(ProvenanceConverterSweepTest.class.getResource("/" + dir).toURI());
+    } catch (URISyntaxException e) {
+      throw new IllegalStateException(e);
+    }
     try (Stream<Path> files = Files.list(root)) {
       for (Path file : (Iterable<Path>) files.sorted()::iterator) {
         if (file.toString().endsWith(suffix)) {

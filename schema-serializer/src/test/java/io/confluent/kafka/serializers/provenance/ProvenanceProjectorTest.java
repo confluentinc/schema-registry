@@ -40,10 +40,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -72,23 +70,34 @@ public class ProvenanceProjectorTest {
     CountingClient client = new CountingClient();
     client.gate = new CountDownLatch(1);
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, "v1", 10, -1);
-    ExecutorService pool = Executors.newFixedThreadPool(4);
-    try {
-      List<Future<?>> asks = new ArrayList<>();
-      for (int i = 0; i < 4; i++) {
-        asks.add(pool.submit(() -> {
+    List<Throwable> failures = new CopyOnWriteArrayList<>();
+    List<Thread> askers = new ArrayList<>();
+    for (int i = 0; i < 4; i++) {
+      Thread asker = new Thread(() -> {
+        try {
           ask(projector, client);
-          return null;
-        }));
-      }
-      Thread.sleep(200);
-      client.gate.countDown();
-      for (Future<?> f : asks) {
-        f.get(10, TimeUnit.SECONDS);
-      }
-    } finally {
-      pool.shutdownNow();
+        } catch (Throwable e) {
+          failures.add(e);
+        }
+      });
+      askers.add(asker);
+      asker.start();
     }
+    // Released only once all four wait, one on the request and three on the projector sharing it,
+    // so none can be a later cache hit.
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (!askers.stream().allMatch(ProvenanceProjectorTest::parked)
+        && System.nanoTime() < deadline) {
+      Thread.onSpinWait();
+    }
+    assertTrue("not every asker waited", askers.stream().allMatch(ProvenanceProjectorTest::parked));
+    assertEquals(1, client.askedAtOnce.get());
+    client.gate.countDown();
+    for (Thread asker : askers) {
+      asker.join(10_000);
+      assertFalse("an asker did not finish", asker.isAlive());
+    }
+    assertTrue(failures.toString(), failures.isEmpty());
     assertEquals(1, client.askedAtOnce.get());
   }
 
@@ -409,8 +418,16 @@ public class ProvenanceProjectorTest {
     ParsedSchema handedOver = projector.readerSchemas(
         writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
-    assertThrows(SerializationException.class, () ->
-        projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+    // Every record fails, and for the fetch: the 40403 is in the cause chain each time.
+    for (int i = 0; i < 2; i++) {
+      SerializationException e = assertThrows(SerializationException.class, () ->
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+      boolean caused = false;
+      for (Throwable t = e; t != null; t = t.getCause()) {
+        caused |= t == client.schemaByIdFailure;
+      }
+      assertTrue("not failed by the fetch: " + e, caused);
+    }
   }
 
   @Test
@@ -554,6 +571,11 @@ public class ProvenanceProjectorTest {
         withMetadata, client.reader, false, m -> "built");
     assertEquals(2, client.asked);
     assertEquals(client.writer, client.lastWriterId);
+  }
+
+  private static boolean parked(Thread thread) {
+    return thread.getState() == Thread.State.WAITING
+        || thread.getState() == Thread.State.TIMED_WAITING;
   }
 
   private static void ask(ProvenanceProjector<String> projector, CountingClient client)

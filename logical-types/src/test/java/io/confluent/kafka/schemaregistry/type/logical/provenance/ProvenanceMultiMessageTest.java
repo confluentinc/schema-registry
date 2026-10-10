@@ -86,6 +86,21 @@ class ProvenanceMultiMessageTest {
   }
 
   @Test
+  void renamingOneMessageRestartsOnlyThatMessage() {
+    String returned = "message Return { int32 id = 1; int32 amount = 2; }";
+    List<ProvenanceVersion> versions = compute(proto(ORDER, REFUND, LINE),
+        proto(ORDER, returned, LINE));
+    Map<List<Integer>, Integer> v1 = pids(versions.get(0));
+    Map<List<Integer>, Integer> v2 = pids(versions.get(1));
+
+    assertThat(v2.get(path(1))).isNotIn(v1.values());               // Return
+    assertThat(v2.get(path(1, 1))).isNotIn(v1.values());            // Return.amount
+    assertThat(v2.get(path(0, 1))).isEqualTo(v1.get(path(0, 1)));  // Order.item
+    assertThat(v2.get(path(0, 2, 0))).isEqualTo(v1.get(path(0, 2, 0)));  // Order.line.sku
+    assertThat(v2.get(path(2, 0))).isEqualTo(v1.get(path(2, 0)));  // Line.sku
+  }
+
+  @Test
   void aSubjectGrowingFromOneMessageToTwoKeepsItsIds() {
     List<ProvenanceVersion> versions = compute(proto(REFUND), proto(ORDER, REFUND, LINE));
     Map<List<Integer>, Integer> v1 = pids(versions.get(0));
