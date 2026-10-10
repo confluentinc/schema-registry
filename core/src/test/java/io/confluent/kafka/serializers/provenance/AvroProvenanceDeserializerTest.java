@@ -46,6 +46,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.lang.ref.WeakReference;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -54,7 +55,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.FutureTask;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -67,6 +71,12 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -200,17 +210,17 @@ class AvroProvenanceDeserializerTest {
         new Rule("r", null, RuleKind.CONDITION, RuleMode.READ, "CEL", null, null, "true", null,
             null, false))));
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
-    Object[] read = new Object[1];
     gated.armed = true;
-    Thread thread = new Thread(() -> read[0] = deserializer.deserializeWithReaderSchema(TOPIC,
-        new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, SUBJECT, 1), false).getValue());
-    thread.start();
-    gated.entered.await();
+    // A FutureTask bounds the wait for the read and rethrows its own failure.
+    FutureTask<Object> read = new FutureTask<>(() -> deserializer.deserializeWithReaderSchema(
+        TOPIC, new RecordHeaders(), bytes, w -> ReaderSchema.of(reader, SUBJECT, 1), false)
+        .getValue());
+    new Thread(read).start();
+    assertTrue(gated.entered.await(10, TimeUnit.SECONDS), "the read never reached the gate");
     // The reconfigure lands while the read is fetching its writer.
     deserializer.configure(config("v1"), false);
     gated.release.countDown();
-    thread.join(5000);
-    assertEquals("", ((GenericRecord) read[0]).get("note").toString());
+    assertEquals("", ((GenericRecord) read.get(10, TimeUnit.SECONDS)).get("note").toString());
   }
 
   @Test
@@ -292,11 +302,97 @@ class AvroProvenanceDeserializerTest {
         new GenericRecordBuilder(v1).set("id", 7).set("note", "old").build());
     gated.provenanceAnswer = new RestClientException("HTTP 404 Not Found", 404, 404);
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(gated, config("v1"));
-    for (int i = 0; i < 2; i++) {
-      assertEquals("old", ((GenericRecord) deserializer.deserializeWithSchema(TOPIC,
-          new RecordHeaders(), bytes, v3).getValue()).get("note").toString());
+    try (Warnings warnings = new Warnings(ProvenanceProjector.class)) {
+      for (int i = 0; i < 2; i++) {
+        assertEquals("old", ((GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+            new RecordHeaders(), bytes, v3).getValue()).get("note").toString());
+      }
+      assertEquals(1, warnings.messages.size(), warnings.messages.toString());
+      assertTrue(warnings.messages.get(0).startsWith("No provenance for "),
+          warnings.messages.get(0));
     }
     assertEquals(1, gated.provenanceCalls);
+  }
+
+  @Test
+  void aReaderDifferingOnlyInDocsBuildsRecordsUnderItsOwnSchema() throws Exception {
+    // Avro's equality ignores docs: a datum reader shared by the two built r5's records as r3's.
+    String note = "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\",\"doc\":\"%s\"}";
+    Schema v1 = record(idField(), string("note"));
+    Schema r3 = record(idField(), String.format(note, "r3"));
+    Schema r5 = record(idField(), String.format(note, "r5"));
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(record(idField())));
+    client.register(SUBJECT, new AvroSchema(r3));
+    client.register(SUBJECT, new AvroSchema(r5));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7).set("note", "old").build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    for (Schema reader : Arrays.asList(r3, r5)) {
+      GenericRecord read = (GenericRecord) deserializer.deserializeWithSchema(TOPIC,
+          new RecordHeaders(), bytes, reader).getValue();
+      assertEquals("", read.get("note").toString());
+      assertEquals(reader.getField("note").doc(), read.getSchema().getField("note").doc());
+    }
+  }
+
+  @Test
+  void aTypeRenamedOntoOneKeptElsewhereInAUnionStillReadsByProvenance() throws Exception {
+    // T is kept at p and A renamed onto it at q. Matched as copies are, q's T is no clone the
+    // resolver would read into o.T: the pair reads by provenance, and the re-added k is new.
+    String t = "\"name\":\"T\",\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":0}]}";
+    String other = "{\"type\":\"record\",\"namespace\":\"o\"," + t;
+    String head = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"n\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},";
+    String rest = "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"record\",\"aliases\":[\"A\"],"
+        + t + "],\"default\":null},"
+        + "{\"name\":\"q\",\"type\":[\"null\",\"string\",\"T\"," + other + "],\"default\":null}]}";
+    Schema v1 = new Schema.Parser().parse(head + "{\"name\":\"k\",\"type\":\"int\"},"
+        + "{\"name\":\"p\",\"type\":[\"null\",{\"type\":\"record\"," + t + "],\"default\":null},"
+        + "{\"name\":\"q\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"A\",\"fields\":"
+        + "[{\"name\":\"x\",\"type\":\"int\"}]},\"string\"," + other + "],\"default\":null}]}");
+    Schema v3 = new Schema.Parser().parse(
+        head + "{\"name\":\"k\",\"type\":\"int\",\"default\":0}," + rest);
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    client.updateCompatibility(SUBJECT, "NONE");
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(new Schema.Parser().parse(head + rest)));
+    client.register(SUBJECT, new AvroSchema(v3));
+    Schema a = v1.getField("q").schema().getTypes().get(1);
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 1).set("k", 5).set("p", null)
+            .set("q", new GenericRecordBuilder(a).set("x", 7).build()).build());
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+        .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, v3).getValue();
+    assertEquals(0, read.get("k"));
+    assertEquals(7, ((GenericRecord) read.get("q")).get("x"));
+  }
+
+  @Test
+  void aReconfigureReachesTheDatumReaderOfAPairReadBefore() throws Exception {
+    // The projection and the datum reader it holds belong to the configuration they were built
+    // under: turning the logical-type converters on reads a decimal as a BigDecimal.
+    String amount = "{\"name\":\"amount\",\"type\":{\"type\":\"bytes\","
+        + "\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}}";
+    Schema v1 = record(idField(), amount);
+    Schema v2 = record(idField(), amount,
+        "{\"name\":\"note\",\"type\":\"string\",\"default\":\"\"}");
+    ProvenanceMockSchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient();
+    client.register(SUBJECT, new AvroSchema(v1));
+    client.register(SUBJECT, new AvroSchema(v2));
+    byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
+        new GenericRecordBuilder(v1).set("id", 7)
+            .set("amount", ByteBuffer.wrap(new BigDecimal("1.25").unscaledValue().toByteArray()))
+            .build());
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    assertTrue(((GenericRecord) deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(),
+        bytes, v2).getValue()).get("amount") instanceof ByteBuffer);
+    Map<String, Object> converting = config("v1");
+    converting.put("avro.use.logical.type.converters", true);
+    deserializer.configure(converting, false);
+    assertEquals(new BigDecimal("1.25"), ((GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, v2).getValue()).get("amount"));
   }
 
   @Test
@@ -761,7 +857,9 @@ class AvroProvenanceDeserializerTest {
     Schema reader = record(idField(),
         "{\"name\":\"x\",\"type\":\"string\",\"default\":\"DEF\",\"doc\":\"again\"}");
 
-    assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
+    SerializationException e =
+        assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
+    assertTrue(causes(e).contains("token endpoint unreachable"), causes(e));
   }
 
   @Test
@@ -984,9 +1082,9 @@ class AvroProvenanceDeserializerTest {
         new Schema.Parser().parse(v2));
 
     WeakReference<Schema> once = readOnce(deserializer, bytes, v2);
+    // A full collection clears a weak reference it finds unreachable, so no wait is needed.
     for (int i = 0; i < 20 && once.get() != null; i++) {
       System.gc();
-      Thread.sleep(20);
     }
     assertNull(once.get());
   }
@@ -1068,6 +1166,33 @@ class AvroProvenanceDeserializerTest {
   private static Schema record(String... fields) {
     return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MyRecord\","
         + "\"namespace\":\"io.confluent\",\"fields\":[" + String.join(",", fields) + "]}");
+  }
+
+  // Collects what a class logs at WARN while open.
+  private static final class Warnings extends AbstractAppender implements AutoCloseable {
+
+    final List<String> messages = new CopyOnWriteArrayList<>();
+    private final Logger logger;
+
+    Warnings(Class<?> type) {
+      super("warnings-" + type.getSimpleName(), null, null, true, Property.EMPTY_ARRAY);
+      logger = (Logger) LogManager.getLogger(type);
+      start();
+      logger.addAppender(this);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      if (event.getLevel() == Level.WARN) {
+        messages.add(event.getMessage().getFormattedMessage());
+      }
+    }
+
+    @Override
+    public void close() {
+      logger.removeAppender(this);
+      stop();
+    }
   }
 
   // Blocks the next writer fetch once armed, until released; fails the next version lookup or
@@ -1156,4 +1281,14 @@ class AvroProvenanceDeserializerTest {
       return pids.get(version);
     }
   }
+
+  // Every message in the cause chain, so a test can name the failure it expects.
+  private static String causes(Throwable e) {
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      chain.append(t.getClass().getSimpleName()).append(": ").append(t.getMessage()).append('\n');
+    }
+    return chain.toString();
+  }
+
 }

@@ -28,6 +28,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.io.DatumReader;
 import org.apache.avro.util.internal.Accessor;
 import org.apache.kafka.common.errors.SerializationException;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Carries provenance into Avro's resolver by renaming, the way {@link Schema#applyAliases} carries
@@ -68,6 +70,9 @@ final class AvroProvenanceProjection {
   // Each type of the reader copy that differs from the caller's, mapped to the caller's.
   private final Map<Schema, Schema> originals;
   private final Map<String, String> sinkOrigins;
+  // Its own: a projection reusing the caller's types equals, as Avro compares, one reusing a
+  // reader that differs only in docs, and must not build records under that one's types.
+  private volatile DatumReader<?> datumReader;
 
   private AvroProvenanceProjection(Schema writer, Schema reader, Map<Schema, Schema> originals,
       Map<String, String> sinkOrigins) {
@@ -144,11 +149,22 @@ final class AvroProvenanceProjection {
     }
   }
 
+  DatumReader<?> datumReader(Supplier<DatumReader<?>> create) {
+    DatumReader<?> reader = datumReader;
+    if (reader == null) {
+      // A race builds two equal readers; either serves.
+      reader = create.get();
+      datumReader = reader;
+    }
+    return reader;
+  }
+
   /**
    * {@code writer} renamed after {@code reader} as {@code mapping} pairs them.
    *
    * <p>The reader comes back too, with every alias removed — provenance has already decided every
-   * pairing an alias could — and any sink branches added.
+   * pairing an alias could — and any sink branches added. A type either would copy unchanged is
+   * the caller's own.
    *
    * @throws ProvenanceUnavailableException if one named type would need two definitions inside a
    *     union, or the resolver would read a writer value into a union branch provenance gives a
@@ -385,6 +401,18 @@ final class AvroProvenanceProjection {
     return names;
   }
 
+  private static boolean sameElements(List<Schema> built, List<Schema> original) {
+    if (built.size() != original.size()) {
+      return false;
+    }
+    for (int i = 0; i < built.size(); i++) {
+      if (built.get(i) != original.get(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static Schema withProps(Schema from, Schema to) {
     from.getObjectProps().forEach(to::addProp);
     return to;
@@ -447,18 +475,31 @@ final class AvroProvenanceProjection {
       switch (writer.getType()) {
         case RECORD:
           return renameRecord(writer, writerAt, reader, readerAt, inUnion);
-        case ENUM:
-          return register(renameEnum(writer, nameAfter(writer, reader)), inUnion);
-        case FIXED:
-          return register(renameFixed(writer, nameAfter(writer, reader)), inUnion);
-        case ARRAY:
-          return withProps(writer, Schema.createArray(renameAt(writer.getElementType(),
-              append(writerAt, null), ofType(reader, Type.ARRAY) != null
-                  ? reader.getElementType() : null, append(readerAt, null), false)));
-        case MAP:
-          return withProps(writer, Schema.createMap(renameAt(writer.getValueType(),
-              append(writerAt, null), ofType(reader, Type.MAP) != null
-                  ? reader.getValueType() : null, append(readerAt, null), false)));
+        case ENUM: {
+          // The writer's own where its name is kept: the resolver ignores a writer's aliases.
+          final String name = nameAfter(writer, reader);
+          return register(name.equals(writer.getFullName()) ? writer : renameEnum(writer, name),
+              inUnion);
+        }
+        case FIXED: {
+          final String name = nameAfter(writer, reader);
+          return register(name.equals(writer.getFullName()) ? writer : renameFixed(writer, name),
+              inUnion);
+        }
+        case ARRAY: {
+          final Schema element = renameAt(writer.getElementType(), append(writerAt, null),
+              ofType(reader, Type.ARRAY) != null ? reader.getElementType() : null,
+              append(readerAt, null), false);
+          return element == writer.getElementType() ? writer
+              : withProps(writer, Schema.createArray(element));
+        }
+        case MAP: {
+          final Schema value = renameAt(writer.getValueType(), append(writerAt, null),
+              ofType(reader, Type.MAP) != null ? reader.getValueType() : null,
+              append(readerAt, null), false);
+          return value == writer.getValueType() ? writer
+              : withProps(writer, Schema.createMap(value));
+        }
         case UNION:
           return renameUnion(writer, writerAt, reader, readerAt);
         default:
@@ -470,6 +511,8 @@ final class AvroProvenanceProjection {
         List<String> readerAt, boolean inUnion) {
       final Schema target = ofType(reader, Type.RECORD);
       final List<Field> fields = new ArrayList<>(writer.getFields().size());
+      // Whether the copy would be the writer again: every name kept, every type the writer's own.
+      boolean same = target != null && target.getFullName().equals(writer.getFullName());
       for (Field field : writer.getFields()) {
         final List<String> fieldAt = append(writerAt, field.name());
         final List<Integer> location = mapping.writerPathAt(fieldAt);
@@ -480,6 +523,7 @@ final class AvroProvenanceProjection {
           if (counterpart == null) {
             fields.add(new Field(unmatchedField(target, field.pos()), discard(field.schema()),
                 field.doc()));
+            same = false;
             continue;
           }
         } else {
@@ -487,9 +531,14 @@ final class AvroProvenanceProjection {
           counterpart = target != null ? target.getField(field.name()) : null;
         }
         final String name = counterpart != null ? counterpart.name() : field.name();
-        fields.add(new Field(name, renameAt(field.schema(), fieldAt,
-            counterpart != null ? counterpart.schema() : null, append(readerAt, name), false),
-            field.doc()));
+        final Schema type = renameAt(field.schema(), fieldAt,
+            counterpart != null ? counterpart.schema() : null, append(readerAt, name), false);
+        same &= name.equals(field.name()) && type == field.schema();
+        fields.add(new Field(name, type, field.doc()));
+      }
+      if (same) {
+        writerNames.put(writer, fieldNames(writer));
+        return register(writer, inUnion);
       }
       final Schema record = Schema.createRecord(
           target != null ? target.getFullName() : throwawayName(writer),
@@ -532,7 +581,8 @@ final class AvroProvenanceProjection {
               : unmatchedBranch(branch, writerAt, reader));
         }
       }
-      final Schema union = Schema.createUnion(branches);
+      final Schema union =
+          sameElements(branches, writer.getTypes()) ? writer : Schema.createUnion(branches);
       writerNames.put(union, branchNames(writer));
       return union;
     }
@@ -632,7 +682,7 @@ final class AvroProvenanceProjection {
         byName.put(built.getFullName(), built);
         return built;
       }
-      if (existing.equals(built)
+      if (equalAsCopies(existing, built)
           && Objects.equals(writerNames.get(existing), writerNames.get(built))) {
         return existing;
       }
@@ -646,6 +696,50 @@ final class AvroProvenanceProjection {
         cloneTargets.put(clone.getFullName(), built.getFullName());
       }
       return clone;
+    }
+
+    /**
+     * Whether {@code a} and {@code b} would be equal had both been copied: a writer type reused as
+     * is keeps the field defaults, props and orders a copy drops, none of which the resolver reads.
+     */
+    private static boolean equalAsCopies(Schema a, Schema b) {
+      if (a == b) {
+        return true;
+      }
+      if (a.getType() != b.getType() || !a.getObjectProps().equals(b.getObjectProps())) {
+        return false;
+      }
+      switch (a.getType()) {
+        case RECORD:
+          if (!a.getFullName().equals(b.getFullName()) || a.isError() != b.isError()
+              || a.getFields().size() != b.getFields().size()) {
+            return false;
+          }
+          for (int i = 0; i < a.getFields().size(); i++) {
+            final Field x = a.getFields().get(i);
+            final Field y = b.getFields().get(i);
+            if (!x.name().equals(y.name()) || !equalAsCopies(x.schema(), y.schema())) {
+              return false;
+            }
+          }
+          return true;
+        case ARRAY:
+          return equalAsCopies(a.getElementType(), b.getElementType());
+        case MAP:
+          return equalAsCopies(a.getValueType(), b.getValueType());
+        case UNION:
+          if (a.getTypes().size() != b.getTypes().size()) {
+            return false;
+          }
+          for (int i = 0; i < a.getTypes().size(); i++) {
+            if (!equalAsCopies(a.getTypes().get(i), b.getTypes().get(i))) {
+              return false;
+            }
+          }
+          return true;
+        default:
+          return a.equals(b);
+      }
     }
 
     private Schema cloneAs(Schema built, String namespace) {
@@ -688,14 +782,16 @@ final class AvroProvenanceProjection {
         case RECORD:
           return recordCopy(reader, copies);
         case ARRAY: {
-          final Schema array =
-              withProps(reader, Schema.createArray(readerCopy(reader.getElementType(), copies)));
+          final Schema element = readerCopy(reader.getElementType(), copies);
+          final Schema array = element == reader.getElementType() ? reader
+              : withProps(reader, Schema.createArray(element));
           copies.put(reader, array);
           return array;
         }
         case MAP: {
-          final Schema map =
-              withProps(reader, Schema.createMap(readerCopy(reader.getValueType(), copies)));
+          final Schema value = readerCopy(reader.getValueType(), copies);
+          final Schema map = value == reader.getValueType() ? reader
+              : withProps(reader, Schema.createMap(value));
           copies.put(reader, map);
           return map;
         }
@@ -706,7 +802,7 @@ final class AvroProvenanceProjection {
           }
           // Appended last, so every branch the application knows keeps its index.
           branches.addAll(sinks.getOrDefault(reader, Collections.emptyList()));
-          return Schema.createUnion(branches);
+          return sameElements(branches, reader.getTypes()) ? reader : Schema.createUnion(branches);
         }
         case ENUM:
         case FIXED: {
@@ -759,6 +855,9 @@ final class AvroProvenanceProjection {
           reader.getName(), reader.getDoc(), reader.getNamespace(), reader.isError());
       copies.put(reader, record);
       final List<Field> fields = new ArrayList<>(reader.getFields().size());
+      // Whether the copy would be the reader again: no alias to remove, no default to add, every
+      // type the reader's own. A recursive one reaches the copy, so is copied.
+      boolean same = reader.getAliases().isEmpty();
       for (Field field : reader.getFields()) {
         // The default as parsed, unvalidated as the reader's own parse left it: Avro cannot write a
         // bytes or fixed default back from its value, and fails an invalid one only when used.
@@ -769,10 +868,17 @@ final class AvroProvenanceProjection {
           // column added later reads null for older rows.
           value = NullNode.getInstance();
         }
-        final Field copy = Accessor.createField(field.name(), readerCopy(field.schema(), copies),
-            field.doc(), value, false, field.order());
+        final Schema type = readerCopy(field.schema(), copies);
+        same &= field.aliases().isEmpty() && type == field.schema()
+            && value == Accessor.defaultValue(field);
+        final Field copy = Accessor.createField(field.name(), type, field.doc(), value, false,
+            field.order());
         field.getObjectProps().forEach(copy::addProp);
         fields.add(copy);
+      }
+      if (same) {
+        copies.put(reader, reader);
+        return reader;
       }
       record.setFields(fields);
       return withProps(reader, record);
