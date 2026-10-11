@@ -116,6 +116,14 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aFieldRetypedToAnotherWireTypeReadsItsDefaultBothWays() throws Exception {
+    // The number continues, so the bytes stay unknown data and the field reads its default.
+    DynamicMessage read = sameBothWays(row("int32 f = 1;"), row("string f = 1;"), set("f", 5));
+    assertEquals("", get(read, "f"));
+    assertTrue(read.getUnknownFields().hasField(1));
+  }
+
+  @Test
   void uint32WidensToInt64() throws Exception {
     assertEquals(7L, get(sameBothWays(row("uint32 f = 1;"), row("int64 f = 1;"), set("f", 7)), "f"));
   }
