@@ -186,6 +186,21 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aNarrowedScalarFailsBothWays() throws Exception {
+    // A retype keeps the pid: Avro's resolver decides, and it rejects long to int.
+    failsBothWays(field("long"), field("int"), (1L << 33) + 5);
+  }
+
+  @Test
+  void aDecimalScaleChangeKeepsItsPidAndReadsAsAvroDoes() throws Exception {
+    // A meaning change continues (decided): the unscaled bytes carry over as written.
+    String decimal = "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":";
+    ByteBuffer unscaled = ByteBuffer.wrap(new byte[] {0x30, 0x39});
+    assertEquals(unscaled,
+        sameBothWays(field(decimal + "2}"), field(decimal + "3}"), unscaled).get("f"));
+  }
+
+  @Test
   void aValueWidenedIntoAUnionIsANewColumn() throws Exception {
     // A scalar becoming a union changes kind, a drop and an add: Avro alone reads the value
     // into the int branch, provenance does not, and with no default the record fails.

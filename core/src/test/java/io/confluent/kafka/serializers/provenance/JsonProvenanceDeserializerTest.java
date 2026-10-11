@@ -41,6 +41,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -349,6 +350,25 @@ class JsonProvenanceDeserializerTest {
     JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config)
         .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> v3).getValue();
     assertEquals(9, on.get("note").asInt());
+  }
+
+  @Test
+  void aScalarRetypedPropertyPassesAsWrittenAndValidationRejectsIt() throws Exception {
+    // integer to string continues (decided): unvalidated the value passes as written, as it does
+    // without provenance; validated, both reads reject it.
+    JsonSchema v1 = object("\"a\": {\"type\": \"integer\"}");
+    JsonSchema v2 = object(string("a"));
+    byte[] bytes = write(v1, "{\"a\": 5}");
+    client.register(SUBJECT, v2);
+    assertEquals(read(v2, bytes, null), read(v2, bytes, "v1"));
+    assertEquals(5, read(v2, bytes, "v1").get("a").asInt());
+    for (String provenance : Arrays.asList(null, "v1")) {
+      Map<String, Object> config = config(provenance);
+      config.put("json.fail.invalid.schema", true);
+      assertThrows(SerializationException.class,
+          () -> new KafkaJsonSchemaDeserializer<JsonNode>(client, config)
+              .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> v2));
+    }
   }
 
   @Test

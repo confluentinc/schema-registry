@@ -46,8 +46,9 @@ import java.util.Map;
  *
  * <p>Where kafka-schema-registry-logical-types is on the classpath, the client also answers
  * provenance, and keeps soft-deleted versions as the registry does: a lookup by schema skips them
- * (40403), a version lookup finds them, and a missing version is 40402. A subject whose every
- * version is soft-deleted is not found (40401), but when deleted versions are looked up.
+ * (40403), a version lookup that asks for deleted ones finds them, and a missing version is 40402.
+ * A subject whose every version is soft-deleted is not found (40401) except when deleted versions
+ * are looked up; a soft deleteSubject forgets the subject, as the base mock does.
  */
 public final class MockSchemaRegistry {
   private static final String MOCK_URL_PREFIX = "mock://";
