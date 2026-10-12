@@ -26,6 +26,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -44,6 +45,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.DoubleSupplier;
 import java.util.concurrent.TimeUnit;
 
 public class MetricsContainer {
@@ -69,6 +71,11 @@ public class MetricsContainer {
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
   public static final String METRIC_LEADER_INITIALIZATION_LATENCY = "leader-initialization-latency";
+  public static final String METRIC_NAME_READER_ALIVE = "kafka-store-reader-alive";
+  public static final String METRIC_NAME_READER_POLL_FAILURES =
+      "kafka-store-reader-consecutive-poll-failures";
+  public static final String METRIC_NAME_READER_LAST_POLL_AGE_MS =
+      "kafka-store-reader-ms-since-last-successful-poll";
   public static final String METRIC_CERTIFICATE_EXPIRATION = "certificate-expiration";
 
   private final Metrics metrics;
@@ -166,6 +173,17 @@ public class MetricsContainer {
         createMetric(METRIC_CERTIFICATE_EXPIRATION + "-truststore",
             "Epoch timestamp when the truststore certificate expires, if its a certificate chain, "
                 + "then its the certificate with the shortest time to live", new Value());
+  }
+
+  /**
+   * Registers a gauge whose value is computed on each read, e.g. for liveness of a background
+   * thread, where push-style recording would go silent exactly when the thread dies.
+   */
+  public void addGauge(String name, String description, DoubleSupplier supplier) {
+    MetricName mn = new MetricName(name, name, description, configuredTags);
+    if (!metrics.metrics().containsKey(mn)) {
+      metrics.addMetric(mn, (Gauge<Double>) (config, now) -> supplier.getAsDouble());
+    }
   }
 
   public Metrics getMetrics() {
