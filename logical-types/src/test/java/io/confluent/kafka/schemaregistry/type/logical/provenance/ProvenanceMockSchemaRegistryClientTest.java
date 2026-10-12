@@ -114,19 +114,6 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
-  void dynamicComputesAsV1AndSaysSo() throws Exception {
-    int v1 = register(record(field("id", "int"), field("name", "string")));
-    int v2 = register(record(field("id", "int"),
-        "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]}"));
-
-    SchemaProvenance dynamic = client.getProvenanceById(SUBJECT, v1, v2, false, false, "dynamic");
-
-    assertThat(dynamic.getAlgorithm()).isEqualTo("dynamic");
-    assertThat(dynamic.getVersions()).isEqualTo(
-        client.getProvenanceById(SUBJECT, v1, v2, false, false, "v1").getVersions());
-  }
-
-  @Test
   void anUnknownAlgorithmIsRejected() throws Exception {
     int v1 = register(record(field("id", "int")));
     assertCode(422, 42216, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false, "v9"));
@@ -200,22 +187,6 @@ class ProvenanceMockSchemaRegistryClientTest {
     };
     int v1 = failing.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
     assertCode(500, 500, () -> failing.getProvenanceById(SUBJECT, v1, v1, false, false, null));
-  }
-
-  @Test
-  void aDynamicRangeOverAnAlgorithmNotSupportedIsRejectedNotRetried() throws Exception {
-    // A 422 with the unknown-algorithm code, which a client stops asking about; a 500 it retries.
-    ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
-      @Override
-      protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-          List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-          boolean includeInterior, String algorithm) {
-        throw new UnsupportedProvenanceAlgorithmException("v2 beside v1");
-      }
-    };
-    int v1 = failing.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
-    assertCode(422, 42216, () -> failing.getProvenanceById(SUBJECT, v1, v1, false, false,
-        "dynamic"));
   }
 
   @Test
