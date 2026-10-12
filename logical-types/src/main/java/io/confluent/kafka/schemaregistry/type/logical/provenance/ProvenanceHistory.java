@@ -204,9 +204,7 @@ public final class ProvenanceHistory {
       int index = e.version();
       throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
     }
-    SchemaProvenance encoded = SchemaProvenanceEncoder.encode(subject, report, ids, versions);
-    encoded.setAlgorithm(ProvenanceAlgorithm.V1.getName());
-    return encoded;
+    return SchemaProvenanceEncoder.encode(subject, report, ids, versions);
   }
 
   /**
@@ -266,6 +264,6 @@ public final class ProvenanceHistory {
             ? v.getVersion() >= low && v.getVersion() <= high
             : v.getVersion() == low || v.getVersion() == high)
         .collect(Collectors.toList());
-    return new SchemaProvenance(whole.getSubject(), whole.getAlgorithm(), versions);
+    return new SchemaProvenance(whole.getSubject(), versions);
   }
 }
