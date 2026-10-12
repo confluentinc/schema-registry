@@ -550,7 +550,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       synchronized (this) {
         projector = provenanceProjector;
         if (projector == null) {
-          projector = new ProvenanceProjector<>(schemaRegistry, provenanceAlgorithm,
+          // No algorithm named: each schema version is matched by its own.
+          projector = new ProvenanceProjector<>(schemaRegistry, null,
               provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy,
               provenanceReaderMarks);
           provenanceProjector = projector;
