@@ -116,6 +116,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * version adds besides — metadata, rules — so for provenance it is the latest version it equals.
    */
   private AvroSchema classReader(Schema schema) {
+    // A hit without the lock computeIfAbsent takes on every call.
+    AvroSchema known = classReaders.getIfPresent(schema);
+    if (known != null) {
+      return known;
+    }
     // The projector first: a load holding the cache's lock must not wait for the monitor a reset,
     // invalidating the cache, holds.
     ProvenanceProjector<AvroProvenanceProjection> projector =
