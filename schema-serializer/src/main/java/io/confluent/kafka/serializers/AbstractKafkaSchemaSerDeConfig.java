@@ -608,14 +608,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return value != null && PROVENANCE_ALGORITHM_ENABLED.equalsIgnoreCase(value.trim());
   }
 
-  /**
-   * The provenance algorithm version to ask for, or null for each schema version's own; always
-   * null, as no version can be named.
-   */
-  public String getProvenanceAlgorithm() {
-    return null;
-  }
-
   public int getProvenanceCacheSize() {
     return this.getInt(PROVENANCE_CACHE_SIZE);
   }
