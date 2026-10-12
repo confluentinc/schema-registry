@@ -354,6 +354,55 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aRecordWrittenUnderAReExportingVersionKeepsItsFields() throws Exception {
+    // v2 declares nothing but a public import of v1's message: its records carry O's fields,
+    // which continue into v3 rather than restarting.
+    String o = "syntax = \"proto3\";\npackage q;\n"
+        + "message O {\n  int32 x = 1;\n  string y = 2;\n%s}\n";
+    client.register("o", new ProtobufSchema(String.format(o, "")));
+    ProtobufSchema v1 = new ProtobufSchema(String.format(o, ""));
+    ProtobufSchema v2 = reExport(String.format(o, ""), 1);
+    ProtobufSchema v3 = new ProtobufSchema(String.format(o, "  int64 z = 3;\n"));
+    for (ProtobufSchema version : Arrays.asList(v1, v2, v3)) {
+      client.register(SUBJECT, version);
+    }
+    for (ProtobufSchema writer : Arrays.asList(v1, v2)) {
+      byte[] bytes = writeById(writer, b -> {
+        b.setField(field(b, "x"), 7);
+        b.setField(field(b, "y"), "ada");
+      });
+      DynamicMessage read = read(v3, bytes, "enabled");
+      assertEquals(read(v3, bytes, null), read);
+      assertEquals(7, get(read, "x"));
+      assertEquals("ada", get(read, "y"));
+    }
+  }
+
+  @Test
+  void aReusedNumberInAReExportedMessageReadsUnset() throws Exception {
+    // Every version only re-exports N, whose flag = 2 is dropped and the number reused.
+    String leaf = "syntax = \"proto3\";\npackage d;\nmessage N {\n  int32 x = 1;\n%s}\n";
+    String[] leaves = {String.format(leaf, "  bool flag = 2;\n"), String.format(leaf, ""),
+        String.format(leaf, "  bool active = 2;\n")};
+    List<ProtobufSchema> versions = new ArrayList<>();
+    for (int i = 0; i < leaves.length; i++) {
+      client.register("o", new ProtobufSchema(leaves[i]));
+      ProtobufSchema version = reExport(leaves[i], i + 1);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    byte[] bytes = writeById(versions.get(0), b -> {
+      b.setField(field(b, "x"), 1);
+      b.setField(field(b, "flag"), true);
+    });
+
+    DynamicMessage read = read(versions.get(2), bytes, "enabled");
+    assertEquals(1, get(read, "x"));
+    assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("active")));
+    assertEquals(true, get(read(versions.get(2), bytes, null), "active"));
+  }
+
+  @Test
   void aReusedNumberInAMessageImportedPubliclyReadsUnset() throws Exception {
     // Row imports wrap.proto, which re-exports leaf.proto's N: the copies are made through it.
     String leaf = "syntax = \"proto3\";\npackage d;\nmessage N {\n  int32 x = 1;\n%s}\n";
@@ -2217,6 +2266,13 @@ class ProtobufProvenanceDeserializerTest {
     byte[] body = builder.build().toByteArray();
     return ByteBuffer.allocate(6 + body.length).put((byte) 0)
         .putInt(client.getId(SUBJECT, writer)).put((byte) 0).put(body).array();
+  }
+
+  // A file declaring nothing but a public import of version {@code version} of subject "o".
+  private static ProtobufSchema reExport(String o, int version) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport public \"o.proto\";\n",
+        Collections.singletonList(new SchemaReference("o.proto", "o", version)),
+        Collections.singletonMap("o.proto", o), null, null);
   }
 
   // One version of main per dependency version, each importing it as d.proto from "dep".
