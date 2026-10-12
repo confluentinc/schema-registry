@@ -43,7 +43,7 @@ import java.util.function.Supplier;
  * {@code p} is the multi-message path {@code [0] + p}, as each version is rooted at its file's
  * first message. Paths provenance does not report, such as collection nodes', are ignored. The
  * algorithm asked for is ignored too: the pids already decide every pairing, though
- * {@code provenance.algorithm} must still be set for a deserializer to read by provenance.
+ * {@code provenance.algorithm} must still be enabled for a deserializer to read by provenance.
  *
  * <p>While a version waits for its pids, the registry's answer is kept, bounded by
  * {@code provenance.cache.size} and {@code provenance.cache.ttl.sec}, so a retried record asks

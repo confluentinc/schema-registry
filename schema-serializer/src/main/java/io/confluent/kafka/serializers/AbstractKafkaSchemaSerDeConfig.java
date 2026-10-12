@@ -17,14 +17,13 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,13 +120,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Specify if the Serializer should use the latest subject version for serialization";
 
   public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
+  public static final String PROVENANCE_ALGORITHM_DISABLED = "disabled";
+  public static final String PROVENANCE_ALGORITHM_ENABLED = "enabled";
+  public static final String PROVENANCE_ALGORITHM_DEFAULT = PROVENANCE_ALGORITHM_DISABLED;
   public static final String PROVENANCE_ALGORITHM_DOC =
-      "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
-          + "writer fields with reader fields rather than by name or field number; unset or "
-          + "'none' to pair them as usual. A version newer than this client knows needs a newer "
-          + "client; one the registry does not know fails every "
-          + "record. Requires kafka-schema-registry-logical-types on the classpath; a client that "
-          + "does not support provenance reads as without it, with a warning";
+      "Whether the Deserializer pairs writer fields with reader fields by provenance rather than "
+          + "by name or field number: 'enabled' to match each schema version by the provenance "
+          + "algorithm it was registered under, today v1 for every version; 'disabled' to pair "
+          + "them as usual. Requires kafka-schema-registry-logical-types on the classpath; a "
+          + "client that does not support provenance reads as without it, with a warning";
 
   public static final String PROVENANCE_STRATEGY = "provenance.strategy";
   public static final Class<?> PROVENANCE_STRATEGY_DEFAULT = ClientProvenanceStrategy.class;
@@ -425,7 +426,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
-        .define(PROVENANCE_ALGORITHM, Type.STRING, null,
+        .define(PROVENANCE_ALGORITHM, Type.STRING, PROVENANCE_ALGORITHM_DEFAULT,
                 PROVENANCE_ALGORITHM_VALIDATOR,
                 Importance.LOW, PROVENANCE_ALGORITHM_DOC)
         .define(PROVENANCE_STRATEGY, Type.CLASS, PROVENANCE_STRATEGY_DEFAULT,
@@ -577,40 +578,42 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(USE_LATEST_VERSION);
   }
 
-  // Unset, empty, "none" or a released provenance algorithm version, in any case: a
-  // misspelt one fails configuration rather than quietly reading without provenance.
+  // Unset, empty, "disabled" or "enabled", in any case: a misspelt value fails configuration
+  // rather than quietly reading without provenance. No version is named: a pin would disagree
+  // with the Metastore once a schema version is registered under another algorithm.
   private static final ConfigDef.Validator PROVENANCE_ALGORITHM_VALIDATOR =
       new ConfigDef.Validator() {
         @Override
         public void ensureValid(String name, Object value) {
           String algorithm = value != null ? value.toString().trim() : "";
-          if (algorithm.isEmpty() || "none".equalsIgnoreCase(algorithm)) {
-            return;
-          }
-          try {
-            ProvenanceAlgorithm.of(algorithm);
-          } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value, "Not a provenance algorithm; one of " + this);
+          if (!algorithm.isEmpty()
+              && !PROVENANCE_ALGORITHM_DISABLED.equalsIgnoreCase(algorithm)
+              && !PROVENANCE_ALGORITHM_ENABLED.equalsIgnoreCase(algorithm)) {
+            throw new ConfigException(name, value, "Not a provenance setting; one of " + this);
           }
         }
 
         @Override
         public String toString() {
-          List<String> names = new ArrayList<>();
-          names.add("none");
-          for (ProvenanceAlgorithm algorithm : ProvenanceAlgorithm.values()) {
-            names.add(algorithm.getName());
-          }
-          return names.toString();
+          return Arrays.asList(PROVENANCE_ALGORITHM_DISABLED, PROVENANCE_ALGORITHM_ENABLED)
+              .toString();
         }
       };
 
   /**
-   * The provenance algorithm version to project with, or null when provenance is off.
+   * Whether deserializers read by provenance.
+   */
+  public boolean isProvenanceEnabled() {
+    String value = this.getString(PROVENANCE_ALGORITHM);
+    return value != null && PROVENANCE_ALGORITHM_ENABLED.equalsIgnoreCase(value.trim());
+  }
+
+  /**
+   * The provenance algorithm version to ask for, or null for each schema version's own; always
+   * null, as no version can be named.
    */
   public String getProvenanceAlgorithm() {
-    String value = this.getString(PROVENANCE_ALGORITHM);
-    return value == null || value.isEmpty() || "none".equalsIgnoreCase(value) ? null : value;
+    return null;
   }
 
   public int getProvenanceCacheSize() {
