@@ -379,6 +379,36 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aWellKnownMessageReadsAcrossAReExportingVersion() throws Exception {
+    // Any and Duration continue between the file and its re-export, either way round, so their
+    // values carry over as natively.
+    String o = "syntax = \"proto3\";\npackage q;\nimport \"google/protobuf/any.proto\";\n"
+        + "import \"google/protobuf/duration.proto\";\nmessage O {\n  int32 x = 1;\n"
+        + "  repeated google.protobuf.Any a = 2;\n  google.protobuf.Duration d = 3;\n}\n";
+    client.register("o", new ProtobufSchema(o));
+    ProtobufSchema direct = new ProtobufSchema(o);
+    ProtobufSchema wrapped = reExport(o, 1);
+    client.register(SUBJECT, direct);
+    client.register(SUBJECT, wrapped);
+    for (ProtobufSchema[] pair : new ProtobufSchema[][] {{direct, wrapped}, {wrapped, direct}}) {
+      byte[] bytes = writeById(pair[0], b -> {
+        b.setField(field(b, "x"), 7);
+        Descriptor any = field(b, "a").getMessageType();
+        b.addRepeatedField(field(b, "a"), DynamicMessage.newBuilder(any)
+            .setField(any.findFieldByName("type_url"), "t/u")
+            .setField(any.findFieldByName("value"), ByteString.copyFromUtf8("v")).build());
+        Descriptor duration = field(b, "d").getMessageType();
+        b.setField(field(b, "d"), DynamicMessage.newBuilder(duration)
+            .setField(duration.findFieldByName("seconds"), 42L)
+            .setField(duration.findFieldByName("nanos"), 5).build());
+      });
+      DynamicMessage read = read(pair[1], bytes, "enabled");
+      assertEquals(read(pair[1], bytes, null), read);
+      assertEquals(1, read.getRepeatedFieldCount(read.getDescriptorForType().findFieldByName("a")));
+    }
+  }
+
+  @Test
   void aReusedNumberInAReExportedMessageReadsUnset() throws Exception {
     // Every version only re-exports N, whose flag = 2 is dropped and the number reused.
     String leaf = "syntax = \"proto3\";\npackage d;\nmessage N {\n  int32 x = 1;\n%s}\n";
