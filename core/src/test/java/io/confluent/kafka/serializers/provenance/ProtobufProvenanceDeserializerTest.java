@@ -82,7 +82,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Protobuf read with {@code provenance.algorithm}: wire-compatible type changes read exactly as without
+ * Protobuf read by provenance: wire-compatible type changes read exactly as without
  * provenance; a reused field number, and messages of a multi-message file, follow provenance.
  */
 class ProtobufProvenanceDeserializerTest {
@@ -192,7 +192,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("", get(read(v3, bytes, "v1"), "memo"));
+    assertEquals("", get(read(v3, bytes, "enabled"), "memo"));
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
   }
 
@@ -212,7 +212,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage on = (DynamicMessage) new KafkaProtobufDeserializer<>(client, config("v1"))
+    DynamicMessage on = (DynamicMessage) new KafkaProtobufDeserializer<>(client, config("enabled"))
         .deserializeWithSchema(TOPIC, headers, bytes, writer -> v3).getValue();
     assertEquals("", get(on, "memo"));
   }
@@ -228,7 +228,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     FieldDescriptor memo = v3.toDescriptor().findFieldByName("memo");
     assertEquals(2, read.getDescriptorForType().findFieldByName("memo").getNumber());
     assertEquals(7, read.getField(v3.toDescriptor().findFieldByName("id")));
@@ -252,7 +252,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals("filled", read.getField(v3.toDescriptor().findFieldByName("memo")));
     assertTrue(read.getUnknownFields().asMap().isEmpty());
   }
@@ -267,7 +267,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     // Nor is it kept aside, to come back if the message is written out again.
-    assertTrue(read(v3, bytes, "v1").getUnknownFields().asMap().isEmpty());
+    assertTrue(read(v3, bytes, "enabled").getUnknownFields().asMap().isEmpty());
   }
 
   @Test
@@ -282,7 +282,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     // d moves; nothing under it needs a number, so Duration's own fields are left alone.
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("d")));
   }
@@ -307,7 +307,7 @@ class ProtobufProvenanceDeserializerTest {
               .setField(t.findFieldByName("seconds"), 42L).build());
     });
 
-    DynamicMessage read = read(versions.get(2), bytes, "v1");
+    DynamicMessage read = read(versions.get(2), bytes, "enabled");
     DynamicMessage n = (DynamicMessage) get(read, "n");
     assertEquals(1, get(n, "x"));
     assertFalse(n.hasField(n.getDescriptorForType().findFieldByName("active")));
@@ -348,7 +348,7 @@ class ProtobufProvenanceDeserializerTest {
     });
 
     assertTrue(readClass(ReferrerMessage.class, bytes, null, false).getRef().getIsActive());
-    ReferrerMessage read = readClass(ReferrerMessage.class, bytes, "v1", false);
+    ReferrerMessage read = readClass(ReferrerMessage.class, bytes, "enabled", false);
     assertEquals("a", read.getRef().getRefId());
     assertFalse(read.getRef().getIsActive());
   }
@@ -382,7 +382,7 @@ class ProtobufProvenanceDeserializerTest {
           .setField(n.findFieldByName("x"), 1).setField(n.findFieldByName("flag"), true).build());
     });
 
-    DynamicMessage n = (DynamicMessage) get(read(versions.get(2), bytes, "v1"), "n");
+    DynamicMessage n = (DynamicMessage) get(read(versions.get(2), bytes, "enabled"), "n");
     assertEquals(1, get(n, "x"));
     assertFalse(n.hasField(n.getDescriptorForType().findFieldByName("active")));
   }
@@ -412,7 +412,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
 
     assertEquals(11, get((DynamicMessage) get(read(v2, bytes, null), "n"), "x"));
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     assertEquals(0, get((DynamicMessage) get(read, "n"), "x"));
   }
@@ -428,7 +428,7 @@ class ProtobufProvenanceDeserializerTest {
     });
     client.register(SUBJECT, v2);
 
-    assertEquals(5, get((DynamicMessage) get(read(v2, bytes, "v1"), "a"), "x"));
+    assertEquals(5, get((DynamicMessage) get(read(v2, bytes, "enabled"), "a"), "x"));
   }
 
   @Test
@@ -446,7 +446,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage element = (DynamicMessage) ((List<?>) get(read(v3, bytes, "v1"), "es")).get(0);
+    DynamicMessage element = (DynamicMessage) ((List<?>) get(read(v3, bytes, "enabled"), "es")).get(0);
     assertEquals(7, get(element, "x"));
     assertEquals("", get(element, "memo"));
   }
@@ -467,7 +467,7 @@ class ProtobufProvenanceDeserializerTest {
         .putInt(client.register(SUBJECT, v1)).put((byte) 0).put(body).array();
     client.register(SUBJECT, v2);
 
-    assertEquals(Collections.emptyList(), get(read(v2, bytes, "v1"), "x"));
+    assertEquals(Collections.emptyList(), get(read(v2, bytes, "enabled"), "x"));
   }
 
   @Test
@@ -496,7 +496,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     DynamicMessage value = (DynamicMessage) get(
-        (DynamicMessage) ((List<?>) get(read(v3, bytes, "v1"), "es")).get(0), "value");
+        (DynamicMessage) ((List<?>) get(read(v3, bytes, "enabled"), "es")).get(0), "value");
     assertEquals(7, get(value, "x"));
     assertEquals("", get(value, "memo"));
   }
@@ -512,7 +512,7 @@ class ProtobufProvenanceDeserializerTest {
 
     // memo moves, so the record has no value for a field the reader requires.
     SerializationException e =
-        assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
     assertTrue(trace(e).contains("missing required fields: memo"), trace(e));
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
   }
@@ -526,7 +526,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = write(writer, refund(writer, 5, 42));
     client.register(SUBJECT, reader);
 
-    DynamicMessage row = read(reader, bytes, "v1");
+    DynamicMessage row = read(reader, bytes, "enabled");
     assertEquals("p.Refund", row.getDescriptorForType().getFullName());
     assertEquals(42, get(row, "amount"));
   }
@@ -538,7 +538,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = write(writer, refund(writer, 5, 42));
     client.register(SUBJECT, reader);
 
-    DynamicMessage row = read(reader, bytes, "v1");
+    DynamicMessage row = read(reader, bytes, "enabled");
     assertEquals("p.Refund", row.getDescriptorForType().getFullName());
     assertEquals(42, get(row, "amount"));
   }
@@ -552,7 +552,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = write(v1, set("a", 42));
     client.register(SUBJECT, row());
     client.register(SUBJECT, v3);
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("provenance.strategy", MultiMessageColumnIds.class);
     config.put(MultiMessageColumnIds.HELD,
         client.getProvenanceByVersion(SUBJECT, "1", "3", true, true, null));
@@ -599,7 +599,7 @@ class ProtobufProvenanceDeserializerTest {
         Collections.singletonList(new Rule("r", null, RuleKind.CONDITION, RuleMode.READ, "CEL",
             null, null, "true", null, null, false))));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(gated, config("v1"));
+        new KafkaProtobufDeserializer<>(gated, config("enabled"));
     armed[0] = true;
     // A FutureTask bounds the wait for the read and rethrows its own failure.
     FutureTask<DynamicMessage> read =
@@ -607,7 +607,7 @@ class ProtobufProvenanceDeserializerTest {
     new Thread(read).start();
     assertTrue(entered.await(10, TimeUnit.SECONDS), "the read never reached the gate");
     // The reconfigure lands while the read is fetching its writer.
-    deserializer.configure(config("v1"), false);
+    deserializer.configure(config("enabled"), false);
     release.countDown();
     assertEquals("", get(read.get(10, TimeUnit.SECONDS), "b"));
   }
@@ -621,7 +621,7 @@ class ProtobufProvenanceDeserializerTest {
         DynamicMessage.newBuilder(order).setField(order.findFieldByName("id"), 7).build());
     client.register(SUBJECT, reader);
 
-    Exception e = assertThrows(Exception.class, () -> read(reader, bytes, "v1"));
+    Exception e = assertThrows(Exception.class, () -> read(reader, bytes, "enabled"));
     assertTrue(trace(e).contains("p.Order, which the reader schema does not declare"), trace(e));
   }
 
@@ -634,7 +634,7 @@ class ProtobufProvenanceDeserializerTest {
 
     // Without provenance the refund's amount reads as the order's total.
     assertEquals(42, get(read(reader, bytes, null), "total"));
-    Exception e = assertThrows(Exception.class, () -> read(reader, bytes, "v1"));
+    Exception e = assertThrows(Exception.class, () -> read(reader, bytes, "enabled"));
     assertTrue(trace(e).contains("p.Refund, which the reader schema does not declare"), trace(e));
   }
 
@@ -651,7 +651,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals(5, get(read(v3, bytes, null), "neu"));
-    assertEquals(0, get(read(v3, bytes, "v1"), "neu"));
+    assertEquals(0, get(read(v3, bytes, "enabled"), "neu"));
   }
 
   @Test
@@ -666,7 +666,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("", get(read(v3, bytes, "v1"), "memo"));
+    assertEquals("", get(read(v3, bytes, "enabled"), "memo"));
     assertEquals("ada", get(read(v3, bytes, null), "memo"));
   }
 
@@ -686,7 +686,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals("old", get(read(v3, bytes, null), "z"));
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals(4, get(read, "x"));
     assertEquals("old", get(read, "z"));
   }
@@ -704,7 +704,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("", get(read(v3, bytes, "v1"), "z"));
+    assertEquals("", get(read(v3, bytes, "enabled"), "z"));
   }
 
   @Test
@@ -726,7 +726,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(client, config("v1"));
+        new KafkaProtobufDeserializer<>(client, config("enabled"));
     for (byte[] bytes : Arrays.asList(anOrder, aRefund, anOrder)) {
       DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
           TOPIC, new RecordHeaders(), bytes, writer -> v3).getValue();
@@ -770,8 +770,8 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
 
     assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
-    assertEquals("", readClass(Readded.class, bytes, "v1", true).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "enabled", false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "enabled", true).getMemo());
   }
 
   @Test
@@ -784,7 +784,7 @@ class ProtobufProvenanceDeserializerTest {
     ProtobufSchema reader = row("option deprecated = true;", "int32 id = 1;",
         "string memo = 2 [deprecated = true, json_name = \"MEMO\"];");
 
-    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+    assertEquals("", get(read(reader, bytes, "enabled"), "memo"));
   }
 
   @Test
@@ -799,7 +799,7 @@ class ProtobufProvenanceDeserializerTest {
             + String.format(row, " [(label) = \"x\"]")}) {
       client = new ProvenanceMockSchemaRegistryClient();
       serializer = new KafkaProtobufSerializer<>(client, config(null));
-      assertEquals("", get(read(new ProtobufSchema(reader), readdedMemo(), "v1"), "memo"),
+      assertEquals("", get(read(new ProtobufSchema(reader), readdedMemo(), "enabled"), "memo"),
           reader);
     }
   }
@@ -811,13 +811,13 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, new AvroSchema("{\"type\":\"record\",\"name\":\"Row\","
         + "\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}"));
     ProtobufSchema reader = row("int32 id = 1;", "string memo = 2 [deprecated = true];");
-    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+    assertEquals("", get(read(reader, bytes, "enabled"), "memo"));
   }
 
   @Test
   void aReaderDeclaringMembersOutOfNumberOrderIsMatchedByStructure() throws Exception {
     // Members are paired by number, not declaration order: the reader is still v3.
-    assertEquals("", get(read(row("string memo = 2;", "int32 id = 1;"), readdedMemo(), "v1"),
+    assertEquals("", get(read(row("string memo = 2;", "int32 id = 1;"), readdedMemo(), "enabled"),
         "memo"));
 
     client = new ProvenanceMockSchemaRegistryClient();
@@ -830,7 +830,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT,
         row("int32 id = 1;", String.format(oneof, "string memo = 2; int32 n = 3;")));
     DynamicMessage read = read(
-        row("int32 id = 1;", String.format(oneof, "int32 n = 3; string memo = 2;")), bytes, "v1");
+        row("int32 id = 1;", String.format(oneof, "int32 n = 3; string memo = 2;")), bytes, "enabled");
     assertEquals("", get(read, "memo"));
     assertEquals(7, get(read, "id"));
   }
@@ -849,7 +849,7 @@ class ProtobufProvenanceDeserializerTest {
     String option = "option deprecated = true;\n  ";
     client.register(SUBJECT, wrapped(option, 1, 2));
 
-    DynamicMessage read = read(wrapped(option, 2, 1), bytes, "v1");
+    DynamicMessage read = read(wrapped(option, 2, 1), bytes, "enabled");
     DynamicMessage element = (DynamicMessage) ((List<?>) get(read, "us")).get(0);
     assertEquals(7, get(read, "id"));
     assertEquals("old", get(element, "b"));
@@ -878,7 +878,7 @@ class ProtobufProvenanceDeserializerTest {
         + "  string memo = 2 [(o.label) = \"x\"];\n}\n",
         Collections.singletonList(new SchemaReference("opts.proto", "opts", 1)),
         Collections.singletonMap("opts.proto", OPTIONS), null, null);
-    assertEquals("", get(read(reader, bytes, "v1"), "memo"));
+    assertEquals("", get(read(reader, bytes, "enabled"), "memo"));
   }
 
   @Test
@@ -938,7 +938,7 @@ class ProtobufProvenanceDeserializerTest {
       byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0)
           .putInt(client.getId(SUBJECT, versions.get(0))).put((byte) 0).put(body).array();
 
-      DynamicMessage read = read(versions.get(2), bytes, "v1");
+      DynamicMessage read = read(versions.get(2), bytes, "enabled");
       assertEquals("", get(read, "memo"), "levels " + levels);
       assertEquals(7, get(read, "id"), "levels " + levels);
     }
@@ -952,7 +952,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, doubling(""));
     client.register(SUBJECT, doubling("string memo = 3;"));
 
-    assertEquals("old", get(read(doubling("string memo = 3;"), bytes, "v1"), "memo"));
+    assertEquals("old", get(read(doubling("string memo = 3;"), bytes, "enabled"), "memo"));
   }
 
   // M0, holding two fields of M1 and the given member, through M16, each holding two of the next.
@@ -980,7 +980,7 @@ class ProtobufProvenanceDeserializerTest {
         + "  string memo = 2;\n}\n");
     client.register(SUBJECT, v3);
 
-    assertEquals("", get(read(v3, bytes, "v1"), "memo"));
+    assertEquals("", get(read(v3, bytes, "enabled"), "memo"));
   }
 
   @Test
@@ -1003,7 +1003,7 @@ class ProtobufProvenanceDeserializerTest {
         + "message B {\n  int32 id = 1;\n  string memo = 2;\n}\n");
     client.register(SUBJECT, reader);
 
-    DynamicMessage read = read(reader, bytes, "v1");
+    DynamicMessage read = read(reader, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     assertEquals("old", get(read, "memo"));
   }
@@ -1025,7 +1025,7 @@ class ProtobufProvenanceDeserializerTest {
         .setField(a.findFieldByName("id"), 7).setField(a.findFieldByName("note"), "old").build());
 
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(client, config("v1"));
+        new KafkaProtobufDeserializer<>(client, config("enabled"));
     assertThrows(SerializationException.class,
         () -> deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), ofB, w -> reader));
     DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
@@ -1049,7 +1049,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = framed(id, v1, "p.B", DynamicMessage.newBuilder(b)
         .setField(b.findFieldByName("id"), 7).setField(b.findFieldByName("note"), "old").build());
 
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
     DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
         client, config).deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, w -> reader)
@@ -1072,7 +1072,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = framed(id, v1, "p.B", DynamicMessage.newBuilder(b)
         .setField(b.findFieldByName("id"), 7).setField(b.findFieldByName("note"), "old").build());
 
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("value.subject.name.strategy", TopicRecordNameStrategy.class.getName());
     DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
         client, config).deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, w -> reader)
@@ -1112,7 +1112,7 @@ class ProtobufProvenanceDeserializerTest {
         + "message Readded {\n  int32 id = 1;\n  string memo = 2;\n}\n"));
 
     assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "enabled", false).getMemo());
   }
 
   @Test
@@ -1131,7 +1131,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals("old", readClass(ReaddedMap.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(ReaddedMap.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(ReaddedMap.class, bytes, "enabled", false).getMemo());
   }
 
   @Test
@@ -1156,7 +1156,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
 
     assertEquals("old!", readClass(Readded.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "enabled", false).getMemo());
   }
 
   @Test
@@ -1181,7 +1181,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, new ProtobufSchema(Readded.getDescriptor()));
 
     assertEquals("old", readClass(Readded.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(Readded.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(Readded.class, bytes, "enabled", false).getMemo());
   }
 
   @Test
@@ -1215,7 +1215,7 @@ class ProtobufProvenanceDeserializerTest {
     ProtobufSchema reader = versions.get(0)
         .copy(null, new RuleSet(null, Collections.singletonList(check)));
 
-    DynamicMessage read = read(reader, bytes, "v1");
+    DynamicMessage read = read(reader, bytes, "enabled");
     assertEquals("old",
         ((DynamicMessage) get(read, "d")).getField(d.findFieldByName("y")));
   }
@@ -1236,7 +1236,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals("old", readClass(ReaddedMap.class, bytes, null, false).getMemo());
-    assertEquals("", readClass(ReaddedMap.class, bytes, "v1", false).getMemo());
+    assertEquals("", readClass(ReaddedMap.class, bytes, "enabled", false).getMemo());
   }
 
   @Test
@@ -1258,7 +1258,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] body = record.toByteArray();
     byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id1).put((byte) 0)
         .put(body).array();
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("specific.protobuf.value.type", ReaddedMap.class);
     KafkaProtobufDeserializer<ReaddedMap> deserializer = new KafkaProtobufDeserializer<>(client);
     deserializer.configure(config, false);
@@ -1297,7 +1297,7 @@ class ProtobufProvenanceDeserializerTest {
         .put((byte) 0).put(body).array();
 
     assertEquals("old", readClass(ReferrerMessage.class, bytes, null, false).getRootId());
-    assertEquals("", readClass(ReferrerMessage.class, bytes, "v1", false).getRootId());
+    assertEquals("", readClass(ReferrerMessage.class, bytes, "enabled", false).getRootId());
   }
 
   @Test
@@ -1311,7 +1311,7 @@ class ProtobufProvenanceDeserializerTest {
     try {
       for (int round = 0; round < 200; round++) {
         KafkaProtobufDeserializer<DynamicMessage> deserializer =
-            new KafkaProtobufDeserializer<>(client, config("v1"));
+            new KafkaProtobufDeserializer<>(client, config("enabled"));
         CyclicBarrier start = new CyclicBarrier(16);
         List<Future<Object>> built = new ArrayList<>();
         for (int i = 0; i < 16; i++) {
@@ -1344,7 +1344,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals(7, get(read, "a"));
     assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("c")));
   }
@@ -1361,7 +1361,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals("old", get(read(v3, bytes, null), "c"));
-    assertEquals("", get(read(v3, bytes, "v1"), "c"));
+    assertEquals("", get(read(v3, bytes, "enabled"), "c"));
   }
 
   @Test
@@ -1382,7 +1382,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "v1"), "n");
+    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "enabled"), "n");
     assertFalse(inner.hasField(inner.getDescriptorForType().findFieldByName("x")));
   }
 
@@ -1410,7 +1410,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "v1"), "n");
+    DynamicMessage inner = (DynamicMessage) get(read(v3, bytes, "enabled"), "n");
     assertEquals(7, inner.getField(inner.getDescriptorForType().findFieldByName("q")));
   }
 
@@ -1428,7 +1428,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals(5, get(read(v3, bytes, null), "i"));
-    assertEquals(0, get(read(v3, bytes, "v1"), "i"));
+    assertEquals(0, get(read(v3, bytes, "enabled"), "i"));
   }
 
   @Test
@@ -1448,7 +1448,7 @@ class ProtobufProvenanceDeserializerTest {
 
     DynamicMessage off = (DynamicMessage) get(read(v2, bytes, null), "x");
     assertEquals(5, off.getField(off.getDescriptorForType().findFieldByName("t1")));
-    DynamicMessage on = read(v2, bytes, "v1");
+    DynamicMessage on = read(v2, bytes, "enabled");
     assertEquals(7, get(on, "a"));
     DynamicMessage onX = (DynamicMessage) get(on, "x");
     assertEquals(0, onX.getField(onX.getDescriptorForType().findFieldByName("t1")));
@@ -1469,7 +1469,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
 
     assertEquals(5, get(read(v2, bytes, null), "q"));
-    assertEquals(0, get(read(v2, bytes, "v1"), "q"));
+    assertEquals(0, get(read(v2, bytes, "enabled"), "q"));
   }
 
   @Test
@@ -1489,7 +1489,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertEquals(5, get(read(v3, bytes, null), "k2"));
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals(4, get(read, "i"));
     assertEquals(0, get(read, "k2"));
   }
@@ -1503,7 +1503,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = write(v1, b -> b.setField(field(b, "a"), 7).setField(field(b, "b"), 5));
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "a"));
     assertEquals(5, get(read, "b"));
   }
@@ -1521,7 +1521,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage value = entryValue(read(v3, bytes, "v1"));
+    DynamicMessage value = entryValue(read(v3, bytes, "enabled"));
     assertEquals(7, get(value, "x"));
     assertEquals(0, get(value, "a"));
   }
@@ -1541,7 +1541,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage value = entryValue(read(v3, bytes, "v1"));
+    DynamicMessage value = entryValue(read(v3, bytes, "enabled"));
     assertEquals(7, get(value, "x"));
     assertEquals(9, get(value, "c"));
     assertEquals(0, get(value, "a"));
@@ -1557,7 +1557,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, withMetadata(v1, "v3"));
     ProtobufSchema merged = withMetadata(v1, "merged");
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(client, config("v1"));
+        new KafkaProtobufDeserializer<>(client, config("enabled"));
 
     DynamicMessage byStructure = (DynamicMessage) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> merged, false).getValue();
@@ -1581,7 +1581,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage value = at(read(v3, bytes, "v1"), "kv[].value[].value");
+    DynamicMessage value = at(read(v3, bytes, "enabled"), "kv[].value[].value");
     assertEquals(7, get(value, "x"));
     assertEquals(0, get(value, "a"));
   }
@@ -1599,7 +1599,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage value = at(read(v3, bytes, "v1"), "kv[].value[].value");
+    DynamicMessage value = at(read(v3, bytes, "enabled"), "kv[].value[].value");
     assertEquals(7, get(value, "x"));
     assertEquals(9, get(value, "c"));
     assertEquals(0, get(value, "a"));
@@ -1619,7 +1619,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage read = at(read(v3, bytes, "v1"), "kv[]");
+    DynamicMessage read = at(read(v3, bytes, "enabled"), "kv[]");
     assertEquals(1, ((List<?>) get(read, "value")).size());
     DynamicMessage value = at(read, "value[]");
     assertEquals(7, get(value, "x"));
@@ -1644,7 +1644,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage in = at(read(v3, bytes, "v1"), "kv[].value[]");
+    DynamicMessage in = at(read(v3, bytes, "enabled"), "kv[].value[]");
     assertEquals(7, get(in, "x"));
     assertFalse(in.hasField(in.getDescriptorForType().findFieldByName("value")));
   }
@@ -1677,7 +1677,7 @@ class ProtobufProvenanceDeserializerTest {
         client.register(SUBJECT, v2);
         client.register(SUBJECT, v3);
 
-        DynamicMessage read = read(v3, bytes, "v1");
+        DynamicMessage read = read(v3, bytes, "enabled");
         assertEquals(1, ((List<?>) get(at(read, "ins"), "value")).size());
         DynamicMessage in = at(read, shape[1]);
         assertEquals(7, get(in, "x"));
@@ -1698,7 +1698,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, row("int32 id = 1;"));
     client.register(SUBJECT, withMetadata(v1, "v3"));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(client, config("v1"));
+        new KafkaProtobufDeserializer<>(client, config("enabled"));
     ProtobufSchema pinnedReader = withMetadata(v1, "merged");
 
     assertEquals("ada", get(readPinned(deserializer, bytes, pinnedReader, 1), "note"));
@@ -1731,7 +1731,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, withMetadata(v1, "v3"));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
-        new KafkaProtobufDeserializer<>(client, config("v1"));
+        new KafkaProtobufDeserializer<>(client, config("enabled"));
     ProtobufSchema pinned = withMetadata(v1, "merged");
 
     String[][] reads = {{"p.A", "1"}, {"p.B", "-"}, {"p.B", "1"}, {"p.A", "-"},
@@ -1760,7 +1760,7 @@ class ProtobufProvenanceDeserializerTest {
         DynamicMessage.newBuilder(a).setField(a.findFieldByName("hi"), "\u0000").build()));
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     DynamicMessage f = (DynamicMessage) get(read, "f");
     assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
@@ -1788,7 +1788,7 @@ class ProtobufProvenanceDeserializerTest {
         .build());
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     DynamicMessage f = (DynamicMessage) get(read, "f");
     assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
@@ -1815,7 +1815,7 @@ class ProtobufProvenanceDeserializerTest {
         .build());
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     DynamicMessage value =
         (DynamicMessage) get((DynamicMessage) ((List<?>) get(read, "f")).get(0), "value");
@@ -1837,7 +1837,7 @@ class ProtobufProvenanceDeserializerTest {
         DynamicMessage.newBuilder(a).setField(a.findFieldByName("hi"), "\u0000").build()));
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     DynamicMessage f = (DynamicMessage) get(read, "f");
     assertFalse(f.hasField(f.getDescriptorForType().findFieldByName("b")));
@@ -1869,7 +1869,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    DynamicMessage read = read(v3, bytes, "v1");
+    DynamicMessage read = read(v3, bytes, "enabled");
     assertEquals(7, get(read, "id"));
     DynamicMessage u = (DynamicMessage) get(read, "u");
     assertFalse(u.hasField(u.getDescriptorForType().findFieldByName("memo")));
@@ -1890,7 +1890,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = write(v1, b -> b.setField(field(b, "id"), 7));
     client.register(SUBJECT, v2);
 
-    assertEquals(7, get(read(v2, bytes, "v1"), "id"));
+    assertEquals(7, get(read(v2, bytes, "enabled"), "id"));
   }
 
   @Test
@@ -1905,7 +1905,7 @@ class ProtobufProvenanceDeserializerTest {
     out.write(ByteBuffer.allocate(4).putInt(id).array());
     out.write(0);
     out.write(new byte[] {8, 7});
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("derive.type", true);
     KafkaProtobufDeserializer<Message> deserializer = new KafkaProtobufDeserializer<>(client, config);
     assertThrows(SerializationException.class,
@@ -1926,10 +1926,10 @@ class ProtobufProvenanceDeserializerTest {
     byte[] plain = write(v1, set("a", 8));
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, beyond, "v1");
+    DynamicMessage read = read(v2, beyond, "enabled");
     assertEquals(7, get(read, "a"));
     assertEquals(0, get(read, "c"));
-    assertEquals(8, get(read(v2, plain, "v1"), "a"));
+    assertEquals(8, get(read(v2, plain, "enabled"), "a"));
   }
 
   @Test
@@ -1944,7 +1944,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id).put((byte) 0)
         .put(body).array();
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "a"));
     assertEquals("", get(read, "s"));
   }
@@ -1961,7 +1961,7 @@ class ProtobufProvenanceDeserializerTest {
             .newBuilder().addFixed32(9).build()).build()).build());
     client.register(SUBJECT, v2);
 
-    DynamicMessage read = read(v2, bytes, "v1");
+    DynamicMessage read = read(v2, bytes, "enabled");
     assertEquals(7, get(read, "a"));
     assertEquals(0, get(read, "c"));
     assertFalse(read.getUnknownFields().hasField(2));
@@ -1983,7 +1983,7 @@ class ProtobufProvenanceDeserializerTest {
         .build());
     client.register(SUBJECT, v2);
 
-    DynamicMessage nested = (DynamicMessage) get(read(v2, bytes, "v1"), "in");
+    DynamicMessage nested = (DynamicMessage) get(read(v2, bytes, "enabled"), "in");
     assertEquals(8, get(nested, "x"));
     assertEquals(0, get(nested, "y"));
   }
@@ -2008,7 +2008,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = ByteBuffer.allocate(6 + body.length).put((byte) 0).putInt(id).put((byte) 0)
         .put(body).array();
 
-    Readded read = readClass(Readded.class, bytes, "v1", false);
+    Readded read = readClass(Readded.class, bytes, "enabled", false);
     assertEquals(8, read.getId());
     assertEquals("", read.getMemo());
   }
@@ -2034,7 +2034,7 @@ class ProtobufProvenanceDeserializerTest {
     out.write(DynamicMessage.newBuilder(d).setField(d.findFieldByName("k"), "K")
         .setField(d.findFieldByName("big"), "old").build().toByteArray());
     DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(client,
-        config("v1")).deserializeWithSchema(TOPIC, new RecordHeaders(), out.toByteArray(),
+        config("enabled")).deserializeWithSchema(TOPIC, new RecordHeaders(), out.toByteArray(),
             w -> v3).getValue();
     assertEquals("K", read.getField(read.getDescriptorForType().findFieldByName("k")));
     assertFalse(read.hasField(read.getDescriptorForType().findFieldByName("nu")));
@@ -2046,7 +2046,7 @@ class ProtobufProvenanceDeserializerTest {
       Consumer<DynamicMessage.Builder> record) throws Exception {
     byte[] bytes = write(writer, record);
     client.register(SUBJECT, reader);
-    DynamicMessage on = read(reader, bytes, "v1");
+    DynamicMessage on = read(reader, bytes, "enabled");
     DynamicMessage off = read(reader, bytes, null);
     assertEquals(off.toString(), on.toString());
     assertFalse(on.toString().isEmpty() && !off.toString().isEmpty());

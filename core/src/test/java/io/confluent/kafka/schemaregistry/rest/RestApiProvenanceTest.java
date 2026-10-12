@@ -448,7 +448,7 @@ public abstract class RestApiProvenanceTest {
     byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders",
         new GenericRecordBuilder(writer).set("id", 7).set("note", "ada").set("extra", 1).build());
     config.remove("use.schema.id");
-    config.put("provenance.algorithm", "v1");
+    config.put("provenance.algorithm", "enabled");
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
     // Flink's reader: the pinned v1 with other metadata merged on, registered nowhere.
     AvroSchema merged = new AvroSchema(v1).copy(
@@ -497,7 +497,7 @@ public abstract class RestApiProvenanceTest {
     config.put("use.schema.id", client.getId(SUBJECT, new AvroSchema(v1)));
     byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders", record);
     config.remove("use.schema.id");
-    config.put("provenance.algorithm", "v1");
+    config.put("provenance.algorithm", "enabled");
 
     // v3 re-adds name, dropped at v2: with provenance it is a new column and reads its default.
     GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)

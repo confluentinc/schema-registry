@@ -86,7 +86,7 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * @param client the deserializer's Schema Registry client
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
-   * @param algorithm the provenance algorithm asked for; null for the default, v1
+   * @param algorithm the provenance algorithm asked for; null for each version's own
    */
   SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId, int toId,
       boolean includeMultipleMessages, String algorithm);
@@ -100,7 +100,7 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * @param client the deserializer's Schema Registry client
    * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
    *     messages
-   * @param algorithm the provenance algorithm asked for; null for the default, v1
+   * @param algorithm the provenance algorithm asked for; null for each version's own
    */
   default SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
       int fromId, int toVersion, boolean includeMultipleMessages, String algorithm) {

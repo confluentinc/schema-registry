@@ -79,13 +79,13 @@ class AvroProvenanceStrictnessTest {
 
     byte[] branch = write(v1, new GenericRecordBuilder(a).set("x", 5).build());
     // Named in the writer's terms, not by the renamer's sink.
-    Exception e = assertThrows(SerializationException.class, () -> read(v3, branch, "v1"));
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, branch, "enabled"));
     assertEquals("The record holds a value of A at writer location [f], a union branch "
         + "provenance pairs with none of the reader's. There is no value to read.",
         e.getCause().getMessage());
     assertEquals(5, ((GenericRecord) read(v3, branch, null).get("f")).get("x"));
 
-    assertEquals("s", read(v3, write(v1, "s"), "v1").get("f").toString());
+    assertEquals("s", read(v3, write(v1, "s"), "enabled").get("f").toString());
   }
 
   @Test
@@ -99,7 +99,7 @@ class AvroProvenanceStrictnessTest {
     GenericRecord value = new GenericRecordBuilder(v1.getTypes().get(2)).set("y", "old").build();
 
     Exception e = assertThrows(SerializationException.class, () ->
-        new KafkaAvroDeserializer(client, config("v1"))
+        new KafkaAvroDeserializer(client, config("enabled"))
             .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v3));
     assertEquals("The record holds a value of B at the writer's root, a union branch "
         + "provenance pairs with none of the reader's. There is no value to read.",
@@ -117,7 +117,7 @@ class AvroProvenanceStrictnessTest {
     Schema fixed = v1.getField("f").schema().getTypes().get(1);
     byte[] bytes = write(v1, new GenericData.Fixed(fixed, new byte[4]));
 
-    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
     assertEquals("The record holds a value of F1 at writer location [f], a union branch "
         + "provenance pairs with none of the reader's. There is no value to read.",
         e.getCause().getMessage());
@@ -140,7 +140,7 @@ class AvroProvenanceStrictnessTest {
             .set("x", 5).build())
         .build();
 
-    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("enabled"))
         .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
     assertEquals(42, ((GenericRecord) read.get("o")).get("x"));
     assertEquals(5, ((GenericRecord) read.get("u")).get("x"));
@@ -160,7 +160,7 @@ class AvroProvenanceStrictnessTest {
     value.put("n", "kept");
     value.put("e", new GenericData.EnumSymbol(v1.getField("e").schema(), "Y"));
 
-    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("enabled"))
         .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
     assertEquals("kept", read.get("n").toString());
   }
@@ -179,7 +179,7 @@ class AvroProvenanceStrictnessTest {
     value.put("u", new GenericData.Fixed(v1.getField("u").schema().getTypes().get(2),
         new byte[] {1, 2, 3, 4}));
 
-    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("enabled"))
         .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v2).getValue();
     assertEquals(4, ((GenericData.Fixed) read.get("u")).bytes()[3]);
   }
@@ -200,7 +200,7 @@ class AvroProvenanceStrictnessTest {
         new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
 
     assertEquals("current", readSpecific(bytes, null).getNote().toString());
-    assertEquals("current", readSpecific(bytes, "v1").getNote().toString());
+    assertEquals("current", readSpecific(bytes, "enabled").getNote().toString());
   }
 
   @Test
@@ -226,7 +226,7 @@ class AvroProvenanceStrictnessTest {
     o.put("x", 42);
     value.put("o", o);
 
-    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("v1"))
+    GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config("enabled"))
         .deserializeWithSchema(TOPIC, new RecordHeaders(), framed(v1, value), v3).getValue();
     assertEquals(5, read.get("full_name"));
     assertNull(read.get("o"));
@@ -246,7 +246,7 @@ class AvroProvenanceStrictnessTest {
         .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null));
     byte[] bytes = framedAs(v3, v1,
         new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("specific.avro.reader", true);
 
     Object read = new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes, v1);
@@ -267,7 +267,7 @@ class AvroProvenanceStrictnessTest {
         .copy(new Metadata(null, Collections.singletonMap("owner", "team"), null), null));
     byte[] bytes = framedAs(v3, v1,
         new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("specific.avro.reader", true);
 
     Object read = new KafkaAvroDeserializer(client, config).deserializeWithSchema(
@@ -286,7 +286,7 @@ class AvroProvenanceStrictnessTest {
     int v3 = client.register(SUBJECT, metadataCopy(v1));
     byte[] bytes = framedAs(v3, v1,
         new GenericRecordBuilder(v1).set("name", "ada").set("note", "current").build());
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("specific.avro.reader", true);
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
     Function<ParsedSchema, ParsedSchema> pinned =
@@ -319,7 +319,7 @@ class AvroProvenanceStrictnessTest {
     value.put("name", "ada");
     value.put("note", "current");
     byte[] bytes = framedAs(v3, v1, value);
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("schema.reflection", true);
     config.put("avro.reflection.allow.null", true);
 
@@ -380,7 +380,7 @@ class AvroProvenanceStrictnessTest {
     Schema v1 = record("[\"null\",\"int\",\"string\"]", "v1");
     Schema v2 = record("[\"null\",\"long\",\"string\"]", "v2");
     register(v1, v2);
-    assertEquals(7L, read(v2, write(v1, 7), "v1").get("f"));
+    assertEquals(7L, read(v2, write(v1, 7), "enabled").get("f"));
   }
 
   @Test
@@ -390,7 +390,7 @@ class AvroProvenanceStrictnessTest {
     Schema v2 = record("[\"long\",\"float\",\"string\"]", "v2");
     register(v1, v2);
     assertNotNull(rename(v1, v2));
-    assertEquals(7L, read(v2, write(v1, 7), "v1").get("f"));
+    assertEquals(7L, read(v2, write(v1, 7), "enabled").get("f"));
   }
 
   @Test
@@ -409,7 +409,7 @@ class AvroProvenanceStrictnessTest {
         .set("value", new GenericRecordBuilder(value).set("x", 5).build()).build();
 
     Object read = read(v2, write(v1, new GenericData.Array<>(
-        v1.getField("f").schema(), Arrays.asList(pair))), "v1").get("f");
+        v1.getField("f").schema(), Arrays.asList(pair))), "enabled").get("f");
     assertEquals(5, ((GenericRecord) ((GenericRecord) ((java.util.List<?>) read).get(0))
         .get("value")).get("y"));
   }
@@ -430,7 +430,7 @@ class AvroProvenanceStrictnessTest {
     register(v2);
     Schema pType = v1.getField("f").schema().getTypes().get(2);
     GenericRecord read = read(v2, write(v1, new GenericRecordBuilder(pType).set("x", 5).build()),
-        "v1");
+        "enabled");
     assertEquals("P", ((GenericRecord) read.get("f")).getSchema().getName());
   }
 
@@ -451,7 +451,7 @@ class AvroProvenanceStrictnessTest {
         new GenericRecordBuilder(v1).set("a", 1).set("b", 2).build());
     register(v2, v3);
 
-    GenericRecord read = read(v3, bytes, "v1");
+    GenericRecord read = read(v3, bytes, "enabled");
     assertEquals(0, read.get("__provenance_unmatched_1"));
     assertEquals(0, read.get("b"));
   }
@@ -481,7 +481,7 @@ class AvroProvenanceStrictnessTest {
         new GenericRecordBuilder(v1).set("name", "ada").set("f", "s").set("home", home).build());
     register(v2, v3);
 
-    GenericRecord read = read(v3, bytes, "v1");
+    GenericRecord read = read(v3, bytes, "enabled");
     assertEquals(v3.toString(), read.getSchema().toString());
     assertEquals(v3.getField("home").schema().toString(),
         ((GenericRecord) read.get("home")).getSchema().toString());
@@ -505,7 +505,7 @@ class AvroProvenanceStrictnessTest {
     register(v2, Readded.getClassSchema());
 
     assertEquals("old", readSpecific(bytes, null).getNote().toString());
-    assertEquals("new", readSpecific(bytes, "v1").getNote().toString());
+    assertEquals("new", readSpecific(bytes, "enabled").getNote().toString());
   }
 
   private Readded readSpecific(byte[] bytes, String provenance) {
@@ -529,7 +529,7 @@ class AvroProvenanceStrictnessTest {
         new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
     // Flink's reader: its pinned v1 with other metadata merged on, registered nowhere.
     AvroSchema merged = withMetadata(v1, "merged");
-    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("enabled"));
 
     GenericRecord byStructure = (GenericRecord) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> merged, false).getValue();
@@ -558,7 +558,7 @@ class AvroProvenanceStrictnessTest {
     client.register(SUBJECT, new AvroSchema(v3));
     byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
         new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
-    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("enabled"));
     AvroSchema reader = new AvroSchema(v3);
 
     assertThrows(SerializationException.class, () -> deserializer.deserializeWithReaderSchema(
@@ -589,7 +589,7 @@ class AvroProvenanceStrictnessTest {
     int foreign = client.register("other-value", new AvroSchema("\"long\""));
     byte[] bytes = new KafkaAvroSerializer(client, config(null)).serialize(TOPIC,
         new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
-    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("v1"));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config("enabled"));
     AvroSchema reader = new AvroSchema(v3);
 
     SerializationException e = assertThrows(SerializationException.class,
@@ -619,7 +619,7 @@ class AvroProvenanceStrictnessTest {
     config.put("context.name.strategy", InContext.class.getName());
     byte[] bytes = new KafkaAvroSerializer(client, config).serialize(TOPIC,
         new GenericRecordBuilder(v1).set("id", 7).set("note", "ada").build());
-    config.put("provenance.algorithm", "v1");
+    config.put("provenance.algorithm", "enabled");
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
     AvroSchema reader = new AvroSchema(v3);
 
