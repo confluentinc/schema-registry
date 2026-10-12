@@ -478,6 +478,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    */
   protected Function<ParsedSchema, ParsedSchema> readerSchemas(
       Function<ParsedSchema, ReaderSchema> readers) {
+    // Without provenance a pin means nothing: read with the caller's schema as given.
+    if (!provenanceEnabled) {
+      return writer -> {
+        ReaderSchema reader = readers.apply(writer);
+        return reader != null ? reader.getSchema() : null;
+      };
+    }
     return provenanceProjector().readerSchemas(readers);
   }
 

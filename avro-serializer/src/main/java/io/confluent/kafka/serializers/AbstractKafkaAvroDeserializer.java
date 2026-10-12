@@ -99,6 +99,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected Function<ParsedSchema, ParsedSchema> readerSchemas(
       Function<ParsedSchema, ReaderSchema> readers) {
+    // Without provenance a pin means nothing: read with the caller's schema as given.
+    if (!provenanceEnabled) {
+      return writer -> {
+        ReaderSchema reader = readers.apply(writer);
+        return reader != null ? reader.getSchema() : null;
+      };
+    }
     return provenanceProjector().readerSchemas(readers);
   }
 
@@ -116,6 +123,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * version adds besides — metadata, rules — so for provenance it is the latest version it equals.
    */
   private AvroSchema classReader(Schema schema) {
+    // Without provenance a reader needs no identity of its own: one per read, as before it.
+    if (!provenanceEnabled) {
+      return new AvroSchema(schema);
+    }
     // A hit without the lock computeIfAbsent takes on every call.
     AvroSchema known = classReaders.getIfPresent(schema);
     if (known != null) {
@@ -123,10 +134,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
     // The projector first: a load holding the cache's lock must not wait for the monitor a reset,
     // invalidating the cache, holds.
-    ProvenanceProjector<AvroProvenanceProjection> projector =
-        !provenanceEnabled ? null : provenanceProjector();
-    return classReaders.asMap().computeIfAbsent(schema, s -> projector == null
-        ? new AvroSchema(s) : (AvroSchema) projector.derivedReader(new AvroSchema(s)));
+    ProvenanceProjector<AvroProvenanceProjection> projector = provenanceProjector();
+    return classReaders.asMap().computeIfAbsent(schema,
+        s -> (AvroSchema) projector.derivedReader(new AvroSchema(s)));
   }
 
   // The configured class's schema, or a generated class's own passed in, is a class reader; any
@@ -134,6 +144,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private AvroSchema readerOf(Schema readerSchema) {
     if (readerSchema == null) {
       return null;
+    }
+    if (!provenanceEnabled) {
+      return new AvroSchema(readerSchema);
     }
     AvroSchema known = classReaders.getIfPresent(readerSchema);
     if (known != null) {
@@ -144,8 +157,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
     // One instance per schema passed in: provenance keys its cache by the reader, whose hash
     // and equality walk the whole schema unless it is the same instance.
-    return !provenanceEnabled ? new AvroSchema(readerSchema)
-        : textReaders.asMap().computeIfAbsent(readerSchema, AvroSchema::new);
+    return textReaders.asMap().computeIfAbsent(readerSchema, AvroSchema::new);
   }
 
   // A reader function's class schema is a class reader too, unless its registered id or version
