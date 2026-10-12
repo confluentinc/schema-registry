@@ -28,8 +28,9 @@ public enum ProvenanceAlgorithm {
   V1("v1");
 
   /**
-   * The version a request that names none is answered with. It never changes: a newer version is
-   * only ever asked for by name, so no upgrade moves a caller's pairings.
+   * The version a schema version not stamped with one is matched by. A request that names none is
+   * answered by each version's own, which never changes once registered, so no upgrade moves a
+   * caller's pairings; until versions are stamped, that is this one throughout.
    */
   public static final ProvenanceAlgorithm DEFAULT = V1;
 
