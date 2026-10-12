@@ -165,6 +165,33 @@ class ProvenanceHistoryTest {
   }
 
   @Test
+  void aReExportedFileImportingAWellKnownMessageContinuesAcrossBothForms() {
+    // Any and Duration are inlined in the file itself, so they must be in its re-export too:
+    // converted through a descriptor, they became named types and their members restarted.
+    String o = "syntax = \"proto3\";\npackage q;\nimport \"google/protobuf/any.proto\";\n"
+        + "import \"google/protobuf/duration.proto\";\nmessage O {\n  int32 x = 1;\n"
+        + "  repeated google.protobuf.Any a = 2;\n  google.protobuf.Duration d = 3;\n}\n";
+    for (boolean multi : new boolean[] {false, true}) {
+      SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
+          List.of(new ProtobufSchema(o), reExport(o), new ProtobufSchema(o))), multi);
+      List<List<Integer>> pids = pids(p);
+      assertThat(pids.get(1)).as("multi=" + multi).isEqualTo(pids.get(0));
+      assertThat(pids.get(2)).as("multi=" + multi).isEqualTo(pids.get(0));
+    }
+  }
+
+  @Test
+  void aReExportOfOnlyEnumsHasNoLogicalForm() {
+    // As the file it re-exports: no message, so no root.
+    String e = "syntax = \"proto3\";\npackage q;\nenum E {\n  A = 0;\n}\n";
+    for (ProtobufSchema version : List.of(new ProtobufSchema(e), reExport(e))) {
+      assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
+          ProvenanceHistory.held(List.of(version)), false))
+          .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
+    }
+  }
+
+  @Test
   void anAvroRootNamingAReferencedRecordContinuesItsFields() {
     String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
         + "{\"name\":\"x\",\"type\":\"int\"},{\"name\":\"y\",\"type\":\"string\"}%s]}";

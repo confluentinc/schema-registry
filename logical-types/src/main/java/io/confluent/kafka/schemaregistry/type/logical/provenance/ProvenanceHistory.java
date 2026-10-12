@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import java.util.ArrayList;
@@ -226,8 +227,8 @@ public final class ProvenanceHistory {
       return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
     try {
-      ParsedSchema converted =
-          schema instanceof ProtobufSchema ? reExported((ProtobufSchema) schema) : schema;
+      ParsedSchema converted = schema instanceof ProtobufSchema
+          ? ProtoPublicImportWrappers.resolve((ProtobufSchema) schema) : schema;
       return includeMultipleMessages && converted instanceof ProtobufSchema
           ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) converted, true)
           : LogicalTypeConversion.toLogicalType(converted);
@@ -239,17 +240,6 @@ public final class ProvenanceHistory {
       }
       throw e;
     }
-  }
-
-  // A file declaring nothing but public imports is written with the message its descriptor
-  // resolves to: convert that, not the bare reference the converter keeps for it, which has no
-  // body. A shape Protobuf cannot resolve throws as the converter would.
-  private static ProtobufSchema reExported(ProtobufSchema schema) {
-    if (schema.rawSchema() == null || !schema.rawSchema().getTypes().isEmpty()
-        || schema.rawSchema().getPublicImports().isEmpty()) {
-      return schema;
-    }
-    return new ProtobufSchema(schema.toDescriptor());
   }
 
   /**
