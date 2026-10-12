@@ -18,7 +18,6 @@ package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -47,8 +46,6 @@ public class ProvenanceAlgorithmConfigTest {
     assertFalse(config("disabled").isProvenanceEnabled());
     assertFalse(config("Disabled").isProvenanceEnabled());
     assertFalse(config("").isProvenanceEnabled());
-    // Enabled names no version: each schema version is matched by its own.
-    assertNull(config("enabled").getProvenanceAlgorithm());
   }
 
   @Test

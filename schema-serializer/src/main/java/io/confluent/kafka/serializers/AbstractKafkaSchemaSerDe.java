@@ -137,10 +137,8 @@ public abstract class AbstractKafkaSchemaSerDe
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
-  // Whether deserializers read by provenance, and the algorithm version they ask for: null for
-  // each schema version's own.
+  // Whether deserializers read by provenance.
   protected boolean provenanceEnabled;
-  protected String provenanceAlgorithm;
   protected int provenanceCacheSize;
   protected ProvenanceStrategy provenanceStrategy;
   private static final String LOGICAL_TYPE_CLASS =
@@ -231,7 +229,6 @@ public abstract class AbstractKafkaSchemaSerDe
     useLatestVersion = config.useLatestVersion();
     // Only a deserializer reads by provenance: a serializer sharing its config ignores it.
     provenanceEnabled = readsByProvenance() && config.isProvenanceEnabled();
-    provenanceAlgorithm = provenanceEnabled ? config.getProvenanceAlgorithm() : null;
     if (provenanceEnabled) {
       requireLogicalTypes();
     }
