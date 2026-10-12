@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -688,10 +687,6 @@ public final class LogicalTypeToDdlConverter {
       } else if (value instanceof ByteString) {
         // A Protobuf default: its bytes, not its debug string, which carries an identity hash.
         bytes = ((ByteString) value).toByteArray();
-      } else if (value instanceof ByteBuffer) {
-        ByteBuffer buffer = ((ByteBuffer) value).duplicate();
-        bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
       } else {
         bytes = value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
       }
