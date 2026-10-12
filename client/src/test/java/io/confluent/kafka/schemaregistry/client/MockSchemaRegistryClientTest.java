@@ -1196,4 +1196,32 @@ public class MockSchemaRegistryClientTest {
         }
     }
 
+    @Test
+    public void aLookupByAVersionedCopyLeavesTheRegisteredSchemaAsItWas() throws Exception {
+      // A lookup finds what was registered; the version the copy carries is not stored.
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      AvroSchema schema = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":"
+          + "[{\"name\":\"a\",\"type\":\"int\"}]}");
+      int id = mock.register("s", schema);
+      assertEquals(id, mock.getId("s", schema.copy(1)));
+
+      ParsedSchema registered = mock.getSchemaBySubjectAndId("s", id);
+      assertNull(registered.version());
+      assertEquals(1, mock.getVersion("s", registered));
+    }
+
+    @Test
+    public void aSchemaCarryingAVersionIsFoundByItsContent() throws Exception {
+      // As the registry finds a version, whatever version the schema carries.
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      AvroSchema schema = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":"
+          + "[{\"name\":\"a\",\"type\":\"int\"}]}");
+      mock.register("s", schema);
+      assertEquals(1, mock.getVersion("s", schema.copy(3)));
+
+      // Registered carrying a version, it is found by its content too.
+      mock.register("t", schema.copy(3));
+      assertEquals(1, mock.getVersion("t", schema));
+      assertEquals(1, mock.getVersion("t", schema.copy(3)));
+    }
 }

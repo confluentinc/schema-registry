@@ -263,6 +263,13 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final int SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
   /**
+   * <code>provenance.interior.max.versions</code>
+   */
+  public static final String PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG =
+          "provenance.interior.max.versions";
+  public static final int PROVENANCE_INTERIOR_MAX_VERSIONS_DEFAULT = 100;
+
+  /**
    * <code>subject.version.search.max.limit</code>
    */
   public static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
@@ -479,6 +486,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "The default limit for subject version searches.";
   protected static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC =
       "The max limit for subject version searches.";
+  protected static final String PROVENANCE_INTERIOR_MAX_VERSIONS_DOC =
+      "The most versions a provenance request with includeInterior may cover. A longer history is "
+      + "read in ranges overlapping by one version, whose shared version joins their ids.";
   protected static final String SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
       "The default limit for subject searches.";
   protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
@@ -767,6 +777,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
             SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
             ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG, ConfigDef.Type.INT,
+            PROVENANCE_INTERIOR_MAX_VERSIONS_DEFAULT, atLeast(2),
+            ConfigDef.Importance.LOW, PROVENANCE_INTERIOR_MAX_VERSIONS_DOC
     )
     .define(SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
             SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT,
