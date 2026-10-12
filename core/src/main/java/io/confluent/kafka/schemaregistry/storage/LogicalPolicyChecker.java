@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -121,8 +122,9 @@ public final class LogicalPolicyChecker {
    * reshaping it is.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    // Its own messages: toDescriptor() follows a public import, so a file that only re-exports
-    // another would count that file's.
+    // A file declaring nothing but a public import is written, and read by Flink, as the file it
+    // re-exports: checked as that, not as the bare reference format=logical keeps for it.
+    schema = ProtoPublicImportWrappers.resolve(schema);
     long own = schema.rawSchema().getTypes().stream()
         .filter(type -> type instanceof MessageElement).count();
     return ProtoToLogicalTypeConverter.toLogicalType(schema, own > 1);
