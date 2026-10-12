@@ -57,7 +57,10 @@ public final class ProvenanceReaderMarks {
     } catch (ExecutionException e) {
       throw new IllegalStateException(e.getCause());
     }
-    pins.put(copy, pin);
+    // A hit without the lock a put takes on every call.
+    if (pins.getIfPresent(copy) == null) {
+      pins.put(copy, pin);
+    }
     return copy;
   }
 
