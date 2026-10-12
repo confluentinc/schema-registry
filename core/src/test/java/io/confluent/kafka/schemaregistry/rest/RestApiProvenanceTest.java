@@ -400,7 +400,7 @@ public abstract class RestApiProvenanceTest {
     assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
             RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v9"));
-    // Omitted is v1 for good; no name asks for whichever version is newest.
+    // Omitted is each version's own, which never changes; no name asks for the newest.
     assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
             RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "latest"));
