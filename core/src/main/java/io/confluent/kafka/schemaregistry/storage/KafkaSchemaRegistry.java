@@ -273,9 +273,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_POLL_FAILURES,
         "Number of consecutive failed polls of the kafka store reader",
         () -> (double) kafkaStore.readerConsecutivePollFailures());
-    metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_LAST_POLL_AGE_MS,
-        "Milliseconds since the kafka store reader last polled successfully",
-        () -> (double) kafkaStore.readerMillisSinceLastSuccessfulPoll());
+    metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_POLL_FAILURE_MS,
+        "Milliseconds the kafka store reader has been failing to poll, 0 if healthy",
+        () -> (double) kafkaStore.readerMillisInPollFailure());
   }
 
   @VisibleForTesting

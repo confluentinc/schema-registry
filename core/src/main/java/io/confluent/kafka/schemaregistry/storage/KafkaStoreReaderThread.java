@@ -90,7 +90,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   static final long MAX_POLL_RETRY_BACKOFF_MS = 30_000L;
   static final long POLL_FAILURE_LOG_INTERVAL_MS = 60_000L;
   private volatile long consecutivePollFailures = 0L;
-  private volatile long lastSuccessfulPollMs = System.currentTimeMillis();
+  private volatile long firstPollFailureMs = 0L;
   private long lastPollFailureLogMs = 0L;
   private long initialPollRetryBackoffMs = INITIAL_POLL_RETRY_BACKOFF_MS;
   private long maxPollRetryBackoffMs = MAX_POLL_RETRY_BACKOFF_MS;
@@ -357,12 +357,15 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           consecutivePollFailures);
     }
     consecutivePollFailures = 0L;
-    lastSuccessfulPollMs = System.currentTimeMillis();
+    firstPollFailureMs = 0L;
   }
 
   private void onPollFailure(KafkaException e) {
     long failures = ++consecutivePollFailures;
     long now = System.currentTimeMillis();
+    if (failures == 1) {
+      firstPollFailureMs = now;
+    }
     // Throttle logging: a persistent outage can otherwise flood the logs
     if (failures == 1 || now - lastPollFailureLogMs >= POLL_FAILURE_LOG_INTERVAL_MS) {
       lastPollFailureLogMs = now;
@@ -396,8 +399,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     return consecutivePollFailures;
   }
 
-  public long millisSinceLastSuccessfulPoll() {
-    return System.currentTimeMillis() - lastSuccessfulPollMs;
+  /**
+   * How long polls have been failing continuously, or 0 if the last poll succeeded. (poll blocks
+   * until records arrive, so "time since last successful poll" would grow forever on an idle
+   * but healthy node.)
+   */
+  public long millisInPollFailure() {
+    return consecutivePollFailures > 0 ? System.currentTimeMillis() - firstPollFailureMs : 0L;
   }
 
   private void checkpointOffsets(Map<TopicPartition, Long> offsets) {

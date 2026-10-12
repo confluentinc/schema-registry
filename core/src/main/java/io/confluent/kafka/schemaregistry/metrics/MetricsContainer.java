@@ -74,8 +74,8 @@ public class MetricsContainer {
   public static final String METRIC_NAME_READER_ALIVE = "kafka-store-reader-alive";
   public static final String METRIC_NAME_READER_POLL_FAILURES =
       "kafka-store-reader-consecutive-poll-failures";
-  public static final String METRIC_NAME_READER_LAST_POLL_AGE_MS =
-      "kafka-store-reader-ms-since-last-successful-poll";
+  public static final String METRIC_NAME_READER_POLL_FAILURE_MS =
+      "kafka-store-reader-poll-failure-duration-ms";
   public static final String METRIC_CERTIFICATE_EXPIRATION = "certificate-expiration";
 
   private final Metrics metrics;

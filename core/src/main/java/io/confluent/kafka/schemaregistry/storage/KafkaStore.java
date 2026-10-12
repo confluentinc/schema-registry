@@ -493,9 +493,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     return reader == null ? 0L : reader.consecutivePollFailures();
   }
 
-  public long readerMillisSinceLastSuccessfulPoll() {
+  public long readerMillisInPollFailure() {
     KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
-    return reader == null ? 0L : reader.millisSinceLastSuccessfulPoll();
+    return reader == null ? 0L : reader.millisInPollFailure();
   }
 
   /**
