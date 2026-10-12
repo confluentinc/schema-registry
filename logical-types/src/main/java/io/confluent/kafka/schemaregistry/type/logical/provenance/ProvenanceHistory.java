@@ -112,9 +112,10 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm},
-   * {@link ProvenanceAlgorithm#DEFAULT} when none is named. A version of the algorithm changes the
-   * matching rules, never the logical type's edition, which is the Metastore's.
+   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm};
+   * when none is named, each version by its own, {@link ProvenanceAlgorithm#DEFAULT} until versions
+   * are stamped. A version of the algorithm changes the matching rules, never the logical type's
+   * edition, which is the Metastore's.
    *
    * <p>Each version is parsed and converted, as {@link #logicalTypeOf} converts it, only when the
    * computation reaches it, and none is held past the next: a range costs the memory of its report,

@@ -3105,8 +3105,8 @@ paths:
           default: false
       - name: algorithm
         in: query
-        description: "Version of the provenance algorithm, such as v1; v1 when omitted,\
-          \ whatever later versions are released"
+        description: "Version of the provenance algorithm, such as v1; when omitted,\
+          \ each version is matched by the one it was registered under, today v1"
         schema:
           type: string
       responses:
