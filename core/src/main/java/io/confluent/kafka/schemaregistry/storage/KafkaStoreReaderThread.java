@@ -34,6 +34,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -81,6 +82,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // messages with this key
   private final K noopKey;
   private final AtomicBoolean initialized;
+
+  // Poll failure tracking. Transient errors from poll() (e.g. AuthenticationException during a
+  // broker-side auth outage) must not kill this thread, otherwise the node serves stale data
+  // forever. See DGS-25570.
+  static final long INITIAL_POLL_RETRY_BACKOFF_MS = 100L;
+  static final long MAX_POLL_RETRY_BACKOFF_MS = 30_000L;
+  static final long POLL_FAILURE_LOG_INTERVAL_MS = 60_000L;
+  private volatile long consecutivePollFailures = 0L;
+  private volatile long lastSuccessfulPollMs = System.currentTimeMillis();
+  private long lastPollFailureLogMs = 0L;
+  private long initialPollRetryBackoffMs = INITIAL_POLL_RETRY_BACKOFF_MS;
+  private long maxPollRetryBackoffMs = MAX_POLL_RETRY_BACKOFF_MS;
 
   private Properties consumerProps = new Properties();
 
@@ -187,6 +200,33 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     log.debug("Kafka store reader thread started");
   }
 
+  // Visible for testing: builds a reader around an already-assigned consumer.
+  KafkaStoreReaderThread(String topic,
+                         StoreUpdateHandler<K, V> storeUpdateHandler,
+                         Serializer<K, V> serializer,
+                         Store<K, V> localStore,
+                         Producer<byte[], byte[]> producer,
+                         K noopKey,
+                         Consumer<byte[], byte[]> consumer,
+                         long initialPollRetryBackoffMs,
+                         long maxPollRetryBackoffMs) {
+    super("kafka-store-reader-thread-" + topic, false);
+    this.offsetUpdateLock = new ReentrantLock();
+    this.offsetReachedThreshold = offsetUpdateLock.newCondition();
+    this.topic = topic;
+    this.groupId = null;
+    this.storeUpdateHandler = storeUpdateHandler;
+    this.serializer = serializer;
+    this.localStore = localStore;
+    this.producer = producer;
+    this.noopKey = noopKey;
+    this.initialized = new AtomicBoolean(true);
+    this.consumer = consumer;
+    this.topicPartition = new TopicPartition(topic, 0);
+    this.initialPollRetryBackoffMs = initialPollRetryBackoffMs;
+    this.maxPollRetryBackoffMs = maxPollRetryBackoffMs;
+  }
+
   public Map<TopicPartition, Long> checkpoints() {
     return checkpointFileCache;
   }
@@ -195,6 +235,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   public void doWork() {
     try {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
+      onPollSuccess();
       storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
@@ -297,10 +338,66 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       throw new IllegalStateException(
           "Consumer threw RecordTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", rtle);
+    } catch (InterruptException ie) {
+      log.error("KafkaStoreReader thread was interrupted and is exiting.", ie);
+      throw ie;
+    } catch (KafkaException ke) {
+      // Includes AuthenticationException and RetriableException. These are typically transient
+      // (e.g. a short broker-side auth outage), so keep the thread alive and retry with backoff.
+      onPollFailure(ke);
     } catch (RuntimeException e) {
       log.error("KafkaStoreReader thread has died for an unknown reason.", e);
       throw new RuntimeException(e);
     }
+  }
+
+  private void onPollSuccess() {
+    if (consecutivePollFailures > 0) {
+      log.info("KafkaStoreReader recovered after {} consecutive poll failures",
+          consecutivePollFailures);
+    }
+    consecutivePollFailures = 0L;
+    lastSuccessfulPollMs = System.currentTimeMillis();
+  }
+
+  private void onPollFailure(KafkaException e) {
+    long failures = ++consecutivePollFailures;
+    long now = System.currentTimeMillis();
+    // Throttle logging: a persistent outage can otherwise flood the logs
+    if (failures == 1 || now - lastPollFailureLogMs >= POLL_FAILURE_LOG_INTERVAL_MS) {
+      lastPollFailureLogMs = now;
+      log.error("KafkaStoreReader poll failed ({} consecutive failures); will retry with backoff",
+          failures, e);
+    } else {
+      log.debug("KafkaStoreReader poll failed ({} consecutive failures)", failures, e);
+    }
+    long backoffMs = initialPollRetryBackoffMs;
+    for (long i = 1; i < failures && backoffMs < maxPollRetryBackoffMs; i++) {
+      backoffMs *= 2;
+    }
+    backoffMs = Math.min(backoffMs, maxPollRetryBackoffMs);
+    try {
+      // returns early if shutdown is initiated
+      pause(backoffMs, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
+   * Returns false if the reader thread has exited unexpectedly. The node then serves stale data
+   * and must not accept writes.
+   */
+  public boolean isReaderAlive() {
+    return !isThreadFailed();
+  }
+
+  public long consecutivePollFailures() {
+    return consecutivePollFailures;
+  }
+
+  public long millisSinceLastSuccessfulPoll() {
+    return System.currentTimeMillis() - lastSuccessfulPollMs;
   }
 
   private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
