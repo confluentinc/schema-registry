@@ -29,7 +29,6 @@ import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.TooManyLocationsException;
-import io.confluent.kafka.schemaregistry.type.logical.provenance.UnsupportedProvenanceAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -393,8 +392,7 @@ public class SubjectsResource {
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
       boolean includeMultipleMessages,
       @Parameter(description = "Version of the provenance algorithm, such as v1; v1 when "
-          + "omitted, whatever later versions are released; dynamic for each version matched to "
-          + "the one before it by the version released when it was registered")
+          + "omitted, whatever later versions are released")
       @QueryParam("algorithm") String algorithm) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -404,9 +402,8 @@ public class SubjectsResource {
     }
     String version;
     try {
-      // dynamic, or the name of the version asked for, v1 when none is named.
-      version = ProvenanceAlgorithm.isDynamic(algorithm) ? ProvenanceAlgorithm.DYNAMIC_NAME
-          : ProvenanceAlgorithm.of(algorithm).getName();
+      // The name of the version asked for, v1 when none is named.
+      version = ProvenanceAlgorithm.of(algorithm).getName();
     } catch (IllegalArgumentException e) {
       throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
     }
@@ -616,7 +613,7 @@ public class SubjectsResource {
       boolean includeMultipleMessages, boolean includeInterior, String algorithm) {
     // The mode and the algorithm are part of the key: each answers differently. So is whether
     // the interior is kept, as a request for the ends computes no more than it returns.
-    List<Object> key = new ArrayList<>(4 + 3 * history.size());
+    List<Object> key = new ArrayList<>(4 + 2 * history.size());
     key.add(subject);
     key.add(includeMultipleMessages);
     key.add(includeInterior);
@@ -624,8 +621,6 @@ public class SubjectsResource {
     for (Schema schema : history) {
       key.add(schema.getVersion());
       key.add(schema.getId());
-      // Under dynamic, when a version was registered decides the algorithm that matches it.
-      key.add(ProvenanceHistory.registeredAt(new SchemaMetadata(schema)));
     }
     return key;
   }
@@ -649,8 +644,6 @@ public class SubjectsResource {
       throw Errors.ambiguousProvenanceException(e.getMessage());
     } catch (TooManyLocationsException | TypeTooDeepException e) {
       throw Errors.provenanceTooLargeException(e.getMessage());
-    } catch (UnsupportedProvenanceAlgorithmException e) {
-      throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
     } catch (ValidationException e) {
       throw Errors.invalidSchemaException(e);
     } catch (RuntimeException e) {

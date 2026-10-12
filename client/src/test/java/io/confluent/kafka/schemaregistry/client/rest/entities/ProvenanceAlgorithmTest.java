@@ -17,30 +17,17 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-/** Which algorithm a name, or under dynamic a registration time, selects. */
+/** Which algorithm a name selects. */
 public class ProvenanceAlgorithmTest {
 
   @Test
-  public void v1IsEffectiveFromTheEpoch() {
-    assertEquals(0L, ProvenanceAlgorithm.V1.getEffectiveTimestamp());
-    assertEquals(ProvenanceAlgorithm.V1, ProvenanceAlgorithm.effectiveAt(0L));
-    assertEquals(ProvenanceAlgorithm.V1, ProvenanceAlgorithm.effectiveAt(System.currentTimeMillis()));
-    // A version with no recorded registration time counts as the epoch.
-    assertEquals(ProvenanceAlgorithm.V1, ProvenanceAlgorithm.effectiveAt(null));
-  }
-
-  @Test
-  public void dynamicIsANameNotAVersion() {
-    assertTrue(ProvenanceAlgorithm.isDynamic("dynamic"));
-    assertTrue(ProvenanceAlgorithm.isDynamic("DYNAMIC"));
-    assertFalse(ProvenanceAlgorithm.isDynamic("v1"));
-    assertFalse(ProvenanceAlgorithm.isDynamic(null));
-    assertThrows(IllegalArgumentException.class, () -> ProvenanceAlgorithm.of("dynamic"));
+  public void aNameSelectsItsVersionInAnyCase() {
+    assertEquals(ProvenanceAlgorithm.V1, ProvenanceAlgorithm.of("v1"));
+    assertEquals(ProvenanceAlgorithm.V1, ProvenanceAlgorithm.of("V1"));
+    assertEquals(ProvenanceAlgorithm.DEFAULT, ProvenanceAlgorithm.of(null));
+    assertEquals(ProvenanceAlgorithm.DEFAULT, ProvenanceAlgorithm.of(""));
   }
 }
