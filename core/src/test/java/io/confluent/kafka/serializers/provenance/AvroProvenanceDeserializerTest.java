@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.FutureTask;
@@ -1006,6 +1007,39 @@ class AvroProvenanceDeserializerTest {
       Class<? extends RuntimeException> expected =
           status == 401 ? AuthenticationException.class : AuthorizationException.class;
       assertThrows(expected, () -> read(reader, bytes, "enabled"));
+    }
+  }
+
+  @Test
+  void anAuthFailureAtAnySchemaFetchReachesTheConsumerWithProvenanceDisabled() throws Exception {
+    // Disabled too, a 401 inside the read is left as a schema fetch's always was: each fetch of
+    // a latest-version read fails in turn, and none is wrapped as a record to skip.
+    AtomicInteger calls = new AtomicInteger();
+    AtomicInteger failAt = new AtomicInteger(Integer.MAX_VALUE);
+    client = new ProvenanceMockSchemaRegistryClient() {
+      @Override
+      public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+          throws IOException, RestClientException {
+        if (calls.incrementAndGet() >= failAt.get()) {
+          throw new RestClientException("refused", 401, 40101);
+        }
+        return super.getSchemaBySubjectAndId(subject, id);
+      }
+    };
+    serializer = new KafkaAvroSerializer(client, config(null));
+    Schema schema = record(idField());
+    byte[] bytes = write(schema, new GenericRecordBuilder(schema).set("id", 1));
+    Map<String, Object> config = config("disabled");
+    config.put("use.latest.version", true);
+    calls.set(0);
+    new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes);
+    int fetches = calls.get();
+    assertTrue(fetches > 0);
+    for (int k = 1; k <= fetches; k++) {
+      calls.set(0);
+      failAt.set(k);
+      assertThrows(AuthenticationException.class,
+          () -> new KafkaAvroDeserializer(client, config).deserialize(TOPIC, bytes));
     }
   }
 
