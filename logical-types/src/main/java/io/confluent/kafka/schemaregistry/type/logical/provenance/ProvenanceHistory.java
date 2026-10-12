@@ -226,9 +226,11 @@ public final class ProvenanceHistory {
       return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
     try {
-      return includeMultipleMessages && schema instanceof ProtobufSchema
-          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true)
-          : LogicalTypeConversion.toLogicalType(schema);
+      ParsedSchema converted =
+          schema instanceof ProtobufSchema ? reExported((ProtobufSchema) schema) : schema;
+      return includeMultipleMessages && converted instanceof ProtobufSchema
+          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) converted, true)
+          : LogicalTypeConversion.toLogicalType(converted);
     } catch (IllegalArgumentException e) {
       // A Protobuf file declaring no type has no root, as one declaring only enums has none:
       // ProtobufSchema says so with an IllegalArgumentException, which would answer a plain 500.
@@ -237,6 +239,17 @@ public final class ProvenanceHistory {
       }
       throw e;
     }
+  }
+
+  // A file declaring nothing but public imports is written with the message its descriptor
+  // resolves to: convert that, not the bare reference the converter keeps for it, which has no
+  // body. A shape Protobuf cannot resolve throws as the converter would.
+  private static ProtobufSchema reExported(ProtobufSchema schema) {
+    if (schema.rawSchema() == null || !schema.rawSchema().getTypes().isEmpty()
+        || schema.rawSchema().getPublicImports().isEmpty()) {
+      return schema;
+    }
+    return new ProtobufSchema(schema.toDescriptor());
   }
 
   /**

@@ -23,12 +23,18 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /** How a history's versions are read: each when the computation reaches it, and only once. */
@@ -107,6 +113,109 @@ class ProvenanceHistoryTest {
         ProvenanceHistory.held(versions), false, false, null);
     assertThat(ends.getVersions()).containsExactly(
         whole.getVersions().get(0), whole.getVersions().get(3));
+  }
+
+  // ---- A root that is only a reference to a type another subject defines ----
+
+  private static final String O = "syntax = \"proto3\";\npackage q;\n"
+      + "message O {\n  int32 x = 1;\n  string y = 2;\n%s}\n";
+
+  @Test
+  void aVersionReExportingItsRootMessageContinuesItsFields() {
+    // The file declares nothing but a public import, as the logical-type writer registers an
+    // external root: its records carry O's fields, so they continue on both sides.
+    String o = String.format(O, "");
+    SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
+        List.of(new ProtobufSchema(o), reExport(o), new ProtobufSchema(String.format(O,
+            "  int64 z = 3;\n")))), false);
+    assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
+    assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
+  }
+
+  @Test
+  void aHistoryOfOnlyReExportsFollowsTheMessageReExported() {
+    // y is dropped, then its number reused by w: w is new, x continues throughout.
+    SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
+        List.of(reExport(String.format(O, "")), reExport(String.format(O, "").replace(
+            "  string y = 2;\n", "")), reExport(String.format(O, "").replace("string y",
+            "string w")))), false);
+    assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1), List.of(1, 3));
+  }
+
+  @Test
+  void aReExportingVersionIsComputedInMultiMessageMode() {
+    String o = String.format(O, "");
+    SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(2), ProvenanceHistory.held(
+        List.of(new ProtobufSchema(o), reExport(o))), true);
+    assertThat(pids(p).get(1)).isNotEmpty().isEqualTo(pids(p).get(0));
+  }
+
+  @Test
+  void aChainOfReExportsHasNoLogicalForm() {
+    // Protobuf resolves one level of re-export only, so a serializer cannot use this either.
+    String o = String.format(O, "");
+    String inner = "syntax = \"proto3\";\nimport public \"o.proto\";\n";
+    String outer = "syntax = \"proto3\";\nimport public \"w.proto\";\n";
+    ProtobufSchema chain = new ProtobufSchema(outer,
+        List.of(new SchemaReference("w.proto", "w", 1), new SchemaReference("o.proto", "o", 1)),
+        Map.of("w.proto", inner, "o.proto", o), null, null);
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
+        ProvenanceHistory.held(List.of(chain)), false))
+        .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
+  }
+
+  @Test
+  void anAvroRootNamingAReferencedRecordContinuesItsFields() {
+    String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"int\"},{\"name\":\"y\",\"type\":\"string\"}%s]}";
+    String plain = String.format(o, "");
+    AvroSchema bare = new AvroSchema("\"q.O\"",
+        List.of(new SchemaReference("o.avsc", "o", 1)), Map.of("o.avsc", plain), null);
+    SchemaProvenance p = ProvenanceHistory.compute("s", history(3), ProvenanceHistory.held(List.of(
+        new AvroSchema(plain), bare, new AvroSchema(String.format(o,
+            ",{\"name\":\"z\",\"type\":\"long\",\"default\":0}")))), false);
+    assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
+    assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
+  }
+
+  @Test
+  void aJsonRootReferencingAnotherSchemaContinuesItsProperties() {
+    String o = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"},"
+        + "\"y\":{\"type\":\"string\"}%s}}";
+    JsonSchema bare = new JsonSchema("{\"$ref\":\"o.json\"}",
+        List.of(new SchemaReference("o.json", "o", 1)),
+        Map.of("o.json", String.format(o, "")), null);
+    SchemaProvenance p = ProvenanceHistory.compute("s", jsonHistory(3), ProvenanceHistory.held(
+        List.of(new JsonSchema(String.format(o, "")), bare, new JsonSchema(String.format(o,
+            ",\"z\":{\"type\":\"number\"}")))), false);
+    assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
+    assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
+  }
+
+  private static ProtobufSchema reExport(String o) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport public \"o.proto\";\n",
+        Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
+        Collections.singletonMap("o.proto", o), null, null);
+  }
+
+  private static List<List<Integer>> pids(SchemaProvenance provenance) {
+    return provenance.getVersions().stream().map(v -> v.getFields() == null
+        ? Collections.<Integer>emptyList()
+        : v.getFields().stream().map(ProvenanceField::getPid).collect(Collectors.toList()))
+        .collect(Collectors.toList());
+  }
+
+  private static List<String> kinds(SchemaProvenance provenance) {
+    return provenance.getVersions().stream().map(ProvenanceVersion::getKind)
+        .collect(Collectors.toList());
+  }
+
+  private static List<SchemaMetadata> jsonHistory(int versions) {
+    List<SchemaMetadata> history = new ArrayList<>();
+    for (int i = 1; i <= versions; i++) {
+      history.add(new SchemaMetadata(i, i, "JSON", Collections.emptyList(), ""));
+    }
+    return history;
   }
 
   private static ParsedSchemaHolder counted(List<Integer> asked, int index, ParsedSchema schema) {

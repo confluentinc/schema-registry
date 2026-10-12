@@ -50,6 +50,7 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -790,6 +791,55 @@ class AvroProvenanceDeserializerTest {
 
   // --- Helpers -----------------------------------------------------------------------------------
 
+  @Test
+  void aRecordWrittenUnderABareRootNameKeepsItsFields() throws Exception {
+    // v2 is only the name of v1's record, defined by a reference: its fields continue into v3.
+    String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"int\"},{\"name\":\"y\",\"type\":\"string\"}%s]}";
+    client.register("o", new AvroSchema(String.format(o, "")));
+    AvroSchema v1 = new AvroSchema(String.format(o, ""));
+    AvroSchema v2 = bareRoot(String.format(o, ""), 1);
+    AvroSchema v3 = new AvroSchema(String.format(o,
+        ",{\"name\":\"z\",\"type\":\"long\",\"default\":0}"));
+    for (AvroSchema version : Arrays.asList(v1, v2, v3)) {
+      client.register(SUBJECT, version);
+    }
+    for (AvroSchema writer : Arrays.asList(v1, v2)) {
+      GenericRecord value = new GenericData.Record(writer.rawSchema());
+      value.put("x", 7);
+      value.put("y", "ada");
+      byte[] bytes = writeById(writer, value);
+      GenericRecord read = readParsed(v3, bytes, "enabled");
+      assertEquals(readParsed(v3, bytes, null), read);
+      assertEquals(7, read.get("x"));
+      assertEquals("ada", read.get("y").toString());
+    }
+  }
+
+  @Test
+  void aFieldReAddedUnderABareRootNameReadsItsDefault() throws Exception {
+    // Every version only names O, whose note is dropped and re-added: the old value is not its.
+    String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"int\"}%s]}";
+    String[] records = {String.format(o, ",{\"name\":\"note\",\"type\":\"string\"}"),
+        String.format(o, ""),
+        String.format(o, ",{\"name\":\"note\",\"type\":\"string\",\"default\":\"new\"}")};
+    List<AvroSchema> versions = new ArrayList<>();
+    for (int i = 0; i < records.length; i++) {
+      client.register("o", new AvroSchema(records[i]));
+      AvroSchema version = bareRoot(records[i], i + 1);
+      client.register(SUBJECT, version);
+      versions.add(version);
+    }
+    GenericRecord value = new GenericData.Record(versions.get(0).rawSchema());
+    value.put("x", 1);
+    value.put("note", "old");
+    byte[] bytes = writeById(versions.get(0), value);
+
+    assertEquals("new", readParsed(versions.get(2), bytes, "enabled").get("note").toString());
+    assertEquals("old", readParsed(versions.get(2), bytes, null).get("note").toString());
+  }
+
   private GenericRecord sameBothWays(Schema writer, Schema reader, Object value) throws Exception {
     byte[] bytes = write(writer, new GenericRecordBuilder(writer).set("f", value));
     client.register(SUBJECT, new AvroSchema(reader));
@@ -1115,6 +1165,29 @@ class AvroProvenanceDeserializerTest {
         TOPIC, new RecordHeaders(), bytes, schema).getValue();
     assertEquals(-1, read.get("w"));
     return new WeakReference<>(schema);
+  }
+
+  // Only the name q.O, defined by version {@code version} of subject "o".
+  private static AvroSchema bareRoot(String o, int version) {
+    return new AvroSchema("\"q.O\"",
+        Collections.singletonList(new SchemaReference("o.avsc", "o", version)),
+        Collections.singletonMap("o.avsc", o), null);
+  }
+
+  private byte[] writeById(AvroSchema writer, GenericRecord value) throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(client.getId(SUBJECT, writer)).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(writer.rawSchema()).write(value, encoder);
+    encoder.flush();
+    return out.toByteArray();
+  }
+
+  private GenericRecord readParsed(AvroSchema reader, byte[] bytes, String provenance) {
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config(provenance));
+    return (GenericRecord) deserializer.deserializeWithSchema(
+        TOPIC, new RecordHeaders(), bytes, writer -> reader).getValue();
   }
 
   private byte[] write(Schema writer, GenericRecordBuilder record) throws Exception {
