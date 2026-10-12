@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers.provenance;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -34,31 +35,42 @@ import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 
 /**
- * A misspelt provenance algorithm fails configuration rather than quietly turning it off, and the
+ * A misspelt provenance setting fails configuration rather than quietly turning it off, and the
  * strategy asked for provenance is configured as the others are.
  */
 public class ProvenanceAlgorithmConfigTest {
 
   @Test
-  public void aKnownAlgorithmOrNoneIsAccepted() {
-    assertEquals("v1", config("v1").getProvenanceAlgorithm());
-    assertEquals("V1", config("V1").getProvenanceAlgorithm());
-    assertNull(config("none").getProvenanceAlgorithm());
-    assertNull(config("None").getProvenanceAlgorithm());
-    assertNull(config("").getProvenanceAlgorithm());
-    assertNull(config(null).getProvenanceAlgorithm());
+  public void enabledOrDisabledIsAcceptedInAnyCase() {
+    assertTrue(config("enabled").isProvenanceEnabled());
+    assertTrue(config("ENABLED").isProvenanceEnabled());
+    assertFalse(config("disabled").isProvenanceEnabled());
+    assertFalse(config("Disabled").isProvenanceEnabled());
+    assertFalse(config("").isProvenanceEnabled());
+    // Enabled names no version: each schema version is matched by its own.
+    assertNull(config("enabled").getProvenanceAlgorithm());
   }
 
   @Test
-  public void anUnknownAlgorithmFailsConfiguration() {
-    assertThrows(ConfigException.class, () -> config("vI"));
-    // A name whose meaning would move on an upgrade is no algorithm.
-    assertThrows(ConfigException.class, () -> config("latest"));
+  public void provenanceIsDisabledByDefault() {
+    AbstractKafkaSchemaSerDeConfig config = config(null);
+    assertEquals("disabled",
+        config.getString(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM));
+    assertFalse(config.isProvenanceEnabled());
+  }
+
+  @Test
+  public void anyOtherValueFailsConfiguration() {
+    assertThrows(ConfigException.class, () -> config("enable"));
+    assertThrows(ConfigException.class, () -> config("on"));
+    assertThrows(ConfigException.class, () -> config("none"));
+    // A version would pin every transition, disagreeing with the Metastore once one is stamped.
+    assertThrows(ConfigException.class, () -> config("v1"));
   }
 
   @Test
   public void theStrategyDefaultsToAskingTheRegistryAndCanBeReplaced() {
-    assertTrue(config("v1").provenanceStrategy() instanceof ClientProvenanceStrategy);
+    assertTrue(config("enabled").provenanceStrategy() instanceof ClientProvenanceStrategy);
 
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -75,7 +87,7 @@ public class ProvenanceAlgorithmConfigTest {
   public void theStrategyIsClosedWhenReconfiguredAndWhenClosed() throws Exception {
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "enabled");
     props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_STRATEGY,
         ClosingStrategy.class.getName());
     ClosingStrategy.closed.set(0);
@@ -89,17 +101,17 @@ public class ProvenanceAlgorithmConfigTest {
 
   @Test
   public void aSerdeNotReadingByProvenanceBuildsNoStrategy() {
-    // A serializer sharing a deserializer's config: no strategy, and the algorithm is off.
+    // A serializer sharing a deserializer's config: no strategy, and provenance is off.
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "v1");
+    props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_ALGORITHM, "enabled");
     props.put(AbstractKafkaSchemaSerDeConfig.PROVENANCE_STRATEGY,
         ClosingStrategy.class.getName());
     ClosingStrategy.created.set(0);
     Serde serde = new Serde(false);
     serde.configure(props);
     assertEquals(0, ClosingStrategy.created.get());
-    assertNull(serde.algorithm());
+    assertFalse(serde.enabled());
   }
 
   @Test
@@ -164,8 +176,8 @@ public class ProvenanceAlgorithmConfigTest {
       return reads;
     }
 
-    String algorithm() {
-      return provenanceAlgorithm;
+    boolean enabled() {
+      return provenanceEnabled;
     }
 
     void configure(Map<String, Object> props) {

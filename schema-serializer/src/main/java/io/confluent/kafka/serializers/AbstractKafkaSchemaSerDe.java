@@ -137,7 +137,9 @@ public abstract class AbstractKafkaSchemaSerDe
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
-  // The provenance algorithm version deserializers project with; null when provenance is off.
+  // Whether deserializers read by provenance, and the algorithm version they ask for: null for
+  // each schema version's own.
+  protected boolean provenanceEnabled;
   protected String provenanceAlgorithm;
   protected int provenanceCacheSize;
   protected ProvenanceStrategy provenanceStrategy;
@@ -228,14 +230,15 @@ public abstract class AbstractKafkaSchemaSerDe
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
     // Only a deserializer reads by provenance: a serializer sharing its config ignores it.
-    provenanceAlgorithm = readsByProvenance() ? config.getProvenanceAlgorithm() : null;
-    if (provenanceAlgorithm != null) {
+    provenanceEnabled = readsByProvenance() && config.isProvenanceEnabled();
+    provenanceAlgorithm = provenanceEnabled ? config.getProvenanceAlgorithm() : null;
+    if (provenanceEnabled) {
       requireLogicalTypes();
     }
     provenanceCacheSize = config.getProvenanceCacheSize();
     provenanceCacheTtlSec = config.getProvenanceCacheTtl();
     closeQuietly(provenanceStrategy, "provenance strategy");
-    provenanceStrategy = provenanceAlgorithm != null ? config.provenanceStrategy() : null;
+    provenanceStrategy = provenanceEnabled ? config.provenanceStrategy() : null;
     validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();
@@ -1210,7 +1213,7 @@ public abstract class AbstractKafkaSchemaSerDe
   }
 
   /**
-   * Whether this serde reads by provenance when {@code provenance.algorithm} is set.
+   * Whether this serde reads by provenance when {@code provenance.algorithm} is enabled.
    */
   protected boolean readsByProvenance() {
     return false;

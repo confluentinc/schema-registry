@@ -321,7 +321,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * null for a dynamic read, or with no class to be found.
    */
   private ProtobufSchema classSchema(ProtobufSchema writer) {
-    if (provenanceAlgorithm == null || (parseMethod == null && !deriveType)) {
+    if (!provenanceEnabled || (parseMethod == null && !deriveType)) {
       return null;
     }
     String name = parseMethod != null ? specificProtobufClass.getName() : writer.fullName();
@@ -385,7 +385,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   // A copy naming the written message: a supplied id stands for it too.
   private ProtobufSchema namedReader(ProtobufSchema reader, String name) {
     ProtobufSchema named = schemaWithName(reader, name);
-    return provenanceAlgorithm == null ? named
+    return !provenanceEnabled ? named
         : (ProtobufSchema) provenanceProjector().sameReader(reader, named);
   }
 
@@ -435,7 +435,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private ProtoProvenanceProjection byProvenance(String subject, SchemaId writerId,
       ProtobufSchema writer, ProtobufSchema reader, String name, List<Migration> migrations) {
-    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
+    if (!provenanceEnabled || reader == null || !migrations.isEmpty()) {
       return null;
     }
     // As Flink chooses its row: every top-level message when the reader's file has several, else

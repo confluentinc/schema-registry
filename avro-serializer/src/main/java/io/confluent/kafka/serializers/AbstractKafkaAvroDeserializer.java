@@ -124,7 +124,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // The projector first: a load holding the cache's lock must not wait for the monitor a reset,
     // invalidating the cache, holds.
     ProvenanceProjector<AvroProvenanceProjection> projector =
-        provenanceAlgorithm == null ? null : provenanceProjector();
+        !provenanceEnabled ? null : provenanceProjector();
     return classReaders.asMap().computeIfAbsent(schema, s -> projector == null
         ? new AvroSchema(s) : (AvroSchema) projector.derivedReader(new AvroSchema(s)));
   }
@@ -144,14 +144,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
     // One instance per schema passed in: provenance keys its cache by the reader, whose hash
     // and equality walk the whole schema unless it is the same instance.
-    return provenanceAlgorithm == null ? new AvroSchema(readerSchema)
+    return !provenanceEnabled ? new AvroSchema(readerSchema)
         : textReaders.asMap().computeIfAbsent(readerSchema, AvroSchema::new);
   }
 
   // A reader function's class schema is a class reader too, unless its registered id or version
   // came with it.
   private AvroSchema readerOf(AvroSchema reader) {
-    if (reader == null || provenanceAlgorithm == null) {
+    if (reader == null || !provenanceEnabled) {
       return reader;
     }
     boolean bare = reader.metadata() == null && reader.ruleSet() == null;
@@ -722,14 +722,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     /**
-     * With {@code provenance.algorithm}, the writer renamed after the reader as provenance pairs
+     * With provenance enabled, the writer renamed after the reader as provenance pairs
      * them, and the reader with the aliases provenance overrode removed; null to read without it.
      * Only names change, so the resolver still promotes, maps enum symbols, matches unions and
      * fills defaults as it always has. A reader of the writer's own version loses its aliases too.
      */
     private AvroProvenanceProjection projectByProvenance(
         AvroSchema writerAvroSchema, AvroSchema readerAvroSchema) {
-      if (provenanceAlgorithm == null || readerAvroSchema == null) {
+      if (!provenanceEnabled || readerAvroSchema == null) {
         return null;
       }
       Schema writer = writerAvroSchema.rawSchema();
@@ -776,7 +776,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         } else {
           // A specific or reflect reader's schema comes from its class; provenance needs it too.
           AvroSchema provenanceReader = readerAvroSchema;
-          if (provenanceReader == null && provenanceAlgorithm != null
+          if (provenanceReader == null && provenanceEnabled
               && (useSpecificAvroReader || useSchemaReflection)) {
             Schema derived = AbstractKafkaAvroDeserializer.this.getReaderSchema(
                 getSubject(), schemaId, writerSchema, null);
