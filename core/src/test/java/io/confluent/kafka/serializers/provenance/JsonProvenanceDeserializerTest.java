@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockSchemaRegistryClient;
@@ -1852,6 +1853,54 @@ class JsonProvenanceDeserializerTest {
   }
 
   // --- Helpers -----------------------------------------------------------------------------------
+
+  @Test
+  void aRecordWrittenUnderABareRootReferenceKeepsItsProperties() throws Exception {
+    // v2 is only a $ref to v1's object, defined by a reference: its properties continue.
+    String o = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"},"
+        + "\"y\":{\"type\":\"string\"}%s}}";
+    client.register("o", new JsonSchema(String.format(o, "")));
+    JsonSchema v1 = new JsonSchema(String.format(o, ""));
+    JsonSchema v2 = bareRoot(String.format(o, ""), 1);
+    JsonSchema v3 = new JsonSchema(String.format(o, ",\"z\":{\"type\":\"number\"}"));
+    client.register(SUBJECT, v1);
+    client.register(SUBJECT, v2);
+    client.register(SUBJECT, v3);
+    for (JsonSchema writer : Arrays.asList(v1, v2)) {
+      byte[] bytes = write(writer, "{\"x\": 7, \"y\": \"ada\"}");
+      JsonNode read = read(v3, bytes, "enabled");
+      assertEquals(read(v3, bytes, null), read);
+      assertEquals(7, read.get("x").asInt());
+      assertEquals("ada", read.get("y").asText());
+    }
+  }
+
+  @Test
+  void aPropertyReAddedUnderABareRootReferenceIsPruned() throws Exception {
+    // Every version only refers to O, whose note is dropped and re-added: the old value is not
+    // the new note's.
+    String o = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"}%s}}";
+    String[] objects = {String.format(o, ",\"note\":{\"type\":\"string\"}"),
+        String.format(o, ""),
+        String.format(o, ",\"note\":{\"type\":\"string\",\"description\":\"new\"}")};
+    JsonSchema[] versions = new JsonSchema[objects.length];
+    for (int i = 0; i < objects.length; i++) {
+      client.register("o", new JsonSchema(objects[i]));
+      versions[i] = bareRoot(objects[i], i + 1);
+      client.register(SUBJECT, versions[i]);
+    }
+    byte[] bytes = write(versions[0], "{\"x\": 1, \"note\": \"old\"}");
+
+    assertFalse(read(versions[2], bytes, "enabled").has("note"));
+    assertEquals("old", read(versions[2], bytes, null).get("note").asText());
+  }
+
+  // Only a $ref to o.json, defined by version {@code version} of subject "o".
+  private static JsonSchema bareRoot(String o, int version) {
+    return new JsonSchema("{\"$ref\":\"o.json\"}",
+        Collections.singletonList(new SchemaReference("o.json", "o", version)),
+        Collections.singletonMap("o.json", o), null);
+  }
 
   private byte[] write(JsonSchema writer, String json) throws Exception {
     client.register(SUBJECT, writer);
