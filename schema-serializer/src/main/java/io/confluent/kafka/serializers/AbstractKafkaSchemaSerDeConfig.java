@@ -123,12 +123,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String PROVENANCE_ALGORITHM = "provenance.algorithm";
   public static final String PROVENANCE_ALGORITHM_DOC =
       "The version of the provenance algorithm, such as 'v1', by which the Deserializer pairs "
-          + "writer fields with reader fields rather than by name or field number; 'dynamic' for "
-          + "each schema version paired with the one before it by the "
-          + "version released when it was registered, so an upgrade never changes the pairing of "
-          + "versions registered before it; unset or 'none' to pair them as usual. A version "
-          + "newer than this "
-          + "client knows needs a newer client; one the registry does not know fails every "
+          + "writer fields with reader fields rather than by name or field number; unset or "
+          + "'none' to pair them as usual. A version newer than this client knows needs a newer "
+          + "client; one the registry does not know fails every "
           + "record. Requires kafka-schema-registry-logical-types on the classpath; a client that "
           + "does not support provenance reads as without it, with a warning";
 
@@ -580,15 +577,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getBoolean(USE_LATEST_VERSION);
   }
 
-  // Unset, empty, "none", "dynamic" or a released provenance algorithm version, in any case: a
+  // Unset, empty, "none" or a released provenance algorithm version, in any case: a
   // misspelt one fails configuration rather than quietly reading without provenance.
   private static final ConfigDef.Validator PROVENANCE_ALGORITHM_VALIDATOR =
       new ConfigDef.Validator() {
         @Override
         public void ensureValid(String name, Object value) {
           String algorithm = value != null ? value.toString().trim() : "";
-          if (algorithm.isEmpty() || "none".equalsIgnoreCase(algorithm)
-              || ProvenanceAlgorithm.isDynamic(algorithm)) {
+          if (algorithm.isEmpty() || "none".equalsIgnoreCase(algorithm)) {
             return;
           }
           try {
@@ -602,7 +598,6 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         public String toString() {
           List<String> names = new ArrayList<>();
           names.add("none");
-          names.add(ProvenanceAlgorithm.DYNAMIC_NAME);
           for (ProvenanceAlgorithm algorithm : ProvenanceAlgorithm.values()) {
             names.add(algorithm.getName());
           }

@@ -302,12 +302,10 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   }
 
   private static void checkAlgorithm(String algorithm) throws RestClientException {
-    if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
-      try {
-        ProvenanceAlgorithm.of(algorithm);
-      } catch (IllegalArgumentException e) {
-        throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
-      }
+    try {
+      ProvenanceAlgorithm.of(algorithm);
+    } catch (IllegalArgumentException e) {
+      throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
     }
   }
 
@@ -350,8 +348,6 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       throw new RestClientException(e.getMessage(), 422, AMBIGUOUS_PROVENANCE);
     } catch (TooManyLocationsException | TypeTooDeepException e) {
       throw new RestClientException(e.getMessage(), 422, PROVENANCE_TOO_LARGE);
-    } catch (UnsupportedProvenanceAlgorithmException e) {
-      throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
     } catch (ValidationException e) {
       throw new RestClientException(e.getMessage(), 422, INVALID_SCHEMA);
     } catch (RuntimeException e) {

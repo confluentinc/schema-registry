@@ -113,9 +113,9 @@ public class ProvenanceProjectorTest {
   public void aStrategyIsAskedInsteadOfTheClient() throws Exception {
     CountingClient client = new CountingClient();
     RecordingStrategy strategy = new RecordingStrategy();
-    ask(new ProvenanceProjector<>(client, "dynamic", 10, -1, strategy), client);
+    ask(new ProvenanceProjector<>(client, "v1", 10, -1, strategy), client);
     assertEquals(0, client.asked);
-    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false, "dynamic"),
+    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false, "v1"),
         strategy.lastRequest);
     assertTrue(strategy.client == client);
   }

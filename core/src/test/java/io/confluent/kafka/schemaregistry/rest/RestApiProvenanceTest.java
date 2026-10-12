@@ -407,22 +407,6 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
-  public void dynamicComputesAsV1AndSaysSo() throws Exception {
-    register(SUBJECT, record(field("id", "int"), field("name", "string")));
-    register(SUBJECT, record(field("id", "int"),
-        "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]}"));
-
-    SchemaProvenance v1 = restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "1", "2", true, false, "v1");
-    SchemaProvenance dynamic = restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "1", "2", true, false, "dynamic");
-
-    // Every version is registered after v1's epoch, so each transition is matched by v1.
-    assertEquals("dynamic", dynamic.getAlgorithm());
-    assertEquals(v1.getVersions(), dynamic.getVersions());
-  }
-
-  @Test
   public void eachEndOfTheRangeMayBeNamedEitherWay() throws Exception {
     int v1 = register(SUBJECT, record(field("id", "int")));
     int v2 = register(SUBJECT, record(field("id", "int"), field("name", "string")));
@@ -483,20 +467,15 @@ public abstract class RestApiProvenanceTest {
 
   @Test
   public void aSoftDeletedReaderIsStillProjectedByTheDeserializer() throws Exception {
-    assertEquals("new", readReAddedColumn(true, "v1"));
+    assertEquals("new", readReAddedColumn(true));
   }
 
   @Test
   public void aRegisteredReaderIsProjectedByTheDeserializer() throws Exception {
-    assertEquals("new", readReAddedColumn(false, "v1"));
+    assertEquals("new", readReAddedColumn(false));
   }
 
-  @Test
-  public void aDeserializerProjectsUnderDynamic() throws Exception {
-    assertEquals("new", readReAddedColumn(false, "dynamic"));
-  }
-
-  private String readReAddedColumn(boolean deleteReader, String algorithm) throws Exception {
+  private String readReAddedColumn(boolean deleteReader) throws Exception {
     String v1 = record(field("id", "int"), field("name", "string"));
     String v2 = record(field("id", "int"));
     String v3 = record(field("id", "int"),
@@ -518,7 +497,7 @@ public abstract class RestApiProvenanceTest {
     config.put("use.schema.id", client.getId(SUBJECT, new AvroSchema(v1)));
     byte[] bytes = new KafkaAvroSerializer(client, config).serialize("orders", record);
     config.remove("use.schema.id");
-    config.put("provenance.algorithm", algorithm);
+    config.put("provenance.algorithm", "v1");
 
     // v3 re-adds name, dropped at v2: with provenance it is a new column and reads its default.
     GenericRecord read = (GenericRecord) new KafkaAvroDeserializer(client, config)

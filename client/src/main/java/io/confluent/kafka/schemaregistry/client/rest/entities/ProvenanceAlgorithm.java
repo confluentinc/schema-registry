@@ -21,17 +21,11 @@ import java.util.Locale;
 /**
  * A released version of the provenance algorithm. A fix ships as a new version, and every earlier
  * one keeps answering exactly as it did, so a caller can move to it deliberately and back again.
- * Each is effective from when it was released: under {@link #DYNAMIC_NAME}, a version registered
- * since is matched to its predecessor by it, and one registered before by the one before it.
- *
- * <p>A version's registration time is persisted from the release that stores createTs on; a new
- * algorithm must take effect only in a later release, or a soft delete written by an older
- * registry could leave nodes disagreeing on when a version was registered.
  */
 public enum ProvenanceAlgorithm {
 
-  // The first: effective for every version, whenever registered.
-  V1("v1", 0L);
+  // The first.
+  V1("v1");
 
   /**
    * The version a request that names none is answered with. It never changes: a newer version is
@@ -39,50 +33,14 @@ public enum ProvenanceAlgorithm {
    */
   public static final ProvenanceAlgorithm DEFAULT = V1;
 
-  /**
-   * The name asking for each version to be matched to its predecessor by the version effective
-   * when it was registered, so a newer algorithm never changes the ids an older one assigned.
-   */
-  public static final String DYNAMIC_NAME = "dynamic";
-
   private final String name;
-  // Epoch millis from which the version is effective.
-  private final long effectiveTimestamp;
 
-  ProvenanceAlgorithm(String name, long effectiveTimestamp) {
+  ProvenanceAlgorithm(String name) {
     this.name = name;
-    this.effectiveTimestamp = effectiveTimestamp;
   }
 
   public String getName() {
     return name;
-  }
-
-  public long getEffectiveTimestamp() {
-    return effectiveTimestamp;
-  }
-
-  /**
-   * The newest version effective at {@code timestamp}, in epoch millis; an unknown one counts as
-   * the epoch, which {@link #V1} is effective from.
-   */
-  public static ProvenanceAlgorithm effectiveAt(Long timestamp) {
-    long at = timestamp != null ? timestamp : 0L;
-    ProvenanceAlgorithm newest = V1;
-    for (ProvenanceAlgorithm algorithm : values()) {
-      if (algorithm.effectiveTimestamp <= at
-          && algorithm.effectiveTimestamp >= newest.effectiveTimestamp) {
-        newest = algorithm;
-      }
-    }
-    return newest;
-  }
-
-  /**
-   * Whether {@code name}, in any case, is {@link #DYNAMIC_NAME}.
-   */
-  public static boolean isDynamic(String name) {
-    return DYNAMIC_NAME.equalsIgnoreCase(name);
   }
 
   /**
