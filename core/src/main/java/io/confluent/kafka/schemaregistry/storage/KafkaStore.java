@@ -74,7 +74,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String bootstrapBrokers;
   private final boolean skipSchemaTopicValidation;
   private KafkaProducer<byte[], byte[]> producer;
-  private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  private volatile KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
   private final K noopKey;
@@ -298,6 +298,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
   public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
+    assertReaderAlive();
     long offsetOfLastMessage = getLatestOffset(timeoutMs);
     waitUntilKafkaReaderReachesOffset(offsetOfLastMessage, timeoutMs);
   }
@@ -307,6 +308,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
    */
   public void waitUntilKafkaReaderReachesLastOffset(String subject, int timeoutMs)
       throws StoreException {
+    assertReaderAlive();
     long lastOffset = lastOffset(subject);
     if (lastOffset == -1) {
       lastOffset = getLatestOffset(timeoutMs);
@@ -336,6 +338,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   @Override
   public V put(K key, V value) throws StoreTimeoutException, StoreException {
     assertInitialized();
+    assertReaderAlive();
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
@@ -461,6 +464,46 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!initialized.get()) {
       throw new StoreException("Illegal state. Store not initialized yet");
     }
+  }
+
+  /**
+   * Fails if the reader thread has died. The local store is then frozen at the last applied
+   * offset, so this node must neither write nor claim to be caught up (lastWrittenOffset would
+   * otherwise satisfy the catch-up check instantly). See DGS-25570.
+   */
+  private void assertReaderAlive() throws StoreException {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    if (reader != null && !reader.isReaderAlive()) {
+      throw new StoreException(
+          "KafkaStoreReaderThread has died; this node's store is stale and the node needs to be "
+          + "restarted");
+    }
+  }
+
+  /**
+   * Whether the reader thread is alive, for health checks and metrics.
+   */
+  public boolean isReaderAlive() {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    return reader == null || reader.isReaderAlive();
+  }
+
+  /**
+   * Whether the reader is alive and not stuck failing to poll, for health checks.
+   */
+  public boolean isReaderHealthy() {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    return reader == null || reader.isReaderHealthy();
+  }
+
+  public long readerConsecutivePollFailures() {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    return reader == null ? 0L : reader.consecutivePollFailures();
+  }
+
+  public long readerMillisInPollFailure() {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    return reader == null ? 0L : reader.millisInPollFailure();
   }
 
   /**
