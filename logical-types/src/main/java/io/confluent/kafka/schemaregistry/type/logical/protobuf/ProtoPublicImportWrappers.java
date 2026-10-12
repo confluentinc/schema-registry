@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,11 +59,13 @@ public final class ProtoPublicImportWrappers {
     String target = own.getPublicImports().get(0);
     ProtoFileElement file = schema.dependencies().get(target);
     if (file == null) {
-      // A built-in file re-exported directly, such as confluent/type/decimal.proto.
+      // A built-in file re-exported directly, such as google/protobuf/type.proto: its own file,
+      // its imports resolved as built-ins again, as the file registered directly would be.
       if (root == null) {
         throw new ValidationException("ProtobufSchema has no root descriptor");
       }
-      return new ProtobufSchema(root);
+      return new ProtobufSchema(new ProtobufSchema(root).rawSchema(), Collections.emptyList(),
+          Collections.emptyMap());
     }
     // The parsed file with the same other dependencies, so a well-known import inlines as in the
     // file itself; a descriptor would list it as a reference and make it a named type.

@@ -21,11 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import com.google.protobuf.Option;
 import com.google.protobuf.UnknownFieldSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -405,6 +407,23 @@ class ProtobufProvenanceDeserializerTest {
       DynamicMessage read = read(pair[1], bytes, "enabled");
       assertEquals(read(pair[1], bytes, null), read);
       assertEquals(1, read.getRepeatedFieldCount(read.getDescriptorForType().findFieldByName("a")));
+    }
+  }
+
+  @Test
+  void aGeneratedClassWithAnAnyFieldReadsAcrossAReExportOfItsBuiltInFile() throws Exception {
+    // Option, from google/protobuf/type.proto, as its serializer registers it; then a wrapper of
+    // that built-in. The class reader is matched to the wrapper, and Any's members carry over.
+    Map<String, Object> autoRegister = config(null);
+    autoRegister.put("auto.register.schemas", true);
+    Option value = Option.newBuilder().setName("n").setValue(Any.newBuilder().setTypeUrl("t/u")
+        .setValue(ByteString.copyFromUtf8("v"))).build();
+    byte[] bytes =
+        new KafkaProtobufSerializer<Option>(client, autoRegister).serialize(TOPIC, value);
+    client.register(SUBJECT, new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"google/protobuf/type.proto\";\n"));
+    for (String provenance : Arrays.asList("disabled", "enabled")) {
+      assertEquals(value, readClass(Option.class, bytes, provenance, false), provenance);
     }
   }
 
