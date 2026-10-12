@@ -60,16 +60,6 @@ public final class ProvenanceHistory {
   private ProvenanceHistory() {
   }
 
-  /**
-   * When {@code version} was registered, in epoch millis: its {@code createTs} where the registry
-   * recorded one apart from its {@code ts} (a rewritten record, as after a soft delete), else its
-   * {@code ts}; null where neither is known.
-   */
-  public static Long registeredAt(SchemaMetadata version) {
-    return version.getCreateTimestamp() != null
-        ? version.getCreateTimestamp() : version.getTimestamp();
-  }
-
   private static boolean isDeleted(SchemaMetadata version) {
     return Boolean.TRUE.equals(version.getDeleted());
   }
@@ -122,11 +112,9 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm}: a
-   * version's name, none for {@link ProvenanceAlgorithm#DEFAULT}, or
-   * {@link ProvenanceAlgorithm#DYNAMIC_NAME}, under which each version is matched to its
-   * predecessor by the version effective when it was registered. A version of the algorithm
-   * changes the matching rules, never the logical type's edition, which is the Metastore's.
+   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm},
+   * {@link ProvenanceAlgorithm#DEFAULT} when none is named. A version of the algorithm changes the
+   * matching rules, never the logical type's edition, which is the Metastore's.
    *
    * <p>Each version is parsed and converted, as {@link #logicalTypeOf} converts it, only when the
    * computation reaches it, and none is held past the next: a range costs the memory of its report,
@@ -144,8 +132,6 @@ public final class ProvenanceHistory {
    * @throws TypeTooDeepException if a version nests its types too deep, as converted or walked
    * @throws IllegalArgumentException if no version of the algorithm has that name, or there is not
    *     one schema per version
-   * @throws UnsupportedProvenanceAlgorithmException if a dynamic range's transitions fall to an
-   *     algorithm other than v1
    * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
    *     logical form
    */
@@ -160,22 +146,7 @@ public final class ProvenanceHistory {
         i -> logicalTypeOf(schemas.get(i).schema(), includeMultipleMessages);
     int last = history.size() - 1;
     IntPredicate reported = includeInterior ? i -> true : i -> i == 0 || i == last;
-    if (!ProvenanceAlgorithm.isDynamic(algorithm)) {
-      return compute(subject, history, versionAt, reported, ProvenanceAlgorithm.of(algorithm));
-    }
-    // The first version is matched to no predecessor, so only the later ones name an algorithm.
-    for (SchemaMetadata entry : history.subList(Math.min(1, history.size()), history.size())) {
-      ProvenanceAlgorithm effective = ProvenanceAlgorithm.effectiveAt(registeredAt(entry));
-      if (effective != ProvenanceAlgorithm.V1) {
-        // Until each transition is matched by its own algorithm.
-        throw new UnsupportedProvenanceAlgorithmException("Dynamic provenance by "
-            + effective.getName() + " is not supported yet");
-      }
-    }
-    SchemaProvenance provenance =
-        compute(subject, history, versionAt, reported, ProvenanceAlgorithm.V1);
-    provenance.setAlgorithm(ProvenanceAlgorithm.DYNAMIC_NAME);
-    return provenance;
+    return compute(subject, history, versionAt, reported, ProvenanceAlgorithm.of(algorithm));
   }
 
   private static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
