@@ -4099,11 +4099,6 @@ components:
           type: string
           description: Name of the subject
           example: User
-        algorithm:
-          type: string
-          description: The version of the provenance algorithm that computed this
-            response
-          example: v1
         versions:
           type: array
           description: "The versions returned, in ascending version order"
