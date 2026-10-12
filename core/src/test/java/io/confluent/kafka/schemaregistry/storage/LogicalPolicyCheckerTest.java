@@ -246,6 +246,20 @@ class LogicalPolicyCheckerTest {
     assertFalse(checkFull(reExport(two), new ProtobufSchema(one)).isEmpty());
   }
 
+  @Test
+  void aReExportOfABuiltInFileIsCheckedAsTheFileItself() {
+    // confluent/type/decimal.proto is bundled, not referenced: the wrapper is that file.
+    ProtobufSchema wrapper = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"confluent/type/decimal.proto\";\n");
+    ProtobufSchema direct = new ProtobufSchema(
+        new ProtobufSchema(wrapper.toDescriptor()).canonicalString());
+    assertEquals(LogicalPolicyChecker.toPolicyLogicalType(direct).getRootSchema(),
+        LogicalPolicyChecker.toPolicyLogicalType(wrapper).getRootSchema());
+    assertEquals(LogicalPolicyChecker.check(direct, List.of(), CompatibilityLevel.NONE),
+        LogicalPolicyChecker.check(wrapper, List.of(), CompatibilityLevel.NONE));
+    assertTrue(checkFull(wrapper, direct).isEmpty());
+  }
+
   private static ProtobufSchema reExport(String file) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
         List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", file), null, null);

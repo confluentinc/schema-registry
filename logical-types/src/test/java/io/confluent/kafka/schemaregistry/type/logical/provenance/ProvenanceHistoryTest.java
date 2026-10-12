@@ -192,6 +192,31 @@ class ProvenanceHistoryTest {
   }
 
   @Test
+  void aReExportOfABuiltInFileImportingAnotherContinuesItsMembers() {
+    // type.proto imports any.proto, api.proto type.proto, datetime.proto duration.proto: as in the
+    // file registered directly, those imports are inlined, so their members continue.
+    for (String file : List.of("google/protobuf/type.proto", "google/protobuf/api.proto",
+        "google/type/datetime.proto")) {
+      ProtobufSchema wrapper = reExportBuiltIn(file);
+      ProtobufSchema direct = new ProtobufSchema(
+          new ProtobufSchema(wrapper.toDescriptor()).canonicalString());
+      for (boolean multi : new boolean[] {false, true}) {
+        SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(2),
+            ProvenanceHistory.held(List.of(direct, wrapper)), multi);
+        assertThat(p.getVersions().get(1).getFields()).as(file + " multi=" + multi)
+            .isEqualTo(p.getVersions().get(0).getFields());
+      }
+    }
+  }
+
+  @Test
+  void aReExportOfABuiltInFileOfOnlyEnumsHasNoLogicalForm() {
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
+        ProvenanceHistory.held(List.of(reExportBuiltIn("google/type/dayofweek.proto"))), false))
+        .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
+  }
+
+  @Test
   void anAvroRootNamingAReferencedRecordContinuesItsFields() {
     String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
         + "{\"name\":\"x\",\"type\":\"int\"},{\"name\":\"y\",\"type\":\"string\"}%s]}";
@@ -223,6 +248,11 @@ class ProvenanceHistoryTest {
     return new ProtobufSchema("syntax = \"proto3\";\nimport public \"o.proto\";\n",
         Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
         Collections.singletonMap("o.proto", o), null, null);
+  }
+
+  // A file declaring nothing but a public import of a file Protobuf bundles.
+  private static ProtobufSchema reExportBuiltIn(String file) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport public \"" + file + "\";\n");
   }
 
   private static List<List<Integer>> pids(SchemaProvenance provenance) {
