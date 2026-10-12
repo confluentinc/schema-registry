@@ -74,7 +74,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String bootstrapBrokers;
   private final boolean skipSchemaTopicValidation;
   private KafkaProducer<byte[], byte[]> producer;
-  private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  private volatile KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
   private final K noopKey;
@@ -486,6 +486,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
   public boolean isReaderAlive() {
     KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
     return reader == null || reader.isReaderAlive();
+  }
+
+  /**
+   * Whether the reader is alive and not stuck failing to poll, for health checks.
+   */
+  public boolean isReaderHealthy() {
+    KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
+    return reader == null || reader.isReaderHealthy();
   }
 
   public long readerConsecutivePollFailures() {

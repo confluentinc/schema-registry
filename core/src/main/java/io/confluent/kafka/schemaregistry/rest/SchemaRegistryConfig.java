@@ -288,6 +288,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
   public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
+  public static final String KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_CONFIG =
+      "kafkastore.reader.unhealthy.after.poll.failure.ms";
+  public static final long KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DEFAULT = 300000L;
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -482,6 +485,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
       "If true, health check will call the local storage.";
+  protected static final String KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DOC =
+      "How long (ms) the Kafka store reader may keep failing to poll before this node reports "
+      + "itself unhealthy. The reader retries failed polls indefinitely, so this bounds how long "
+      + "a node can keep serving stale data without reporting it. 0 disables the check.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -745,6 +752,10 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(ENABLE_STORE_HEALTH_CHECK, ConfigDef.Type.BOOLEAN, DEFAULT_ENABLE_STORE_HEALTH_CHECK,
         ConfigDef.Importance.LOW, ENABLE_STORE_HEALTH_CHECK_DOC
+    )
+    .define(KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_CONFIG, ConfigDef.Type.LONG,
+        KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DOC
     )
     .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
         SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,

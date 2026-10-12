@@ -507,9 +507,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         return false;
       }
     }
-    // A dead reader leaves the node serving stale data, so report unhealthy
+    // A dead or stuck reader leaves the node serving stale data, so report unhealthy
     return initialized()
-        && kafkaStore.isReaderAlive()
+        && kafkaStore.isReaderHealthy()
         && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
   }
 

@@ -37,6 +37,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,11 +90,15 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   static final long INITIAL_POLL_RETRY_BACKOFF_MS = 100L;
   static final long MAX_POLL_RETRY_BACKOFF_MS = 30_000L;
   static final long POLL_FAILURE_LOG_INTERVAL_MS = 60_000L;
+  private final Time time;
+  private final long initialPollRetryBackoffMs;
+  private final long maxPollRetryBackoffMs;
+  private final long unhealthyAfterPollFailureMs;
   private volatile long consecutivePollFailures = 0L;
-  private volatile long firstPollFailureMs = 0L;
+  // Time the current failure streak began, 0 if the last poll succeeded. Kept in a single
+  // volatile so metric readers never see a half-updated (count, timestamp) pair.
+  private volatile long pollFailingSinceMs = 0L;
   private long lastPollFailureLogMs = 0L;
-  private long initialPollRetryBackoffMs = INITIAL_POLL_RETRY_BACKOFF_MS;
-  private long maxPollRetryBackoffMs = MAX_POLL_RETRY_BACKOFF_MS;
 
   private Properties consumerProps = new Properties();
 
@@ -107,17 +112,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 K noopKey,
                                 AtomicBoolean initialized,
                                 SchemaRegistryConfig config) {
-    super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
-    offsetUpdateLock = new ReentrantLock();
-    offsetReachedThreshold = offsetUpdateLock.newCondition();
-    this.topic = topic;
-    this.groupId = groupId;
-    this.storeUpdateHandler = storeUpdateHandler;
-    this.serializer = serializer;
-    this.localStore = localStore;
-    this.producer = producer;
-    this.noopKey = noopKey;
-    this.initialized = initialized;
+    this(topic, groupId, storeUpdateHandler, serializer, localStore, producer, noopKey,
+        initialized, null,
+        new Tuning(Time.SYSTEM, INITIAL_POLL_RETRY_BACKOFF_MS, MAX_POLL_RETRY_BACKOFF_MS,
+            config.getLong(
+                SchemaRegistryConfig.KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_CONFIG)));
 
     if (localStore.isPersistent()) {
       try {
@@ -175,7 +174,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                       + " topic. Expected 1 and instead got " + partitions.size());
     }
 
-    this.topicPartition = new TopicPartition(topic, 0);
     List<TopicPartition> topicPartitions = Arrays.asList(this.topicPartition);
     this.consumer.assign(topicPartitions);
 
@@ -200,31 +198,51 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     log.debug("Kafka store reader thread started");
   }
 
-  // Visible for testing: builds a reader around an already-assigned consumer.
+  // Assigns the final fields. The production constructor passes a null consumer and creates it
+  // afterwards; tests pass an already-assigned consumer.
   KafkaStoreReaderThread(String topic,
+                         String groupId,
                          StoreUpdateHandler<K, V> storeUpdateHandler,
                          Serializer<K, V> serializer,
                          Store<K, V> localStore,
                          Producer<byte[], byte[]> producer,
                          K noopKey,
+                         AtomicBoolean initialized,
                          Consumer<byte[], byte[]> consumer,
-                         long initialPollRetryBackoffMs,
-                         long maxPollRetryBackoffMs) {
-    super("kafka-store-reader-thread-" + topic, false);
+                         Tuning tuning) {
+    super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     this.offsetUpdateLock = new ReentrantLock();
     this.offsetReachedThreshold = offsetUpdateLock.newCondition();
     this.topic = topic;
-    this.groupId = null;
+    this.topicPartition = new TopicPartition(topic, 0);
+    this.groupId = groupId;
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
     this.producer = producer;
     this.noopKey = noopKey;
-    this.initialized = new AtomicBoolean(true);
+    this.initialized = initialized;
     this.consumer = consumer;
-    this.topicPartition = new TopicPartition(topic, 0);
-    this.initialPollRetryBackoffMs = initialPollRetryBackoffMs;
-    this.maxPollRetryBackoffMs = maxPollRetryBackoffMs;
+    this.time = tuning.time;
+    this.initialPollRetryBackoffMs = tuning.initialPollRetryBackoffMs;
+    this.maxPollRetryBackoffMs = tuning.maxPollRetryBackoffMs;
+    this.unhealthyAfterPollFailureMs = tuning.unhealthyAfterPollFailureMs;
+  }
+
+  /** Poll retry and health settings, grouped so tests can override them. */
+  static final class Tuning {
+    final Time time;
+    final long initialPollRetryBackoffMs;
+    final long maxPollRetryBackoffMs;
+    final long unhealthyAfterPollFailureMs;
+
+    Tuning(Time time, long initialPollRetryBackoffMs, long maxPollRetryBackoffMs,
+           long unhealthyAfterPollFailureMs) {
+      this.time = time;
+      this.initialPollRetryBackoffMs = initialPollRetryBackoffMs;
+      this.maxPollRetryBackoffMs = maxPollRetryBackoffMs;
+      this.unhealthyAfterPollFailureMs = unhealthyAfterPollFailureMs;
+    }
   }
 
   public Map<TopicPartition, Long> checkpoints() {
@@ -233,9 +251,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void doWork() {
+    ConsumerRecords<byte[], byte[]> records = pollRecords();
+    if (records == null) {
+      return;
+    }
     try {
-      ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
-      onPollSuccess();
       storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
@@ -338,17 +358,46 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       throw new IllegalStateException(
           "Consumer threw RecordTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", rtle);
-    } catch (InterruptException ie) {
-      log.error("KafkaStoreReader thread was interrupted and is exiting.", ie);
-      throw ie;
-    } catch (KafkaException ke) {
-      // Includes AuthenticationException and RetriableException. These are typically transient
-      // (e.g. a short broker-side auth outage), so keep the thread alive and retry with backoff.
-      onPollFailure(ke);
     } catch (RuntimeException e) {
       log.error("KafkaStoreReader thread has died for an unknown reason.", e);
       throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * Polls the consumer. Only failures of the poll call itself are retried: errors from applying
+   * the records or from the update handlers keep their original behaviour, because by then the
+   * consumer is already past the batch.
+   *
+   * @return the polled records, or null if there is nothing to process (closing, or a poll
+   *     failure that will be retried)
+   */
+  private ConsumerRecords<byte[], byte[]> pollRecords() {
+    ConsumerRecords<byte[], byte[]> records;
+    try {
+      records = consumer.poll(Long.MAX_VALUE);
+    } catch (WakeupException we) {
+      // do nothing because the thread is closing -- see shutdown(). Must stay ahead of
+      // KafkaException, which WakeupException extends.
+      return null;
+    } catch (RecordTooLargeException rtle) {
+      throw new IllegalStateException(
+          "Consumer threw RecordTooLargeException. A schema has been written that "
+          + "exceeds the default maximum fetch size.", rtle);
+    } catch (InterruptException ie) {
+      log.error("KafkaStoreReader thread was interrupted and is exiting.", ie);
+      throw ie;
+    } catch (KafkaException ke) {
+      // Includes AuthenticationException and RetriableException. Retry with backoff, and let
+      // the health check report the node if the failures last too long.
+      onPollFailure(ke);
+      return null;
+    } catch (RuntimeException e) {
+      log.error("KafkaStoreReader thread has died for an unknown reason.", e);
+      throw new RuntimeException(e);
+    }
+    onPollSuccess();
+    return records;
   }
 
   private void onPollSuccess() {
@@ -356,16 +405,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       log.info("KafkaStoreReader recovered after {} consecutive poll failures",
           consecutivePollFailures);
     }
+    pollFailingSinceMs = 0L;
     consecutivePollFailures = 0L;
-    firstPollFailureMs = 0L;
   }
 
   private void onPollFailure(KafkaException e) {
-    long failures = ++consecutivePollFailures;
-    long now = System.currentTimeMillis();
-    if (failures == 1) {
-      firstPollFailureMs = now;
+    long now = time.milliseconds();
+    if (pollFailingSinceMs == 0L) {
+      pollFailingSinceMs = now;
     }
+    long failures = ++consecutivePollFailures;
     // Throttle logging: a persistent outage can otherwise flood the logs
     if (failures == 1 || now - lastPollFailureLogMs >= POLL_FAILURE_LOG_INTERVAL_MS) {
       lastPollFailureLogMs = now;
@@ -405,7 +454,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
    * but healthy node.)
    */
   public long millisInPollFailure() {
-    return consecutivePollFailures > 0 ? System.currentTimeMillis() - firstPollFailureMs : 0L;
+    long since = pollFailingSinceMs;
+    return since == 0L ? 0L : Math.max(0L, time.milliseconds() - since);
+  }
+
+  /**
+   * False if the thread died, or if polls have been failing for longer than the configured limit
+   * (a reader that is alive but stuck still serves stale data).
+   */
+  public boolean isReaderHealthy() {
+    return isReaderAlive()
+        && (unhealthyAfterPollFailureMs <= 0
+            || millisInPollFailure() <= unhealthyAfterPollFailureMs);
   }
 
   private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
