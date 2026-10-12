@@ -54,7 +54,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * JSON Schema read with {@code provenance.algorithm}: a property dropped and re-added across an interior
+ * JSON Schema read by provenance: a property dropped and re-added across an interior
  * version is pruned from the document, since the reader's property is a new one.
  */
 class JsonProvenanceDeserializerTest {
@@ -83,7 +83,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode on = read(v3, bytes, "v1");
+    JsonNode on = read(v3, bytes, "enabled");
     assertEquals(7, on.get("id").asInt());
     assertFalse(on.has("note"));
     assertEquals("ada", read(v3, bytes, null).get("note").asText());
@@ -99,7 +99,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("use.latest.version", true);
     config.put("latest.compatibility.strict", false);
 
@@ -124,7 +124,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config("v1"))
+    JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config("enabled"))
         .deserializeWithSchema(TOPIC, headers, bytes, writer -> v3).getValue();
     assertFalse(on.has("note"));
   }
@@ -149,7 +149,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode on = read(v3, bytes, "v1");
+    JsonNode on = read(v3, bytes, "enabled");
     assertEquals("a", on.get("line").get("sku").asText());
     assertFalse(on.get("line").has("note"));
     assertEquals("b", on.get("lines").get(0).get("sku").asText());
@@ -166,7 +166,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"p\": \"x\"}");
     client.register(SUBJECT, v2);
 
-    assertFalse(read(v2, bytes, "v1").has("p"));
+    assertFalse(read(v2, bytes, "enabled").has("p"));
     assertEquals("x", read(v2, bytes, null).get("p").asText());
   }
 
@@ -180,7 +180,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"p\": \"x\"}");
     client.register(SUBJECT, v2);
 
-    assertEquals("x", read(v2, bytes, "v1").get("p").asText());
+    assertEquals("x", read(v2, bytes, "enabled").get("p").asText());
   }
 
   @Test
@@ -194,7 +194,7 @@ class JsonProvenanceDeserializerTest {
     JsonSchema reader = object(number("id"),
         "\"note\": {\"type\": \"string\", \"description\": \"again\"}");
 
-    assertFalse(read(reader, bytes, "v1").has("note"));
+    assertFalse(read(reader, bytes, "enabled").has("note"));
   }
 
   @Test
@@ -212,7 +212,7 @@ class JsonProvenanceDeserializerTest {
     JsonSchema reader = new JsonSchema(
         "{\"type\": \"object\", \"properties\": {\"d\": " + d + f + g + "}}");
 
-    JsonNode read = read(reader, bytes, "v1");
+    JsonNode read = read(reader, bytes, "enabled");
     assertFalse(read.has("f"));
     assertEquals("K", read.get("d").get("k").asText());
   }
@@ -235,7 +235,7 @@ class JsonProvenanceDeserializerTest {
         "{\"type\": \"object\", \"properties\": {\"d\": {\"$ref\": \"#/definitions/E\"}" + f + g
             + "}, \"definitions\": {\"E\": " + e + "}}",
         "{\"type\": \"object\", \"properties\": {\"d\": " + e + f + g + "}}"}) {
-      JsonNode read = read(new JsonSchema(reader), bytes, "v1");
+      JsonNode read = read(new JsonSchema(reader), bytes, "enabled");
       assertFalse(read.has("f"), reader);
       assertEquals("K", read.get("d").get("k").asText(), reader);
     }
@@ -251,7 +251,7 @@ class JsonProvenanceDeserializerTest {
         + "\"definitions\": {\"D\": {\"$ref\": \"#/definitions/D\"}}}");
     client.register(SUBJECT, v2);
 
-    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(v2, bytes, "v1"));
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(v2, bytes, "enabled"));
     assertEquals("A", read.get("a").asText());
   }
 
@@ -280,7 +280,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, reader);
 
     JsonNode read =
-        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(reader, bytes, "v1"));
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> read(reader, bytes, "enabled"));
     assertFalse(read.has("f"));
     assertEquals("Y", read.get("u").get("y").asText());
   }
@@ -292,7 +292,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"name\": \"ada\"}");
     client.register(SUBJECT, v2);
 
-    JsonNode on = read(v2, bytes, "v1");
+    JsonNode on = read(v2, bytes, "enabled");
     assertEquals(read(v2, bytes, null), on);
     assertTrue(on.has("name"));
   }
@@ -313,7 +313,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("filled", read(v3, bytes, "v1").get("note").asText());
+    assertEquals("filled", read(v3, bytes, "enabled").get("note").asText());
   }
 
   @Test
@@ -329,7 +329,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = read(v3, bytes, "v1");
+    JsonNode read = read(v3, bytes, "enabled");
     assertEquals(7, read.get("id").asInt());
     assertTrue(read.get("f").isNull());
   }
@@ -345,7 +345,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("json.fail.invalid.schema", true);
     JsonNode on = (JsonNode) new KafkaJsonSchemaDeserializer<JsonNode>(client, config)
         .deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, writer -> v3).getValue();
@@ -360,9 +360,9 @@ class JsonProvenanceDeserializerTest {
     JsonSchema v2 = object(string("a"));
     byte[] bytes = write(v1, "{\"a\": 5}");
     client.register(SUBJECT, v2);
-    assertEquals(read(v2, bytes, null), read(v2, bytes, "v1"));
-    assertEquals(5, read(v2, bytes, "v1").get("a").asInt());
-    for (String provenance : Arrays.asList(null, "v1")) {
+    assertEquals(read(v2, bytes, null), read(v2, bytes, "enabled"));
+    assertEquals(5, read(v2, bytes, "enabled").get("a").asInt());
+    for (String provenance : Arrays.asList(null, "enabled")) {
       Map<String, Object> config = config(provenance);
       config.put("json.fail.invalid.schema", true);
       assertThrows(SerializationException.class,
@@ -386,7 +386,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+    assertFalse(read(v3, bytes, "enabled").get("u").has("t"));
     assertEquals("old", read(v3, bytes, null).get("u").get("t").asText());
   }
 
@@ -405,7 +405,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"u\": {\"a\": 1, \"t\": \"kept\"}}");
     client.register(SUBJECT, v2);
 
-    assertEquals("kept", read(v2, bytes, "v1").get("u").get("t").asText());
+    assertEquals("kept", read(v2, bytes, "enabled").get("u").get("t").asText());
   }
 
   @Test
@@ -425,7 +425,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+    assertFalse(read(v3, bytes, "enabled").get("u").has("t"));
     assertEquals("old", read(v3, bytes, null).get("u").get("t").asText());
   }
 
@@ -439,7 +439,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
     assertEquals("Property [o, t] has no value to read: provenance withholds it, as new to the "
         + "reader or read as another branch than written, and the reader requires it and "
         + "declares no default.", e.getCause().getMessage());
@@ -462,7 +462,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+    assertEquals("dflt", read(v3, bytes, "enabled").get("p").get("t").asText());
   }
 
   @Test
@@ -480,7 +480,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
     assertTrue(e.getCause().getMessage().startsWith("Property [p, t] has no value to read"));
   }
 
@@ -504,7 +504,7 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, versions[1]);
       client.register(SUBJECT, versions[2]);
 
-      assertFalse(read(versions[2], bytes, "v1").get("u").has("t"));
+      assertFalse(read(versions[2], bytes, "enabled").get("u").has("t"));
     }
   }
 
@@ -533,7 +533,7 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v2);
       client.register(SUBJECT, v3);
 
-      assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+      assertEquals("dflt", read(v3, bytes, "enabled").get("p").get("t").asText());
     }
   }
 
@@ -551,7 +551,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("from-default", read(v3, bytes, "v1").get("o").get("t").asText());
+    assertEquals("from-default", read(v3, bytes, "enabled").get("o").get("t").asText());
   }
 
   @Test
@@ -567,7 +567,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = read(v3, bytes, "v1");
+    JsonNode read = read(v3, bytes, "enabled");
     assertTrue(read.has("t"));
     assertTrue(read.get("t").isNull());
   }
@@ -595,7 +595,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("dflt", read(v3, bytes, "v1").get("p").get("t").asText());
+    assertEquals("dflt", read(v3, bytes, "enabled").get("p").get("t").asText());
   }
 
   @Test
@@ -626,7 +626,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, versions[1]);
     client.register(SUBJECT, versions[2]);
 
-    assertEquals("dflt", read(versions[2], bytes, "v1").get("p").get("t").asText());
+    assertEquals("dflt", read(versions[2], bytes, "enabled").get("p").get("t").asText());
   }
 
   @Test
@@ -640,7 +640,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("d", read(v3, bytes, "v1").get("t").asText());
+    assertEquals("d", read(v3, bytes, "enabled").get("t").asText());
   }
 
   @Test
@@ -663,9 +663,9 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       if (closed) {
-        assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
       } else {
-        assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+        assertFalse(read(v3, bytes, "enabled").get("u").has("t"));
       }
     }
   }
@@ -687,7 +687,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, bytes, "v1").get("u").has("t"));
+    assertFalse(read(v3, bytes, "enabled").get("u").has("t"));
   }
 
   @Test
@@ -704,7 +704,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals("sib", read(v3, bytes, "v1").get("t").asText());
+    assertEquals("sib", read(v3, bytes, "enabled").get("t").asText());
   }
 
   @Test
@@ -722,7 +722,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"u\": {\"kind\": \"a\", \"x\": 5}}");
     client.register(SUBJECT, v2);
 
-    assertEquals(5, read(v2, bytes, "v1").get("u").get("x").asInt());
+    assertEquals(5, read(v2, bytes, "enabled").get("u").get("x").asInt());
   }
 
   @Test
@@ -734,11 +734,11 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"u\": \"b\"}");
     JsonSchema inserted = object("\"u\": {\"oneOf\": [{\"const\": \"z\"}, " + a + ", " + b + "]}");
     client.register(SUBJECT, inserted);
-    assertEquals("b", read(inserted, bytes, "v1").path("u").asText());
+    assertEquals("b", read(inserted, bytes, "enabled").path("u").asText());
 
     JsonSchema reordered = object("\"u\": {\"oneOf\": [" + b + ", " + a + "]}");
     client.register(SUBJECT, reordered);
-    assertEquals("b", read(reordered, bytes, "v1").path("u").asText());
+    assertEquals("b", read(reordered, bytes, "enabled").path("u").asText());
   }
 
   @Test
@@ -754,7 +754,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"u\": {\"number\": \"4111\", \"cvv\": \"123\"}}");
     client.register(SUBJECT, v2);
 
-    assertEquals("4111", read(v2, bytes, "v1").path("u").path("number").asText());
+    assertEquals("4111", read(v2, bytes, "enabled").path("u").path("number").asText());
   }
 
   @Test
@@ -768,7 +768,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"u\": {\"y\": 5}}");
     client.register(SUBJECT, v2);
 
-    assertEquals(5, read(v2, bytes, "v1").get("u").get("y").asInt());
+    assertEquals(5, read(v2, bytes, "enabled").get("u").get("y").asInt());
   }
 
   @Test
@@ -783,8 +783,8 @@ class JsonProvenanceDeserializerTest {
     byte[] ofA = write(v1, "{\"u\": {\"kind\": \"a\", \"p\": 8}}");
     client.register(SUBJECT, v2);
 
-    assertFalse(read(v2, ofB, "v1").get("u").has("p"));
-    assertEquals(8, read(v2, ofA, "v1").get("u").get("p").asInt());
+    assertFalse(read(v2, ofB, "enabled").get("u").has("p"));
+    assertEquals(8, read(v2, ofA, "enabled").get("u").get("p").asInt());
   }
 
   @Test
@@ -798,8 +798,8 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, number, "v1").has("e"));
-    assertEquals("s", read(v3, string, "v1").get("e").asText());
+    assertFalse(read(v3, number, "enabled").has("e"));
+    assertEquals("s", read(v3, string, "enabled").get("e").asText());
   }
 
   @Test
@@ -815,7 +815,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = read(v3, bytes, "v1");
+    JsonNode read = read(v3, bytes, "enabled");
     assertTrue(read.get("a").asBoolean());
     assertFalse(read.has("b"));
   }
@@ -837,7 +837,7 @@ class JsonProvenanceDeserializerTest {
       byte[] bytes = write(v1, array ? "{\"e\": [\"x\"]}" : "{\"e\": {\"k\": \"x\"}}");
       client.register(SUBJECT, v2);
 
-      assertFalse(read(v2, bytes, "v1").has("e"), shape);
+      assertFalse(read(v2, bytes, "enabled").has("e"), shape);
       assertTrue(read(v2, bytes, null).has("e"), shape);
     }
   }
@@ -861,8 +861,8 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v2);
       client.register(SUBJECT, v3);
 
-      assertFalse(read(v3, number, "v1").has("e"), shape);
-      assertTrue(read(v3, string, "v1").has("e"), shape);
+      assertFalse(read(v3, number, "enabled").has("e"), shape);
+      assertTrue(read(v3, string, "enabled").has("e"), shape);
     }
   }
 
@@ -880,7 +880,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v1);
     byte[] bytes = write(v2, "{\"g\": {\"kind\": \"k1\", \"e\": 4.5, \"l\": 5.5}}");
 
-    assertFalse(read(v1, bytes, "v1").get("g").has("l"));
+    assertFalse(read(v1, bytes, "enabled").get("g").has("l"));
   }
 
   @Test
@@ -895,8 +895,8 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, number, "v1").has("e"));
-    assertEquals("s", read(v3, string, "v1").get("e").asText());
+    assertFalse(read(v3, number, "enabled").has("e"));
+    assertEquals("s", read(v3, string, "enabled").get("e").asText());
   }
 
   @Test
@@ -910,8 +910,8 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, decimal, "v1").has("e"));
-    assertFalse(read(v3, fraction, "v1").has("e"));
+    assertFalse(read(v3, decimal, "enabled").has("e"));
+    assertFalse(read(v3, fraction, "enabled").has("e"));
   }
 
   @Test
@@ -926,7 +926,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals(1, read(v3, bytes, "v1").get("e").asInt());
+    assertEquals(1, read(v3, bytes, "enabled").get("e").asInt());
   }
 
   @Test
@@ -957,7 +957,7 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       assertTrue(read(v3, bytes, null).has("e"), shape[1]);
-      assertFalse(read(v3, bytes, "v1").has("e"), shape[1]);
+      assertFalse(read(v3, bytes, "enabled").has("e"), shape[1]);
     }
   }
 
@@ -973,7 +973,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"o\": {\"a\": \"s\"}, \"u\": \"t\"}");
     client.register(SUBJECT, v2);
 
-    JsonNode read = read(v2, bytes, "v1");
+    JsonNode read = read(v2, bytes, "enabled");
     assertEquals("s", read.get("o").get("a").asText());
     assertEquals("t", read.get("u").asText());
   }
@@ -994,7 +994,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v3);
 
     assertTrue(read(v3, bytes, null).has("e"));
-    assertFalse(read(v3, bytes, "v1").has("e"));
+    assertFalse(read(v3, bytes, "enabled").has("e"));
   }
 
   @Test
@@ -1014,7 +1014,7 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       assertTrue(read(v3, bytes, null).has("e"), any);
-      assertFalse(read(v3, bytes, "v1").has("e"), any);
+      assertFalse(read(v3, bytes, "enabled").has("e"), any);
     }
   }
 
@@ -1033,8 +1033,8 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, map, "v1").has("e"));
-    assertEquals("s", read(v3, string, "v1").get("e").asText());
+    assertFalse(read(v3, map, "enabled").has("e"));
+    assertEquals("s", read(v3, string, "enabled").get("e").asText());
   }
 
   @Test
@@ -1053,7 +1053,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = read(v3, bytes, "v1");
+    JsonNode read = read(v3, bytes, "enabled");
     assertEquals("s", read.get("o").get("a").asText());
     assertFalse(read.has("note"));
   }
@@ -1078,11 +1078,11 @@ class JsonProvenanceDeserializerTest {
         client.register(SUBJECT, v3);
 
         if (defaulted.isEmpty()) {
-          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
           assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"),
               requires);
         } else {
-          assertEquals("pd", read(v3, bytes, "v1").get("p").asText(), requires);
+          assertEquals("pd", read(v3, bytes, "enabled").get("p").asText(), requires);
         }
       }
     }
@@ -1107,7 +1107,7 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v2);
       client.register(SUBJECT, v3);
 
-      assertEquals(0, read(v3, bytes, "v1").size(), trigger);
+      assertEquals(0, read(v3, bytes, "enabled").size(), trigger);
     }
   }
 
@@ -1126,10 +1126,10 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, reader);
 
       if (defaulted.isEmpty()) {
-        Exception e = assertThrows(SerializationException.class, () -> read(reader, bytes, "v1"));
+        Exception e = assertThrows(SerializationException.class, () -> read(reader, bytes, "enabled"));
         assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"));
       } else {
-        assertEquals("pd", read(reader, bytes, "v1").get("p").asText());
+        assertEquals("pd", read(reader, bytes, "enabled").get("p").asText());
       }
     }
   }
@@ -1146,7 +1146,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+    Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
     assertTrue(e.getCause().getMessage().contains("does not validate"));
   }
 
@@ -1165,7 +1165,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = read(v3, bytes, "v1");
+    JsonNode read = read(v3, bytes, "enabled");
     assertEquals("x", read.get("a").asText());
     assertFalse(read.has("note"));
   }
@@ -1187,9 +1187,9 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertFalse(read(v3, bytes, "v1").has("p"));
-    assertEquals(1, read(v3, extra, "v1").get("p").get("z").asInt());
-    assertFalse(read(v3, extra, "v1").get("p").has("x"));
+    assertFalse(read(v3, bytes, "enabled").has("p"));
+    assertEquals(1, read(v3, extra, "enabled").get("p").get("z").asInt());
+    assertFalse(read(v3, extra, "enabled").get("p").has("x"));
   }
 
   @Test
@@ -1211,10 +1211,10 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       if (defaulted.isEmpty()) {
-        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
         assertTrue(e.getCause().getMessage().startsWith("Property [p] has no value to read"));
       } else {
-        assertEquals(7, read(v3, bytes, "v1").get("p").asInt());
+        assertEquals(7, read(v3, bytes, "enabled").get("p").asInt());
       }
     }
   }
@@ -1246,7 +1246,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode l = read(v3, bytes, "v1").get("l");
+    JsonNode l = read(v3, bytes, "enabled").get("l");
     assertEquals("k1", l.get("kind").asText());
     assertEquals(3, l.get("j").asInt());
     assertFalse(l.has("f0"));
@@ -1272,9 +1272,9 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "v1"));
+    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "enabled"));
     assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\", \"l\": true, \"x\": \"s\"}}"),
-        read(v3, ruled, "v1"));
+        read(v3, ruled, "enabled"));
   }
 
   @Test
@@ -1294,7 +1294,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"p\": {\"kind\": \"k1\", \"l\": true}}");
     client.register(SUBJECT, v2);
 
-    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v2, bytes, "v1"));
+    assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v2, bytes, "enabled"));
   }
 
   @Test
@@ -1313,9 +1313,9 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       if (x.contains("default")) {
-        assertEquals("d", read(v3, bytes, "v1").get("x").asText());
+        assertEquals("d", read(v3, bytes, "enabled").get("x").asText());
       } else {
-        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
         assertTrue(e.getCause().getMessage().startsWith("Property [x] has no value to read"));
       }
     }
@@ -1341,7 +1341,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> read(v3, bytes, "v1"));
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> read(v3, bytes, "enabled"));
     JsonNode leaf = read.get("p");
     for (int level = depth; level >= 1; level--) {
       leaf = leaf.get("p" + level);
@@ -1372,9 +1372,9 @@ class JsonProvenanceDeserializerTest {
         client.register(SUBJECT, v3);
 
         if (x.contains("default")) {
-          assertEquals("d", read(v3, bytes, "v1").get("x").asText());
+          assertEquals("d", read(v3, bytes, "enabled").get("x").asText());
         } else {
-          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+          Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
           assertTrue(e.getCause().getMessage().startsWith("Property [x] has no value to read"));
         }
       }
@@ -1394,7 +1394,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, object("\"id\": {\"type\": \"integer\"}"));
     client.register(SUBJECT, v3);
     KafkaJsonSchemaDeserializer<JsonNode> deserializer =
-        new KafkaJsonSchemaDeserializer<>(client, config("v1"));
+        new KafkaJsonSchemaDeserializer<>(client, config("enabled"));
 
     JsonNode pinned = (JsonNode) deserializer.deserializeWithReaderSchema(TOPIC,
         new RecordHeaders(), bytes, w -> ReaderSchema.of(v3, SUBJECT, 1), false).getValue();
@@ -1422,9 +1422,9 @@ class JsonProvenanceDeserializerTest {
       client.register(SUBJECT, v3);
 
       if (y.contains("default")) {
-        assertEquals("e", read(v3, bytes, "v1").get("y").asText());
+        assertEquals("e", read(v3, bytes, "enabled").get("y").asText());
       } else {
-        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
         assertTrue(e.getCause().getMessage().startsWith("Property [y] has no value to read"));
       }
     }
@@ -1457,10 +1457,10 @@ class JsonProvenanceDeserializerTest {
 
       if (branchB.isEmpty()) {
         // Control: o stays, so x is still required and has no default.
-        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "v1"));
+        Exception e = assertThrows(SerializationException.class, () -> read(v3, bytes, "enabled"));
         assertTrue(e.getCause().getMessage().startsWith("Property [p, o, x] has no value to read"));
       } else {
-        assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "v1"));
+        assertEquals(MAPPER.readTree("{\"p\": {\"kind\": \"k1\"}}"), read(v3, bytes, "enabled"));
       }
     }
   }
@@ -1475,7 +1475,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"x\": \"s\"}");
     client.register(SUBJECT, v2);
 
-    assertEquals("s", read(v2, bytes, "v1").get("x").asText());
+    assertEquals("s", read(v2, bytes, "enabled").get("x").asText());
   }
 
   @Test
@@ -1507,7 +1507,7 @@ class JsonProvenanceDeserializerTest {
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
 
-    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(10), () -> read(v3, bytes, "v1"));
+    JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(10), () -> read(v3, bytes, "enabled"));
     assertEquals(MAPPER.readTree("{\"root\": " + kept + "}"), read);
   }
 
@@ -1519,7 +1519,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"x\": 3}");
     client.register(SUBJECT, v2);
 
-    assertEquals(3, read(v2, bytes, "v1").get("x").asInt());
+    assertEquals(3, read(v2, bytes, "enabled").get("x").asInt());
   }
 
   @Test
@@ -1531,7 +1531,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"f\": \"YWJj\"}");
     client.register(SUBJECT, v2);
 
-    assertEquals("YWJj", read(v2, bytes, "v1").get("f").asText());
+    assertEquals("YWJj", read(v2, bytes, "enabled").get("f").asText());
   }
 
   @Test
@@ -1543,7 +1543,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"x\": [3, 4]}");
     client.register(SUBJECT, v2);
 
-    assertEquals(MAPPER.readTree("[3, 4]"), read(v2, bytes, "v1").get("x"));
+    assertEquals(MAPPER.readTree("[3, 4]"), read(v2, bytes, "enabled").get("x"));
   }
 
   @Test
@@ -1558,7 +1558,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"x\": [3]}");
     client.register(SUBJECT, v2);
 
-    assertFalse(read(v2, bytes, "v1").has("x"));
+    assertFalse(read(v2, bytes, "enabled").has("x"));
   }
 
   @Test
@@ -1572,7 +1572,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"x\": {\"k\": 3}}");
     client.register(SUBJECT, v2);
 
-    assertFalse(read(v2, bytes, "v1").has("x"));
+    assertFalse(read(v2, bytes, "enabled").has("x"));
   }
 
   @Test
@@ -1589,12 +1589,12 @@ class JsonProvenanceDeserializerTest {
     }
     byte[] bytes = write(v1, "{\"x\": [" + items + "], \"y\": \"old\"}");
     client.register(SUBJECT, v2);
-    read(v2, bytes, "v1");
+    read(v2, bytes, "enabled");
 
     JsonNode read = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
       JsonNode last = null;
       for (int i = 0; i < 50; i++) {
-        last = read(v2, bytes, "v1");
+        last = read(v2, bytes, "enabled");
       }
       return last;
     });
@@ -1610,7 +1610,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
-    Typed read = new KafkaJsonSchemaDeserializer<>(client, config("v1"), Typed.class)
+    Typed read = new KafkaJsonSchemaDeserializer<>(client, config("enabled"), Typed.class)
         .deserialize(TOPIC, bytes);
     assertEquals(7, read.id);
     assertNull(read.note);
@@ -1632,7 +1632,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
-    Object read = new KafkaJsonSchemaDeserializer<>(client, config("v1")).deserialize(TOPIC, bytes);
+    Object read = new KafkaJsonSchemaDeserializer<>(client, config("enabled")).deserialize(TOPIC, bytes);
     assertNull(((Named) read).note);
   }
 
@@ -1645,7 +1645,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
-    Created read = new KafkaJsonSchemaDeserializer<>(client, config("v1"), Created.class)
+    Created read = new KafkaJsonSchemaDeserializer<>(client, config("enabled"), Created.class)
         .deserialize(TOPIC, bytes);
     assertEquals(7, read.id);
     assertNull(read.note);
@@ -1662,7 +1662,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("json.fail.invalid.schema", true);
     SerializationException e = assertThrows(SerializationException.class,
         () -> new KafkaJsonSchemaDeserializer<>(client, config, Typed.class)
@@ -1680,7 +1680,7 @@ class JsonProvenanceDeserializerTest {
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
     client.register(SUBJECT, object(number("id")));
     client.register(SUBJECT, JsonSchemaUtils.getSchema(new WithCount()));
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     config.put("json.fail.invalid.schema", true);
     WithCount read = new KafkaJsonSchemaDeserializer<>(client, config, WithCount.class)
         .deserialize(TOPIC, bytes);
@@ -1702,7 +1702,7 @@ class JsonProvenanceDeserializerTest {
     // Equivalent to the class, so the version it stands for, in text unlike v1's.
     client.register(SUBJECT, new JsonSchema(text.replace("{\"type\":\"string\"}]}",
         "{\"type\":\"string\",\"description\":\"re-added\"}]}")));
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     // Named in the config too, so the reconfigure keeps it.
     config.put("json.value.type", Gated.Pojo.class.getName());
     KafkaJsonSchemaDeserializer<Gated.Pojo> deserializer =
@@ -1737,7 +1737,7 @@ class JsonProvenanceDeserializerTest {
     out.write(ByteBuffer.allocate(4).putInt(id).array());
     out.write("\"x\"".getBytes(StandardCharsets.UTF_8));
     assertThrows(SerializationException.class,
-        () -> new KafkaJsonSchemaDeserializer<>(client, config("v1"))
+        () -> new KafkaJsonSchemaDeserializer<>(client, config("enabled"))
             .deserialize(TOPIC, out.toByteArray()));
     assertNull(System.getProperty(Marked.INITIALIZED));
   }
@@ -1748,7 +1748,7 @@ class JsonProvenanceDeserializerTest {
     // schema: neither may wait for the other.
     JsonSchema v1 = object(number("id"), string("note"));
     byte[] bytes = write(v1, "{\"id\": 7, \"note\": \"ada\"}");
-    Map<String, Object> config = config("v1");
+    Map<String, Object> config = config("enabled");
     KafkaJsonSchemaDeserializer<Typed> deserializer =
         new KafkaJsonSchemaDeserializer<>(client, config, Typed.class);
     Thread reader = new Thread(() -> deserializer.deserialize(TOPIC, bytes), "reader");

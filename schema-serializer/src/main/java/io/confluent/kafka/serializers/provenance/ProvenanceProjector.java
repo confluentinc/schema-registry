@@ -112,8 +112,9 @@ public final class ProvenanceProjector<T> {
       CacheBuilder.newBuilder().weakKeys().build();
 
   /**
-   * A projector asking {@code client} by {@code algorithm}, caching up to {@code cacheSize}
-   * entries of each kind for {@code cacheTtlSec} seconds, or indefinitely when that is negative.
+   * A projector asking {@code client} by {@code algorithm}, null for each version's own, caching
+   * up to {@code cacheSize} entries of each kind for {@code cacheTtlSec} seconds, or indefinitely
+   * when that is negative.
    */
   public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
       int cacheTtlSec) {

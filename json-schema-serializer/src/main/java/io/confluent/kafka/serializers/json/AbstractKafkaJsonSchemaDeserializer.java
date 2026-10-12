@@ -413,14 +413,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   /**
-   * With {@code provenance.algorithm}, the payload parsed with every property provenance marks as
+   * With provenance enabled, the payload parsed with every property provenance marks as
    * new removed; {@code node} unchanged otherwise, as it is after migrations, which provenance
    * does not apply to.
    */
   private JsonNode byProvenance(String subject, SchemaId writerId, JsonSchema writer,
       ParsedSchema reader, List<Migration> migrations, JsonNode node, ByteBuffer buffer,
       int start, int length) throws IOException {
-    if (provenanceAlgorithm == null || reader == null || !migrations.isEmpty()) {
+    if (!provenanceEnabled || reader == null || !migrations.isEmpty()) {
       return node;
     }
     JsonProvenanceProjection projection = provenanceProjector()
@@ -476,7 +476,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    * {@code javaType}, derived as the serializer derives it; null for an untyped read.
    */
   private JsonSchema classSchema(JsonSchema writer) {
-    if (provenanceAlgorithm == null) {
+    if (!provenanceEnabled) {
       return null;
     }
     Class<?> cls = type != null && !Object.class.equals(type) ? type : javaTypeOf(writer);
