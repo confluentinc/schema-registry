@@ -467,16 +467,16 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
-   * Fails if the reader thread has died. The local store is then frozen at the last applied
-   * offset, so this node must neither write nor claim to be caught up (lastWrittenOffset would
-   * otherwise satisfy the catch-up check instantly). See DGS-25570.
+   * Fails if the reader thread has died or is currently failing to poll. The local store is then
+   * frozen at the last applied offset, so this node must neither write nor claim to be caught up
+   * (lastWrittenOffset would otherwise satisfy the catch-up check instantly). See DGS-25570.
    */
   private void assertReaderAlive() throws StoreException {
     KafkaStoreReaderThread<K, V> reader = this.kafkaTopicReader;
-    if (reader != null && !reader.isReaderAlive()) {
+    if (reader != null && !reader.isStoreTrustworthy()) {
       throw new StoreException(
-          "KafkaStoreReaderThread has died; this node's store is stale and the node needs to be "
-          + "restarted");
+          "KafkaStoreReaderThread has died or is failing to poll; this node's store may be "
+          + "stale, so the write was rejected");
     }
   }
 

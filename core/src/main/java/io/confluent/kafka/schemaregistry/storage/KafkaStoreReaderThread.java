@@ -459,6 +459,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   }
 
   /**
+   * Whether this node's store can be trusted to be current: the thread is alive and its latest
+   * poll did not fail. While polls are failing the store may be arbitrarily stale, so the node
+   * must not take the leader write path (the catch-up check would otherwise pass instantly on
+   * lastWrittenOffset).
+   */
+  public boolean isStoreTrustworthy() {
+    return isReaderAlive() && consecutivePollFailures == 0L;
+  }
+
+  /**
    * False if the thread died, or if polls have been failing for longer than the configured limit
    * (a reader that is alive but stuck still serves stale data).
    */

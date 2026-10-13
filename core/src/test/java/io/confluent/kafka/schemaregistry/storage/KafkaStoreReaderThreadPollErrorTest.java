@@ -198,6 +198,7 @@ public class KafkaStoreReaderThreadPollErrorTest {
 
     awaitTrue(() -> reader.consecutivePollFailures() > 0);
     assertTrue("alive and within the limit", reader.isReaderHealthy());
+    assertFalse("store may be stale while polls fail", reader.isStoreTrustworthy());
 
     time.sleep(1500L);
     assertTrue(reader.isReaderAlive());
@@ -208,6 +209,7 @@ public class KafkaStoreReaderThreadPollErrorTest {
     awaitTrue(() -> reader.consecutivePollFailures() == 0);
     assertEquals(0L, reader.millisInPollFailure());
     assertTrue(reader.isReaderHealthy());
+    assertTrue(reader.isStoreTrustworthy());
   }
 
   @Test
