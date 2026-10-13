@@ -51,8 +51,8 @@ import org.apache.kafka.common.errors.RetriableException;
  *       and the next asks again;
  *   <li>an {@link AuthenticationException} or {@link AuthorizationException}: the record fails
  *       with it, and the next asks again;
- *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for an unknown
- *       algorithm; every record of the writer fails until the outcome expires;
+ *   <li>a {@link ProvenanceRejectedException}: the request itself is wrong, as for a range too
+ *       long; every record of the writer fails until the outcome expires;
  *   <li>a {@link ProvenanceUnknownWriterException}: a schema id asked about, most often the
  *       writer's, is no version of the subject; the writer is matched to one by structure,
  *       through the deserializer's client, and asked about again, or else read without it;

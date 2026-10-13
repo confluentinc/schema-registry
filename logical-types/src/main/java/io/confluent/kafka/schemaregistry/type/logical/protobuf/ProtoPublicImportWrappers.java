@@ -47,7 +47,8 @@ public final class ProtoPublicImportWrappers {
    *
    * @throws IllegalArgumentException if Protobuf cannot resolve the re-export, as for a chain of
    *     them or two public imports, which a serializer cannot use either
-   * @throws ValidationException if the re-exported file declares no message
+   * @throws ValidationException if a re-exported bundled file declares no message; a registered
+   *     one is returned, and fails when converted as the file itself would
    */
   public static ProtobufSchema resolve(ProtobufSchema schema) {
     ProtoFileElement own = schema.rawSchema();

@@ -280,7 +280,7 @@ public class Errors {
     return new RestConstraintViolationException(message, AMBIGUOUS_PROVENANCE_ERROR_CODE);
   }
 
-  /** A version has more locations than provenance computes. */
+  /** A version has more locations than provenance computes, or nests its types too deep. */
   public static RestConstraintViolationException provenanceTooLargeException(String message) {
     return new RestConstraintViolationException(message, PROVENANCE_TOO_LARGE_ERROR_CODE);
   }
@@ -290,6 +290,7 @@ public class Errors {
     return new RestConstraintViolationException(message, PROVENANCE_RANGE_TOO_LONG_ERROR_CODE);
   }
 
+  /** The request names a version of the provenance algorithm this registry does not know. */
   public static RestConstraintViolationException unknownProvenanceAlgorithmException(
       String message) {
     return new RestConstraintViolationException(message, UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE);

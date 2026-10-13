@@ -54,7 +54,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * subject, soft or not, is forgotten entirely, as the base mock forgets it and its schemas. A
  * soft-deleted schema registered again keeps its id and its soft-deleted version, which models
  * neither of the registry's policies since #4658: without LOGICAL the registry tombstones the
- * soft-deleted version, and under LOGICAL it gives the schema a new id.
+ * soft-deleted version, and under LOGICAL it gives the schema a new id. It also lets a version
+ * another schema references be soft-deleted, which the registry refuses (42206).
  */
 public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient {
 
