@@ -193,7 +193,25 @@ public class JsonSchemaUtils {
     if (envelopeDetection && isEnvelope(object)) {
       return getSchemaFromEnvelope((JsonNode) object);
     }
-    Class<?> cls = object.getClass();
+    return getSchemaOfClass(object.getClass(), specVersion, scanPackages, useOneofForNullables,
+        failUnknownProperties, objectMapper, client);
+  }
+
+  /**
+   * The schema of a class, as derived for an instance of it. No instance is needed, so a class
+   * without a no-argument constructor (a record, or one built through a creator) has one too.
+   */
+  public static JsonSchema getSchemaOfClass(
+      Class<?> cls,
+      SpecificationVersion specVersion,
+      List<String> scanPackages,
+      boolean useOneofForNullables,
+      boolean failUnknownProperties,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
+    if (specVersion == null) {
+      specVersion = SpecificationVersion.DRAFT_7;
+    }
     if (cls.isAnnotationPresent(Schema.class)) {
       Schema schema = (Schema) cls.getAnnotation(Schema.class);
       List<SchemaReference> references = Arrays.stream(schema.refs())
