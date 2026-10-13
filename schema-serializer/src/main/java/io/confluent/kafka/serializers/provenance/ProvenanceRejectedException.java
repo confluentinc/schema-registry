@@ -17,8 +17,8 @@
 package io.confluent.kafka.serializers.provenance;
 
 /**
- * The request for provenance is itself wrong, as a range too long, or an algorithm a strategy names
- * that its source does not know: every record of the writer fails, until the outcome expires.
+ * The request for provenance is itself wrong, as a range too long: every record of the writer
+ * fails, until the outcome expires.
  */
 public class ProvenanceRejectedException extends ProvenanceException {
 

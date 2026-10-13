@@ -212,10 +212,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       synchronized (this) {
         projector = provenanceProjector;
         if (projector == null) {
-          // No algorithm named: each schema version is matched by its own.
-          projector = new ProvenanceProjector<>(schemaRegistry, null,
-              provenanceCacheSize, provenanceCacheTtlSec, provenanceStrategy,
-              provenanceReaderMarks);
+          projector = new ProvenanceProjector<>(schemaRegistry, provenanceCacheSize,
+              provenanceCacheTtlSec, provenanceStrategy, provenanceReaderMarks);
           provenanceProjector = projector;
         }
       }

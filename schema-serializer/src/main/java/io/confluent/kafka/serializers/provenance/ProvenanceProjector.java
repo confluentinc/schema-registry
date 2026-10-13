@@ -97,7 +97,6 @@ public final class ProvenanceProjector<T> {
   private static final Logger log = LoggerFactory.getLogger(ProvenanceProjector.class);
 
   private final SchemaRegistryClient client;
-  private final String algorithm;
   private final Cache<List<Object>, Outcome<T>> outcomes;
   // Schemas' registered ids under a subject, as looked up.
   private final Cache<List<Object>, Optional<Integer>> registeredIds;
@@ -112,35 +111,32 @@ public final class ProvenanceProjector<T> {
       CacheBuilder.newBuilder().weakKeys().build();
 
   /**
-   * A projector asking {@code client} by {@code algorithm}, null for each version's own, caching
-   * up to {@code cacheSize} entries of each kind for {@code cacheTtlSec} seconds, or indefinitely
-   * when that is negative.
+   * A projector asking {@code client}, caching up to {@code cacheSize} entries of each kind for
+   * {@code cacheTtlSec} seconds, or indefinitely when that is negative.
    */
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec) {
-    this(client, algorithm, cacheSize, cacheTtlSec, null);
+  public ProvenanceProjector(SchemaRegistryClient client, int cacheSize, int cacheTtlSec) {
+    this(client, cacheSize, cacheTtlSec, null);
   }
 
   /**
-   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int)}, getting provenance
-   * from {@code strategy} rather than from Schema Registry.
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, int, int)}, getting provenance from
+   * {@code strategy} rather than from Schema Registry.
    */
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec, ProvenanceStrategy strategy) {
-    this(client, algorithm, cacheSize, cacheTtlSec, strategy, new ProvenanceReaderMarks());
+  public ProvenanceProjector(SchemaRegistryClient client, int cacheSize, int cacheTtlSec,
+      ProvenanceStrategy strategy) {
+    this(client, cacheSize, cacheTtlSec, strategy, new ProvenanceReaderMarks());
   }
 
   /**
-   * As {@link #ProvenanceProjector(SchemaRegistryClient, String, int, int, ProvenanceStrategy)},
+   * As {@link #ProvenanceProjector(SchemaRegistryClient, int, int, ProvenanceStrategy)},
    * keeping which readers were pinned or derived in {@code marks}, which a deserializer keeps
    * across reconfigures.
    */
-  public ProvenanceProjector(SchemaRegistryClient client, String algorithm, int cacheSize,
-      int cacheTtlSec, ProvenanceStrategy strategy, ProvenanceReaderMarks marks) {
+  public ProvenanceProjector(SchemaRegistryClient client, int cacheSize, int cacheTtlSec,
+      ProvenanceStrategy strategy, ProvenanceReaderMarks marks) {
     this.client = client;
     this.marks = marks;
     this.strategy = strategy != null ? strategy : new ClientProvenanceStrategy();
-    this.algorithm = algorithm;
     this.outcomes = cache(cacheSize, cacheTtlSec);
     this.registeredIds = cache(cacheSize, cacheTtlSec);
   }
@@ -408,8 +404,7 @@ public final class ProvenanceProjector<T> {
    * or, when pinned, by version; null when two schema ids are one and the same.
    *
    * @throws SerializationException if the request itself is rejected — a bad version, request or
-   *     range, or an algorithm a strategy names — or the strategy breaks its contract: every
-   *     record of the writer fails
+   *     range — or the strategy breaks its contract: every record of the writer fails
    */
   private SchemaProvenance provenance(String subject, int writerId, Integer readerId,
       Integer readerVersion, boolean includeMultipleMessages) {
@@ -422,9 +417,9 @@ public final class ProvenanceProjector<T> {
     try {
       provenance = readerVersion != null
           ? strategy.provenanceToVersion(client, subject, writerId, readerVersion,
-              includeMultipleMessages, algorithm)
+              includeMultipleMessages)
           : strategy.provenance(
-              client, subject, writerId, readerId, includeMultipleMessages, algorithm);
+              client, subject, writerId, readerId, includeMultipleMessages);
     } catch (ProvenanceRejectedException e) {
       throw new SerializationException(
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);

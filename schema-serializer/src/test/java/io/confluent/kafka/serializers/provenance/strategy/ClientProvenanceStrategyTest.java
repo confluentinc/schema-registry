@@ -60,7 +60,7 @@ public class ClientProvenanceStrategyTest {
 
   @Test
   public void aRequestTheRegistryRefusesIsRejected() {
-    for (int[] code : new int[][] {{422, 42202}, {422, 42215}, {404, 40402}, {422, 42216}}) {
+    for (int[] code : new int[][] {{422, 42202}, {422, 42215}, {404, 40402}, {422, 42219}}) {
       assertFails(ProvenanceRejectedException.class,
           new RestClientException("rejected", code[0], code[1]));
     }
@@ -110,12 +110,12 @@ public class ClientProvenanceStrategyTest {
   }
 
   private static SchemaProvenance ask(FailingClient client) {
-    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false, "v1");
+    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false);
   }
 
   private static SchemaProvenance askToVersion(FailingClient client) {
     return new ClientProvenanceStrategy().provenanceToVersion(
-        client, "s", 1, 2, false, "v1");
+        client, "s", 1, 2, false);
   }
 
   // Answers the provenance request with a response, or fails as set.
@@ -133,14 +133,14 @@ public class ClientProvenanceStrategyTest {
 
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        boolean includeInterior, boolean includeMultipleMessages)
         throws IOException, RestClientException {
       return answer();
     }
 
     @Override
     public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        boolean includeInterior, boolean includeMultipleMessages)
         throws IOException, RestClientException {
       return answer();
     }

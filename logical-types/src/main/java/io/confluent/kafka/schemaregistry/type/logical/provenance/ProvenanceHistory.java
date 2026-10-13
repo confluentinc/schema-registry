@@ -21,7 +21,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
@@ -103,20 +102,19 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The provenance of {@code history}, every version reported, by the default algorithm.
+   * The provenance of {@code history}, every version reported.
    *
-   * @see #compute(String, List, List, boolean, boolean, String)
+   * @see #compute(String, List, List, boolean, boolean)
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
       List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages) {
-    return compute(subject, history, schemas, includeMultipleMessages, true, null);
+    return compute(subject, history, schemas, includeMultipleMessages, true);
   }
 
   /**
-   * The provenance of {@code history}, by the version of the algorithm named {@code algorithm};
-   * when none is named, each version by its own, {@link ProvenanceAlgorithm#DEFAULT} until versions
-   * are stamped. A version of the algorithm changes the matching rules, never the logical type's
-   * edition, which is the Metastore's.
+   * The provenance of {@code history}, each version matched by the algorithm it was registered
+   * under: v1 for every version until versions are stamped. A version of the algorithm changes the
+   * matching rules, never the logical type's edition, which is the Metastore's.
    *
    * <p>Each version is parsed and converted, as {@link #logicalTypeOf} converts it, only when the
    * computation reaches it, and none is held past the next: a range costs the memory of its report,
@@ -132,14 +130,13 @@ public final class ProvenanceHistory {
    *     identity per location
    * @throws TooManyLocationsException if a version has more locations than provenance computes
    * @throws TypeTooDeepException if a version nests its types too deep, as converted or walked
-   * @throws IllegalArgumentException if no version of the algorithm has that name, or there is not
-   *     one schema per version
+   * @throws IllegalArgumentException if there is not one schema per version
    * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
    *     logical form
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
       List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-      boolean includeInterior, String algorithm) {
+      boolean includeInterior) {
     if (schemas.size() != history.size()) {
       throw new IllegalArgumentException("Expected one schema per version, got " + schemas.size()
           + " schemas for " + history.size() + " versions");
@@ -148,17 +145,7 @@ public final class ProvenanceHistory {
         i -> logicalTypeOf(schemas.get(i).schema(), includeMultipleMessages);
     int last = history.size() - 1;
     IntPredicate reported = includeInterior ? i -> true : i -> i == 0 || i == last;
-    return compute(subject, history, versionAt, reported, ProvenanceAlgorithm.of(algorithm));
-  }
-
-  private static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      IntFunction<LogicalType> versionAt, IntPredicate reported, ProvenanceAlgorithm algorithm) {
-    switch (algorithm) {
-      case V1:
-        return computeV1(subject, history, versionAt, reported);
-      default:
-        throw new IllegalArgumentException("Unsupported provenance algorithm " + algorithm);
-    }
+    return computeV1(subject, history, versionAt, reported);
   }
 
   // The registry's number for the computer's version index, or -1 if there is none.

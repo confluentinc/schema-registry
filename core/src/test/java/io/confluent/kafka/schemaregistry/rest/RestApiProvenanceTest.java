@@ -114,7 +114,7 @@ public abstract class RestApiProvenanceTest {
 
     // Named newer-first, as a writer newer than its reader would be.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false, false, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false, false);
 
     assertEquals(Arrays.asList(1, 2), versions(provenance));
     assertEquals(Arrays.asList(v1, v2), schemaIds(provenance));
@@ -185,7 +185,7 @@ public abstract class RestApiProvenanceTest {
 
     // Old records on a topic are exactly the ones written under since-deleted schemas.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false, false, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false, false);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
   }
 
@@ -250,7 +250,7 @@ public abstract class RestApiProvenanceTest {
     // Distinct from every other 404, so a reader knows to stop asking and read without it.
     assertError(404, Errors.SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false, false, null));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false, false));
   }
 
   @Test
@@ -358,9 +358,9 @@ public abstract class RestApiProvenanceTest {
         proto, ProtobufSchema.TYPE, Collections.emptyList(), SUBJECT).getId();
 
     SchemaProvenance plain = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false);
     SchemaProvenance multi = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true);
 
     assertEquals(Arrays.asList(Arrays.asList(0)), paths(plain.getVersions().get(0)));
     assertEquals(Arrays.asList(Arrays.asList(0), Arrays.asList(0, 0), Arrays.asList(1),
@@ -375,35 +375,9 @@ public abstract class RestApiProvenanceTest {
 
     assertEquals(
         restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, null),
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false),
         restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true, null));
-  }
-
-  @Test
-  public void anOmittedAlgorithmAnswersAsV1() throws Exception {
-    // Until versions are stamped, each version's own algorithm is v1.
-    int id = register(SUBJECT, record(field("id", "int")));
-
-    SchemaProvenance omitted = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, null);
-    SchemaProvenance v1 = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v1");
-
-    assertEquals(omitted, v1);
-  }
-
-  @Test
-  public void anUnknownAlgorithmIsRejected() throws Exception {
-    int id = register(SUBJECT, record(field("id", "int")));
-
-    assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
-        () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "v9"));
-    // Omitted is each version's own, which never changes; no name asks for the newest.
-    assertError(422, Errors.UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE,
-        () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false, "latest"));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true));
   }
 
   @Test
@@ -412,7 +386,7 @@ public abstract class RestApiProvenanceTest {
     int v2 = register(SUBJECT, record(field("id", "int"), field("name", "string")));
 
     SchemaProvenance toVersion = restApp.restClient.getProvenanceToVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, 2, false, false, null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, 2, false, false);
     SchemaProvenance fromVersion = restApp.restClient.httpRequest("/subjects/" + SUBJECT
         + "/provenance?fromVersion=2&toId=" + v1, "GET", null,
         RestService.DEFAULT_REQUEST_PROPERTIES, PROVENANCE);
@@ -518,8 +492,7 @@ public abstract class RestApiProvenanceTest {
   private SchemaProvenance byVersion(String subject, String from, String to,
       boolean includeInterior) throws Exception {
     return restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior, false,
-        null);
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior, false);
   }
 
   private static void assertError(int status, int code, ThrowingRunnable call) {

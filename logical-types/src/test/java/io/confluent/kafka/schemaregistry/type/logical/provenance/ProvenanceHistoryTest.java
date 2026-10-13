@@ -108,9 +108,9 @@ class ProvenanceHistoryTest {
         "{\"name\":\"b\",\"type\":\"long\"}"));
 
     SchemaProvenance whole = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, true, null);
+        ProvenanceHistory.held(versions), false, true);
     SchemaProvenance ends = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, false, null);
+        ProvenanceHistory.held(versions), false, false);
     assertThat(ends.getVersions()).containsExactly(
         whole.getVersions().get(0), whole.getVersions().get(3));
   }

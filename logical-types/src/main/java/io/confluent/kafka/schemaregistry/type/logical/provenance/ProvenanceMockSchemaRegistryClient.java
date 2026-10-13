@@ -21,7 +21,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -67,7 +66,6 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   private static final int INVALID_VERSION = 42202;
   private static final int RECURSIVE_SCHEMA = 42220;
   private static final int UNRESOLVABLE_REFERENCE = 42214;
-  private static final int UNKNOWN_ALGORITHM = 42216;
   private static final int AMBIGUOUS_PROVENANCE = 42217;
   private static final int PROVENANCE_TOO_LARGE = 42218;
   private static final int PROVENANCE_RANGE_TOO_LONG = 42219;
@@ -251,40 +249,36 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) throws IOException, RestClientException {
-    // As the registry: the request checked before the history, the subject as it names it.
-    checkAlgorithm(algorithm);
+      boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history,
         carrying(history, fromId, subject), carrying(history, toId, subject),
-        includeInterior, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior,
-      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
-    // As the registry: the request checked before the history, the subject as it names it.
-    checkAlgorithm(algorithm);
+      boolean includeMultipleMessages) throws IOException, RestClientException {
+    // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
-        includeInterior, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages);
   }
 
   @Override
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) throws IOException, RestClientException {
-    // As the registry: the request checked before the history, the subject as it names it.
-    checkAlgorithm(algorithm);
+      boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history, carrying(history, fromId, subject),
-        named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages,
-        algorithm);
+        named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages);
   }
 
   // The subject's history as the registry names it, without the default context's prefix; else as
@@ -302,17 +296,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
   }
 
-  private static void checkAlgorithm(String algorithm) throws RestClientException {
-    try {
-      ProvenanceAlgorithm.of(algorithm);
-    } catch (IllegalArgumentException e) {
-      throw new RestClientException(e.getMessage(), 422, UNKNOWN_ALGORITHM);
-    }
-  }
-
   private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
       int from, int to, boolean includeInterior,
-      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+      boolean includeMultipleMessages) throws IOException, RestClientException {
     List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
     if (includeInterior && range.size() > interiorMaxVersions) {
       throw new RestClientException("The range covers " + range.size() + " versions, more than "
@@ -339,8 +325,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = compute(subject, range, schemas, includeMultipleMessages, includeInterior,
-          algorithm);
+      whole = compute(subject, range, schemas, includeMultipleMessages, includeInterior);
     } catch (Unparsable e) {
       throw new RestClientException(e.getMessage(), 422, UNRESOLVABLE_REFERENCE);
     } catch (RecursiveTypeException e) {
@@ -371,9 +356,9 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
    */
   protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
       List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-      boolean includeInterior, String algorithm) {
+      boolean includeInterior) {
     return ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages,
-        includeInterior, algorithm);
+        includeInterior);
   }
 
   // A version that could not be parsed, met during the computation.

@@ -1013,7 +1013,7 @@ class AvroProvenanceDeserializerTest {
       client = new ProvenanceMockSchemaRegistryClient() {
         @Override
         public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-            boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+            boolean includeInterior, boolean includeMultipleMessages)
             throws RestClientException {
           throw new RestClientException("refused", status, status * 100 + 1);
         }
@@ -1383,7 +1383,7 @@ class AvroProvenanceDeserializerTest {
 
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-        boolean includeInterior, boolean includeMultipleMessages, String algorithm)
+        boolean includeInterior, boolean includeMultipleMessages)
         throws IOException, RestClientException {
       provenanceCalls++;
       RuntimeException failure = nextProvenanceFailure;
@@ -1395,7 +1395,7 @@ class AvroProvenanceDeserializerTest {
         throw provenanceAnswer;
       }
       return super.getProvenanceById(
-          subject, fromId, toId, includeInterior, includeMultipleMessages, algorithm);
+          subject, fromId, toId, includeInterior, includeMultipleMessages);
     }
   }
 
