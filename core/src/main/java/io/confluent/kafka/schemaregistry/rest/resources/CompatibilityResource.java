@@ -134,8 +134,14 @@ public class CompatibilityResource {
     VersionId versionId = parseVersionId(version);
     Schema schemaForSpecifiedVersion;
     try {
-      //Don't check compatibility against deleted schema
-      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
+      // Soft-deleted versions are checked against only under LOGICAL, as registration checks them.
+      if (!schemaRegistry.checksSoftDeletedVersions(subject)) {
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
+      } else if (versionId.isLatest()) {
+        schemaForSpecifiedVersion = schemaRegistry.latestVersionToCheck(subject);
+      } else {
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), true);
+      }
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
@@ -227,9 +233,10 @@ public class CompatibilityResource {
     List<String> errorMessages;
     List<SchemaKey> previousSchemas = new ArrayList<>();
     try {
-      //Don't check compatibility against deleted schema
-      schemaRegistry.getAllVersions(subject, LookupFilter.DEFAULT)
-          .forEachRemaining(previousSchemas::add);
+      // Soft-deleted versions are checked against only under LOGICAL, as registration checks them.
+      LookupFilter filter = schemaRegistry.checksSoftDeletedVersions(subject)
+          ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
+      schemaRegistry.getAllVersions(subject, filter).forEachRemaining(previousSchemas::add);
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Error while retrieving schema for subject "
           + subject, e);
