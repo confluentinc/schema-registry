@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -112,7 +113,7 @@ public class JsonNodeComparatorTest {
     JsonNode refA = node("{\"$ref\":\"" + url("/a") + "\"}");
     JsonNode refB = node("{\"$ref\":\"" + url("/b") + "\"}");
     try {
-      sorted(new JsonNodeComparator(blockingClient()), refB, refA);
+      sorted(new JsonNodeComparator(b -> b.schemaClient(blockingClient())), refB, refA);
       fail("Expected the remote $ref fetch to be rejected");
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage(), e.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE));
@@ -128,7 +129,8 @@ public class JsonNodeComparatorTest {
 
     assertEquals(
         sorted(new JsonNodeComparator(), object, integer, string),
-        sorted(new JsonNodeComparator(blockingClient()), object, integer, string));
+        sorted(new JsonNodeComparator(b -> b.schemaClient(blockingClient())),
+            object, integer, string));
     assertEquals(0, hits.get());
   }
 
@@ -181,6 +183,25 @@ public class JsonNodeComparatorTest {
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage(), e.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE));
     }
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void copyWithTagsResolvesRegisteredRefsWhenBlocked() throws IOException {
+    String refName = "http://acme.example/widget.json";
+    String schema = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"oneOf\":[{\"$ref\":\"" + refName + "\"},"
+        + "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"string\"}}}]}";
+    JsonSchema jsonSchema = new JsonSchema(schema,
+        Collections.singletonList(new SchemaReference(refName, "widget", 1)),
+        Collections.singletonMap(refName, "{\"type\":\"string\"}"),
+        null, null, null, true);
+
+    JsonNode result = MAPPER.readTree(
+        jsonSchema.copy(tagFirstBranch(), Collections.emptyMap()).canonicalString());
+
+    // The registered ref resolves locally; the object branch sorts first and gets the tag.
+    assertTrue(result.toString(), result.get("oneOf").get(1).has("confluent:tags"));
     assertEquals(0, hits.get());
   }
 }

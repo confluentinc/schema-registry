@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -354,44 +355,9 @@ public class JsonSchema implements ParsedSchema {
       synchronized (this) {
         if (schemaObj == null) {
           try {
-            // Extract the $schema to use for determining the id keyword
-            SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-            if (jsonNode.has(SCHEMA_KEYWORD)) {
-              String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-              if (schema != null) {
-                spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
-                    .orElse(SpecificationVersion.DRAFT_7);
-              }
-            }
-            // Extract the $id to use for resolving relative $ref URIs
-            URI idUri = null;
-            if (jsonNode.has(spec.idKeyword())) {
-              String id = jsonNode.get(spec.idKeyword()).asText();
-              if (id != null) {
-                idUri = ReferenceResolver.resolve((URI) null, id);
-              }
-            }
             SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
                 .useDefaults(true).draftV7Support();
-            org.everit.json.schema.loader.SchemaClient schemaClient = everitSchemaClient();
-            if (schemaClient != null) {
-              // Block remote ref fetching; classpath and registered refs still resolve.
-              builder.schemaClient(schemaClient);
-            }
-            for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-              // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
-              // resolves via Everit's literal JSON Pointer fallback even when the
-              // schema author placed the body under draft-7's native `definitions`
-              // bucket. The asymmetric direction (definitions → $defs, not the
-              // reverse) makes `$defs` the canonical "forgiving" ref form across both
-              // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
-              // which bucket the body actually lives in. The original content in
-              // resolvedReferences is left untouched; only the in-memory copy passed
-              // to the loader is augmented.
-              String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
-              URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-              builder.registerSchemaByURI(child, new JSONObject(content));
-            }
+            configureEveritLoader(builder);
             String rootJson = mergeDefBuckets(
                 objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
             JSONObject jsonObject = new JSONObject(rootJson);
@@ -405,6 +371,46 @@ public class JsonSchema implements ParsedSchema {
       }
     }
     return schemaObj;
+  }
+
+  // Applies this schema's remote-ref policy and registered references to an Everit loader
+  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder) {
+    // Extract the $schema to use for determining the id keyword
+    SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+    if (jsonNode.has(SCHEMA_KEYWORD)) {
+      String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+      if (schema != null) {
+        spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
+            .orElse(SpecificationVersion.DRAFT_7);
+      }
+    }
+    // Extract the $id to use for resolving relative $ref URIs
+    URI idUri = null;
+    if (jsonNode.has(spec.idKeyword())) {
+      String id = jsonNode.get(spec.idKeyword()).asText();
+      if (id != null) {
+        idUri = ReferenceResolver.resolve((URI) null, id);
+      }
+    }
+    org.everit.json.schema.loader.SchemaClient schemaClient = everitSchemaClient();
+    if (schemaClient != null) {
+      // Block remote ref fetching; classpath and registered refs still resolve.
+      builder.schemaClient(schemaClient);
+    }
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
+      // resolves via Everit's literal JSON Pointer fallback even when the
+      // schema author placed the body under draft-7's native `definitions`
+      // bucket. The asymmetric direction (definitions → $defs, not the
+      // reverse) makes `$defs` the canonical "forgiving" ref form across both
+      // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
+      // which bucket the body actually lives in. The original content in
+      // resolvedReferences is left untouched; only the in-memory copy passed
+      // to the loader is augmented.
+      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
+      URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+      builder.registerSchemaByURI(child, new JSONObject(content));
+    }
   }
 
   /**
@@ -1249,8 +1255,11 @@ public class JsonSchema implements ParsedSchema {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
+    // Sort composition branches with the same loader setup as this schema; null keeps the default
+    Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig =
+        everitSchemaClient() != null ? this::configureEveritLoader : null;
     for (SchemaEntity entity : entityToModify) {
-      JsonNode fieldNodePtr = findMatchingEntity(node, entity, everitSchemaClient());
+      JsonNode fieldNodePtr = findMatchingEntity(node, entity, loaderConfig);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);

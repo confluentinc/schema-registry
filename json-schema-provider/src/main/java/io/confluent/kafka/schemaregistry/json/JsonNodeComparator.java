@@ -20,26 +20,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import org.everit.json.schema.Schema;
-import org.everit.json.schema.loader.SchemaClient;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONObject;
 
 import java.util.Comparator;
+import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
   private static final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
-  private final SchemaClient schemaClient;
+  private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
 
   public JsonNodeComparator() {
     this(null);
   }
 
-  // Client used to load the compared schemas; null means the loader default
-  public JsonNodeComparator(SchemaClient schemaClient) {
-    this.schemaClient = schemaClient;
+  // Configures the loader for the compared schemas; null means the loader default
+  public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+    this.loaderConfig = loaderConfig;
   }
 
   @Override
@@ -69,11 +69,12 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   private Schema load(JsonNode node) throws JsonProcessingException {
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .schemaJson(objectMapper.readValue(node.toString(), JSONObject.class));
-    if (schemaClient == null) {
+    if (loaderConfig == null) {
       return builder.build().load().build();
     }
+    loaderConfig.accept(builder);
     try {
-      return builder.schemaClient(schemaClient).build().load().build();
+      return builder.build().load().build();
     } catch (RuntimeException e) {
       if (JsonSchema.isRemoteRefBlocked(e)) {
         throw new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
