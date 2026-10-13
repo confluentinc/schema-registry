@@ -288,6 +288,23 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return schema1.equals(schema2) || schema2.canLookup(schema1, this);
   }
 
+  // The id of a version's schema: an equal one's first, since another may merely look it up, as
+  // a bare root name does the record it names, and would take that version's id.
+  private int idOfVersion(String subject, ParsedSchema schema) throws IOException {
+    int id = -1;
+    Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
+    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
+      ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
+      if (parsedSchema.equals(schema)) {
+        return entry.getKey();
+      }
+      if (schemasEqual(parsedSchema, schema)) {
+        id = entry.getKey();
+      }
+    }
+    return id;
+  }
+
   private boolean hasLiveVersion(String subject, ParsedSchema schema) {
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     return versions != null && versions.keySet().stream().anyMatch(v -> schemasEqual(v, schema));
@@ -550,17 +567,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (maxVersion != -1) {
       version = maxVersion;
     }
-    int id = -1;
-    Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
-      try {
-        ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
-        if (schemasEqual(parsedSchema, schema)) {
-          id = entry.getKey();
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+    int id;
+    try {
+      id = idOfVersion(subject, schema);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
     return new Schema(subject, version, id, schema);
   }
@@ -587,15 +598,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (schema == null) {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    int id = -1;
-    Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
-      ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
-      if (schemasEqual(parsedSchema, schema)) {
-        id = entry.getKey();
-      }
-    }
-    return new SchemaMetadata(new Schema(subject, version, id, schema));
+    return new SchemaMetadata(new Schema(subject, version, idOfVersion(subject, schema), schema));
   }
 
   @Override
@@ -620,15 +623,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       if (schemaMetadata != null) {
         Map<String, String> props = schemaMetadata.getProperties();
         if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
-          int id = -1;
-          Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-          for (Map.Entry<Integer, Schema> e : idSchemaMap.entrySet()) {
-            ParsedSchema parsedSchema = parseSchemaOrElseThrow(e.getValue());
-            if (schemasEqual(parsedSchema, schema)) {
-              id = e.getKey();
-            }
-          }
-          return new SchemaMetadata(new Schema(subject, version, id, schema));
+          return new SchemaMetadata(
+              new Schema(subject, version, idOfVersion(subject, schema), schema));
         }
       }
     }
