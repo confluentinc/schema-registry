@@ -95,9 +95,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final long maxPollRetryBackoffMs;
   private final long unhealthyAfterPollFailureMs;
   private volatile long consecutivePollFailures = 0L;
-  // Time the current failure streak began, 0 if the last poll succeeded. Kept in a single
-  // volatile so metric readers never see a half-updated (count, timestamp) pair.
-  private volatile long pollFailingSinceMs = 0L;
+  // Time the current failure streak began, NOT_FAILING if the last poll succeeded. Kept in a
+  // single volatile so metric readers never see a half-updated (count, timestamp) pair. The
+  // sentinel is -1, not 0, because 0 is a valid reading of an injected Time.
+  private static final long NOT_FAILING = -1L;
+  private volatile long pollFailingSinceMs = NOT_FAILING;
   private long lastPollFailureLogMs = 0L;
 
   private Properties consumerProps = new Properties();
@@ -405,13 +407,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       log.info("KafkaStoreReader recovered after {} consecutive poll failures",
           consecutivePollFailures);
     }
-    pollFailingSinceMs = 0L;
+    pollFailingSinceMs = NOT_FAILING;
     consecutivePollFailures = 0L;
   }
 
   private void onPollFailure(KafkaException e) {
     long now = time.milliseconds();
-    if (pollFailingSinceMs == 0L) {
+    if (pollFailingSinceMs == NOT_FAILING) {
       pollFailingSinceMs = now;
     }
     long failures = ++consecutivePollFailures;
@@ -455,7 +457,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
    */
   public long millisInPollFailure() {
     long since = pollFailingSinceMs;
-    return since == 0L ? 0L : Math.max(0L, time.milliseconds() - since);
+    return since == NOT_FAILING ? 0L : Math.max(0L, time.milliseconds() - since);
   }
 
   /**

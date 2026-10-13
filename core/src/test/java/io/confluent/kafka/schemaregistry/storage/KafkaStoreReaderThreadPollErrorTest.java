@@ -213,6 +213,21 @@ public class KafkaStoreReaderThreadPollErrorTest {
   }
 
   @Test
+  public void failureDurationIsCorrectWhenClockStartsAtZero() throws Exception {
+    // A clock reading of 0 must not be mistaken for "not failing"
+    MockTime time = new MockTime(0L, 0L, 0L);
+    reader = newReader(flakyConsumer(new AtomicBoolean(true)), new StringMessageHandler(), time,
+        1000L);
+
+    reader.start();
+
+    awaitTrue(() -> reader.consecutivePollFailures() > 0);
+    time.sleep(1500L);
+    assertEquals(1500L, reader.millisInPollFailure());
+    assertFalse(reader.isReaderHealthy());
+  }
+
+  @Test
   public void thresholdOfZeroDisablesPollFailureHealthCheck() throws Exception {
     MockTime time = new MockTime();
     reader = newReader(
