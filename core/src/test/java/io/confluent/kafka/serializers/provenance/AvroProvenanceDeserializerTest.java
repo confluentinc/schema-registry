@@ -818,6 +818,27 @@ class AvroProvenanceDeserializerTest {
   }
 
   @Test
+  void aFieldReAddedAfterABareRootNamingTheSameRecordReadsItsDefault() throws Exception {
+    // v2 only names v1's record; note is dropped at v3 and re-added at v4: v1's value is not
+    // its. v1 must keep its own id though v2 can look it up, or the read falls back natively.
+    String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"int\"}%s]}";
+    String note = ",{\"name\":\"note\",\"type\":\"string\"%s}";
+    client.register("o", new AvroSchema(String.format(o, String.format(note, ""))));
+    AvroSchema v1 = new AvroSchema(String.format(o, String.format(note, "")));
+    client.register(SUBJECT, v1);
+    client.register(SUBJECT, bareRoot(String.format(o, String.format(note, "")), 1));
+    client.register(SUBJECT, new AvroSchema(String.format(o, "")));
+    AvroSchema v4 = new AvroSchema(String.format(o, String.format(note, ",\"default\":\"new\"")));
+    client.register(SUBJECT, v4);
+    GenericRecord value = new GenericData.Record(v1.rawSchema());
+    value.put("x", 7);
+    value.put("note", "old");
+
+    assertEquals("new", readParsed(v4, writeById(v1, value), "enabled").get("note").toString());
+  }
+
+  @Test
   void aFieldReAddedUnderABareRootNameReadsItsDefault() throws Exception {
     // Every version only names O, whose note is dropped and re-added: the old value is not its.
     String o = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\",\"fields\":["

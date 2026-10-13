@@ -91,7 +91,8 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
           "Not authorized by Schema Registry for the provenance of " + pair, e);
     }
     switch (e.getErrorCode()) {
-      // A bad version, request or range, or an algorithm the registry does not know.
+      // A bad version, request or range, or an algorithm a strategy names that the registry
+      // does not know.
       case 42202:
       case 42215:
       case 40402:

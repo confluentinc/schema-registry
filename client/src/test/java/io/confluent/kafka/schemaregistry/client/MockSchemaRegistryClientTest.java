@@ -1224,4 +1224,20 @@ public class MockSchemaRegistryClientTest {
       assertEquals(1, mock.getVersion("t", schema));
       assertEquals(1, mock.getVersion("t", schema.copy(3)));
     }
+
+    @Test
+    public void aVersionKeepsItsIdWhenALaterOneMerelyLooksItUp() throws Exception {
+      // A bare root name can look up the record it names; v1's id is still its own.
+      String record = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\","
+          + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      mock.register("o", new AvroSchema(record));
+      int v1 = mock.register("s", new AvroSchema(record));
+      int v2 = mock.register("s", new AvroSchema("\"q.O\"",
+          Collections.singletonList(new SchemaReference("o.avsc", "o", 1)),
+          Collections.singletonMap("o.avsc", record), null));
+      assertEquals(v1, mock.getSchemaMetadata("s", 1).getId());
+      assertEquals(v1, (int) mock.getByVersion("s", 1, false).getId());
+      assertEquals(v2, mock.getSchemaMetadata("s", 2).getId());
+    }
 }

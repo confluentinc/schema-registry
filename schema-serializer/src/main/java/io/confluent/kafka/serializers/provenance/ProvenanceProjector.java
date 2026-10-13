@@ -76,7 +76,7 @@ import org.slf4j.LoggerFactory;
  * transient one — the source or the registry unreachable, a 5xx, 408 or 429 — fails the record and
  * is never cached, so every record asks again, even for a server failure that recurs; so does a
  * 401 or 403, as the {@code AuthenticationException} or {@code AuthorizationException} a schema
- * fetch gives. A rejected request, such as for an unknown algorithm, fails every record of the
+ * fetch gives. A rejected request, such as for a range too long, fails every record of the
  * pair. Provenance that is unavailable for the pair — a reader that is not a version of the
  * subject, a pairing no single schema can express — is cached and warned about, and the writer is
  * read as without provenance. Anything else the build or the strategy throws fails the record,
@@ -408,8 +408,8 @@ public final class ProvenanceProjector<T> {
    * or, when pinned, by version; null when two schema ids are one and the same.
    *
    * @throws SerializationException if the request itself is rejected — a bad version, request or
-   *     range, or an unknown algorithm — or the strategy breaks its contract: every record of the
-   *     writer fails
+   *     range, or an algorithm a strategy names — or the strategy breaks its contract: every
+   *     record of the writer fails
    */
   private SchemaProvenance provenance(String subject, int writerId, Integer readerId,
       Integer readerVersion, boolean includeMultipleMessages) {
