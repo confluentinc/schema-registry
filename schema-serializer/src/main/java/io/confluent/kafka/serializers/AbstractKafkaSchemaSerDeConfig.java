@@ -127,8 +127,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Whether the Deserializer pairs writer fields with reader fields by provenance rather than "
           + "by name or field number: 'enabled' to match each schema version by the provenance "
           + "algorithm it was registered under, today v1 for every version; 'disabled' to pair "
-          + "them as usual. Requires kafka-schema-registry-logical-types on the classpath; a "
-          + "client that does not support provenance reads as without it, with a warning";
+          + "them as usual. 'enabled' requires kafka-schema-registry-logical-types on the "
+          + "classpath, or configuration fails; with a SchemaRegistryClient that does not "
+          + "implement provenance, records are read as without it, with a warning";
 
   public static final String PROVENANCE_STRATEGY = "provenance.strategy";
   public static final Class<?> PROVENANCE_STRATEGY_DEFAULT = ClientProvenanceStrategy.class;
@@ -146,7 +147,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final int PROVENANCE_CACHE_TTL_DEFAULT = 300;
   public static final String PROVENANCE_CACHE_TTL_DOC =
       "The TTL for caches holding provenance pairings and reader schema ids, or -1 for no TTL, "
-          + "which also keeps failures, such as an algorithm Schema Registry does not know, until "
+          + "which also keeps failures, such as a request Schema Registry rejects, until "
           + "the Deserializer is reconfigured; 0 caches nothing, so every record asks Schema "
           + "Registry and logs every fallback";
 
