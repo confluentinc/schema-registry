@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -439,5 +441,15 @@ class LogicalTypeToDdlConverterTest {
     assertEquals("Order", parsed.getName());
     assertEquals(original.getRootSchema(), parsed.getRootSchema());
     assertTrue(parsed.getNamedTypes().isEmpty(), parsed.getNamedTypes().keySet().toString());
+  }
+
+  @Test
+  void aProto2BytesDefaultIsRenderedAsItsBytes() {
+    // The converter records a Protobuf ByteString: its bytes, not its debug string, which carries
+    // an identity hash.
+    String ddl = LogicalTypeToDdlConverter.toDdl(ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema("syntax = \"proto2\";\nmessage M {\n"
+            + "  optional bytes b = 1 [default = \"ab\"];\n}\n")));
+    assertTrue(ddl.contains("DEFAULT x'6162'"), ddl);
   }
 }
