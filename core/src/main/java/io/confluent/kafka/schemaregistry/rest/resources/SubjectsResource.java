@@ -36,7 +36,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceAlgorithm;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -111,8 +110,7 @@ public class SubjectsResource {
 
   /**
    * Provenance over one requested range, keyed by the subject, the mode, whether the interior is
-   * kept, the algorithm, and every (version, schema id) in the range,
-   * soft-deleted versions included. It is
+   * kept, and every (version, schema id) in the range, soft-deleted versions included. It is
    * computed over the range alone — its ends and everything between — so a version outside it,
    * however old or however broken, has no effect. Any registration, or a version's removal, inside
    * the range changes the key, so nothing needs invalidating; a soft delete changes nothing
@@ -357,10 +355,10 @@ public class SubjectsResource {
               description = "Unprocessable Entity. Error code 42201 indicates a schema with no "
                   + "logical form. Error code 42202 indicates an invalid version. Error code "
                   + "42214 indicates a schema that could not be parsed. Error code 42215 "
-                  + "indicates an invalid range. Error code 42216 indicates an unknown "
-                  + "algorithm. Error code 42217 indicates a history whose names and aliases do "
-                  + "not determine one provenance. Error code 42218 indicates a version with too "
-                  + "many locations to compute, or nesting its types too deep. Error code 42219 "
+                  + "indicates an invalid range. Error code 42217 indicates a history whose names "
+                  + "and aliases do not determine one provenance. Error code 42218 indicates a "
+                  + "version with too many locations to compute, or nesting its types too deep. "
+                  + "Error code 42219 "
                   + "indicates a range with includeInterior covering more versions than one "
                   + "request may. Error code 42220 indicates a recursive schema.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -390,23 +388,12 @@ public class SubjectsResource {
       @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
           + "top-level messages; ignored for other formats")
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
-      boolean includeMultipleMessages,
-      @Parameter(description = "Version of the provenance algorithm, such as v1; when "
-          + "omitted, each version is matched by the algorithm it was registered under, today "
-          + "v1")
-      @QueryParam("algorithm") String algorithm) {
+      boolean includeMultipleMessages) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     if ((fromVersion == null) == (fromId == null) || (toVersion == null) == (toId == null)) {
       throw Errors.invalidProvenanceRequestException("Name each end of the range once: by "
           + "version (fromVersion, toVersion) or by schema id (fromId, toId).");
-    }
-    String version;
-    try {
-      // The name of the version asked for, v1 when none is named.
-      version = ProvenanceAlgorithm.of(algorithm).getName();
-    } catch (IllegalArgumentException e) {
-      throw Errors.unknownProvenanceAlgorithmException(e.getMessage());
     }
 
     String errorMessage = "Error while computing provenance for subject " + subject;
@@ -417,8 +404,7 @@ public class SubjectsResource {
           : versionOfId(fromId, subject, entries);
       int to = toVersion != null ? versionNamed(toVersion, entries)
           : versionOfId(toId, subject, entries);
-      return provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages,
-          version);
+      return provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -511,8 +497,7 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
-      boolean includeInterior, boolean includeMultipleMessages,
-      String algorithm) {
+      boolean includeInterior, boolean includeMultipleMessages) {
     int low = Math.min(from, to);
     int high = Math.max(from, to);
     List<Schema> range = history.stream()
@@ -528,7 +513,7 @@ public class SubjectsResource {
           + " versions, each starting at the version the previous one ends at");
     }
     List<Object> key =
-        provenanceKey(subject, range, includeMultipleMessages, includeInterior, algorithm);
+        provenanceKey(subject, range, includeMultipleMessages, includeInterior);
     CompletableFuture<Computed> mine = new CompletableFuture<>();
     CompletableFuture<Computed> pending = provenanceCache.asMap().putIfAbsent(key, mine);
     if (pending == null) {
@@ -537,7 +522,7 @@ public class SubjectsResource {
       Computed computed;
       try {
         computed = new Computed(computeProvenance(subject, range, includeMultipleMessages,
-            includeInterior, algorithm), null);
+            includeInterior), null);
       } catch (RuntimeException e) {
         computed = new Computed(null, e);
       } catch (Error e) {
@@ -611,14 +596,13 @@ public class SubjectsResource {
   }
 
   private static List<Object> provenanceKey(String subject, List<Schema> history,
-      boolean includeMultipleMessages, boolean includeInterior, String algorithm) {
-    // The mode and the algorithm are part of the key: each answers differently. So is whether
-    // the interior is kept, as a request for the ends computes no more than it returns.
-    List<Object> key = new ArrayList<>(4 + 2 * history.size());
+      boolean includeMultipleMessages, boolean includeInterior) {
+    // The mode is part of the key: each answers differently. So is whether the interior is
+    // kept, as a request for the ends computes no more than it returns.
+    List<Object> key = new ArrayList<>(3 + 2 * history.size());
     key.add(subject);
     key.add(includeMultipleMessages);
     key.add(includeInterior);
-    key.add(algorithm);
     for (Schema schema : history) {
       key.add(schema.getVersion());
       key.add(schema.getId());
@@ -627,7 +611,7 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance computeProvenance(String subject, List<Schema> history,
-      boolean includeMultipleMessages, boolean includeInterior, String algorithm) {
+      boolean includeMultipleMessages, boolean includeInterior) {
     // Parsed and converted as the computation reaches each version, so a range holds no more
     // than its report; a failure is then the first in version order.
     List<ParsedSchemaHolder> schemas = new ArrayList<>(history.size());
@@ -636,7 +620,7 @@ public class SubjectsResource {
     }
     try {
       return ProvenanceHistory.compute(subject, provenanceEntries(history), schemas,
-          includeMultipleMessages, includeInterior, algorithm);
+          includeMultipleMessages, includeInterior);
     } catch (Unparsable e) {
       throw Errors.unresolvableReferenceException(e.getMessage());
     } catch (RecursiveTypeException e) {

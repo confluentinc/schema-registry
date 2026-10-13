@@ -653,7 +653,7 @@ class ProtobufProvenanceDeserializerTest {
     Map<String, Object> config = config("enabled");
     config.put("provenance.strategy", MultiMessageColumnIds.class);
     config.put(MultiMessageColumnIds.HELD,
-        client.getProvenanceByVersion(SUBJECT, "1", "3", true, true, null));
+        client.getProvenanceByVersion(SUBJECT, "1", "3", true, true));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
         new KafkaProtobufDeserializer<>(client, config);
 
