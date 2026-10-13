@@ -260,9 +260,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
+    registerReaderMetrics();
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+  }
+
+  private void registerReaderMetrics() {
+    metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_ALIVE,
+        "1.0 if the kafka store reader thread is alive, 0.0 if it died and the node is stale",
+        () -> kafkaStore.isReaderAlive() ? 1.0 : 0.0);
+    metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_POLL_FAILURES,
+        "Number of consecutive failed polls of the kafka store reader",
+        () -> (double) kafkaStore.readerConsecutivePollFailures());
+    metricsContainer.addGauge(MetricsContainer.METRIC_NAME_READER_POLL_FAILURE_MS,
+        "Milliseconds the kafka store reader has been failing to poll, 0 after a successful poll",
+        () -> (double) kafkaStore.readerMillisInPollFailure());
   }
 
   @VisibleForTesting
@@ -494,7 +507,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         return false;
       }
     }
+    // A dead or stuck reader leaves the node serving stale data, so report unhealthy
     return initialized()
+        && kafkaStore.isReaderHealthy()
         && getResourceExtensions().stream().allMatch(SchemaRegistryResourceExtension::healthy);
   }
 
