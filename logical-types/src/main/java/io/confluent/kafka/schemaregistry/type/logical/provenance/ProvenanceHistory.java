@@ -165,15 +165,30 @@ public final class ProvenanceHistory {
       ids.add(entry.getId());
       versions.add(entry.getVersion());
     }
+    ProvenanceReport report = report(schemaTypes, versions, versionAt, reported);
+    return SchemaProvenanceEncoder.encode(subject, report, ids, versions);
+  }
+
+  /**
+   * {@link ProvenanceComputer#report}, with a failure naming its version by the registry's number
+   * for it, as the endpoint's errors do, rather than by its index.
+   *
+   * <p>A recursive type, an ambiguous history, too many locations, too deep a nesting or a schema
+   * with no logical form fails as {@link ProvenanceComputer#report} or the conversion fails it,
+   * naming the version by number where it names one.
+   *
+   * @param versions each version's number, in the order of {@code schemaTypes}
+   */
+  public static ProvenanceReport report(List<SchemaType> schemaTypes, List<Integer> versions,
+      IntFunction<LogicalType> versionAt, IntPredicate reported) {
     // The version last converted is the one being converted or walked when either fails.
     int[] reached = {-1};
     IntFunction<LogicalType> tracked = i -> {
       reached[0] = i;
       return versionAt.apply(i);
     };
-    ProvenanceReport report;
     try {
-      report = ProvenanceComputer.report(schemaTypes, tracked, reported);
+      return ProvenanceComputer.report(schemaTypes, tracked, reported);
     } catch (RecursiveTypeException e) {
       throw e.atVersion(versionNumber(versions, reached[0]));
     } catch (TypeTooDeepException e) {
@@ -192,7 +207,6 @@ public final class ProvenanceHistory {
       int index = e.version();
       throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
     }
-    return SchemaProvenanceEncoder.encode(subject, report, ids, versions);
   }
 
   /**
