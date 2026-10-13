@@ -103,6 +103,11 @@ import java.util.function.ToIntFunction;
  * <p>Ids are allocated walking versions in order and, within a version, members in path order —
  * the pre-order walk — taking the next integer for each member matched to nothing.
  *
+ * <p>Each member also has a check id, allocated the same way from the matches had no type
+ * changed kind: a location new only by a kind change, and everything under it, keeps the check id
+ * of what it would have continued, so the logical compatibility checks can pair it with what it
+ * replaced. Every other rule is shared, so where no kind changes the two ids pair alike.
+ *
  * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
  */
 public final class ProvenanceComputer {
@@ -181,6 +186,7 @@ public final class ProvenanceComputer {
     SchemaType previousSchemaType = null;
     String previousRootMessage = null;
     int nextId = 1;
+    int nextCheckId = 1;
     int locations = 0;
     for (int version = 0; version < schemaTypes.size(); version++) {
       LogicalType logicalType = versionAt.apply(version);
@@ -208,9 +214,10 @@ public final class ProvenanceComputer {
       List<ProvenanceReport.Member> members = new ArrayList<>(keep ? walk.members.size() : 0);
       for (Node member : walk.members) {
         member.id = member.match != null ? member.match.id : nextId++;
+        member.checkId = member.paired != null ? member.paired.checkId : nextCheckId++;
         if (keep) {
-          members.add(new ProvenanceReport.Member(
-              member.where.path, member.where.names, spelled(member.kinds), member.id));
+          members.add(new ProvenanceReport.Member(member.where.path, member.where.names,
+              spelled(member.kinds), member.id, member.checkId));
         }
       }
       if (keep) {
@@ -264,6 +271,7 @@ public final class ProvenanceComputer {
     while (!pending.isEmpty()) {
       Node node = pending.pop();
       node.match = null;
+      node.paired = null;
       for (List<Node> group : node.groups.values()) {
         group.forEach(pending::push);
       }
@@ -333,7 +341,10 @@ public final class ProvenanceComputer {
     private final Map<String, List<Node>> groups = new HashMap<>();
     private List<Kind> kinds;
     private Node match;
+    // The match had no type changed kind: what the logical compatibility checks pair.
+    private Node paired;
     private int id;
+    private int checkId;
 
     Node(Role role, String name, List<String> aliases, Integer number, Schema body,
         Map<Object, Integer> childDerived, Where where) {
@@ -349,14 +360,16 @@ public final class ProvenanceComputer {
     static Node root(Node previous) {
       Node root = new Node(null, null, null, null, null, Collections.emptyMap(), null);
       root.match = previous;
+      root.paired = previous;
       return root;
     }
 
     /**
-     * The previous version's members of this node's match at {@code step}, of one role.
+     * The previous version's members of this node's pairing at {@code step}, of one role: its
+     * match's, or under a kind change the location it would have continued.
      */
     List<Node> previous(String step, Role role) {
-      List<Node> group = match != null ? match.groups.get(step) : null;
+      List<Node> group = paired != null ? paired.groups.get(step) : null;
       return group != null && group.get(0).role == role ? group : Collections.emptyList();
     }
   }
@@ -476,10 +489,23 @@ public final class ProvenanceComputer {
       for (Node peer : peers) {
         peer.kinds = kindsOf(peer.body);
       }
-      match(peers, owner.previous(step, peers.get(0).role));
+      List<Node> previous = owner.previous(step, peers.get(0).role);
+      if (owner.match != null || owner.paired == null) {
+        match(peers, previous);
+      } else {
+        // Under a kind change, matched only for the checks: where the previous members make it
+        // ambiguous, unpaired; an ambiguity of the peers alone throws as it always has.
+        try {
+          match(peers, previous);
+        } catch (AmbiguousProvenanceException e) {
+          match(peers, Collections.emptyList());
+        }
+      }
       for (Node peer : peers) {
-        if (peer.match != null && !peer.match.kinds.equals(peer.kinds)) {
-          // Matched, but its type changed kind: it, and all under it, are new.
+        peer.paired = peer.match;
+        if (owner.match == null
+            || peer.match != null && !peer.match.kinds.equals(peer.kinds)) {
+          // Matched, but its type or its owner's changed kind: it, and all under it, are new.
           peer.match = null;
         }
       }

@@ -112,12 +112,14 @@ public final class ProvenanceReport {
     private final List<String> names;
     private final String kind;
     private final int id;
+    private final int checkId;
 
-    Member(List<Integer> path, List<String> names, String kind, int id) {
+    Member(List<Integer> path, List<String> names, String kind, int id, int checkId) {
       this.path = path;
       this.names = names;
       this.kind = kind;
       this.id = id;
+      this.checkId = checkId;
     }
 
     /**
@@ -152,6 +154,16 @@ public final class ProvenanceReport {
      */
     public int getId() {
       return id;
+    }
+
+    /**
+     * The id the logical compatibility checks pair by: {@link #getId()} but for a kind change,
+     * where a location and everything under it keep the check id of what they would have
+     * continued. Allocated as ids are, from its own sequence; not served, and not stable across
+     * releases.
+     */
+    public int getCheckId() {
+      return checkId;
     }
 
     @Override
