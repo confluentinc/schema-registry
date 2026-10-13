@@ -578,9 +578,17 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       if (!mode.isImportOrForwardMode() && !force) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
+        // Under LOGICAL, soft-deleted versions are checked too, in ascending order with the rest.
+        List<ParsedSchemaHolder> previousVersions = undeletedVersions;
+        if (checksSoftDeletedVersions(subject)) {
+          previousVersions = new ArrayList<>(allVersions.size());
+          for (int i = allVersions.size() - 1; i >= 0; i--) {
+            previousVersions.add(new LazyParsedSchemaHolder(this, allVersions.get(i)));
+          }
+        }
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
             parsedSchema,
-            undeletedVersions));
+            previousVersions));
         isCompatible = compatibilityErrorLogs.isEmpty();
         if (!isCompatible) {
           log.warn("Rejected schema registration for subject '{}' (compatibility level={}, "

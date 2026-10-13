@@ -169,6 +169,35 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     }
   }
 
+  /**
+   * Whether compatibility for {@code subject} is checked against its soft-deleted versions too,
+   * as under an effective LOGICAL compatibilityPolicy: a soft-deleted version's records are still
+   * read, and the tables LOGICAL protects have applied it.
+   */
+  default boolean checksSoftDeletedVersions(String subject) throws SchemaRegistryException {
+    return CompatibilityPolicy.forName(getConfigInScope(subject).getCompatibilityPolicy())
+        == CompatibilityPolicy.LOGICAL;
+  }
+
+  /**
+   * The latest version of {@code subject} compatibility is checked against: soft-deleted or not
+   * where {@link #checksSoftDeletedVersions} says so, else the latest live one; null if none.
+   */
+  default Schema latestVersionToCheck(String subject) throws SchemaRegistryException {
+    if (!checksSoftDeletedVersions(subject)) {
+      return getLatestVersion(subject);
+    }
+    Iterator<SchemaKey> versions = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+    SchemaKey latest = null;
+    while (versions.hasNext()) {
+      SchemaKey key = versions.next();
+      if (latest == null || key.getVersion() > latest.getVersion()) {
+        latest = key;
+      }
+    }
+    return latest == null ? null : get(subject, latest.getVersion(), true);
+  }
+
   void deleteContext(String delimitedContext) throws SchemaRegistryException;
 
   default Schema lookUpSchemaUnderSubject(
