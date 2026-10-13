@@ -1601,20 +1601,17 @@ public class RestService implements Closeable, Configurable {
    * within the response wherever a column continues — addressed by version number.
    * {@code "latest"} is accepted as a version.
    * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
-   * top-level messages; other formats ignore it. {@code algorithm} names the version of the
-   * provenance algorithm, such as {@code "v1"}; null asks for each version's own, which is v1
-   * until versions are stamped.
+   * top-level messages; other formats ignore it.
    */
   public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
                                                  String subject,
                                                  String fromVersion,
                                                  String toVersion,
                                                  boolean includeInterior,
-                                                 boolean includeMultipleMessages,
-                                                 String algorithm)
+                                                 boolean includeMultipleMessages)
       throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromVersion", fromVersion, "toVersion",
-        toVersion, includeInterior, includeMultipleMessages, algorithm);
+        toVersion, includeInterior, includeMultipleMessages);
   }
 
   /**
@@ -1626,11 +1623,10 @@ public class RestService implements Closeable, Configurable {
                                             int fromId,
                                             int toId,
                                             boolean includeInterior,
-                                            boolean includeMultipleMessages,
-                                            String algorithm)
+                                            boolean includeMultipleMessages)
       throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromId", fromId, "toId", toId,
-        includeInterior, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages);
   }
 
   /**
@@ -1643,24 +1639,20 @@ public class RestService implements Closeable, Configurable {
                                                  int fromId,
                                                  int toVersion,
                                                  boolean includeInterior,
-                                                 boolean includeMultipleMessages,
-                                                 String algorithm)
+                                                 boolean includeMultipleMessages)
       throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromId", fromId, "toVersion", toVersion,
-        includeInterior, includeMultipleMessages, algorithm);
+        includeInterior, includeMultipleMessages);
   }
 
   private SchemaProvenance getProvenance(Map<String, String> requestProperties, String subject,
       String fromParam, Object from, String toParam, Object to, boolean includeInterior,
-      boolean includeMultipleMessages, String algorithm) throws IOException, RestClientException {
+      boolean includeMultipleMessages) throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam(fromParam, String.valueOf(from));
     builder.queryParam(toParam, String.valueOf(to));
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
-    if (algorithm != null) {
-      builder.queryParam("algorithm", algorithm);
-    }
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }

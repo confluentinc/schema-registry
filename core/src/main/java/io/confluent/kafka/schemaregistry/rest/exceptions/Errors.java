@@ -89,7 +89,7 @@ public class Errors {
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
   public static final int UNRESOLVABLE_REFERENCE_ERROR_CODE = 42214;
   public static final int INVALID_PROVENANCE_REQUEST_ERROR_CODE = 42215;
-  public static final int UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE = 42216;
+  // 42216 is reserved for a request naming an unknown provenance algorithm.
   public static final int AMBIGUOUS_PROVENANCE_ERROR_CODE = 42217;
   public static final int PROVENANCE_TOO_LARGE_ERROR_CODE = 42218;
   public static final int PROVENANCE_RANGE_TOO_LONG_ERROR_CODE = 42219;
@@ -288,12 +288,6 @@ public class Errors {
   /** A request for every version of a range covers more versions than one request may. */
   public static RestConstraintViolationException provenanceRangeTooLongException(String message) {
     return new RestConstraintViolationException(message, PROVENANCE_RANGE_TOO_LONG_ERROR_CODE);
-  }
-
-  /** The request names a version of the provenance algorithm this registry does not know. */
-  public static RestConstraintViolationException unknownProvenanceAlgorithmException(
-      String message) {
-    return new RestConstraintViolationException(message, UNKNOWN_PROVENANCE_ALGORITHM_ERROR_CODE);
   }
 
   public static RestException associationNotFoundException(String resource) {

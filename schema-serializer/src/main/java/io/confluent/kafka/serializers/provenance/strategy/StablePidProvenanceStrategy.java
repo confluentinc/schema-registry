@@ -41,8 +41,7 @@ import java.util.function.Supplier;
  * for, and be equal across versions exactly where a location continues. A Protobuf deserializer
  * picks the mode by its reader's file, so one subject may be asked in both: a single-message path
  * {@code p} is the multi-message path {@code [0] + p}, as each version is rooted at its file's
- * first message. Paths provenance does not report, such as collection nodes', are ignored. The
- * algorithm asked for is ignored too: the pids already decide every pairing, though
+ * first message. Paths provenance does not report, such as collection nodes', are ignored.
  * {@code provenance.algorithm} must still be enabled for a deserializer to read by provenance.
  *
  * <p>While a version waits for its pids, the registry's answer is kept, bounded by
@@ -85,19 +84,19 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-      int toId, boolean includeMultipleMessages, String algorithm) {
-    // The registry's pids are replaced, whatever its algorithm.
+      int toId, boolean includeMultipleMessages) {
+    // The registry's pids are replaced.
     return answered(Arrays.asList(subject, fromId, toId, null, includeMultipleMessages), subject,
         includeMultipleMessages, () -> super.provenance(
-            client, subject, fromId, toId, includeMultipleMessages, null));
+            client, subject, fromId, toId, includeMultipleMessages));
   }
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeMultipleMessages, String algorithm) {
+      int fromId, int toVersion, boolean includeMultipleMessages) {
     return answered(Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages),
         subject, includeMultipleMessages, () -> super.provenanceToVersion(
-            client, subject, fromId, toVersion, includeMultipleMessages, null));
+            client, subject, fromId, toVersion, includeMultipleMessages));
   }
 
   // An answer is kept only while its versions wait for pids; once they have them, the registry is

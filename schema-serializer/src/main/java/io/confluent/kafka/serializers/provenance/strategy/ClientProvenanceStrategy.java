@@ -40,11 +40,11 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-      int toId, boolean includeMultipleMessages, String algorithm) {
+      int toId, boolean includeMultipleMessages) {
     try {
       // A deserializer pairs the two ends only.
       return client.getProvenanceById(
-          subject, fromId, toId, false, includeMultipleMessages, algorithm);
+          subject, fromId, toId, false, includeMultipleMessages);
     } catch (IOException e) {
       throw new ProvenanceRetriableException("Could not reach Schema Registry", e);
     } catch (RestClientException e) {
@@ -57,10 +57,10 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeMultipleMessages, String algorithm) {
+      int fromId, int toVersion, boolean includeMultipleMessages) {
     try {
       return client.getProvenanceToVersion(
-          subject, fromId, toVersion, false, includeMultipleMessages, algorithm);
+          subject, fromId, toVersion, false, includeMultipleMessages);
     } catch (IOException e) {
       throw new ProvenanceRetriableException("Could not reach Schema Registry", e);
     } catch (RestClientException e) {
@@ -91,12 +91,10 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
           "Not authorized by Schema Registry for the provenance of " + pair, e);
     }
     switch (e.getErrorCode()) {
-      // A bad version, request or range, or an algorithm a strategy names that the registry
-      // does not know.
+      // A bad version, request or range.
       case 42202:
       case 42215:
       case 40402:
-      case 42216:
       case 42219:
         return new ProvenanceRejectedException(e.getMessage(), e);
       case 40411:
