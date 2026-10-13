@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical.provenance;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Every version's members with an id allocated per location — the data a provenance endpoint
@@ -95,6 +97,17 @@ public final class ProvenanceReport {
      */
     public List<Member> getMembers() {
       return members;
+    }
+
+    /**
+     * Each member's check id by its path: what {@code FieldPairing.byIds} pairs by.
+     */
+    public Map<List<Integer>, Integer> checkIds() {
+      Map<List<Integer>, Integer> ids = new HashMap<>();
+      for (Member member : members) {
+        ids.put(member.getPath(), member.getCheckId());
+      }
+      return ids;
     }
 
     @Override
