@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -165,6 +166,17 @@ public class KafkaStoreReaderThreadPollErrorTest {
   @Test
   public void recordTooLargeFromPollIsFatal() throws Exception {
     consumer.setPollException(new RecordTooLargeException("too large"));
+
+    reader.start();
+
+    awaitTrue(() -> !reader.isReaderAlive());
+    assertEquals(0L, reader.consecutivePollFailures());
+  }
+
+  @Test
+  public void configExceptionFromPollIsFatal() throws Exception {
+    // A configuration error cannot clear by retrying, so it must not be retried forever
+    consumer.setPollException(new ConfigException("bad consumer config"));
 
     reader.start();
 

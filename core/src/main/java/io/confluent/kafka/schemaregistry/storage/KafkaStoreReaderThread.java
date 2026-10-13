@@ -34,6 +34,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -389,6 +390,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     } catch (InterruptException ie) {
       log.error("KafkaStoreReader thread was interrupted and is exiting.", ie);
       throw ie;
+    } catch (ConfigException ce) {
+      // A configuration error cannot clear by retrying
+      log.error("KafkaStoreReader thread has died because of a configuration error.", ce);
+      throw ce;
     } catch (KafkaException ke) {
       // Includes AuthenticationException and RetriableException. Retry with backoff, and let
       // the health check report the node if the failures last too long.
