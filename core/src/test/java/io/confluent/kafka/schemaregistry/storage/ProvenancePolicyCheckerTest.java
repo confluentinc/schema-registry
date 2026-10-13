@@ -136,14 +136,67 @@ class ProvenancePolicyCheckerTest {
     }
   }
 
+  @Test
+  void aCandidateBlockingProvenanceIsNamedByItsVersionNumber() {
+    // Registered as versions 3 and 7, the candidate is version 8; the computer counts from 0.
+    List<ParsedSchema> history = Arrays.asList(
+        avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}"),
+        avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"},"
+            + "{\"name\":\"k\",\"type\":[\"null\",\"int\"],\"default\":null}"));
+    ParsedSchema candidate = avro("{\"name\":\"c\",\"type\":[\"null\",\"int\"],"
+        + "\"default\":null,\"aliases\":[\"a\",\"b\"]}");
+    List<String> errors = ProvenancePolicyChecker.check("s", candidate, history, List.of(3, 7),
+        List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID);
+    assertTrue(has(errors, "PROVENANCE_UNAVAILABLE"), errors.toString());
+    assertTrue(errors.toString().contains("at version 8"), errors.toString());
+  }
+
+  // --- An earlier version blocking provenance -------------------------------------------------
+
+  @Test
+  void anEarlierVersionBlockingProvenanceLeavesTheCheckToNamePairing() {
+    // Each history's second version blocks provenance, as only a version registered before the
+    // subject was checked this way can: the next one is checked by name, as before.
+    String node = "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"next\","
+        + "\"type\":[\"null\",\"N\"],\"default\":null}]}";
+    String recursive = "{\"type\":\"object\",\"properties\":{\"n\":{\"$ref\":\"#/definitions/N\"}},"
+        + "\"definitions\":{\"N\":{\"type\":\"object\",\"properties\":{\"next\":"
+        + "{\"$ref\":\"#/definitions/N\"}}}}}";
+    List<List<ParsedSchema>> histories = Arrays.asList(
+        Arrays.asList(avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}"),
+            avro("{\"name\":\"c\",\"type\":[\"null\",\"int\"],\"default\":null,"
+                + "\"aliases\":[\"a\",\"b\"]}"),
+            avro("{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null}")),
+        Arrays.asList(avro("{\"name\":\"a\",\"type\":\"int\"}"),
+            avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"n\",\"type\":" + node + "}"),
+            avro("{\"name\":\"a\",\"type\":\"long\"}")),
+        Arrays.asList(proto("int32 a = 1;"),
+            proto("int32 a = 1;\n  N n = 2;\n  message N { N next = 1; }"),
+            proto("int64 a = 1;")),
+        Arrays.asList(json("{\"a\":" + INT + "}"), new JsonSchema(recursive),
+            json("{\"a\":{\"type\":\"number\"}}")));
+    for (List<ParsedSchema> history : histories) {
+      // As a candidate, the blocking version is rejected.
+      assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID),
+          "PROVENANCE_UNAVAILABLE"), history.toString());
+      for (PairBy pairBy : PairBy.values()) {
+        for (CompatibilityLevel level : LEVELS) {
+          assertEquals(LogicalPolicyChecker.check(history.get(2), holders(history, 2), level),
+              check(history, 2, level, pairBy), history + " " + pairBy + " " + level);
+        }
+      }
+    }
+  }
+
   // -------------------------------------------------------------------------------------------
 
-  // Version k registered after versions 0..k-1, every one compared.
+  // Version k registered after versions 0..k-1, numbered from 1, every one compared.
   private static List<String> check(List<ParsedSchema> history, int k, CompatibilityLevel level,
       PairBy pairBy) {
     List<Integer> previous = IntStream.range(0, k).boxed().collect(Collectors.toList());
-    return ProvenancePolicyChecker.check(history.get(k), history.subList(0, k), previous, level,
-        pairBy);
+    List<Integer> numbers = IntStream.rangeClosed(1, k).boxed().collect(Collectors.toList());
+    return ProvenancePolicyChecker.check("s", history.get(k), history.subList(0, k), numbers,
+        previous, level, pairBy);
   }
 
   private static boolean has(List<String> errors, String rule) {
