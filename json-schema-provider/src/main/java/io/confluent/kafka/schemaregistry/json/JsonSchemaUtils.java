@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import org.apache.commons.compress.utils.Lists;
+import org.everit.json.schema.loader.SchemaClient;
 
 public class JsonSchemaUtils {
 
@@ -297,10 +298,17 @@ public class JsonSchemaUtils {
   }
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
+    return findMatchingEntity(node, entity, null);
+  }
+
+  public static JsonNode findMatchingEntity(JsonNode node,
+                                            SchemaEntity entity,
+                                            SchemaClient schemaClient) {
     String[] identifiers = entity.getEntityPath().split("\\.");
     LinkedList<String> identifiersList = new LinkedList<>();
     Collections.addAll(identifiersList, identifiers);
-    JsonNode entityNode = findNodeHelper(node, entity.getEntityType(), identifiersList);
+    JsonNode entityNode =
+        findNodeHelper(node, entity.getEntityType(), identifiersList, schemaClient);
     if (entityNode == null) {
       throw new IllegalArgumentException(String.format(
         "No matching path '%s' found in the schema", entity.getEntityPath()));
@@ -328,7 +336,8 @@ public class JsonSchemaUtils {
 
   private static JsonNode findNodeHelper(JsonNode node,
                                          SchemaEntity.EntityType entityType,
-                                         LinkedList<String> identifiersList) {
+                                         LinkedList<String> identifiersList,
+                                         SchemaClient schemaClient) {
     String type = identifiersList.poll();
     if (type == null) {
       return null;
@@ -353,35 +362,39 @@ public class JsonSchemaUtils {
         if (result == null || identifiersList.isEmpty()) {
           return result;
         } else {
-          return findNodeHelper(result, entityType, identifiersList);
+          return findNodeHelper(result, entityType, identifiersList, schemaClient);
         }
       case "array":
-        return findNodeHelper(node.get("items"), entityType, identifiersList);
+        return findNodeHelper(node.get("items"), entityType, identifiersList, schemaClient);
       case "anyof":
         if (node.has("anyOf")) {
-          return findSubSchemasFromIndex(node, entityType, "anyOf", identifiersList);
+          return findSubSchemasFromIndex(
+              node, entityType, "anyOf", identifiersList, schemaClient);
         }
 
         // handle "type": ["null", "object"] etc
         identifiersList.poll();
-        return findNodeHelper(node, entityType, identifiersList);
+        return findNodeHelper(node, entityType, identifiersList, schemaClient);
       case "allof":
         if (node.has("allOf")) {
-          return findSubSchemasFromIndex(node, entityType, "allOf", identifiersList);
+          return findSubSchemasFromIndex(
+              node, entityType, "allOf", identifiersList, schemaClient);
         }
 
         // handle if-then-else
         identifiersList.poll();
         if ("conditional".equals(identifiersList.peek())) {
           identifiersList.poll();
-          return findNodeHelper(node.get(identifiersList.poll()), entityType, identifiersList);
+          return findNodeHelper(
+              node.get(identifiersList.poll()), entityType, identifiersList, schemaClient);
         } else {
-          return findNodeHelper(node, entityType, identifiersList);
+          return findNodeHelper(node, entityType, identifiersList, schemaClient);
         }
       case "oneof":
-        return findSubSchemasFromIndex(node, entityType, "oneOf", identifiersList);
+        return findSubSchemasFromIndex(
+            node, entityType, "oneOf", identifiersList, schemaClient);
       case "not":
-        return findNodeHelper(node.get(type), entityType, identifiersList);
+        return findNodeHelper(node.get(type), entityType, identifiersList, schemaClient);
       default:
         return null;
     }
@@ -390,13 +403,15 @@ public class JsonSchemaUtils {
   private static JsonNode findSubSchemasFromIndex(JsonNode node,
                                                   SchemaEntity.EntityType entityType,
                                                   String compositionType,
-                                                  LinkedList<String> identifiersList) {
+                                                  LinkedList<String> identifiersList,
+                                                  SchemaClient schemaClient) {
     String index = identifiersList.poll();
     if (index == null) {
       return null;
     }
     List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
-    jsonNodeList.sort(new JsonNodeComparator());
-    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)), entityType, identifiersList);
+    jsonNodeList.sort(new JsonNodeComparator(schemaClient));
+    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)),
+        entityType, identifiersList, schemaClient);
   }
 }
