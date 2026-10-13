@@ -290,7 +290,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
   public static final String KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_CONFIG =
       "kafkastore.reader.unhealthy.after.poll.failure.ms";
-  public static final long KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DEFAULT = 300000L;
+  public static final long KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DEFAULT = 0L;
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -488,7 +488,10 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_READER_UNHEALTHY_AFTER_POLL_FAILURE_MS_DOC =
       "How long (ms) the Kafka store reader may keep failing to poll before this node reports "
       + "itself unhealthy. The reader retries failed polls indefinitely, so this bounds how long "
-      + "a node can keep serving stale data without reporting it. 0 disables the check.";
+      + "a node can keep serving stale data without reporting it. Disabled (0) by default: during "
+      + "a Kafka-wide outage every node would otherwise fail its health check at about the same "
+      + "time, turning stale reads into no reads. Enable it only if health checks should catch "
+      + "a single node whose reader is stuck while Kafka is available to the others.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
