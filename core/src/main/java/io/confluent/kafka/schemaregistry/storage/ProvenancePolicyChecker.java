@@ -41,10 +41,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * {@code LOGICAL}'s checks over the subject's provenance. Paired by check id, they give the
- * provenance endpoint's compatible flag for a subject without a compatibility group: what
- * registration will answer once LOGICAL pairs by provenance. Registration and the compatibility
- * checks still use {@link LogicalPolicyChecker}, which also remains for a subject with a group, and
- * as the fallback below.
+ * provenance endpoint's compatible flag: what registration will answer once LOGICAL pairs by
+ * provenance. Registration and the compatibility checks still use {@link LogicalPolicyChecker},
+ * which also remains as the fallback below.
  *
  * <p>The rules, the logical types compared and the findings are {@link LogicalPolicyChecker}'s;
  * what differs is the pairing and what it needs. Each version is matched against its predecessor
@@ -63,8 +62,8 @@ import org.slf4j.LoggerFactory;
  * checked; a file the policy checks as its one message takes that message's ids, so a file
  * changing between one message and several is still the reshaping it is.
  *
- * <p>A caller with a compatibility group uses {@link LogicalPolicyChecker}: provenance does not
- * follow groups.
+ * <p>A compatibility group selects the versions compared; provenance ignores groups, as the
+ * endpoint's ids do, so the range includes other groups' versions between them.
  */
 final class ProvenancePolicyChecker {
 

@@ -1306,8 +1306,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * ({@link ProvenancePolicyChecker}). Provenance is computed over the subject's versions from the
    * oldest one the level compares to the last below {@code beforeVersion}, soft-deleted ones
    * included, the candidate after them: the caller's holders are reused and any other version in
-   * that range is loaded. Holders that do not say which version they are are checked by name, as
-   * before.
+   * that range is loaded, as is another compatibility group's. Holders that do not say which
+   * version they are are checked by name, as before.
    */
   private List<String> logicalFindings(ParsedSchema parsedSchema,
       List<ParsedSchemaHolder> previousSchemas, CompatibilityLevel level, int beforeVersion) {
@@ -1452,8 +1452,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
       // Additive: the native check below still runs; LOGICAL layers the Flink/Iceberg logical-type
       // validity and compatibility checks on top, so it can only make registration stricter.
-      // Provenance does not follow compatibility groups, so a group keeps pairing by name.
-      errorMessages.addAll(pairBy == PairBy.CHECK_ID && compatibilityGroup == null
+      // A group selects the versions compared; provenance, as the endpoint's ids, ignores groups.
+      errorMessages.addAll(pairBy == PairBy.CHECK_ID
               ? logicalFindings(parsedSchema, previousSchemas, compatibility, beforeVersion)
               : LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
     }
