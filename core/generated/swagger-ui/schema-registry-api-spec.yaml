@@ -3110,7 +3110,8 @@ paths:
         description: "LOGICAL to say, for each version returned, whether registering\
           \ it after the versions before it is accepted under that policy with columns\
           \ paired by provenance, as registration will pair them, and the errors it\
-          \ would report"
+          \ would report; such a request may compare its versions with at most provenance.compatibility.max.comparisons\
+          \ earlier ones"
         schema:
           type: string
       responses:
@@ -3141,14 +3142,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorMessage"
         "422":
-          description: Unprocessable Entity. Error code 42201 indicates a schema with
-            no logical form. Error code 42202 indicates an invalid version. Error
-            code 42214 indicates a schema that could not be parsed. Error code 42215
-            indicates an invalid range. Error code 42217 indicates a history whose names
-            and aliases do not determine one provenance. Error code 42218 indicates a
-            version with too many locations to compute, or nesting its types too deep.
-            Error code 42219 indicates a range with includeInterior covering more versions
-            than one request may. Error code 42220 indicates a recursive schema.
+          description: "Unprocessable Entity. Error code 42201 indicates a schema\
+            \ with no logical form. Error code 42202 indicates an invalid version.\
+            \ Error code 42214 indicates a schema that could not be parsed. Error\
+            \ code 42215 indicates an invalid range, or a compatibilityPolicy other\
+            \ than LOGICAL. Error code 42217 indicates a history whose names and aliases\
+            \ do not determine one provenance. Error code 42218 indicates a version\
+            \ with too many locations to compute, or nesting its types too deep. Error\
+            \ code 42219 indicates a range with includeInterior covering more versions\
+            \ than one request may, or with compatibilityPolicy comparing its versions\
+            \ with more earlier ones than one request may. Error code 42220 indicates\
+            \ a recursive schema."
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -4102,11 +4106,11 @@ components:
         messages:
           type: array
           description: "The errors registering this version would report, as a compatibility\
-            \ check reports them"
+            \ check reports them; at most 100, the last counting any more"
           items:
             type: string
             description: "The errors registering this version would report, as a compatibility\
-              \ check reports them"
+              \ check reports them; at most 100, the last counting any more"
       description: One version's column provenance
     SchemaProvenance:
       type: object

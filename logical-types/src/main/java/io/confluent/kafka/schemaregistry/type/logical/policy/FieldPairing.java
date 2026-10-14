@@ -90,7 +90,8 @@ public final class FieldPairing {
       List<FieldView> updateFields) {
     int[] partners = new int[updateFields.size()];
     if (originalIds == null) {
-      // As the checks always have: a duplicate writer name throws, as their toMap did.
+      // As the checks always have: a duplicate writer name throws, as their toMap did, its
+      // message shortened.
       Map<String, Integer> byName = new HashMap<>();
       for (int i = 0; i < originalFields.size(); i++) {
         if (byName.put(originalFields.get(i).name, i) != null) {

@@ -69,6 +69,19 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aNullCompatibilityPolicyIsTheFiveArgumentForm() throws Exception {
+    int v1 = register(record(field("id", "int")));
+    int v2 = register(record(field("id", "int"), field("name", "string")));
+
+    assertThat(client.getProvenanceById(SUBJECT, v1, v2, true, false, null))
+        .isEqualTo(client.getProvenanceById(SUBJECT, v1, v2, true, false));
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "2", true, false, null))
+        .isEqualTo(client.getProvenanceByVersion(SUBJECT, "1", "2", true, false));
+    assertThat(client.getProvenanceToVersion(SUBJECT, v1, 2, true, false, null))
+        .isEqualTo(client.getProvenanceToVersion(SUBJECT, v1, 2, true, false));
+  }
+
+  @Test
   void latestAndInteriorResolveAsTheRegistryResolvesThem() throws Exception {
     register(record(field("a", "int"), field("b", "int")));
     register(record(field("b", "int")));

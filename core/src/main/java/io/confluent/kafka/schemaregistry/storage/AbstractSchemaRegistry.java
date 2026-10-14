@@ -1357,8 +1357,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         }
         range.add(holder);
       }
+      // The version judged, or the number registration gives the schema after the last.
+      int candidateNumber = beforeVersion != AFTER_LATEST ? beforeVersion
+          : numbers.get(numbers.size() - 1) + 1;
       return ProvenancePolicyChecker.check(subject, parsedSchema, range, numbers, compared,
-          level, PairBy.CHECK_ID);
+          level, PairBy.CHECK_ID, candidateNumber);
     } catch (SchemaRegistryException e) {
       // As a lazy holder reports a version it cannot read.
       throw new IllegalStateException(e);

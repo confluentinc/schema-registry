@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHisto
 import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -105,6 +106,10 @@ public class SubjectsResource {
 
   public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
+
+  // The most messages a version's compatibility verdict carries; the count of the rest is last.
+  private static final int MAX_MESSAGES = 100;
+
   private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
@@ -358,12 +363,15 @@ public class SubjectsResource {
               description = "Unprocessable Entity. Error code 42201 indicates a schema with no "
                   + "logical form. Error code 42202 indicates an invalid version. Error code "
                   + "42214 indicates a schema that could not be parsed. Error code 42215 "
-                  + "indicates an invalid range. Error code 42217 indicates a history whose names "
+                  + "indicates an invalid range, or a compatibilityPolicy other than LOGICAL. "
+                  + "Error code 42217 indicates a history whose names "
                   + "and aliases do not determine one provenance. Error code 42218 indicates a "
                   + "version with too many locations to compute, or nesting its types too deep. "
                   + "Error code 42219 "
                   + "indicates a range with includeInterior covering more versions than one "
-                  + "request may. Error code 42220 indicates a recursive schema.",
+                  + "request may, or with compatibilityPolicy comparing its versions with more "
+                  + "earlier ones than one request may. Error code 42220 indicates a recursive "
+                  + "schema.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",
@@ -394,7 +402,9 @@ public class SubjectsResource {
       boolean includeMultipleMessages,
       @Parameter(description = "LOGICAL to say, for each version returned, whether registering "
           + "it after the versions before it is accepted under that policy with columns paired "
-          + "by provenance, as registration will pair them, and the errors it would report")
+          + "by provenance, as registration will pair them, and the errors it would report; "
+          + "such a request may compare its versions with at most "
+          + "provenance.compatibility.max.comparisons earlier ones")
       @QueryParam("compatibilityPolicy") String compatibilityPolicy) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -418,7 +428,8 @@ public class SubjectsResource {
           : versionOfId(toId, subject, entries);
       SchemaProvenance provenance =
           provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
-      return compatibilityPolicy == null ? provenance : withCompatibility(subject, provenance);
+      return compatibilityPolicy == null ? provenance
+          : withCompatibility(subject, history, provenance);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -512,21 +523,64 @@ public class SubjectsResource {
 
   /**
    * {@code provenance}, possibly a cached one and so left unchanged, with each version's verdict
-   * under LOGICAL by provenance.
+   * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages.
    */
-  private SchemaProvenance withCompatibility(String subject, SchemaProvenance provenance)
-      throws SchemaRegistryException {
+  private SchemaProvenance withCompatibility(String subject, List<Schema> history,
+      SchemaProvenance provenance) throws SchemaRegistryException {
+    checkComparisons(subject, history, provenance.getVersions());
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
       ProvenanceVersion flagged = new ProvenanceVersion(version.getVersion(), version.getId(),
           version.getKind(), version.getFields());
-      List<String> messages =
-          schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion());
+      List<String> messages;
+      try {
+        messages = schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion());
+      } catch (InvalidSchemaException e) {
+        // An earlier version that no longer parses, outside the range: 42214, as when in it.
+        throw Errors.unresolvableReferenceException(e.getMessage());
+      }
       flagged.setCompatible(messages.isEmpty());
-      flagged.setMessages(messages);
+      flagged.setMessages(atMostMaxMessages(messages));
       versions.add(flagged);
     }
     return new SchemaProvenance(provenance.getSubject(), versions);
+  }
+
+  // Each version returned is compared with every earlier one at a transitive level, else the one
+  // before it, as registration compares it; one version alone is always answered.
+  private void checkComparisons(String subject, List<Schema> history,
+      List<ProvenanceVersion> versions) throws SchemaRegistryException {
+    if (versions.size() < 2) {
+      return;
+    }
+    CompatibilityLevel level = CompatibilityLevel.forName(
+        schemaRegistry.getConfigInScope(subject).getCompatibilityLevel());
+    boolean transitive = level == CompatibilityLevel.BACKWARD_TRANSITIVE
+        || level == CompatibilityLevel.FULL_TRANSITIVE;
+    long comparisons = 0;
+    for (ProvenanceVersion version : versions) {
+      long earlier = history.stream().filter(s -> s.getVersion() < version.getVersion()).count();
+      comparisons += level == null || level == CompatibilityLevel.NONE ? 0
+          : transitive ? earlier : Math.min(earlier, 1);
+    }
+    int max = schemaRegistry.config().getInt(
+        SchemaRegistryConfig.PROVENANCE_COMPATIBILITY_MAX_COMPARISONS_CONFIG);
+    if (comparisons > max) {
+      throw Errors.provenanceRangeTooLongException("With compatibilityPolicy, the "
+          + versions.size() + " versions requested of subject " + subject + " are compared "
+          + "with " + comparisons + " earlier versions, more than " + max + ": request fewer "
+          + "versions at a time, down to one");
+    }
+  }
+
+  // The first MAX_MESSAGES - 1 messages and a count of the rest, when there are more.
+  private static List<String> atMostMaxMessages(List<String> messages) {
+    if (messages.size() <= MAX_MESSAGES) {
+      return messages;
+    }
+    List<String> kept = new ArrayList<>(messages.subList(0, MAX_MESSAGES - 1));
+    kept.add((messages.size() - kept.size()) + " more messages not listed");
+    return kept;
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,

@@ -278,11 +278,15 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   /**
    * As {@link #getProvenanceById}; with {@code compatibilityPolicy} {@code "LOGICAL"}, each version
    * also says whether registering it after the versions before it is accepted under that policy
-   * once it pairs columns by provenance, with the errors it would report.
+   * once it pairs columns by provenance, with the errors it would report. A {@code null} policy
+   * is the five-argument form.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
       boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
       throws IOException, RestClientException {
+    if (compatibilityPolicy == null) {
+      return getProvenanceById(subject, fromId, toId, includeInterior, includeMultipleMessages);
+    }
     throw new UnsupportedOperationException();
   }
 
@@ -303,6 +307,10 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior, boolean includeMultipleMessages,
       String compatibilityPolicy) throws IOException, RestClientException {
+    if (compatibilityPolicy == null) {
+      return getProvenanceByVersion(subject, fromVersion, toVersion, includeInterior,
+          includeMultipleMessages);
+    }
     throw new UnsupportedOperationException();
   }
 
@@ -324,6 +332,10 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
       boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
       throws IOException, RestClientException {
+    if (compatibilityPolicy == null) {
+      return getProvenanceToVersion(subject, fromId, toVersion, includeInterior,
+          includeMultipleMessages);
+    }
     throw new UnsupportedOperationException();
   }
 

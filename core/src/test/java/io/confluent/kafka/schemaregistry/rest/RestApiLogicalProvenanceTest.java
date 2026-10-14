@@ -33,6 +33,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -211,6 +214,55 @@ public abstract class RestApiLogicalProvenanceTest {
     assertFlag(subject, 2, "FIELD_DELETED");
   }
 
+  // --- What a flag names ----------------------------------------------------------------------
+
+  @Test
+  public void testAFlagAfterANumberingGapNamesTheVersionItJudges() throws Exception {
+    // Imported as versions 1 and 5; v=5 aliases two fields of v=1, so no provenance reaches it.
+    String subject = "imported_gap";
+    restApp.restClient.setMode("IMPORT", subject);
+    restApp.restClient.registerSchema(
+        avro(field("a", "\"int\""), field("b", "\"int\"")), subject, 1, 9101);
+    restApp.restClient.registerSchema(avro(field("c", "[\"null\",\"int\"]",
+        "\"default\":null,\"aliases\":[\"a\",\"b\"]")), subject, 5, 9102);
+    restApp.restClient.setMode("READWRITE", subject);
+    logical(subject, CompatibilityLevel.BACKWARD);
+    assertFlag(subject, 5, "PROVENANCE_UNAVAILABLE");
+    String messages = flag(subject, 5).getMessages().toString();
+    assertTrue(messages.contains("at version 5"), messages);
+  }
+
+  @Test
+  public void testAFlagPastAnEarlierVersionThatNoLongerParsesIsA42214() throws Exception {
+    // v=1 rewritten to name a type that does not exist, as if a reference no longer resolved.
+    String subject = "unparseable_earlier";
+    history(subject, AvroSchema.TYPE, avro(field("a", "\"string\"")),
+        avro(field("a", "\"string\""), field("b", "[\"null\",\"int\"]", "\"default\":null")));
+    restApp.schemaRegistry().getKafkaStore().put(new SchemaKey(subject, 1),
+        new SchemaValue(subject, 1, 9201, avro(field("x", "\"ns.Missing\"")), false));
+    logical(subject, CompatibilityLevel.BACKWARD);
+    RestClientException e = assertThrows(RestClientException.class, () -> flag(subject, 2));
+    assertEquals(Errors.UNRESOLVABLE_REFERENCE_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void testAVersionWithManyMessagesListsAtMostOneHundred() throws Exception {
+    // v=2 drops 120 fields of v=1: a FIELD_DELETED each, more than a verdict lists.
+    String subject = "many_messages";
+    String[] fields = new String[120];
+    for (int i = 0; i < fields.length; i++) {
+      fields[i] = field("f" + i, "[\"null\",\"int\"]", "\"default\":null");
+    }
+    history(subject, AvroSchema.TYPE, avro(fields), avro());
+    logical(subject, CompatibilityLevel.BACKWARD);
+    ProvenanceVersion flagged = flag(subject, 2);
+    assertFalse(flagged.getCompatible());
+    List<String> messages = flagged.getMessages();
+    assertEquals(100, messages.size());
+    assertTrue(messages.get(98).contains("FIELD_DELETED"), messages.get(98));
+    assertTrue(messages.get(99).endsWith(" more messages not listed"), messages.get(99));
+  }
+
   // --- The request ----------------------------------------------------------------------------
 
   @Test
@@ -221,10 +273,37 @@ public abstract class RestApiLogicalProvenanceTest {
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", "1", true, false);
     assertNull(plain.getVersions().get(0).getCompatible());
     assertNull(plain.getVersions().get(0).getMessages());
-    RestClientException e = assertThrows(RestClientException.class,
-        () -> restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-            subject, "1", "1", true, false, "STRICT"));
-    assertEquals(Errors.INVALID_PROVENANCE_REQUEST_ERROR_CODE, e.getErrorCode());
+    for (String policy : new String[] {"STRICT", "", "lenient"}) {
+      RestClientException e = assertThrows(RestClientException.class,
+          () -> restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+              subject, "1", "1", true, false, policy), policy);
+      assertEquals(Errors.INVALID_PROVENANCE_REQUEST_ERROR_CODE, e.getErrorCode(), policy);
+    }
+    assertTrue(restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, "1", "1", true, false, "logical").getVersions().get(0).getCompatible());
+  }
+
+  @Test
+  public void testARequestComparingTooManyVersionsIsA42219() throws Exception {
+    // At most 3 comparisons (the cluster test's limit): at a transitive level each version is
+    // compared with every earlier one, else with the one before it. One version is always answered.
+    String subject = "too_many_comparisons";
+    List<String> fields = new ArrayList<>();
+    List<String> versions = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      fields.add(field("f" + i, "[\"null\",\"int\"]", "\"default\":null"));
+      versions.add(avro(fields.toArray(new String[0])));
+    }
+    history(subject, AvroSchema.TYPE, versions.toArray(new String[0]));
+    logical(subject, CompatibilityLevel.BACKWARD_TRANSITIVE);
+    assertComparisonsRejected(subject, "1", "5", true);
+    assertComparisonsRejected(subject, "1", "5", false);
+    assertComparisonsRejected(subject, "3", "4", true);
+    assertEquals(2, flags(subject, "2", "3", true).getVersions().size());
+    assertFlag(subject, 5, null);
+    logical(subject, CompatibilityLevel.BACKWARD);
+    assertComparisonsRejected(subject, "1", "5", true);
+    assertEquals(3, flags(subject, "2", "4", true).getVersions().size());
   }
 
   // -------------------------------------------------------------------------------------------
@@ -288,18 +367,34 @@ public abstract class RestApiLogicalProvenanceTest {
   // when rule is null, else incompatible naming rule. Asked of that version alone, as a range
   // across an earlier blocking version has no provenance.
   private void assertFlag(String subject, int version, String rule) throws Exception {
-    SchemaProvenance provenance = restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject, String.valueOf(version),
-        String.valueOf(version), true, false, "LOGICAL");
-    ProvenanceVersion flagged = provenance.getVersions().get(0);
+    ProvenanceVersion flagged = flag(subject, version);
     assertEquals(version, flagged.getVersion().intValue());
     if (rule == null) {
       assertTrue(flagged.getCompatible(), flagged.toString());
+      assertNull(flagged.getMessages(), flagged.toString());
     } else {
       assertFalse(flagged.getCompatible(), flagged.toString());
       assertTrue(flagged.getMessages().toString().contains("errorType:\"" + rule + "\""),
           flagged.toString());
     }
+  }
+
+  private ProvenanceVersion flag(String subject, int version) throws Exception {
+    String v = String.valueOf(version);
+    return flags(subject, v, v, true).getVersions().get(0);
+  }
+
+  private SchemaProvenance flags(String subject, String from, String to, boolean interior)
+      throws Exception {
+    return restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, from, to, interior, false, "LOGICAL");
+  }
+
+  private void assertComparisonsRejected(String subject, String from, String to,
+      boolean interior) {
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> flags(subject, from, to, interior), from + ".." + to);
+    assertEquals(Errors.PROVENANCE_RANGE_TOO_LONG_ERROR_CODE, e.getErrorCode(), from + ".." + to);
   }
 
   // A record R with id and the given fields.
