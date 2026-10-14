@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.net.URL;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAssertionRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.UnretryableException;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -39,6 +40,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HttpJwtRetrieverTest {
@@ -244,6 +246,14 @@ public class HttpJwtRetrieverTest {
     when(mockedCon.getOutputStream()).thenReturn(new ByteArrayOutputStream());
     when(mockedCon.getInputStream()).thenReturn(new ByteArrayInputStream(Utils.utf8(response)));
     return mockedCon;
+  }
+
+  @Test
+  public void testCloseClosesRequestFormatter() throws IOException {
+    ClientAssertionRequestFormatter requestFormatter = mock(ClientAssertionRequestFormatter.class);
+    new HttpJwtRetriever(requestFormatter, null, "https://localhost/token", 100L, 1000L, null,
+        null).close();
+    verify(requestFormatter).close();
   }
 
 }
