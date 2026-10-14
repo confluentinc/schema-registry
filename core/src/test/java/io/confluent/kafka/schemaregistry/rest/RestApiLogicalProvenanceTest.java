@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -38,6 +39,7 @@ import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -202,16 +204,35 @@ public abstract class RestApiLogicalProvenanceTest {
     }
   }
 
+  // --- Compatibility groups ------------------------------------------------------------------
+
   @Test
-  public void testWithACompatibilityGroupARenamePairsByName() throws Exception {
-    // Provenance does not follow compatibility groups, so a group keeps pairing by name.
+  public void testWithACompatibilityGroupARenameIsCompatibleByProvenance() throws Exception {
+    // A group selects the versions compared; provenance, as the endpoint's ids, ignores groups.
     String subject = "avro_rename_group";
     history(subject, AvroSchema.TYPE, avro(field("a", "\"string\"")),
         avro(field("b", "\"string\"", "\"aliases\":[\"a\"]")));
-    ConfigUpdateRequest config = logicalConfig(CompatibilityLevel.BACKWARD);
-    config.setCompatibilityGroup("app.major");
-    restApp.restClient.updateConfig(config, subject);
-    assertFlag(subject, 2, "FIELD_DELETED");
+    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
+    assertFlag(subject, 2, null);
+  }
+
+  @Test
+  public void testAFieldAnotherGroupDroppedIsIncompatibleByProvenance() throws Exception {
+    // v=2, group 2, drops a; v=3, group 1, re-adds it (with z, so it is no repeat of v=1). Only
+    // v=1 is compared, so by name a continues; provenance walks through v=2, where a ends.
+    String subject = "group_interleaved";
+    String readded = avro(field("a", "\"string\""),
+        field("z", "[\"null\",\"int\"]", "\"default\":null"));
+    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.NONE), subject);
+    restApp.restClient.registerSchema(inGroup(avro(field("a", "\"string\"")), "1"), subject, false);
+    restApp.restClient.registerSchema(inGroup(avro(), "2"), subject, false);
+    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
+    assertEquals(List.of(), restApp.restClient.testCompatibility(inGroup(readded, "1"), subject,
+        null, false, true));
+    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.NONE), subject);
+    restApp.restClient.registerSchema(inGroup(readded, "1"), subject, false);
+    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
+    assertFlag(subject, 3, "FIELD_DELETED");
   }
 
   // --- What a flag names ----------------------------------------------------------------------
@@ -326,6 +347,21 @@ public abstract class RestApiLogicalProvenanceTest {
     config.setCompatibilityLevel(level.name);
     config.setCompatibilityPolicy("LOGICAL");
     return config;
+  }
+
+  private static ConfigUpdateRequest groupConfig(CompatibilityLevel level) {
+    ConfigUpdateRequest config = logicalConfig(level);
+    config.setCompatibilityGroup("app.major");
+    return config;
+  }
+
+  // An Avro schema in group major of app.major.
+  private static RegisterSchemaRequest inGroup(String schema, String major) {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schema);
+    request.setSchemaType(AvroSchema.TYPE);
+    request.setMetadata(new Metadata(null, Map.of("app.major", major), null));
+    return request;
   }
 
   private void register(String subject, String type, String schema) throws Exception {
