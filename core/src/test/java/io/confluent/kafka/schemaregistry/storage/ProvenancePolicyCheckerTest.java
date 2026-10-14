@@ -146,7 +146,7 @@ class ProvenancePolicyCheckerTest {
     ParsedSchema candidate = avro("{\"name\":\"c\",\"type\":[\"null\",\"int\"],"
         + "\"default\":null,\"aliases\":[\"a\",\"b\"]}");
     List<String> errors = ProvenancePolicyChecker.check("s", candidate, holders(history, 2),
-        List.of(3, 7), List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID);
+        List.of(3, 7), List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID, 8);
     assertTrue(has(errors, "PROVENANCE_UNAVAILABLE"), errors.toString());
     assertTrue(errors.toString().contains("at version 8"), errors.toString());
   }
@@ -227,7 +227,7 @@ class ProvenancePolicyCheckerTest {
     List<Integer> previous = IntStream.range(0, k).boxed().collect(Collectors.toList());
     List<Integer> numbers = IntStream.rangeClosed(1, k).boxed().collect(Collectors.toList());
     return ProvenancePolicyChecker.check("s", history.get(k), holders(history, k), numbers,
-        previous, level, pairBy);
+        previous, level, pairBy, k + 1);
   }
 
   private static boolean has(List<String> errors, String rule) {

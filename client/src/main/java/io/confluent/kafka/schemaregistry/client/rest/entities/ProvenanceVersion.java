@@ -126,10 +126,12 @@ public class ProvenanceVersion {
 
   /**
    * The errors that registration would report for this version, as a compatibility check reports
-   * them; absent when it is compatible or the request names no {@code compatibilityPolicy}.
+   * them, at most 100: past that, the first 99 and a last one counting the rest. Absent when it is
+   * compatible or the request names no {@code compatibilityPolicy}.
    */
   @io.swagger.v3.oas.annotations.media.Schema(description = "The errors registering this "
-      + "version would report, as a compatibility check reports them")
+      + "version would report, as a compatibility check reports them; at most 100, the last "
+      + "counting any more")
   @JsonProperty("messages")
   public List<String> getMessages() {
     return messages;

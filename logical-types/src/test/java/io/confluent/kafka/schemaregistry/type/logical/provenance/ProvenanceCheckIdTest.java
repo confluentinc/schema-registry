@@ -158,6 +158,7 @@ class ProvenanceCheckIdTest {
   @Test
   void anAmbiguityUnderAKindChangeLeavesTheGroupUnpaired() {
     // c aliases both a and b: an error where pids pair, but no pid pairs under a kind change.
+    // Avro only: Protobuf and JSON never pair two peers with one previous location.
     Field c = new Field("c", Schema.create(Schema.Type.INT), 0, null, false, null, null,
         Map.of(Schema.AVRO_ALIASES, "a,b"));
     ProvenanceReport r = Pids.report(SchemaType.AVRO, Arrays.asList(

@@ -270,7 +270,10 @@ public class Errors {
     return new RestConstraintViolationException(message, UNRESOLVABLE_REFERENCE_ERROR_CODE);
   }
 
-  /** The request does not name exactly one range, by version or by schema id. */
+  /**
+   * The request does not name exactly one range, by version or by schema id, or names a
+   * compatibilityPolicy other than LOGICAL.
+   */
   public static RestConstraintViolationException invalidProvenanceRequestException(String message) {
     return new RestConstraintViolationException(message, INVALID_PROVENANCE_REQUEST_ERROR_CODE);
   }
@@ -285,7 +288,10 @@ public class Errors {
     return new RestConstraintViolationException(message, PROVENANCE_TOO_LARGE_ERROR_CODE);
   }
 
-  /** A request for every version of a range covers more versions than one request may. */
+  /**
+   * A request for every version of a range covers more versions than one request may, or one with
+   * a compatibilityPolicy compares its versions with more earlier ones than one request may.
+   */
   public static RestConstraintViolationException provenanceRangeTooLongException(String message) {
     return new RestConstraintViolationException(message, PROVENANCE_RANGE_TOO_LONG_ERROR_CODE);
   }
