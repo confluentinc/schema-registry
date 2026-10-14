@@ -84,6 +84,12 @@
             <artifactId>kafka-schema-rules</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
+        <!-- Optional in the serializers; provenance.algorithm needs it. -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-logical-types</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client-encryption-tink</artifactId>
