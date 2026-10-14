@@ -879,16 +879,17 @@ public class AvroSchemaUtils {
       return true;
     }
 
-    // getField only sees canonical names. Avro 1.12 keeps aliases on the field,
-    // so a writer name that is an alias still maps to that field's position.
-    private static int indexOf(Schema recordSchema, String name) {
-      Schema.Field recordField = recordSchema.getField(name);
+    // Matches Avro resolution: aliases on the target (writer schema) field are
+    // looked up as names on the record, after the canonical name.
+    private static int indexOf(Schema recordSchema, Schema.Field writerField) {
+      Schema.Field recordField = recordSchema.getField(writerField.name());
       if (recordField != null) {
         return recordField.pos();
       }
-      for (Schema.Field candidate : recordSchema.getFields()) {
-        if (candidate.aliases().contains(name)) {
-          return candidate.pos();
+      for (String alias : writerField.aliases()) {
+        recordField = recordSchema.getField(alias);
+        if (recordField != null) {
+          return recordField.pos();
         }
       }
       return -1;
@@ -900,7 +901,7 @@ public class AvroSchemaUtils {
           List<Schema.Field> writerFields = writerSchema.getFields();
           int[] index = new int[writerFields.size()];
           for (int i = 0; i < index.length; i++) {
-            index[i] = indexOf(recordSchema, writerFields.get(i).name());
+            index[i] = indexOf(recordSchema, writerFields.get(i));
           }
           return index;
         });

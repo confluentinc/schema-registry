@@ -115,9 +115,9 @@ public class NameAwareGenericDataTest {
   public void aliasAtDifferentIndex_followsAlias() throws Exception {
     Schema recordSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
         + "{\"name\":\"a\",\"type\":\"int\"},"
-        + "{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"b_alias\"]}]}");
+        + "{\"name\":\"b\",\"type\":\"int\"}]}");
     Schema writerSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
-        + "{\"name\":\"b_alias\",\"type\":\"int\"},"
+        + "{\"name\":\"b_new\",\"type\":\"int\",\"aliases\":[\"b\"]},"
         + "{\"name\":\"a\",\"type\":\"int\"}]}");
     CountingRecord record = new CountingRecord(recordSchema);
     record.put("a", 1);
@@ -126,7 +126,7 @@ public class NameAwareGenericDataTest {
 
     GenericRecord result = roundTrip(writerSchema, record);
 
-    assertEquals(Integer.valueOf(2), result.get("b_alias"));
+    assertEquals(Integer.valueOf(2), result.get("b_new"));
     assertEquals(Integer.valueOf(1), result.get("a"));
     assertEquals(2, record.indexGets);
     assertEquals(0, record.nameGets);
@@ -203,6 +203,44 @@ public class NameAwareGenericDataTest {
     assertEquals(0, record.namePuts);
     assertEquals(Integer.valueOf(8), record.get(1));
     assertEquals(Integer.valueOf(1), record.get(0));
+  }
+
+  @Test
+  public void recordFieldAliasIsNotFollowed() throws Exception {
+    // Avro applies reader aliases to writer names, not the other way around.
+    Schema recordSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"b_alias\"]}]}");
+    Schema writerSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"b_alias\",\"type\":\"int\"},"
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+    CountingRecord record = new CountingRecord(recordSchema);
+    record.put("a", 1);
+    record.put("b", 2);
+
+    GenericRecord result = roundTrip(writerSchema, record);
+
+    // "a" matches by name; "b_alias" has no match and falls back to position 0.
+    assertEquals(Integer.valueOf(1), result.get("b_alias"));
+    assertEquals(Integer.valueOf(1), result.get("a"));
+  }
+
+  @Test
+  public void canonicalNameWinsOverWriterFieldAlias() throws Exception {
+    Schema recordSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"b\",\"type\":\"int\"}]}");
+    Schema writerSchema = parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]},"
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+    CountingRecord record = new CountingRecord(recordSchema);
+    record.put("a", 1);
+    record.put("b", 2);
+
+    GenericRecord result = roundTrip(writerSchema, record);
+
+    assertEquals(Integer.valueOf(2), result.get("b"));
+    assertEquals(Integer.valueOf(1), result.get("a"));
   }
 
   private static GenericRecord roundTrip(Schema writerSchema, GenericRecord record)
