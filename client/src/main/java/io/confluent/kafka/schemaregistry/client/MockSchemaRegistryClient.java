@@ -850,8 +850,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           if (isPermanent) {
             idToSchemaCache.get(subject).remove(entry.getValue());
           }
-          // A deleted version's schema registered again is a new version, as in the registry.
-          schemaToResponseCache.get(subject).remove(entry.getKey());
+          // A deleted version's schema registered again is a new version, as in the registry: so
+          // is any form a lookup cached that resolves to it.
+          ParsedSchema deletedSchema = entry.getKey();
+          schemaToResponseCache.get(subject).keySet()
+              .removeIf(schema -> schemasEqual(deletedSchema, schema));
           return Integer.valueOf(version);
         }
       }
