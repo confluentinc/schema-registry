@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
@@ -818,7 +819,19 @@ public class AvroSchemaUtils {
   }
 
   static class NameAwareGenericData extends GenericData {
+    // Records whose fields already line up with the writer schema. Positional
+    // access, and the identical-schema path never touches fieldIndexes.
+    private static final Object SAME_INDEX = new Object();
+
     private final GenericData delegate;
+
+    // Identity-keyed so a schema pair is not interned by Schema.equals.
+    // 1000 matches transformedSchemas. These instances are constructed before
+    // DEFAULT_CACHE_CAPACITY is assigned, so the bound is inlined.
+    private final Cache<SchemaPair, int[]> fieldIndexes =
+        CacheBuilder.newBuilder()
+            .maximumSize(1000)
+            .build();
 
     public NameAwareGenericData() {
       this(null);
@@ -828,24 +841,139 @@ public class AvroSchemaUtils {
       this.delegate = delegate;
     }
 
-    // The following methods override methods that use position instead of name
+    // The following methods override methods that use position instead of name.
+    // Name resolution is cached once per schema pair; aligned records skip it.
 
     @Override
-    public void setField(Object record, String name, int position, Object value) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
-        ((GenericRecord) record).put(name, value);
+    protected Object getRecordState(Object record, Schema schema) {
+      if (!(record instanceof GenericRecord)) {
+        return null;
+      }
+      Schema recordSchema = ((GenericRecord) record).getSchema();
+      if (recordSchema == schema) {
+        return SAME_INDEX;
+      }
+      if (schema.getType() != Schema.Type.RECORD
+          || recordSchema.getType() != Schema.Type.RECORD) {
+        return null;
+      }
+      List<Schema.Field> writerFields = schema.getFields();
+      List<Schema.Field> recordFields = recordSchema.getFields();
+      if (fieldsMatchByIndex(writerFields, recordFields)) {
+        return SAME_INDEX;
+      }
+      return fieldIndex(schema, recordSchema);
+    }
+
+    private static boolean fieldsMatchByIndex(
+        List<Schema.Field> writerFields, List<Schema.Field> recordFields) {
+      int writerCount = writerFields.size();
+      if (writerCount > recordFields.size()) {
+        return false;
+      }
+      for (int i = 0; i < writerCount; i++) {
+        if (!writerFields.get(i).name().equals(recordFields.get(i).name())) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Matches Avro resolution: aliases on the target (writer schema) field are
+    // looked up as names on the record, after the canonical name.
+    private static int indexOf(Schema recordSchema, Schema.Field writerField) {
+      Schema.Field recordField = recordSchema.getField(writerField.name());
+      if (recordField != null) {
+        return recordField.pos();
+      }
+      for (String alias : writerField.aliases()) {
+        recordField = recordSchema.getField(alias);
+        if (recordField != null) {
+          return recordField.pos();
+        }
+      }
+      return -1;
+    }
+
+    private int[] fieldIndex(Schema writerSchema, Schema recordSchema) {
+      try {
+        return fieldIndexes.get(new SchemaPair(writerSchema, recordSchema), () -> {
+          List<Schema.Field> writerFields = writerSchema.getFields();
+          int[] index = new int[writerFields.size()];
+          for (int i = 0; i < index.length; i++) {
+            index[i] = indexOf(recordSchema, writerFields.get(i));
+          }
+          return index;
+        });
+      } catch (java.util.concurrent.ExecutionException e) {
+        throw new AvroRuntimeException(e);
+      }
+    }
+
+    // SAME_INDEX keeps the writer position. A cached slot of -1, a null state,
+    // and a non-record all fall through to the 3-arg method.
+    private static int mappedPosition(int position, Object state) {
+      if (state == SAME_INDEX) {
+        return position;
+      }
+      if (state instanceof int[]) {
+        return ((int[]) state)[position];
+      }
+      return -1;
+    }
+
+    @Override
+    protected void setField(
+        Object record, String name, int position, Object value, Object state) {
+      int mapped = mappedPosition(position, state);
+      if (mapped >= 0) {
+        ((IndexedRecord) record).put(mapped, value);
       } else {
-        ((IndexedRecord) record).put(position, value);
+        setField(record, name, position, value);
       }
     }
 
     @Override
-    public Object getField(Object record, String name, int position) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
-        return ((GenericRecord) record).get(name);
-      } else {
-        return ((IndexedRecord) record).get(position);
+    public void setField(Object record, String name, int position, Object value) {
+      if (record instanceof GenericRecord) {
+        GenericRecord genericRecord = (GenericRecord) record;
+        List<Schema.Field> fields = genericRecord.getSchema().getFields();
+        if (position >= 0 && position < fields.size()
+            && name.equals(fields.get(position).name())) {
+          ((IndexedRecord) record).put(position, value);
+          return;
+        }
+        if (genericRecord.hasField(name)) {
+          genericRecord.put(name, value);
+          return;
+        }
       }
+      ((IndexedRecord) record).put(position, value);
+    }
+
+    @Override
+    protected Object getField(Object record, String name, int position, Object state) {
+      int mapped = mappedPosition(position, state);
+      if (mapped >= 0) {
+        return ((IndexedRecord) record).get(mapped);
+      }
+      return getField(record, name, position);
+    }
+
+    @Override
+    public Object getField(Object record, String name, int position) {
+      if (record instanceof GenericRecord) {
+        GenericRecord genericRecord = (GenericRecord) record;
+        List<Schema.Field> fields = genericRecord.getSchema().getFields();
+        if (position >= 0 && position < fields.size()
+            && name.equals(fields.get(position).name())) {
+          return ((IndexedRecord) record).get(position);
+        }
+        if (genericRecord.hasField(name)) {
+          return genericRecord.get(name);
+        }
+      }
+      return ((IndexedRecord) record).get(position);
     }
 
     // The following methods override all methods that rely on logical conversions
@@ -901,6 +1029,33 @@ public class AvroSchemaUtils {
         return this.delegate.resolveUnion(union, datum);
       } else {
         return super.resolveUnion(union, datum);
+      }
+    }
+
+    private static final class SchemaPair {
+      private final Schema writer;
+      private final Schema record;
+
+      private SchemaPair(Schema writer, Schema record) {
+        this.writer = writer;
+        this.record = record;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        if (this == o) {
+          return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+          return false;
+        }
+        SchemaPair other = (SchemaPair) o;
+        return writer == other.writer && record == other.record;
+      }
+
+      @Override
+      public int hashCode() {
+        return System.identityHashCode(writer) + System.identityHashCode(record);
       }
     }
   }
