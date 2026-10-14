@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.Retry;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.UnretryableException;
 import org.apache.kafka.common.utils.Utils;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -93,11 +95,7 @@ public class HttpJwtRetriever implements JwtRetriever {
     UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_VERSION);
   }
 
-  private final String clientId;
-
-  private final String clientSecret;
-
-  private final String scope;
+  private final HttpRequestFormatter requestFormatter;
 
   private final SSLSocketFactory sslSocketFactory;
 
@@ -111,8 +109,6 @@ public class HttpJwtRetriever implements JwtRetriever {
 
   private final Integer loginReadTimeoutMs;
 
-  private final boolean urlencodeHeader;
-
   public HttpJwtRetriever(String clientId,
       String clientSecret,
       String scope,
@@ -123,16 +119,32 @@ public class HttpJwtRetriever implements JwtRetriever {
       Integer loginConnectTimeoutMs,
       Integer loginReadTimeoutMs,
       boolean urlencodeHeader) {
-    this.clientId = Objects.requireNonNull(clientId);
-    this.clientSecret = Objects.requireNonNull(clientSecret);
-    this.scope = scope;
+    this(new BasicAuthRequestFormatter(Objects.requireNonNull(clientId),
+            Objects.requireNonNull(clientSecret), scope, urlencodeHeader),
+        sslSocketFactory, tokenEndpointUrl, loginRetryBackoffMs, loginRetryBackoffMaxMs,
+        loginConnectTimeoutMs, loginReadTimeoutMs);
+  }
+
+  /**
+   * Creates a retriever whose token request headers and body are supplied by
+   * {@code requestFormatter}, e.g. Kafka's {@code ClientAssertionRequestFormatter} for
+   * client assertion (RFC 7523) authentication. If the formatter is {@link Closeable} it is
+   * closed by {@link #close()}.
+   */
+  public HttpJwtRetriever(HttpRequestFormatter requestFormatter,
+      SSLSocketFactory sslSocketFactory,
+      String tokenEndpointUrl,
+      long loginRetryBackoffMs,
+      long loginRetryBackoffMaxMs,
+      Integer loginConnectTimeoutMs,
+      Integer loginReadTimeoutMs) {
+    this.requestFormatter = Objects.requireNonNull(requestFormatter);
     this.sslSocketFactory = sslSocketFactory;
     this.tokenEndpointUrl = Objects.requireNonNull(tokenEndpointUrl);
     this.loginRetryBackoffMs = loginRetryBackoffMs;
     this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
     this.loginConnectTimeoutMs = loginConnectTimeoutMs;
     this.loginReadTimeoutMs = loginReadTimeoutMs;
-    this.urlencodeHeader = urlencodeHeader;
   }
 
   /**
@@ -151,11 +163,9 @@ public class HttpJwtRetriever implements JwtRetriever {
    */
 
   public String retrieve() throws JwtRetrieverException {
-    String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
-    String requestBody = formatRequestBody(scope);
+    Map<String, String> headers = requestFormatter.formatHeaders();
+    String requestBody = requestFormatter.formatBody();
     Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
-    Map<String, String> headers =
-        Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
     String responseBody;
 
@@ -188,6 +198,13 @@ public class HttpJwtRetriever implements JwtRetriever {
       }
     } catch (IOException e) {
       throw new JwtRetrieverException(e);
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (requestFormatter instanceof Closeable) {
+      ((Closeable) requestFormatter).close();
     }
   }
 
@@ -429,4 +446,34 @@ public class HttpJwtRetriever implements JwtRetriever {
     return value;
   }
 
+  /**
+   * Formats a client_credentials request that authenticates with the client secret in an HTTP
+   * Basic <code>Authorization</code> header.
+   */
+  private static class BasicAuthRequestFormatter implements HttpRequestFormatter {
+
+    private final String clientId;
+    private final String clientSecret;
+    private final String scope;
+    private final boolean urlencodeHeader;
+
+    BasicAuthRequestFormatter(String clientId, String clientSecret, String scope,
+        boolean urlencodeHeader) {
+      this.clientId = clientId;
+      this.clientSecret = clientSecret;
+      this.scope = scope;
+      this.urlencodeHeader = urlencodeHeader;
+    }
+
+    @Override
+    public Map<String, String> formatHeaders() {
+      return Collections.singletonMap(AUTHORIZATION_HEADER,
+          formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader));
+    }
+
+    @Override
+    public String formatBody() {
+      return formatRequestBody(scope);
+    }
+  }
 }
