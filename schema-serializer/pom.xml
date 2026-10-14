@@ -32,6 +32,13 @@
             <artifactId>kafka_${kafka.scala.version}</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Reading by provenance compares schemas as logical types; required only then. -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-logical-types</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
