@@ -914,6 +914,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, fromId, toId, includeInterior, includeMultipleMessages, compatibilityPolicy);
+  }
+
+  @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
       String toVersion, boolean includeInterior, boolean includeMultipleMessages)
       throws IOException, RestClientException {
@@ -922,11 +930,27 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String compatibilityPolicy) throws IOException, RestClientException {
+    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromVersion, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
+  }
+
+  @Override
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
       boolean includeInterior, boolean includeMultipleMessages)
       throws IOException, RestClientException {
     return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
         fromId, toVersion, includeInterior, includeMultipleMessages);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromId, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
   }
 
   @Override

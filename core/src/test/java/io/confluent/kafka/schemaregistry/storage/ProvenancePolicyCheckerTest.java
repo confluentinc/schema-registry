@@ -145,8 +145,8 @@ class ProvenancePolicyCheckerTest {
             + "{\"name\":\"k\",\"type\":[\"null\",\"int\"],\"default\":null}"));
     ParsedSchema candidate = avro("{\"name\":\"c\",\"type\":[\"null\",\"int\"],"
         + "\"default\":null,\"aliases\":[\"a\",\"b\"]}");
-    List<String> errors = ProvenancePolicyChecker.check("s", candidate, history, List.of(3, 7),
-        List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID);
+    List<String> errors = ProvenancePolicyChecker.check("s", candidate, holders(history, 2),
+        List.of(3, 7), List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID);
     assertTrue(has(errors, "PROVENANCE_UNAVAILABLE"), errors.toString());
     assertTrue(errors.toString().contains("at version 8"), errors.toString());
   }
@@ -188,6 +188,37 @@ class ProvenancePolicyCheckerTest {
     }
   }
 
+  @Test
+  void aBlockBeforeTheRangeLeavesTheCheckToCheckIds() {
+    // v=1 blocks provenance; the candidate renames a field of v=2. A non-transitive level
+    // computes from v=2 and pairs the rename by id; a transitive one reaches v=1 and pairs by name.
+    String node = "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"next\","
+        + "\"type\":[\"null\",\"N\"],\"default\":null}]}";
+    List<List<ParsedSchema>> histories = Arrays.asList(
+        Arrays.asList(avro("{\"name\":\"a\",\"type\":\"int\"}"),
+            avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"n\",\"type\":" + node + "}"),
+            avro("{\"name\":\"a\",\"type\":\"int\"}"),
+            avro("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}")),
+        Arrays.asList(proto("int32 a = 1;"),
+            proto("int32 a = 1;\n  N n = 2;\n  message N { N next = 1; }"),
+            proto("int32 a = 1;"),
+            proto("int32 b = 1;")));
+    // JSON has no renames: a property's name is its identity.
+    for (List<ParsedSchema> history : histories) {
+      for (CompatibilityLevel level : new CompatibilityLevel[] {CompatibilityLevel.BACKWARD,
+          CompatibilityLevel.FULL}) {
+        assertEquals(List.of(), check(history, 3, level, PairBy.CHECK_ID), history + " " + level);
+      }
+      for (CompatibilityLevel level : new CompatibilityLevel[] {
+          CompatibilityLevel.BACKWARD_TRANSITIVE, CompatibilityLevel.FULL_TRANSITIVE}) {
+        assertEquals(LogicalPolicyChecker.check(history.get(3), holders(history, 3), level),
+            check(history, 3, level, PairBy.CHECK_ID), history + " " + level);
+        assertTrue(has(check(history, 3, level, PairBy.CHECK_ID), "FIELD_DELETED"),
+            history + " " + level);
+      }
+    }
+  }
+
   // -------------------------------------------------------------------------------------------
 
   // Version k registered after versions 0..k-1, numbered from 1, every one compared.
@@ -195,7 +226,7 @@ class ProvenancePolicyCheckerTest {
       PairBy pairBy) {
     List<Integer> previous = IntStream.range(0, k).boxed().collect(Collectors.toList());
     List<Integer> numbers = IntStream.rangeClosed(1, k).boxed().collect(Collectors.toList());
-    return ProvenancePolicyChecker.check("s", history.get(k), history.subList(0, k), numbers,
+    return ProvenancePolicyChecker.check("s", history.get(k), holders(history, k), numbers,
         previous, level, pairBy);
   }
 

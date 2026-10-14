@@ -276,6 +276,17 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   /**
+   * As {@link #getProvenanceById}; with {@code compatibilityPolicy} {@code "LOGICAL"}, each version
+   * also says whether registering it after the versions before it is accepted under that policy
+   * once it pairs columns by provenance, with the errors it would report.
+   */
+  default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * As {@link #getProvenanceById}, between two versions, each a version number or {@code
    * "latest"}.
    */
@@ -286,12 +297,32 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   /**
+   * As {@link #getProvenanceByVersion}, with {@code compatibilityPolicy} as for
+   * {@link #getProvenanceById(String, int, int, boolean, boolean, String)}.
+   */
+  default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String compatibilityPolicy) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * As {@link #getProvenanceById}, from the version carrying schema id {@code fromId} to version
    * {@code toVersion}: the form a deserializer uses when its reader is pinned to a version, as one
    * schema id may sit under several versions.
    */
   default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
       boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * As {@link #getProvenanceToVersion}, with {@code compatibilityPolicy} as for
+   * {@link #getProvenanceById(String, int, int, boolean, boolean, String)}.
+   */
+  default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

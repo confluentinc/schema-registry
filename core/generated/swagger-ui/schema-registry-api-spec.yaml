@@ -3058,7 +3058,9 @@ paths:
         \ each end of the range either by version (fromVersion, toVersion) or by schema\
         \ id (fromId, toId), in any mix, and in either order. Soft-deleted versions\
         \ are always included, and the response names the subject as the registry\
-        \ normalizes it."
+        \ normalizes it. With compatibilityPolicy=LOGICAL, each version also says\
+        \ whether registering it after the versions before it is accepted under LOGICAL\
+        \ once LOGICAL pairs columns by provenance, with the errors it would report."
       operationId: getProvenance
       parameters:
       - name: subject
@@ -3103,6 +3105,14 @@ paths:
         schema:
           type: boolean
           default: false
+      - name: compatibilityPolicy
+        in: query
+        description: "LOGICAL to say, for each version returned, whether registering\
+          \ it after the versions before it is accepted under that policy with columns\
+          \ paired by provenance, as registration will pair them, and the errors it\
+          \ would report"
+        schema:
+          type: string
       responses:
         "200":
           description: The provenance.
@@ -4084,6 +4094,19 @@ components:
           description: "The version's fields, in path order"
           items:
             $ref: "#/components/schemas/ProvenanceField"
+        compatible:
+          type: boolean
+          description: "Whether registering this version after the versions before\
+            \ it is accepted under compatibilityPolicy=LOGICAL, columns paired by\
+            \ provenance; present only when the request names compatibilityPolicy"
+        messages:
+          type: array
+          description: "The errors registering this version would report, as a compatibility\
+            \ check reports them"
+          items:
+            type: string
+            description: "The errors registering this version would report, as a compatibility\
+              \ check reports them"
       description: One version's column provenance
     SchemaProvenance:
       type: object

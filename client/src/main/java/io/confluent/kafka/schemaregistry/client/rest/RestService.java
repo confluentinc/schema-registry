@@ -1610,8 +1610,22 @@ public class RestService implements Closeable, Configurable {
                                                  boolean includeInterior,
                                                  boolean includeMultipleMessages)
       throws IOException, RestClientException {
+    return getProvenanceByVersion(requestProperties, subject, fromVersion, toVersion,
+        includeInterior, includeMultipleMessages, null);
+  }
+
+  /**
+   * As {@link #getProvenanceByVersion(Map, String, String, String, boolean, boolean)}; with
+   * {@code compatibilityPolicy} {@code "LOGICAL"}, each version also says whether registering it
+   * after the versions before it is accepted under that policy once it pairs columns by
+   * provenance, with the errors it would report.
+   */
+  public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
+      String subject, String fromVersion, String toVersion, boolean includeInterior,
+      boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromVersion", fromVersion, "toVersion",
-        toVersion, includeInterior, includeMultipleMessages);
+        toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
   }
 
   /**
@@ -1625,8 +1639,21 @@ public class RestService implements Closeable, Configurable {
                                             boolean includeInterior,
                                             boolean includeMultipleMessages)
       throws IOException, RestClientException {
+    return getProvenanceById(requestProperties, subject, fromId, toId, includeInterior,
+        includeMultipleMessages, null);
+  }
+
+  /**
+   * As {@link #getProvenanceById(Map, String, int, int, boolean, boolean)}, with
+   * {@code compatibilityPolicy} as for
+   * {@link #getProvenanceByVersion(Map, String, String, String, boolean, boolean, String)}.
+   */
+  public SchemaProvenance getProvenanceById(Map<String, String> requestProperties,
+      String subject, int fromId, int toId, boolean includeInterior,
+      boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromId", fromId, "toId", toId,
-        includeInterior, includeMultipleMessages);
+        includeInterior, includeMultipleMessages, compatibilityPolicy);
   }
 
   /**
@@ -1641,18 +1668,35 @@ public class RestService implements Closeable, Configurable {
                                                  boolean includeInterior,
                                                  boolean includeMultipleMessages)
       throws IOException, RestClientException {
+    return getProvenanceToVersion(requestProperties, subject, fromId, toVersion,
+        includeInterior, includeMultipleMessages, null);
+  }
+
+  /**
+   * As {@link #getProvenanceToVersion(Map, String, int, int, boolean, boolean)}, with
+   * {@code compatibilityPolicy} as for
+   * {@link #getProvenanceByVersion(Map, String, String, String, boolean, boolean, String)}.
+   */
+  public SchemaProvenance getProvenanceToVersion(Map<String, String> requestProperties,
+      String subject, int fromId, int toVersion, boolean includeInterior,
+      boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
     return getProvenance(requestProperties, subject, "fromId", fromId, "toVersion", toVersion,
-        includeInterior, includeMultipleMessages);
+        includeInterior, includeMultipleMessages, compatibilityPolicy);
   }
 
   private SchemaProvenance getProvenance(Map<String, String> requestProperties, String subject,
       String fromParam, Object from, String toParam, Object to, boolean includeInterior,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
     builder.queryParam(fromParam, String.valueOf(from));
     builder.queryParam(toParam, String.valueOf(to));
     builder.queryParam("includeInterior", includeInterior);
     builder.queryParam("includeMultipleMessages", includeMultipleMessages);
+    if (compatibilityPolicy != null) {
+      builder.queryParam("compatibilityPolicy", compatibilityPolicy);
+    }
     String path = builder.build(subject).toString();
     return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
