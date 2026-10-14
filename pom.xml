@@ -55,6 +55,7 @@
         <module>json-serializer</module>
         <module>kafka-connect-schema-backup-api</module>
         <module>kafka-connect-schema-backup-core</module>
+        <module>kafka-connect-backup-aware-byte-array-converter</module>
         <module>schema-converter</module>
         <module>avro-data</module>
         <module>avro-converter</module>
