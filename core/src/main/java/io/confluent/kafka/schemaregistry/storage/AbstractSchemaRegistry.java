@@ -1328,8 +1328,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<Integer> passedVersions = new ArrayList<>(passed.keySet());
       Collections.sort(passedVersions);
       // A non-transitive level compares the latest version passed only.
-      int oldest = CompatibilityLevel.BACKWARD_TRANSITIVE == level
-          || CompatibilityLevel.FULL_TRANSITIVE == level
+      int oldest = LogicalPolicyChecker.isTransitive(level)
           ? passedVersions.get(0) : passedVersions.get(passedVersions.size() - 1);
       List<Integer> numbers = new ArrayList<>();
       Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
