@@ -19,6 +19,8 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
@@ -38,13 +40,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@code LOGICAL}'s checks over the subject's provenance: the second implementation, beside
- * {@link LogicalPolicyChecker}, until it replaces it. Not yet called by registration.
+ * {@code LOGICAL}'s checks over the subject's provenance, which registration and the compatibility
+ * checks use for a subject without a compatibility group; {@link LogicalPolicyChecker} remains for
+ * one with a group, and as the fallback below.
  *
  * <p>The rules, the logical types compared and the findings are {@link LogicalPolicyChecker}'s;
- * what differs is the pairing and what it needs. Provenance is computed over the whole history, the
- * candidate last. A candidate that blocks provenance — one through which no range can be computed
- * — is rejected. A history already blocked by an earlier version, which only a version registered
+ * what differs is the pairing and what it needs. Each version is matched against its predecessor
+ * alone, so provenance is computed only over the versions from the oldest one compared to the
+ * last, the candidate after them: they pair as they would over the whole history, and none before
+ * them is parsed. A candidate that blocks provenance — one through which no range can be computed
+ * — is rejected. A range already blocked by an earlier version, which only a version registered
  * before the subject was checked this way or by IMPORT can be, is checked by
  * {@link LogicalPolicyChecker} instead, as before, with a warning: the name-paired check converts
  * only the versions it compares, skips one it cannot convert, and needs no provenance.
@@ -81,7 +86,8 @@ final class ProvenancePolicyChecker {
    *
    * @param subject the subject, for the warning when an earlier version blocks provenance
    * @param newSchema the schema being registered
-   * @param history every version of the subject, soft-deleted ones included, in version order
+   * @param history the subject's versions, soft-deleted ones included, in version order: every one
+   *     from the oldest compared to the latest, and any before them, which are not parsed
    * @param versionNumbers each version's number in the registry, in the order of {@code history};
    *     the candidate is named as the number after the last
    * @param previousVersions the positions in {@code history} the level compares against,
@@ -89,9 +95,9 @@ final class ProvenancePolicyChecker {
    * @param level the configured compatibility level, or {@code null} (treated as NONE)
    * @param pairBy how members are paired
    */
-  static List<String> check(String subject, ParsedSchema newSchema, List<ParsedSchema> history,
-      List<Integer> versionNumbers, List<Integer> previousVersions, CompatibilityLevel level,
-      PairBy pairBy) {
+  static List<String> check(String subject, ParsedSchema newSchema,
+      List<? extends ParsedSchemaHolder> history, List<Integer> versionNumbers,
+      List<Integer> previousVersions, CompatibilityLevel level, PairBy pairBy) {
     List<String> errors = new ArrayList<>();
     LogicalType newLogical;
     try {
@@ -102,23 +108,35 @@ final class ProvenancePolicyChecker {
     }
     errors.addAll(LogicalPolicyChecker.describeValidity(newLogical));
 
-    List<Integer> toCompare = selectForComparison(previousVersions, level);
-    if (toCompare.isEmpty()) {
+    List<Integer> selected = selectForComparison(previousVersions, level);
+    if (selected.isEmpty()) {
       return errors;
     }
-    int candidate = history.size();
-    List<ParsedSchema> versions = new ArrayList<>(history);
-    versions.add(newSchema);
-    List<Integer> numbers = new ArrayList<>(versionNumbers);
-    numbers.add(versionNumbers.isEmpty() ? 1 : versionNumbers.get(candidate - 1) + 1);
+    // The range: from the oldest version compared to the last, positions taken from its start.
+    int from = selected.get(0);
+    List<ParsedSchemaHolder> range = new ArrayList<>(history.subList(from, history.size()));
+    List<Integer> rangeNumbers = new ArrayList<>(versionNumbers.subList(from, history.size()));
+    List<Integer> toCompare = new ArrayList<>(selected.size());
+    selected.forEach(version -> toCompare.add(version - from));
+    int candidate = range.size();
+    List<ParsedSchemaHolder> versions = new ArrayList<>(range);
+    versions.add(new SimpleParsedSchemaHolder(newSchema));
+    List<Integer> numbers = new ArrayList<>(rangeNumbers);
+    numbers.add(rangeNumbers.get(candidate - 1) + 1);
     Provenance provenance;
     try {
       provenance = new Provenance(versions, numbers, newLogical, toCompare);
     } catch (RuntimeException e) {
+      if (isStoreFailure(e)) {
+        throw e;
+      }
       try {
-        // Computed again without the candidate, only on failure: is the history blocked already?
-        new Provenance(history, versionNumbers, null, List.of());
+        // Computed again without the candidate, only on failure: is the range blocked already?
+        new Provenance(range, rangeNumbers, null, List.of());
       } catch (RuntimeException earlier) {
+        if (isStoreFailure(earlier)) {
+          throw earlier;
+        }
         log.warn("An earlier version of subject {} blocks schema provenance ({}), so LOGICAL "
             + "pairs it by name", subject, earlier.getMessage());
         return LogicalPolicyChecker.check(newSchema, holders(history, previousVersions), level);
@@ -140,11 +158,21 @@ final class ProvenancePolicyChecker {
     return errors;
   }
 
-  private static List<ParsedSchemaHolder> holders(List<ParsedSchema> history,
+  /**
+   * A stored version that could not be read, as a lazy holder reports it: a failure of the
+   * registry, not of the version, unlike a schema that no longer parses.
+   */
+  private static boolean isStoreFailure(RuntimeException e) {
+    return e instanceof IllegalStateException
+        && e.getCause() instanceof SchemaRegistryException
+        && !(e.getCause() instanceof InvalidSchemaException);
+  }
+
+  private static List<ParsedSchemaHolder> holders(List<? extends ParsedSchemaHolder> history,
       List<Integer> previousVersions) {
     List<ParsedSchemaHolder> holders = new ArrayList<>(previousVersions.size());
     for (int version : previousVersions) {
-      holders.add(new SimpleParsedSchemaHolder(history.get(version)));
+      holders.add(history.get(version));
     }
     return holders;
   }
@@ -183,21 +211,25 @@ final class ProvenancePolicyChecker {
     private final Map<Integer, ProvenanceReport.Version> reported = new HashMap<>();
 
     // The last version's logical type is lastLogical when given, as the candidate's is.
-    Provenance(List<ParsedSchema> versions, List<Integer> numbers, LogicalType lastLogical,
+    Provenance(List<ParsedSchemaHolder> versions, List<Integer> numbers, LogicalType lastLogical,
         List<Integer> toCompare) {
       List<SchemaType> schemaTypes = new ArrayList<>();
       List<LogicalType> computed = new ArrayList<>();
       for (int i = 0; i < versions.size(); i++) {
-        ParsedSchema schema = versions.get(i);
+        ParsedSchema schema;
         LogicalType logical;
         LogicalType forProvenance;
         try {
+          schema = versions.get(i).schema();
           logical = lastLogical != null && i == versions.size() - 1 ? lastLogical
               : LogicalPolicyChecker.toPolicyLogicalType(schema);
           // Protobuf wrapped, as a file of several messages is checked.
           forProvenance = schema instanceof ProtobufSchema
               ? ProvenanceHistory.logicalTypeOf(schema, true) : logical;
         } catch (RuntimeException e) {
+          if (isStoreFailure(e)) {
+            throw e;
+          }
           // As the endpoint names a version with no logical form.
           throw new IllegalArgumentException("Version " + numbers.get(i) + ": " + e.getMessage(),
               e);

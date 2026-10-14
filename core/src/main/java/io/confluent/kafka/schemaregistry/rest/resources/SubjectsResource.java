@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHisto
 import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -340,7 +341,9 @@ public class SubjectsResource {
           + "response, so compare them only within one. Address each end of the range either by "
           + "version (fromVersion, toVersion) or by schema id (fromId, toId), in any mix, and in "
           + "either order. Soft-deleted versions are always included, and the response names the "
-          + "subject as the registry normalizes it.",
+          + "subject as the registry normalizes it. With compatibilityPolicy=LOGICAL, each version "
+          + "also says whether registering it after the versions before it is accepted under "
+          + "LOGICAL once LOGICAL pairs columns by provenance, with the errors it would report.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -388,12 +391,21 @@ public class SubjectsResource {
       @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
           + "top-level messages; ignored for other formats")
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
-      boolean includeMultipleMessages) {
+      boolean includeMultipleMessages,
+      @Parameter(description = "LOGICAL to say, for each version returned, whether registering "
+          + "it after the versions before it is accepted under that policy with columns paired "
+          + "by provenance, as registration will pair them, and the errors it would report")
+      @QueryParam("compatibilityPolicy") String compatibilityPolicy) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     if ((fromVersion == null) == (fromId == null) || (toVersion == null) == (toId == null)) {
       throw Errors.invalidProvenanceRequestException("Name each end of the range once: by "
           + "version (fromVersion, toVersion) or by schema id (fromId, toId).");
+    }
+    if (compatibilityPolicy != null
+        && CompatibilityPolicy.forName(compatibilityPolicy) != CompatibilityPolicy.LOGICAL) {
+      throw Errors.invalidProvenanceRequestException(
+          "compatibilityPolicy may only be LOGICAL, not " + compatibilityPolicy + ".");
     }
 
     String errorMessage = "Error while computing provenance for subject " + subject;
@@ -404,7 +416,9 @@ public class SubjectsResource {
           : versionOfId(fromId, subject, entries);
       int to = toVersion != null ? versionNamed(toVersion, entries)
           : versionOfId(toId, subject, entries);
-      return provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
+      SchemaProvenance provenance =
+          provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
+      return compatibilityPolicy == null ? provenance : withCompatibility(subject, provenance);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -494,6 +508,25 @@ public class SubjectsResource {
       throw Errors.subjectNotFoundException(subject);
     }
     return history;
+  }
+
+  /**
+   * {@code provenance}, possibly a cached one and so left unchanged, with each version's verdict
+   * under LOGICAL by provenance.
+   */
+  private SchemaProvenance withCompatibility(String subject, SchemaProvenance provenance)
+      throws SchemaRegistryException {
+    List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
+    for (ProvenanceVersion version : provenance.getVersions()) {
+      ProvenanceVersion flagged = new ProvenanceVersion(version.getVersion(), version.getId(),
+          version.getKind(), version.getFields());
+      List<String> messages =
+          schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion());
+      flagged.setCompatible(messages.isEmpty());
+      flagged.setMessages(messages);
+      versions.add(flagged);
+    }
+    return new SchemaProvenance(provenance.getSubject(), versions);
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,

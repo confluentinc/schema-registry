@@ -38,6 +38,8 @@ public class ProvenanceVersion {
   private Integer id;
   private String kind;
   private List<ProvenanceField> fields;
+  private Boolean compatible;
+  private List<String> messages;
 
   @JsonCreator
   public ProvenanceVersion(@JsonProperty("version") Integer version,
@@ -104,6 +106,40 @@ public class ProvenanceVersion {
     this.fields = fields;
   }
 
+  /**
+   * Whether registering this version after the versions before it is accepted under
+   * compatibilityPolicy=LOGICAL once LOGICAL pairs columns by provenance; present only when the
+   * request names {@code compatibilityPolicy}.
+   */
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether registering this version "
+      + "after the versions before it is accepted under compatibilityPolicy=LOGICAL, columns "
+      + "paired by provenance; present only when the request names compatibilityPolicy")
+  @JsonProperty("compatible")
+  public Boolean getCompatible() {
+    return compatible;
+  }
+
+  @JsonProperty("compatible")
+  public void setCompatible(Boolean compatible) {
+    this.compatible = compatible;
+  }
+
+  /**
+   * The errors that registration would report for this version, as a compatibility check reports
+   * them; absent when it is compatible or the request names no {@code compatibilityPolicy}.
+   */
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The errors registering this "
+      + "version would report, as a compatibility check reports them")
+  @JsonProperty("messages")
+  public List<String> getMessages() {
+    return messages;
+  }
+
+  @JsonProperty("messages")
+  public void setMessages(List<String> messages) {
+    this.messages = messages;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -116,17 +152,20 @@ public class ProvenanceVersion {
     return Objects.equals(version, that.version)
         && Objects.equals(id, that.id)
         && Objects.equals(kind, that.kind)
-        && Objects.equals(fields, that.fields);
+        && Objects.equals(fields, that.fields)
+        && Objects.equals(compatible, that.compatible)
+        && Objects.equals(messages, that.messages);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(version, id, kind, fields);
+    return Objects.hash(version, id, kind, fields, compatible, messages);
   }
 
   @Override
   public String toString() {
     return "{version=" + version + ",id=" + id + ",kind=" + kind + ",fields=" + fields
+        + (compatible != null ? ",compatible=" + compatible + ",messages=" + messages : "")
         + "}";
   }
 }
