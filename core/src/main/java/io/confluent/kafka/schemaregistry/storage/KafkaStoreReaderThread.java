@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
 import io.confluent.kafka.schemaregistry.utils.ShutdownableThread;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -91,14 +92,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   static final long INITIAL_POLL_RETRY_BACKOFF_MS = 100L;
   static final long MAX_POLL_RETRY_BACKOFF_MS = 30_000L;
   static final long POLL_FAILURE_LOG_INTERVAL_MS = 60_000L;
+  // While recovering from a failure, poll with this timeout instead of blocking: on an idle
+  // topic a long poll never returns, so the failure streak would otherwise never clear.
+  static final long RECOVERY_POLL_TIMEOUT_MS = 1_000L;
   private final Time time;
   private final long initialPollRetryBackoffMs;
   private final long maxPollRetryBackoffMs;
   private final long unhealthyAfterPollFailureMs;
   private volatile long consecutivePollFailures = 0L;
-  // Time the current failure streak began, NOT_FAILING if the last poll succeeded. Kept in a
-  // single volatile so metric readers never see a half-updated (count, timestamp) pair. The
-  // sentinel is -1, not 0, because 0 is a valid reading of an injected Time.
+  // Start of the current failure streak on the monotonic clock (Time.hiResClockMs),
+  // NOT_FAILING if the last poll succeeded. Held in one volatile and read once into a local, so
+  // metric readers never combine it with a different value of itself. The sentinel is -1, not
+  // 0, because 0 is a valid reading of an injected Time.
   private static final long NOT_FAILING = -1L;
   private volatile long pollFailingSinceMs = NOT_FAILING;
   private long lastPollFailureLogMs = 0L;
@@ -377,8 +382,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
    */
   private ConsumerRecords<byte[], byte[]> pollRecords() {
     ConsumerRecords<byte[], byte[]> records;
+    boolean recovering = consecutivePollFailures > 0;
     try {
-      records = consumer.poll(Long.MAX_VALUE);
+      records = recovering
+          ? consumer.poll(Duration.ofMillis(RECOVERY_POLL_TIMEOUT_MS))
+          : consumer.poll(Long.MAX_VALUE);
     } catch (WakeupException we) {
       // do nothing because the thread is closing -- see shutdown(). Must stay ahead of
       // KafkaException, which WakeupException extends.
@@ -404,7 +412,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       throw new RuntimeException(e);
     }
     onPollSuccess();
-    return records;
+    // A short recovery poll can return empty. That clears the failure streak but is not a batch.
+    return recovering && records.isEmpty() ? null : records;
   }
 
   private void onPollSuccess() {
@@ -417,7 +426,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   }
 
   private void onPollFailure(KafkaException e) {
-    long now = time.milliseconds();
+    long now = time.hiResClockMs();
     if (pollFailingSinceMs == NOT_FAILING) {
       pollFailingSinceMs = now;
     }
@@ -462,7 +471,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
    */
   public long millisInPollFailure() {
     long since = pollFailingSinceMs;
-    return since == NOT_FAILING ? 0L : Math.max(0L, time.milliseconds() - since);
+    return since == NOT_FAILING ? 0L : Math.max(0L, time.hiResClockMs() - since);
   }
 
   /**

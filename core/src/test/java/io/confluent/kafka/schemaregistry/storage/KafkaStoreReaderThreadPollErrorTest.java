@@ -21,7 +21,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -31,8 +33,10 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -222,6 +226,47 @@ public class KafkaStoreReaderThreadPollErrorTest {
     assertEquals(0L, reader.millisInPollFailure());
     assertTrue(reader.isReaderHealthy());
     assertTrue(reader.isStoreTrustworthy());
+  }
+
+  @Test
+  public void recoversOnIdleTopicWithoutAnyRecordArriving() throws Exception {
+    // Like a real consumer on a quiet topic: after the failures, a long poll blocks until
+    // woken and never returns. Only a short poll can show that the failures have cleared.
+    AtomicInteger remainingFailures = new AtomicInteger(3);
+    CountDownLatch woken = new CountDownLatch(1);
+    MockConsumer<byte[], byte[]> idle = new MockConsumer<byte[], byte[]>(
+        OffsetResetStrategy.EARLIEST) {
+      @Override
+      public synchronized ConsumerRecords<byte[], byte[]> poll(Duration timeout) {
+        if (remainingFailures.getAndDecrement() > 0) {
+          throw new SaslAuthenticationException("Authentication failed");
+        }
+        if (timeout.toMillis() > 60_000L) {
+          try {
+            woken.await();
+          } catch (InterruptedException e) {
+            throw new InterruptException(e);
+          }
+          throw new WakeupException();
+        }
+        return super.poll(timeout);
+      }
+
+      @Override
+      public void wakeup() {
+        woken.countDown();
+        super.wakeup();
+      }
+    };
+    idle.assign(Collections.singletonList(TP));
+    idle.updateBeginningOffsets(Collections.singletonMap(TP, 0L));
+    reader = newReader(idle, new StringMessageHandler(), new MockTime(), 0L);
+
+    reader.start();
+
+    awaitTrue(() -> reader.isStoreTrustworthy());
+    assertEquals(0L, reader.millisInPollFailure());
+    assertTrue(reader.isReaderAlive());
   }
 
   @Test

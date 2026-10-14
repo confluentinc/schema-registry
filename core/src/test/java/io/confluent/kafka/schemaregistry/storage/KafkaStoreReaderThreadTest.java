@@ -115,7 +115,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
           TestUtils.getRandomCanonicalAvroString(1).get(0), "subject-dead-reader");
       fail("Writes must be rejected when the reader is dead");
     } catch (RestClientException e) {
-      // expected
+      assertEquals(50001, e.getErrorCode());
     }
     realConsumer.close();
   }
@@ -166,7 +166,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
           TestUtils.getRandomCanonicalAvroString(1).get(0), "subject-failing-poll");
       fail("Writes must be rejected while polls are failing");
     } catch (RestClientException e) {
-      // expected
+      assertEquals(50001, e.getErrorCode());
     }
     realConsumer.close();
   }
