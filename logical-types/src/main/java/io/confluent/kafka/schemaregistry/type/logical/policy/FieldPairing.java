@@ -21,9 +21,11 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecke
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * How a comparison pairs the writer's struct members with the reader's: the members compared with
@@ -109,8 +111,13 @@ public final class FieldPairing {
         throw new IllegalStateException("Two members with one id under " + originalPath);
       }
     }
+    Set<Integer> updateSeen = new HashSet<>();
     for (int i = 0; i < partners.length; i++) {
-      partners[i] = byId.getOrDefault(idAt(updateIds, updatePath.child(i)), -1);
+      int id = idAt(updateIds, updatePath.child(i));
+      if (!updateSeen.add(id)) {
+        throw new IllegalStateException("Two members with one id under " + updatePath);
+      }
+      partners[i] = byId.getOrDefault(id, -1);
     }
     return partners;
   }

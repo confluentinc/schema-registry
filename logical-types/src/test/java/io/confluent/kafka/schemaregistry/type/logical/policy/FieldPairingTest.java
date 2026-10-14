@@ -196,6 +196,21 @@ class FieldPairingTest {
         .isInstanceOf(IllegalStateException.class).hasMessageContaining("No id");
   }
 
+  @Test
+  void twoMembersOfOneStructWithOneIdAreAnInconsistencyOnEitherSide() {
+    History h = history(
+        avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}"),
+        avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}"));
+    Map<List<Integer>, Integer> distinct = Map.of(List.of(0), 1, List.of(1), 2);
+    Map<List<Integer>, Integer> shared = Map.of(List.of(0), 1, List.of(1), 1);
+    for (FieldPairing pairing : Arrays.asList(FieldPairing.byIds(shared, distinct),
+        FieldPairing.byIds(distinct, shared))) {
+      assertThatThrownBy(() -> LogicalTypeChecker.compare(Mode.ICEBERG_V2, h.versions.get(0),
+          h.versions.get(1), pairing))
+          .isInstanceOf(IllegalStateException.class).hasMessageContaining("Two members");
+    }
+  }
+
   // -------------------------------------------------------------------------------------------
 
   /** A subject's versions as logical types, and their provenance report. */
