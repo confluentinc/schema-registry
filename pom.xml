@@ -109,7 +109,7 @@
         <jsonata-version>2.6.4</jsonata-version>
         <jackson3.version>3.2.1</jackson3.version>
         <json-schema.version>1.14.6</json-schema.version>
-        <json-skema.version>0.30.0</json-skema.version>
+        <json-skema.version>0.32.0</json-skema.version>
         <kcache.version>5.2.3</kcache.version>
         <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
         <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
