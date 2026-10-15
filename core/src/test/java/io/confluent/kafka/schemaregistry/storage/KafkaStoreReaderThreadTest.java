@@ -68,12 +68,12 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   @Test
   public void testPollFailureIsRetried() throws Exception {
     Properties props = new Properties();
-    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, brokerList);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, KAFKASTORE_TOPIC);
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     Store<String, String> localStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     KafkaStoreReaderThread<String, String> readerThread = new KafkaStoreReaderThread<>(
-        bootstrapServers, KAFKASTORE_TOPIC, "test-group", new StringMessageHandler(),
+        brokerList, KAFKASTORE_TOPIC, "test-group", new StringMessageHandler(),
         StringSerializer.INSTANCE, localStore, null, "noop", new AtomicBoolean(true), config);
 
     TopicPartition tp = new TopicPartition(KAFKASTORE_TOPIC, 0);
