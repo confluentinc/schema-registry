@@ -35,6 +35,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -82,6 +83,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // messages with this key
   private final K noopKey;
   private final AtomicBoolean initialized;
+  private int pollFailures = 0;
 
   private Properties consumerProps = new Properties();
 
@@ -194,8 +196,31 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void doWork() {
+    ConsumerRecords<byte[], byte[]> records;
     try {
-      ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+      records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+      pollFailures = 0;
+    } catch (WakeupException we) {
+      // do nothing because the thread is closing -- see shutdown()
+      return;
+    } catch (RecordTooLargeException rtle) {
+      throw new IllegalStateException(
+          "Consumer threw RecordTooLargeException. A schema has been written that "
+          + "exceeds the default maximum fetch size.", rtle);
+    } catch (InterruptException ie) {
+      throw ie;
+    } catch (KafkaException ke) {
+      // e.g. AuthenticationException during a broker-side auth outage; retry instead of dying
+      long backoffMs = Math.min(30_000L, 100L << Math.min(pollFailures++, 9));
+      log.error("KafkaStoreReader poll failed; retrying in {} ms", backoffMs, ke);
+      try {
+        pause(backoffMs, TimeUnit.MILLISECONDS);  // returns early on shutdown
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return;
+    }
+    try {
       storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
@@ -369,6 +394,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
           + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
     }
+  }
+
+  /* for testing purposes */
+  void setConsumer(Consumer<byte[], byte[]> consumer) {
+    this.consumer.close();
+    this.consumer = consumer;
   }
 
   /* for testing purposes */
