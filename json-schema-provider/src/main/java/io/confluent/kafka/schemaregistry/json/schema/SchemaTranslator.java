@@ -73,13 +73,17 @@ import com.github.erosb.jsonsKema.Regexp;
 import com.github.erosb.jsonsKema.RequiredSchema;
 import com.github.erosb.jsonsKema.Schema;
 import com.github.erosb.jsonsKema.SchemaVisitor;
+import com.github.erosb.jsonsKema.SourceLocation;
 import com.github.erosb.jsonsKema.TrueSchema;
 import com.github.erosb.jsonsKema.TypeSchema;
 import com.github.erosb.jsonsKema.UnevaluatedItemsSchema;
 import com.github.erosb.jsonsKema.UnevaluatedPropertiesSchema;
 import com.github.erosb.jsonsKema.UniqueItemsSchema;
+import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.WriteOnlySchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -98,6 +102,7 @@ import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.SchemaLocation;
 import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.loader.OrgJsonUtil;
 import org.json.JSONArray;
@@ -118,8 +123,20 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   // object-identity cycle in the schema graph (e.g. a $ref/$dynamicRef to the recursive 2020-12
   // meta-schema) is broken instead of recursing forever and overflowing the stack.
   private final Set<Schema> descending;
+  private final URI rootDocument;
+  private final String rootId;
 
   public SchemaTranslator() {
+    this(URI.create(JsonSchema.DEFAULT_BASE_URI), null);
+  }
+
+  /**
+   * @param rootDocument the document source json-sKema assigned to the root document
+   * @param rootId the root {@code $id}, which json-sKema consumes into the base URI
+   */
+  public SchemaTranslator(URI rootDocument, String rootId) {
+    this.rootDocument = rootDocument;
+    this.rootId = rootId;
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
     this.refReferred = new IdentityHashMap<>();
@@ -240,8 +257,23 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
         ctx = new SchemaContext(ctx.source(), subBuilder);
       }
     }
+    if (schema.getDefault() != null
+        && ctx.schemaBuilder() instanceof org.everit.json.schema.ReferenceSchema.Builder) {
+      ctx = new SchemaContext(ctx.source(), referenceWithDefault(ctx, schema));
+    }
     if (schema.getId() != null) {
       ctx.schemaBuilder().id(schema.getId().getValue());
+    }
+    SourceLocation location = schema.getLocation();
+    if (location != UnknownSource.INSTANCE) {
+      boolean inRootDocument = rootDocument.equals(location.getDocumentSource());
+      ctx.schemaBuilder().schemaLocation(new SchemaLocation(
+          inRootDocument ? null : toEveritDocumentUri(location.getDocumentSource()),
+          location.getPointer().getSegments()));
+      if (inRootDocument && rootId != null && schema.getId() == null
+          && location.getPointer().getSegments().isEmpty()) {
+        ctx.schemaBuilder().id(rootId);
+      }
     }
     if (schema.getTitle() != null) {
       ctx.schemaBuilder().title(schema.getTitle().getValue());
@@ -250,7 +282,9 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       ctx.schemaBuilder().description(schema.getDescription().getValue());
     }
     if (schema.getDefault() != null) {
-      ctx.schemaBuilder().defaultValue(schema.getDefault().accept(new JsonValueVisitor()));
+      // A null default is JSONObject.NULL, as everit's own loader has it: null means none.
+      Object value = schema.getDefault().accept(new JsonValueVisitor());
+      ctx.schemaBuilder().defaultValue(value != null ? value : JSONObject.NULL);
     }
     Map<String, Object> unprocessed = new HashMap<>();
     if (!schema.getUnprocessedProperties().isEmpty()) {
@@ -309,8 +343,15 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitContainsSchema(ContainsSchema schema) {
     SchemaContext ctx = super.visitContainsSchema(schema);
     assert ctx != null;
-    return new SchemaContext(schema, ArraySchema.builder().requiresArray(false)
-        .containsItemSchema(ctx.schema()));
+    ArraySchema.Builder builder = ArraySchema.builder().requiresArray(false)
+        .containsItemSchema(ctx.schema());
+    Map<String, Object> unprocessed = new HashMap<>();
+    unprocessed.put("minContains", schema.getMinContains());
+    if (schema.getMaxContains() != null) {
+      unprocessed.put("maxContains", schema.getMaxContains());
+    }
+    builder.unprocessedProperties(unprocessed);
+    return new SchemaContext(schema, builder);
   }
 
   @Override
@@ -524,7 +565,8 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   @Override
   public SchemaContext visitPropertySchema(String property,
-      Schema schema) {
+      Schema schema,
+      CompositeSchema context) {
     SchemaContext ctx = schema.accept(this);
     assert ctx != null;
     return new SchemaContext(schema, ObjectSchema.builder().requiresObject(false)
@@ -535,6 +577,27 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitReadOnlySchema(ReadOnlySchema schema) {
     // ignore readOnly
     return super.visitReadOnlySchema(schema);
+  }
+
+  /**
+   * The {@code $ref} of {@code ctx} rebuilt with the sibling {@code default} of {@code schema},
+   * which 2019-09 and later honour. everit builds a reference once, when it is registered for
+   * resolution, so a default set on its builder afterwards would be lost.
+   */
+  private org.everit.json.schema.ReferenceSchema.Builder referenceWithDefault(
+      SchemaContext ctx, CompositeSchema schema) {
+    org.everit.json.schema.ReferenceSchema built =
+        (org.everit.json.schema.ReferenceSchema) ctx.schemaBuilder().build();
+    Object value = schema.getDefault().accept(new JsonValueVisitor());
+    org.everit.json.schema.ReferenceSchema.Builder ref =
+        org.everit.json.schema.ReferenceSchema.builder()
+            .refValue(built.getReferenceValue());
+    ref.defaultValue(value != null ? value : JSONObject.NULL);
+    Schema referred = refReferred.get(built);
+    if (referred != null) {
+      offerRef(ref.build(), referred);
+    }
+    return ref;
   }
 
   @Override
@@ -602,6 +665,15 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     return super.visitWriteOnlySchema(schema);
   }
 
+  /**
+   * Maps a json-sKema document source to the URI everit reports for a referenced document: the
+   * reference relative to the root document, resolved against the root {@code $id} when present.
+   */
+  private URI toEveritDocumentUri(URI documentSource) {
+    URI relative = rootDocument.relativize(documentSource);
+    return rootId != null ? URI.create(rootId).resolve(relative) : relative;
+  }
+
   private org.everit.json.schema.Schema.Builder<?> typeToSchema(String type) {
     switch (type) {
       case "string":
@@ -636,7 +708,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
 
     @Override
-    public Object visitArray(IJsonArray<?> arr) {
+    public Object visitArray(IJsonArray arr) {
       return objectMapper.convertValue(arr, JSONArray.class);
     }
 
@@ -656,7 +728,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
 
     @Override
-    public Object visitObject(IJsonObject<?, ?> obj) {
+    public Object visitObject(IJsonObject obj) {
       return objectMapper.convertValue(obj, JSONObject.class);
     }
 
@@ -768,9 +840,35 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
             return product;
           }
         }
+        if (isGeneratedAny(schema) && containsType((CombinedSchemaExt) schema, current)) {
+          product.set(i, mergeIntoAny((CombinedSchemaExt) schema, current));
+          return product;
+        }
+      }
+      // Keyword order is arbitrary, so a multi-type anyOf may arrive after keyword schemas
+      // (e.g. items) that belong in one of its branches; fold those in too.
+      if (isGeneratedAny(current)) {
+        CombinedSchemaExt any = (CombinedSchemaExt) current;
+        List<org.everit.json.schema.Schema> result = new ArrayList<>();
+        for (org.everit.json.schema.Schema schema : product) {
+          if (containsType(any, schema)) {
+            any = mergeIntoAny(any, schema);
+          } else {
+            result.add(schema);
+          }
+        }
+        result.add(any);
+        return result;
       }
       product.add(current);
       return product;
+    }
+
+    private CombinedSchemaExt mergeIntoAny(
+        CombinedSchemaExt any, org.everit.json.schema.Schema schema) {
+      return CombinedSchemaExt.anyOf(accumulate(new ArrayList<>(any.getSubschemas()), schema))
+          .isGenerated(true)
+          .build();
     }
 
     private List<org.everit.json.schema.Schema> concat(

@@ -1,0 +1,86 @@
+syntax = "proto3";
+package io.confluent.protobuf.generated;
+
+import "confluent/type/decimal.proto";
+import "google/protobuf/timestamp.proto";
+import "google/type/date.proto";
+import "google/type/timeofday.proto";
+
+message Row {
+  .google.type.Date date = 1 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.notNull",
+        value: "true"
+      }
+    ]
+  }];
+  .confluent.type.Decimal decimal = 2 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.notNull",
+        value: "true"
+      },
+      {
+        value: "5",
+        key: "precision"
+      },
+      {
+        value: "1",
+        key: "scale"
+      }
+    ]
+  }];
+  .google.protobuf.Timestamp timestamp_ltz = 3 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.notNull",
+        value: "true"
+      }
+    ]
+  }];
+  .google.protobuf.Timestamp timestamp = 4 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.notNull",
+        value: "true"
+      },
+      {
+        key: "flink.type",
+        value: "timestamp"
+      }
+    ]
+  }];
+  .google.type.TimeOfDay time = 5 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.notNull",
+        value: "true"
+      },
+      {
+        key: "flink.precision",
+        value: "3"
+      }
+    ]
+  }];
+}

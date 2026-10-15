@@ -47,6 +47,7 @@ import java.util.regex.Pattern;
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   public static final String PERCENT_REPLACEMENT = "_x";
+  private static final String LOGICAL_FORMAT = "logical";
 
   @Parameter(required = false)
   String schemaExtension;
@@ -63,9 +64,18 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = false)
   boolean encodeSubject = true;
 
-  Map<String, ParsedSchema> downloadSchemas(List<String> subjects, List<String> versionsToDownload)
+  /**
+   * Renders the downloaded schemas in this format, which the registry interprets -- {@code
+   * logical} emits logical types DDL, and a schema type may offer others. What the registry
+   * returns is written as-is, since re-reading it locally would undo the rendering.
+   */
+  @Parameter(required = false)
+  String format;
+
+  Map<String, SchemaMetadata> downloadSchemas(
+      List<String> subjects, List<String> versionsToDownload)
       throws MojoExecutionException {
-    Map<String, ParsedSchema> results = new LinkedHashMap<>();
+    Map<String, SchemaMetadata> results = new LinkedHashMap<>();
 
     if (versionsToDownload.size() != subjects.size()) {
       throw new MojoExecutionException("Number of versions specified should "
@@ -76,7 +86,11 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try {
         getLog().info(String.format("Downloading metadata "
             + "for %s.for version %s", subjects.get(i), versionsToDownload.get(i)));
-        schemaMetadata = this.client().getLatestSchemaMetadata(subjects.get(i));
+        // Only ask for a rendering when one was requested, so that a client which does not
+        // implement the format-aware reads still serves an ordinary download.
+        schemaMetadata = isFormatted()
+            ? this.client().getLatestSchemaMetadata(subjects.get(i), format)
+            : this.client().getLatestSchemaMetadata(subjects.get(i));
         if (!versionsToDownload.get(i).equalsIgnoreCase("latest")) {
           Integer maxVersion = schemaMetadata.getVersion();
           if (maxVersion < Integer.parseInt(versionsToDownload.get(i))) {
@@ -84,18 +98,13 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
                 String.format("Max possible version "
                     + "for %s is %d", subjects.get(i), maxVersion));
           } else {
-            schemaMetadata = this.client().getSchemaMetadata(subjects.get(i),
-                Integer.parseInt(versionsToDownload.get(i)));
+            int version = Integer.parseInt(versionsToDownload.get(i));
+            schemaMetadata = isFormatted()
+                ? this.client().getSchemaMetadata(subjects.get(i), version, format)
+                : this.client().getSchemaMetadata(subjects.get(i), version);
           }
         }
-        Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(null, schemaMetadata));
-        if (schema.isPresent()) {
-          results.put(subjects.get(i), schema.get());
-        } else {
-          throw new MojoExecutionException(
-              String.format("Error while parsing schema for %s", subjects.get(i))
-          );
-        }
+        results.put(subjects.get(i), schemaMetadata);
       } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while downloading metadata for %s.", subjects.get(i)),
@@ -165,10 +174,10 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
       }
     }
-    Map<String, ParsedSchema> subjectToSchema =
+    Map<String, SchemaMetadata> subjectToSchema =
         downloadSchemas(subjectsToDownload, versionsToDownload);
 
-    for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
+    for (Map.Entry<String, SchemaMetadata> kvp : subjectToSchema.entrySet()) {
       String subject = kvp.getKey();
       String encodedSubject = encodeSubject ? encode(subject) : subject;
       String fileName = String.format("%s%s", encodedSubject, getExtension(kvp.getValue()));
@@ -180,7 +189,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try (OutputStreamWriter writer = new OutputStreamWriter(
           new FileOutputStream(outputFile), StandardCharsets.UTF_8)
       ) {
-        writer.write(kvp.getValue().toString());
+        writer.write(schemaBody(kvp.getValue()));
       } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while writing subject('%s') schema to %s", subject,
@@ -217,11 +226,33 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
   }
 
-  private String getExtension(ParsedSchema parsedSchema) {
+  /**
+   * Returns what the registry sent, unless nothing was asked of it: with no format the schema is
+   * read back through the providers as before, which also keeps the written form exactly what
+   * earlier versions wrote. Reading a rendered schema that way would undo the rendering -- the
+   * providers convert logical types DDL back to its native form.
+   */
+  private String schemaBody(SchemaMetadata schemaMetadata) throws MojoExecutionException {
+    if (isFormatted()) {
+      return schemaMetadata.getSchema();
+    }
+    Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(null, schemaMetadata));
+    if (!schema.isPresent()) {
+      throw new MojoExecutionException(
+          String.format("Error while parsing schema %s", schemaMetadata.getSchema()));
+    }
+    return schema.get().toString();
+  }
+
+  private String getExtension(SchemaMetadata schemaMetadata) {
     if (this.schemaExtension != null) {
       return schemaExtension;
     }
-    switch (parsedSchema.schemaType()) {
+    // A rendered schema is no longer in its own format, so the schema type does not name it.
+    if (LOGICAL_FORMAT.equalsIgnoreCase(format)) {
+      return ".ddl";
+    }
+    switch (schemaMetadata.getSchemaType()) {
       case AvroSchema.TYPE:
         return ".avsc";
       case JsonSchema.TYPE:
@@ -231,6 +262,10 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       default:
         return ".txt";
     }
+  }
+
+  private boolean isFormatted() {
+    return format != null && !format.trim().isEmpty();
   }
 
   protected String encode(String subject) {

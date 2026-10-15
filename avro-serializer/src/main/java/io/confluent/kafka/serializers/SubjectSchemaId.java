@@ -16,15 +16,16 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.util.Objects;
 
 // Cache key for a schema looked up by id. Ids are only unique within a context, so the id is
-// paired with the context-qualified subject the serde used to look the schema up.
+// paired with the context-qualified subject the serde resolved for the record.
 final class SubjectSchemaId {
   private final String subject;
-  private final Integer schemaId;
+  private final SchemaId schemaId;
 
-  SubjectSchemaId(String subject, Integer schemaId) {
+  SubjectSchemaId(String subject, SchemaId schemaId) {
     this.subject = subject;
     this.schemaId = schemaId;
   }
