@@ -87,13 +87,15 @@ public class Errors {
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
+  public static final int ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE = 42213;
+  public static final String ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE =
+      "Associations batch request exceeded a configured limit";
   public static final int UNRESOLVABLE_REFERENCE_ERROR_CODE = 42214;
   public static final int INVALID_PROVENANCE_REQUEST_ERROR_CODE = 42215;
   // 42216 is reserved for a request naming an unknown provenance algorithm.
   public static final int AMBIGUOUS_PROVENANCE_ERROR_CODE = 42217;
   public static final int PROVENANCE_TOO_LARGE_ERROR_CODE = 42218;
   public static final int PROVENANCE_RANGE_TOO_LONG_ERROR_CODE = 42219;
-  // Not 42213: later releases use it for ASSOCIATION_BATCH_LIMIT_EXCEEDED.
   public static final int RECURSIVE_SCHEMA_ERROR_CODE = 42220;
 
   // HTTP 500
@@ -318,5 +320,11 @@ public class Errors {
     return new RestConflictException(
         String.format(TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT, max),
         TOO_MANY_ASSOCIATIONS_ERROR_CODE);
+  }
+
+  public static RestAssociationBatchLimitExceededException associationBatchLimitExceededException(
+      String message) {
+    return new RestAssociationBatchLimitExceededException(
+        message != null ? message : ASSOCIATION_BATCH_LIMIT_EXCEEDED_MESSAGE);
   }
 }

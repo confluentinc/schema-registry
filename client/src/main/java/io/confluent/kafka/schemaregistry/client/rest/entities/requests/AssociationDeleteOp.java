@@ -30,14 +30,31 @@ public class AssociationDeleteOp extends AssociationOp {
 
   private String associationType;
   private Boolean cascadeLifecycle;
+  private Boolean async;
 
+  /**
+   * Creates a delete op. When {@code async} is true, the association is deleted before the
+   * response, but any cascaded subject deletes run in the background. A queued subject is
+   * deleted even if new versions are registered under it first. Until the background delete
+   * runs, the subject still exists. A create for the same subject that runs before then,
+   * including one in a later entry of the same batch, may fail with a different schema, as for
+   * any STRONG create on an existing subject; with the same schema it re-associates the
+   * subject and the queued delete then skips it. Servers that don't support async ignore the
+   * field and delete synchronously.
+   */
   @JsonCreator
   public AssociationDeleteOp(
       @JsonProperty("associationType") String associationType,
-      @JsonProperty("cascadeLifecycle") Boolean cascadeLifecycle) {
+      @JsonProperty("cascadeLifecycle") Boolean cascadeLifecycle,
+      @JsonProperty("async") Boolean async) {
     super(OpType.DELETE);
     this.associationType = associationType;
     this.cascadeLifecycle = cascadeLifecycle;
+    this.async = async;
+  }
+
+  public AssociationDeleteOp(String associationType, Boolean cascadeLifecycle) {
+    this(associationType, cascadeLifecycle, null);
   }
 
   public AssociationDeleteOp(String associationType) {
@@ -64,6 +81,16 @@ public class AssociationDeleteOp extends AssociationOp {
     this.cascadeLifecycle = cascadeLifecycle;
   }
 
+  @JsonProperty("async")
+  public Boolean getAsync() {
+    return async;
+  }
+
+  @JsonProperty("async")
+  public void setAsync(Boolean async) {
+    this.async = async;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -77,12 +104,13 @@ public class AssociationDeleteOp extends AssociationOp {
     }
     AssociationDeleteOp that = (AssociationDeleteOp) o;
     return Objects.equals(associationType, that.associationType)
-        && Objects.equals(cascadeLifecycle, that.cascadeLifecycle);
+        && Objects.equals(cascadeLifecycle, that.cascadeLifecycle)
+        && Objects.equals(async, that.async);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), associationType, cascadeLifecycle);
+    return Objects.hash(super.hashCode(), associationType, cascadeLifecycle, async);
   }
 
   public void validate(boolean dryRun) {

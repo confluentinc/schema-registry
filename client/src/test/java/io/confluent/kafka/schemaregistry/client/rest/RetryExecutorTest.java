@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.rest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.function.Predicate;
@@ -41,6 +42,24 @@ public class RetryExecutorTest {
     TestCallableIO testCallable = new TestCallableIO();
     int result = retryExecutor.retry(testCallable);
     Assert.assertEquals(3, result);
+  }
+
+  @Test
+  public void testRetryExecutorConnectTimeoutRetried() throws IOException, RestClientException {
+    // Mirrors the leader-forwarding case: a transient "Connect timed out" is retried once.
+    RetryExecutor retryExecutor = new RetryExecutor(1, 0, 0);
+    TestCallableConnectTimeout testCallable = new TestCallableConnectTimeout(1);
+    int result = retryExecutor.retry(testCallable);
+    Assert.assertEquals(2, result);
+  }
+
+  @Test
+  public void testRetryExecutorConnectTimeoutNotRetriedWhenDisabled() {
+    // With retries disabled (maxRetries == 0) the connect failure propagates immediately.
+    RetryExecutor retryExecutor = new RetryExecutor(0, 0, 0);
+    TestCallableConnectTimeout testCallable = new TestCallableConnectTimeout(1);
+    Assert.assertThrows(SocketTimeoutException.class, () -> retryExecutor.retry(testCallable));
+    Assert.assertEquals(1, testCallable.count);
   }
 
   @Test
@@ -171,6 +190,25 @@ public class RetryExecutorTest {
         throw new SocketException("test");
       }
       return count;
+    }
+  }
+
+  /** Throws a connect timeout until {@code failures} attempts have been made. */
+  static class TestCallableConnectTimeout implements Callable<Integer> {
+    private final int failures;
+    private int count = 0;
+
+    TestCallableConnectTimeout(int failures) {
+      this.failures = failures;
+    }
+
+    @Override
+    public Integer call() throws IOException {
+      if (count < failures) {
+        count++;
+        throw new SocketTimeoutException("Connect timed out");
+      }
+      return count + 1;
     }
   }
 

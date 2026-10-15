@@ -50,6 +50,7 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.classic.methods.HttpPut;
@@ -89,6 +90,28 @@ public class ApacheClientRestServiceTest {
     verify(httpClient).executeOpen(any(), requestCaptor.capture(), any());
     HttpGet capturedRequest = requestCaptor.getValue();
     assertEquals("true", capturedRequest.getHeader(RestService.X_FORWARD_HEADER).getValue());
+  }
+
+  @Test
+  public void testDeleteAssociationsAsyncAccepted() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", false, true);
+
+    CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
+    CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+    when(httpClient.executeOpen(any(), any(), any())).thenReturn(response);
+    when(response.getCode()).thenReturn(HttpURLConnection.HTTP_ACCEPTED);
+
+    Field httpClientField = RestService.class.getDeclaredField("httpClient");
+    httpClientField.setAccessible(true);
+    httpClientField.set(restService, httpClient);
+
+    // A 202 is a success and must not throw
+    restService.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, "lkc-1",
+        "topic", Arrays.asList("key"), true, null, true);
+
+    ArgumentCaptor<HttpDelete> requestCaptor = ArgumentCaptor.forClass(HttpDelete.class);
+    verify(httpClient).executeOpen(any(), requestCaptor.capture(), any());
+    assertTrue(requestCaptor.getValue().getRequestUri().contains("async=true"));
   }
 
   /*
