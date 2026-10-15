@@ -19,12 +19,13 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.github.erosb.jsonsKema.IJsonString;
+import com.github.erosb.jsonsKema.IJsonValue;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
 import com.github.erosb.jsonsKema.JsonObject;
 import com.github.erosb.jsonsKema.JsonString;
-import com.github.erosb.jsonsKema.JsonValue;
 import com.github.erosb.jsonsKema.UnknownSource;
 import java.io.IOException;
 import java.util.HashMap;
@@ -41,7 +42,7 @@ public class JsonSkemaObjectDeserializer extends StdDeserializer<JsonObject> {
 
   @Override
   public JsonObject deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-    Map<JsonString, JsonValue> ob = new HashMap<>();
+    Map<IJsonString, IJsonValue> ob = new HashMap<>();
     JsonToken t = p.getCurrentToken();
     if (t == JsonToken.START_OBJECT) {
       t = p.nextToken();
