@@ -708,7 +708,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
 
     @Override
-    public Object visitArray(IJsonArray<?> arr) {
+    public Object visitArray(IJsonArray arr) {
       return objectMapper.convertValue(arr, JSONArray.class);
     }
 
@@ -728,7 +728,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     }
 
     @Override
-    public Object visitObject(IJsonObject<?, ?> obj) {
+    public Object visitObject(IJsonObject obj) {
       return objectMapper.convertValue(obj, JSONObject.class);
     }
 
