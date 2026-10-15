@@ -170,6 +170,16 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
+   * What registering {@code version} of {@code subject} after the versions before it gives under
+   * compatibilityPolicy=LOGICAL once LOGICAL pairs members by provenance check id: the errors
+   * registration would report, empty if it would be accepted.
+   */
+  default List<String> isLogicallyCompatibleByProvenance(String subject, int version)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Whether compatibility for {@code subject} is checked against its soft-deleted versions too,
    * as under an effective LOGICAL compatibilityPolicy: a soft-deleted version's records are still
    * read, and the tables LOGICAL protects have applied it.
