@@ -19,7 +19,9 @@ package io.confluent.kafka.schemaregistry.client.rest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.net.SocketException;
+import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.function.Predicate;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -63,6 +65,91 @@ public class RetryExecutorTest {
     Assert.assertThrows(RestClientException.class, () -> retryExecutor.retry(testCallable));
   }
 
+  @Test
+  public void testCustomPredicateRetriesStatusDefaultWouldNot()
+      throws IOException, RestClientException {
+    // 409 is not retriable by default; the custom predicate opts into it.
+    RetryExecutor retryExecutor =
+        new RetryExecutor(3, 0, 0, new Random(), e -> e.getStatus() == 409);
+    TestCallableWithStatus testCallable = new TestCallableWithStatus(409, 3);
+    int result = retryExecutor.retry(testCallable);
+    Assert.assertEquals(3, result);
+  }
+
+  @Test
+  public void testDefaultPredicateDoesNotRetryConflict() {
+    // Guards the flip side of the above: without a custom predicate, 409 must still fail fast.
+    RetryExecutor retryExecutor = new RetryExecutor(3, 0, 0);
+    TestCallableWithStatus testCallable = new TestCallableWithStatus(409, 3);
+    Assert.assertThrows(RestClientException.class, () -> retryExecutor.retry(testCallable));
+    Assert.assertEquals(1, testCallable.count);
+  }
+
+  @Test
+  public void testCustomPredicateDoesNotRetryStatusDefaultWould() {
+    // The predicate replaces the default rather than widening it: 500 is retriable by default
+    // but excluded here, so the call must fail on its first attempt.
+    RetryExecutor retryExecutor =
+        new RetryExecutor(3, 0, 0, new Random(), e -> e.getStatus() == 409);
+    TestCallableWithStatus testCallable = new TestCallableWithStatus(500, 3);
+    Assert.assertThrows(RestClientException.class, () -> retryExecutor.retry(testCallable));
+    Assert.assertEquals(1, testCallable.count);
+  }
+
+  @Test
+  public void testNullFourthArgBindsToRandomAndIsRejected() {
+    // Locks in why there is no four-arg predicate overload: with Random as the only four-arg
+    // parameter, a bare null resolves unambiguously and is reported as a bad argument at
+    // construction, instead of failing to compile with an ambiguous-reference error.
+    Assert.assertThrows(NullPointerException.class, () -> new RetryExecutor(3, 0, 0, null));
+  }
+
+  @Test
+  public void testCustomPredicateComposedWithDefault() throws IOException, RestClientException {
+    // The expected real-world usage: the default statuses plus an extra one.
+    Predicate<RestClientException> predicate =
+        ((Predicate<RestClientException>) RestService::isRestClientExceptionRetriable)
+            .or(e -> e.getStatus() == 409);
+    RetryExecutor retryExecutor = new RetryExecutor(3, 0, 0, new Random(), predicate);
+    Assert.assertEquals(3, (int) retryExecutor.retry(new TestCallableWithStatus(409, 3)));
+    Assert.assertEquals(3, (int) retryExecutor.retry(new TestCallableWithStatus(503, 3)));
+  }
+
+  @Test
+  public void testRetriesExhaustedWithCustomPredicate() {
+    RetryExecutor retryExecutor =
+        new RetryExecutor(2, 0, 0, new Random(), e -> e.getStatus() == 409);
+    TestCallableWithStatus testCallable = new TestCallableWithStatus(409, 5);
+    Assert.assertThrows(RestClientException.class, () -> retryExecutor.retry(testCallable));
+    Assert.assertEquals(3, testCallable.count);
+  }
+
+  @Test
+  public void testNullPredicateRejected() {
+    Assert.assertThrows(NullPointerException.class,
+        () -> new RetryExecutor(3, 0, 0, new Random(), null));
+  }
+
+  @Test
+  public void testNullRandomRejected() {
+    // Deferred otherwise: a null Random only fails at the first backoff, and only when
+    // initialWaitMs > 0, so it would survive every test that uses a zero wait.
+    Assert.assertThrows(NullPointerException.class,
+        () -> new RetryExecutor(3, 1000, 20000, null, e -> e.getStatus() == 409));
+  }
+
+  @Test
+  public void testIsRetriableReflectsPredicate() {
+    RetryExecutor custom =
+        new RetryExecutor(3, 0, 0, new Random(), e -> e.getStatus() == 409);
+    Assert.assertTrue(custom.isRetriable(new RestClientException("test", 409, 40901)));
+    Assert.assertFalse(custom.isRetriable(new RestClientException("test", 503, 50301)));
+
+    RetryExecutor defaultExecutor = new RetryExecutor(3, 0, 0);
+    Assert.assertFalse(defaultExecutor.isRetriable(new RestClientException("test", 409, 40901)));
+    Assert.assertTrue(defaultExecutor.isRetriable(new RestClientException("test", 503, 50301)));
+  }
+
   static class TestCallable implements Callable<Integer> {
     private int count = 0;
     @Override
@@ -93,6 +180,27 @@ public class RetryExecutorTest {
     public Void call() throws RestClientException {
       count++;
       return null;
+    }
+  }
+
+  /** Fails with the given status until {@code failures} attempts have been made. */
+  static class TestCallableWithStatus implements Callable<Integer> {
+    private final int status;
+    private final int failures;
+    private int count = 0;
+
+    TestCallableWithStatus(int status, int failures) {
+      this.status = status;
+      this.failures = failures;
+    }
+
+    @Override
+    public Integer call() throws RestClientException {
+      if (count < failures) {
+        count++;
+        throw new RestClientException("test", status, status * 100 + 1);
+      }
+      return count;
     }
   }
 

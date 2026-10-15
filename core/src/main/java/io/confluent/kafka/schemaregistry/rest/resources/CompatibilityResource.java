@@ -26,9 +26,9 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,18 +37,19 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.QueryParam;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.QueryParam;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -64,9 +65,10 @@ public class CompatibilityResource {
 
   public static final String apiTag = "Compatibility (v1)";
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
-  public CompatibilityResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public CompatibilityResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -132,8 +134,14 @@ public class CompatibilityResource {
     VersionId versionId = parseVersionId(version);
     Schema schemaForSpecifiedVersion;
     try {
-      //Don't check compatibility against deleted schema
-      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
+      // Soft-deleted versions are checked against only under LOGICAL, as registration checks them.
+      if (!schemaRegistry.checksSoftDeletedVersions(subject)) {
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
+      } else if (versionId.isLatest()) {
+        schemaForSpecifiedVersion = schemaRegistry.latestVersionToCheck(subject);
+      } else {
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), true);
+      }
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
@@ -144,8 +152,8 @@ public class CompatibilityResource {
     if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
       throw Errors.versionNotFoundException(versionId.getVersionId());
     }
-    Schema schema = new Schema(subject, request);
     try {
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
@@ -225,15 +233,16 @@ public class CompatibilityResource {
     List<String> errorMessages;
     List<SchemaKey> previousSchemas = new ArrayList<>();
     try {
-      //Don't check compatibility against deleted schema
-      schemaRegistry.getAllVersions(subject, LookupFilter.DEFAULT)
-          .forEachRemaining(previousSchemas::add);
+      // Soft-deleted versions are checked against only under LOGICAL, as registration checks them.
+      LookupFilter filter = schemaRegistry.checksSoftDeletedVersions(subject)
+          ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
+      schemaRegistry.getAllVersions(subject, filter).forEachRemaining(previousSchemas::add);
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Error while retrieving schema for subject "
           + subject, e);
     }
-    Schema schema = new Schema(subject, request);
     try {
+      Schema schema = new Schema(subject, request);
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
       }
