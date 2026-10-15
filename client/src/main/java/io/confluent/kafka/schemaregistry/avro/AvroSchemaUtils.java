@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -207,9 +208,13 @@ public class AvroSchemaUtils {
 
   // Replaces each {"type": "<name>"} that refers to a named type with just "<name>",
   // as older Avro versions did. Defaults and custom properties are left alone.
+  // Comments are allowed, as in Avro's own schema parser.
   public static String fixTypeObjects(String schemaString) {
     try {
-      return fixTypeObjects(jsonMapper.readTree(schemaString)).toString();
+      JsonNode schema = jsonMapper.reader()
+          .with(JsonParser.Feature.ALLOW_COMMENTS)
+          .readTree(schemaString);
+      return fixTypeObjects(schema).toString();
     } catch (IOException e) {
       throw new SchemaParseException(e);
     }

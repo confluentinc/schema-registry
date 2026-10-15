@@ -1478,6 +1478,17 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testTypeObjectNamingTypeWithComments() {
+    String schema = "/* legacy */ {\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+        + "// wrapped reference\n"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}}]}";
+    AvroSchema parsed = new AvroSchema(schema, Collections.emptyList(),
+        Collections.emptyMap(), null, false);
+    assertEquals(Schema.Type.FIXED, parsed.rawSchema().getField("b").schema().getType());
+  }
+
+  @Test
   public void testTypeObjectFixLeavesDefaultsAlone() {
     String schema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
         + "{\"name\":\"x\",\"type\":{\"type\":\"Missing\"},\"default\":{\"type\":\"Foo\"}}]}";
