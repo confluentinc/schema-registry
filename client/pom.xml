@@ -118,6 +118,26 @@
                     </java>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <!-- AVRO-4189: runs without SERIALIZABLE_PACKAGES, which Avro reads once per JVM.
+                         The pinned test is not overridden by -Dtest; elsewhere the test skips itself. -->
+                    <execution>
+                        <id>avro-untrusted-classes</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <test>AvroUntrustedClassTest</test>
+                            <systemPropertyVariables combine.self="override">
+                                <avro.untrusted.classes>true</avro.untrusted.classes>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
 
         <resources>
