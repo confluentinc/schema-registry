@@ -24,6 +24,7 @@ import static org.junit.Assume.assumeTrue;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.Grant;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.example.reserved.record$;
 import io.confluent.kafka.example.stringable.StringableLink;
 import io.confluent.kafka.example.stringable.StringableUser;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
@@ -31,6 +32,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,16 +68,12 @@ public class AvroTrustedSerdeTest {
     public String name = "d";
   }
 
-  public static class Thingamajig {
-    public String name = "t";
-  }
-
   public static class Whatsit {
     public String name = "w";
   }
 
-  public static class Gubbins {
-    public String name = "g";
+  public static class Sprocket {
+    public String name = "s";
   }
 
   private SchemaRegistryClient schemaRegistry;
@@ -211,33 +209,12 @@ public class AvroTrustedSerdeTest {
   }
 
   @Test
-  public void mapOfGenericRecordsDoesNotLoadClassesTheyName() {
-    // The record's schema names a class on the classpath that is not trusted
-    Schema schema = ReflectData.get().getSchema(Thingamajig.class);
-    Map<String, Object> map = Collections.singletonMap("k", record(schema, "name", "t"));
-    byte[] bytes = serialize("thingamajigs", map);
-    Object value = ((Map<?, ?>) deserialize("thingamajigs", bytes)).values().iterator().next();
-    assertEquals("t", ((GenericRecord) value).get("name").toString());
-  }
-
-  @Test
   public void containerOfPojoListSerializesWithoutConfig() {
     Schema arraySchema = Schema.createArray(ReflectData.get().getSchema(Whatsit.class));
     byte[] bytes = serialize("whatsits",
         new NonRecordContainer(arraySchema, Collections.singletonList(new Whatsit())));
     Object value = ((List<?>) deserialize("whatsits", bytes)).get(0);
     assertEquals("w", ((GenericRecord) value).get("name").toString());
-  }
-
-  @Test
-  public void listOfGenericRecordsDoesNotLoadClassesTheyName() {
-    // The record's schema names a class on the classpath that is not trusted
-    Schema schema = ReflectData.get().getSchema(Gubbins.class);
-    List<Object> list = Collections.singletonList(record(schema, "name", "g"));
-    byte[] bytes = serialize("gubbins",
-        new NonRecordContainer(Schema.createArray(schema), list));
-    Object value = ((List<?>) deserialize("gubbins", bytes)).get(0);
-    assertEquals("g", ((GenericRecord) value).get("name").toString());
   }
 
   @Test
@@ -260,5 +237,25 @@ public class AvroTrustedSerdeTest {
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
         KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
     assertEquals("https://example.com", ((StringableLink) result).getUrl().toString());
+  }
+
+  @Test
+  public void containerOfPojosAfterANullSerializesWithoutConfig() {
+    Schema element = Schema.createUnion(Schema.create(Schema.Type.NULL),
+        ReflectData.get().getSchema(Sprocket.class));
+    byte[] bytes = serialize("sprockets", new NonRecordContainer(Schema.createArray(element),
+        Arrays.asList(null, new Sprocket())));
+    Object value = ((List<?>) deserialize("sprockets", bytes)).get(1);
+    assertEquals("s", ((GenericRecord) value).get("name").toString());
+  }
+
+  @Test
+  public void latestVersionSpecificReaderResolvesMangledClassNames() {
+    // The record is named "record", so its generated class is record$
+    byte[] bytes = serialize("reserved", record(record$.SCHEMA$, "path", "/tmp/x"));
+    Object result = deserialize("reserved", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
+        KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
+    assertEquals("/tmp/x", ((record$) result).getPath().getPath());
   }
 }

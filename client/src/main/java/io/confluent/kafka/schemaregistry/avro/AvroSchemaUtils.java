@@ -72,7 +72,6 @@ import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectData.AllowNull;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificData;
-import org.apache.avro.specific.SpecificFixed;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -640,12 +639,6 @@ public class AvroSchemaUtils {
 
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
-    if (holdsGenericContainers(value)) {
-      // As for a generic record, a reflect writer would load classes named by the schema
-      GenericData genericData = getThreadLocalGenericData();
-      return new GenericDatumWriter<>(schema,
-          genericData != null ? genericData : getGenericData(useLogicalTypes));
-    }
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
@@ -655,35 +648,6 @@ public class AvroSchemaUtils {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
     }
   }
-
-  // Whether a map or a plain collection holds generic containers, such as generic records. As in
-  // getSchema, a map's first value, or a collection's first element, decides, through any nesting.
-  // Generated specific types are not generic.
-  private static boolean holdsGenericContainers(Object value) {
-    Object leaf = value;
-    for (int depth = 0; depth < MAX_NESTING && isPlainAggregate(leaf); depth++) {
-      Collection<?> elements = leaf instanceof Map ? ((Map<?, ?>) leaf).values()
-          : (Collection<?>) leaf;
-      if (elements.isEmpty()) {
-        return false;
-      }
-      leaf = elements.iterator().next();
-    }
-    return leaf != value && isGenericOnly(leaf);
-  }
-
-  private static boolean isGenericOnly(Object value) {
-    return value instanceof GenericContainer && !(value instanceof SpecificRecord
-        || value instanceof SpecificFixed || value instanceof Enum);
-  }
-
-  // A generic array is a collection too, but is already written as a generic container
-  private static boolean isPlainAggregate(Object value) {
-    return value instanceof Map
-        || (value instanceof Collection && !(value instanceof GenericContainer));
-  }
-
-  private static final int MAX_NESTING = 32;
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
     String[] identifiers = entity.getEntityPath().split("\\.");

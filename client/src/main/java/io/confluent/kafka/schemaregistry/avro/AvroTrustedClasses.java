@@ -232,26 +232,31 @@ public final class AvroTrustedClasses {
       return;
     }
     if (value instanceof Map || value instanceof Collection) {
-      // Only maps and collections are traversed, so only they need cycle protection
-      trustClassOf(value, Collections.newSetFromMap(new IdentityHashMap<>()));
+      trustMembers(value, Collections.newSetFromMap(new IdentityHashMap<>()), new HashSet<>());
     } else {
       trustOwnClass(value);
     }
   }
 
-  private static void trustClassOf(Object value, Set<Object> visited) {
-    if (value == null || !visited.add(value)) {
+  // Trusts every member of a map or collection, since an explicit schema, as in a
+  // NonRecordContainer, can allow nulls and several member types. Only maps and collections need
+  // cycle protection, and each other class is handled once per call.
+  private static void trustMembers(Object value, Set<Object> aggregates, Set<Class<?>> handled) {
+    if (value == null) {
       return;
     }
-    // As in AvroSchemaUtils.getSchema, a map's schema comes from its first value, and likewise
-    // for a collection's first element
-    Collection<?> elements = value instanceof Map ? ((Map<?, ?>) value).values()
-        : value instanceof Collection ? (Collection<?>) value
-        : null;
-    if (elements != null && !elements.isEmpty()) {
-      trustClassOf(elements.iterator().next(), visited);
+    boolean isMap = value instanceof Map;
+    if (isMap || value instanceof Collection) {
+      if (!aggregates.add(value)) {
+        return;
+      }
+      for (Object member : isMap ? ((Map<?, ?>) value).values() : (Collection<?>) value) {
+        trustMembers(member, aggregates, handled);
+      }
     }
-    trustOwnClass(value);
+    if (handled.add(value.getClass())) {
+      trustOwnClass(value);
+    }
   }
 
   private static void trustOwnClass(Object value) {
@@ -431,7 +436,7 @@ public final class AvroTrustedClasses {
 
   private static void addGeneratedClass(Schema schema, Set<Class<?>> classes,
       ClassLoader loader) {
-    Class<?> resolved = resolveClass(schema.getFullName(), loader);
+    Class<?> resolved = resolveClass(schema, loader);
     if (resolved != null && resolved.isAnnotationPresent(AvroGenerated.class)) {
       classes.add(resolved);
     }
@@ -478,7 +483,7 @@ public final class AvroTrustedClasses {
   private static void addNamedType(Schema schema, Set<String> names, ClassLoader loader) {
     String fullName = schema.getFullName();
     if (fullName != null) {
-      Class<?> resolved = resolveClass(fullName, loader != null ? loader : defaultClassLoader());
+      Class<?> resolved = resolveClass(schema, loader != null ? loader : defaultClassLoader());
       names.add(resolved != null ? resolved.getName() : fullName);
     }
   }
@@ -488,9 +493,15 @@ public final class AvroTrustedClasses {
     return loader != null ? loader : AvroTrustedClasses.class.getClassLoader();
   }
 
-  // Mirrors SpecificData.getClass, without initializing the class or consulting the validator
-  private static Class<?> resolveClass(String fullName, ClassLoader loader) {
-    Class<?> resolved = loadClass(fullName, loader);
+  // Mirrors SpecificData.getClass, without initializing the class or consulting the validator:
+  // first the Java name, with reserved words mangled, then the full name as a nested class
+  private static Class<?> resolveClass(Schema schema, ClassLoader loader) {
+    Class<?> resolved = loadClass(SpecificData.getClassName(schema), loader);
+    if (resolved != null) {
+      return resolved;
+    }
+    String fullName = schema.getFullName();
+    resolved = loadClass(fullName, loader);
     if (resolved != null) {
       return resolved;
     }

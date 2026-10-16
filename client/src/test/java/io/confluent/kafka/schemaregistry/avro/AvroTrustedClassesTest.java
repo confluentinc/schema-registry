@@ -26,8 +26,10 @@ import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
@@ -296,6 +298,19 @@ public class AvroTrustedClassesTest {
     // Through nesting, as a map of lists
     AvroTrustedClasses.trustClassOf(
         Collections.singletonMap("k", Collections.singletonList(new Child())));
+    assertTrue(AvroTrustedClasses.isTrusted(Child.class));
+  }
+
+  @Test
+  public void trustClassOfTrustsEveryMember() {
+    // A leading null, and members of several types, as an explicit schema can allow
+    AvroTrustedClasses.trustClassOf(Arrays.asList(null, new Line(), new Address()));
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("a", null);
+    map.put("b", new Child());
+    AvroTrustedClasses.trustClassOf(map);
     assertTrue(AvroTrustedClasses.isTrusted(Child.class));
   }
 
