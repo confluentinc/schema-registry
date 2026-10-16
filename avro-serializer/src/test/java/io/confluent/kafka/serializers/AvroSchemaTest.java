@@ -22,6 +22,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -48,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.avro.generic.GenericArray;
@@ -1443,14 +1445,40 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testTypeObjectNamingTypeRejectedForNew() {
-    try {
-      new AvroSchema(TYPE_OBJECT_SCHEMA, Collections.emptyList(),
-          Collections.emptyMap(), null, true);
-      fail("Expected SchemaParseException");
-    } catch (SchemaParseException e) {
-      // expected
-    }
+  public void testTypeObjectNamingTypeAcceptedForNew() {
+    AvroSchema schema = new AvroSchema(TYPE_OBJECT_SCHEMA, Collections.emptyList(),
+        Collections.emptyMap(), null, true);
+    assertEquals(Schema.Type.FIXED, schema.rawSchema().getField("b").schema().getType());
+    assertFalse(schema.canonicalString().contains("{\"type\":\"tests.Hash\"}"));
+  }
+
+  @Test
+  public void testTypeObjectNamingUndefinedTypeReportsName() {
+    String schema = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":{\"type\":\"strnig\"}}]}";
+    AvroRuntimeException e = assertThrows(AvroRuntimeException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, true));
+    assertTrue(e.getMessage(), e.getMessage().contains("strnig"));
+  }
+
+  @Test
+  public void testTypeObjectWithTrailingContentRejected() {
+    SchemaParseException e = assertThrows(SchemaParseException.class,
+        () -> new AvroSchema(TYPE_OBJECT_SCHEMA + " trailing", Collections.emptyList(),
+            Collections.emptyMap(), null, false));
+    assertNotNull(e.getMessage());
+  }
+
+  @Test
+  public void testParseErrorWithoutTypeObjectIsUnchanged() {
+    String schema = "{\"type\":\"record\",\"name\":\"R\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":\"bad\"}]}";
+    String expected = assertThrows(AvroRuntimeException.class,
+        () -> new Schema.Parser().parse(schema)).getMessage();
+    AvroRuntimeException e = assertThrows(AvroRuntimeException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, true));
+    assertEquals(expected, e.getMessage());
+    assertNull(AvroSchemaUtils.fixTypeObjects(schema));
   }
 
   @Test

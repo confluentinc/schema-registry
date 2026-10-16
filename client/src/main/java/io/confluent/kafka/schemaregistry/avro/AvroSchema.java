@@ -275,31 +275,39 @@ public class AvroSchema implements ParsedSchema {
 
   // Parses the references and then the main schema, adding the references to refsOut.
   // Newer Avro versions reject a "type" object that names a type, such as
-  // {"type": {"type": "com.acme.Mytype"}}, so retry with such objects replaced by
-  // the type name; references are already registered, the main schema only if not new.
+  // {"type": {"type": "com.acme.Mytype"}}, so on failure retry with such objects
+  // replaced by the type name, as older versions read them.
   private Schema parseAll(String schemaString, Collection<String> refStrings,
       List<Schema> refsOut) {
     try {
-      return parseAll(schemaString, refStrings, refsOut, false, false);
+      return parseWith(getParser(), schemaString, refStrings, refsOut);
     } catch (SchemaParseException e) {
-      if (!AvroSchemaUtils.isTypeObjectError(e)) {
+      boolean changed = false;
+      List<String> fixedRefs = new ArrayList<>(refStrings.size());
+      for (String ref : refStrings) {
+        String fixed = AvroSchemaUtils.fixTypeObjects(ref);
+        changed |= fixed != null;
+        fixedRefs.add(fixed != null ? fixed : ref);
+      }
+      String fixedSchema = schemaString != null
+          ? AvroSchemaUtils.fixTypeObjects(schemaString)
+          : null;
+      changed |= fixedSchema != null;
+      if (!changed) {
         throw e;
       }
       refsOut.clear();
-      return parseAll(schemaString, refStrings, refsOut, true, !validateAsNew);
+      return parseWith(getParser(), fixedSchema != null ? fixedSchema : schemaString,
+          fixedRefs, refsOut);
     }
   }
 
-  private Schema parseAll(String schemaString, Collection<String> refStrings,
-      List<Schema> refsOut, boolean fixRefs, boolean fixMain) {
-    Schema.Parser parser = getParser();
+  private static Schema parseWith(Schema.Parser parser, String schemaString,
+      Collection<String> refStrings, List<Schema> refsOut) {
     for (String ref : refStrings) {
-      refsOut.add(parser.parse(fixRefs ? AvroSchemaUtils.fixTypeObjects(ref) : ref));
+      refsOut.add(parser.parse(ref));
     }
-    if (schemaString == null) {
-      return null;
-    }
-    return parser.parse(fixMain ? AvroSchemaUtils.fixTypeObjects(schemaString) : schemaString);
+    return schemaString != null ? parser.parse(schemaString) : null;
   }
 
   @Override

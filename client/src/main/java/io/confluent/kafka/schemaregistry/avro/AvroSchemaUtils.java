@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.avro;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -44,6 +45,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversion;
 import org.apache.avro.Conversions;
@@ -196,35 +198,36 @@ public class AvroSchemaUtils {
     }
   }
 
-  private static final String TYPE_OBJECT_ERROR = "A schema \"type\" MUST be";
-
   private static final Set<String> PRIMITIVE_TYPES = new HashSet<>(Arrays.asList(
       "null", "boolean", "int", "long", "float", "double", "bytes", "string"));
 
-  // Whether Avro rejected a "type" object that names a type, such as {"type": "Hash"}
-  public static boolean isTypeObjectError(SchemaParseException e) {
-    return e.getMessage() != null && e.getMessage().contains(TYPE_OBJECT_ERROR);
-  }
-
   // Replaces each {"type": "<name>"} that refers to a named type with just "<name>",
-  // as older Avro versions did. Defaults and custom properties are left alone.
-  // Comments are allowed, as in Avro's own schema parser.
+  // as older Avro versions did, or returns null if there is none or the text is not a
+  // single JSON value. Defaults and custom properties are left alone, and comments are
+  // allowed, as in Avro's own schema parser.
   public static String fixTypeObjects(String schemaString) {
+    JsonNode schema;
     try {
-      JsonNode schema = jsonMapper.reader()
+      schema = jsonMapper.reader()
           .with(JsonParser.Feature.ALLOW_COMMENTS)
+          .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .readTree(schemaString);
-      return fixTypeObjects(schema).toString();
     } catch (IOException e) {
-      throw new SchemaParseException(e);
+      return null;
     }
+    if (schema == null) {
+      return null;
+    }
+    boolean[] changed = new boolean[1];
+    JsonNode fixed = fixTypeObjects(schema, changed);
+    return changed[0] ? fixed.toString() : null;
   }
 
-  private static JsonNode fixTypeObjects(JsonNode schema) {
+  private static JsonNode fixTypeObjects(JsonNode schema, boolean[] changed) {
     if (schema.isArray()) {
       ArrayNode union = (ArrayNode) schema;
       for (int i = 0; i < union.size(); i++) {
-        union.set(i, fixTypeObjects(union.get(i)));
+        union.set(i, fixTypeObjects(union.get(i), changed));
       }
     } else if (schema.isObject()) {
       ObjectNode obj = (ObjectNode) schema;
@@ -233,7 +236,7 @@ public class AvroSchemaUtils {
         return schema;
       }
       if (!type.isTextual()) {
-        obj.set("type", fixTypeObjects(type));
+        obj.set("type", fixTypeObjects(type, changed));
         return schema;
       }
       switch (type.asText()) {
@@ -243,19 +246,19 @@ public class AvroSchemaUtils {
           if (fields != null && fields.isArray()) {
             for (JsonNode field : fields) {
               if (field.isObject() && field.has("type")) {
-                ((ObjectNode) field).set("type", fixTypeObjects(field.get("type")));
+                ((ObjectNode) field).set("type", fixTypeObjects(field.get("type"), changed));
               }
             }
           }
           break;
         case "array":
           if (obj.has("items")) {
-            obj.set("items", fixTypeObjects(obj.get("items")));
+            obj.set("items", fixTypeObjects(obj.get("items"), changed));
           }
           break;
         case "map":
           if (obj.has("values")) {
-            obj.set("values", fixTypeObjects(obj.get("values")));
+            obj.set("values", fixTypeObjects(obj.get("values"), changed));
           }
           break;
         case "enum":
@@ -263,6 +266,7 @@ public class AvroSchemaUtils {
           break;
         default:
           if (!PRIMITIVE_TYPES.contains(type.asText())) {
+            changed[0] = true;
             return type;
           }
       }
@@ -299,26 +303,40 @@ public class AvroSchemaUtils {
     return REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL;
   }
 
+  // Schemas whose class Avro refused to load. Avro does not cache the failure, so skip
+  // the lookup for a while instead of failing it on every message.
+  private static final Cache<Schema, Boolean> untrustedSchemas = CacheBuilder.newBuilder()
+      .weakKeys()
+      .expireAfterWrite(1, TimeUnit.MINUTES)
+      .maximumSize(1000)
+      .build();
+
   // The class lookup only picks a preferred model, so an untrusted class (AVRO-4189) falls
   // back to the default; a SpecificDatumReader still rejects it when it reads.
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
     if (useLogicalTypes) {
       return getSpecificDataForSchema(reader);
     }
+    if (reader == null || untrustedSchemas.getIfPresent(reader) != null) {
+      return SpecificData.get();
+    }
     try {
       return SpecificData.getForSchema(reader);
     } catch (SecurityException e) {
+      untrustedSchemas.put(reader, Boolean.TRUE);
       return SpecificData.get();
     }
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader) {
     if (reader != null && (reader.getType() == org.apache.avro.Schema.Type.RECORD
-            || reader.getType() == org.apache.avro.Schema.Type.UNION)) {
+            || reader.getType() == org.apache.avro.Schema.Type.UNION)
+        && untrustedSchemas.getIfPresent(reader) == null) {
       Class<?> clazz;
       try {
         clazz = getSpecificData().getClass(reader);
       } catch (SecurityException e) {
+        untrustedSchemas.put(reader, Boolean.TRUE);
         clazz = null;
       }
       if (clazz != null) {
