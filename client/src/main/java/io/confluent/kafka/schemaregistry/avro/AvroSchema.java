@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,6 +64,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.SchemaParseException;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.util.Utf8;
@@ -121,11 +123,7 @@ public class AvroSchema implements ParsedSchema {
                     Integer version,
                     boolean validateAsNew) {
     this.validateAsNew = validateAsNew;
-    Schema.Parser parser = getParser();
-    for (String schema : resolvedReferences.values()) {
-      parser.parse(schema);
-    }
-    this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
+    this.schemaObj = parseAll(schemaString, resolvedReferences.values(), new ArrayList<>());
     if (!validateAsNew) {
       // For new schemas, strict validation is already applied.
       // For non-new schemas, validation is skipped.
@@ -269,6 +267,49 @@ public class AvroSchema implements ParsedSchema {
     return parser;
   }
 
+  List<Schema> parseReferences() {
+    List<Schema> schemaRefs = new ArrayList<>();
+    parseAll(null, resolvedReferences.values(), schemaRefs);
+    return schemaRefs;
+  }
+
+  // Parses the references and then the main schema, adding the references to refsOut.
+  // Newer Avro versions reject a "type" object that names a type, such as
+  // {"type": {"type": "com.acme.Mytype"}}, so on failure retry with such objects
+  // replaced by the type name, as older versions read them.
+  private Schema parseAll(String schemaString, Collection<String> refStrings,
+      List<Schema> refsOut) {
+    try {
+      return parseWith(getParser(), schemaString, refStrings, refsOut);
+    } catch (SchemaParseException e) {
+      boolean changed = false;
+      List<String> fixedRefs = new ArrayList<>(refStrings.size());
+      for (String ref : refStrings) {
+        String fixed = AvroSchemaUtils.fixTypeObjects(ref);
+        changed |= fixed != null;
+        fixedRefs.add(fixed != null ? fixed : ref);
+      }
+      String fixedSchema = schemaString != null
+          ? AvroSchemaUtils.fixTypeObjects(schemaString)
+          : null;
+      changed |= fixedSchema != null;
+      if (!changed) {
+        throw e;
+      }
+      refsOut.clear();
+      return parseWith(getParser(), fixedSchema != null ? fixedSchema : schemaString,
+          fixedRefs, refsOut);
+    }
+  }
+
+  private static Schema parseWith(Schema.Parser parser, String schemaString,
+      Collection<String> refStrings, List<Schema> refsOut) {
+    for (String ref : refStrings) {
+      refsOut.add(parser.parse(ref));
+    }
+    return schemaString != null ? parser.parse(schemaString) : null;
+  }
+
   @Override
   public Schema rawSchema() {
     return schemaObj;
@@ -302,12 +343,7 @@ public class AvroSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (canonicalString == null) {
-          Schema.Parser parser = getParser();
-          List<Schema> schemaRefs = new ArrayList<>();
-          for (String schema : resolvedReferences.values()) {
-            Schema schemaRef = parser.parse(schema);
-            schemaRefs.add(schemaRef);
-          }
+          List<Schema> schemaRefs = parseReferences();
           canonicalString = schemaObj.toString(schemaRefs, false);
         }
       }
