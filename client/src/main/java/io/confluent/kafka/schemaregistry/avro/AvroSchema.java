@@ -44,8 +44,10 @@ import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -382,6 +384,166 @@ public class AvroSchema implements ParsedSchema {
         this.version,
         this.validateAsNew
     );
+  }
+
+  @Override
+  public void validate(boolean strict) {
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return;
+    }
+    Set<String> buildable = buildableRecords(schema);
+    if (!isBuildable(schema, buildable)) {
+      throw new IllegalArgumentException(
+          "Schema has no finite value: " + unbuildablePath(schema, buildable));
+    }
+  }
+
+  // Worklist over the records reachable through fields and unions, linear in their size:
+  // a record is buildable once each of its fields has a buildable alternative
+  private static Set<String> buildableRecords(Schema root) {
+    Map<String, Schema> records = new LinkedHashMap<>();
+    collectRecords(root, records);
+    Map<String, Integer> unbuilt = new HashMap<>();
+    Map<String, List<PendingField>> waiting = new HashMap<>();
+    Deque<String> ready = new ArrayDeque<>();
+    for (Schema record : records.values()) {
+      int count = 0;
+      for (Schema.Field field : record.getFields()) {
+        List<String> alternatives = recordAlternatives(field.schema());
+        if (alternatives != null) {
+          count++;
+          PendingField pending = new PendingField(record.getFullName());
+          for (String name : alternatives) {
+            waiting.computeIfAbsent(name, k -> new ArrayList<>()).add(pending);
+          }
+        }
+      }
+      unbuilt.put(record.getFullName(), count);
+      if (count == 0) {
+        ready.push(record.getFullName());
+      }
+    }
+    Set<String> buildable = new HashSet<>();
+    while (!ready.isEmpty()) {
+      String name = ready.pop();
+      buildable.add(name);
+      for (PendingField pending : waiting.getOrDefault(name, Collections.emptyList())) {
+        if (!pending.met) {
+          pending.met = true;
+          if (unbuilt.merge(pending.record, -1, Integer::sum) == 0) {
+            ready.push(pending.record);
+          }
+        }
+      }
+    }
+    return buildable;
+  }
+
+  // The records a field needs one of, or null if it is buildable without any
+  private static List<String> recordAlternatives(Schema schema) {
+    List<Schema> branches = schema.getType() == Schema.Type.UNION
+        ? schema.getTypes()
+        : Collections.singletonList(schema);
+    List<String> names = new ArrayList<>();
+    for (Schema branch : branches) {
+      if (branch.getType() == Schema.Type.RECORD) {
+        names.add(branch.getFullName());
+      } else if (isBuildable(branch, Collections.emptySet())) {
+        return null;
+      }
+    }
+    return names;
+  }
+
+  private static final class PendingField {
+    private final String record;
+    private boolean met;
+
+    private PendingField(String record) {
+      this.record = record;
+    }
+  }
+
+  // Iterative, since a chain of named references can be far deeper than the schema JSON
+  private static void collectRecords(Schema root, Map<String, Schema> records) {
+    Deque<Schema> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      Schema schema = pending.pop();
+      switch (schema.getType()) {
+        case RECORD:
+          if (records.putIfAbsent(schema.getFullName(), schema) == null) {
+            for (Schema.Field field : schema.getFields()) {
+              pending.push(field.schema());
+            }
+          }
+          break;
+        case UNION:
+          for (Schema branch : schema.getTypes()) {
+            pending.push(branch);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  private static boolean isBuildable(Schema schema, Set<String> buildable) {
+    switch (schema.getType()) {
+      case RECORD:
+        return buildable.contains(schema.getFullName());
+      case UNION:
+        return schema.getTypes().stream().anyMatch(t -> isBuildable(t, buildable));
+      case ENUM:
+        return !schema.getEnumSymbols().isEmpty();
+      default:
+        return true;
+    }
+  }
+
+  // Follows the first unbuildable field from the root until a record repeats,
+  // or until an empty union or enum ends the chain
+  private static String unbuildablePath(Schema root, Set<String> buildable) {
+    List<String> names = new ArrayList<>();
+    List<String> fields = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    String reason = null;
+    Schema schema = root;
+    while (true) {
+      if (schema.getType() == Schema.Type.UNION) {
+        if (schema.getTypes().isEmpty()) {
+          reason = "an empty union";
+          break;
+        }
+        schema = schema.getTypes().get(0);
+        continue;
+      }
+      names.add(schema.getFullName());
+      if (schema.getType() == Schema.Type.ENUM) {
+        reason = "an enum with no symbols";
+        break;
+      }
+      if (!seen.add(schema.getFullName())) {
+        break;
+      }
+      for (Schema.Field field : schema.getFields()) {
+        if (!isBuildable(field.schema(), buildable)) {
+          fields.add("'" + field.name() + "'");
+          schema = field.schema();
+          break;
+        }
+      }
+    }
+    if (names.isEmpty()) {
+      return reason;
+    }
+    String path = String.join(" -> ", names);
+    if (!fields.isEmpty()) {
+      path += " through fields " + String.join(", ", fields);
+    }
+    return reason != null ? path + " (" + reason + ")" : path;
   }
 
   @Override
