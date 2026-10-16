@@ -142,8 +142,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (object == null) {
       return null;
     }
-    // Avro loads the class of a specific record or reflect POJO, which the application supplied
-    AvroTrustedClasses.trustClassOf(object);
+    // Avro loads the class of a specific record or reflect POJO, which the application supplied;
+    // a container is unwrapped before writing, so its value is what Avro sees
+    AvroTrustedClasses.trustClassOf(object instanceof NonRecordContainer
+        ? ((NonRecordContainer) object).getValue() : object);
     boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {

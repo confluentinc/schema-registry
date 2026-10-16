@@ -28,6 +28,7 @@ import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
@@ -55,6 +56,14 @@ public class AvroTrustedSerdeTest {
 
   public static class Gizmo {
     public String name = "z";
+  }
+
+  public static class Doohickey {
+    public String name = "d";
+  }
+
+  public static class Thingamajig {
+    public String name = "t";
   }
 
   private SchemaRegistryClient schemaRegistry;
@@ -177,5 +186,25 @@ public class AvroTrustedSerdeTest {
     assertForbidden(() -> new KafkaAvroDeserializer(schemaRegistry,
         config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"))
         .deserialize("gizmos", bytes, schema));
+  }
+
+  @Test
+  public void containerOfPojosSerializesWithoutConfig() {
+    // The serializer unwraps the container, so the POJOs inside are what Avro loads
+    Schema mapSchema = Schema.createMap(ReflectData.get().getSchema(Doohickey.class));
+    Map<String, Object> map = Collections.singletonMap("k", new Doohickey());
+    byte[] bytes = serialize("doohickeys", new NonRecordContainer(mapSchema, map));
+    Object value = ((Map<?, ?>) deserialize("doohickeys", bytes)).values().iterator().next();
+    assertEquals("d", ((GenericRecord) value).get("name").toString());
+  }
+
+  @Test
+  public void mapOfGenericRecordsDoesNotLoadClassesTheyName() {
+    // The record's schema names a class on the classpath that is not trusted
+    Schema schema = ReflectData.get().getSchema(Thingamajig.class);
+    Map<String, Object> map = Collections.singletonMap("k", record(schema, "name", "t"));
+    byte[] bytes = serialize("thingamajigs", map);
+    Object value = ((Map<?, ?>) deserialize("thingamajigs", bytes)).values().iterator().next();
+    assertEquals("t", ((GenericRecord) value).get("name").toString());
   }
 }

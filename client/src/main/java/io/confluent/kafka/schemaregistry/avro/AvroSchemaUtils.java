@@ -72,6 +72,7 @@ import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectData.AllowNull;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificFixed;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -639,6 +640,12 @@ public class AvroSchemaUtils {
 
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    if (isMapOfGenericContainers(value)) {
+      // As for a generic record, a reflect writer would load classes named by the schema
+      GenericData genericData = getThreadLocalGenericData();
+      return new GenericDatumWriter<>(schema,
+          genericData != null ? genericData : getGenericData(useLogicalTypes));
+    }
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
@@ -647,6 +654,16 @@ public class AvroSchemaUtils {
     } else {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
     }
+  }
+
+  // As in getSchema, a map's first value decides; generated specific types are not generic
+  private static boolean isMapOfGenericContainers(Object value) {
+    if (!(value instanceof Map) || ((Map<?, ?>) value).isEmpty()) {
+      return false;
+    }
+    Object first = ((Map<?, ?>) value).values().iterator().next();
+    return first instanceof GenericContainer && !(first instanceof SpecificRecord
+        || first instanceof SpecificFixed || first instanceof Enum);
   }
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
