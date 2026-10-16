@@ -98,4 +98,37 @@ public class AvroUntrustedClassTest {
       AvroTrustedClasses.resetToDefaults();
     }
   }
+
+  public static class LateModeled extends SpecificRecordBase {
+    public static final SpecificData MODEL$ = new SpecificData();
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void aRejectionRecordedAfterTrustChangesIsIgnored() {
+    Schema schema = SchemaBuilder.record("LateModeled")
+        .namespace(AvroUntrustedClassTest.class.getName()).fields().endRecord();
+    // A lookup begins, trust changes concurrently, then the lookup records its rejection
+    long generation = AvroTrustedClasses.generation();
+    try {
+      AvroTrustedClasses.trustExactly(LateModeled.class);
+      AvroSchemaUtils.markUntrusted(schema, generation, new SecurityException("stale"));
+      assertSame(LateModeled.MODEL$, AvroSchemaUtils.getSpecificDataForSchema(schema, true));
+    } finally {
+      AvroTrustedClasses.resetToDefaults();
+    }
+  }
 }

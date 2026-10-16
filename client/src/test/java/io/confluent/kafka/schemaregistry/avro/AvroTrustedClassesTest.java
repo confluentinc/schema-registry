@@ -25,6 +25,7 @@ import static org.junit.Assume.assumeTrue;
 import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -312,6 +313,51 @@ public class AvroTrustedClassesTest {
     map.put("b", new Child());
     AvroTrustedClasses.trustClassOf(map);
     assertTrue(AvroTrustedClasses.isTrusted(Child.class));
+  }
+
+  @Test
+  public void trustClassOfTrustsArrayElementsAndMapKeys() {
+    AvroTrustedClasses.trustClassOf(new Object[] {new Object[] {new Line()}});
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    AvroTrustedClasses.trustClassOf(Collections.singletonMap(new Address(), 1));
+    assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+  }
+
+  // Marked as generated, with a java-class field, as a generated stringable field is
+  @AvroGenerated
+  public static class Linked extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"Linked\",\"namespace\":\""
+            + AvroTrustedClassesTest.class.getName() + "\",\"fields\":[{\"name\":\"url\","
+            + "\"type\":{\"type\":\"string\",\"java-class\":\"java.net.URL\"}}]}");
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void trustGeneratedClassesNamedByUsesAvrosClassLoader() {
+    // A context class loader that cannot see the class, as an isolated one may be
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try {
+      thread.setContextClassLoader(ClassLoader.getPlatformClassLoader());
+      AvroTrustedClasses.trustGeneratedClassesNamedBy(Linked.SCHEMA$);
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    assertTrue(AvroTrustedClasses.isTrusted(URL.class));
   }
 
   @Test

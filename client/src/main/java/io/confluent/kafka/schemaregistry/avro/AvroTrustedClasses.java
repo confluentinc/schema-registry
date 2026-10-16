@@ -24,10 +24,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
@@ -81,6 +83,9 @@ public final class AvroTrustedClasses {
   private static final boolean VALIDATOR_AVAILABLE = isValidatorAvailable();
 
   private static volatile State state = new State();
+
+  // Incremented whenever trust may have changed
+  private static final AtomicLong generation = new AtomicLong();
 
   private AvroTrustedClasses() {
   }
@@ -231,27 +236,36 @@ public final class AvroTrustedClasses {
     if (!VALIDATOR_AVAILABLE || value == null) {
       return;
     }
-    if (value instanceof Map || value instanceof Collection) {
+    if (value instanceof Map || value instanceof Collection || value instanceof Object[]) {
       trustMembers(value, Collections.newSetFromMap(new IdentityHashMap<>()), new HashSet<>());
     } else {
       trustOwnClass(value);
     }
   }
 
-  // Trusts every member of a map or collection, since an explicit schema, as in a
-  // NonRecordContainer, can allow nulls and several member types. Only maps and collections need
-  // cycle protection, and each other class is handled once per call.
+  // Trusts every member of a map, collection or object array, including a map's keys, since an
+  // explicit schema, as in a NonRecordContainer, can allow nulls, several member types, and
+  // non-string keys. Only these aggregates need cycle protection, and each other class is
+  // handled once per call.
   private static void trustMembers(Object value, Set<Object> aggregates, Set<Class<?>> handled) {
     if (value == null) {
       return;
     }
-    boolean isMap = value instanceof Map;
-    if (isMap || value instanceof Collection) {
+    if (value instanceof Map || value instanceof Collection || value instanceof Object[]) {
       if (!aggregates.add(value)) {
         return;
       }
-      for (Object member : isMap ? ((Map<?, ?>) value).values() : (Collection<?>) value) {
-        trustMembers(member, aggregates, handled);
+      if (value instanceof Map) {
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+          trustMembers(entry.getKey(), aggregates, handled);
+          trustMembers(entry.getValue(), aggregates, handled);
+        }
+      } else {
+        Iterable<?> members = value instanceof Collection
+            ? (Collection<?>) value : Arrays.asList((Object[]) value);
+        for (Object member : members) {
+          trustMembers(member, aggregates, handled);
+        }
       }
     }
     if (handled.add(value.getClass())) {
@@ -277,7 +291,7 @@ public final class AvroTrustedClasses {
     }
     Set<Class<?>> generated = new HashSet<>();
     collectGeneratedClasses(readerSchema, Collections.newSetFromMap(new IdentityHashMap<>()),
-        generated, defaultClassLoader());
+        generated, null);
     for (Class<?> clazz : generated) {
       walkAndTrust(clazz, null);
     }
@@ -331,6 +345,11 @@ public final class AvroTrustedClasses {
     install();
   }
 
+  // The trust generation, for discarding rejections recorded before trust changed
+  static long generation() {
+    return generation.get();
+  }
+
   // Exposed for tests
   static boolean isTrusted(Class<?> clazz) {
     return state.isTrusted(clazz);
@@ -343,7 +362,7 @@ public final class AvroTrustedClasses {
   public static void install() {
     if (VALIDATOR_AVAILABLE) {
       Validator.install();
-      AvroSchemaUtils.clearUntrustedSchemas();
+      generation.incrementAndGet();
     }
   }
 
@@ -483,19 +502,34 @@ public final class AvroTrustedClasses {
   private static void addNamedType(Schema schema, Set<String> names, ClassLoader loader) {
     String fullName = schema.getFullName();
     if (fullName != null) {
-      Class<?> resolved = resolveClass(schema, loader != null ? loader : defaultClassLoader());
+      Class<?> resolved = resolveClass(schema, loader);
       names.add(resolved != null ? resolved.getName() : fullName);
     }
   }
 
-  private static ClassLoader defaultClassLoader() {
-    ClassLoader loader = Thread.currentThread().getContextClassLoader();
-    return loader != null ? loader : AvroTrustedClasses.class.getClassLoader();
+  // Resolves with the given loader, or, when there is none, with the loaders Avro tries: the data
+  // model's, which is Avro's own by default, then the thread's context loader
+  private static Class<?> resolveClass(Schema schema, ClassLoader loader) {
+    if (loader != null) {
+      return resolveClassWith(schema, loader);
+    }
+    Set<ClassLoader> loaders = new LinkedHashSet<>();
+    loaders.add(SpecificData.get().getClassLoader());
+    loaders.add(Thread.currentThread().getContextClassLoader());
+    loaders.add(AvroTrustedClasses.class.getClassLoader());
+    loaders.remove(null);
+    for (ClassLoader candidate : loaders) {
+      Class<?> resolved = resolveClassWith(schema, candidate);
+      if (resolved != null) {
+        return resolved;
+      }
+    }
+    return null;
   }
 
   // Mirrors SpecificData.getClass, without initializing the class or consulting the validator:
   // first the Java name, with reserved words mangled, then the full name as a nested class
-  private static Class<?> resolveClass(Schema schema, ClassLoader loader) {
+  private static Class<?> resolveClassWith(Schema schema, ClassLoader loader) {
     Class<?> resolved = loadClass(SpecificData.getClassName(schema), loader);
     if (resolved != null) {
       return resolved;

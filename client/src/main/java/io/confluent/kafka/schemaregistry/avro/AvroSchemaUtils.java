@@ -309,19 +309,22 @@ public class AvroSchemaUtils {
 
   // Schemas whose class Avro refused to load. Avro does not cache the failure, so skip
   // the lookup for a while instead of failing it on every message.
-  private static final Cache<Schema, Boolean> untrustedSchemas = CacheBuilder.newBuilder()
+  private static final Cache<Schema, Long> untrustedSchemas = CacheBuilder.newBuilder()
       .weakKeys()
       .expireAfterWrite(1, TimeUnit.MINUTES)
       .maximumSize(1000)
       .build();
 
-  // Called when trust changes, so that a newly trusted class is looked up again
-  static void clearUntrustedSchemas() {
-    untrustedSchemas.invalidateAll();
+  // A rejection holds only while trust is unchanged since the lookup began, so that one recorded
+  // after a concurrent trust declaration is ignored
+  private static boolean isRememberedUntrusted(Schema reader) {
+    Long generation = untrustedSchemas.getIfPresent(reader);
+    return generation != null && generation == AvroTrustedClasses.generation();
   }
 
-  private static void markUntrusted(Schema reader, SecurityException e) {
-    untrustedSchemas.put(reader, Boolean.TRUE);
+  // Package-private for tests; generation is the trust generation read before the lookup
+  static void markUntrusted(Schema reader, long generation, SecurityException e) {
+    untrustedSchemas.put(reader, generation);
     log.debug("Using the default specific data model for {}, since Avro does not trust its "
         + "class: {}", reader.getFullName(), e.getMessage());
   }
@@ -332,13 +335,14 @@ public class AvroSchemaUtils {
     if (useLogicalTypes) {
       return getSpecificDataForSchema(reader);
     }
-    if (reader == null || untrustedSchemas.getIfPresent(reader) != null) {
+    if (reader == null || isRememberedUntrusted(reader)) {
       return SpecificData.get();
     }
+    long generation = AvroTrustedClasses.generation();
     try {
       return SpecificData.getForSchema(reader);
     } catch (SecurityException e) {
-      markUntrusted(reader, e);
+      markUntrusted(reader, generation, e);
       return SpecificData.get();
     }
   }
@@ -346,12 +350,13 @@ public class AvroSchemaUtils {
   public static SpecificData getSpecificDataForSchema(Schema reader) {
     if (reader != null && (reader.getType() == org.apache.avro.Schema.Type.RECORD
             || reader.getType() == org.apache.avro.Schema.Type.UNION)
-        && untrustedSchemas.getIfPresent(reader) == null) {
+        && !isRememberedUntrusted(reader)) {
+      long generation = AvroTrustedClasses.generation();
       Class<?> clazz;
       try {
         clazz = getSpecificData().getClass(reader);
       } catch (SecurityException e) {
-        markUntrusted(reader, e);
+        markUntrusted(reader, generation, e);
         clazz = null;
       }
       if (clazz != null) {
