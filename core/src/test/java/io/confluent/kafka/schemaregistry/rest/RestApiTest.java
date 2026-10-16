@@ -2340,7 +2340,7 @@ public abstract class RestApiTest {
     // into the metadata, so the new version gets a new ID and the soft-deleted version stays:
     // provenance needs it.
     String subject = "logical";
-    restApp.restClient.updateCompatibility(NONE.name, subject);
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
     logical.setCompatibilityPolicy("LOGICAL");
     restApp.restClient.updateConfig(logical, subject);
@@ -2349,7 +2349,7 @@ public abstract class RestApiTest {
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
     String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
-        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
 
     int v1Id = restApp.restClient.registerSchema(v1, subject);
     int v2Id = restApp.restClient.registerSchema(v2, subject);
@@ -2386,7 +2386,7 @@ public abstract class RestApiTest {
     // Once the stamped re-registration is hard-deleted, the soft-deleted v2 still carries its ID,
     // and re-registering stamps the content again under the next version.
     String subject = "logical_hard";
-    restApp.restClient.updateCompatibility(NONE.name, subject);
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
     logical.setCompatibilityPolicy("LOGICAL");
     restApp.restClient.updateConfig(logical, subject);
@@ -2395,7 +2395,7 @@ public abstract class RestApiTest {
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
     String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
-        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
     restApp.restClient.registerSchema(v1, subject);
     int v2Id = restApp.restClient.registerSchema(v2, subject);
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
@@ -2433,7 +2433,7 @@ public abstract class RestApiTest {
     String other = "other";
     String subject = "logical_reuse";
     restApp.restClient.updateCompatibility(NONE.name, other);
-    restApp.restClient.updateCompatibility(NONE.name, subject);
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
     logical.setCompatibilityPolicy("LOGICAL");
     restApp.restClient.updateConfig(logical, subject);
@@ -2442,7 +2442,7 @@ public abstract class RestApiTest {
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
     String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
-        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
     String unrelated = "{\"type\":\"record\",\"name\":\"U\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"u\",\"type\":\"int\"}]}";
 
@@ -2479,7 +2479,7 @@ public abstract class RestApiTest {
     // Default metadata skips the lookup before register, so register itself must find the live
     // stamped version although the confluent:version it inherits was set to the next one.
     String subject = "logical_defaults";
-    restApp.restClient.updateCompatibility(NONE.name, subject);
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
     ConfigUpdateRequest logical = new ConfigUpdateRequest();
     logical.setCompatibilityPolicy("LOGICAL");
     logical.setDefaultMetadata(
@@ -2490,7 +2490,7 @@ public abstract class RestApiTest {
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"}]}";
     String v2 = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"a\",\"type\":\"long\"},"
-        + "{\"name\":\"b\",\"type\":\"string\"}]}";
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
     restApp.restClient.registerSchema(v1, subject);
     int v2Id = restApp.restClient.registerSchema(v2, subject);
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
@@ -3830,6 +3830,7 @@ public abstract class RestApiTest {
     restApp.restClient.registerSchema(schema, subject);
     restApp.restClient.registerSchema(schema, other);
     ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel(BACKWARD.name);
     request.setCompatibilityPolicy("LOGICAL");
     restApp.restClient.updateConfig(request, subject);
 
