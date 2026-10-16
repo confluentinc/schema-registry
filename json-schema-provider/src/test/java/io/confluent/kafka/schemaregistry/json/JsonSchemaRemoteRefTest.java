@@ -15,14 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -31,6 +41,41 @@ import org.junit.Test;
  * than fetched over the network.
  */
 public class JsonSchemaRemoteRefTest {
+
+  private static final String DRAFT7 = "\"$schema\":\"http://json-schema.org/draft-07/schema#\"";
+
+  private HttpServer server;
+  private final AtomicInteger hits = new AtomicInteger();
+
+  @Before
+  public void startServer() throws IOException {
+    server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server.createContext("/", this::respond);
+    server.start();
+  }
+
+  private void respond(HttpExchange exchange) throws IOException {
+    hits.incrementAndGet();
+    byte[] body = "{\"type\":\"string\"}".getBytes(StandardCharsets.UTF_8);
+    exchange.getResponseHeaders().add("Content-Type", "application/json");
+    exchange.sendResponseHeaders(200, body.length);
+    exchange.getResponseBody().write(body);
+    exchange.close();
+  }
+
+  @After
+  public void stopServer() {
+    server.stop(0);
+  }
+
+  private int port() {
+    return server.getAddress().getPort();
+  }
+
+  private static String draft7WithRef(String ref) {
+    return "{" + DRAFT7 + ",\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\""
+        + ref + "\"}}}";
+  }
 
   private static JsonSchema schema(
       String schemaString,
@@ -172,5 +217,101 @@ public class JsonSchemaRemoteRefTest {
         .isBackwardCompatible(schema(previous, Collections.emptyMap(), true));
     assertFalse(errors.isEmpty());
     assertTrue(errors.get(0).contains("unsupported external reference"));
+  }
+
+  // isBlockedRef
+
+  @Test
+  public void isBlockedRefBlocksNonLocalSchemes() {
+    assertTrue(JsonSchema.isBlockedRef("http://example.com/x.json"));
+    assertTrue(JsonSchema.isBlockedRef("https://example.com/x.json"));
+    assertTrue(JsonSchema.isBlockedRef("ftp://example.com/x.json"));
+    assertTrue(JsonSchema.isBlockedRef("jrt:/java.base/schema.json"));
+    assertTrue(JsonSchema.isBlockedRef("mailto:a@example.com"));
+  }
+
+  @Test
+  public void isBlockedRefUnwrapsJar() {
+    assertTrue(JsonSchema.isBlockedRef("jar:http://example.com/x.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef("jar:jar:http://example.com/x.jar!/y.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef("jar:ftp://example.com/x.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef("jar:file://example.com/x.jar!/s.json"));
+    assertFalse(JsonSchema.isBlockedRef("jar:file:/local.jar!/s.json"));
+  }
+
+  @Test
+  public void isBlockedRefDeepJarNestingFailsClosed() {
+    StringBuilder deep = new StringBuilder();
+    for (int i = 0; i < 10_000; i++) {
+      deep.append("jar:");
+    }
+    assertTrue(JsonSchema.isBlockedRef(deep + "http://example.com/x.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef(deep + "file:/local.jar!/s.json"));
+    // Unparseable input takes the string-based path, which is also bounded.
+    assertTrue(JsonSchema.isBlockedRef(deep + "ftp://example.com/x{.jar!/s.json"));
+  }
+
+  @Test
+  public void isBlockedRefFileAuthority() {
+    assertTrue(JsonSchema.isBlockedRef("file://example.com/x.json"));
+    assertTrue(JsonSchema.isBlockedRef("file://example_host/x.json"));
+    assertFalse(JsonSchema.isBlockedRef("file:/x.json"));
+    assertFalse(JsonSchema.isBlockedRef("file:///x.json"));
+  }
+
+  @Test
+  public void isBlockedRefUnparseableSchemeShapedFailsClosed() {
+    assertTrue(JsonSchema.isBlockedRef("ftp://example.com/x{.json"));
+    assertTrue(JsonSchema.isBlockedRef("jar:ftp://example.com/x{.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef(" jar: http://example.com/x.jar!/s.json"));
+    assertTrue(JsonSchema.isBlockedRef("file://example.com/a b.json"));
+  }
+
+  @Test
+  public void isBlockedRefAllowsLocalAndSchemeless() {
+    assertFalse(JsonSchema.isBlockedRef(null));
+    assertFalse(JsonSchema.isBlockedRef("classpath:/x.json"));
+    assertFalse(JsonSchema.isBlockedRef("classpath://a b.json"));
+    assertFalse(JsonSchema.isBlockedRef("file:///local/a b.json"));
+    assertFalse(JsonSchema.isBlockedRef("common/addr.json"));
+    assertFalse(JsonSchema.isBlockedRef("not a uri"));
+  }
+
+  // Loader-level behavior
+
+  @Test
+  public void jarWrappedHttpRefRejectedWithoutFetchWhenBlocked() {
+    assertRefRejected(draft7WithRef("jar:http://127.0.0.1:" + port() + "/x.jar!/s.json"));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void fileAuthorityRefRejectedWhenBlocked() {
+    assertRefRejected(draft7WithRef("file://127.0.0.1/x"));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void blockMessageOmitsUserinfoAndQuery() {
+    String ref = "http://userinfo-marker:pw@127.0.0.1:" + port() + "/r.json?query-marker=1";
+    try {
+      schema(draft7WithRef(ref), Collections.emptyMap(), true).rawSchema();
+      fail("Expected loading to fail because the remote $ref fetch is disabled");
+    } catch (RuntimeException e) {
+      assertBlocked(e);
+      for (Throwable c = e; c != null; c = c.getCause()) {
+        String message = String.valueOf(c.getMessage());
+        assertFalse(message, message.contains("userinfo-marker"));
+        assertFalse(message, message.contains("query-marker"));
+      }
+    }
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void httpRefStillFetchedWhenNotBlocked() {
+    String ref = "http://127.0.0.1:" + port() + "/r.json";
+    assertNotNull(schema(draft7WithRef(ref), Collections.emptyMap(), false).rawSchema());
+    assertTrue(hits.get() > 0);
   }
 }

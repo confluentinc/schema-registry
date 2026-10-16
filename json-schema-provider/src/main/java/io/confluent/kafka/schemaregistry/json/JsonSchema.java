@@ -92,10 +92,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -492,15 +494,7 @@ public class JsonSchema implements ParsedSchema {
                   ? TrueSchema.builder().build()
                   : FalseSchema.builder().build();
             } else {
-              // Extract the $schema to use for determining the id keyword
-              SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-              if (jsonNode.has(SCHEMA_KEYWORD)) {
-                String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-                SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
-                if (s != null) {
-                  spec = s;
-                }
-              }
+              SpecificationVersion spec = specVersion();
               switch (spec) {
                 case DRAFT_2020_12:
                 case DRAFT_2019_09:
@@ -565,6 +559,31 @@ public class JsonSchema implements ParsedSchema {
 
   private void loadPreviousDraft(SpecificationVersion spec)
       throws JsonProcessingException {
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .useDefaults(true).draftV7Support();
+    configureEveritLoader(builder, spec);
+    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    builder.schemaJson(jsonObject);
+    SchemaLoader loader = builder.build();
+    schemaObj = loader.load().build();
+  }
+
+  private SpecificationVersion specVersion() {
+    // Extract the $schema to use for determining the id keyword
+    SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+    if (jsonNode.has(SCHEMA_KEYWORD)) {
+      String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+      SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+      if (s != null) {
+        spec = s;
+      }
+    }
+    return spec;
+  }
+
+  // Applies this schema's remote-ref policy and registered references to an Everit loader
+  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
+                                     SpecificationVersion spec) {
     org.everit.json.schema.loader.SpecificationVersion loaderSpec =
         org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
     switch (spec) {
@@ -589,8 +608,6 @@ public class JsonSchema implements ParsedSchema {
         idUri = ReferenceResolver.resolve((URI) null, id);
       }
     }
-    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-        .useDefaults(true).draftV7Support();
     // Register the draft 4/6/7 meta-schemas so a $ref to one of them resolves from the bundled
     // copy instead of triggering an external HTTP fetch (Everit otherwise queries the network).
     // The modern 2019-09/2020-12 meta-schemas are intentionally not registered here: they are
@@ -599,28 +616,124 @@ public class JsonSchema implements ParsedSchema {
     for (Map.Entry<URI, String> meta : previousDraftMetaSchemas.entrySet()) {
       builder.registerSchemaByURI(meta.getKey(), new JSONObject(meta.getValue()));
     }
-    if (blockRemoteRefs) {
-      // Block remote HTTP(S) ref fetching; classpath and registered refs still resolve.
-      builder.schemaClient(new NoHttpSchemaClient());
+    org.everit.json.schema.loader.SchemaClient schemaClient = everitSchemaClient();
+    if (schemaClient != null) {
+      // Block remote ref fetching; classpath and registered refs still resolve.
+      builder.schemaClient(schemaClient);
     }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
       builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
     }
-    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
-    builder.schemaJson(jsonObject);
-    SchemaLoader loader = builder.build();
-    schemaObj = loader.load().build();
   }
 
   private static boolean isHttpScheme(String scheme) {
     return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
   }
 
+  // RFC 3986 scheme prefix
+  private static final java.util.regex.Pattern SCHEME_PREFIX =
+      java.util.regex.Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:");
+
+  private static final int MAX_JAR_UNWRAP_DEPTH = 16;
+
   /**
-   * An Everit {@link org.everit.json.schema.loader.SchemaClient} that refuses to fetch
-   * {@code http}/{@code https} URLs, while delegating all other (e.g. {@code classpath})
-   * lookups to the default classpath-aware client.
+   * Whether a remote ref must not be fetched: anything but classpath: and local file: is blocked;
+   * jar: is checked by its inner URL. Schemeless refs are left to the delegate.
+   */
+  static boolean isBlockedRef(String url) {
+    if (url == null) {
+      return false;
+    }
+    String current = url.trim();
+    for (int depth = 0; depth <= MAX_JAR_UNWRAP_DEPTH; depth++) {
+      final URI uri;
+      try {
+        uri = URI.create(current);
+      } catch (IllegalArgumentException e) {
+        return isBlockedUnparseableRef(current);
+      }
+      String scheme = uri.getScheme();
+      if (scheme == null) {
+        return false;
+      }
+      if (!"jar".equalsIgnoreCase(scheme)) {
+        return !isLocalScheme(uri);
+      }
+      current = unwrapJar(uri);
+    }
+    return true;
+  }
+
+  // file://host is a network fetch
+  private static boolean isLocalScheme(URI uri) {
+    String scheme = uri.getScheme();
+    if ("classpath".equalsIgnoreCase(scheme)) {
+      return true;
+    }
+    if ("file".equalsIgnoreCase(scheme)) {
+      String authority = uri.getRawAuthority();
+      return authority == null || authority.isEmpty();
+    }
+    return false;
+  }
+
+  // Inner URL of a jar: URI (before "!/")
+  private static String unwrapJar(URI uri) {
+    String inner = uri.getRawSchemeSpecificPart();
+    int bang = inner.indexOf("!/");
+    return bang < 0 ? inner : inner.substring(0, bang);
+  }
+
+  private static boolean isBlockedUnparseableRef(String url) {
+    String remaining = url.toLowerCase(Locale.ROOT).replaceAll("[\\x00-\\x20]", "");
+    for (int depth = 0; remaining.startsWith("jar:"); depth++) {
+      if (depth >= MAX_JAR_UNWRAP_DEPTH) {
+        return true;
+      }
+      remaining = remaining.substring("jar:".length());
+    }
+    if (remaining.startsWith("classpath:")) {
+      return false;
+    }
+    if (remaining.startsWith("file:")) {
+      return hasNetworkAuthority(remaining, "file:".length());
+    }
+    return SCHEME_PREFIX.matcher(remaining).find();
+  }
+
+  private static boolean hasNetworkAuthority(String schemeAndRest, int afterColon) {
+    if (!schemeAndRest.startsWith("//", afterColon)) {
+      return false;
+    }
+    int hostStart = afterColon + 2;
+    return hostStart < schemeAndRest.length() && schemeAndRest.charAt(hostStart) != '/';
+  }
+
+  // Host only: refs can carry secrets in userinfo or query
+  private static String hostForLog(String url) {
+    if (url == null) {
+      return "<null>";
+    }
+    String current = url.trim();
+    for (int depth = 0; depth <= MAX_JAR_UNWRAP_DEPTH; depth++) {
+      try {
+        URI uri = URI.create(current);
+        if (!"jar".equalsIgnoreCase(uri.getScheme())) {
+          String host = uri.getHost();
+          return host != null ? host.toLowerCase(Locale.ROOT) : "<unparseable-host>";
+        }
+        current = unwrapJar(uri);
+      } catch (IllegalArgumentException ignored) {
+        break;
+      }
+    }
+    return "<unparseable-host>";
+  }
+
+  /**
+   * An Everit {@link org.everit.json.schema.loader.SchemaClient} that refuses non-local URLs,
+   * while delegating local (e.g. {@code classpath}) lookups to the default classpath-aware client.
    */
   private static final class NoHttpSchemaClient
       implements org.everit.json.schema.loader.SchemaClient {
@@ -630,13 +743,20 @@ public class JsonSchema implements ParsedSchema {
 
     @Override
     public InputStream get(String url) {
-      String scheme = url == null ? null : URI.create(url.trim()).getScheme();
-      if (isHttpScheme(scheme)) {
+      String trimmed = url == null ? null : url.trim();
+      if (isBlockedRef(trimmed)) {
         throw new UncheckedIOException(new IOException(
-            REMOTE_REF_DISABLED_MESSAGE + ": " + url));
+            REMOTE_REF_DISABLED_MESSAGE + ": " + hostForLog(trimmed)));
       }
-      return delegate.get(url);
+      return delegate.get(trimmed);
     }
+  }
+
+  private static final NoHttpSchemaClient NO_HTTP_SCHEMA_CLIENT = new NoHttpSchemaClient();
+
+  // Client used to load this schema; null means the loader default
+  protected org.everit.json.schema.loader.SchemaClient everitSchemaClient() {
+    return blockRemoteRefs ? NO_HTTP_SCHEMA_CLIENT : null;
   }
 
   /**
@@ -1508,8 +1628,11 @@ public class JsonSchema implements ParsedSchema {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
+    // Sort composition branches with the same loader setup as this schema; null keeps the default
+    Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
+        ? b -> configureEveritLoader(b, specVersion()) : null;
     for (SchemaEntity entity : entityToModify) {
-      JsonNode fieldNodePtr = findMatchingEntity(node, entity);
+      JsonNode fieldNodePtr = findMatchingEntity(node, entity, loaderConfig);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
