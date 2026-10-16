@@ -23,6 +23,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -564,6 +566,36 @@ public class JsonSchemaTest {
         + "    }\n"
         + "  }\n"
         + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
+    assertEquals(0, diff.size());
+  }
+
+  @Test
+  public void testRefWithReadOnly() {
+    String schema = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": { \"incidentContext\": { \"$ref\": \"#/$defs/IncidentContext\" } },\n"
+        + "    \"$defs\": {\n"
+        + "      \"IncidentContext\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"incidentInvolvedParties\": {\n"
+        + "          \"type\": \"array\", \"items\": { \"$ref\": \"#/$defs/RelatedPerson\" } } }\n"
+        + "      },\n"
+        + "      \"RelatedPerson\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"sanctionsCheckResult\": { \"readOnly\": true, \"$ref\": \"#/$defs/SanctionsCheckResult\" } },\n"
+        + "        \"discriminator\": {\n"
+        + "          \"propertyName\": \"relatedPersonType\",\n"
+        + "          \"mapping\": { \"NaturalPerson\": \"#/$defs/NaturalPerson\", \"LegalPerson\": \"#/$defs/LegalPerson\" }\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"NaturalPerson\": { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"LegalPerson\":   { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"SanctionsCheckResult\": { \"type\": \"object\", \"properties\": {} }\n"
+        + "    }\n"
+        + "  }";
     JsonSchema jsonSchema = new JsonSchema(schema);
     List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
     assertEquals(0, diff.size());
@@ -1898,6 +1930,39 @@ public class JsonSchemaTest {
   private static JsonSchema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return new JsonSchema(schemaString);
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReference() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceWithDraft_2020_12() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceCrossDraft() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
   }
 
   static class TestObj {
