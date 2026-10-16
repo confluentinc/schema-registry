@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Verifies the {@code CompatibilityPolicy.LOGICAL} branch inside
@@ -121,27 +123,28 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         "errorType findings are not contiguous: " + errors);
   }
 
-  @Test
-  void logicalPolicyRejectsForwardCompatibility() {
-    // Iceberg, the only current LOGICAL target, supports only backward-compatible evolution, so
-    // this pairing is rejected before either check runs -- even for a pair with no other findings.
+  @ParameterizedTest
+  @ValueSource(strings = {"NONE", "FORWARD", "FORWARD_TRANSITIVE"})
+  void logicalPolicyRejectsNonBackwardCompatibility(String level) {
+    // LOGICAL requires a backward-compatible level, so these are rejected before either check
+    // runs -- even for a pair with no other findings.
     List<String> errors = check(
-        "FORWARD", "LOGICAL",
+        level, "LOGICAL",
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
     assertEquals(1, errors.size(), errors.toString());
     assertTrue(errors.get(0).contains("compatibilityPolicy=LOGICAL"), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel=" + level), errors.toString());
   }
 
-  @Test
-  void logicalPolicyRejectsForwardTransitiveCompatibility() {
+  @ParameterizedTest
+  @ValueSource(strings = {"BACKWARD", "BACKWARD_TRANSITIVE", "FULL", "FULL_TRANSITIVE"})
+  void logicalPolicyAllowsBackwardCompatibility(String level) {
     List<String> errors = check(
-        "FORWARD_TRANSITIVE", "LOGICAL",
+        level, "LOGICAL",
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
-    assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD_TRANSITIVE"), errors.toString());
+    assertTrue(errors.isEmpty(), errors.toString());
   }
 
   @Test
