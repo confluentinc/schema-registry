@@ -29,7 +29,7 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
 
   /**
    * Config key (within the {@code schema.providers.} provider config map) controlling whether
-   * remote HTTP(S) schema references may be fetched. The typed value is injected by the schema
+   * remote schema references may be fetched. The typed value is injected by the schema
    * registry from {@code schema.providers.json.fetch.remote.schemas} (defaults to true).
    */
   public static final String FETCH_REMOTE_REFS = "fetchRemoteRefs";
@@ -53,7 +53,7 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   }
 
   /**
-   * Determines whether remote HTTP(S) schema-reference fetching should be blocked while loading
+   * Determines whether remote schema-reference fetching should be blocked while loading
    * the given schema. Applies uniformly to all parses (new registrations and already-stored
    * schemas alike); subclasses may override for a different policy.
    */
