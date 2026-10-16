@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
@@ -73,10 +72,10 @@ public final class AvroTrustedClasses {
 
   private static final String ALL_PACKAGES = "*";
 
-  // Values whose schema Avro derives without loading their class
+  // Values whose schema AvroSchemaUtils.getSchema derives without reflection
   private static final List<Class<?>> NON_REFLECTIVE_TYPES = Arrays.asList(
-      CharSequence.class, Number.class, Boolean.class, byte[].class, ByteBuffer.class,
-      Map.class, Collection.class);
+      Boolean.class, Integer.class, Long.class, Float.class, Double.class, CharSequence.class,
+      byte[].class, ByteBuffer.class);
 
   private static final boolean VALIDATOR_AVAILABLE = isValidatorAvailable();
 

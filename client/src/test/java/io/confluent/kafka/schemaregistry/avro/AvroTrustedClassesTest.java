@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -159,6 +160,45 @@ public class AvroTrustedClassesTest {
     public Schema getSchema() {
       return ReflectData.get().getSchema(Line.class);
     }
+  }
+
+  // POJOs that reflection derives a schema for, although they are a number and a map
+  public static class Money extends Number {
+    public long cents = 100;
+
+    @Override
+    public int intValue() {
+      return (int) cents;
+    }
+
+    @Override
+    public long longValue() {
+      return cents;
+    }
+
+    @Override
+    public float floatValue() {
+      return cents;
+    }
+
+    @Override
+    public double doubleValue() {
+      return cents;
+    }
+  }
+
+  public static class Attributes extends HashMap<String, String> {
+  }
+
+  @Test
+  public void trustClassOfTrustsNumberAndMapPojos() {
+    AvroTrustedClasses.trustClassOf(new Money());
+    AvroTrustedClasses.trustClassOf(new Attributes());
+    assertTrue(AvroTrustedClasses.isTrusted(Money.class));
+    assertTrue(AvroTrustedClasses.isTrusted(Attributes.class));
+    // Primitive values are left alone
+    AvroTrustedClasses.trustClassOf(new StringBuilder("s"));
+    assertFalse(AvroTrustedClasses.isTrusted(StringBuilder.class));
   }
 
   @Test
