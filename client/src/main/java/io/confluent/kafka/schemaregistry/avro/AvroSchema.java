@@ -385,6 +385,114 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
+  public void validate(boolean strict) {
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return;
+    }
+    Set<String> buildable = buildableRecords(schema);
+    if (!isBuildable(schema, buildable)) {
+      throw new IllegalArgumentException(
+          "Schema has no finite value: " + unbuildablePath(schema, buildable));
+    }
+  }
+
+  // Least fixpoint over the records reachable through required fields and unions;
+  // arrays and maps are skipped since they can always be empty
+  private static Set<String> buildableRecords(Schema root) {
+    Map<String, Schema> records = new LinkedHashMap<>();
+    collectRecords(root, records);
+    Set<String> buildable = new HashSet<>();
+    boolean changed = true;
+    while (changed) {
+      changed = false;
+      for (Schema record : records.values()) {
+        if (!buildable.contains(record.getFullName())
+            && record.getFields().stream().allMatch(f -> isBuildable(f.schema(), buildable))) {
+          buildable.add(record.getFullName());
+          changed = true;
+        }
+      }
+    }
+    return buildable;
+  }
+
+  private static void collectRecords(Schema schema, Map<String, Schema> records) {
+    switch (schema.getType()) {
+      case RECORD:
+        if (records.putIfAbsent(schema.getFullName(), schema) == null) {
+          for (Schema.Field field : schema.getFields()) {
+            collectRecords(field.schema(), records);
+          }
+        }
+        break;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          collectRecords(branch, records);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static boolean isBuildable(Schema schema, Set<String> buildable) {
+    switch (schema.getType()) {
+      case RECORD:
+        return buildable.contains(schema.getFullName());
+      case UNION:
+        return schema.getTypes().stream().anyMatch(t -> isBuildable(t, buildable));
+      case ENUM:
+        return !schema.getEnumSymbols().isEmpty();
+      default:
+        return true;
+    }
+  }
+
+  // Follows the first unbuildable field from the root until a record repeats,
+  // or until an empty union or enum ends the chain
+  private static String unbuildablePath(Schema root, Set<String> buildable) {
+    List<String> names = new ArrayList<>();
+    List<String> fields = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    String reason = null;
+    Schema schema = root;
+    while (true) {
+      if (schema.getType() == Schema.Type.UNION) {
+        if (schema.getTypes().isEmpty()) {
+          reason = "an empty union";
+          break;
+        }
+        schema = schema.getTypes().get(0);
+        continue;
+      }
+      names.add(schema.getFullName());
+      if (schema.getType() == Schema.Type.ENUM) {
+        reason = "an enum with no symbols";
+        break;
+      }
+      if (!seen.add(schema.getFullName())) {
+        break;
+      }
+      for (Schema.Field field : schema.getFields()) {
+        if (!isBuildable(field.schema(), buildable)) {
+          fields.add("'" + field.name() + "'");
+          schema = field.schema();
+          break;
+        }
+      }
+    }
+    if (names.isEmpty()) {
+      return reason;
+    }
+    String path = String.join(" -> ", names);
+    if (!fields.isEmpty()) {
+      path += " through fields " + String.join(", ", fields);
+    }
+    return reason != null ? path + " (" + reason + ")" : path;
+  }
+
+  @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
