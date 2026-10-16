@@ -24,8 +24,12 @@ import java.security.GeneralSecurityException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KeysetWrapperDeserializer implements Deserializer<KeysetWrapper> {
+
+  private static final Logger log = LoggerFactory.getLogger(KeysetWrapperDeserializer.class);
 
   private Aead aead;
   private Aead oldAead;
@@ -38,6 +42,9 @@ public class KeysetWrapperDeserializer implements Deserializer<KeysetWrapper> {
       if (oldSecret != null) {
         oldAead = MetadataEncoderService.getPrimitive(oldSecret);
       }
+      log.info("KeysetWrapperDeserializer initialized with secret hash={}, oldSecret configured={}",
+          secret != null ? Integer.toHexString(secret.hashCode()) : "null",
+          oldSecret != null);
     } catch (GeneralSecurityException e) {
       throw new ConfigException("Error while configuring KeysetWrapperDeserializer", e);
     }

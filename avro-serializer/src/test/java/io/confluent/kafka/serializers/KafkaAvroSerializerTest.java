@@ -23,11 +23,21 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -36,8 +46,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -46,10 +58,10 @@ import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -69,30 +81,31 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
-  private final Properties defaultConfig;
-  private final SchemaRegistryClient schemaRegistry;
-  private final KafkaAvroSerializer avroSerializer;
-  private final KafkaAvroDeserializer avroDeserializer;
-  private final KafkaAvroSerializer reflectionAvroSerializer;
-  private final KafkaAvroDecoder avroDecoder;
-  private final String topic;
-  private final KafkaAvroDeserializer specificAvroDeserializer;
-  private final KafkaAvroDecoder specificAvroDecoder;
-  private final KafkaAvroDeserializer reflectionAvroDeserializer;
-  private final KafkaAvroDecoder reflectionAvroDecoder;
+  protected final Properties defaultConfig;
+  protected final SchemaRegistryClient schemaRegistry;
+  protected final KafkaAvroSerializer avroSerializer;
+  protected final KafkaAvroDeserializer avroDeserializer;
+  protected final KafkaAvroSerializer reflectionAvroSerializer;
+  protected final KafkaAvroDecoder avroDecoder;
+  protected final String topic;
+  protected final KafkaAvroDeserializer specificAvroDeserializer;
+  protected final KafkaAvroDecoder specificAvroDecoder;
+  protected final KafkaAvroDeserializer reflectionAvroDeserializer;
+  protected final KafkaAvroDecoder reflectionAvroDecoder;
 
   public KafkaAvroSerializerTest() {
-    defaultConfig = new Properties();
-    defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    defaultConfig = createSerializerConfig();
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
-    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
-    avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(defaultConfig));
+    Properties deserializerConfig = createDeserializerConfig();
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, new HashMap(deserializerConfig));
+    avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(deserializerConfig));
     topic = "test";
 
     HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
@@ -102,7 +115,7 @@ public class KafkaAvroSerializerTest {
     specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
 
-    Properties specificDecoderProps = new Properties();
+    Properties specificDecoderProps = createDeserializerConfig();
     specificDecoderProps.setProperty(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     specificDecoderProps.setProperty(
@@ -118,7 +131,7 @@ public class KafkaAvroSerializerTest {
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
 
-    Properties reflectionDecoderProps = new Properties();
+    Properties reflectionDecoderProps = createDeserializerConfig();
     reflectionDecoderProps.setProperty(
             KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     reflectionDecoderProps.setProperty(
@@ -131,7 +144,22 @@ public class KafkaAvroSerializerTest {
             schemaRegistry, new VerifiableProperties(reflectionDecoderProps));
   }
 
-  private Schema createUserSchema() {
+  protected Properties createSerializerConfig() {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    return serializerConfig;
+  }
+
+  protected Properties createDeserializerConfig() {
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.setProperty(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    deserializerConfig.setProperty(
+        KafkaAvroDeserializerConfig.AVRO_FAIL_ON_TRAILING_DATA_CONFIG, "true");
+    return deserializerConfig;
+  }
+
+  protected Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"User\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
@@ -140,14 +168,14 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createUserRecord() {
+  protected IndexedRecord createUserRecord() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private Schema createExtendUserSchema() {
+  protected Schema createExtendUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"User\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, " +
@@ -157,14 +185,14 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createExtendUserRecordWithNullField() {
+  protected IndexedRecord createExtendUserRecordWithNullField() {
     Schema schema = createExtendUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private IndexedRecord createExtendUserRecord() {
+  protected IndexedRecord createExtendUserRecord() {
     Schema schema = createExtendUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
@@ -172,14 +200,14 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
-  private IndexedRecord createUserRecordUtf8() {
+  protected IndexedRecord createUserRecordUtf8() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", new Utf8("testUser"));
     return avroRecord;
   }
 
-  private Schema createAccountSchema() {
+  protected Schema createAccountSchema() {
     String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"Account\"," +
         "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
@@ -188,18 +216,18 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createAccountRecord() {
+  protected IndexedRecord createAccountRecord() {
     return createAccountRecord("0123456789");
   }
 
-  private IndexedRecord createAccountRecord(String accountNumber) {
+  protected IndexedRecord createAccountRecord(String accountNumber) {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", accountNumber);
     return avroRecord;
   }
 
-  private Schema createBalanceSchema() {
+  protected Schema createBalanceSchema() {
     String balanceSchema = "{\n" +
             "\t\"namespace\": \"example.avro\", \"type\": \"record\",\n" +
             "    \"name\": \"Account\",\n" +
@@ -220,7 +248,7 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createBalanceRecord() {
+  protected IndexedRecord createBalanceRecord() {
     Schema schema = createBalanceSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
@@ -235,11 +263,11 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
-  private IndexedRecord createSpecificAvroRecord() {
+  protected IndexedRecord createSpecificAvroRecord() {
     return User.newBuilder().setName("testUser").build();
   }
 
-  private IndexedRecord createExtendedSpecificAvroRecord() {
+  protected IndexedRecord createExtendedSpecificAvroRecord() {
     return ExtendedUser.newBuilder()
         .setName("testUser")
         .setAge(99)
@@ -247,11 +275,11 @@ public class KafkaAvroSerializerTest {
         .build();
   }
 
-  private IndexedRecord createAnnotatedUserRecord() {
+  protected IndexedRecord createAnnotatedUserRecord() {
     return io.confluent.kafka.example.annotated.User.newBuilder().setName("testUser").build();
   }
 
-  private IndexedRecord createInvalidAvroRecord() {
+  protected IndexedRecord createInvalidAvroRecord() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
                         "\"name\": \"User\"," +
                         "\"fields\": [{\"name\": \"f1\", \"type\": \"string\"}," +
@@ -271,7 +299,7 @@ public class KafkaAvroSerializerTest {
           + " \"name\": \"test\",\n"
           + " \"items\": {\n"
           + "\"type\": \"record\",\n"
-          + "\"namespace\": \"example.avro\",\n"
+          + "\"namespace\": \"io.confluent.kafka.example\",\n"
           + "\"name\": \"User\",\n"
           + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
 
@@ -281,63 +309,143 @@ public class KafkaAvroSerializerTest {
           + " \"name\": \"test\",\n"
           + " \"values\": {\n"
           + "\"type\": \"record\",\n"
-          + "\"namespace\": \"example.avro\",\n"
+          + "\"namespace\": \"io.confluent.kafka.example\",\n"
           + "\"name\": \"User\",\n"
           + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
+
+  private static final org.apache.avro.Schema mapEntriesSchema = new Schema.Parser().parse(
+      "{\n"
+          + "\"type\":\"array\","
+          + "\"items\":{"
+          + "\"type\":\"record\","
+          + "\"name\":\"KsqlDataSourceSchema\","
+          + "\"namespace\":\"io.confluent.ksql.avro_schemas\","
+          + "\"fields\":["
+          + "{\"name\":\"key\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"value\",\"type\":[\"null\",\"int\"],\"default\":null}],"
+          + "\"connect.internal.type\":\"MapEntry\"}}");
 
   @Test
   public void testKafkaAvroSerializer() {
     byte[] bytes;
     IndexedRecord avroRecord = createUserRecord();
-    bytes = avroSerializer.serialize(topic, avroRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
+
+    ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    AvroSchema expectedSchema = new AvroSchema(avroRecord.getSchema());
+    assertEquals(expectedSchema, schemaAndValue.getSchema());
+    assertEquals(avroRecord, schemaAndValue.getValue());
 
     IndexedRecord avroRecordWithAllField = createExtendUserRecord();
-    bytes = avroSerializer.serialize(topic, avroRecordWithAllField);
-    assertEquals(avroRecordWithAllField, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecordWithAllField, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecordWithAllField);
+    assertEquals(avroRecordWithAllField, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecordWithAllField, avroDecoder.fromBytes(headers, bytes));
 
     IndexedRecord avroRecordWithoutOptional = createExtendUserRecordWithNullField();
-    bytes = avroSerializer.serialize(topic, avroRecordWithoutOptional);
-    assertEquals(avroRecordWithoutOptional, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecordWithoutOptional, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecordWithoutOptional);
+    assertEquals(avroRecordWithoutOptional, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecordWithoutOptional, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, null);
-    assertEquals(null, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(null, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, null);
+    assertEquals(null, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(null, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, true);
-    assertEquals(true, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(true, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, true);
+    assertEquals(true, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(true, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, 123);
-    assertEquals(123, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(123, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, 123);
+    assertEquals(123, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(123, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, 345L);
-    assertEquals(345l, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(345l, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, 345L);
+    assertEquals(345l, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(345l, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, 1.23f);
-    assertEquals(1.23f, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(1.23f, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, 1.23f);
+    assertEquals(1.23f, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(1.23f, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, 2.34d);
-    assertEquals(2.34, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(2.34, avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, 2.34d);
+    assertEquals(2.34, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(2.34, avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, "abc");
-    assertEquals("abc", avroDeserializer.deserialize(topic, bytes));
-    assertEquals("abc", avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, "abc");
+    assertEquals("abc", avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals("abc", avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, "abc".getBytes());
-    assertArrayEquals("abc".getBytes(), (byte[]) avroDeserializer.deserialize(topic, bytes));
-    assertArrayEquals("abc".getBytes(), (byte[]) avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, "abc".getBytes());
+    assertArrayEquals("abc".getBytes(), (byte[]) avroDeserializer.deserialize(topic, headers, bytes));
+    assertArrayEquals("abc".getBytes(), (byte[]) avroDecoder.fromBytes(headers, bytes));
 
-    bytes = avroSerializer.serialize(topic, new Utf8("abc"));
-    assertEquals("abc", avroDeserializer.deserialize(topic, bytes));
-    assertEquals("abc", avroDecoder.fromBytes(bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, new Utf8("abc"));
+    assertEquals("abc", avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals("abc", avroDecoder.fromBytes(headers, bytes));
+  }
+
+  @Test
+  public void testSerializeWithSchema() {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema schema = new AvroSchema(avroRecord.getSchema());
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord, schema);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = avroSerializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = avroSerializer.serialize(topic, headers, avroRecord);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = avroSerializer.serialize(topic, headers2, avroRecord, schema);
+    assertArrayEquals(regularBytes, withSchemaBytes);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerPrimitiveArrays() {
+    final Map<String, List<?>> arrays = ImmutableMap.of(
+        "{\"type\": \"array\", \"items\": \"boolean\"}", ImmutableList.of(true, false),
+        "{\"type\": \"array\", \"items\": \"int\"}", ImmutableList.of(1, 2),
+        "{\"type\": \"array\", \"items\": \"long\"}", ImmutableList.of(1L, 2L),
+        "{\"type\": \"array\", \"items\": \"double\"}", ImmutableList.of(1.1, 2.2),
+        "{\"type\": \"array\", \"items\": \"string\"}", ImmutableList.of("string", "elements!")
+    );
+
+    int index = 0;
+    for (Map.Entry<String, List<?>> entry : arrays.entrySet()) {
+      String schema = entry.getKey();
+      List<?> input = entry.getValue();
+      final List<String> expected = input.stream()
+          .map(Object::toString)
+          .collect(Collectors.toList());
+      AvroSchema avroSchema = new AvroSchema(schema);
+      GenericData.Array<?> array = new GenericData.Array<>(avroSchema.rawSchema(), input);
+      RecordHeaders headers = new RecordHeaders();
+      byte[] bytes = avroSerializer.serialize(topic + "_" + index, headers, array);
+      Object object = avroDeserializer.deserialize(topic + "_" + index, headers, bytes);
+      List<String> result = ((List<?>) object).stream()
+          .map(Object::toString)
+          .collect(Collectors.toList());
+      assertEquals(expected, result);
+    }
   }
 
   @Test(expected = SerializationException.class)
@@ -350,21 +458,43 @@ public class KafkaAvroSerializerTest {
     );
     avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createUserRecord();
-    avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    avroSerializer.serialize(topic, headers, avroRecord);
   }
 
   @Test(expected = InvalidConfigurationException.class)
   public void testKafkaAvroSerializerWithoutConfigure() {
     KafkaAvroSerializer unconfiguredSerializer = new KafkaAvroSerializer();
     IndexedRecord avroRecord = createUserRecord();
-    unconfiguredSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    unconfiguredSerializer.serialize(topic, headers, avroRecord);
   }
 
   @Test(expected = InvalidConfigurationException.class)
   public void testKafkaAvroDeserializerWithoutConfigure() {
     KafkaAvroDeserializer unconfiguredSerializer = new KafkaAvroDeserializer();
     byte[] randomBytes = "foo".getBytes();
-    unconfiguredSerializer.deserialize(topic, randomBytes);
+    RecordHeaders headers = new RecordHeaders();
+    unconfiguredSerializer.deserialize(topic, headers, randomBytes);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithTrailingData() throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    // Append some extra bytes to simulate trailing data
+    byte[] bytesWithTrailingData = new byte[bytes.length + 5];
+    System.arraycopy(bytes, 0, bytesWithTrailingData, 0, bytes.length);
+    avroDeserializer.deserialize(topic, headers, bytesWithTrailingData);
   }
 
   @Test
@@ -378,9 +508,10 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
-    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test
@@ -398,9 +529,10 @@ public class KafkaAvroSerializerTest {
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test(expected = SerializationException.class)
@@ -419,9 +551,10 @@ public class KafkaAvroSerializerTest {
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test
@@ -442,11 +575,12 @@ public class KafkaAvroSerializerTest {
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
     // User gets deserialized as an account!
     IndexedRecord badRecord = createAccountRecord("testUser");
-    assertEquals(badRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(badRecord, avroDecoder.fromBytes(bytes));
+    assertEquals(badRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(badRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test
@@ -464,9 +598,10 @@ public class KafkaAvroSerializerTest {
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test
@@ -486,9 +621,10 @@ public class KafkaAvroSerializerTest {
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 
   @Test
@@ -516,9 +652,144 @@ public class KafkaAvroSerializerTest {
         + "}";
     schemaRegistry.register(topic + "-value", new AvroSchema(schema));
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
-    assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, bytes));
-    assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(headers, bytes));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register("mysubject", new AvroSchema(avroRecord.getSchema()));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.WEAK,
+                false,
+                null,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithAssociatedNameStrategyFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to TopicNameStrategy
+    IndexedRecord avroRecord = createUserRecord();
+    String fallbackTopic = "fallback-test";
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    schemaRegistry.register(fallbackTopic + "-value", new AvroSchema(avroRecord.getSchema()));
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+        // subject.name.strategy.fallback.type defaults to "TOPIC"
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to TopicNameStrategy since no association exists
+    byte[] bytes = avroSerializer.serialize(fallbackTopic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithAssociatedNameStrategyRecordFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to RecordNameStrategy
+    IndexedRecord avroRecord = createUserRecord();
+    String fallbackTopic = "example.avro.User";
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    schemaRegistry.register(fallbackTopic, new AvroSchema(avroRecord.getSchema()));
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        false,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_TYPE,
+        "RECORD"
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to RecordNameStrategy since no association exists
+    byte[] bytes = avroSerializer.serialize(fallbackTopic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithAssociatedNameStrategyNoFallback()
+      throws IOException, RestClientException {
+    // No association is created and fallback is disabled
+    IndexedRecord avroRecord = createUserRecord();
+    String noFallbackTopic = "no-fallback-test";
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_TYPE,
+        "NONE"
+    );
+    avroSerializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should throw SerializationException since no association exists and fallback is disabled
+    avroSerializer.serialize(noFallbackTopic, headers, avroRecord);
   }
 
   @Test
@@ -538,9 +809,10 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(configs, false);
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register("example.avro.User", new AvroSchema(avroRecord.getSchema()));
-    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
-    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
 
     // restore configs
     avroDeserializer.configure(new HashMap(defaultConfig), false);
@@ -557,12 +829,14 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(configs, false);
     IndexedRecord record1 = createUserRecord();
     IndexedRecord record2 = createAccountRecord();
-    byte[] bytes1 = avroSerializer.serialize(topic, record1);
-    byte[] bytes2 = avroSerializer.serialize(topic, record2);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, headers, bytes1));
+    headers = new RecordHeaders();
+    byte[] bytes2 = avroSerializer.serialize(topic, headers, record2);
+    assertEquals(record2, avroDeserializer.deserialize(topic, headers, bytes2));
     assertNotNull(schemaRegistry.getLatestSchemaMetadata(topic + "-example.avro.User"));
     assertNotNull(schemaRegistry.getLatestSchemaMetadata(topic + "-example.avro.Account"));
-    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
-    assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
   }
 
   @Test(expected = SerializationException.class)
@@ -574,7 +848,8 @@ public class KafkaAvroSerializerTest {
         TopicRecordNameStrategy.class.getName()
     );
     avroSerializer.configure(configs, false);
-    avroSerializer.serialize(topic, "a string should not be allowed");
+    RecordHeaders headers = new RecordHeaders();
+    avroSerializer.serialize(topic, headers, "a string should not be allowed");
   }
 
   @Test
@@ -606,10 +881,12 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(configs, false);
     IndexedRecord record1 = createUserRecord();
     IndexedRecord record2 = createAccountRecord();
-    byte[] bytes1 = avroSerializer.serialize(topic, record1);
-    byte[] bytes2 = avroSerializer.serialize(topic, record2);
-    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
-    assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, headers, bytes1));
+    headers = new RecordHeaders();
+    byte[] bytes2 = avroSerializer.serialize(topic, headers, record2);
+    assertEquals(record2, avroDeserializer.deserialize(topic, headers, bytes2));
   }
 
   @Test
@@ -648,8 +925,9 @@ public class KafkaAvroSerializerTest {
             ));
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);
-    byte[] bytes1 = avroSerializer.serialize(topic, record);
-    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record);
+    assertEquals(record, avroDeserializer.deserialize(topic, headers, bytes1));
   }
 
   @Test
@@ -795,13 +1073,15 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);
 
-    byte[] bytes1 = avroSerializer.serialize(topic, record);
-    byte[] bytesGrant = avroSerializer.serialize(differentTopic, grantRecord);
-
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record);
     // Assert that deserialize is capable to deserializing from topic A using A-subject
-    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    assertEquals(record, avroDeserializer.deserialize(topic, headers, bytes1));
+
+    headers = new RecordHeaders();
+    byte[] bytesGrant = avroSerializer.serialize(differentTopic, headers, grantRecord);
     // Assert that deserialize is capable to deserializing from topic B using B-subject
-    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, bytesGrant));
+    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, headers, bytesGrant));
   }
 
   @Test
@@ -872,13 +1152,15 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);
 
-    byte[] bytes1 = avroSerializer.serialize(topic, record);
-    byte[] bytesGrant = avroSerializer.serialize(differentTopic, grantRecord);
-
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record);
     // Assert that deserialize is capable to deserializing from topic A using A-subject
-    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    assertEquals(record, avroDeserializer.deserialize(topic, headers, bytes1));
+
+    headers = new RecordHeaders();
+    byte[] bytesGrant = avroSerializer.serialize(differentTopic, headers, grantRecord);
     // Assert that deserialize is capable to deserializing from topic B using B-subject
-    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, bytesGrant));
+    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, headers, bytesGrant));
   }
 
   @Test
@@ -915,6 +1197,7 @@ public class KafkaAvroSerializerTest {
             new SchemaReference("io.confluent.kafka.example.User", "user", -1)
         )));
   }
+
   @Test
   public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
     Map serializerConfigs = ImmutableMap.of(
@@ -938,8 +1221,9 @@ public class KafkaAvroSerializerTest {
     schemaRegistry.register(topic + "-value", new AvroSchema(arraySchema));
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);
-    byte[] bytes1 = avroSerializer.serialize(topic, data);
-    Object result = avroDeserializer.deserialize(topic, bytes1);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, data);
+    Object result = avroDeserializer.deserialize(topic, headers, bytes1);
     assertEquals(data, result);
   }
 
@@ -960,13 +1244,66 @@ public class KafkaAvroSerializerTest {
         true
     );
     Map<Utf8, IndexedRecord> data = new HashMap<>();
-    data.put(new Utf8("one"), createUserRecordUtf8());
+    data.put(new Utf8("one"), createSpecificAvroRecord());
     schemaRegistry.register(topic + "-value", new AvroSchema(mapSchema));
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);
-    byte[] bytes1 = avroSerializer.serialize(topic, data);
-    Object result = avroDeserializer.deserialize(topic, bytes1);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, data);
+    Object result = avroDeserializer.deserialize(topic, headers, bytes1);
     assertEquals(data, result);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMapEntries() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    Schema entrySchema = connectOptionalKeyMapEntrySchema(
+        "bob",
+        org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT)
+    );
+    GenericData.Record e1 = new GenericData.Record(entrySchema);
+    e1.put("key", "a");
+    e1.put("value", 1);
+    GenericData.Record e2 = new GenericData.Record(entrySchema);
+    e2.put("key", null);
+    e2.put("value", null);
+    GenericData.Array<?> data = new GenericData.Array<>(mapEntriesSchema,
+        Arrays.asList(e1, e2));
+    schemaRegistry.register(topic + "-value", new AvroSchema(mapEntriesSchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, data);
+    Object result = avroDeserializer.deserialize(topic, headers, bytes1);
+    assertEquals(data, result);
+  }
+
+  private static org.apache.avro.Schema connectOptionalKeyMapEntrySchema(
+      final String name,
+      final org.apache.avro.Schema valueSchema
+  ) {
+    return org.apache.avro.SchemaBuilder.record(name)
+        .namespace("io.confluent.ksql.avro_schemas")
+        .prop("connect.internal.type", "MapEntry")
+        .fields()
+        .optionalString("key")
+        .name("value")
+        .type().unionOf().nullType().and().type(valueSchema).endUnion()
+        .nullDefault()
+        .endRecord();
   }
 
   @Test
@@ -974,9 +1311,10 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
     Object obj;
     IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
-    bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
-    obj = avroDecoder.fromBytes(bytes);
+    obj = avroDecoder.fromBytes(headers, bytes);
     GenericData.Record extendedUser = (GenericData.Record) obj;
     assertTrue(
         "Returned object should be a GenericData Record",
@@ -985,7 +1323,7 @@ public class KafkaAvroSerializerTest {
     //Age field is visible
     assertNotNull(extendedUser.get("age"));
 
-    obj = avroDecoder.fromBytes(bytes, User.getClassSchema());
+    obj = avroDecoder.fromBytes(headers, bytes, User.getClassSchema());
     assertTrue(
         "Returned object should be a GenericData Record",
         GenericData.Record.class.isInstance(obj)
@@ -1000,7 +1338,7 @@ public class KafkaAvroSerializerTest {
       //this is expected
     }
 
-    obj = avroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    obj = avroDeserializer.deserialize(topic, headers, bytes, User.getClassSchema());
     assertTrue(
         "Returned object should be a GenericData Record",
         GenericData.Record.class.isInstance(obj)
@@ -1014,6 +1352,16 @@ public class KafkaAvroSerializerTest {
     } catch (AvroRuntimeException e){
       //this is expected
     }
+
+    ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(
+        topic, headers, bytes, User.getClassSchema());
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(obj, schemaAndValue.getValue());
+
+    schemaAndValue = avroDeserializer.deserializeWithSchema(
+        topic, headers, bytes, x -> new AvroSchema(User.getClassSchema()));
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(obj, schemaAndValue.getValue());
   }
 
   @Test
@@ -1041,8 +1389,9 @@ public class KafkaAvroSerializerTest {
     GenericRecord recordV1 = new GenericData.Record(avroSchemaV1.rawSchema());
     recordV1.put(fieldToDelete, "present");
 
-    byte[] bytes = avroSerializer.serialize(topic, recordV1);
-    GenericRecord genericRecordV2 = (GenericRecord) avroDeserializer.deserialize(topic, bytes, avroSchemaV2.rawSchema());
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, recordV1);
+    GenericRecord genericRecordV2 = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes, avroSchemaV2.rawSchema());
 
     // In version 2 of the schema, newOptionalField field has a non-null default value
     assertNotNull("Optional field should have a non-null default value", genericRecordV2.get(newOptionalField));
@@ -1062,22 +1411,23 @@ public class KafkaAvroSerializerTest {
     Object obj;
 
     IndexedRecord avroRecord = createSpecificAvroRecord();
-    bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
-    obj = avroDecoder.fromBytes(bytes);
+    obj = avroDecoder.fromBytes(headers, bytes);
     assertTrue(
         "Returned object should be a GenericData Record",
         GenericData.Record.class.isInstance(obj)
     );
 
-    obj = specificAvroDecoder.fromBytes(bytes);
+    obj = specificAvroDecoder.fromBytes(headers, bytes);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
     );
     assertEquals(avroRecord, obj);
 
-    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    obj = specificAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
@@ -1091,30 +1441,31 @@ public class KafkaAvroSerializerTest {
     Object obj;
 
     IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
-    bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
-    obj = specificAvroDecoder.fromBytes(bytes);
+    obj = specificAvroDecoder.fromBytes(headers, bytes);
     assertTrue(
         "Full object should be a io.confluent.kafka.example.ExtendedUser",
         ExtendedUser.class.isInstance(obj)
     );
     assertEquals(avroRecord, obj);
 
-    obj = specificAvroDecoder.fromBytes(bytes, User.getClassSchema());
+    obj = specificAvroDecoder.fromBytes(headers, bytes, User.getClassSchema());
     assertTrue(
         "Projection object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
     );
     assertEquals("testUser", ((User) obj).getName().toString());
 
-    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    obj = specificAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue(
         "Full object should be a io.confluent.kafka.example.ExtendedUser",
         ExtendedUser.class.isInstance(obj)
     );
     assertEquals(avroRecord, obj);
 
-    obj = specificAvroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    obj = specificAvroDeserializer.deserialize(topic, headers, bytes, User.getClassSchema());
     assertTrue(
         "Projection object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
@@ -1138,9 +1489,10 @@ public class KafkaAvroSerializerTest {
     );
 
     IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
-    final byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    final byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
-    final Object obj = specificAvroDeserializerWithReaderSchema.deserialize(topic, bytes);
+    final Object obj = specificAvroDeserializerWithReaderSchema.deserialize(topic, headers, bytes);
     assertTrue(
         "Full object should be a io.confluent.kafka.example.User",
         User.class.isInstance(obj)
@@ -1156,21 +1508,50 @@ public class KafkaAvroSerializerTest {
     Widget widget = new Widget("alice");
     Schema schema = ReflectData.get().getSchema(widget.getClass());
 
-    bytes = reflectionAvroSerializer.serialize(topic, widget);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = reflectionAvroSerializer.serialize(topic, headers, widget);
 
-    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, schema);
     assertTrue(
             "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes, schema);
     assertTrue(
             "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionInstantLogicalType() {
+    byte[] bytes;
+    Object obj;
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true
+    );
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, configs);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, configs);
+
+    EventWithInstant event = new EventWithInstant(Instant.ofEpochMilli(1_460_000_000_000L));
+    Schema schema = AvroSchemaUtils.getReflectData(true, false).getSchema(EventWithInstant.class);
+    assertEquals("timestamp-millis", schema.getField("ts").schema().getLogicalType().getName());
+
+    RecordHeaders headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, event);
+
+    obj = deserializer.deserialize(topic, headers, bytes, schema);
+    assertTrue(
+        "Returned object should be an EventWithInstant",
+        EventWithInstant.class.isInstance(obj)
+    );
+    assertEquals(event, obj);
   }
 
   @Test
@@ -1184,7 +1565,8 @@ public class KafkaAvroSerializerTest {
     Schema schema = ReflectData.AllowNull.get().getSchema(widget.getClass());
 
     try {
-      reflectionAvroSerializer.serialize(topic, widget);
+      RecordHeaders headers = new RecordHeaders();
+      reflectionAvroSerializer.serialize(topic, headers, widget);
       fail("Sending instance with null field should fail reflection serializer");
     } catch (SerializationException e){
       //this is expected
@@ -1198,15 +1580,16 @@ public class KafkaAvroSerializerTest {
     reflectionAvroDeserializer.configure(configs, false);
     reflectionAvroSerializer.configure(configs, false);
 
-    bytes = reflectionAvroSerializer.serialize(topic, widget);
-    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = reflectionAvroSerializer.serialize(topic, headers, widget);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, schema);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
         ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
         ExtendedWidget.class.isInstance(obj)
@@ -1232,15 +1615,16 @@ public class KafkaAvroSerializerTest {
     reflectionAvroDeserializer.configure(configs, false);
     reflectionAvroSerializer.configure(configs, false);
 
-    bytes = reflectionAvroSerializer.serialize(topic, record);
-    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = reflectionAvroSerializer.serialize(topic, headers, record);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, schema);
     assertTrue(
         "Returned object should be a RecordWithUUID",
         RecordWithUUID.class.isInstance(obj)
     );
     assertEquals(record, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue(
         "Returned object should be a RecordWithUUID",
         RecordWithUUID.class.isInstance(obj)
@@ -1266,15 +1650,16 @@ public class KafkaAvroSerializerTest {
     reflectionAvroDeserializer.configure(configs, false);
     reflectionAvroSerializer.configure(configs, false);
 
-    bytes = reflectionAvroSerializer.serialize(topic, record);
-    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = reflectionAvroSerializer.serialize(topic, headers, record);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, schema);
     assertTrue(
         "Returned object should be a RecordWithUUID",
         RecordWithUUID.class.isInstance(obj)
     );
     assertEquals(record, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue(
         "Returned object should be a RecordWithUUID",
         RecordWithUUID.class.isInstance(obj)
@@ -1291,30 +1676,31 @@ public class KafkaAvroSerializerTest {
     Schema extendedWidgetSchema = ReflectData.get().getSchema(ExtendedWidget.class);
     Schema widgetSchema = ReflectData.get().getSchema(Widget.class);
 
-    bytes = reflectionAvroSerializer.serialize(topic, widget);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = reflectionAvroSerializer.serialize(topic, headers, widget);
 
-    obj = reflectionAvroDecoder.fromBytes(bytes, extendedWidgetSchema);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, extendedWidgetSchema);
     assertTrue(
             "Full object should be a io.confluent.kafka.example.ExtendedWidget",
             ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
-    obj = reflectionAvroDecoder.fromBytes(bytes, widgetSchema);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, widgetSchema);
     assertTrue(
             "Projection object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals("alice", ((Widget) obj).getName());
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes, extendedWidgetSchema);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes, extendedWidgetSchema);
     assertTrue(
             "Full object should be a io.confluent.kafka.example.ExtendedWidget",
             ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes, widgetSchema);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes, widgetSchema);
     assertTrue(
             "Projection object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
@@ -1327,10 +1713,11 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
 
     IndexedRecord avroRecord = createUserRecord();
-    bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
     try {
-      specificAvroDecoder.fromBytes(bytes);
+      specificAvroDecoder.fromBytes(headers, bytes);
       fail("Did not throw an exception when class for specific avro record does not exist.");
     } catch (SerializationException e) {
       // this is expected
@@ -1339,7 +1726,7 @@ public class KafkaAvroSerializerTest {
     }
 
     try {
-      specificAvroDeserializer.deserialize(topic, bytes);
+      specificAvroDeserializer.deserialize(topic, headers, bytes);
       fail("Did not throw an exception when class for specific avro record does not exist.");
     } catch (SerializationException e) {
       // this is expected
@@ -1356,14 +1743,16 @@ public class KafkaAvroSerializerTest {
 
     // null doesn't require schema registration. So serialization should succeed with a null
     // schema registry client.
-    assertEquals(null, nullAvroSerializer.serialize("test", null));
+    RecordHeaders headers = new RecordHeaders();
+    assertEquals(null, nullAvroSerializer.serialize("test", headers, null));
   }
 
   @Test
   public void testAvroSerializerInvalidInput() {
     IndexedRecord invalidRecord = createInvalidAvroRecord();
     try {
-      avroSerializer.serialize(topic, invalidRecord);
+      RecordHeaders headers = new RecordHeaders();
+      avroSerializer.serialize(topic, headers, invalidRecord);
       fail("Sending invalid record should fail serializer");
     } catch (SerializationException e) {
       // this is expected
@@ -1385,16 +1774,17 @@ public class KafkaAvroSerializerTest {
     Object obj;
 
     String message = "testKafkaAvroSerializerSpecificRecordWithPrimitives";
-    bytes = avroSerializer.serialize(topic, message);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, message);
 
-    obj = avroDecoder.fromBytes(bytes);
+    obj = avroDecoder.fromBytes(headers, bytes);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
 
-    obj = specificAvroDecoder.fromBytes(bytes);
+    obj = specificAvroDecoder.fromBytes(headers, bytes);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
 
-    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    obj = specificAvroDeserializer.deserialize(topic, headers, bytes);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
   }
@@ -1406,21 +1796,22 @@ public class KafkaAvroSerializerTest {
 
     String message = "testKafkaAvroSerializerReflectionRecordWithPrimitives";
     Schema schema = AvroSchemaUtils.getSchema(message);
-    bytes = avroSerializer.serialize(topic, message);
+    RecordHeaders headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic, headers, message);
 
-    obj = avroDecoder.fromBytes(bytes);
+    obj = avroDecoder.fromBytes(headers, bytes);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
 
-    obj = avroDeserializer.deserialize(topic, bytes);
+    obj = avroDeserializer.deserialize(topic, headers, bytes);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
 
-    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    obj = reflectionAvroDecoder.fromBytes(headers, bytes, schema);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    obj = reflectionAvroDeserializer.deserialize(topic, headers, bytes, schema);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
   }
@@ -1440,8 +1831,9 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(configs, false);
 
     IndexedRecord record1 = createBalanceRecord();
-    byte[] bytes1 = avroSerializer.serialize(topic, record1);
-    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, headers, bytes1));
   }
 
   @Test
@@ -1472,6 +1864,11 @@ public class KafkaAvroSerializerTest {
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
   }
 
+  // --- Regression tests: the Avro datum writer/reader caches must be keyed by subject and
+  // schema id or by content, not by schema-object identity. They previously used identity (==)
+  // keys, so content-identical schemas arriving as distinct instances accumulated duplicate
+  // entries, leaking memory (the SpecificAvroSerializer datumWriterCache in particular).
+
   @SuppressWarnings("unchecked")
   private static Cache<Object, Object> getCache(
       Object serde, Class<?> declaringClass, String fieldName) throws Exception {
@@ -1482,54 +1879,39 @@ public class KafkaAvroSerializerTest {
 
   @Test
   public void testDatumWriterCacheKeyedBySubjectAndSchemaId() throws Exception {
-    // auto.register=false keeps the caller-provided schema instance, so fresh-but-equal
-    // instances reach the cache; identity keys produced one entry per instance.
-    HashMap<String, Object> props = new HashMap<>();
-    props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    // auto.register=false keeps the caller-provided schema instance (the getId branch does not
+    // replace it), so distinct-but-equal instances reach the datumWriterCache key. With the
+    // previous identity keys this produced one cache entry per instance.
+    Properties props = createSerializerConfig();
     props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, "false");
-    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, props);
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(props));
     schemaRegistry.register(topic + "-value", new AvroSchema(createUserSchema()));
 
     byte[] bytes = null;
+    RecordHeaders headers = new RecordHeaders();
     for (int i = 0; i < 5; i++) {
+      // Fresh schema instance each iteration, identical content.
       Schema schema = createUserSchema();
       GenericRecord record = new GenericData.Record(schema);
       record.put("name", "testUser");
-      bytes = serializer.serialize(topic, record);
+      bytes = serializer.serialize(topic, headers, record);
     }
 
     Cache<Object, Object> datumWriterCache =
         getCache(serializer, AbstractKafkaAvroSerializer.class, "datumWriterCache");
     assertEquals(1L, datumWriterCache.size());
+    // Sanity: the produced bytes still round-trip.
     assertEquals("testUser",
-        ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
-  }
-
-  @Test
-  public void testDatumWriterCacheAutoRegisterKeyedBySubjectAndSchemaId() throws Exception {
-    // The INC-11758 path: auto.register=true with a fresh, content-identical schema instance
-    // per call. Identity keys produced one entry per call; subject and id keys collapse to 1.
-    byte[] bytes = null;
-    for (int i = 0; i < 5; i++) {
-      Schema schema = createUserSchema();
-      GenericRecord record = new GenericData.Record(schema);
-      record.put("name", "testUser");
-      bytes = avroSerializer.serialize(topic, record);
-    }
-
-    Cache<Object, Object> datumWriterCache =
-        getCache(avroSerializer, AbstractKafkaAvroSerializer.class, "datumWriterCache");
-    assertEquals(1L, datumWriterCache.size());
-    assertEquals("testUser",
-        ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+        ((GenericRecord) avroDeserializer.deserialize(topic, headers, bytes)).get("name").toString());
   }
 
   @Test
   public void testDatumReaderCacheKeyedBySubjectAndSchemaId() throws Exception {
-    byte[] bytes = avroSerializer.serialize(topic, createUserRecord());
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, createUserRecord());
     for (int i = 0; i < 5; i++) {
       assertEquals("testUser",
-          ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+          ((GenericRecord) avroDeserializer.deserialize(topic, headers, bytes)).get("name").toString());
     }
     Cache<Object, Object> datumReaderCache =
         getCache(avroDeserializer, AbstractKafkaAvroDeserializer.class, "datumReaderCache");
@@ -1538,35 +1920,53 @@ public class KafkaAvroSerializerTest {
 
   @Test
   public void testDatumReaderKeyUsesContentEqualityForReaderSchema() {
+    // Distinct instances, identical content (both writer ids and reader schemas).
     Schema readerA = createUserSchema();
     Schema readerB = createUserSchema();
     assertTrue(readerA != readerB);
-
+    SchemaId writerId = new SchemaId(AvroSchema.TYPE, 1, (String) null);
+    SchemaId writerIdCopy = new SchemaId(AvroSchema.TYPE, 1, (String) null);
     String subject = topic + "-value";
 
     AbstractKafkaAvroDeserializer.DatumReaderKey key1 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerA);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerId, readerA);
     AbstractKafkaAvroDeserializer.DatumReaderKey key2 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerB);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerIdCopy, readerB);
     // Same writer id + content-equal reader schema => equal key (unequal under identity keys).
     assertEquals(key1, key2);
     assertEquals(key1.hashCode(), key2.hashCode());
 
+    // The common no-explicit-reader case (null reader schema) keys consistently.
     assertEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 7, null),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 7, null));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            subject, new SchemaId(AvroSchema.TYPE, 7, (String) null), null),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            subject, new SchemaId(AvroSchema.TYPE, 7, (String) null), null));
 
-    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 2, readerA));
+    // A schema identified by guid (id == null) keys consistently too.
+    String guid = "12345678-1234-1234-1234-123456789abc";
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            subject, new SchemaId(AvroSchema.TYPE, null, guid), readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            subject, new SchemaId(AvroSchema.TYPE, null, guid), readerB));
+
+    // Different writer id => different key.
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        subject, new SchemaId(AvroSchema.TYPE, 2, (String) null), readerA));
     // Same writer id under a different subject (e.g. another context) => different key.
-    assertNotEquals(key1,
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(":.replica:" + subject, 1, readerA));
-    assertNotEquals(key1,
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, createExtendUserSchema()));
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        ":.replica:" + subject, writerId, readerA));
+    // Different reader content => different key.
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        subject, writerId, createExtendUserSchema()));
 
-    // A null writer id (JSON migration path) must not collide with a real id for the same reader.
+    // Post-migration sentinel: a null writer id never collides with a normal entry that has a
+    // non-null writer id for the same reader schema -- this is what prevents cache poisoning.
     assertNotEquals(
         new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerA));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, writerId, readerA));
+    // Two post-migration entries (null writer id) with content-equal reader schemas collapse.
     assertEquals(
         new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
         new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerB));
@@ -1582,8 +1982,8 @@ public class KafkaAvroSerializerTest {
     }
   }
 
-  private static HashMap<String, Object> createReplicaContextConfig() {
-    HashMap<String, Object> props = new HashMap<>();
+  private static Properties createReplicaContextConfig() {
+    Properties props = new Properties();
     props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
         ReplicaContextNameStrategy.class.getName());
@@ -1608,74 +2008,114 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testDatumReaderCacheSeparatesContexts() throws Exception {
     SchemaRegistryClient registry = new MockSchemaRegistryClient();
-    HashMap<String, Object> props = createReplicaContextConfig();
+    Properties props = createReplicaContextConfig();
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    RecordHeaders headers = new RecordHeaders();
     String replicaTopic = "replica-" + topic;
     IndexedRecord user = createUserRecord();
     IndexedRecord event = createEventRecord();
-    // A serializer per record keeps the datum writer cache out of this test.
-    byte[] userBytes = new KafkaAvroSerializer(registry, props).serialize(topic, user);
-    byte[] eventBytes = new KafkaAvroSerializer(registry, props).serialize(replicaTopic, event);
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] eventBytes = serializer.serialize(replicaTopic, headers, event);
     assertEquals(1, schemaIdOf(userBytes));
     assertEquals(1, schemaIdOf(eventBytes));
 
-    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, props);
-    assertEquals(user, deserializer.deserialize(topic, userBytes));
-    assertEquals(event, deserializer.deserialize(replicaTopic, eventBytes));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+    assertEquals(event, deserializer.deserialize(replicaTopic, headers, eventBytes));
 
-    deserializer = new KafkaAvroDeserializer(registry, props);
-    assertEquals(event, deserializer.deserialize(replicaTopic, eventBytes));
-    assertEquals(user, deserializer.deserialize(topic, userBytes));
+    deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(event, deserializer.deserialize(replicaTopic, headers, eventBytes));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
   }
 
   @Test
   public void testReaderSchemaCacheSeparatesContexts() throws Exception {
     SchemaRegistryClient registry = new MockSchemaRegistryClient();
-    HashMap<String, Object> props = createReplicaContextConfig();
+    Properties props = createReplicaContextConfig();
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    RecordHeaders headers = new RecordHeaders();
     String replicaTopic = "replica-" + topic;
     User user = User.newBuilder().setName("testUser").build();
     Grant grant = Grant.newBuilder().setGrant("testGrant").build();
-    // A serializer per record keeps the datum writer cache out of this test.
-    byte[] userBytes = new KafkaAvroSerializer(registry, props).serialize(topic, user);
-    byte[] grantBytes = new KafkaAvroSerializer(registry, props).serialize(replicaTopic, grant);
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] grantBytes = serializer.serialize(replicaTopic, headers, grant);
     assertEquals(1, schemaIdOf(userBytes));
     assertEquals(1, schemaIdOf(grantBytes));
 
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, props);
-    assertEquals(user, deserializer.deserialize(topic, userBytes));
-    assertEquals(grant, deserializer.deserialize(replicaTopic, grantBytes));
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
+    assertEquals(grant, deserializer.deserialize(replicaTopic, headers, grantBytes));
 
-    deserializer = new KafkaAvroDeserializer(registry, props);
-    assertEquals(grant, deserializer.deserialize(replicaTopic, grantBytes));
-    assertEquals(user, deserializer.deserialize(topic, userBytes));
+    deserializer = new KafkaAvroDeserializer(registry, new HashMap(props));
+    assertEquals(grant, deserializer.deserialize(replicaTopic, headers, grantBytes));
+    assertEquals(user, deserializer.deserialize(topic, headers, userBytes));
   }
 
   @Test
   public void testDatumWriterCacheSeparatesContexts() throws Exception {
-    SchemaRegistryClient registry = new MockSchemaRegistryClient();
-    HashMap<String, Object> props = createReplicaContextConfig();
+    // Returns only the id on register, like a server without guids; with a guid the schema
+    // id alone would already tell the two schemas apart.
+    SchemaRegistryClient registry = new MockSchemaRegistryClient() {
+      @Override
+      public RegisterSchemaResponse registerWithResponse(
+          String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
+          throws IOException, RestClientException {
+        return new RegisterSchemaResponse(
+            super.registerWithResponse(subject, schema, normalize, propagateSchemaTags).getId());
+      }
+    };
+    Properties props = createReplicaContextConfig();
+    RecordHeaders headers = new RecordHeaders();
     String replicaTopic = "replica-" + topic;
     IndexedRecord user = createUserRecord();
     IndexedRecord event = createEventRecord();
 
-    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, props);
-    byte[] userBytes = serializer.serialize(topic, user);
-    byte[] eventBytes = serializer.serialize(replicaTopic, event);
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    byte[] userBytes = serializer.serialize(topic, headers, user);
+    byte[] eventBytes = serializer.serialize(replicaTopic, headers, event);
     assertEquals(1, schemaIdOf(userBytes));
     assertEquals(1, schemaIdOf(eventBytes));
     // A fresh deserializer per read keeps the deserializer caches out of this test.
-    assertEquals(user,
-        new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
-    assertEquals(event,
-        new KafkaAvroDeserializer(registry, props).deserialize(replicaTopic, eventBytes));
+    assertEquals(user, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(topic, headers, userBytes));
+    assertEquals(event, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(replicaTopic, headers, eventBytes));
 
-    serializer = new KafkaAvroSerializer(registry, props);
-    eventBytes = serializer.serialize(replicaTopic, event);
-    userBytes = serializer.serialize(topic, user);
-    assertEquals(event,
-        new KafkaAvroDeserializer(registry, props).deserialize(replicaTopic, eventBytes));
-    assertEquals(user,
-        new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
+    serializer = new KafkaAvroSerializer(registry, new HashMap(props));
+    eventBytes = serializer.serialize(replicaTopic, headers, event);
+    userBytes = serializer.serialize(topic, headers, user);
+    assertEquals(event, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(replicaTopic, headers, eventBytes));
+    assertEquals(user, new KafkaAvroDeserializer(registry, new HashMap(props))
+        .deserialize(topic, headers, userBytes));
+  }
+
+  static class EventWithInstant {
+    Instant ts;
+
+    EventWithInstant() {
+    }
+
+    EventWithInstant(Instant ts) {
+      this.ts = ts;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(ts);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof EventWithInstant)) {
+        return false;
+      }
+      return Objects.equals(this.ts, ((EventWithInstant) obj).ts);
+    }
   }
 
   static class RecordWithUUID {

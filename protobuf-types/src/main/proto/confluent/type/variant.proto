@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package confluent.type;
+
+option java_package = "io.confluent.protobuf.type";
+option java_multiple_files = true;
+option java_outer_classname = "VariantProto";
+
+message Variant {
+
+  // A dictionary of field names used by all objects in the variant value.
+  // Encoded as: version header, dictionary size, offset list, and UTF-8 string data.
+  bytes metadata = 1;
+
+  // The variant value, which can be a primitive, object, or array.
+  // Encoded as: a one-byte header (basic type + type info) followed by the content bytes.
+  bytes value = 2;
+}

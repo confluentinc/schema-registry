@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import org.apache.kafka.common.Configurable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
  */
 public interface SchemaProvider extends Configurable {
 
+  Logger LOG = LoggerFactory.getLogger(SchemaProvider.class);
+
   String SCHEMA_VERSION_FETCHER_CONFIG = "schemaVersionFetcher";
+
+  String SCHEMA_PROVIDERS_PREFIX = "schema.providers";
 
   default void configure(Map<String, ?> configs) {
   }
@@ -48,32 +54,49 @@ public interface SchemaProvider extends Configurable {
   String schemaType();
 
   /**
-   * Parses a schema.
+   * Returns whether parsing {@code schema} yields a result that depends on its subject.
    *
-   * @param schema the schema
-   * @param isNew whether the schema is new
-   * @return an optional parsed schema
+   * <p>Almost no provider reads the subject, so the parsed form of a given body is the same under
+   * every subject and callers are free to cache it by content alone. A provider that does read the
+   * subject -- to name something the body leaves unnamed, say -- must say so here, otherwise two
+   * subjects sharing a body would share the first one's result.
+   *
+   * @param schema the schema about to be parsed
+   * @return whether the result depends on the schema's subject
    */
-  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(schema, isNew, false));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+  default boolean isSubjectDependent(Schema schema) {
+    return false;
   }
 
   /**
    * Parses a schema.
    *
    * @param schema the schema
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
+   * @return an optional parsed schema
+   */
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean validateAsNew) {
+    return parseSchema(schema, validateAsNew, false);
+  }
+
+  /**
+   * Parses a schema.
+   *
+   * @param schema the schema
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return an optional parsed schema
    */
-  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew, boolean normalize) {
+  default Optional<ParsedSchema> parseSchema(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
-      return Optional.of(parseSchemaOrElseThrow(schema, isNew, normalize));
+      return Optional.of(parseSchemaOrElseThrow(schema, validateAsNew, normalize));
     } catch (Exception e) {
+      // Logged here rather than where it is thrown, because this is where the reason is lost:
+      // an empty result says only that the schema could not be read. A caller that wants to
+      // decide for itself -- one classifying a body it may parse another way -- should use
+      // parseSchemaOrElseThrow and get the exception instead of a log line.
+      LOG.error("Could not parse schema of type {}", schema.getSchemaType(), e);
       return Optional.empty();
     }
   }
@@ -83,18 +106,15 @@ public interface SchemaProvider extends Configurable {
    *
    * @param schemaString the schema
    * @param references a list of schema references
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
-                                             boolean isNew) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString), isNew, false));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+                                             boolean validateAsNew) {
+    return parseSchema(
+        new Schema(null, null, null, schemaType(), references, schemaString),
+        validateAsNew, false);
   }
 
   /**
@@ -102,20 +122,17 @@ public interface SchemaProvider extends Configurable {
    *
    * @param schemaString the schema
    * @param references a list of schema references
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
-                                             boolean isNew,
+                                             boolean validateAsNew,
                                              boolean normalize) {
-    try {
-      return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString), isNew, normalize));
-    } catch (Exception e) {
-      return Optional.empty();
-    }
+    return parseSchema(
+        new Schema(null, null, null, schemaType(), references, schemaString),
+        validateAsNew, normalize);
   }
 
   default Optional<ParsedSchema> parseSchema(String schemaString,
@@ -127,9 +144,9 @@ public interface SchemaProvider extends Configurable {
    * Parses a string representing a schema.
    *
    * @param schema the schema
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return a parsed schema or throw an error
    */
-  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize);
+  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean validateAsNew, boolean normalize);
 }

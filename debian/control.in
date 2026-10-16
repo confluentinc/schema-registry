@@ -2,7 +2,7 @@ Source: confluent-schema-registry
 Section: misc
 Priority: optional
 Maintainer: Confluent Packaging <packages@confluent.io>
-Build-Depends: debhelper (>= 9), dh-systemd, java7-jdk, javahelper (>= 0.40),
+Build-Depends: debhelper (>= 9), dh-systemd, javahelper (>= 0.40),
  make, maven
 Standards-Version: 3.9.3
 Homepage: http://confluent.io

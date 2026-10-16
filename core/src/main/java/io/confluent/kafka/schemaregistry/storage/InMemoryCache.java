@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -28,10 +29,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -47,15 +50,25 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CO
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
-  private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
+  // Every version of each subject carrying a schema ID, by tenant, context and ID: a version
+  // going leaves the others, such as a soft-deleted one kept on re-registration, to resolve it.
+  private final Map<String, Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>>>
+      guidToSubjectVersions;
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
-  private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
+  private final Map<String, Map<String, Map<SchemaKey, Set<ContextId>>>> referencedBy;
+
+  private final Map<String, Map<String, AssociationValue>> associationsByGuid;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsBySubject;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsByResourceId;
 
   public InMemoryCache(Serializer<K, V> serializer) {
     this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
+    this.associationsByGuid = new ConcurrentHashMap<>();
+    this.associationsBySubject = new ConcurrentHashMap<>();
+    this.associationsByResourceId = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -116,14 +129,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (id == null) {
       return null;
     }
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(id);
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return null;
-    }
-    return new SchemaIdAndSubjects(id, subjectVersions);
+    Map<String, Integer> latest = new HashMap<>();
+    subjectVersionsOf(ctx, id).forEach((subject, versions) -> {
+      Integer version = latest(versions);
+      if (version != null) {
+        latest.put(subject, version);
+      }
+    });
+    return latest.isEmpty() ? null : new SchemaIdAndSubjects(id, latest);
   }
 
   @Override
@@ -132,11 +145,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
+  public Set<ContextId> referencesSchema(SchemaKey schema) throws StoreException {
     String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
-    Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+    Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
         referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-    Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+    Map<SchemaKey, Set<ContextId>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
     return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
@@ -144,48 +157,66 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(id);
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return null;
-    }
+    Map<String, NavigableSet<Integer>> subjectVersions = subjectVersionsOf(ctx, id);
     if (qs == null || qs.getSubject().isEmpty()) {
-      Map.Entry<String, Integer> entry = subjectVersions.entrySet().iterator().next();
-      return new SchemaKey(entry.getKey(), entry.getValue());
+      for (Map.Entry<String, NavigableSet<Integer>> entry : subjectVersions.entrySet()) {
+        Integer version = latest(entry.getValue());
+        if (version != null) {
+          return new SchemaKey(entry.getKey(), version);
+        }
+      }
+      return null;
     } else {
-      Integer version = subjectVersions.get(subject);
+      Integer version =
+          latest(subjectVersions.getOrDefault(subject, Collections.emptyNavigableSet()));
       return version != null ? new SchemaKey(subject, version) : null;
     }
   }
 
   @Override
+  public Integer idByGuid(String guid, String context) throws StoreException {
+    MD5 md5;
+    try {
+      md5 = MD5.fromString(guid);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+    Map<String, Map<MD5, Integer>> ctxIds =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> ids = ctxIds.getOrDefault(ctx, Collections.emptyMap());
+    return ids.get(md5);
+  }
+
+  @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
-    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-    Map<Integer, Map<String, Integer>> guids =
-        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
-    Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
-    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
+    addSubjectVersion(schemaKey, schemaValue.getId());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
+  }
+
+  @Override
+  public void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue) {
+    if (schemaValue == null) {
+      return;
+    }
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    removeSubjectVersion(schemaKey, schemaValue.getId());
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
           referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-      Map<SchemaKey, Set<Integer>> refBy =
+      Map<SchemaKey, Set<ContextId>> refBy =
           ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
       if (refBy != null) {
-        Set<Integer> ids = refBy.get(refKey);
+        Set<ContextId> ids = refBy.get(refKey);
         if (ids != null) {
-          ids.remove(schemaValue.getId());
+          ids.remove(new ContextId(ctx, schemaValue.getId()));
           if (ids.isEmpty()) {
             refBy.remove(refKey);
           }
@@ -195,49 +226,68 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue) {
-    if (schemaValue == null) {
-      return;
-    }
-    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
-    if (subjectVersions == null || subjectVersions.isEmpty()) {
-      return;
-    }
-    subjectVersions.computeIfPresent(schemaKey.getSubject(),
-        (k, v) -> schemaKey.getVersion() == v ? null : v);
-    if (subjectVersions.isEmpty()) {
-      guids.remove(schemaValue.getId());
-    }
-  }
-
-  @Override
   public void schemaRegistered(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
-        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-    Map<Integer, Map<String, Integer>> guids =
-        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
-    Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
-    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
+    addSubjectVersion(schemaKey, schemaValue.getId());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-      Map<SchemaKey, Set<Integer>> refBy =
+      Map<SchemaKey, Set<ContextId>> refBy =
           ctxRefBy.computeIfAbsent(refSubject.getContext(), k -> new ConcurrentHashMap<>());
-      Set<Integer> ids = refBy.computeIfAbsent(
+      Set<ContextId> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      ids.add(schemaValue.getId());
+      ids.add(new ContextId(ctx, schemaValue.getId()));
     }
+  }
+
+  // The versions of each subject carrying schema ID id in context ctx; empty when there are none.
+  private Map<String, NavigableSet<Integer>> subjectVersionsOf(String ctx, int id) {
+    return guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap())
+        .getOrDefault(ctx, Collections.emptyMap())
+        .getOrDefault(id, Collections.emptyMap());
+  }
+
+  private void addSubjectVersion(SchemaKey schemaKey, int id) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>())
+        .computeIfAbsent(ctx, k -> new ConcurrentHashMap<>())
+        .compute(id, (k, subjectVersions) -> {
+          // Add inside compute so it serializes with removeSubjectVersion unlinking the id entry
+          Map<String, NavigableSet<Integer>> updated =
+              subjectVersions != null ? subjectVersions : new ConcurrentHashMap<>();
+          updated.computeIfAbsent(schemaKey.getSubject(), s -> new ConcurrentSkipListSet<>())
+              .add(schemaKey.getVersion());
+          return updated;
+        });
+  }
+
+  private void removeSubjectVersion(SchemaKey schemaKey, int id) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>> ctxGuids =
+        guidToSubjectVersions.get(tenant());
+    Map<Integer, Map<String, NavigableSet<Integer>>> guids =
+        ctxGuids != null ? ctxGuids.get(ctx) : null;
+    if (guids == null) {
+      return;
+    }
+    guids.computeIfPresent(id, (k, subjectVersions) -> {
+      subjectVersions.computeIfPresent(schemaKey.getSubject(), (s, versions) -> {
+        versions.remove(schemaKey.getVersion());
+        return versions.isEmpty() ? null : versions;
+      });
+      return subjectVersions.isEmpty() ? null : subjectVersions;
+    });
+  }
+
+  // The highest of versions, or null when there are none.
+  private static Integer latest(NavigableSet<Integer> versions) {
+    Iterator<Integer> it = versions.descendingIterator();
+    return it.hasNext() ? it.next() : null;
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
@@ -247,6 +297,81 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     hashes.put(md5, schemaValue.getId());
+  }
+
+  @Override
+  public AssociationValue associationByGuid(String guid)
+      throws StoreException {
+    Map<String, AssociationValue> tenantAssociations =
+        associationsByGuid.getOrDefault(tenant(), Collections.emptyMap());
+    return tenantAssociations.get(guid);
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsBySubject(String subject)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsBySubject.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(subject, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsByResourceId(String resourceId)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsByResourceId.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(resourceId, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public void associationRegistered(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.computeIfAbsent(key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByGuid.put(value.getGuid(), value);
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsBySubject.computeIfAbsent(
+        key.getSubject(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsBySubject.get(key.getSubject()).add(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByResourceId.computeIfAbsent(
+        value.getResourceId(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsByResourceId.get(value.getResourceId()).add(value);
+
+    if (oldValue != null && !oldValue.equals(value)) {
+      // Remove old association if it exists
+      associationTombstoned(key, oldValue);
+    }
+  }
+
+  @Override
+  public void associationTombstoned(AssociationKey key, AssociationValue value) {
+    if (value == null) {
+      return;
+    }
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByGuid.remove(value.getGuid());
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsBySubject.get(key.getSubject()).remove(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByResourceId.get(value.getResourceId()).remove(value);
+    if (tenantAssociationsBySubject.get(key.getSubject()).isEmpty()) {
+      tenantAssociationsBySubject.remove(key.getSubject());
+    }
+    if (tenantAssociationsByResourceId.get(value.getResourceId()).isEmpty()) {
+      tenantAssociationsByResourceId.remove(value.getResourceId());
+    }
   }
 
   @Override
@@ -376,13 +501,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     String ctx = QualifiedSubject.contextFor(tenant(), subject);
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+    Map<String, Map<Integer, Map<String, NavigableSet<Integer>>>> ctxGuids =
         guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
-    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
-    Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
+    Map<Integer, Map<String, NavigableSet<Integer>>> guids =
+        ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Iterator<Map.Entry<Integer, Map<String, NavigableSet<Integer>>>> it =
+        guids.entrySet().iterator();
     while (it.hasNext()) {
-      Map<String, Integer> subjectVersions = it.next().getValue();
-      subjectVersions.entrySet().removeIf(e -> matchDeleted.test(e.getKey(), e.getValue()));
+      Map<String, NavigableSet<Integer>> subjectVersions = it.next().getValue();
+      subjectVersions.entrySet().removeIf(e -> {
+        e.getValue().removeIf(version -> matchDeleted.test(e.getKey(), version));
+        return e.getValue().isEmpty();
+      });
       if (subjectVersions.isEmpty()) {
         it.remove();
       }
@@ -414,8 +544,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
-            QualifiedSubject.qualifiedContextFor(tenant(), s)));
+        || QualifiedSubject.isSubjectInContext(tenant(), s, qs);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {
