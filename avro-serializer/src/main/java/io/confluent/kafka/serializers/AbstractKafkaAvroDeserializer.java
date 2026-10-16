@@ -96,11 +96,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
 
     if (useSpecificAvroReader && type != null) {
-      // Avro loads the configured class, and the types its schema references
-      AvroTrustedClasses.trust(type);
       try {
-        specificAvroReaderSchema = ((SpecificRecord)type.getDeclaredConstructor().newInstance())
-                .getSchema();
+        SpecificRecord reader = (SpecificRecord) type.getDeclaredConstructor().newInstance();
+        specificAvroReaderSchema = reader.getSchema();
+        // Avro loads the configured class, and the types its own schema references
+        AvroTrustedClasses.trustClassOf(reader);
       } catch (Exception e) {
         throw new ConfigException(
           String.format(

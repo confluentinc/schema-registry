@@ -26,8 +26,10 @@ import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericContainer;
@@ -35,6 +37,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.reflect.AvroDefault;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumReader;
 import org.apache.avro.reflect.ReflectDatumWriter;
@@ -199,6 +202,85 @@ public class AvroTrustedClassesTest {
     // Primitive values are left alone
     AvroTrustedClasses.trustClassOf(new StringBuilder("s"));
     assertFalse(AvroTrustedClasses.isTrusted(StringBuilder.class));
+  }
+
+  // Hand-written specific records without SCHEMA$, so their schema is not derivable from the class
+  public static class HandWrittenChild extends SpecificRecordBase {
+    static final Schema SCHEMA = SchemaBuilder.record("HandWrittenChild")
+        .namespace(AvroTrustedClassesTest.class.getName()).fields().requiredInt("x").endRecord();
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  public static class HandWritten extends SpecificRecordBase {
+    static final Schema SCHEMA = SchemaBuilder.record("HandWritten")
+        .namespace(AvroTrustedClassesTest.class.getName()).fields()
+        .name("child").type(HandWrittenChild.SCHEMA).noDefault().endRecord();
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void trustClassOfTrustsSpecificRecordsInAMap() {
+    AvroTrustedClasses.trustClassOf(Collections.singletonMap("k", new HandWritten()));
+    assertTrue(AvroTrustedClasses.isTrusted(HandWritten.class));
+    assertTrue(AvroTrustedClasses.isTrusted(HandWrittenChild.class));
+  }
+
+  @Test
+  public void trustClassOfIgnoresGenericRecordsInAMap() {
+    Schema schema = ReflectData.get().getSchema(Line.class);
+    AvroTrustedClasses.trustClassOf(
+        Collections.singletonMap("k", new GenericData.Record(schema)));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  @Test
+  public void trustClassOfHandlesAMapThatContainsItself() {
+    Map<String, Object> map = new HashMap<>();
+    map.put("self", map);
+    AvroTrustedClasses.trustClassOf(map);
+  }
+
+  public static class Child {
+    public int x = 1;
+  }
+
+  public static class Parent {
+    @AvroDefault("null")
+    public Child child;
+  }
+
+  @Test
+  public void trustClassOfWalksPojosThatNeedAllowNull() {
+    // Plain reflection rejects a null default for a record field
+    assertThrows(RuntimeException.class, () -> ReflectData.get().getSchema(Parent.class));
+    AvroTrustedClasses.trustClassOf(new Parent());
+    assertTrue(AvroTrustedClasses.isTrusted(Child.class));
   }
 
   @Test
