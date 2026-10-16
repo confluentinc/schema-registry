@@ -44,8 +44,10 @@ import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -397,42 +399,94 @@ public class AvroSchema implements ParsedSchema {
     }
   }
 
-  // Least fixpoint over the records reachable through required fields and unions;
-  // arrays and maps are skipped since they can always be empty
+  // Worklist over the records reachable through fields and unions, linear in their size:
+  // a record is buildable once each of its fields has a buildable alternative
   private static Set<String> buildableRecords(Schema root) {
     Map<String, Schema> records = new LinkedHashMap<>();
     collectRecords(root, records);
+    Map<String, Integer> unbuilt = new HashMap<>();
+    Map<String, List<PendingField>> waiting = new HashMap<>();
+    Deque<String> ready = new ArrayDeque<>();
+    for (Schema record : records.values()) {
+      int count = 0;
+      for (Schema.Field field : record.getFields()) {
+        List<String> alternatives = recordAlternatives(field.schema());
+        if (alternatives != null) {
+          count++;
+          PendingField pending = new PendingField(record.getFullName());
+          for (String name : alternatives) {
+            waiting.computeIfAbsent(name, k -> new ArrayList<>()).add(pending);
+          }
+        }
+      }
+      unbuilt.put(record.getFullName(), count);
+      if (count == 0) {
+        ready.push(record.getFullName());
+      }
+    }
     Set<String> buildable = new HashSet<>();
-    boolean changed = true;
-    while (changed) {
-      changed = false;
-      for (Schema record : records.values()) {
-        if (!buildable.contains(record.getFullName())
-            && record.getFields().stream().allMatch(f -> isBuildable(f.schema(), buildable))) {
-          buildable.add(record.getFullName());
-          changed = true;
+    while (!ready.isEmpty()) {
+      String name = ready.pop();
+      buildable.add(name);
+      for (PendingField pending : waiting.getOrDefault(name, Collections.emptyList())) {
+        if (!pending.met) {
+          pending.met = true;
+          if (unbuilt.merge(pending.record, -1, Integer::sum) == 0) {
+            ready.push(pending.record);
+          }
         }
       }
     }
     return buildable;
   }
 
-  private static void collectRecords(Schema schema, Map<String, Schema> records) {
-    switch (schema.getType()) {
-      case RECORD:
-        if (records.putIfAbsent(schema.getFullName(), schema) == null) {
-          for (Schema.Field field : schema.getFields()) {
-            collectRecords(field.schema(), records);
+  // The records a field needs one of, or null if it is buildable without any
+  private static List<String> recordAlternatives(Schema schema) {
+    List<Schema> branches = schema.getType() == Schema.Type.UNION
+        ? schema.getTypes()
+        : Collections.singletonList(schema);
+    List<String> names = new ArrayList<>();
+    for (Schema branch : branches) {
+      if (branch.getType() == Schema.Type.RECORD) {
+        names.add(branch.getFullName());
+      } else if (isBuildable(branch, Collections.emptySet())) {
+        return null;
+      }
+    }
+    return names;
+  }
+
+  private static final class PendingField {
+    private final String record;
+    private boolean met;
+
+    private PendingField(String record) {
+      this.record = record;
+    }
+  }
+
+  // Iterative, since a chain of named references can be far deeper than the schema JSON
+  private static void collectRecords(Schema root, Map<String, Schema> records) {
+    Deque<Schema> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      Schema schema = pending.pop();
+      switch (schema.getType()) {
+        case RECORD:
+          if (records.putIfAbsent(schema.getFullName(), schema) == null) {
+            for (Schema.Field field : schema.getFields()) {
+              pending.push(field.schema());
+            }
           }
-        }
-        break;
-      case UNION:
-        for (Schema branch : schema.getTypes()) {
-          collectRecords(branch, records);
-        }
-        break;
-      default:
-        break;
+          break;
+        case UNION:
+          for (Schema branch : schema.getTypes()) {
+            pending.push(branch);
+          }
+          break;
+        default:
+          break;
+      }
     }
   }
 

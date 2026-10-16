@@ -22,7 +22,9 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -125,6 +127,35 @@ public class AvroSchemaValidateFiniteTest {
     parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
         + "{\"name\":\"e\",\"type\":[\"null\","
         + "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[]}]}]}").validate();
+  }
+
+  @Test
+  public void longReferenceChainAccepted() throws Exception {
+    // Records defined shallowly in arrays, referenced as a deep chain from a nullable field;
+    // a small stack makes a recursive walk overflow without a slow-to-parse schema
+    int n = 2000;
+    StringBuilder schema = new StringBuilder("{\"type\":\"record\",\"name\":\"Root\",\"fields\":[");
+    for (int i = 0; i < n; i++) {
+      schema.append("{\"name\":\"d").append(i).append("\",\"type\":{\"type\":\"array\",")
+          .append("\"items\":{\"type\":\"record\",\"name\":\"R").append(i).append("\",\"fields\":[");
+      if (i > 0) {
+        schema.append("{\"name\":\"r\",\"type\":\"R").append(i - 1).append("\"}");
+      }
+      schema.append("]}}},");
+    }
+    schema.append("{\"name\":\"n\",\"type\":[\"null\",\"R").append(n - 1).append("\"]}]}");
+    AvroSchema parsed = parse(schema.toString());
+    AtomicReference<Throwable> failure = new AtomicReference<>();
+    Thread thread = new Thread(null, () -> {
+      try {
+        parsed.validate();
+      } catch (Throwable t) {
+        failure.set(t);
+      }
+    }, "validate", 128 * 1024);
+    thread.start();
+    thread.join();
+    assertNull(failure.get());
   }
 
   @Test
