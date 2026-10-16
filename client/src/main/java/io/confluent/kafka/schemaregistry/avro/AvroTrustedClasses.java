@@ -283,6 +283,7 @@ public final class AvroTrustedClasses {
   public static void install() {
     if (VALIDATOR_AVAILABLE) {
       Validator.install();
+      AvroSchemaUtils.clearUntrustedSchemas();
     }
   }
 

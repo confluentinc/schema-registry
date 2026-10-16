@@ -76,6 +76,8 @@ import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.common.errors.SerializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -94,6 +96,8 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.FIELDS_FIELD;
 import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroSchemaUtils.class);
 
   private static final GenericData GENERIC_DATA_INSTANCE =
       new NameAwareGenericData(GenericData.get());
@@ -311,6 +315,17 @@ public class AvroSchemaUtils {
       .maximumSize(1000)
       .build();
 
+  // Called when trust changes, so that a newly trusted class is looked up again
+  static void clearUntrustedSchemas() {
+    untrustedSchemas.invalidateAll();
+  }
+
+  private static void markUntrusted(Schema reader, SecurityException e) {
+    untrustedSchemas.put(reader, Boolean.TRUE);
+    log.debug("Using the default specific data model for {}, since Avro does not trust its "
+        + "class: {}", reader.getFullName(), e.getMessage());
+  }
+
   // The class lookup only picks a preferred model, so an untrusted class (AVRO-4189) falls
   // back to the default; a SpecificDatumReader still rejects it when it reads.
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
@@ -323,7 +338,7 @@ public class AvroSchemaUtils {
     try {
       return SpecificData.getForSchema(reader);
     } catch (SecurityException e) {
-      untrustedSchemas.put(reader, Boolean.TRUE);
+      markUntrusted(reader, e);
       return SpecificData.get();
     }
   }
@@ -336,7 +351,7 @@ public class AvroSchemaUtils {
       try {
         clazz = getSpecificData().getClass(reader);
       } catch (SecurityException e) {
-        untrustedSchemas.put(reader, Boolean.TRUE);
+        markUntrusted(reader, e);
         clazz = null;
       }
       if (clazz != null) {

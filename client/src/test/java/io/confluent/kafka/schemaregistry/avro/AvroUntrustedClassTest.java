@@ -23,6 +23,7 @@ import static org.junit.Assume.assumeTrue;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -59,6 +60,42 @@ public class AvroUntrustedClassTest {
       assertSame(AvroSchemaUtils.getSpecificData(), AvroSchemaUtils.getThreadLocalSpecificData());
     } finally {
       AvroSchemaUtils.clearThreadLocalData();
+    }
+  }
+
+  // A hand-written specific record with its own model, not generated, so not trusted by default
+  public static class Modeled extends SpecificRecordBase {
+    public static final SpecificData MODEL$ = new SpecificData();
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void trustingAClassTakesEffectDespiteTheUntrustedCache() {
+    Schema schema = SchemaBuilder.record("Modeled")
+        .namespace(AvroUntrustedClassTest.class.getName()).fields().endRecord();
+    // Remembered as untrusted
+    assertSame(AvroSchemaUtils.getSpecificData(),
+        AvroSchemaUtils.getSpecificDataForSchema(schema, true));
+    assertSame(SpecificData.get(), AvroSchemaUtils.getSpecificDataForSchema(schema, false));
+    try {
+      AvroTrustedClasses.trustExactly(Modeled.class);
+      assertSame(Modeled.MODEL$, AvroSchemaUtils.getSpecificDataForSchema(schema, true));
+      assertSame(Modeled.MODEL$, AvroSchemaUtils.getSpecificDataForSchema(schema, false));
+    } finally {
+      AvroTrustedClasses.resetToDefaults();
     }
   }
 }

@@ -297,8 +297,14 @@ public class AvroSchema implements ParsedSchema {
         throw e;
       }
       refsOut.clear();
-      return parseWith(getParser(), fixedSchema != null ? fixedSchema : schemaString,
-          fixedRefs, refsOut);
+      try {
+        return parseWith(getParser(), fixedSchema != null ? fixedSchema : schemaString,
+            fixedRefs, refsOut);
+      } catch (RuntimeException retryException) {
+        // Keep the original error, such as Avro's rejection of the type object, as the root cause
+        retryException.addSuppressed(e);
+        throw retryException;
+      }
     }
   }
 

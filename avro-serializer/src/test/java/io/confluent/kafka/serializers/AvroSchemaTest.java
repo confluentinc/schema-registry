@@ -1459,6 +1459,9 @@ public class AvroSchemaTest {
     AvroRuntimeException e = assertThrows(AvroRuntimeException.class,
         () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, true));
     assertTrue(e.getMessage(), e.getMessage().contains("strnig"));
+    // Avro's rejection of the type object is kept as the root cause
+    assertEquals(1, e.getSuppressed().length);
+    assertTrue(e.getSuppressed()[0] instanceof SchemaParseException);
   }
 
   @Test
