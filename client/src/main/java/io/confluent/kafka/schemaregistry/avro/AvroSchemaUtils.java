@@ -212,8 +212,10 @@ public class AvroSchemaUtils {
   public static String fixTypeObjects(String schemaString) {
     JsonNode schema;
     try {
+      // Accepts what Avro's own parser accepts: comments, but not NaN or Infinity
       schema = jsonMapper.reader()
           .with(JsonParser.Feature.ALLOW_COMMENTS)
+          .without(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS)
           .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .readTree(schemaString);
     } catch (IOException e) {

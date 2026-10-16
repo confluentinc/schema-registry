@@ -1473,6 +1473,18 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testTypeObjectWithNonNumericNumberRejected() {
+    // Avro rejects an unquoted NaN, so the rewrite must not turn it into a valid "NaN" default
+    String schema = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}},"
+        + "{\"name\":\"d\",\"type\":\"double\",\"default\":NaN}]}";
+    assertThrows(SchemaParseException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, false));
+    assertNull(AvroSchemaUtils.fixTypeObjects(schema));
+  }
+
+  @Test
   public void testParseErrorWithoutTypeObjectIsUnchanged() {
     String schema = "{\"type\":\"record\",\"name\":\"R\","
         + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":\"bad\"}]}";
