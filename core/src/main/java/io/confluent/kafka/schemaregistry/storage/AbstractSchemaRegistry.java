@@ -1306,7 +1306,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * oldest one the level compares to the last below {@code beforeVersion}, soft-deleted ones
    * included, the candidate after them: the caller's holders are reused and any other version in
    * that range is loaded, as is another compatibility group's. Holders that do not say which
-   * version they are are checked by name, as before.
+   * version they are are checked by name, as before. A stored version judged at a non-transitive
+   * level is given the version just before it, so the range is that version alone.
    */
   private List<String> logicalFindings(ParsedSchema parsedSchema,
       List<ParsedSchemaHolder> previousSchemas, CompatibilityLevel level, int beforeVersion) {
@@ -1330,14 +1331,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       int oldest = LogicalPolicyChecker.isTransitive(level)
           ? passedVersions.get(0) : passedVersions.get(passedVersions.size() - 1);
       List<Integer> numbers = new ArrayList<>();
-      Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
-      while (keys.hasNext()) {
-        int version = keys.next().getVersion();
-        if (version >= oldest && version < beforeVersion) {
-          numbers.add(version);
+      if (beforeVersion != AFTER_LATEST && !LogicalPolicyChecker.isTransitive(level)) {
+        numbers.add(oldest);
+      } else {
+        Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+        while (keys.hasNext()) {
+          int version = keys.next().getVersion();
+          if (version >= oldest && version < beforeVersion) {
+            numbers.add(version);
+          }
         }
+        Collections.sort(numbers);
       }
-      Collections.sort(numbers);
       if (!numbers.containsAll(passed.keySet().stream()
           .filter(version -> version >= oldest).collect(Collectors.toList()))) {
         // The caller's versions are not the subject's, as they are for every caller today.
@@ -1359,7 +1364,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       int candidateNumber = beforeVersion != AFTER_LATEST ? beforeVersion
           : numbers.get(numbers.size() - 1) + 1;
       return ProvenancePolicyChecker.check(subject, parsedSchema, range, numbers, compared,
-          level, PairBy.CHECK_ID, candidateNumber);
+          level, PairBy.CHECK_ID, candidateNumber, beforeVersion == AFTER_LATEST);
     } catch (SchemaRegistryException e) {
       // As a lazy holder reports a version it cannot read.
       throw new IllegalStateException(e);
@@ -1406,8 +1411,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected List<String> isCompatibleWithPrevious(Config config,
                                         ParsedSchema parsedSchema,
                                         List<ParsedSchemaHolder> previousSchemas) {
-    // LOGICAL pairs by name until it switches to provenance check ids, CHECK_ID here: the answer
-    // isLogicallyCompatibleByProvenance gives today.
+    // LOGICAL pairs by name until it switches to provenance check ids, CHECK_ID here. The
+    // endpoint's flag pairs by check id but always at BACKWARD against the version just before,
+    // so for transitive, grouped or validateFields subjects the two will still differ.
     return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, PairBy.NAME,
         AFTER_LATEST);
   }
@@ -1457,7 +1463,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
-    if (!errorMessages.isEmpty()) {
+    // A stored version judged is checked whatever the subject's config, which this would misstate.
+    if (!errorMessages.isEmpty() && beforeVersion == AFTER_LATEST) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
                 isSchemaFieldValidationEnabled(config),

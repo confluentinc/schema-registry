@@ -369,9 +369,7 @@ public class SubjectsResource {
                   + "version with too many locations to compute, or nesting its types too deep. "
                   + "Error code 42219 "
                   + "indicates a range with includeInterior covering more versions than one "
-                  + "request may, or with compatibilityPolicy comparing its versions with more "
-                  + "earlier ones than one request may. Error code 42220 indicates a recursive "
-                  + "schema.",
+                  + "request may. Error code 42220 indicates a recursive schema.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                   implementation = ErrorMessage.class))),
           @ApiResponse(responseCode = "500",

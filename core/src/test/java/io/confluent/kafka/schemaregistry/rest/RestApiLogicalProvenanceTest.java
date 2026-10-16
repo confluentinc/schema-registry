@@ -185,6 +185,21 @@ public abstract class RestApiLogicalProvenanceTest {
   }
 
   @Test
+  public void testAFlagPastAVersionWithNoLogicalFormIsIncompatible() throws Exception {
+    // v=2 is recursive, so no provenance pairs v=3 with it; v=3 drops b of v=1. The one message
+    // is LOGICAL's: no subject config is appended.
+    String subject = "past_recursive";
+    String node = "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"next\","
+        + "\"type\":[\"null\",\"N\"],\"default\":null}]}";
+    history(subject, AvroSchema.TYPE, avro(field("a", "\"int\""), field("b", "\"int\"")),
+        avro(field("a", "\"int\""), field("n", node)), avro(field("a", "\"int\"")));
+    assertFlag(subject, 3, "PROVENANCE_UNAVAILABLE");
+    List<String> messages = flag(subject, 3).getMessages();
+    assertEquals(1, messages.size(), messages.toString());
+    assertTrue(messages.get(0).contains("through an earlier version"), messages.toString());
+  }
+
+  @Test
   public void testAFlagPastAnEarlierVersionThatNoLongerParsesIsA42214() throws Exception {
     // v=1 rewritten to name a type that does not exist, as if a reference no longer resolved.
     String subject = "unparseable_earlier";
