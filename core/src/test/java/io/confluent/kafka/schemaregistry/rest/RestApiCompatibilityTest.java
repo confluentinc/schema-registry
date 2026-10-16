@@ -487,6 +487,38 @@ public abstract class RestApiCompatibilityTest {
     }
   }
 
+  @Test
+  public void testLogicalPolicyRejectsNoneCompatibilityInTheSameRequest() throws Exception {
+    // LOGICAL requires a backward-compatible level, so NONE is rejected just like FORWARD.
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    config.setCompatibilityPolicy("LOGICAL");
+    try {
+      restApp.restClient.updateConfig(config, null);
+      fail("Setting NONE compatibility with LOGICAL policy should fail");
+    } catch (RestClientException e) {
+      assertEquals(
+          RestInvalidCompatibilityException.ERROR_CODE,
+          e.getErrorCode(),
+          "Should get an invalid compatibility level error"
+      );
+      assertTrue(e.getMessage().contains("compatibilityLevel=NONE"), e.getMessage());
+    }
+  }
+
+  @Test
+  public void testLogicalPolicyRejectsAnInheritedNoneCompatibility() throws Exception {
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    assertEquals(
+        CompatibilityLevel.NONE.name,
+        restApp.restClient.updateConfig(globalConfig, null).getCompatibilityLevel(),
+        "Changing global compatibility level should succeed"
+    );
+    assertLogicalPolicyRejectedAgainstInheritedLevel(
+        "testSubject", CompatibilityLevel.NONE.name);
+  }
+
   /** Asserts that setting only the policy is rejected because the level is inherited. */
   private void assertLogicalPolicyRejectedAgainstInheritedLevel(
       String subject, String expectedLevel) throws Exception {

@@ -4193,6 +4193,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.BACKWARD.name);
     config.setCompatibilityPolicy("LOGICAL");
     restApp.restClient.updateConfig(config, subject);
 
