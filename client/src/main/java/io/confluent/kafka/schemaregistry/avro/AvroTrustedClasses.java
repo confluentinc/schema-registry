@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificFixed;
@@ -45,8 +46,8 @@ import org.slf4j.LoggerFactory;
  * JVM-wide validator trusts. This adds a validator, on top of whatever is installed, that trusts
  * the classes declared here. Declaring a class also trusts the types Avro resolves from the schema
  * it derives for it: nested records, enums and fixed types, and the classes named by its
- * java-class properties. A class named only by a schema that arrived from elsewhere, such as the
- * registry, is never trusted implicitly.
+ * java-class properties. A class named only by a schema is not trusted implicitly, except that a
+ * reader schema the application passes in trusts the generated classes it names.
  *
  * <p>On an Avro without the validator, every method is a no-op.
  */
@@ -98,8 +99,10 @@ public final class AvroTrustedClasses {
     private final Set<String> packages = ConcurrentHashMap.newKeySet();
     private final Set<Predicate<Class<?>>> predicates = ConcurrentHashMap.newKeySet();
     private volatile boolean allPackages;
-    // Classes already walked, so that trusting the class of every serialized value is cheap
+    // Classes and reader schemas already walked, so that trusting per message is cheap
     private final Cache<Class<?>, Boolean> walked = CacheBuilder.newBuilder().weakKeys().build();
+    private final Cache<Schema, Boolean> walkedSchemas =
+        CacheBuilder.newBuilder().weakKeys().build();
 
     private State() {
       classes.addAll(DEFAULT_CLASSES);
@@ -237,6 +240,27 @@ public final class AvroTrustedClasses {
     }
   }
 
+  /**
+   * Trusts the generated classes, such as specific records, that the record, enum and fixed
+   * names of a reader schema the application supplied resolve to. Other classes the schema names,
+   * including those of its java-class properties, are left alone, since the application may have
+   * taken the schema from elsewhere, such as the registry.
+   */
+  public static void trustGeneratedTypesOf(Schema readerSchema) {
+    if (!VALIDATOR_AVAILABLE || readerSchema == null) {
+      return;
+    }
+    State current = state;
+    if (current.walkedSchemas.getIfPresent(readerSchema) == null) {
+      Set<String> names = new HashSet<>();
+      collectGeneratedTypeNames(readerSchema, Collections.newSetFromMap(new IdentityHashMap<>()),
+          names, defaultClassLoader());
+      current.classes.addAll(names);
+      current.walkedSchemas.put(readerSchema, Boolean.TRUE);
+      install();
+    }
+  }
+
   private static boolean isResolvedReflectively(Object value) {
     if (value instanceof GenericContainer) {
       // Of the containers, only generated specific classes are loaded by name
@@ -360,40 +384,88 @@ public final class AvroTrustedClasses {
   private static void addNamedType(Schema schema, Set<String> names, ClassLoader loader) {
     String fullName = schema.getFullName();
     if (fullName != null) {
-      String resolved = resolveBinaryName(fullName, loader);
-      names.add(resolved != null ? resolved : fullName);
+      Class<?> resolved = resolveClass(fullName, loader != null ? loader : defaultClassLoader());
+      names.add(resolved != null ? resolved.getName() : fullName);
     }
   }
 
+  // Like collectTypeNames, but only for named types that resolve to generated classes
+  private static void collectGeneratedTypeNames(Schema schema, Set<Schema> visited,
+      Set<String> names, ClassLoader loader) {
+    if (schema == null || !visited.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        addGeneratedType(schema, names, loader);
+        for (Schema.Field field : schema.getFields()) {
+          collectGeneratedTypeNames(field.schema(), visited, names, loader);
+        }
+        break;
+      case ENUM:
+      case FIXED:
+        addGeneratedType(schema, names, loader);
+        break;
+      case ARRAY:
+        collectGeneratedTypeNames(schema.getElementType(), visited, names, loader);
+        break;
+      case MAP:
+        collectGeneratedTypeNames(schema.getValueType(), visited, names, loader);
+        break;
+      case UNION:
+        for (Schema member : schema.getTypes()) {
+          collectGeneratedTypeNames(member, visited, names, loader);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void addGeneratedType(Schema schema, Set<String> names, ClassLoader loader) {
+    String fullName = schema.getFullName();
+    Class<?> resolved = fullName != null ? resolveClass(fullName, loader) : null;
+    if (resolved != null && isGenerated(resolved)) {
+      names.add(resolved.getName());
+    }
+  }
+
+  // Classes generated by Avro, whose construction runs no application code
+  private static boolean isGenerated(Class<?> clazz) {
+    return SpecificRecord.class.isAssignableFrom(clazz)
+        || SpecificFixed.class.isAssignableFrom(clazz)
+        || (clazz.isEnum() && GenericEnumSymbol.class.isAssignableFrom(clazz));
+  }
+
+  private static ClassLoader defaultClassLoader() {
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    return loader != null ? loader : AvroTrustedClasses.class.getClassLoader();
+  }
+
   // Mirrors SpecificData.getClass, without initializing the class or consulting the validator
-  private static String resolveBinaryName(String fullName, ClassLoader loader) {
-    if (loader == null) {
-      loader = Thread.currentThread().getContextClassLoader();
-    }
-    if (loader == null) {
-      loader = AvroTrustedClasses.class.getClassLoader();
-    }
-    if (classExists(fullName, loader)) {
-      return fullName;
+  private static Class<?> resolveClass(String fullName, ClassLoader loader) {
+    Class<?> resolved = loadClass(fullName, loader);
+    if (resolved != null) {
+      return resolved;
     }
     StringBuilder candidate = new StringBuilder(fullName);
     int lastDot = fullName.lastIndexOf('.');
     while (lastDot != -1) {
       candidate.setCharAt(lastDot, '$');
-      if (classExists(candidate.toString(), loader)) {
-        return candidate.toString();
+      resolved = loadClass(candidate.toString(), loader);
+      if (resolved != null) {
+        return resolved;
       }
       lastDot = fullName.lastIndexOf('.', lastDot - 1);
     }
     return null;
   }
 
-  private static boolean classExists(String name, ClassLoader loader) {
+  private static Class<?> loadClass(String name, ClassLoader loader) {
     try {
-      Class.forName(name, false, loader);
-      return true;
+      return Class.forName(name, false, loader);
     } catch (ClassNotFoundException | LinkageError e) {
-      return false;
+      return null;
     }
   }
 

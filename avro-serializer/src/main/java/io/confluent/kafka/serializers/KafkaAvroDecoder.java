@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.utils.VerifiableProperties;
 
@@ -51,6 +52,8 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
    * Pass a reader schema to get an Avro projection
    */
   public Object fromBytes(byte[] bytes, Schema readerSchema) {
+    // Avro loads the generated classes the reader schema names; see AvroTrustedClasses
+    AvroTrustedClasses.trustGeneratedTypesOf(readerSchema);
     return deserialize(bytes, readerSchema);
   }
 
@@ -62,6 +65,7 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
    * Pass a reader schema to get an Avro projection
    */
   public Object fromBytes(Headers headers, byte[] bytes, Schema readerSchema) {
+    AvroTrustedClasses.trustGeneratedTypesOf(readerSchema);
     return deserialize(headers, bytes, readerSchema);
   }
 }

@@ -23,6 +23,7 @@ import static org.junit.Assume.assumeTrue;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.Grant;
+import io.confluent.kafka.example.User;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
@@ -50,6 +51,10 @@ public class AvroTrustedSerdeTest {
 
   public static class Gadget {
     public String name = "g";
+  }
+
+  public static class Gizmo {
+    public String name = "z";
   }
 
   private SchemaRegistryClient schemaRegistry;
@@ -157,5 +162,24 @@ public class AvroTrustedSerdeTest {
         KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, "true",
         KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG, Gadget.class.getName());
     assertEquals("g", ((Gadget) result).name);
+  }
+
+  @Test
+  public void projectionOntoGeneratedClassNeedsNoConfig() {
+    byte[] bytes = serialize("projected", record(User.SCHEMA$, "name", "carol"));
+    Object result = new KafkaAvroDeserializer(schemaRegistry,
+        config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"))
+        .deserialize("projected", bytes, User.getClassSchema());
+    assertEquals("carol", ((User) result).getName().toString());
+  }
+
+  @Test
+  public void readerSchemaDoesNotTrustOtherClasses() {
+    // A reader schema may come from anywhere, so a class it names is trusted only if generated
+    Schema schema = ReflectData.get().getSchema(Gizmo.class);
+    byte[] bytes = serialize("gizmos", record(schema, "name", "z"));
+    assertForbidden(() -> new KafkaAvroDeserializer(schemaRegistry,
+        config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"))
+        .deserialize("gizmos", bytes, schema));
   }
 }

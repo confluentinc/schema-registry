@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.header.Headers;
@@ -112,10 +113,13 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
    * Pass a reader schema to get an Avro projection
    */
   public Object deserialize(String topic, byte[] bytes, Schema readerSchema) {
+    // Avro loads the generated classes the reader schema names; see AvroTrustedClasses
+    AvroTrustedClasses.trustGeneratedTypesOf(readerSchema);
     return deserialize(topic, isKey, bytes, readerSchema);
   }
 
   public Object deserialize(String topic, Headers headers, byte[] bytes, Schema readerSchema) {
+    AvroTrustedClasses.trustGeneratedTypesOf(readerSchema);
     return deserialize(topic, isKey, headers, bytes, readerSchema);
   }
 
@@ -127,6 +131,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public GenericContainerWithVersion deserializeWithSchema(
       String topic, Headers headers, byte[] bytes, Schema readerSchema) {
+    AvroTrustedClasses.trustGeneratedTypesOf(readerSchema);
     return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, readerSchema);
   }
 

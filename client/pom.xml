@@ -122,8 +122,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <executions>
-                    <!-- AVRO-4189: runs without SERIALIZABLE_PACKAGES, which Avro reads once per JVM.
-                         The pinned test is not overridden by -Dtest; elsewhere the test skips itself. -->
+                    <!-- AVRO-4189: trust tests in their own JVM, before any other test trusts or loads
+                         their classes. The pinned test is not overridden by -Dtest; elsewhere it skips
+                         itself. -->
                     <execution>
                         <id>avro-untrusted-classes</id>
                         <goals>
