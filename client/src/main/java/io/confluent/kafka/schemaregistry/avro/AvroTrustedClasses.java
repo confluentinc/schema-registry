@@ -231,8 +231,8 @@ public final class AvroTrustedClasses {
     if (!VALIDATOR_AVAILABLE || value == null) {
       return;
     }
-    if (value instanceof Map) {
-      // Only maps are traversed, so only they need cycle protection
+    if (value instanceof Map || value instanceof Collection) {
+      // Only maps and collections are traversed, so only they need cycle protection
       trustClassOf(value, Collections.newSetFromMap(new IdentityHashMap<>()));
     } else {
       trustOwnClass(value);
@@ -243,12 +243,13 @@ public final class AvroTrustedClasses {
     if (value == null || !visited.add(value)) {
       return;
     }
-    if (value instanceof Map) {
-      // As in AvroSchemaUtils.getSchema, a map's schema comes from its first value
-      Map<?, ?> map = (Map<?, ?>) value;
-      if (!map.isEmpty()) {
-        trustClassOf(map.values().iterator().next(), visited);
-      }
+    // As in AvroSchemaUtils.getSchema, a map's schema comes from its first value, and likewise
+    // for a collection's first element
+    Collection<?> elements = value instanceof Map ? ((Map<?, ?>) value).values()
+        : value instanceof Collection ? (Collection<?>) value
+        : null;
+    if (elements != null && !elements.isEmpty()) {
+      trustClassOf(elements.iterator().next(), visited);
     }
     trustOwnClass(value);
   }

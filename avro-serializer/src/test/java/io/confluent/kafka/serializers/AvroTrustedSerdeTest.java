@@ -24,12 +24,15 @@ import static org.junit.Assume.assumeTrue;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.Grant;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.example.stringable.StringableUser;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -64,6 +67,14 @@ public class AvroTrustedSerdeTest {
 
   public static class Thingamajig {
     public String name = "t";
+  }
+
+  public static class Whatsit {
+    public String name = "w";
+  }
+
+  public static class Gubbins {
+    public String name = "g";
   }
 
   private SchemaRegistryClient schemaRegistry;
@@ -206,5 +217,35 @@ public class AvroTrustedSerdeTest {
     byte[] bytes = serialize("thingamajigs", map);
     Object value = ((Map<?, ?>) deserialize("thingamajigs", bytes)).values().iterator().next();
     assertEquals("t", ((GenericRecord) value).get("name").toString());
+  }
+
+  @Test
+  public void containerOfPojoListSerializesWithoutConfig() {
+    Schema arraySchema = Schema.createArray(ReflectData.get().getSchema(Whatsit.class));
+    byte[] bytes = serialize("whatsits",
+        new NonRecordContainer(arraySchema, Collections.singletonList(new Whatsit())));
+    Object value = ((List<?>) deserialize("whatsits", bytes)).get(0);
+    assertEquals("w", ((GenericRecord) value).get("name").toString());
+  }
+
+  @Test
+  public void listOfGenericRecordsDoesNotLoadClassesTheyName() {
+    // The record's schema names a class on the classpath that is not trusted
+    Schema schema = ReflectData.get().getSchema(Gubbins.class);
+    List<Object> list = Collections.singletonList(record(schema, "name", "g"));
+    byte[] bytes = serialize("gubbins",
+        new NonRecordContainer(Schema.createArray(schema), list));
+    Object value = ((List<?>) deserialize("gubbins", bytes)).get(0);
+    assertEquals("g", ((GenericRecord) value).get("name").toString());
+  }
+
+  @Test
+  public void typelessSpecificReaderTrustsJavaClassTypesOfGeneratedClasses() {
+    // The generated class declares a java.net.URI field through java-class
+    byte[] bytes = serialize("sites",
+        record(StringableUser.SCHEMA$, "site", "https://example.com"));
+    Object result = deserialize("sites", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    assertEquals(URI.create("https://example.com"), ((StringableUser) result).getSite());
   }
 }

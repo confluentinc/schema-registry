@@ -640,7 +640,7 @@ public class AvroSchemaUtils {
 
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
-    if (isMapOfGenericContainers(value)) {
+    if (holdsGenericContainers(value)) {
       // As for a generic record, a reflect writer would load classes named by the schema
       GenericData genericData = getThreadLocalGenericData();
       return new GenericDatumWriter<>(schema,
@@ -656,15 +656,34 @@ public class AvroSchemaUtils {
     }
   }
 
-  // As in getSchema, a map's first value decides; generated specific types are not generic
-  private static boolean isMapOfGenericContainers(Object value) {
-    if (!(value instanceof Map) || ((Map<?, ?>) value).isEmpty()) {
-      return false;
+  // Whether a map or a plain collection holds generic containers, such as generic records. As in
+  // getSchema, a map's first value, or a collection's first element, decides, through any nesting.
+  // Generated specific types are not generic.
+  private static boolean holdsGenericContainers(Object value) {
+    Object leaf = value;
+    for (int depth = 0; depth < MAX_NESTING && isPlainAggregate(leaf); depth++) {
+      Collection<?> elements = leaf instanceof Map ? ((Map<?, ?>) leaf).values()
+          : (Collection<?>) leaf;
+      if (elements.isEmpty()) {
+        return false;
+      }
+      leaf = elements.iterator().next();
     }
-    Object first = ((Map<?, ?>) value).values().iterator().next();
-    return first instanceof GenericContainer && !(first instanceof SpecificRecord
-        || first instanceof SpecificFixed || first instanceof Enum);
+    return leaf != value && isGenericOnly(leaf);
   }
+
+  private static boolean isGenericOnly(Object value) {
+    return value instanceof GenericContainer && !(value instanceof SpecificRecord
+        || value instanceof SpecificFixed || value instanceof Enum);
+  }
+
+  // A generic array is a collection too, but is already written as a generic container
+  private static boolean isPlainAggregate(Object value) {
+    return value instanceof Map
+        || (value instanceof Collection && !(value instanceof GenericContainer));
+  }
+
+  private static final int MAX_NESTING = 32;
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
     String[] identifiers = entity.getEntityPath().split("\\.");

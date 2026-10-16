@@ -290,6 +290,24 @@ public class AvroTrustedClassesTest {
   }
 
   @Test
+  public void trustClassOfTrustsPojosInCollections() {
+    AvroTrustedClasses.trustClassOf(Collections.singletonList(new Line()));
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    // Through nesting, as a map of lists
+    AvroTrustedClasses.trustClassOf(
+        Collections.singletonMap("k", Collections.singletonList(new Child())));
+    assertTrue(AvroTrustedClasses.isTrusted(Child.class));
+  }
+
+  @Test
+  public void trustClassOfIgnoresGenericRecordsInACollection() {
+    Schema schema = ReflectData.get().getSchema(Line.class);
+    AvroTrustedClasses.trustClassOf(
+        Collections.singletonList(new GenericData.Record(schema)));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  @Test
   public void trustClassOfHandlesAMapThatContainsItself() {
     Map<String, Object> map = new HashMap<>();
     map.put("self", map);
