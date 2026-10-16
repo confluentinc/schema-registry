@@ -176,6 +176,9 @@ public class CelExecutorTest {
     Map<String, Object> specificDeserProps = new HashMap<>(defaultConfig);
     specificDeserProps.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "false");
     specificDeserProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    // The specific classes are named only by the writer's schema, so they must be trusted
+    specificDeserProps.put(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG,
+        "io.confluent.kafka.schemaregistry.rules");
     specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserProps);
 
     Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);

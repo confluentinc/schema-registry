@@ -123,6 +123,10 @@ public class JsonataExecutorTest {
 
     Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);
     reflectionProps.put(KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, "true");
+    // The reflect and specific classes are named only by the registry's schemas, so they must be
+    // trusted
+    reflectionProps.put(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG,
+        "io.confluent.kafka.schemaregistry.rules");
     reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
     reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionProps);
     Map<String, Object> reflectionProps2 = new HashMap<>(reflectionProps);
@@ -138,6 +142,8 @@ public class JsonataExecutorTest {
 
     Map<String, Object> specificProps2 = new HashMap<>(defaultConfig2);
     specificProps2.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificProps2.put(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG,
+        "io.confluent.kafka.schemaregistry.rules");
     specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificProps2);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, defaultConfig);

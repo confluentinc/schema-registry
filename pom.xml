@@ -702,11 +702,6 @@
                             <threadCount>5</threadCount>
                             <rerunFailingTestsCount>3</rerunFailingTestsCount>
                             <groups>IntegrationTest</groups>
-                            <systemPropertyVariables>
-                                <!-- AVRO-4189: allow integration tests to use specific and reflect
-                                     classes from any package. -->
-                                <org.apache.avro.SERIALIZABLE_PACKAGES>*</org.apache.avro.SERIALIZABLE_PACKAGES>
-                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>
