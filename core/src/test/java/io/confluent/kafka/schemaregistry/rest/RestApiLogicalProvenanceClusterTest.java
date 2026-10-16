@@ -21,18 +21,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import java.util.Properties;
-
 public class RestApiLogicalProvenanceClusterTest extends RestApiLogicalProvenanceTest {
 
   protected ClusterTestHarness harness;
 
   public RestApiLogicalProvenanceClusterTest() {
     this.harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name);
-    Properties props = new Properties();
-    // Small, so a test can cross it.
-    props.setProperty(SchemaRegistryConfig.PROVENANCE_COMPATIBILITY_MAX_COMPARISONS_CONFIG, "3");
-    harness.injectSchemaRegistryProperties(props);
   }
 
   @BeforeEach
