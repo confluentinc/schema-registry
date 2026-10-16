@@ -150,6 +150,10 @@ public final class AvroTrustedClasses {
    * Trusts the given classes and the types Avro resolves from the schemas it derives for them.
    */
   public static void trust(Class<?>... classes) {
+    // Deriving a schema can initialize the class, through its SCHEMA$
+    if (!VALIDATOR_AVAILABLE) {
+      return;
+    }
     State current = state;
     for (Class<?> clazz : classes) {
       if (clazz != null) {
@@ -164,7 +168,7 @@ public final class AvroTrustedClasses {
    * Trusts every class that the given predicate accepts.
    */
   public static void trust(Predicate<Class<?>> predicate) {
-    if (predicate != null) {
+    if (VALIDATOR_AVAILABLE && predicate != null) {
       state.predicates.add(predicate);
       install();
     }
@@ -174,6 +178,9 @@ public final class AvroTrustedClasses {
    * Trusts the given classes only, not the types they reference.
    */
   public static void trustExactly(Class<?>... classes) {
+    if (!VALIDATOR_AVAILABLE) {
+      return;
+    }
     State current = state;
     for (Class<?> clazz : classes) {
       if (clazz != null) {
@@ -191,6 +198,9 @@ public final class AvroTrustedClasses {
   }
 
   public static void trustClasses(Collection<String> classNames) {
+    if (!VALIDATOR_AVAILABLE) {
+      return;
+    }
     State current = state;
     for (String className : classNames) {
       if (className != null && !className.trim().isEmpty()) {
@@ -209,6 +219,10 @@ public final class AvroTrustedClasses {
   }
 
   public static void trustPackages(Collection<String> packageNames) {
+    // Also avoids warning that "*" disables a check that doesn't exist
+    if (!VALIDATOR_AVAILABLE) {
+      return;
+    }
     State current = state;
     for (String packageName : packageNames) {
       if (packageName == null || packageName.trim().isEmpty()) {
@@ -425,7 +439,8 @@ public final class AvroTrustedClasses {
   }
 
   // A specific record's own SCHEMA$, when it names that class. Avro derives a relocated copy when
-  // the names differ, as they always do for a nested class, which loses its nested types.
+  // the names differ, as they do for a nested class with a dotted namespace, which loses its
+  // nested types.
   private static Schema declaredSchema(Class<?> clazz) {
     if (!IndexedRecord.class.isAssignableFrom(clazz)) {
       return null;
@@ -439,7 +454,10 @@ public final class AvroTrustedClasses {
           return schema;
         }
       }
-    } catch (NoSuchFieldException | IllegalAccessException | RuntimeException | LinkageError e) {
+    } catch (NoSuchFieldException e) {
+      // As for a hand-written record
+      return null;
+    } catch (IllegalAccessException | RuntimeException | LinkageError e) {
       log.debug("Could not read the Avro schema declared by {}", clazz.getName(), e);
     }
     return null;

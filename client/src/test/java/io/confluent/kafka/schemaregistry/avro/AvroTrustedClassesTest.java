@@ -142,8 +142,8 @@ public class AvroTrustedClassesTest {
     assertTrue(AvroTrustedClasses.isTrusted(Address.class));
   }
 
-  // Hand-written nested specific records, whose SCHEMA$ Avro relocates when deriving it because a
-  // nested class's dotted name never matches its binary name
+  // Hand-written nested specific records, whose SCHEMA$ Avro relocates when deriving it because
+  // the dotted namespace doesn't match the class's binary name
   public static class Code {
     public Code(String code) {
     }
