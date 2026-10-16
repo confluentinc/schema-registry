@@ -77,6 +77,11 @@ public class JsonSchemaRemoteRefTest {
         + ref + "\"}}}";
   }
 
+  private static String latestDraftWithRef(String keyword, String ref) {
+    return "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\","
+        + "\"properties\":{\"a\":{\"" + keyword + "\":\"" + ref + "\"}}}";
+  }
+
   private static JsonSchema schema(
       String schemaString,
       Map<String, String> resolvedReferences,
@@ -312,6 +317,61 @@ public class JsonSchemaRemoteRefTest {
   public void httpRefStillFetchedWhenNotBlocked() {
     String ref = "http://127.0.0.1:" + port() + "/r.json";
     assertNotNull(schema(draft7WithRef(ref), Collections.emptyMap(), false).rawSchema());
+    assertTrue(hits.get() > 0);
+  }
+
+  @Test
+  public void jarWrappedHttpRefRejectedWithoutFetchWhenBlocked_latestDraft() {
+    assertRefRejected(latestDraftWithRef(
+        "$ref", "jar:http://127.0.0.1:" + port() + "/x.jar!/s.json"));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void fileAuthorityRefRejectedWhenBlocked_latestDraft() {
+    assertRefRejected(latestDraftWithRef("$ref", "file://127.0.0.1/x"));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void jarWrappedDynamicRefRejectedWithoutFetchWhenBlocked_latestDraft() {
+    assertRefRejected(latestDraftWithRef(
+        "$dynamicRef", "jar:http://127.0.0.1:" + port() + "/x.jar!/s.json"));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void blockMessageOmitsUserinfoAndQuery_latestDraft() {
+    String ref = "http://userinfo-marker:pw@127.0.0.1:" + port() + "/r.json?query-marker=1";
+    try {
+      schema(latestDraftWithRef("$ref", ref), Collections.emptyMap(), true).rawSchema();
+      fail("Expected loading to fail because the remote $ref fetch is disabled");
+    } catch (RuntimeException e) {
+      assertBlocked(e);
+      // json-sKema's own wrapper repeats the URL; check the block message itself
+      Throwable c = e;
+      while (!String.valueOf(c.getMessage()).startsWith(JsonSchema.REMOTE_REF_DISABLED_MESSAGE)) {
+        c = c.getCause();
+      }
+      assertFalse(c.getMessage(), c.getMessage().contains("userinfo-marker"));
+      assertFalse(c.getMessage(), c.getMessage().contains("query-marker"));
+    }
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void unregisteredRelativeRefNotReportedAsBlocked_latestDraft() {
+    // Resolves against the in-memory base, which is not a remote fetch
+    assertNotBlocked(
+        schema(latestDraftWithRef("$ref", "missing.json"), Collections.emptyMap(), true));
+    assertEquals(0, hits.get());
+  }
+
+  @Test
+  public void httpRefStillFetchedWhenNotBlocked_latestDraft() {
+    String ref = "http://127.0.0.1:" + port() + "/r.json";
+    assertNotNull(
+        schema(latestDraftWithRef("$ref", ref), Collections.emptyMap(), false).rawSchema());
     assertTrue(hits.get() > 0);
   }
 }
