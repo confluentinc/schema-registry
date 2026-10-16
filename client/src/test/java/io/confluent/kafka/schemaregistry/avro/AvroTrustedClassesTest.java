@@ -1,0 +1,210 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.avro;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
+
+import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectDatumReader;
+import org.apache.avro.reflect.ReflectDatumWriter;
+import org.apache.avro.util.ClassSecurityValidator;
+import org.apache.avro.util.ClassSecurityValidator.ClassSecurityPredicate;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+// Runs in the avro-untrusted-classes surefire execution, where no package is trusted
+public class AvroTrustedClassesTest {
+
+  public static class Order {
+    public int id = 7;
+    public List<Line> lines = new ArrayList<>();
+    public Status status = Status.OPEN;
+    public Address address = new Address();
+  }
+
+  public static class Line {
+    public int qty = 2;
+  }
+
+  public enum Status { OPEN, CLOSED }
+
+  @BeforeClass
+  public static void requireUntrustedFork() {
+    assumeTrue(Boolean.getBoolean("avro.untrusted.classes"));
+  }
+
+  @Before
+  @After
+  public void reset() {
+    AvroTrustedClasses.resetToDefaults();
+  }
+
+  // A fresh ReflectData, since Avro caches the classes each instance has loaded
+  private static Order roundTrip(Order order) throws IOException {
+    ReflectData data = new ReflectData();
+    Schema schema = data.getSchema(Order.class);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new ReflectDatumWriter<Order>(schema, data).write(order, encoder);
+    encoder.flush();
+    return new ReflectDatumReader<Order>(schema, schema, data)
+        .read(null, DecoderFactory.get().binaryDecoder(out.toByteArray(), null));
+  }
+
+  private static Order order() {
+    Order order = new Order();
+    order.lines.add(new Line());
+    return order;
+  }
+
+  @Test
+  public void untrustedPojoIsRejectedByAvro() {
+    assertThrows(SecurityException.class, () -> roundTrip(order()));
+  }
+
+  @Test
+  public void trustCoversTheObjectGraph() throws IOException {
+    AvroTrustedClasses.trust(Order.class);
+    Order result = roundTrip(order());
+    assertEquals(2, result.lines.get(0).qty);
+    assertEquals("Springfield", result.address.city);
+    // Nested types under their binary names, and a type in another package
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    assertTrue(AvroTrustedClasses.isTrusted(Status.class));
+    assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+  }
+
+  @Test
+  public void trustExactlyDoesNotFollowReferencedTypes() {
+    AvroTrustedClasses.trustExactly(Order.class);
+    assertTrue(AvroTrustedClasses.isTrusted(Order.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  @Test
+  public void trustClassOfTrustsAnApplicationValue() throws IOException {
+    AvroTrustedClasses.trustClassOf(order());
+    assertEquals(2, roundTrip(order()).lines.get(0).qty);
+  }
+
+  @Test
+  public void trustClassOfIgnoresGenericRecords() {
+    // A generic record's schema may name any class; that must not make the class trusted
+    Schema schema = ReflectData.get().getSchema(Line.class);
+    AvroTrustedClasses.trustClassOf(new GenericData.Record(schema));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  // A container that is not a generated class, like the serializer's NonRecordContainer
+  public static class Container implements GenericContainer {
+    @Override
+    public Schema getSchema() {
+      return ReflectData.get().getSchema(Line.class);
+    }
+  }
+
+  @Test
+  public void trustClassOfIgnoresOtherContainers() {
+    AvroTrustedClasses.trustClassOf(new Container());
+    assertFalse(AvroTrustedClasses.isTrusted(Container.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  @Test
+  public void trustPackagesIgnoresATrailingDot() {
+    AvroTrustedClasses.trustPackages("io.confluent.kafka.schemaregistry.avro.othermodel.");
+    assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+  }
+
+  @Test
+  public void trustPackagesMatchesWholePackagesAndSubpackages() {
+    AvroTrustedClasses.trustPackages("io.confluent.kafka.schemaregistry.avro.other");
+    assertFalse(AvroTrustedClasses.isTrusted(Address.class));
+    AvroTrustedClasses.trustPackages("io.confluent.kafka.schemaregistry");
+    assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+    // A nested class reports its enclosing package
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
+  @Test
+  public void trustClassesUsesBinaryNames() {
+    AvroTrustedClasses.trustClasses(Line.class.getName());
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Order.class));
+  }
+
+  @Test
+  public void trustAllPackages() throws IOException {
+    AvroTrustedClasses.trustPackages("*");
+    assertEquals(2, roundTrip(order()).lines.get(0).qty);
+  }
+
+  @Test
+  public void trustPredicate() {
+    AvroTrustedClasses.trust(clazz -> clazz == Line.class);
+    assertTrue(AvroTrustedClasses.isTrusted(Line.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Order.class));
+  }
+
+  @Test
+  public void collectionTypesAreTrustedByDefault() {
+    assertTrue(AvroTrustedClasses.isTrusted(ArrayList.class));
+    assertTrue(AvroTrustedClasses.isTrusted(List.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Order.class));
+  }
+
+  @Test
+  public void installsOnTopOfAReplacedValidator() {
+    ClassSecurityPredicate original = ClassSecurityValidator.getGlobal();
+    try {
+      ClassSecurityValidator.setGlobal(ClassSecurityValidator.builder().add(Line.class).build());
+      assertFalse(AvroTrustedClasses.isInstalled());
+      AvroTrustedClasses.trustExactly(Order.class);
+      assertTrue(AvroTrustedClasses.isInstalled());
+      // The replacing validator's trust is kept
+      assertTrue(ClassSecurityValidator.getGlobal().isTrusted(Line.class));
+      assertTrue(ClassSecurityValidator.getGlobal().isTrusted(Order.class));
+    } finally {
+      ClassSecurityValidator.setGlobal(original);
+    }
+  }
+
+  @Test
+  public void resetToDefaultsDropsDeclarations() {
+    AvroTrustedClasses.trust(Order.class);
+    AvroTrustedClasses.resetToDefaults();
+    assertFalse(AvroTrustedClasses.isTrusted(Order.class));
+    assertTrue(AvroTrustedClasses.isInstalled());
+  }
+}

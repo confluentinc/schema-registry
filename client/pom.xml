@@ -130,7 +130,7 @@
                             <goal>test</goal>
                         </goals>
                         <configuration>
-                            <test>AvroUntrustedClassTest</test>
+                            <test>AvroUntrustedClassTest,AvroTrustedClassesTest</test>
                             <systemPropertyVariables combine.self="override">
                                 <avro.untrusted.classes>true</avro.untrusted.classes>
                             </systemPropertyVariables>

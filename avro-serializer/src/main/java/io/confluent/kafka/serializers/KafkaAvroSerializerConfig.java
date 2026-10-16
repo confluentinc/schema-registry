@@ -46,6 +46,16 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
       + "'BEFORE_DOMAIN_RULES' (run on the original message before domain rule transformations), "
       + "or 'AFTER_DOMAIN_RULES' (run on the transformed message after domain rules).";
 
+  public static final String AVRO_TRUSTED_CLASSES_CONFIG = "avro.trusted.classes";
+  public static final String AVRO_TRUSTED_CLASSES_DOC = "Classes that Avro may load, by binary "
+      + "name such as com.example.Outer$Inner, beyond those trusted automatically. Avro 1.12.2 "
+      + "only loads trusted classes, and this trust applies to the whole JVM";
+  public static final String AVRO_TRUSTED_PACKAGES_CONFIG = "avro.trusted.packages";
+  public static final String AVRO_TRUSTED_PACKAGES_DOC = "Packages, with their subpackages, "
+      + "whose classes Avro may load, beyond those trusted automatically. '*' trusts every "
+      + "class, which disables Avro's check. Avro 1.12.2 only loads trusted classes, and this "
+      + "trust applies to the whole JVM";
+
   private static ConfigDef config;
 
   static {
@@ -63,7 +73,11 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
             VALIDATION_RULES_EXECUTION_DEFAULT,
             EnumRecommender.in(ValidationRulesExecution.values()),
             ConfigDef.Importance.MEDIUM,
-            VALIDATION_RULES_EXECUTION_DOC);
+            VALIDATION_RULES_EXECUTION_DOC)
+        .define(AVRO_TRUSTED_CLASSES_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.MEDIUM, AVRO_TRUSTED_CLASSES_DOC)
+        .define(AVRO_TRUSTED_PACKAGES_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.MEDIUM, AVRO_TRUSTED_PACKAGES_DOC);
   }
 
   public KafkaAvroSerializerConfig(Map<?, ?> props) {

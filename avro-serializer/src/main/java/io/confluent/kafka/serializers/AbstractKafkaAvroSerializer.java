@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -32,6 +33,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -86,6 +88,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    List<String> trustedClasses =
+        config.getList(KafkaAvroSerializerConfig.AVRO_TRUSTED_CLASSES_CONFIG);
+    if (!trustedClasses.isEmpty()) {
+      AvroTrustedClasses.trustClasses(trustedClasses);
+    }
+    List<String> trustedPackages =
+        config.getList(KafkaAvroSerializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG);
+    if (!trustedPackages.isEmpty()) {
+      AvroTrustedClasses.trustPackages(trustedPackages);
+    }
     validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
         config.getString(KafkaAvroSerializerConfig.VALIDATION_RULES_EXECUTION)
             .toUpperCase(Locale.ROOT));
@@ -128,6 +140,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (object == null) {
       return null;
     }
+    // Avro loads the class of a specific record or reflect POJO, which the application supplied
+    AvroTrustedClasses.trustClassOf(object);
     boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
