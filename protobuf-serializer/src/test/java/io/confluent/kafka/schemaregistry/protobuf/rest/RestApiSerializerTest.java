@@ -580,6 +580,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     Collection<String> subjects = schemaRegistry.getAllSubjects();
     for (String subject : subjects) {
       SchemaMetadata metadata = schemaRegistry.getLatestSchemaMetadata(subject);
+      assertEquals(metadata.getSubject(), subject);
       Optional<ParsedSchema> schema = schemaRegistry.parseSchema(new Schema(subject, metadata));
       ProtobufSchema proto = (ProtobufSchema) schema.get();
       GenericDescriptor d = proto.toSpecificDescriptor(

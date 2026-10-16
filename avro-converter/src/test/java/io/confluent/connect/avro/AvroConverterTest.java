@@ -17,6 +17,7 @@
 package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
@@ -200,7 +201,15 @@ public class AvroConverterTest {
 
     avroConverter.configure(configs, false);
     testVersionExtracted(subject, serializer, avroConverter);
+  }
 
+  @Test
+  public void testVersionExtractedFromMetadata() throws Exception {
+    String subject = TOPIC + "-value";
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    avroConverter.configure(Collections.singletonMap("schema.registry.url", "http://fake-url"), false);
+    testVersionExtractedFromMetadata(subject, serializer, avroConverter);
   }
 
   private void testVersionExtracted(String subject, KafkaAvroSerializer serializer, AvroConverter avroConverter) throws IOException, RestClientException {
@@ -234,6 +243,42 @@ public class AvroConverterTest {
 
     SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  private void testVersionExtractedFromMetadata(String subject, KafkaAvroSerializer serializer,
+      AvroConverter avroConverter) throws IOException, RestClientException {
+    // Pre-register to ensure ordering
+    org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .endRecord();
+    schemaRegistry.register(subject, new AvroSchema(avroSchema1).copy(
+        new Metadata(null, ImmutableMap.of("confluent:version", "2"), null), null));
+
+    org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .requiredString("value")
+        .endRecord();
+    schemaRegistry.register(subject, new AvroSchema(avroSchema2).copy(
+        new Metadata(null, ImmutableMap.of("confluent:version", "200"), null), null));
+
+
+    // Get serialized data
+    org.apache.avro.generic.GenericRecord avroRecord1
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema1).set("key", 15).build();
+    byte[] serializedRecord1 = serializer.serialize(TOPIC, avroRecord1);
+    org.apache.avro.generic.GenericRecord avroRecord2
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2).set("key", 15).set
+        ("value", "bar").build();
+    byte[] serializedRecord2 = serializer.serialize(TOPIC, avroRecord2);
+
+
+    SchemaAndValue converted1 = avroConverter.toConnectData(TOPIC, serializedRecord1);
+    assertEquals(2L, (long) converted1.schema().version());
+
+    SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
+    assertEquals(200L, (long) converted2.schema().version());
   }
 
 

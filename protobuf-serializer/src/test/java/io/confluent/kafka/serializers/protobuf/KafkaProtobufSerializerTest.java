@@ -23,6 +23,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -33,6 +34,7 @@ import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.De
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
@@ -851,4 +853,67 @@ public class KafkaProtobufSerializerTest {
     protobufSerializer.configure(new HashMap(serializerConfig), false);
     testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
   }
+
+  @Test
+  public void testRecordNameStrategyReadsTheRecordsOwnMessage() throws Exception {
+    // A record of a file's second message, read with no reader schema, stays that message.
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    int id = schemaRegistry.register("p.B", schema);
+    Descriptors.Descriptor b = schema.toDescriptor("p.B");
+    byte[] body = DynamicMessage.newBuilder(b).setField(b.findFieldByName("id"), 7)
+        .setField(b.findFieldByName("note"), "old").build().toByteArray();
+    byte[] indexes = schema.toMessageIndexes("p.B").toByteArray();
+    byte[] bytes = ByteBuffer.allocate(5 + indexes.length + body.length).put((byte) 0)
+        .putInt(id).put(indexes).put(body).array();
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName());
+
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(schemaRegistry, configs);
+    DynamicMessage read = deserializer.deserialize(topic, bytes);
+    assertEquals("p.B", read.getDescriptorForType().getFullName());
+    assertEquals(7, read.getField(read.getDescriptorForType().findFieldByName("id")));
+    assertEquals("old", read.getField(read.getDescriptorForType().findFieldByName("note")));
+  }
+
+  @Test
+  public void testDependencyPreregisterRefWithNegativeOne() throws Exception {
+    String refSubject = "TestProto.proto";
+    String refSchemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message TestMessage {\n"
+        + "  string test_string = 1;\n"
+        + "}\n";
+    schemaRegistry.register(refSubject, new ProtobufSchema(refSchemaString));
+    String subject = topic + "-value";
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"TestProto.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DependencyMessage {\n"
+        + "  TestMessage test_message = 1;\n"
+        + "  bool is_active = 2;\n"
+        + "}";
+    SchemaReference ref = new SchemaReference("TestProto.proto", "TestProto.proto", -1);
+    ParsedSchema parsedSchema = new ProtobufSchema(
+        schemaString, ImmutableList.of(ref), ImmutableMap.of(ref.getName(), refSchemaString), null, null);
+    schemaRegistry.register(subject, parsedSchema);
+
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 2);
+    SchemaReference refCopy = new SchemaReference("TestProto.proto", "TestProto.proto", -1);
+    schema = schemaRegistry.parseSchema(ProtobufSchema.TYPE, schema.canonicalString(), ImmutableList.of(refCopy)).get();
+    int id = schemaRegistry.getId(subject, schema);
+    assertEquals(2, id);
+  }
+
 }

@@ -103,6 +103,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.kafka.schemaregistry.client.security.SslFactory.*"/>
         <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
     </Match>

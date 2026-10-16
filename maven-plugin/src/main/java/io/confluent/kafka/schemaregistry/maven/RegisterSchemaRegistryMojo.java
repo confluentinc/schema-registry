@@ -35,6 +35,9 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
   @Parameter(required = false)
   boolean normalizeSchemas = false;
 
+  @Parameter(required = false)
+  boolean propagateSchemaTags = false;
+
   @Override
   protected boolean processSchema(String subject,
                                   File schemaPath,
@@ -49,7 +52,7 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
     }
 
     RegisterSchemaResponse response =
-        this.client().registerWithResponse(subject, schema, normalizeSchemas);
+        this.client().registerWithResponse(subject, schema, normalizeSchemas, propagateSchemaTags);
     if (response.getSchema() != null) {
       Optional<ParsedSchema> optSchema =
           this.client().parseSchema(new Schema(subject, response));

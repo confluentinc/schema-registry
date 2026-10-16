@@ -21,6 +21,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.InterruptedIOException;
@@ -142,7 +143,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       schema = schemaWithName(schema, name);
       if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(id, schema, subject, isKey);
+        // Fetched again by id it comes back unnamed, as its file's first message: name it again.
+        schema = schemaWithName(schemaForDeserialize(id, schema, subject, isKey), name);
       }
 
       ProtobufSchema readerSchema = null;
@@ -278,13 +280,19 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   private Integer schemaVersion(
       String topic, boolean isKey, int id, String subject, ProtobufSchema schema, Object value
   ) throws IOException, RestClientException {
-    Integer version;
+    Integer version = null;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
     }
     ProtobufSchema subjectSchema =
         (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-    version = schemaRegistry.getVersion(subject, subjectSchema);
+    Metadata metadata = subjectSchema.metadata();
+    if (metadata != null) {
+      version = metadata.getConfluentVersionNumber();
+    }
+    if (version == null) {
+      version = schemaRegistry.getVersion(subject, subjectSchema);
+    }
     return version;
   }
 

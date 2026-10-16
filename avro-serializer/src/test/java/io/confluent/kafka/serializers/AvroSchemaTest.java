@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -785,8 +786,8 @@ public class AvroSchemaTest {
       "    },\n" +
       "    {\n" +
       "      \"name\": \"my_field2\",\n" +
-      "      \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "      \"type\": {\n" +
+      "        \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "        \"name\": \"nestedRecordWithNamespace\",\n" +
       "        \"type\": \"record\",\n" +
       "        \"fields\": [\n" +
@@ -836,6 +837,7 @@ public class AvroSchemaTest {
       "    \"name\" : \"my_field2\",\n" +
       "    \"type\" : {\n" +
       "      \"type\" : \"record\",\n" +
+      "      \"namespace\" : \"com.example.mynamespace.nested\",\n" +
       "      \"name\" : \"nestedRecordWithNamespace\",\n" +
       "      \"fields\" : [ {\n" +
       "        \"name\" : \"nested_field1\",\n" +
@@ -847,8 +849,7 @@ public class AvroSchemaTest {
       "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
       "      } ],\n" +
       "      \"confluent:tags\": [ \"PII\" ]\n" +
-      "    },\n" +
-      "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
+      "    }\n" +
       "  }, {\n" +
       "    \"name\" : \"my_field3\",\n" +
       "    \"type\" : \"double\",\n" +
@@ -884,6 +885,16 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecordWithoutNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+            "com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
@@ -1103,10 +1114,108 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "nestedRecord3.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecord.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nested.nestedRecord2.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
+  }
+
+  @Test
+  public void testRecursiveFindTags() {
+    String schemaString = "{\n"
+        + "  \"confluent:tags\": [\n"
+        + "    \"PII\"\n"
+        + "  ],\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"age\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": null,\n"
+        + "      \"name\": \"parent\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"Person\"\n"
+        + "      ]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": [],\n"
+        + "      \"name\": \"children\",\n"
+        + "      \"type\": {\n"
+        + "        \"items\": \"Person\",\n"
+        + "        \"type\": \"array\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"attributes\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"map\",\n"
+        + "        \"values\": [\n"
+        + "          \"null\",\n"
+        + "          \"int\",\n"
+        + "          \"long\",\n"
+        + "          \"float\",\n"
+        + "          \"double\",\n"
+        + "          \"string\",\n"
+        + "          \"boolean\",\n"
+        + "          {\n"
+        + "            \"fields\": [\n"
+        + "              {\n"
+        + "                \"name\": \"id\",\n"
+        + "                \"type\": \"int\"\n"
+        + "              },\n"
+        + "              {\n"
+        + "                \"name\": \"value\",\n"
+        + "                \"type\": \"string\"\n"
+        + "              }\n"
+        + "            ],\n"
+        + "            \"name\": \"NestedAttribute\",\n"
+        + "            \"type\": \"record\"\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"fixedSizeData\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"FixedData\",\n"
+        + "        \"size\": 16,\n"
+        + "        \"type\": \"fixed\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ],\n"
+        + "  \"name\": \"Person\",\n"
+        + "  \"namespace\": \"com.example\",\n"
+        + "  \"type\": \"record\"\n"
+        + "}";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(ImmutableSet.of("PII"), schema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>();
+    expectedTags.put(new SchemaEntity(
+            "com.example.Person",
+            SchemaEntity.EntityType.SR_RECORD),
+        Collections.singleton("PII"));
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
   }
 
   @Test

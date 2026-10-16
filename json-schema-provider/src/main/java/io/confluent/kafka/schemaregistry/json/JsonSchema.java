@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,6 +38,23 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.github.erosb.jsonsKema.ClassPathAwareSchemaClient;
+import com.github.erosb.jsonsKema.JsonArray;
+import com.github.erosb.jsonsKema.JsonBoolean;
+import com.github.erosb.jsonsKema.JsonNull;
+import com.github.erosb.jsonsKema.JsonNumber;
+import com.github.erosb.jsonsKema.JsonObject;
+import com.github.erosb.jsonsKema.JsonString;
+import com.github.erosb.jsonsKema.JsonValue;
+import com.github.erosb.jsonsKema.MemoizingSchemaClient;
+import com.github.erosb.jsonsKema.PrepopulatedSchemaClient;
+import com.github.erosb.jsonsKema.SchemaLoaderConfig;
+import com.github.erosb.jsonsKema.URLQueryingSchemaClient;
+import com.github.erosb.jsonsKema.UnknownSource;
+import com.github.erosb.jsonsKema.ValidationFailure;
+import com.github.erosb.jsonsKema.Validator;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -46,6 +65,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -53,18 +73,23 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -88,9 +113,9 @@ import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
+import org.everit.json.schema.TrueSchema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
-import org.everit.json.schema.loader.SpecificationVersion;
 import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -100,6 +125,8 @@ import org.slf4j.LoggerFactory;
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
+
+  public static final String DEFAULT_BASE_URI = "mem://input";
 
   public static final String TYPE = "JSON";
 
@@ -115,6 +142,8 @@ public class JsonSchema implements ParsedSchema {
 
   private transient volatile Schema schemaObj;
 
+  private transient volatile com.github.erosb.jsonsKema.Schema skemaObj;
+
   private final Integer version;
 
   private final List<SchemaReference> references;
@@ -124,6 +153,8 @@ public class JsonSchema implements ParsedSchema {
   private final Metadata metadata;
 
   private final RuleSet ruleSet;
+
+  private final boolean ignoreModernDialects;
 
   // When true, remote HTTP/HTTPS schema-reference fetching is blocked while loading this schema.
   // Set only for a new schema registration when remote fetching is disabled; carried across
@@ -145,6 +176,40 @@ public class JsonSchema implements ParsedSchema {
   private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
 
+  // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
+  // only prepopulates the draft 2020-12 metaschemas
+  private static final Map<URI, String> prepopulatedMetaSchemas = 
+      new ImmutableMap.Builder<URI, String>()
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/core"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/core"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/validation"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/format"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/format"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/content"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/content"))
+          // The following are to account for URIs with trailing #
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          // The following are to account for raw http
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .build();
+
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
   }
@@ -165,6 +230,7 @@ public class JsonSchema implements ParsedSchema {
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = null;
     this.ruleSet = null;
+    this.ignoreModernDialects = false;
     this.blockRemoteRefs = false;
   }
 
@@ -191,6 +257,7 @@ public class JsonSchema implements ParsedSchema {
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.version = version;
+    this.ignoreModernDialects = false;
     this.blockRemoteRefs = false;
   }
 
@@ -209,6 +276,7 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
       this.metadata = metadata;
       this.ruleSet = ruleSet;
+      this.ignoreModernDialects = false;
       this.blockRemoteRefs = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON schema", e);
@@ -231,9 +299,10 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
       this.metadata = metadata;
       this.ruleSet = ruleSet;
+      this.ignoreModernDialects = false;
       this.blockRemoteRefs = blockRemoteRefs;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON schema", e);
+      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
     }
   }
 
@@ -250,30 +319,37 @@ public class JsonSchema implements ParsedSchema {
       this.resolvedReferences = Collections.emptyMap();
       this.metadata = null;
       this.ruleSet = null;
+      this.ignoreModernDialects = false;
       this.blockRemoteRefs = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
     }
   }
 
+  // CHECKSTYLE_RULES.OFF: ParameterNumber
   private JsonSchema(
       JsonNode jsonNode,
+      com.github.erosb.jsonsKema.Schema skemaObj,
       Schema schemaObj,
       Integer version,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
       Metadata metadata,
       RuleSet ruleSet,
+      boolean ignoreModernDialects,
       String canonicalString,
       boolean blockRemoteRefs
   ) {
+    // CHECKSTYLE_RULES.ON: ParameterNumber
     this.jsonNode = jsonNode;
+    this.skemaObj = skemaObj;
     this.schemaObj = schemaObj;
     this.version = version;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
     this.metadata = metadata;
     this.ruleSet = ruleSet;
+    this.ignoreModernDialects = ignoreModernDialects;
     this.canonicalString = canonicalString;
     this.blockRemoteRefs = blockRemoteRefs;
   }
@@ -282,12 +358,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy() {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString,
         this.blockRemoteRefs
     );
@@ -297,12 +375,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Integer version) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         version,
         this.references,
         this.resolvedReferences,
         this.metadata,
         this.ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString,
         this.blockRemoteRefs
     );
@@ -312,12 +392,14 @@ public class JsonSchema implements ParsedSchema {
   public JsonSchema copy(Metadata metadata, RuleSet ruleSet) {
     return new JsonSchema(
         this.jsonNode,
+        this.skemaObj,
         this.schemaObj,
         this.version,
         this.references,
         this.resolvedReferences,
         metadata,
         ruleSet,
+        this.ignoreModernDialects,
         this.canonicalString,
         this.blockRemoteRefs
     );
@@ -332,13 +414,31 @@ public class JsonSchema implements ParsedSchema {
     return new JsonSchema(
       original,
       null,
+      null,
       schemaCopy.version(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
+      this.ignoreModernDialects,
       null,
       this.blockRemoteRefs);
+  }
+
+  public JsonSchema copyIgnoringModernDialects() {
+    return new JsonSchema(
+        this.jsonNode,
+        null,
+        null,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
+        true,
+        this.canonicalString,
+        this.blockRemoteRefs
+    );
   }
 
   public JsonNode toJsonNode() {
@@ -354,17 +454,34 @@ public class JsonSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (schemaObj == null) {
+          if (!jsonNode.isObject() && !jsonNode.isBoolean()) {
+            // A JSON Schema document must be an object or a boolean.
+            throw new IllegalArgumentException(
+                "Invalid JSON schema: expected an object or boolean at the root, found "
+                    + jsonNode.getNodeType());
+          }
           try {
-            SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-                .useDefaults(true).draftV7Support();
-            configureEveritLoader(builder);
-            String rootJson = mergeDefBuckets(
-                objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
-            JSONObject jsonObject = new JSONObject(rootJson);
-            builder.schemaJson(jsonObject);
-            SchemaLoader loader = builder.build();
-            schemaObj = loader.load().build();
-          } catch (IOException e) {
+            if (jsonNode.isBoolean()) {
+              schemaObj = jsonNode.booleanValue()
+                  ? TrueSchema.builder().build()
+                  : FalseSchema.builder().build();
+            } else {
+              SpecificationVersion spec = specVersion();
+              switch (spec) {
+                case DRAFT_2020_12:
+                case DRAFT_2019_09:
+                  if (ignoreModernDialects) {
+                    loadPreviousDraft(spec);
+                  } else {
+                    loadLatestDraft();
+                  }
+                  break;
+                default:
+                  loadPreviousDraft(spec);
+                  break;
+              }
+            }
+          } catch (Throwable e) {
             throw new IllegalArgumentException("Invalid JSON", e);
           }
         }
@@ -373,21 +490,89 @@ public class JsonSchema implements ParsedSchema {
     return schemaObj;
   }
 
-  // Applies this schema's remote-ref policy and registered references to an Everit loader
-  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder) {
+  @VisibleForTesting
+  protected Map<URI, String> getPrepopulatedMappings() {
+    return prepopulatedMetaSchemas;
+  }
+
+  private void loadLatestDraft() throws URISyntaxException {
+    Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
+    for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      URI uri = new URI(dep.getKey());
+      mappings.put(uri, dep.getValue());
+      if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
+        // For backward compatibility
+        mappings.put(new URI("./" + dep.getKey()), dep.getValue());
+      }
+    }
+    SchemaLoaderConfig config;
+    if (blockRemoteRefs) {
+      // Reproduce json-sKema's default client chain, but swap the innermost
+      // URLQueryingSchemaClient (which performs the network call) for one that refuses HTTP(S).
+      // The prepopulated meta-schemas, the registered mappings, and the classpath are tried first,
+      // so anything reaching the blocking client is a genuine remote fetch.
+      com.github.erosb.jsonsKema.SchemaClient schemaClient = new MemoizingSchemaClient(
+          new PrepopulatedSchemaClient(
+              new ClassPathAwareSchemaClient(new NoHttpSkemaClient()), mappings));
+      config = new SchemaLoaderConfig(schemaClient, URI.create(DEFAULT_BASE_URI), mappings);
+    } else {
+      config = SchemaLoaderConfig.createDefaultConfig(mappings);
+    }
+    JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
+    skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
+    SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
+    assert ctx != null;
+    ctx.close();
+    schemaObj = ctx.schema();
+  }
+
+  private void loadPreviousDraft(SpecificationVersion spec)
+      throws JsonProcessingException {
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .useDefaults(true).draftV7Support();
+    configureEveritLoader(builder, spec);
+    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    builder.schemaJson(jsonObject);
+    SchemaLoader loader = builder.build();
+    schemaObj = loader.load().build();
+  }
+
+  private SpecificationVersion specVersion() {
     // Extract the $schema to use for determining the id keyword
     SpecificationVersion spec = SpecificationVersion.DRAFT_7;
     if (jsonNode.has(SCHEMA_KEYWORD)) {
       String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-      if (schema != null) {
-        spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
-            .orElse(SpecificationVersion.DRAFT_7);
+      SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+      if (s != null) {
+        spec = s;
       }
     }
+    return spec;
+  }
+
+  // Applies this schema's remote-ref policy and registered references to an Everit loader
+  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
+                                     SpecificationVersion spec) {
+    org.everit.json.schema.loader.SpecificationVersion loaderSpec =
+        org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+    switch (spec) {
+      case DRAFT_7:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
+        break;
+      case DRAFT_6:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_6;
+        break;
+      case DRAFT_4:
+        loaderSpec = org.everit.json.schema.loader.SpecificationVersion.DRAFT_4;
+        break;
+      default:
+        break;
+    }
+
     // Extract the $id to use for resolving relative $ref URIs
     URI idUri = null;
-    if (jsonNode.has(spec.idKeyword())) {
-      String id = jsonNode.get(spec.idKeyword()).asText();
+    if (jsonNode.has(loaderSpec.idKeyword())) {
+      String id = jsonNode.get(loaderSpec.idKeyword()).asText();
       if (id != null) {
         idUri = ReferenceResolver.resolve((URI) null, id);
       }
@@ -398,76 +583,13 @@ public class JsonSchema implements ParsedSchema {
       builder.schemaClient(schemaClient);
     }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-      // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
-      // resolves via Everit's literal JSON Pointer fallback even when the
-      // schema author placed the body under draft-7's native `definitions`
-      // bucket. The asymmetric direction (definitions → $defs, not the
-      // reverse) makes `$defs` the canonical "forgiving" ref form across both
-      // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
-      // which bucket the body actually lives in. The original content in
-      // resolvedReferences is left untouched; only the in-memory copy passed
-      // to the loader is augmented.
-      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      builder.registerSchemaByURI(child, new JSONObject(content));
+      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
     }
   }
 
-  /**
-   * Copies any top-level entries under {@code fromKey} into {@code toKey}.
-   *
-   * <p>Used by both load paths to bridge {@code definitions} entries into {@code $defs} so
-   * that {@code $ref: "#/$defs/X"} resolves regardless of which bucket the body lives in.
-   * The keys are parameterized to keep the helper algorithmically symmetric and easy to test
-   * in isolation; in production both call sites pass {@code ("definitions", "$defs")}.
-   *
-   * <p>Existing {@code toKey} entries take precedence on key collision (the target keyword
-   * wins). Returns the original string when:
-   * <ul>
-   *   <li>{@code json} is null or empty,</li>
-   *   <li>{@code json} parses to a non-object (e.g. a boolean schema),</li>
-   *   <li>{@code fromKey} is absent, its value is not an object, or its value is empty,</li>
-   *   <li>{@code toKey} is present but not an object (preserved rather than overwritten),</li>
-   *   <li>parsing fails (best-effort fallback).</li>
-   * </ul>
-   *
-   * <p>Top-level only — nested {@code definitions}/{@code $defs} inside subschemas are not
-   * bridged.
-   */
-  static String mergeDefBuckets(String json, String fromKey, String toKey) {
-    if (json == null || json.isEmpty()) {
-      return json;
-    }
-    try {
-      JsonNode root = objectMapper.readTree(json);
-      if (!root.isObject()) {
-        return json;
-      }
-      JsonNode source = root.get(fromKey);
-      if (source == null || !source.isObject() || source.size() == 0) {
-        // Nothing to copy — return as-is to avoid creating a stray empty target.
-        return json;
-      }
-      // Preserve a non-object target unchanged rather than overwriting it.
-      JsonNode existingTarget = root.get(toKey);
-      if (existingTarget != null && !existingTarget.isObject()) {
-        return json;
-      }
-      ObjectNode mut = (ObjectNode) root;
-      ObjectNode target = existingTarget != null
-          ? (ObjectNode) existingTarget
-          : mut.putObject(toKey);
-      java.util.Iterator<Map.Entry<String, JsonNode>> it = source.fields();
-      while (it.hasNext()) {
-        Map.Entry<String, JsonNode> entry = it.next();
-        if (!target.has(entry.getKey())) {
-          target.set(entry.getKey(), entry.getValue());
-        }
-      }
-      return objectMapper.writeValueAsString(mut);
-    } catch (IOException e) {
-      return json;
-    }
+  private static boolean isHttpScheme(String scheme) {
+    return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
   }
 
   // RFC 3986 scheme prefix
@@ -598,6 +720,34 @@ public class JsonSchema implements ParsedSchema {
     return blockRemoteRefs ? NO_HTTP_SCHEMA_CLIENT : null;
   }
 
+  /**
+   * A json-sKema {@link com.github.erosb.jsonsKema.SchemaClient} that refuses to fetch
+   * {@code http}/{@code https} URIs, while delegating any other scheme to the standard
+   * URL-querying client.
+   */
+  private static final class NoHttpSkemaClient implements com.github.erosb.jsonsKema.SchemaClient {
+
+    private final com.github.erosb.jsonsKema.SchemaClient delegate = new URLQueryingSchemaClient();
+
+    @Override
+    public InputStream get(URI uri) {
+      if (isHttpScheme(uri.getScheme())) {
+        throw new UncheckedIOException(new IOException(
+            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
+      }
+      return delegate.get(uri);
+    }
+
+    @Override
+    public com.github.erosb.jsonsKema.IJsonValue getParsed(URI uri) {
+      if (isHttpScheme(uri.getScheme())) {
+        throw new UncheckedIOException(new IOException(
+            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
+      }
+      return delegate.getParsed(uri);
+    }
+  }
+
   public static final String REMOTE_REF_DISABLED_MESSAGE =
       "Remote schema reference fetching over HTTP(S) is disabled";
 
@@ -691,6 +841,10 @@ public class JsonSchema implements ParsedSchema {
     return ruleSet;
   }
 
+  public boolean isIgnoreModernDialects() {
+    return ignoreModernDialects;
+  }
+
   @Override
   public JsonSchema normalize() {
     String canonical = canonicalString();
@@ -702,12 +856,14 @@ public class JsonSchema implements ParsedSchema {
       return new JsonSchema(
           jsonNode,
           null,
+          null,
           this.version,
           Collections.unmodifiableList(
               this.references.stream().sorted().distinct().collect(Collectors.toList())),
           this.resolvedReferences,
           this.metadata,
           this.ruleSet,
+          this.ignoreModernDialects,
           null,
           this.blockRemoteRefs
       );
@@ -738,11 +894,50 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  public void validate(Object value) throws JsonProcessingException, ValidationException {
-    validate(rawSchema(), value);
+  public JsonNode validate(JsonNode value) throws JsonProcessingException, ValidationException {
+    // Obtain the raw schema to ensure skemaObj is populated
+    Schema rawSchema = rawSchema();
+    if (skemaObj != null) {
+      return validate(skemaObj, value);
+    } else {
+      return validate(rawSchema, value);
+    }
   }
 
-  public static void validate(Schema schema, Object value)
+  public static JsonNode validate(com.github.erosb.jsonsKema.Schema schema, JsonNode value)
+      throws JsonProcessingException, ValidationException {
+    Validator validator = Validator.forSchema(schema);
+    JsonValue primitiveValue = null;
+    if (value instanceof BinaryNode) {
+      primitiveValue = new JsonString(value.asText(), UnknownSource.INSTANCE);
+    } else if (value instanceof BooleanNode) {
+      primitiveValue = new JsonBoolean(value.asBoolean(), UnknownSource.INSTANCE);
+    } else if (value instanceof NullNode) {
+      primitiveValue = new JsonNull(UnknownSource.INSTANCE);
+    } else if (value instanceof NumericNode) {
+      primitiveValue = new JsonNumber(value.numberValue(), UnknownSource.INSTANCE);
+    } else if (value instanceof TextNode) {
+      primitiveValue = new JsonString(value.asText(), UnknownSource.INSTANCE);
+    }
+    ValidationFailure failure;
+    if (primitiveValue != null) {
+      failure = validator.validate(primitiveValue);
+    } else {
+      JsonValue jsonObject;
+      if (value instanceof ArrayNode) {
+        jsonObject = objectMapper.convertValue(value, JsonArray.class);
+      } else {
+        jsonObject = objectMapper.convertValue(value, JsonObject.class);
+      }
+      failure = validator.validate(jsonObject);
+    }
+    if (failure != null) {
+      throw new ValidationException(failure.toString());
+    }
+    return value;
+  }
+
+  public static JsonNode validate(Schema schema, Object value)
       throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
@@ -760,6 +955,9 @@ public class JsonSchema implements ParsedSchema {
     }
     if (primitiveValue != NONE_MARKER) {
       schema.validate(primitiveValue);
+      return value instanceof JsonNode
+          ? (JsonNode) value
+          : objectMapper.convertValue(primitiveValue, JsonNode.class);
     } else {
       Object jsonObject;
       if (value instanceof ArrayNode) {
@@ -772,6 +970,7 @@ public class JsonSchema implements ParsedSchema {
         jsonObject = objectMapper.convertValue(value, JSONObject.class);
       }
       schema.validate(jsonObject);
+      return objectMapper.convertValue(jsonObject, JsonNode.class);
     }
   }
 
@@ -828,7 +1027,8 @@ public class JsonSchema implements ParsedSchema {
         && Objects.equals(references, that.references)
         && Objects.equals(canonicalString(), that.canonicalString())
         && Objects.equals(metadata, that.metadata)
-        && Objects.equals(ruleSet, that.ruleSet);
+        && Objects.equals(ruleSet, that.ruleSet)
+        && ignoreModernDialects == that.ignoreModernDialects;
   }
 
   @Override
@@ -837,7 +1037,8 @@ public class JsonSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (hashCode == NO_HASHCODE) {
-          hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+          hashCode = Objects.hash(
+              jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
         }
       }
     }
@@ -1047,11 +1248,144 @@ public class JsonSchema implements ParsedSchema {
     node.forEach(n -> getInlineTagsRecursively(tags, n));
   }
 
-  private Set<String> getInlineTags(Schema propertySchema) {
-    Object prop = propertySchema.getUnprocessedProperties().get(TAGS);
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema, "", false, new HashSet<>());
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Schema schema, String scope, boolean inField, Set<String> visited) {
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
+      List<Schema> subschemas = new ArrayList<>(combinedSchema.getSubschemas());
+      subschemas.sort(new JsonSchemaComparator());
+      for (int i = 0; i < subschemas.size(); i++) {
+        Schema subschema = subschemas.get(i);
+        getInlineTaggedEntitiesRecursively(
+            tags, subschema, scopedName + "." + i + ".", false, visited);
+      }
+    } else if (schema instanceof ArraySchema) {
+      Schema subschema = ((ArraySchema) schema).getAllItemSchema();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "array.", false, visited);
+    } else if (schema instanceof ObjectSchema) {
+      ObjectSchema objectSchema = (ObjectSchema) schema;
+      String scopedName = scope + "object";
+      if (visited.contains(scopedName)) {
+        return;
+      } else {
+        visited.add(scopedName);
+      }
+      if (!inField) {
+        Set<String> recordTags = getInlineTags(schema);
+        if (!recordTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
+        }
+      }
+      for (Map.Entry<String, Schema> entry : objectSchema.getPropertySchemas().entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String scopedPropertyName = scopedName + "." + propertyName;
+        Set<String> fieldTags = getInlineTags(propertySchema);
+        if (!fieldTags.isEmpty()) {
+          tags.put(new SchemaEntity(scopedPropertyName, SR_FIELD), fieldTags);
+        }
+        getInlineTaggedEntitiesRecursively(
+            tags, propertySchema, scopedPropertyName + ".", true, visited);
+      }
+      getInlineTaggedEntitiesRecursively(
+          tags, schema.getUnprocessedProperties(), scopedName + ".", visited);
+    } else if (schema instanceof ConditionalSchema) {
+      ConditionalSchema condSchema = (ConditionalSchema) schema;
+      String scopedName = scope + "conditional";
+      condSchema.getIfSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".if.", false, visited));
+      condSchema.getThenSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".then.", false, visited));
+      condSchema.getElseSchema().ifPresent(value -> getInlineTaggedEntitiesRecursively(
+          tags, value, scopedName + ".else.", false, visited));
+    } else if (schema instanceof NotSchema) {
+      Schema subschema = ((NotSchema) schema).getMustNotMatch();
+      getInlineTaggedEntitiesRecursively(tags, subschema, scope + "not.", false, visited);
+    }
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      Map<String, Object> unprocessedProperties, String scope, Set<String> visited) {
+    Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
+    if (defns != null) {
+      for (Map.Entry<String, Object> entry : defns.entrySet()) {
+        Object rawSchema = null;
+        if (entry.getValue() instanceof Map) {
+          rawSchema = replaceRefs((Map<String, Object>) entry.getValue());
+        } else if (entry.getValue() instanceof List) {
+          rawSchema = replaceRefs((List<Object>) entry.getValue());
+        }
+        if (rawSchema != null) {
+          JsonNode jsonNode = objectMapper.valueToTree(rawSchema);
+          JsonSchema jsonSchema = new JsonSchema(jsonNode);
+          getInlineTaggedEntitiesRecursively(tags, jsonSchema.rawSchema(),
+              scope + "definitions." + entry.getKey() + ".", false, visited);
+        }
+      }
+    }
+    Map<String, Object> defs = (Map<String, Object>) unprocessedProperties.get("$defs");
+    if (defs != null) {
+      for (Map.Entry<String, Object> entry : defs.entrySet()) {
+        if (entry.getValue() instanceof Schema) {
+          getInlineTaggedEntitiesRecursively(
+              tags, (Schema) entry.getValue(),
+              scope + "$defs." + entry.getKey() + ".", false, visited);
+        }
+      }
+    }
+  }
+
+  private Map<String, Object> replaceRefs(Map<String, Object> defs) {
+    Map<String, Object> result = new HashMap<>(defs);
+    if (result.containsKey("$ref")) {
+      // Use bare fragment as we don't care about the ref value during indexing
+      result.put("$ref", "#");
+    }
+    for (Map.Entry<String, Object> entry : result.entrySet()) {
+      if (entry.getValue() instanceof Map) {
+        entry.setValue(replaceRefs((Map<String, Object>) entry.getValue()));
+      } else if (entry.getValue() instanceof List) {
+        entry.setValue(replaceRefs((List<Object>) entry.getValue()));
+      } else if (entry.getValue() == JSONObject.NULL) {
+        entry.setValue(null);
+      }
+    }
+    return result;
+  }
+
+  private List<Object> replaceRefs(List<Object> items) {
+    List<Object> result = new ArrayList<>();
+    for (Object item : items) {
+      if (item instanceof Map) {
+        result.add(replaceRefs((Map<String, Object>) item));
+      } else if (item instanceof List) {
+        result.add(replaceRefs((List<Object>) item));
+      } else if (item == JSONObject.NULL) {
+        result.add(null);
+      } else {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  private Set<String> getInlineTags(Schema schema) {
+    Object prop = schema.getUnprocessedProperties().get(TAGS);
     if (prop instanceof List) {
       List<?> tags = (List<?>) prop;
-      Set<String> result = new HashSet<>(tags.size());
+      Set<String> result = new LinkedHashSet<>(tags.size());
       for (Object tag : tags) {
         result.add(tag.toString());
       }
@@ -1256,8 +1590,8 @@ public class JsonSchema implements ParsedSchema {
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
     // Sort composition branches with the same loader setup as this schema; null keeps the default
-    Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig =
-        everitSchemaClient() != null ? this::configureEveritLoader : null;
+    Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
+        ? b -> configureEveritLoader(b, specVersion()) : null;
     for (SchemaEntity entity : entityToModify) {
       JsonNode fieldNodePtr = findMatchingEntity(node, entity, loaderConfig);
       Set<String> allTags = getInlineTags(fieldNodePtr);
@@ -1278,5 +1612,25 @@ public class JsonSchema implements ParsedSchema {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
       }
     }
+  }
+
+  private static String readFromClassPath(String absPath) {
+    InputStream is = JsonSchema.class.getResourceAsStream(absPath);
+    if (is != null) {
+      BufferedReader reader = null;
+      try {
+        reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+        return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+      } finally {
+        if (reader != null) {
+          try {
+            reader.close();
+          } catch (IOException e) {
+            // ignore
+          }
+        }
+      }
+    }
+    throw new IllegalArgumentException("Could not load resource " + absPath);
   }
 }

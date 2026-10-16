@@ -17,6 +17,8 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
 import static com.google.common.base.CaseFormat.UPPER_CAMEL;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingElement;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.findMatchingNode;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.jsonToFile;
@@ -2367,6 +2369,14 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Whether a field is the key of a map entry. Proto3 maps are repeated messages of a
+   * synthesized entry type whose field 1 is the key.
+   */
+  private static boolean isMapKeyField(FieldDescriptor fd) {
+    return fd.getContainingType().getOptions().getMapEntry() && fd.getNumber() == 1;
+  }
+
   private Object toTransformedMessage(
       RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
     FieldContext fieldCtx = ctx.currentField();
@@ -2382,13 +2392,31 @@ public class ProtobufSchema implements ParsedSchema {
     } else if (message instanceof Message) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
-        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        if (isMapKeyField(fd)) {
+          // A map field arrives as a list of entry messages, so the walk reaches the
+          // entry's key as well as its value. A key is part of the map's identity rather
+          // than a value to transform - rewriting it would move the entry - and the
+          // validation walk never evaluates anything on it either.
+          continue;
+        }
+        // Resolve by number, not by name: protobuf identifies a field by its number, and
+        // renaming a field at the same number is a compatible change
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
+        if (schemaFd == null) {
+          // The schema does not declare this field, so it carries no tags and no
+          // transform applies to it. Reading options off it would throw.
+          continue;
+        }
         try (FieldContext fc = ctx.enterField(
-            message, fd.getFullName(), fd.getName(), getType(fd),
-            getInlineTags(schemaFd)) // use schema-based fd which has the tags
+            message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
+            getInlineTags(schemaFd))
         ) {
-          // skip oneof fields that are not set
-          if (fd.getContainingOneof() != null && !copy.hasField(fd)) {
+          // Skip-on-null, as in the validation walk: a field with explicit presence that
+          // is unset has no value to transform, and writing one back would materialize
+          // it - an absent message would become present, carrying a transformed default.
+          // hasPresence() covers oneof members, including the synthetic oneof of a proto3
+          // optional field.
+          if (fd.hasPresence() && !copy.hasField(fd)) {
             continue;
           }
           Object value = copy.getField(fd); // we can't use the schema-based fd
@@ -2536,10 +2564,71 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    ProtoFileElement schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema.getTypes(), "", new HashSet<>());
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      List<TypeElement> types, String scope, Set<String> visited) {
+    for (TypeElement type : types) {
+      if (type instanceof MessageElement) {
+        getInlineTaggedEntitiesRecursively(tags, (MessageElement) type, scope, visited);
+      }
+    }
+  }
+
+  private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
+      MessageElement message, String scope, Set<String> visited) {
+    String scopedName = scope + message.getName();
+    if (visited.contains(scopedName)) {
+      return;
+    } else {
+      visited.add(scopedName);
+    }
+    Set<String> recordTags = getInlineTags(CONFLUENT_MESSAGE_META, message.getOptions());
+    if (!recordTags.isEmpty()) {
+      tags.put(new SchemaEntity(scopedName, SR_RECORD), recordTags);
+    }
+    for (OneOfElement oneOf : message.getOneOfs()) {
+      for (FieldElement field : oneOf.getFields()) {
+        Set<String> fieldTags = getInlineTags(CONFLUENT_FIELD_META, field.getOptions());
+        if (!fieldTags.isEmpty()) {
+          tags.put(new SchemaEntity(
+              scopedName + "." + field.getName(), SR_FIELD), fieldTags);
+        }
+      }
+    }
+    for (FieldElement field : message.getFields()) {
+      Set<String> fieldTags = getInlineTags(CONFLUENT_FIELD_META, field.getOptions());
+      if (!fieldTags.isEmpty()) {
+        tags.put(new SchemaEntity(scopedName + "." + field.getName(), SR_FIELD), fieldTags);
+      }
+    }
+    getInlineTaggedEntitiesRecursively(tags, message.getNestedTypes(), scopedName + ".", visited);
+  }
+
+
   private Set<String> getInlineTags(FieldDescriptor fd) {
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       return new LinkedHashSet<>(meta.getTagsList());
+    }
+    return Collections.emptySet();
+  }
+
+  private Set<String> getInlineTags(String optionName, List<OptionElement> options) {
+    ProtobufMeta meta = ProtobufSchema.findMeta(optionName, options);
+    if (meta != null) {
+      if (meta.getTags() != null) {
+        return new LinkedHashSet<>(meta.getTags());
+      }
     }
     return Collections.emptySet();
   }
@@ -2559,7 +2648,7 @@ public class ProtobufSchema implements ParsedSchema {
       JsonNode entityNode;
       Object matchingElement;
 
-      if (SchemaEntity.EntityType.SR_RECORD == entity.getEntityType()) {
+      if (SR_RECORD == entity.getEntityType()) {
         metaName = CONFLUENT_MESSAGE_META;
         matchingElement = findMatchingElement(original, identifiers, false);
         MessageElement messageElement = (MessageElement) matchingElement;

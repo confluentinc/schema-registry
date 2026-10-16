@@ -14,10 +14,10 @@
   {
     "description": "Detect changes to id",
     "original_schema": {
-      "id": "something"
+      "$id": "something"
     },
     "update_schema": {
-      "id": "something_else"
+      "$id": "something_else"
     },
     "changes": [
       "ID_CHANGED #/"

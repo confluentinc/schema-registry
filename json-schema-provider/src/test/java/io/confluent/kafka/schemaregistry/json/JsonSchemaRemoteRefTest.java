@@ -37,8 +37,8 @@ import org.junit.Test;
 
 /**
  * Tests for the {@code blockRemoteRefs} behavior of {@link JsonSchema}: when set, a
- * {@code $ref} to an unregistered http/https document is rejected rather than fetched over
- * the network.
+ * {@code $ref}/{@code $dynamicRef} to an unregistered http/https document is rejected rather
+ * than fetched over the network.
  */
 public class JsonSchemaRemoteRefTest {
 
@@ -140,6 +140,13 @@ public class JsonSchemaRemoteRefTest {
   public void httpsRefRejectedWhenBlocked_draft7() {
     assertRefRejected("{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
         + "\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"https://example.com/r.json\"}}}");
+  }
+
+  @Test
+  public void dynamicRefRejectedWhenBlocked_latestDraft() {
+    assertRefRejected("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"a\":{\"$dynamicRef\":\"http://example.com/r.json#node\"}}}");
   }
 
   @Test
