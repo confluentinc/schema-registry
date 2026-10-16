@@ -341,6 +341,29 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testRegisterSchemaWithNoFiniteValue() throws Exception {
+    String subject = "testSubject";
+    String schemaString = "{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"next\",\"type\":\"Node\"}]}";
+
+    RestClientException rce = assertThrows(RestClientException.class,
+        () -> restApp.restClient.registerSchema(schemaString, subject));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    assertTrue(rce.getMessage().contains("Node -> Node through fields 'next'"), rce.getMessage());
+
+    rce = assertThrows(RestClientException.class,
+        () -> restApp.restClient.lookUpSubjectVersion(schemaString, subject));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+
+    // IMPORT mode skips validation, so replicated schemas are still accepted and readable
+    restApp.restClient.setMode("IMPORT", subject);
+    int id = expectedSchemaId(1);
+    assertEquals(id, restApp.restClient.registerSchema(schemaString, subject, 1, id));
+    assertEquals(schemaString, restApp.restClient.getId(id).getSchemaString());
+  }
+
+  @Test
   public void testRegisterBadReferenceInContext() throws Exception {
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
