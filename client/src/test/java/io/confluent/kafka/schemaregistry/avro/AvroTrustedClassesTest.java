@@ -23,6 +23,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
+import io.confluent.kafka.schemaregistry.avro.othermodel.ShadedChild;
+import io.confluent.kafka.schemaregistry.avro.othermodel.ShadedRecord;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -138,6 +140,70 @@ public class AvroTrustedClassesTest {
     assertTrue(AvroTrustedClasses.isTrusted(Line.class));
     assertTrue(AvroTrustedClasses.isTrusted(Status.class));
     assertTrue(AvroTrustedClasses.isTrusted(Address.class));
+  }
+
+  // Hand-written nested specific records, whose SCHEMA$ Avro relocates when deriving it because a
+  // nested class's dotted name never matches its binary name
+  public static class Code {
+    public Code(String code) {
+    }
+  }
+
+  public static class NestedChild extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("NestedChild")
+        .namespace(AvroTrustedClassesTest.class.getName()).fields().requiredInt("x").endRecord();
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  public static class NestedParent extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("NestedParent")
+        .namespace(AvroTrustedClassesTest.class.getName()).fields()
+        .name("child").type(NestedChild.SCHEMA$).noDefault()
+        .name("code").type(SchemaBuilder.builder().stringBuilder()
+            .prop(SpecificData.CLASS_PROP, Code.class.getName()).endString()).noDefault()
+        .endRecord();
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void trustCoversNestedSpecificRecords() {
+    AvroTrustedClasses.trust(NestedParent.class);
+    assertTrue(AvroTrustedClasses.isTrusted(NestedChild.class));
+    // A java-class name that starts with the namespace Avro would relocate
+    assertTrue(AvroTrustedClasses.isTrusted(Code.class));
+  }
+
+  @Test
+  public void trustCoversShadedSpecificRecords() {
+    // SCHEMA$ names com.original.model, so the relocated schema Avro derives is walked instead
+    AvroTrustedClasses.trust(ShadedRecord.class);
+    assertTrue(AvroTrustedClasses.isTrusted(ShadedChild.class));
   }
 
   @Test

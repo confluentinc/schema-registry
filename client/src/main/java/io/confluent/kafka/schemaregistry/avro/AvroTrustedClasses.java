@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.avro;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,6 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.AvroGenerated;
 import org.apache.avro.specific.SpecificData;
@@ -403,6 +406,10 @@ public final class AvroTrustedClasses {
   }
 
   private static Schema deriveSchema(Class<?> clazz) {
+    Schema declared = declaredSchema(clazz);
+    if (declared != null) {
+      return declared;
+    }
     try {
       return ReflectData.get().getSchema(clazz);
     } catch (RuntimeException e) {
@@ -415,6 +422,27 @@ public final class AvroTrustedClasses {
         return null;
       }
     }
+  }
+
+  // A specific record's own SCHEMA$, when it names that class. Avro derives a relocated copy when
+  // the names differ, as they always do for a nested class, which loses its nested types.
+  private static Schema declaredSchema(Class<?> clazz) {
+    if (!IndexedRecord.class.isAssignableFrom(clazz)) {
+      return null;
+    }
+    try {
+      Field field = clazz.getDeclaredField("SCHEMA$");
+      if (Modifier.isStatic(field.getModifiers())
+          && Schema.class.isAssignableFrom(field.getType())) {
+        Schema schema = (Schema) field.get(null);
+        if (schema != null && resolveClass(schema, clazz.getClassLoader()) == clazz) {
+          return schema;
+        }
+      }
+    } catch (NoSuchFieldException | IllegalAccessException | RuntimeException | LinkageError e) {
+      log.debug("Could not read the Avro schema declared by {}", clazz.getName(), e);
+    }
+    return null;
   }
 
   // The generated classes that the record, enum and fixed names of a schema resolve to

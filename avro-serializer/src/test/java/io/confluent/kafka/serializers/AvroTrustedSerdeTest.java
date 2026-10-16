@@ -119,6 +119,52 @@ public class AvroTrustedSerdeTest {
     }
   }
 
+  // Hand-written nested specific records, a parent and the child its schema names
+  public static class Panel extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("Panel")
+        .namespace(AvroTrustedSerdeTest.class.getName()).fields().requiredInt("x").endRecord();
+
+    public Object x;
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return x;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+      x = value;
+    }
+  }
+
+  public static class Frame extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("Frame")
+        .namespace(AvroTrustedSerdeTest.class.getName()).fields()
+        .name("panel").type(Panel.SCHEMA$).noDefault().endRecord();
+
+    public Object panel;
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return panel;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+      panel = value;
+    }
+  }
+
   private SchemaRegistryClient schemaRegistry;
 
   @BeforeClass
@@ -299,6 +345,19 @@ public class AvroTrustedSerdeTest {
         KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG,
         Clamp.class.getName() + "," + StringBuilder.class.getName());
     assertEquals("x", ((StringBuilder) ((Clamp) result).label).toString());
+  }
+
+  @Test
+  public void configuredNestedSpecificTypeTrustsItsNestedChild() {
+    GenericRecord panel = new GenericData.Record(Panel.SCHEMA$);
+    panel.put("x", 5);
+    GenericRecord frame = new GenericData.Record(Frame.SCHEMA$);
+    frame.put("panel", panel);
+    byte[] bytes = serialize("frames", frame);
+    Object result = deserialize("frames", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, Frame.class.getName());
+    assertEquals(5, ((Panel) ((Frame) result).panel).x);
   }
 
   @Test
