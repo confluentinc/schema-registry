@@ -251,6 +251,36 @@ public class AvroTrustedClassesTest {
     assertTrue(AvroTrustedClasses.isTrusted(HandWrittenChild.class));
   }
 
+  // A hand-written record whose instances report a schema other than their class's, as if taken
+  // from the registry
+  public static class Dynamic extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("Dynamic")
+        .namespace(AvroTrustedClassesTest.class.getName()).fields().endRecord();
+
+    @Override
+    public Schema getSchema() {
+      return SchemaBuilder.record("Dynamic").namespace(AvroTrustedClassesTest.class.getName())
+          .fields().name("line").type(ReflectData.get().getSchema(Line.class)).noDefault()
+          .endRecord();
+    }
+
+    @Override
+    public Object get(int field) {
+      return null;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+    }
+  }
+
+  @Test
+  public void trustClassOfPrefersTheClassSchema() {
+    AvroTrustedClasses.trustClassOf(new Dynamic());
+    assertTrue(AvroTrustedClasses.isTrusted(Dynamic.class));
+    assertFalse(AvroTrustedClasses.isTrusted(Line.class));
+  }
+
   @Test
   public void trustClassOfIgnoresGenericRecordsInAMap() {
     Schema schema = ReflectData.get().getSchema(Line.class);

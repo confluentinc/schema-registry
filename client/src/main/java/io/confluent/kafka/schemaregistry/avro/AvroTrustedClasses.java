@@ -228,8 +228,14 @@ public final class AvroTrustedClasses {
    * primitive values are left alone, since their schema, not their class, names their types.
    */
   public static void trustClassOf(Object value) {
-    if (VALIDATOR_AVAILABLE) {
+    if (!VALIDATOR_AVAILABLE || value == null) {
+      return;
+    }
+    if (value instanceof Map) {
+      // Only maps are traversed, so only they need cycle protection
       trustClassOf(value, Collections.newSetFromMap(new IdentityHashMap<>()));
+    } else {
+      trustOwnClass(value);
     }
   }
 
@@ -244,20 +250,25 @@ public final class AvroTrustedClasses {
         trustClassOf(map.values().iterator().next(), visited);
       }
     }
+    trustOwnClass(value);
+  }
+
+  private static void trustOwnClass(Object value) {
     if (!isResolvedReflectively(value)) {
       return;
     }
     Class<?> clazz = value.getClass();
     State current = state;
     if (current.walked.getIfPresent(clazz) == null) {
-      // A specific record supplies its own schema, which may not be derivable from its class
-      Schema schema = value instanceof GenericContainer
-          ? ((GenericContainer) value).getSchema()
-          : null;
       current.classes.add(clazz.getName());
-      current.classes.addAll(schema != null
-          ? typesReachableFrom(schema, clazz.getClassLoader())
-          : typesReachableFrom(clazz));
+      Schema schema = deriveSchema(clazz);
+      if (schema == null && value instanceof GenericContainer) {
+        // A hand-written specific record may have no schema derivable from its class
+        schema = ((GenericContainer) value).getSchema();
+      }
+      if (schema != null) {
+        current.classes.addAll(typesReachableFrom(schema, clazz.getClassLoader()));
+      }
       current.walked.put(clazz, Boolean.TRUE);
       install();
     }
@@ -336,26 +347,31 @@ public final class AvroTrustedClasses {
 
   // Deriving the schema uses plain reflection and never consults the validator
   private static Set<String> typesReachableFrom(Class<?> clazz) {
-    Schema schema;
-    try {
-      schema = ReflectData.get().getSchema(clazz);
-    } catch (RuntimeException e) {
-      try {
-        // Such as a POJO whose null defaults only avro.reflection.allow.null supports
-        schema = ReflectData.AllowNull.get().getSchema(clazz);
-      } catch (RuntimeException e2) {
-        // Not every class has a derivable schema, such as an interface; the class is still trusted
-        log.debug("Could not derive an Avro schema for {}", clazz.getName(), e);
-        return Collections.emptySet();
-      }
-    }
-    return typesReachableFrom(schema, clazz.getClassLoader());
+    Schema schema = deriveSchema(clazz);
+    return schema != null
+        ? typesReachableFrom(schema, clazz.getClassLoader())
+        : Collections.emptySet();
   }
 
   private static Set<String> typesReachableFrom(Schema schema, ClassLoader loader) {
     Set<String> names = new HashSet<>();
     collectTypeNames(schema, Collections.newSetFromMap(new IdentityHashMap<>()), names, loader);
     return names;
+  }
+
+  private static Schema deriveSchema(Class<?> clazz) {
+    try {
+      return ReflectData.get().getSchema(clazz);
+    } catch (RuntimeException e) {
+      try {
+        // Such as a POJO whose null defaults only avro.reflection.allow.null supports
+        return ReflectData.AllowNull.get().getSchema(clazz);
+      } catch (RuntimeException e2) {
+        // Not every class has a derivable schema, such as an interface; the class is still trusted
+        log.debug("Could not derive an Avro schema for {}", clazz.getName(), e);
+        return null;
+      }
+    }
   }
 
   private static void collectTypeNames(Schema schema, Set<Schema> visited, Set<String> names,
