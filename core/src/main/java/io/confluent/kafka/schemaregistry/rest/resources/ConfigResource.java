@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -82,9 +83,9 @@ public class ConfigResource {
   }
 
   /**
-   * Rejects a compatibilityLevel/compatibilityPolicy combination of FORWARD(_TRANSITIVE) and
-   * LOGICAL up front. Iceberg, the only current LOGICAL target, supports only
-   * backward-compatible evolution, so this pairing can never be satisfied.
+   * Rejects compatibilityPolicy=LOGICAL up front unless compatibilityLevel is BACKWARD,
+   * BACKWARD_TRANSITIVE, FULL or FULL_TRANSITIVE. Iceberg, the only current LOGICAL target,
+   * supports only backward-compatible evolution, so NONE and the forward levels are rejected.
    *
    * <p>Checks only what this request determines on its own: a field it sets explicitly, or one
    * it omits, whose current effective value already stands. A field explicitly set to
@@ -119,11 +120,9 @@ public class ConfigResource {
         ? CompatibilityPolicy.forName(requestedPolicy.get())
         : CompatibilityPolicy.forName(existingConfig.getCompatibilityPolicy());
     if (effectivePolicy == CompatibilityPolicy.LOGICAL
-        && (effectiveLevel == CompatibilityLevel.FORWARD
-            || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
+        && !LogicalPolicyChecker.supportsLevel(effectiveLevel)) {
       throw new RestInvalidCompatibilityException(
-          "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
-              + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
+          LogicalPolicyChecker.unsupportedLevelMessage(effectiveLevel));
     }
   }
 

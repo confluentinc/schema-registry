@@ -315,6 +315,23 @@ public final class LogicalPolicyChecker {
     }
   }
 
+  /**
+   * Returns whether {@code LOGICAL} can be combined with {@code level}: only the backward and full
+   * levels, since Iceberg supports only backward-compatible evolution. NONE and null are rejected.
+   */
+  public static boolean supportsLevel(CompatibilityLevel level) {
+    return checksBackward(level);
+  }
+
+  /**
+   * The error reported for a {@code level} that {@link #supportsLevel} rejects.
+   */
+  public static String unsupportedLevelMessage(CompatibilityLevel level) {
+    return "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel=" + level
+        + ": LOGICAL requires BACKWARD, BACKWARD_TRANSITIVE, FULL or FULL_TRANSITIVE, since"
+        + " Iceberg only supports backward-compatible schema evolution";
+  }
+
   private static List<ParsedSchemaHolder> selectForComparison(
       List<ParsedSchemaHolder> previousSchemas, CompatibilityLevel level) {
     if (previousSchemas.isEmpty() || level == null || level == CompatibilityLevel.NONE) {
