@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.11-0</version>
+        <version>8.0.9-0</version>
     </parent>
 
     <licenses>
@@ -22,11 +22,16 @@
     <packaging>jar</packaging>
     <name>kafka-schema-registry-client</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
-         <dependency>
-             <groupId>org.yaml</groupId>
-             <artifactId>snakeyaml</artifactId>
-         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-types</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
@@ -48,6 +53,10 @@
             <artifactId>jackson-datatype-jdk8</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bctls-fips</artifactId>
             <version>${bouncycastle.tls-fips.version}</version>
@@ -64,22 +73,21 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-inline</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-annotations</artifactId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.google.re2j</groupId>
+            <artifactId>re2j</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -88,9 +96,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
         </dependency>
     </dependencies>
 

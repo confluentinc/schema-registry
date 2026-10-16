@@ -19,7 +19,6 @@ package io.confluent.kafka.formatter;
 import static org.junit.Assert.assertEquals;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
@@ -29,13 +28,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.After;
 import org.junit.Before;
@@ -85,7 +84,7 @@ public class AvroMessageFormatterTest {
 
   @Test
   public void testDeserializeBytesIssue506() throws IOException, RestClientException {
-		formatter.init(props);
+    formatter.init(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -197,8 +196,8 @@ public class AvroMessageFormatterTest {
     System.arraycopy(SOME_BYTES, 0, value, 1 + SCHEMA_ID_BYTES.length, SOME_BYTES.length);
 
     return new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0,
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME,
         0, value.length,
-        includeKey ? key : null, value);
+        includeKey ? key : null, value, new RecordHeaders(), Optional.empty());
   }
 }

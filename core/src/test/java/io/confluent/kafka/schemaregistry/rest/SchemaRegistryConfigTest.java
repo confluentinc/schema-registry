@@ -15,13 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.Kafka;
 import kafka.cluster.Broker;
 
 import org.apache.kafka.common.config.ConfigException;
@@ -30,8 +29,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -189,6 +186,13 @@ public class SchemaRegistryConfigTest {
   }
 
   @Test
+  public void defaultAssociationsEnable() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals(true, config.getBoolean(SchemaRegistryConfig.ASSOCIATIONS_ENABLE));
+  }
+
+  @Test
   public void defaultMutabilityMode() throws RestConfigException {
     Properties props = new Properties();
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
@@ -206,7 +210,7 @@ public class SchemaRegistryConfigTest {
     props.setProperty("listener.name.alice." + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = AbstractSchemaRegistry.getInterInstanceListener(config.getListeners(),
       config.getString(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG),
       SchemaRegistryConfig.HTTPS);
     Map<String, Object> overrides = config.getOverriddenSslConfigs(internalListener);
@@ -222,6 +226,37 @@ public class SchemaRegistryConfigTest {
     overrides = config.getOverriddenSslConfigs(unnamedListener);
     assertEquals("/mnt/keystore/keystore.jks", overrides.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
 
+  }
+
+  @Test
+  public void requestTimeoutDefaultExposedToRestLayerOnly() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    // The 10-minute blanket default is passed up to RestConfig so the Jetty layer enforces it...
+    assertEquals("600000", config.originals().get("request.timeout.ms"));
+    // ...but it is deliberately kept out of the properties forwarded to Kafka clients, where
+    // "request.timeout.ms" is a distinct client setting.
+    assertEquals(null, config.originalProperties().getProperty("request.timeout.ms"));
+
+    // Interrupt-on-timeout is enabled by default (so timed-out work can be reclaimed), and is
+    // likewise kept out of the Kafka-client properties.
+    assertEquals("true", config.originals().get("request.timeout.interrupt.enable"));
+    assertEquals(null,
+        config.originalProperties().getProperty("request.timeout.interrupt.enable"));
+  }
+
+  @Test
+  public void requestTimeoutOperatorOverrideRespected() throws RestConfigException {
+    Properties props = new Properties();
+    props.setProperty("request.timeout.ms", "1000");
+    props.setProperty("request.timeout.interrupt.enable", "false");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    // Explicit operator values are honored and left untouched (including in originalProperties).
+    assertEquals("1000", config.originals().get("request.timeout.ms"));
+    assertEquals("1000", config.originalProperties().getProperty("request.timeout.ms"));
+    assertEquals("false", config.originals().get("request.timeout.interrupt.enable"));
+    assertEquals("false",
+        config.originalProperties().getProperty("request.timeout.interrupt.enable"));
   }
 
 }

@@ -18,7 +18,9 @@ package io.confluent.connect.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.SocketException;
@@ -53,8 +55,15 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class JsonSchemaConverterTest {
 
@@ -71,7 +80,7 @@ public class JsonSchemaConverterTest {
   private final JsonSchemaConverter converter;
 
   public JsonSchemaConverterTest() {
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new JsonSchemaProvider()));
     converter = new JsonSchemaConverter(schemaRegistry);
   }
 
@@ -290,7 +299,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, false);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, false);
@@ -298,7 +308,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, true);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, true);
@@ -312,7 +323,8 @@ public class JsonSchemaConverterTest {
             .build()
     ).name("biz.baz").version(1).build();
     final JsonSchemaConverter jsonConverter =
-        new JsonSchemaConverter(new MockSchemaRegistryClient());
+        new JsonSchemaConverter(new MockSchemaRegistryClient(
+            ImmutableList.of(new JsonSchemaProvider())));
     jsonConverter.configure(Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "localhost"
     ), false);
@@ -405,5 +417,67 @@ public class JsonSchemaConverterTest {
     }
 
     converter.toConnectData(TOPIC, valueBytes);
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForKey() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
+    JsonSchemaConverter keyConverter = new JsonSchemaConverter(schemaRegistry);
+    Map<String, String> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    keyConverter.configure(config, true);
+
+    Schema schema = SchemaBuilder.struct()
+        .field("key", Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema).put("key", "testKey");
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = keyConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the key header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNotNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = keyConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals("testKey", ((Struct) result.value()).get("key"));
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForValue() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
+    JsonSchemaConverter valueConverter = new JsonSchemaConverter(schemaRegistry);
+    Map<String, String> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    valueConverter.configure(config, false);
+
+    Schema schema = SchemaBuilder.struct()
+        .field("value", Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema).put("value", "testValue");
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = valueConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the value header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNotNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = valueConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals("testValue", ((Struct) result.value()).get("value"));
   }
 }

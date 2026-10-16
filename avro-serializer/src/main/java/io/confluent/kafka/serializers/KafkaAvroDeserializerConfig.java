@@ -49,6 +49,11 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
   public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC =
           "If true, use logical type converter in generic record";
 
+  public static final String AVRO_FAIL_ON_TRAILING_DATA_CONFIG = "avro.fail.on.trailing.data";
+  public static final boolean AVRO_FAIL_ON_TRAILING_DATA_DEFAULT = false;
+  public static final String AVRO_FAIL_ON_TRAILING_DATA_DOC =
+      "If true, fail if extra data is found after deserializing an Avro message";
+
   private static ConfigDef config;
 
   static {
@@ -67,7 +72,10 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
             Importance.MEDIUM, AVRO_REFLECTION_ALLOW_NULL_DOC)
         .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
             AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT, ConfigDef.Importance.MEDIUM,
-            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC);
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC)
+        .define(AVRO_FAIL_ON_TRAILING_DATA_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_FAIL_ON_TRAILING_DATA_DEFAULT, ConfigDef.Importance.LOW,
+            AVRO_FAIL_ON_TRAILING_DATA_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {

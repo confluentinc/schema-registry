@@ -68,15 +68,16 @@ public class HcVaultKmsAead implements Aead {
     try {
       LogicalResponse response = vault.write(this.encryptPath, request);
       Map<String, String> data = response.getData();
+      int status = responseStatus(response);
       String error = data.get("errors");
       if (error != null) {
-        throw new GeneralSecurityException("failed to encrypt");
+        throw new VaultException("failed to encrypt: " + error, status);
       }
 
       String ciphertext = data.get("ciphertext");
       if (ciphertext == null) {
         String err = new String(response.getRestResponse().getBody(), StandardCharsets.UTF_8);
-        throw new GeneralSecurityException("encryption failed: " + err);
+        throw new VaultException("encryption failed: " + err, status);
       }
       return ciphertext.getBytes(StandardCharsets.UTF_8);
     } catch (VaultException e) {
@@ -94,19 +95,24 @@ public class HcVaultKmsAead implements Aead {
     try {
       LogicalResponse response = vault.write(this.decryptPath, request);
       Map<String, String> data = response.getData();
+      int status = responseStatus(response);
       String error = data.get("errors");
       if (error != null) {
-        throw new GeneralSecurityException("failed to decrypt");
+        throw new VaultException("failed to decrypt: " + error, status);
       }
 
       String plaintext64 = response.getData().get("plaintext");
       if (plaintext64 == null) {
-        throw new GeneralSecurityException("decryption failed");
+        throw new VaultException("decryption failed", status);
       }
       return Base64.getDecoder().decode(plaintext64);
 
     } catch (VaultException e) {
       throw new GeneralSecurityException("decryption failed", e);
     }
+  }
+
+  private static int responseStatus(LogicalResponse response) {
+    return response.getRestResponse() != null ? response.getRestResponse().getStatus() : 0;
   }
 }
