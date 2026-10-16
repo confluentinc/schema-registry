@@ -627,10 +627,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  private static boolean isHttpScheme(String scheme) {
-    return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
-  }
-
   // RFC 3986 scheme prefix
   private static final java.util.regex.Pattern SCHEME_PREFIX =
       java.util.regex.Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:");
@@ -760,9 +756,8 @@ public class JsonSchema implements ParsedSchema {
   }
 
   /**
-   * A json-sKema {@link com.github.erosb.jsonsKema.SchemaClient} that refuses to fetch
-   * {@code http}/{@code https} URIs, while delegating any other scheme to the standard
-   * URL-querying client.
+   * A json-sKema {@link com.github.erosb.jsonsKema.SchemaClient} that refuses non-local URIs,
+   * while delegating other lookups to the standard URL-querying client.
    */
   private static final class NoHttpSkemaClient implements com.github.erosb.jsonsKema.SchemaClient {
 
@@ -770,20 +765,23 @@ public class JsonSchema implements ParsedSchema {
 
     @Override
     public InputStream get(URI uri) {
-      if (isHttpScheme(uri.getScheme())) {
-        throw new UncheckedIOException(new IOException(
-            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
-      }
+      checkNotBlocked(uri);
       return delegate.get(uri);
     }
 
     @Override
     public com.github.erosb.jsonsKema.IJsonValue getParsed(URI uri) {
-      if (isHttpScheme(uri.getScheme())) {
-        throw new UncheckedIOException(new IOException(
-            REMOTE_REF_DISABLED_MESSAGE + ": " + uri));
-      }
+      checkNotBlocked(uri);
       return delegate.getParsed(uri);
+    }
+
+    private static void checkNotBlocked(URI uri) {
+      String url = uri.toString();
+      // relative refs resolve against the in-memory base; leave those to the delegate as before
+      if (!url.startsWith(DEFAULT_BASE_URI) && isBlockedRef(url)) {
+        throw new UncheckedIOException(new IOException(
+            REMOTE_REF_DISABLED_MESSAGE + ": " + hostForLog(url)));
+      }
     }
   }
 
