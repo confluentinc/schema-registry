@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -43,6 +45,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversion;
 import org.apache.avro.Conversions;
@@ -69,10 +72,13 @@ import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectData.AllowNull;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificFixed;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.common.errors.SerializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -81,6 +87,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -90,6 +97,8 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.FIELDS_FIELD;
 import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroSchemaUtils.class);
 
   private static final GenericData GENERIC_DATA_INSTANCE =
       new NameAwareGenericData(GenericData.get());
@@ -194,6 +203,82 @@ public class AvroSchemaUtils {
     }
   }
 
+  private static final Set<String> PRIMITIVE_TYPES = new HashSet<>(Arrays.asList(
+      "null", "boolean", "int", "long", "float", "double", "bytes", "string"));
+
+  // Replaces each {"type": "<name>"} that refers to a named type with just "<name>",
+  // as older Avro versions did, or returns null if there is none or the text is not a
+  // single JSON value. Defaults and custom properties are left alone, and comments are
+  // allowed, as in Avro's own schema parser.
+  public static String fixTypeObjects(String schemaString) {
+    JsonNode schema;
+    try {
+      schema = jsonMapper.reader()
+          .with(JsonParser.Feature.ALLOW_COMMENTS)
+          .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+          .readTree(schemaString);
+    } catch (IOException e) {
+      return null;
+    }
+    if (schema == null) {
+      return null;
+    }
+    boolean[] changed = new boolean[1];
+    JsonNode fixed = fixTypeObjects(schema, changed);
+    return changed[0] ? fixed.toString() : null;
+  }
+
+  private static JsonNode fixTypeObjects(JsonNode schema, boolean[] changed) {
+    if (schema.isArray()) {
+      ArrayNode union = (ArrayNode) schema;
+      for (int i = 0; i < union.size(); i++) {
+        union.set(i, fixTypeObjects(union.get(i), changed));
+      }
+    } else if (schema.isObject()) {
+      ObjectNode obj = (ObjectNode) schema;
+      JsonNode type = obj.get("type");
+      if (type == null) {
+        return schema;
+      }
+      if (!type.isTextual()) {
+        obj.set("type", fixTypeObjects(type, changed));
+        return schema;
+      }
+      switch (type.asText()) {
+        case "record":
+        case "error":
+          JsonNode fields = obj.get("fields");
+          if (fields != null && fields.isArray()) {
+            for (JsonNode field : fields) {
+              if (field.isObject() && field.has("type")) {
+                ((ObjectNode) field).set("type", fixTypeObjects(field.get("type"), changed));
+              }
+            }
+          }
+          break;
+        case "array":
+          if (obj.has("items")) {
+            obj.set("items", fixTypeObjects(obj.get("items"), changed));
+          }
+          break;
+        case "map":
+          if (obj.has("values")) {
+            obj.set("values", fixTypeObjects(obj.get("values"), changed));
+          }
+          break;
+        case "enum":
+        case "fixed":
+          break;
+        default:
+          if (!PRIMITIVE_TYPES.contains(type.asText())) {
+            changed[0] = true;
+            return type;
+          }
+      }
+    }
+    return schema;
+  }
+
   private static void validateName(String name) {
     Result result = NameValidator.UTF_VALIDATOR.validate(name);
     if (!result.isOK()) {
@@ -223,14 +308,53 @@ public class AvroSchemaUtils {
     return REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL;
   }
 
+  // Schemas whose class Avro refused to load. Avro does not cache the failure, so skip
+  // the lookup for a while instead of failing it on every message.
+  private static final Cache<Schema, Boolean> untrustedSchemas = CacheBuilder.newBuilder()
+      .weakKeys()
+      .expireAfterWrite(1, TimeUnit.MINUTES)
+      .maximumSize(1000)
+      .build();
+
+  // Called when trust changes, so that a newly trusted class is looked up again
+  static void clearUntrustedSchemas() {
+    untrustedSchemas.invalidateAll();
+  }
+
+  private static void markUntrusted(Schema reader, SecurityException e) {
+    untrustedSchemas.put(reader, Boolean.TRUE);
+    log.debug("Using the default specific data model for {}, since Avro does not trust its "
+        + "class: {}", reader.getFullName(), e.getMessage());
+  }
+
+  // The class lookup only picks a preferred model, so an untrusted class (AVRO-4189) falls
+  // back to the default; a SpecificDatumReader still rejects it when it reads.
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
-    return useLogicalTypes ? getSpecificDataForSchema(reader) : SpecificData.getForSchema(reader);
+    if (useLogicalTypes) {
+      return getSpecificDataForSchema(reader);
+    }
+    if (reader == null || untrustedSchemas.getIfPresent(reader) != null) {
+      return SpecificData.get();
+    }
+    try {
+      return SpecificData.getForSchema(reader);
+    } catch (SecurityException e) {
+      markUntrusted(reader, e);
+      return SpecificData.get();
+    }
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader) {
     if (reader != null && (reader.getType() == org.apache.avro.Schema.Type.RECORD
-            || reader.getType() == org.apache.avro.Schema.Type.UNION)) {
-      Class<?> clazz = getSpecificData().getClass(reader);
+            || reader.getType() == org.apache.avro.Schema.Type.UNION)
+        && untrustedSchemas.getIfPresent(reader) == null) {
+      Class<?> clazz;
+      try {
+        clazz = getSpecificData().getClass(reader);
+      } catch (SecurityException e) {
+        markUntrusted(reader, e);
+        clazz = null;
+      }
       if (clazz != null) {
         return getSpecificDataForClass(clazz);
       }
@@ -516,6 +640,12 @@ public class AvroSchemaUtils {
 
   public static DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    if (holdsGenericContainers(value)) {
+      // As for a generic record, a reflect writer would load classes named by the schema
+      GenericData genericData = getThreadLocalGenericData();
+      return new GenericDatumWriter<>(schema,
+          genericData != null ? genericData : getGenericData(useLogicalTypes));
+    }
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
@@ -525,6 +655,35 @@ public class AvroSchemaUtils {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
     }
   }
+
+  // Whether a map or a plain collection holds generic containers, such as generic records. As in
+  // getSchema, a map's first value, or a collection's first element, decides, through any nesting.
+  // Generated specific types are not generic.
+  private static boolean holdsGenericContainers(Object value) {
+    Object leaf = value;
+    for (int depth = 0; depth < MAX_NESTING && isPlainAggregate(leaf); depth++) {
+      Collection<?> elements = leaf instanceof Map ? ((Map<?, ?>) leaf).values()
+          : (Collection<?>) leaf;
+      if (elements.isEmpty()) {
+        return false;
+      }
+      leaf = elements.iterator().next();
+    }
+    return leaf != value && isGenericOnly(leaf);
+  }
+
+  private static boolean isGenericOnly(Object value) {
+    return value instanceof GenericContainer && !(value instanceof SpecificRecord
+        || value instanceof SpecificFixed || value instanceof Enum);
+  }
+
+  // A generic array is a collection too, but is already written as a generic container
+  private static boolean isPlainAggregate(Object value) {
+    return value instanceof Map
+        || (value instanceof Collection && !(value instanceof GenericContainer));
+  }
+
+  private static final int MAX_NESTING = 32;
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
     String[] identifiers = entity.getEntityPath().split("\\.");
@@ -595,9 +754,7 @@ public class AvroSchemaUtils {
   protected static String toNormalizedString(AvroSchema schema) {
     try {
       Map<String, String> env = new HashMap<>();
-      Schema.Parser parser = schema.getParser();
-      for (String resolvedRef : schema.resolvedReferences().values()) {
-        Schema schemaRef = parser.parse(resolvedRef);
+      for (Schema schemaRef : schema.parseReferences()) {
         String fullName = schemaRef.getFullName();
         env.put(fullName, "\"" + fullName + "\"");
       }
