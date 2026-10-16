@@ -942,14 +942,11 @@ public class KafkaAvroSerializerTest {
         KafkaAvroSerializerConfig.USE_LATEST_VERSION,
         true
     );
-    // The specific classes are named only by the writer's schema, so they must be trusted
     Map deserializerConfigs = ImmutableMap.of(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus",
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
-        true,
-        KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG,
-        "io.confluent.kafka.example.uniontest"
+        true
     );
     String unionUserSubject = "union-test-user";
     String unionGrantSubject = "union-test-grant";

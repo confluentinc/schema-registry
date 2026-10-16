@@ -26,8 +26,8 @@ import org.apache.avro.specific.SpecificData;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-// Runs in its own surefire execution without org.apache.avro.SERIALIZABLE_PACKAGES,
-// so classes outside java.lang are untrusted (AVRO-4189); skipped in other executions.
+// Runs in its own surefire execution, before any other test trusts or loads its class, so the
+// class is untrusted (AVRO-4189); skipped in other executions.
 public class AvroUntrustedClassTest {
 
   // A record named after a class on the classpath that Avro does not trust
