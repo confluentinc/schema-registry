@@ -325,6 +325,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           AvroSchemaUtils.getReflectData(
               avroUseLogicalTypeConverters, avroReflectionAllowNull));
     } else if (useSpecificAvroReader) {
+      // The reader schema may come from the registry, as with use.latest.version; Avro also loads
+      // the java-class types that the generated classes it names declare in their own schemas
+      AvroTrustedClasses.trustGeneratedClassesNamedBy(finalReaderSchema);
       return new SpecificDatumReader<>(finalWriterSchema, finalReaderSchema,
           AvroSchemaUtils.getSpecificDataForSchema(
               finalReaderSchema, avroUseLogicalTypeConverters));

@@ -24,6 +24,7 @@ import static org.junit.Assume.assumeTrue;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.Grant;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.example.stringable.StringableLink;
 import io.confluent.kafka.example.stringable.StringableUser;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
@@ -247,5 +248,17 @@ public class AvroTrustedSerdeTest {
     Object result = deserialize("sites", bytes,
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     assertEquals(URI.create("https://example.com"), ((StringableUser) result).getSite());
+  }
+
+  @Test
+  public void latestVersionSpecificReaderTrustsJavaClassTypesOfGeneratedClasses() {
+    // The reader schema comes from the registry, so only the generated class's own schema adds
+    // trust for its java.net.URL field
+    byte[] bytes = serialize("links",
+        record(StringableLink.SCHEMA$, "url", "https://example.com"));
+    Object result = deserialize("links", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
+        KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
+    assertEquals("https://example.com", ((StringableLink) result).getUrl().toString());
   }
 }

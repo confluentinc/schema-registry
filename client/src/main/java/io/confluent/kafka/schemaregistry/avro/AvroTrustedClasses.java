@@ -255,17 +255,38 @@ public final class AvroTrustedClasses {
   }
 
   private static void trustOwnClass(Object value) {
-    if (!isResolvedReflectively(value)) {
+    if (isResolvedReflectively(value)) {
+      walkAndTrust(value.getClass(),
+          value instanceof GenericContainer ? (GenericContainer) value : null);
+    }
+  }
+
+  /**
+   * Trusts the types that the generated classes named by a reader schema declare in their own
+   * schemas, such as a java.net.URI field declared through java-class. The reader schema itself,
+   * which may come from the registry, adds no trust: it only selects the generated classes.
+   */
+  public static void trustGeneratedClassesNamedBy(Schema readerSchema) {
+    if (!VALIDATOR_AVAILABLE || readerSchema == null) {
       return;
     }
-    Class<?> clazz = value.getClass();
+    Set<Class<?>> generated = new HashSet<>();
+    collectGeneratedClasses(readerSchema, Collections.newSetFromMap(new IdentityHashMap<>()),
+        generated, defaultClassLoader());
+    for (Class<?> clazz : generated) {
+      walkAndTrust(clazz, null);
+    }
+  }
+
+  // Trusts a class and the types its schema references, once per class. The schema comes from
+  // the class, or from the instance when the class has none, as for a hand-written record.
+  private static void walkAndTrust(Class<?> clazz, GenericContainer instance) {
     State current = state;
     if (current.walked.getIfPresent(clazz) == null) {
       current.classes.add(clazz.getName());
       Schema schema = deriveSchema(clazz);
-      if (schema == null && value instanceof GenericContainer) {
-        // A hand-written specific record may have no schema derivable from its class
-        schema = ((GenericContainer) value).getSchema();
+      if (schema == null && instance != null) {
+        schema = instance.getSchema();
       }
       if (schema != null) {
         current.classes.addAll(typesReachableFrom(schema, clazz.getClassLoader()));
@@ -372,6 +393,47 @@ public final class AvroTrustedClasses {
         log.debug("Could not derive an Avro schema for {}", clazz.getName(), e);
         return null;
       }
+    }
+  }
+
+  // The generated classes that the record, enum and fixed names of a schema resolve to
+  private static void collectGeneratedClasses(Schema schema, Set<Schema> visited,
+      Set<Class<?>> classes, ClassLoader loader) {
+    if (schema == null || !visited.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        addGeneratedClass(schema, classes, loader);
+        for (Schema.Field field : schema.getFields()) {
+          collectGeneratedClasses(field.schema(), visited, classes, loader);
+        }
+        break;
+      case ENUM:
+      case FIXED:
+        addGeneratedClass(schema, classes, loader);
+        break;
+      case ARRAY:
+        collectGeneratedClasses(schema.getElementType(), visited, classes, loader);
+        break;
+      case MAP:
+        collectGeneratedClasses(schema.getValueType(), visited, classes, loader);
+        break;
+      case UNION:
+        for (Schema member : schema.getTypes()) {
+          collectGeneratedClasses(member, visited, classes, loader);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void addGeneratedClass(Schema schema, Set<Class<?>> classes,
+      ClassLoader loader) {
+    Class<?> resolved = resolveClass(schema.getFullName(), loader);
+    if (resolved != null && resolved.isAnnotationPresent(AvroGenerated.class)) {
+      classes.add(resolved);
     }
   }
 
