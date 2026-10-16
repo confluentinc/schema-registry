@@ -20,7 +20,6 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.storage.ProvenancePolicyChecker.PairBy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -1368,30 +1367,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * What registering {@code version} of {@code subject} after the versions before it gives under
-   * compatibilityPolicy=LOGICAL, with the subject's other config, once LOGICAL pairs members by
-   * provenance check id: the errors registration would report, empty if it would be accepted.
-   * As registration under LOGICAL does, the versions before it include soft-deleted ones.
+   * Whether {@code version} of {@code subject} is a valid backward step from the version just
+   * before it, soft-deleted or not, under compatibilityPolicy=LOGICAL with members paired by
+   * provenance check id, whatever the subject's config: the errors found, empty if none.
    */
   @Override
   public List<String> isLogicallyCompatibleByProvenance(String subject, int version)
       throws SchemaRegistryException {
-    Config config = new Config(new ConfigUpdateRequest(getConfigInScope(subject)));
+    // A table applies versions one at a time, so the subject's level, group and field
+    // validation do not apply.
+    Config config = new Config(CompatibilityLevel.BACKWARD.name);
     config.setCompatibilityPolicy(CompatibilityPolicy.LOGICAL.name());
+    config.setValidateFields(false);
     ParsedSchema parsedSchema = parseSchema(get(subject, version, true));
-    List<Integer> before = new ArrayList<>();
+    int previous = 0;
     Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
     while (keys.hasNext()) {
       int earlier = keys.next().getVersion();
       if (earlier < version) {
-        before.add(earlier);
+        previous = Math.max(previous, earlier);
       }
     }
-    Collections.sort(before);
-    List<ParsedSchemaHolder> previousSchemas = new ArrayList<>(before.size());
-    for (int earlier : before) {
-      previousSchemas.add(new LazyParsedSchemaHolder(this, new SchemaKey(subject, earlier)));
-    }
+    List<ParsedSchemaHolder> previousSchemas = previous == 0
+        ? Collections.emptyList()
+        : Collections.singletonList(
+            new LazyParsedSchemaHolder(this, new SchemaKey(subject, previous)));
     try {
       return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, PairBy.CHECK_ID,
           version);

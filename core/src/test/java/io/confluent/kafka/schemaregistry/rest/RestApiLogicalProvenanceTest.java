@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -42,12 +43,14 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * {@code compatible} on the provenance endpoint: what registration under LOGICAL will say once
- * LOGICAL pairs columns by provenance check id, while registration and the compatibility checks
- * still pair by name. A rename continues a column; a field given a new identity is a deletion and
- * an addition.
+ * {@code compatible} on the provenance endpoint: whether each version is a valid backward step
+ * from the one before it under LOGICAL, columns paired by provenance check id, while registration
+ * and the compatibility checks still pair by name. A rename continues a column; a field given a
+ * new identity is a deletion and an addition.
  */
 @Tag("IntegrationTest")
 public abstract class RestApiLogicalProvenanceTest {
@@ -131,34 +134,6 @@ public abstract class RestApiLogicalProvenanceTest {
   }
 
   @Test
-  public void testAFieldReAddedAcrossAGapIsIncompatibleTransitively() throws Exception {
-    // a is dropped at v=2 and re-added at v=3 (with z, so v=3 is no repeat of v=1): a new column,
-    // a deletion of v=1's. Only a transitive level compares v=1; by name a continues.
-    String[][] histories = {
-        {AvroSchema.TYPE, avro(field("a", "[\"null\",\"int\"]", "\"default\":null")), avro(),
-            avro(field("a", "[\"null\",\"int\"]", "\"default\":null"),
-                field("z", "[\"null\",\"int\"]", "\"default\":null"))},
-        {ProtobufSchema.TYPE, proto("p", "optional int32 a = 2;"), proto("p", ""),
-            proto("p", "optional int32 a = 2;\n  optional int32 z = 3;")},
-        // Closed, as natively adding a property to an open content model is incompatible.
-        {JsonSchema.TYPE, closedJson("\"a\":{\"type\":\"integer\"}"), closedJson(""),
-            closedJson("\"a\":{\"type\":\"integer\"},\"z\":{\"type\":\"integer\"}")}};
-    for (String[] history : histories) {
-      String type = history[0];
-      for (CompatibilityLevel level : new CompatibilityLevel[] {CompatibilityLevel.BACKWARD,
-          CompatibilityLevel.BACKWARD_TRANSITIVE}) {
-        String subject = "gap_" + type + "_" + level;
-        history(subject, type, history[1], history[2]);
-        assertNameVerdict(subject, type, history[3], level, null);
-        register(subject, type, history[3]);
-        logical(subject, level);
-        assertFlag(subject, 3,
-            level == CompatibilityLevel.BACKWARD ? null : "FIELD_DELETED");
-      }
-    }
-  }
-
-  @Test
   public void testAKindChangeIsIncompatibleByNameAndByProvenance() throws Exception {
     String[][] histories = {
         {AvroSchema.TYPE, avro(field("a", "[\"null\",\"int\"]", "\"default\":null")),
@@ -179,31 +154,6 @@ public abstract class RestApiLogicalProvenanceTest {
     }
   }
 
-  // --- Where names still pair -----------------------------------------------------------------
-
-  @Test
-  public void testAnEarlierBlockingVersionPairsByNameTransitively() throws Exception {
-    // v=2, imported, aliases two fields of v=1, so no provenance reaches back past it: the
-    // transitive answer pairs by name, as registration will, while BACKWARD needs only v=2.
-    for (CompatibilityLevel level : new CompatibilityLevel[] {CompatibilityLevel.BACKWARD,
-        CompatibilityLevel.BACKWARD_TRANSITIVE}) {
-      String subject = "imported_block_" + level;
-      restApp.restClient.setMode("IMPORT", subject);
-      // The same content in both subjects, so the same ids.
-      int id = 9001;
-      restApp.restClient.registerSchema(
-          avro(field("a", "\"int\""), field("b", "\"int\"")), subject, 1, id);
-      restApp.restClient.registerSchema(avro(field("c", "[\"null\",\"int\"]",
-          "\"default\":null,\"aliases\":[\"a\",\"b\"]")), subject, 2, id + 1);
-      restApp.restClient.setMode("READWRITE", subject);
-      logical(subject, CompatibilityLevel.NONE);
-      register(subject, AvroSchema.TYPE,
-          avro(field("d", "[\"null\",\"int\"]", "\"default\":null,\"aliases\":[\"c\"]")));
-      logical(subject, level);
-      assertFlag(subject, 3, level == CompatibilityLevel.BACKWARD ? null : "FIELD_DELETED");
-    }
-  }
-
   // --- Compatibility groups ------------------------------------------------------------------
 
   @Test
@@ -214,25 +164,6 @@ public abstract class RestApiLogicalProvenanceTest {
         avro(field("b", "\"string\"", "\"aliases\":[\"a\"]")));
     restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
     assertFlag(subject, 2, null);
-  }
-
-  @Test
-  public void testAFieldAnotherGroupDroppedIsIncompatibleByProvenance() throws Exception {
-    // v=2, group 2, drops a; v=3, group 1, re-adds it (with z, so it is no repeat of v=1). Only
-    // v=1 is compared, so by name a continues; provenance walks through v=2, where a ends.
-    String subject = "group_interleaved";
-    String readded = avro(field("a", "\"string\""),
-        field("z", "[\"null\",\"int\"]", "\"default\":null"));
-    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.NONE), subject);
-    restApp.restClient.registerSchema(inGroup(avro(field("a", "\"string\"")), "1"), subject, false);
-    restApp.restClient.registerSchema(inGroup(avro(), "2"), subject, false);
-    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
-    assertEquals(List.of(), restApp.restClient.testCompatibility(inGroup(readded, "1"), subject,
-        null, false, true));
-    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.NONE), subject);
-    restApp.restClient.registerSchema(inGroup(readded, "1"), subject, false);
-    restApp.restClient.updateConfig(groupConfig(CompatibilityLevel.BACKWARD), subject);
-    assertFlag(subject, 3, "FIELD_DELETED");
   }
 
   // --- What a flag names ----------------------------------------------------------------------
@@ -304,38 +235,54 @@ public abstract class RestApiLogicalProvenanceTest {
         subject, "1", "1", true, false, "logical").getVersions().get(0).getCompatible());
   }
 
-  @Test
-  public void testARequestComparingTooManyVersionsIsA42219() throws Exception {
-    // At most 3 comparisons (the cluster test's limit): at a transitive level each version is
-    // compared with every earlier one, else with the one before it. One version is always answered.
-    String subject = "too_many_comparisons";
-    List<String> fields = new ArrayList<>();
-    List<String> versions = new ArrayList<>();
-    for (int i = 0; i < 5; i++) {
-      fields.add(field("f" + i, "[\"null\",\"int\"]", "\"default\":null"));
-      versions.add(avro(fields.toArray(new String[0])));
+  // --- The subject's config ------------------------------------------------------------------
+
+  @ParameterizedTest
+  @ValueSource(strings = {"BACKWARD", "NONE", "FORWARD", "FULL", "BACKWARD_TRANSITIVE", "GROUP"})
+  public void testAFlagJudgesEachStepFromTheOneBeforeWhateverTheConfig(String config)
+      throws Exception {
+    // v=2 changes a's type; v=3 adds a symbol, valid backward from v=2 only. v=2 is soft-deleted
+    // and in another group, and still the version v=3 is compared with.
+    String subject = "config_" + config;
+    none(subject);
+    restApp.restClient.registerSchema(inGroup(avro(field("a", "\"int\""),
+        field("e", enumOf("X"))), "1"), subject, false);
+    restApp.restClient.registerSchema(inGroup(avro(field("a", "\"string\""),
+        field("e", enumOf("X"))), "2"), subject, false);
+    restApp.restClient.registerSchema(inGroup(avro(field("a", "\"string\""),
+        field("e", enumOf("X", "Y"))), "1"), subject, false);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+    ConfigUpdateRequest update = new ConfigUpdateRequest();
+    if (config.equals("GROUP")) {
+      update.setCompatibilityLevel(CompatibilityLevel.BACKWARD.name);
+      update.setCompatibilityGroup("app.major");
+    } else {
+      update.setCompatibilityLevel(config);
     }
-    history(subject, AvroSchema.TYPE, versions.toArray(new String[0]));
-    logical(subject, CompatibilityLevel.BACKWARD_TRANSITIVE);
-    assertComparisonsRejected(subject, "1", "5", true);
-    assertComparisonsRejected(subject, "1", "5", false);
-    assertComparisonsRejected(subject, "3", "4", true);
-    assertEquals(2, flags(subject, "2", "3", true).getVersions().size());
-    assertFlag(subject, 5, null);
-    logical(subject, CompatibilityLevel.BACKWARD);
-    assertComparisonsRejected(subject, "1", "5", true);
-    assertEquals(3, flags(subject, "2", "4", true).getVersions().size());
+    restApp.restClient.updateConfig(update, subject);
+    List<Boolean> compatible = new ArrayList<>();
+    for (ProvenanceVersion version : flags(subject, "1", "3", true).getVersions()) {
+      compatible.add(version.getCompatible());
+    }
+    assertEquals(List.of(true, false, true), compatible);
   }
 
   // -------------------------------------------------------------------------------------------
 
-  // Registers each version under LOGICAL at NONE, so only validity is checked: no comparison
-  // stops a version the flag is meant to judge.
+  // Registers each version at NONE, under no LOGICAL, so no check stops a version the flag is
+  // meant to judge.
   private void history(String subject, String type, String... versions) throws Exception {
-    logical(subject, CompatibilityLevel.NONE);
+    none(subject);
     for (String version : versions) {
       register(subject, type, version);
     }
+  }
+
+  private void none(String subject) throws Exception {
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityLevel(CompatibilityLevel.NONE.name);
+    config.setCompatibilityPolicy(CompatibilityPolicy.STRICT.name);
+    restApp.restClient.updateConfig(config, subject);
   }
 
   private void logical(String subject, CompatibilityLevel level) throws Exception {
@@ -369,7 +316,7 @@ public abstract class RestApiLogicalProvenanceTest {
   }
 
   // What registration says today, by name, at level under LOGICAL: compatible when rule is
-  // null, else incompatible naming rule. Leaves the subject at NONE for the next registration.
+  // null, else incompatible naming rule. Leaves the subject as none() does.
   private void assertNameVerdict(String subject, String type, String schema,
       CompatibilityLevel level, String rule) throws Exception {
     logical(subject, level);
@@ -383,7 +330,7 @@ public abstract class RestApiLogicalProvenanceTest {
     } else {
       assertTrue(messages.toString().contains("errorType:\"" + rule + "\""), messages.toString());
     }
-    logical(subject, CompatibilityLevel.NONE);
+    none(subject);
   }
 
   // As assertNameVerdict, asserting only that rule is not reported.
@@ -396,12 +343,11 @@ public abstract class RestApiLogicalProvenanceTest {
     List<String> messages =
         restApp.restClient.testCompatibility(request, subject, null, false, true);
     assertFalse(messages.toString().contains("errorType:\"" + rule + "\""), messages.toString());
-    logical(subject, CompatibilityLevel.NONE);
+    none(subject);
   }
 
-  // The flag on version at the subject's current level, the policy taken as LOGICAL: compatible
-  // when rule is null, else incompatible naming rule. Asked of that version alone, as a range
-  // across an earlier blocking version has no provenance.
+  // The flag on version: compatible when rule is null, else incompatible naming rule. Asked of
+  // that version alone, as a range across an earlier blocking version has no provenance.
   private void assertFlag(String subject, int version, String rule) throws Exception {
     ProvenanceVersion flagged = flag(subject, version);
     assertEquals(version, flagged.getVersion().intValue());
@@ -426,13 +372,6 @@ public abstract class RestApiLogicalProvenanceTest {
         subject, from, to, interior, false, "LOGICAL");
   }
 
-  private void assertComparisonsRejected(String subject, String from, String to,
-      boolean interior) {
-    RestClientException e = assertThrows(RestClientException.class,
-        () -> flags(subject, from, to, interior), from + ".." + to);
-    assertEquals(Errors.PROVENANCE_RANGE_TOO_LONG_ERROR_CODE, e.getErrorCode(), from + ".." + to);
-  }
-
   // A record R with id and the given fields.
   private static String avro(String... fields) {
     StringBuilder all = new StringBuilder("{\"name\":\"id\",\"type\":\"int\"}");
@@ -440,6 +379,11 @@ public abstract class RestApiLogicalProvenanceTest {
       all.append(',').append(field);
     }
     return "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"ns\",\"fields\":[" + all + "]}";
+  }
+
+  private static String enumOf(String... symbols) {
+    return "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\""
+        + String.join("\",\"", symbols) + "\"]}";
   }
 
   private static String field(String name, String type, String... extra) {
@@ -457,11 +401,5 @@ public abstract class RestApiLogicalProvenanceTest {
   private static String json(String properties) {
     return "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"}"
         + (properties.isEmpty() ? "" : "," + properties) + "}}";
-  }
-
-  // As json, with no other properties allowed.
-  private static String closedJson(String properties) {
-    String open = json(properties);
-    return open.substring(0, open.length() - 1) + ",\"additionalProperties\":false}";
   }
 }

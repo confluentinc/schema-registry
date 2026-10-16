@@ -20,7 +20,6 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHisto
 import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
@@ -347,8 +346,9 @@ public class SubjectsResource {
           + "version (fromVersion, toVersion) or by schema id (fromId, toId), in any mix, and in "
           + "either order. Soft-deleted versions are always included, and the response names the "
           + "subject as the registry normalizes it. With compatibilityPolicy=LOGICAL, each version "
-          + "also says whether registering it after the versions before it is accepted under "
-          + "LOGICAL once LOGICAL pairs columns by provenance, with the errors it would report.",
+          + "also says whether it is a valid backward step from the version just before it under "
+          + "LOGICAL, columns paired by provenance, whatever the subject's config, with the errors "
+          + "found.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -400,11 +400,10 @@ public class SubjectsResource {
           + "top-level messages; ignored for other formats")
       @DefaultValue("false") @QueryParam("includeMultipleMessages")
       boolean includeMultipleMessages,
-      @Parameter(description = "LOGICAL to say, for each version returned, whether registering "
-          + "it after the versions before it is accepted under that policy with columns paired "
-          + "by provenance, as registration will pair them, and the errors it would report; "
-          + "such a request may compare its versions with at most "
-          + "provenance.compatibility.max.comparisons earlier ones")
+      @Parameter(description = "LOGICAL to say, for each version returned, whether it is a "
+          + "valid backward step from the version just before it under that policy, columns "
+          + "paired by provenance, whatever the subject's compatibility config, and the errors "
+          + "found")
       @QueryParam("compatibilityPolicy") String compatibilityPolicy) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -429,7 +428,7 @@ public class SubjectsResource {
       SchemaProvenance provenance =
           provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
       return compatibilityPolicy == null ? provenance
-          : withCompatibility(subject, history, provenance);
+          : withCompatibility(subject, provenance);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -525,9 +524,8 @@ public class SubjectsResource {
    * {@code provenance}, possibly a cached one and so left unchanged, with each version's verdict
    * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages.
    */
-  private SchemaProvenance withCompatibility(String subject, List<Schema> history,
-      SchemaProvenance provenance) throws SchemaRegistryException {
-    checkComparisons(subject, history, provenance.getVersions());
+  private SchemaProvenance withCompatibility(String subject, SchemaProvenance provenance)
+      throws SchemaRegistryException {
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
       ProvenanceVersion flagged = new ProvenanceVersion(version.getVersion(), version.getId(),
@@ -544,33 +542,6 @@ public class SubjectsResource {
       versions.add(flagged);
     }
     return new SchemaProvenance(provenance.getSubject(), versions);
-  }
-
-  // Each version returned is compared with every earlier one at a transitive level, else the one
-  // before it, as registration compares it; one version alone is always answered.
-  private void checkComparisons(String subject, List<Schema> history,
-      List<ProvenanceVersion> versions) throws SchemaRegistryException {
-    if (versions.size() < 2) {
-      return;
-    }
-    CompatibilityLevel level = CompatibilityLevel.forName(
-        schemaRegistry.getConfigInScope(subject).getCompatibilityLevel());
-    boolean transitive = level == CompatibilityLevel.BACKWARD_TRANSITIVE
-        || level == CompatibilityLevel.FULL_TRANSITIVE;
-    long comparisons = 0;
-    for (ProvenanceVersion version : versions) {
-      long earlier = history.stream().filter(s -> s.getVersion() < version.getVersion()).count();
-      comparisons += level == null || level == CompatibilityLevel.NONE ? 0
-          : transitive ? earlier : Math.min(earlier, 1);
-    }
-    int max = schemaRegistry.config().getInt(
-        SchemaRegistryConfig.PROVENANCE_COMPATIBILITY_MAX_COMPARISONS_CONFIG);
-    if (comparisons > max) {
-      throw Errors.provenanceRangeTooLongException("With compatibilityPolicy, the "
-          + versions.size() + " versions requested of subject " + subject + " are compared "
-          + "with " + comparisons + " earlier versions, more than " + max + ": request fewer "
-          + "versions at a time, down to one");
-    }
   }
 
   // The first MAX_MESSAGES - 1 messages and a count of the rest, when there are more.
