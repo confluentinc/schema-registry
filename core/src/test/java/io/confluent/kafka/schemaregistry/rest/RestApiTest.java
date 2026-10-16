@@ -47,10 +47,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -1349,6 +1351,60 @@ public abstract class RestApiTest {
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
             (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+  }
+
+  @Test
+  public void testTypeObjectNamingTypeOnEachPath() throws Exception {
+    // A field type such as {"type": "myavro.currencies.Currency"}, which Avro 1.12.2
+    // rejects, is accepted on every path and stored with the bare type name.
+    String currency = "{\"type\":\"enum\",\"name\":\"Currency\","
+        + "\"namespace\":\"myavro.currencies\",\"symbols\":[\"EUR\",\"USD\"]}";
+    String bare = "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"myavro\","
+        + "\"fields\":[{\"name\":\"currency\",\"type\":\"myavro.currencies.Currency\"}]}";
+    String wrapped = bare.replace("\"type\":\"myavro.currencies.Currency\"",
+        "\"type\":{\"type\":\"myavro.currencies.Currency\"}");
+    TestUtils.registerAndVerifySchema(
+        restApp.restClient, currency, expectedSchemaId(1), "shared");
+    List<SchemaReference> refs = Collections.singletonList(
+        new SchemaReference("myavro.currencies.Currency", "shared", 1));
+
+    // New registration
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(wrapped);
+    request.setReferences(refs);
+    int id = restApp.restClient.registerSchema(request, "orders", false).getId();
+    assertEquals(expectedSchemaId(2), id);
+    String stored = restApp.restClient.getId(id).getSchemaString();
+    assertFalse(stored.contains("{\"type\":\"myavro.currencies.Currency\"}"), stored);
+
+    // Re-registration, lookup and compatibility
+    assertEquals(id, restApp.restClient.registerSchema(request, "orders", false).getId());
+    assertEquals((Integer) 1,
+        restApp.restClient.lookUpSubjectVersion(request, "orders", false, false).getVersion());
+    assertTrue(restApp.restClient.testCompatibility(request, "orders", "latest", false, true)
+        .isEmpty());
+
+    // Re-registration on a subject with default metadata, which skips the lenient lookup
+    ConfigUpdateRequest defaults = new ConfigUpdateRequest();
+    defaults.setDefaultMetadata(new Metadata(null, Collections.singletonMap("owner", "x"), null));
+    restApp.restClient.updateConfig(defaults, "orders_defaults");
+    RegisterSchemaRequest bareRequest = new RegisterSchemaRequest();
+    bareRequest.setSchema(bare);
+    bareRequest.setReferences(refs);
+    int defaultsId =
+        restApp.restClient.registerSchema(bareRequest, "orders_defaults", false).getId();
+    assertEquals(defaultsId,
+        restApp.restClient.registerSchema(request, "orders_defaults", false).getId());
+
+    // Registration with schema tags, which rebuilds the request from the parsed schema
+    RegisterSchemaRequest tagged = new RegisterSchemaRequest();
+    tagged.setSchema(wrapped);
+    tagged.setReferences(refs);
+    tagged.setSchemaTagsToAdd(Collections.singletonList(new SchemaTags(
+        new SchemaEntity("myavro.Order", SchemaEntity.EntityType.SR_RECORD),
+        Collections.singletonList("TAG1"))));
+    int taggedId = restApp.restClient.registerSchema(tagged, "orders_tags", false).getId();
+    assertTrue(restApp.restClient.getId(taggedId).getSchemaString().contains("TAG1"));
   }
 
   @Test
