@@ -24,11 +24,23 @@ import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONObject;
 
 import java.util.Comparator;
+import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
   private static final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+
+  private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
+
+  public JsonNodeComparator() {
+    this(null);
+  }
+
+  // Configures the loader for the compared schemas; null means the loader default
+  public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+    this.loaderConfig = loaderConfig;
+  }
 
   @Override
   public int compare(JsonNode o1, JsonNode o2) {
@@ -46,15 +58,28 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
     }
 
     try {
-      Schema schema1 = SchemaLoader.builder()
-          .schemaJson(objectMapper.readValue(o1.toString(), JSONObject.class))
-          .build().load().build();
-      Schema schema2 = SchemaLoader.builder()
-          .schemaJson(objectMapper.readValue(o2.toString(), JSONObject.class))
-          .build().load().build();
+      Schema schema1 = load(o1);
+      Schema schema2 = load(o2);
       return jsonSchemaComparator.compare(schema1, schema2);
     } catch (JsonProcessingException e) {
       throw new IllegalArgumentException("Cannot parse Json Schema from JsonNode", e);
+    }
+  }
+
+  private Schema load(JsonNode node) throws JsonProcessingException {
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .schemaJson(objectMapper.readValue(node.toString(), JSONObject.class));
+    if (loaderConfig == null) {
+      return builder.build().load().build();
+    }
+    loaderConfig.accept(builder);
+    try {
+      return builder.build().load().build();
+    } catch (RuntimeException e) {
+      if (JsonSchema.isRemoteRefBlocked(e)) {
+        throw new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
+      }
+      throw e;
     }
   }
 }
