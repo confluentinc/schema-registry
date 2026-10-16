@@ -1,0 +1,14 @@
+{
+  "namespace": "io.confluent.kafka.example.stringable",
+  "type": "record",
+  "name": "StringableUser",
+  "fields": [
+    {
+      "name": "site",
+      "type": {
+        "type": "string",
+        "java-class": "java.net.URI"
+      }
+    }
+  ]
+}
