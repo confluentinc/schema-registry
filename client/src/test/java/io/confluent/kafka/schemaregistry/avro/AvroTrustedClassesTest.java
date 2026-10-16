@@ -25,6 +25,7 @@ import static org.junit.Assume.assumeTrue;
 import io.confluent.kafka.schemaregistry.avro.othermodel.Address;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -207,7 +208,8 @@ public class AvroTrustedClassesTest {
     assertFalse(AvroTrustedClasses.isTrusted(StringBuilder.class));
   }
 
-  // Hand-written specific records without SCHEMA$, so their schema is not derivable from the class
+  // Hand-written specific records without SCHEMA$, whose instances report a schema, as if taken
+  // from the registry, that names another record and a java-class type
   public static class HandWrittenChild extends SpecificRecordBase {
     static final Schema SCHEMA = SchemaBuilder.record("HandWrittenChild")
         .namespace(AvroTrustedClassesTest.class.getName()).fields().requiredInt("x").endRecord();
@@ -230,7 +232,10 @@ public class AvroTrustedClassesTest {
   public static class HandWritten extends SpecificRecordBase {
     static final Schema SCHEMA = SchemaBuilder.record("HandWritten")
         .namespace(AvroTrustedClassesTest.class.getName()).fields()
-        .name("child").type(HandWrittenChild.SCHEMA).noDefault().endRecord();
+        .name("child").type(HandWrittenChild.SCHEMA).noDefault()
+        .name("link").type(SchemaBuilder.builder().stringBuilder()
+            .prop(SpecificData.CLASS_PROP, URI.class.getName()).endString()).noDefault()
+        .endRecord();
 
     @Override
     public Schema getSchema() {
@@ -248,10 +253,11 @@ public class AvroTrustedClassesTest {
   }
 
   @Test
-  public void trustClassOfTrustsSpecificRecordsInAMap() {
+  public void trustClassOfIgnoresTheSchemaAnInstanceReports() {
     AvroTrustedClasses.trustClassOf(Collections.singletonMap("k", new HandWritten()));
     assertTrue(AvroTrustedClasses.isTrusted(HandWritten.class));
-    assertTrue(AvroTrustedClasses.isTrusted(HandWrittenChild.class));
+    assertFalse(AvroTrustedClasses.isTrusted(HandWrittenChild.class));
+    assertFalse(AvroTrustedClasses.isTrusted(URI.class));
   }
 
   // A hand-written record whose instances report a schema other than their class's, as if taken

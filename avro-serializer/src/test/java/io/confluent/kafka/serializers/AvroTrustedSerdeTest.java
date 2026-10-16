@@ -38,9 +38,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.After;
 import org.junit.Before;
@@ -74,6 +77,46 @@ public class AvroTrustedSerdeTest {
 
   public static class Sprocket {
     public String name = "s";
+  }
+
+  // Hand-written specific records whose own schema names a java-class type
+  public abstract static class Labeled extends SpecificRecordBase {
+    public Object label;
+
+    static Schema schema(String name) {
+      return SchemaBuilder.record(name).namespace(AvroTrustedSerdeTest.class.getName()).fields()
+          .name("label").type(SchemaBuilder.builder().stringBuilder()
+              .prop(SpecificData.CLASS_PROP, StringBuilder.class.getName()).endString())
+          .noDefault().endRecord();
+    }
+
+    @Override
+    public Object get(int field) {
+      return label;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+      label = value;
+    }
+  }
+
+  public static class Bracket extends Labeled {
+    public static final Schema SCHEMA$ = schema("Bracket");
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+  }
+
+  public static class Clamp extends Labeled {
+    public static final Schema SCHEMA$ = schema("Clamp");
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
   }
 
   private SchemaRegistryClient schemaRegistry;
@@ -237,6 +280,25 @@ public class AvroTrustedSerdeTest {
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
         KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
     assertEquals("https://example.com", ((StringableLink) result).getUrl().toString());
+  }
+
+  @Test
+  public void typelessSpecificReaderTrustsOnlyTheConfiguredClass() {
+    // The writer's schema selects the class, so the types its schema names need their own config
+    byte[] bytes = serialize("brackets", record(Bracket.SCHEMA$, "label", "x"));
+    assertForbidden(() -> deserialize("brackets", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
+        KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG, Bracket.class.getName()));
+  }
+
+  @Test
+  public void typelessSpecificReaderReadsOnceTheJavaClassTypeIsConfigured() {
+    byte[] bytes = serialize("clamps", record(Clamp.SCHEMA$, "label", "x"));
+    Object result = deserialize("clamps", bytes,
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true",
+        KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG,
+        Clamp.class.getName() + "," + StringBuilder.class.getName());
+    assertEquals("x", ((StringBuilder) ((Clamp) result).label).toString());
   }
 
   @Test

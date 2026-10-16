@@ -100,7 +100,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         SpecificRecord reader = (SpecificRecord) type.getDeclaredConstructor().newInstance();
         specificAvroReaderSchema = reader.getSchema();
         // Avro loads the configured class, and the types its own schema references
-        AvroTrustedClasses.trustClassOf(reader);
+        AvroTrustedClasses.trust(type);
       } catch (Exception e) {
         throw new ConfigException(
           String.format(
@@ -411,8 +411,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
     try {
       SpecificRecord reader = readerClass.newInstance();
-      // Avro also loads the java-class types of the class's own schema, such as java.net.URI
-      AvroTrustedClasses.trustClassOf(reader);
       return reader.getSchema();
     } catch (InstantiationException e) {
       throw new SerializationException(writerSchema.getFullName()

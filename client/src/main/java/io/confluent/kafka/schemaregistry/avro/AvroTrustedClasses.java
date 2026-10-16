@@ -231,6 +231,7 @@ public final class AvroTrustedClasses {
    * Trusts the class of a value the application serializes, if Avro resolves it reflectively,
    * as for a specific record or a reflect POJO. Generic records, enums and fixed values and
    * primitive values are left alone, since their schema, not their class, names their types.
+   * Only the schema derived from the class adds trust, never the one the value reports.
    */
   public static void trustClassOf(Object value) {
     if (!VALIDATOR_AVAILABLE || value == null) {
@@ -275,8 +276,7 @@ public final class AvroTrustedClasses {
 
   private static void trustOwnClass(Object value) {
     if (isResolvedReflectively(value)) {
-      walkAndTrust(value.getClass(),
-          value instanceof GenericContainer ? (GenericContainer) value : null);
+      walkAndTrust(value.getClass());
     }
   }
 
@@ -293,20 +293,17 @@ public final class AvroTrustedClasses {
     collectGeneratedClasses(readerSchema, Collections.newSetFromMap(new IdentityHashMap<>()),
         generated, null);
     for (Class<?> clazz : generated) {
-      walkAndTrust(clazz, null);
+      walkAndTrust(clazz);
     }
   }
 
-  // Trusts a class and the types its schema references, once per class. The schema comes from
-  // the class, or from the instance when the class has none, as for a hand-written record.
-  private static void walkAndTrust(Class<?> clazz, GenericContainer instance) {
+  // Trusts a class and the types its own schema references, once per class. An instance's schema,
+  // which may come from the registry, is never used, so a class without one is trusted alone.
+  private static void walkAndTrust(Class<?> clazz) {
     State current = state;
     if (current.walked.getIfPresent(clazz) == null) {
       current.classes.add(clazz.getName());
       Schema schema = deriveSchema(clazz);
-      if (schema == null && instance != null) {
-        schema = instance.getSchema();
-      }
       if (schema != null) {
         current.classes.addAll(typesReachableFrom(schema, clazz.getClassLoader()));
       }
