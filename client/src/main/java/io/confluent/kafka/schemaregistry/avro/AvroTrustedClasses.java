@@ -109,8 +109,8 @@ public final class AvroTrustedClasses {
 
     private boolean isTrusted(Class<?> clazz) {
       // Reading an annotation does not initialize the class
-      if (allPackages || clazz.isAnnotationPresent(AvroGenerated.class)
-          || classes.contains(clazz.getName())) {
+      if (allPackages || classes.contains(clazz.getName())
+          || clazz.isAnnotationPresent(AvroGenerated.class)) {
         return true;
       }
       // A nested class reports its enclosing package
