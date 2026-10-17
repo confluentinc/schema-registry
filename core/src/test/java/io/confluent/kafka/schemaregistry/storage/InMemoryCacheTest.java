@@ -70,6 +70,20 @@ public class InMemoryCacheTest {
     assertEquals(new SchemaKey(SUBJECT, 3), cache.schemaKeyById(7, SUBJECT));
   }
 
+  @Test
+  public void anImportOverwriteUnderAnotherIdLeavesTheOldIdItsOtherVersions() throws Exception {
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 1, false);
+    put(cache, 2, false);
+
+    // v2 imported again under ID 9: ID 7 is left with v1 alone, then with nothing.
+    overwrite(cache, 2, 9);
+    assertEquals(new SchemaKey(SUBJECT, 1), cache.schemaKeyById(7, SUBJECT));
+    assertEquals(new SchemaKey(SUBJECT, 2), cache.schemaKeyById(9, SUBJECT));
+    overwrite(cache, 1, 9);
+    assertNull(cache.schemaKeyById(7, SUBJECT));
+  }
+
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {
     InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache =
         new InMemoryCache<>(new SchemaRegistrySerializer());
@@ -88,6 +102,15 @@ public class InMemoryCacheTest {
     } else {
       cache.schemaRegistered(key, value, null);
     }
+  }
+
+  // As an IMPORT overwrite: the version's record replaced by one under another ID.
+  private static void overwrite(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,
+      int version, int id) throws Exception {
+    SchemaKey key = new SchemaKey(SUBJECT, version);
+    SchemaValue value = new SchemaValue(SUBJECT, version, id, SCHEMA, false);
+    SchemaValue old = (SchemaValue) cache.put(key, value);
+    cache.schemaRegistered(key, value, old);
   }
 
   private static void tombstone(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,

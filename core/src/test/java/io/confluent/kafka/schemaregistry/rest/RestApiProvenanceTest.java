@@ -218,6 +218,37 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aSchemaIdEndOverwrittenByImportIsNotFound() throws Exception {
+    // Version 1 imported again under another ID no longer carries the first.
+    restApp.restClient.setMode("IMPORT", SUBJECT);
+    restApp.restClient.registerSchema(record(field("id", "int")), SUBJECT, 1, 100);
+    restApp.restClient.registerSchema(record(field("id", "long")), SUBJECT, 1, 200);
+    restApp.restClient.setMode("READWRITE", SUBJECT);
+
+    assertError(404, Errors.SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE,
+        () -> restApp.restClient.getProvenanceById(
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 100, false, false));
+    assertEquals(Collections.singletonList(1), versions(restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 200, 200, false, false)));
+  }
+
+  @Test
+  public void aSchemaIdEndOverwrittenByImportIsAnEarlierVersionStillCarryingIt()
+      throws Exception {
+    String avro = record(field("id", "int"));
+    restApp.restClient.setMode("IMPORT", SUBJECT);
+    restApp.restClient.registerSchema(avro, SUBJECT, 1, 100);
+    restApp.restClient.registerSchema(avro, SUBJECT, 2, 100);
+    restApp.restClient.registerSchema(record(field("id", "long")), SUBJECT, 2, 200);
+    restApp.restClient.setMode("READWRITE", SUBJECT);
+
+    SchemaProvenance provenance = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false, false);
+    assertEquals(Arrays.asList(1, 2), versions(provenance));
+    assertEquals(Arrays.asList(100, 200), schemaIds(provenance));
+  }
+
+  @Test
   public void aSchemaIdSharedWithAnotherSubjectIsThisSubjectsVersion() throws Exception {
     register("other-value", record(field("x", "string")));
     register("other-value", record(field("id", "int")));
