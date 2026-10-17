@@ -23,6 +23,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
@@ -31,7 +32,6 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.RecursiveTypeException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.TooManyLocationsException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -52,6 +52,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -92,6 +93,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 @Path("/subjects")
@@ -348,7 +350,7 @@ public class SubjectsResource {
           + "subject as the registry normalizes it. With compatibilityPolicy=LOGICAL, each version "
           + "also says whether it is a valid backward step from the version just before it under "
           + "LOGICAL, columns paired by provenance, whatever the subject's config, with the errors "
-          + "found.",
+          + "found. A version with an earlier version's schema id never is.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -401,7 +403,7 @@ public class SubjectsResource {
       @Parameter(description = "LOGICAL to say, for each version returned, whether it is a "
           + "valid backward step from the version just before it under that policy, columns "
           + "paired by provenance, whatever the subject's compatibility config, and the errors "
-          + "found")
+          + "found. A version with an earlier version's schema id never is.")
       @QueryParam("compatibilityPolicy") String compatibilityPolicy) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -417,16 +419,16 @@ public class SubjectsResource {
 
     String errorMessage = "Error while computing provenance for subject " + subject;
     try {
-      List<Schema> history = nonEmptyProvenanceHistory(subject);
-      List<SchemaMetadata> entries = provenanceEntries(history);
-      int from = fromVersion != null ? versionNamed(fromVersion, entries)
-          : versionOfId(fromId, subject, entries);
-      int to = toVersion != null ? versionNamed(toVersion, entries)
-          : versionOfId(toId, subject, entries);
+      int from = fromVersion != null ? versionNamed(subject, fromVersion)
+          : versionOfId(subject, fromId);
+      int to = toVersion != null ? versionNamed(subject, toVersion)
+          : versionOfId(subject, toId);
+      List<Schema> range =
+          rangeOf(subject, Math.min(from, to), Math.max(from, to), includeInterior);
       SchemaProvenance provenance =
-          provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
+          provenanceOf(subject, range, from, to, includeInterior, includeMultipleMessages);
       return compatibilityPolicy == null ? provenance
-          : withCompatibility(subject, provenance);
+          : withCompatibility(subject, range, provenance);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -510,27 +512,32 @@ public class SubjectsResource {
   }
 
 
-  private List<Schema> nonEmptyProvenanceHistory(String subject) throws SchemaRegistryException {
-    List<Schema> history = provenanceHistory(subject);
-    if (history.isEmpty()) {
-      throw Errors.subjectNotFoundException(subject);
-    }
-    return history;
-  }
-
   /**
    * {@code provenance}, possibly a cached one and so left unchanged, with each version's verdict
-   * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages.
+   * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages. A version with
+   * the schema id of an earlier version of the subject, soft-deleted or not, is incompatible, its
+   * one message saying so.
    */
-  private SchemaProvenance withCompatibility(String subject, SchemaProvenance provenance)
-      throws SchemaRegistryException {
+  private SchemaProvenance withCompatibility(String subject, List<Schema> range,
+      SchemaProvenance provenance) throws SchemaRegistryException {
+    Map<Integer, Integer> previousVersions = new HashMap<>();
+    int previous = versionBefore(subject, range.get(0).getVersion());
+    for (Schema schema : range) {
+      previousVersions.put(schema.getVersion(), previous);
+      previous = schema.getVersion();
+    }
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
       ProvenanceVersion flagged = new ProvenanceVersion(version.getVersion(), version.getId(),
           version.getKind(), version.getFields());
+      int first = firstVersionWithId(subject, version.getId(), version.getVersion());
       List<String> messages;
       try {
-        messages = schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion());
+        messages = first < version.getVersion()
+            ? List.of(LogicalPolicyChecker.describeRepeatedId(version.getVersion(),
+                version.getId(), first))
+            : schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion(),
+                previousVersions.get(version.getVersion()));
       } catch (InvalidSchemaException e) {
         // An earlier version that no longer parses, outside the range: 42214, as when in it.
         throw Errors.unresolvableReferenceException(e.getMessage());
@@ -540,6 +547,18 @@ public class SubjectsResource {
       versions.add(flagged);
     }
     return new SchemaProvenance(provenance.getSubject(), versions);
+  }
+
+  // The first version of the subject carrying schema id id, soft-deleted or not; version itself
+  // if no earlier one does.
+  private int firstVersionWithId(String subject, int id, int version)
+      throws SchemaRegistryException {
+    List<SubjectVersion> versions = schemaRegistry.listVersionsForId(id, subject, true);
+    return versions == null ? version : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .mapToInt(SubjectVersion::getVersion)
+        .min()
+        .orElse(version);
   }
 
   // The first MAX_MESSAGES - 1 messages and a count of the rest, when there are more.
@@ -552,22 +571,8 @@ public class SubjectsResource {
     return kept;
   }
 
-  private SchemaProvenance provenanceOf(String subject, List<Schema> history, int from, int to,
+  private SchemaProvenance provenanceOf(String subject, List<Schema> range, int from, int to,
       boolean includeInterior, boolean includeMultipleMessages) {
-    int low = Math.min(from, to);
-    int high = Math.max(from, to);
-    List<Schema> range = history.stream()
-        .filter(s -> s.getVersion() >= low && s.getVersion() <= high)
-        .collect(Collectors.toList());
-    int maxInterior = schemaRegistry.config().getInt(
-        SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG);
-    if (includeInterior && range.size() > maxInterior) {
-      // Every version of the range is reported, so its size scales with the range's length.
-      throw Errors.provenanceRangeTooLongException("The range from version " + low + " to "
-          + high + " of subject " + subject + " covers " + range.size() + " versions, more than "
-          + maxInterior + " with includeInterior: read it in ranges of at most " + maxInterior
-          + " versions, each starting at the version the previous one ends at");
-    }
     List<Object> key =
         provenanceKey(subject, range, includeMultipleMessages, includeInterior);
     CompletableFuture<Computed> mine = new CompletableFuture<>();
@@ -607,48 +612,137 @@ public class SubjectsResource {
   }
 
   /**
-   * Every version of {@code subject}, soft-deleted ones included, in version order.
+   * The versions of {@code subject} from {@code low} to {@code high}, soft-deleted ones included,
+   * in version order, and none outside them. Over a span no longer than an interior range may
+   * cover, each number is read; over a longer one, only those the subject lists, so that the
+   * numbers no version has are not read one by one. Either end missing is not found.
    */
-  private List<Schema> provenanceHistory(String subject) throws SchemaRegistryException {
-    List<Schema> history = new ArrayList<>();
-    Iterator<SchemaKey> keys = schemaRegistry.getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
-    while (keys.hasNext()) {
-      Schema schema = schemaRegistry.get(subject, keys.next().getVersion(), true);
-      if (schema != null) {
-        history.add(schema);
+  private List<Schema> rangeOf(String subject, int low, int high, boolean includeInterior)
+      throws SchemaRegistryException {
+    int maxInterior = schemaRegistry.config().getInt(
+        SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG);
+    List<Integer> numbers;
+    if (high - low < maxInterior) {
+      numbers = IntStream.rangeClosed(low, high).boxed().collect(Collectors.toList());
+    } else {
+      numbers = new ArrayList<>();
+      Iterator<SchemaKey> keys =
+          schemaRegistry.getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+      while (keys.hasNext()) {
+        int version = keys.next().getVersion();
+        if (version >= low && version <= high) {
+          numbers.add(version);
+        }
+      }
+      if (includeInterior && numbers.size() > maxInterior) {
+        // Every version of the range is reported, so its size scales with the range's length.
+        throw Errors.provenanceRangeTooLongException("The range from version " + low + " to "
+            + high + " of subject " + subject + " covers " + numbers.size() + " versions, more "
+            + "than " + maxInterior + " with includeInterior: read it in ranges of at most "
+            + maxInterior + " versions, each starting at the version the previous one ends at");
       }
     }
-    history.sort(Comparator.comparing(Schema::getVersion));
-    return history;
+    // The ends first, so that a missing one is not found before the interior is read.
+    Schema first = end(subject, low);
+    Schema last = low == high ? first : end(subject, high);
+    List<Schema> range = new ArrayList<>();
+    range.add(first);
+    for (int version : numbers) {
+      if (version > low && version < high) {
+        Schema schema = schemaRegistry.get(subject, version, true);
+        if (schema != null) {
+          range.add(schema);
+        }
+      }
+    }
+    if (last != first) {
+      range.add(last);
+    }
+    return range;
+  }
+
+  private Schema end(String subject, int version) throws SchemaRegistryException {
+    Schema schema = schemaRegistry.get(subject, version, true);
+    if (schema == null) {
+      requireSubject(subject);
+      throw Errors.versionNotFoundException(version);
+    }
+    return schema;
+  }
+
+  /**
+   * The version just before {@code version}, soft-deleted or not, or 0 if none: almost always the
+   * number before it, else the highest the subject lists below it.
+   */
+  private int versionBefore(String subject, int version) throws SchemaRegistryException {
+    if (version <= 1) {
+      return 0;
+    }
+    if (schemaRegistry.getSchemaValue(new SchemaKey(subject, version - 1)) != null) {
+      return version - 1;
+    }
+    int previous = 0;
+    Iterator<SchemaKey> keys = schemaRegistry.getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+    while (keys.hasNext()) {
+      int earlier = keys.next().getVersion();
+      if (earlier < version) {
+        previous = Math.max(previous, earlier);
+      }
+    }
+    return previous;
+  }
+
+  /**
+   * A version number, read with the range, or {@code "latest"}, which means the latest version not
+   * soft-deleted.
+   */
+  private int versionNamed(String subject, String version) throws SchemaRegistryException {
+    VersionId id;
+    try {
+      id = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      requireSubject(subject);
+      throw e;
+    }
+    if (!id.isLatest()) {
+      return id.getVersionId();
+    }
+    Schema latest = schemaRegistry.getLatestVersion(subject);
+    if (latest == null) {
+      requireSubject(subject);
+      throw Errors.versionNotFoundException(id.getVersionId());
+    }
+    return latest.getVersion();
+  }
+
+  /**
+   * The version carrying schema id {@code id}. A schema re-registered after a soft delete can sit
+   * under more than one version; the latest is taken.
+   */
+  private int versionOfId(String subject, int id) throws SchemaRegistryException {
+    List<SubjectVersion> versions = schemaRegistry.listVersionsForId(id, subject, true);
+    OptionalInt version = versions == null ? OptionalInt.empty() : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .mapToInt(SubjectVersion::getVersion)
+        .max();
+    if (!version.isPresent()) {
+      requireSubject(subject);
+      throw Errors.schemaIdNotInSubjectException(id, subject);
+    }
+    return version.getAsInt();
+  }
+
+  // An end not found: the subject's own 404 first, when it has no version at all.
+  private void requireSubject(String subject) throws SchemaRegistryException {
+    if (!schemaRegistry.getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext()) {
+      throw Errors.subjectNotFoundException(subject);
+    }
   }
 
   private static List<SchemaMetadata> provenanceEntries(List<Schema> history) {
     return history.stream()
         .map(SchemaMetadata::new)
         .collect(Collectors.toList());
-  }
-
-  /**
-   * A version number or {@code "latest"}, which means the latest version not soft-deleted.
-   */
-  private static int versionNamed(String version, List<SchemaMetadata> entries)
-      throws InvalidVersionException {
-    VersionId id = new VersionId(version);
-    OptionalInt resolved = id.isLatest()
-        ? ProvenanceHistory.latestVersion(entries)
-        : ProvenanceHistory.version(entries, id.getVersionId());
-    if (!resolved.isPresent()) {
-      throw Errors.versionNotFoundException(id.getVersionId());
-    }
-    return resolved.getAsInt();
-  }
-
-  private static int versionOfId(int id, String subject, List<SchemaMetadata> entries) {
-    OptionalInt version = ProvenanceHistory.versionCarrying(entries, id);
-    if (!version.isPresent()) {
-      throw Errors.schemaIdNotInSubjectException(id, subject);
-    }
-    return version.getAsInt();
   }
 
   private static List<Object> provenanceKey(String subject, List<Schema> history,
