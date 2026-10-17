@@ -229,6 +229,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public void schemaRegistered(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    // An IMPORT overwrite can give this version a different ID; the old one no longer carries it.
+    if (oldSchemaValue != null && !oldSchemaValue.getId().equals(schemaValue.getId())) {
+      removeSubjectVersion(schemaKey, oldSchemaValue.getId());
+    }
     addSubjectVersion(schemaKey, schemaValue.getId());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
