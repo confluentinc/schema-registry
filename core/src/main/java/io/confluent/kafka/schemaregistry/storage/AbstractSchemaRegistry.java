@@ -1097,22 +1097,33 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       Schema schemaEntity = toSchemaEntity(schema);
       logSchemaOp(schemaEntity, "READ");
 
-      SchemaIdAndSubjects schemaIdAndSubjects =
-              this.lookupCache.schemaIdAndSubjects(schemaEntity);
-      if (schemaIdAndSubjects == null) {
-        return null;
-      }
       // Every version of each subject carrying the ID, not only the latest that
       // schemaIdAndSubjects names: a soft-deleted version re-registered keeps the same ID.
+      Map<String, ? extends Set<Integer>> subjectVersions =
+              this.lookupCache.subjectVersionsById(id, subjectVersionKey.getSubject());
+      if (subjectVersions == null) {
+        // A cache that does not index them; each subject's latest, as before.
+        SchemaIdAndSubjects schemaIdAndSubjects =
+                this.lookupCache.schemaIdAndSubjects(schemaEntity);
+        subjectVersions = schemaIdAndSubjects == null ? Collections.emptyMap()
+                : schemaIdAndSubjects.allSubjectVersions().entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> Collections.singleton(e.getValue())));
+      }
+      if (subjectVersions.isEmpty()) {
+        return null;
+      }
       List<SubjectVersion> versions = new ArrayList<>();
-      for (String versionSubject : schemaIdAndSubjects.allSubjectVersions().keySet()) {
-        try (CloseableIterator<SchemaRegistryValue> values = allVersions(versionSubject, false)) {
-          while (values.hasNext()) {
-            SchemaValue schemaValue = (SchemaValue) values.next();
-            if (schemaValue.getId() == schemaIdAndSubjects.getSchemaId()
-                && (!schemaValue.isDeleted() || lookupDeleted)) {
-              versions.add(new SubjectVersion(versionSubject, schemaValue.getVersion()));
+      for (Map.Entry<String, ? extends Set<Integer>> entry : subjectVersions.entrySet()) {
+        for (int version : entry.getValue()) {
+          try {
+            SchemaValue schemaValue =
+                    (SchemaValue) store.get(new SchemaKey(entry.getKey(), version));
+            if (schemaValue != null && (!schemaValue.isDeleted() || lookupDeleted)) {
+              versions.add(new SubjectVersion(entry.getKey(), version));
             }
+          } catch (StoreException e) {
+            // Skipped, as a version that cannot be read always has been.
           }
         }
       }

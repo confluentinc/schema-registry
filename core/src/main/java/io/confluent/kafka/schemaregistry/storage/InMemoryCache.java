@@ -174,6 +174,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Map<String, ? extends Set<Integer>> subjectVersionsById(int id, String subject) {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    return Collections.unmodifiableMap(subjectVersionsOf(ctx, id));
+  }
+
+  @Override
   public Integer idByGuid(String guid, String context) throws StoreException {
     MD5 md5;
     try {
