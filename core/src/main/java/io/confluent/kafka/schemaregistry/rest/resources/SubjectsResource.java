@@ -598,6 +598,10 @@ public class SubjectsResource {
    */
   private List<Schema> rangeOf(String subject, int low, int high, boolean includeInterior)
       throws SchemaRegistryException {
+    // The ends first, so that a missing one is not found, rather than the range too long, and
+    // before the interior is read.
+    final Schema first = end(subject, low);
+    final Schema last = low == high ? first : end(subject, high);
     int maxInterior = schemaRegistry.config().getInt(
         SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG);
     List<Integer> numbers;
@@ -621,9 +625,6 @@ public class SubjectsResource {
             + maxInterior + " versions, each starting at the version the previous one ends at");
       }
     }
-    // The ends first, so that a missing one is not found before the interior is read.
-    Schema first = end(subject, low);
-    Schema last = low == high ? first : end(subject, high);
     List<Schema> range = new ArrayList<>();
     range.add(first);
     for (int version : numbers) {
