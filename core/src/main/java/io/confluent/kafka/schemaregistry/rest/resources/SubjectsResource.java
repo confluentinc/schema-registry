@@ -22,6 +22,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
