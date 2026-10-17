@@ -3061,7 +3061,7 @@ paths:
         \ normalizes it. With compatibilityPolicy=LOGICAL, each version also says\
         \ whether it is a valid backward step from the version just before it under\
         \ LOGICAL, columns paired by provenance, whatever the subject's config, with\
-        \ the errors found."
+        \ the errors found. A version with an earlier version's schema id never is."
       operationId: getProvenance
       parameters:
       - name: subject
@@ -3111,7 +3111,7 @@ paths:
         description: "LOGICAL to say, for each version returned, whether it is a valid\
           \ backward step from the version just before it under that policy, columns\
           \ paired by provenance, whatever the subject's compatibility config, and\
-          \ the errors found"
+          \ the errors found. A version with an earlier version's schema id never is."
         schema:
           type: string
       responses:
@@ -4100,7 +4100,8 @@ components:
           type: boolean
           description: "Whether this version is a valid backward step from the version\
             \ just before it under compatibilityPolicy=LOGICAL, columns paired by provenance,\
-            \ whatever the subject's config; present only when the request names compatibilityPolicy"
+            \ whatever the subject's config, and never if an earlier version has its schema\
+            \ id; present only when the request names compatibilityPolicy"
         messages:
           type: array
           description: "The errors found for this version, as a compatibility check\
