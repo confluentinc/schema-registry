@@ -2334,9 +2334,25 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testVersionsOfAnIdListAKeptSameIdVersion() throws Exception {
+    // v1 soft-deleted and re-registered as v2 with the same ID stays, so with deleted=true the
+    // ID's versions list it too.
+    String subject = "kept";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    int id = restApp.restClient.registerSchema(schema, subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+    assertEquals(id, restApp.restClient.registerSchema(schema, subject));
+
+    assertEquals(Arrays.asList(new SubjectVersion(subject, 1), new SubjectVersion(subject, 2)),
+        restApp.restClient.getAllVersionsById(id, null, true));
+    assertEquals(Collections.singletonList(new SubjectVersion(subject, 2)),
+        restApp.restClient.getAllVersionsById(id, null, false));
+  }
+
+  @Test
   public void testSameIdTombstoneKeepsOnlyTheNewestSoftDeletedVersion() throws Exception {
-    // Re-registration keeps the newest unreferenced soft-deleted version with the same ID
-    // and tombstones older ones, so repeated soft deletes and re-registrations stay bounded.
+    // Re-registration keeps the newest soft-deleted version with the same ID and tombstones
+    // older unreferenced ones, so repeated soft deletes and re-registrations stay bounded.
     String subject = "no_refs";
     restApp.restClient.updateCompatibility(NONE.name, subject);
 
