@@ -174,6 +174,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Map<String, ? extends Set<Integer>> subjectVersionsById(int id, String subject) {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    return Collections.unmodifiableMap(subjectVersionsOf(ctx, id));
+  }
+
+  @Override
   public Integer idByGuid(String guid, String context) throws StoreException {
     MD5 md5;
     try {
@@ -205,6 +211,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     }
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
     removeSubjectVersion(schemaKey, schemaValue.getId());
+    // Another version with this ID has the same content, references included, so it still refers
+    // to them: only the last one removes its ID from the references.
+    if (!subjectVersionsOf(ctx, schemaValue.getId()).isEmpty()) {
+      return;
+    }
     for (SchemaReference ref : schemaValue.getReferences()) {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
