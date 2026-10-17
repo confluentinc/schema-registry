@@ -407,7 +407,7 @@ public class AssociationsResource {
       @ApiResponse(responseCode = "207", description = "The batch get response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
       @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
-          + "batchGet request exceeded a configured association count or payload size limit")
+          + "batchGet request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
@@ -443,7 +443,7 @@ public class AssociationsResource {
       @ApiResponse(responseCode = "207", description = "The batch response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class))),
       @ApiResponse(responseCode = "422", description = "Error code 42213 -- Associations "
-          + "batchMutate request exceeded a configured association count or payload size limit")
+          + "batchMutate request exceeded a configured batch size limit")
   })
   @PerformanceMetric("associations.batch-mutate")
   @DocumentedName("mutateAssociations")

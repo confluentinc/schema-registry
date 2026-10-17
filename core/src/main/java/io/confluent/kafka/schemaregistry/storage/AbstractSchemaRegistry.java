@@ -2878,17 +2878,32 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse batchGetAssociations(
       boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
-    checkAssociationBatchGetLimits(request);
+    checkAssociationBatchGetLimits(includeSchemas, request);
     metricsContainer.getAssociationBatchGetBatchSize().record(request.getRequests().size());
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
       try {
         query.validate();
-        String resourceType = resourceTypeOrDefault(query.getResourceType());
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
         String resourceName = query.getResourceName();
         String resourceNamespace = query.getResourceNamespace();
         String resourceId = query.getResourceId();
-        List<Association> associations = getAssociationsForQuery(query);
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
         if (!associations.isEmpty()) {
           Association first = associations.get(0);
           if (resourceName == null) {
@@ -2951,7 +2966,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         resourceType, associationTypes, query.getLifecycle());
   }
 
-  void checkAssociationBatchGetLimits(AssociationBatchGetRequest request)
+  // The limits apply whatever includeSchemas is set to.
+  void checkAssociationBatchGetLimits(
+      boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
     if (!config().associationBatchGetLimitsEnabled()) {
       return;
@@ -2993,7 +3010,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request)
       throws SchemaRegistryException {
-    checkAssociationBatchMutateLimits(request);
+    checkAssociationBatchLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -3147,7 +3164,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  void checkAssociationBatchMutateLimits(AssociationBatchRequest request)
+  void checkAssociationBatchLimits(AssociationBatchRequest request)
       throws SchemaRegistryException {
     if (!config().associationBatchMutateLimitsEnabled()) {
       return;
