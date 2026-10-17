@@ -180,6 +180,15 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
+   * As {@link #isLogicallyCompatibleByProvenance(String, int)}, given {@code previousVersion}, the
+   * version just before {@code version}, soft-deleted or not, or 0 if none.
+   */
+  default List<String> isLogicallyCompatibleByProvenance(String subject, int version,
+      int previousVersion) throws SchemaRegistryException {
+    return isLogicallyCompatibleByProvenance(subject, version);
+  }
+
+  /**
    * Whether compatibility for {@code subject} is checked against its soft-deleted versions too,
    * as under an effective LOGICAL compatibilityPolicy: a soft-deleted version's records are still
    * read, and the tables LOGICAL protects have applied it.
