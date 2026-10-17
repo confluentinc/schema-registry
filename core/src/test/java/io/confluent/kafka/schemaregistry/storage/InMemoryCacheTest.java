@@ -84,6 +84,23 @@ public class InMemoryCacheTest {
     assertNull(cache.schemaKeyById(7, SUBJECT));
   }
 
+  @Test
+  public void aSoftDeletedOverwriteUnderAnotherIdLeavesTheOldIdItsOtherVersions()
+      throws Exception {
+    // A lagging reader whose overwrite record was compacted away sees it as a soft delete.
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 1, false);
+    put(cache, 2, false);
+
+    SchemaKey key = new SchemaKey(SUBJECT, 2);
+    SchemaValue value = new SchemaValue(SUBJECT, 2, 9, SCHEMA, true);
+    SchemaValue old = (SchemaValue) cache.put(key, value);
+    cache.schemaDeleted(key, value, old);
+
+    assertEquals(new SchemaKey(SUBJECT, 1), cache.schemaKeyById(7, SUBJECT));
+    assertEquals(new SchemaKey(SUBJECT, 2), cache.schemaKeyById(9, SUBJECT));
+  }
+
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {
     InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache =
         new InMemoryCache<>(new SchemaRegistrySerializer());
