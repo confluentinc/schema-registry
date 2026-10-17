@@ -200,6 +200,28 @@ public abstract class RestApiLogicalProvenanceTest {
   }
 
   @Test
+  public void testAFlagOnAVersionRepeatingAnEarlierSchemaIdIsIncompatible() throws Exception {
+    // v=1 soft-deleted and registered again as v=3, with its id, outside LOGICAL; v=3 is a valid
+    // step from v=2. Flagged with the one message, whether v=1 is in the range or not.
+    String subject = "repeated_id";
+    String first = avro(field("e", enumOf("X", "Y")));
+    history(subject, AvroSchema.TYPE, first, avro(field("e", enumOf("X"))));
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+    register(subject, AvroSchema.TYPE, first);
+    for (String from : new String[] {"1", "3"}) {
+      List<ProvenanceVersion> versions = flags(subject, from, "3", true).getVersions();
+      ProvenanceVersion repeated = versions.get(versions.size() - 1);
+      assertEquals(3, repeated.getVersion().intValue());
+      assertFalse(repeated.getCompatible(), repeated.toString());
+      assertEquals(1, repeated.getMessages().size(), repeated.toString());
+      assertTrue(repeated.getMessages().get(0).contains("errorType:\"SCHEMA_ID_REPEATED\""),
+          repeated.toString());
+      assertTrue(repeated.getMessages().get(0).contains("as version 1"), repeated.toString());
+    }
+    assertTrue(flag(subject, 1).getCompatible());
+  }
+
+  @Test
   public void testAFlagPastAnEarlierVersionThatNoLongerParsesIsA42214() throws Exception {
     // v=1 rewritten to name a type that does not exist, as if a reference no longer resolved.
     String subject = "unparseable_earlier";

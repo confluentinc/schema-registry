@@ -269,6 +269,19 @@ public final class LogicalPolicyChecker {
   }
 
   /**
+   * {@code version} carrying the schema id {@code id} of {@code earlierVersion}, in the shape of
+   * the other findings, every mode named.
+   */
+  public static String describeRepeatedId(int version, int id, int earlierVersion) {
+    String modes = Arrays.stream(MODES)
+        .map(mode -> "\"" + mode + "\"")
+        .collect(Collectors.joining(", "));
+    return "{errorType:\"SCHEMA_ID_REPEATED\", category:[" + modes + "], description:\"Version "
+        + version + " has schema id " + id + ", as version " + earlierVersion + " does\", "
+        + "additionalInfo:\"\"}";
+  }
+
+  /**
    * Renders one finding as {@code {errorType:"<rule>", category:["<mode>", ...],
    * description:"<message>", additionalInfo:"<path>"}} -- mirroring the {@code {errorType,
    * description, additionalInfo}} shape the native JSON/Protobuf checks already use (see
