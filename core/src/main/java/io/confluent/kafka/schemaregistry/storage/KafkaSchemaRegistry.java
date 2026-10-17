@@ -626,9 +626,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 + "to generating an ID that is already in use.");
           }
         }
+        // The newest soft-deleted version with the same ID stays, so the history shows the ID
+        // was used before; older ones are tombstoned. deletedVersions is newest first.
+        boolean keptNewest = false;
         for (Schema deleted : deletedVersions) {
           if (deleted.getId().equals(schema.getId())
                   && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
+            if (!keptNewest) {
+              keptNewest = true;
+              continue;
+            }
             SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
             // Skip tombstoning if any schema (including soft-deleted) still references this
             // (subject, version): references resolve by subject+version, not by global ID, so
