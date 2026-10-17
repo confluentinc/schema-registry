@@ -321,6 +321,19 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted) throws
           SchemaRegistryException;
 
+  /**
+   * The latest version of {@code subject} carrying schema id {@code id} itself, soft-deleted or
+   * not, or null if none does.
+   */
+  default Integer latestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, subject, true);
+    return versions == null ? null : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .map(SubjectVersion::getVersion)
+        .max(Integer::compare)
+        .orElse(null);
+  }
+
   int normalizeSubjectVersionLimit(int suppliedLimit);
 
   SchemaString getByGuid(String guid, String format) throws SchemaRegistryException;
