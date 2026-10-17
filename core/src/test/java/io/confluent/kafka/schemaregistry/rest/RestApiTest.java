@@ -2295,10 +2295,9 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testSameIdTombstoneStillRunsWhenNoReferences() throws Exception {
-    // The reference-aware guard must not regress the original optimization: when nothing
-    // (active or soft-deleted) references the same-ID soft-deleted version, it should
-    // still be tombstoned during re-registration.
+  public void testSameIdTombstoneKeepsOnlyTheNewestSoftDeletedVersion() throws Exception {
+    // Re-registration keeps the newest unreferenced soft-deleted version with the same ID
+    // and tombstones older ones, so repeated soft deletes and re-registrations stay bounded.
     String subject = "no_refs";
     restApp.restClient.updateCompatibility(NONE.name, subject);
 
@@ -2319,15 +2318,23 @@ public abstract class RestApiTest {
     int reRegisteredId = restApp.restClient.registerSchema(v2, subject);
     assertEquals(v2Id, reRegisteredId);
 
-    // The old soft-deleted v2 should be gone (tombstoned); only the new v3 remains.
+    // The soft-deleted v2, the only one with its ID, stays beside the new v3.
+    Schema v3 = restApp.restClient.getVersion(subject, 3);
+    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    assertTrue(restApp.restClient.getVersion(subject, 2, true).getDeleted());
+
+    // Again: v3 now stays and the older v2 is tombstoned.
+    assertEquals((Integer) 3, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "3"));
+    assertEquals(v2Id, restApp.restClient.registerSchema(v2, subject));
     try {
       restApp.restClient.getVersion(subject, 2, true);
       fail("Soft-deleted v2 should have been tombstoned when no references exist");
     } catch (RestClientException rce) {
       assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
-    Schema v3 = restApp.restClient.getVersion(subject, 3);
-    assertEquals(Integer.valueOf(v2Id), v3.getId());
+    assertTrue(restApp.restClient.getVersion(subject, 3, true).getDeleted());
+    assertEquals(Integer.valueOf(v2Id), restApp.restClient.getVersion(subject, 4).getId());
     // v1 (different id) should still be soft-deleted and visible with deleted=true.
     Schema v1Deleted = restApp.restClient.getVersion(subject, 1, true);
     assertEquals(Integer.valueOf(v1Id), v1Deleted.getId());

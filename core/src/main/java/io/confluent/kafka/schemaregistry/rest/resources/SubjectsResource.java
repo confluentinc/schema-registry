@@ -52,6 +52,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -348,7 +349,7 @@ public class SubjectsResource {
           + "subject as the registry normalizes it. With compatibilityPolicy=LOGICAL, each version "
           + "also says whether it is a valid backward step from the version just before it under "
           + "LOGICAL, columns paired by provenance, whatever the subject's config, with the errors "
-          + "found.",
+          + "found. A version with an earlier version's schema id never is.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -401,7 +402,7 @@ public class SubjectsResource {
       @Parameter(description = "LOGICAL to say, for each version returned, whether it is a "
           + "valid backward step from the version just before it under that policy, columns "
           + "paired by provenance, whatever the subject's compatibility config, and the errors "
-          + "found")
+          + "found. A version with an earlier version's schema id never is.")
       @QueryParam("compatibilityPolicy") String compatibilityPolicy) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -426,7 +427,7 @@ public class SubjectsResource {
       SchemaProvenance provenance =
           provenanceOf(subject, history, from, to, includeInterior, includeMultipleMessages);
       return compatibilityPolicy == null ? provenance
-          : withCompatibility(subject, provenance);
+          : withCompatibility(subject, history, provenance);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -520,17 +521,33 @@ public class SubjectsResource {
 
   /**
    * {@code provenance}, possibly a cached one and so left unchanged, with each version's verdict
-   * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages.
+   * under LOGICAL by provenance, and at most {@link #MAX_MESSAGES} of its messages. A version with
+   * the schema id of an earlier one in {@code history}, the subject's every version, is
+   * incompatible, its one message saying so.
    */
-  private SchemaProvenance withCompatibility(String subject, SchemaProvenance provenance)
-      throws SchemaRegistryException {
+  private SchemaProvenance withCompatibility(String subject, List<Schema> history,
+      SchemaProvenance provenance) throws SchemaRegistryException {
+    Map<Integer, Integer> previousVersions = new HashMap<>();
+    Map<Integer, Integer> firstVersions = new HashMap<>();
+    int previous = 0;
+    for (Schema schema : history) {
+      previousVersions.put(schema.getVersion(), previous);
+      firstVersions.putIfAbsent(schema.getId(), schema.getVersion());
+      previous = schema.getVersion();
+    }
+    // Every version returned is in history, as its range was taken from it.
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
       ProvenanceVersion flagged = new ProvenanceVersion(version.getVersion(), version.getId(),
           version.getKind(), version.getFields());
+      int first = firstVersions.get(version.getId());
       List<String> messages;
       try {
-        messages = schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion());
+        messages = first < version.getVersion()
+            ? List.of(LogicalPolicyChecker.describeRepeatedId(version.getVersion(),
+                version.getId(), first))
+            : schemaRegistry.isLogicallyCompatibleByProvenance(subject, version.getVersion(),
+                previousVersions.get(version.getVersion()));
       } catch (InvalidSchemaException e) {
         // An earlier version that no longer parses, outside the range: 42214, as when in it.
         throw Errors.unresolvableReferenceException(e.getMessage());
