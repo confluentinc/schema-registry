@@ -1127,6 +1127,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  // Looked up by the ID itself, not its content's hash, and in the subject alone.
+  @Override
+  public Integer latestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    try {
+      SchemaKey key = lookupCache.schemaKeyById(id, subject);
+      return key != null && key.getSubject().equals(subject) ? key.getVersion() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+              + id + " from the backend Kafka store", e);
+    }
+  }
+
   private CloseableIterator<SchemaRegistryValue> allConfigs(
           String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);

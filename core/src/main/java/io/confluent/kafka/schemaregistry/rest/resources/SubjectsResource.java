@@ -17,13 +17,11 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.type.logical.provenance.AmbiguousProvenanceException;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
-import java.util.OptionalInt;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
@@ -701,16 +699,12 @@ public class SubjectsResource {
    * under more than one version; the latest is taken.
    */
   private int versionOfId(String subject, int id) throws SchemaRegistryException {
-    List<SubjectVersion> versions = schemaRegistry.listVersionsForId(id, subject, true);
-    OptionalInt version = versions == null ? OptionalInt.empty() : versions.stream()
-        .filter(v -> v.getSubject().equals(subject))
-        .mapToInt(SubjectVersion::getVersion)
-        .max();
-    if (!version.isPresent()) {
+    Integer version = schemaRegistry.latestVersionWithId(id, subject);
+    if (version == null) {
       requireSubject(subject);
       throw Errors.schemaIdNotInSubjectException(id, subject);
     }
-    return version.getAsInt();
+    return version;
   }
 
   // An end not found: the subject's own 404 first, when it has no version at all.

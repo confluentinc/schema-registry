@@ -190,6 +190,34 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aSchemaIdEndIsTheVersionCarryingThatIdItself() throws Exception {
+    // Imported under two IDs, the same content hashes to one of them; each end must keep its own.
+    String avro = record(field("id", "int"));
+    restApp.restClient.setMode("IMPORT", SUBJECT);
+    restApp.restClient.registerSchema(avro, SUBJECT, 1, 100);
+    restApp.restClient.registerSchema(avro, SUBJECT, 2, 200);
+    restApp.restClient.setMode("READWRITE", SUBJECT);
+
+    SchemaProvenance provenance = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false, false);
+    assertEquals(Arrays.asList(1, 2), versions(provenance));
+    assertEquals(Arrays.asList(100, 200), schemaIds(provenance));
+  }
+
+  @Test
+  public void aSchemaIdSharedWithAnotherSubjectIsThisSubjectsVersion() throws Exception {
+    register("other-value", record(field("x", "string")));
+    register("other-value", record(field("id", "int")));
+    // The same ID is version 2 of the other subject and version 1 of this one.
+    int shared = register(SUBJECT, record(field("id", "int")));
+    int id = register(SUBJECT, record(field("id", "int"), field("name", "string")));
+
+    SchemaProvenance provenance = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, shared, id, false, false);
+    assertEquals(Arrays.asList(1, 2), versions(provenance));
+  }
+
+  @Test
   public void latestSkipsASoftDeletedLatestVersion() throws Exception {
     register(SUBJECT, record(field("id", "int")));
     register(SUBJECT, record(field("id", "int"), field("name", "string")));

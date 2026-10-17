@@ -32,7 +32,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -88,16 +87,17 @@ class SubjectsResourceProvenanceLoadTest {
   }
 
   @Test
-  void aSchemaIdEndIsResolvedThroughTheIdIndex() throws Exception {
+  void aSchemaIdEndIsResolvedInTheSubjectAlone() throws Exception {
     stub(3, 4);
-    when(registry.listVersionsForId(103, SUBJECT, true)).thenReturn(Arrays.asList(
-        new SubjectVersion("other", 7), new SubjectVersion(SUBJECT, 3)));
+    when(registry.latestVersionWithId(103, SUBJECT)).thenReturn(3);
     when(registry.getLatestVersion(SUBJECT)).thenReturn(schema(4));
 
     SchemaProvenance provenance =
         resource.getProvenance(SUBJECT, null, "latest", 103, null, false, false, null);
 
+    // Other subjects sharing the ID are never read.
     assertEquals(Arrays.asList(3, 4), versionsOf(provenance));
+    verify(registry, never()).listVersionsForId(anyInt(), any(), anyBoolean());
     verify(registry, never()).getAllVersions(any(), any());
   }
 
