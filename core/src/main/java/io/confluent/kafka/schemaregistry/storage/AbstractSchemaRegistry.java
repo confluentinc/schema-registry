@@ -123,7 +123,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
@@ -1107,24 +1106,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (schemaIdAndSubjects == null) {
         return null;
       }
-      return schemaIdAndSubjects
-              .allSubjectVersions()
-              .entrySet()
-              .stream()
-              .flatMap(e -> {
-                try {
-                  SchemaValue schemaValue =
-                          (SchemaValue) store.get(new SchemaKey(e.getKey(), e.getValue()));
-                  if (schemaValue != null && (!schemaValue.isDeleted() || lookupDeleted)) {
-                    return Stream.of(new SubjectVersion(e.getKey(), e.getValue()));
-                  } else {
-                    return Stream.empty();
-                  }
-                } catch (StoreException ex) {
-                  return Stream.empty();
-                }
-              })
-              .collect(Collectors.toList());
+      // Every version of each subject carrying the ID, not only the latest that
+      // schemaIdAndSubjects names: a soft-deleted version re-registered keeps the same ID.
+      List<SubjectVersion> versions = new ArrayList<>();
+      for (String versionSubject : schemaIdAndSubjects.allSubjectVersions().keySet()) {
+        try (CloseableIterator<SchemaRegistryValue> values = allVersions(versionSubject, false)) {
+          while (values.hasNext()) {
+            SchemaValue schemaValue = (SchemaValue) values.next();
+            if (schemaValue.getId() == schemaIdAndSubjects.getSchemaId()
+                && (!schemaValue.isDeleted() || lookupDeleted)) {
+              versions.add(new SubjectVersion(versionSubject, schemaValue.getVersion()));
+            }
+          }
+        }
+      }
+      return versions;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
               + id + " from the backend Kafka store", e);
