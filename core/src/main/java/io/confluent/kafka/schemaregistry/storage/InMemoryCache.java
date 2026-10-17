@@ -192,6 +192,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+    unindexReplacedId(schemaKey, schemaValue, oldSchemaValue);
     addSubjectVersion(schemaKey, schemaValue.getId());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
@@ -229,10 +230,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public void schemaRegistered(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    // An IMPORT overwrite can give this version a different ID; the old one no longer carries it.
-    if (oldSchemaValue != null && !oldSchemaValue.getId().equals(schemaValue.getId())) {
-      removeSubjectVersion(schemaKey, oldSchemaValue.getId());
-    }
+    unindexReplacedId(schemaKey, schemaValue, oldSchemaValue);
     addSubjectVersion(schemaKey, schemaValue.getId());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
@@ -246,6 +244,15 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       Set<ContextId> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
       ids.add(new ContextId(ctx, schemaValue.getId()));
+    }
+  }
+
+  // An IMPORT overwrite can give this version a different ID, seen as a registration or, when
+  // compaction removed the overwrite before a lagging reader saw it, a soft delete.
+  private void unindexReplacedId(SchemaKey schemaKey, SchemaValue schemaValue,
+      SchemaValue oldSchemaValue) {
+    if (oldSchemaValue != null && !oldSchemaValue.getId().equals(schemaValue.getId())) {
+      removeSubjectVersion(schemaKey, oldSchemaValue.getId());
     }
   }
 
