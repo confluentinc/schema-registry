@@ -2946,20 +2946,51 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  private void checkAssociationBatchGetLimits(
+  private static String resourceTypeOrDefault(String resourceType) {
+    return resourceType == null || resourceType.isEmpty() ? "topic" : resourceType;
+  }
+
+  private List<Association> getAssociationsForQuery(AssociationGetRequest query)
+      throws SchemaRegistryException {
+    String resourceType = resourceTypeOrDefault(query.getResourceType());
+    List<String> associationTypes = query.getAssociationTypes() != null
+        ? query.getAssociationTypes()
+        : Collections.emptyList();
+    String resourceId = query.getResourceId();
+    if (resourceId != null && !resourceId.isEmpty()) {
+      return getAssociationsByResourceId(
+          resourceId, resourceType, associationTypes, query.getLifecycle());
+    }
+    return getAssociationsByResourceName(
+        query.getResourceName(), query.getResourceNamespace(),
+        resourceType, associationTypes, query.getLifecycle());
+  }
+
+  // The limits apply whatever includeSchemas is set to.
+  void checkAssociationBatchGetLimits(
       boolean includeSchemas, AssociationBatchGetRequest request)
-      throws AssociationBatchLimitExceededException {
-    if (!includeSchemas || !config().associationBatchGetLimitsEnabled()) {
+      throws SchemaRegistryException {
+    if (!config().associationBatchGetLimitsEnabled()) {
       return;
     }
-    // batchSize is defined as the number of topics (resource entries) in the request; a single
-    // topic may request both a key and a value association without counting as two topics.
-    int numTopics = request.getRequests().size();
-    int maxNum = config().maxAssociationNumPerGetBatch();
-    if (numTopics > maxNum) {
+    long requestPayloadBytes = jsonPayloadSize(request);
+    long maxBatchBytes = config().maxAssociationGetBatchPayloadBytes();
+    if (requestPayloadBytes > maxBatchBytes) {
       throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchGet request has %d topics, exceeding the configured maximum of %d"
-              + " topics per batch when includeSchemas is true", numTopics, maxNum));
+          "Associations batchGet request has a payload size of %d bytes, exceeding the"
+              + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
+    }
+
+    // Only associations that exist count, and the lookups stop as soon as the limit is passed.
+    int maxNum = config().maxAssociationNumPerGetBatch();
+    int numAssociations = 0;
+    for (AssociationGetRequest query : request.getRequests()) {
+      numAssociations += getAssociationsForQuery(query).size();
+      if (numAssociations > maxNum) {
+        throw new AssociationBatchLimitExceededException(String.format(
+            "Associations batchGet request retrieves at least %d associations, exceeding the"
+                + " configured maximum of %d associations per batch", numAssociations, maxNum));
+      }
     }
   }
 
@@ -2978,7 +3009,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request)
-      throws AssociationBatchLimitExceededException {
+      throws SchemaRegistryException {
     checkAssociationBatchLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
@@ -3133,82 +3164,72 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  private void checkAssociationBatchLimits(AssociationBatchRequest request)
-      throws AssociationBatchLimitExceededException {
+  void checkAssociationBatchLimits(AssociationBatchRequest request)
+      throws SchemaRegistryException {
     if (!config().associationBatchMutateLimitsEnabled()) {
       return;
     }
-
-    boolean hasInlineSchema = false;
-    for (AssociationOpRequest req : request.getRequests()) {
-      List<? extends AssociationOp> ops = req.getAssociations();
-      if (ops == null) {
-        continue;
-      }
-      for (AssociationOp op : ops) {
-        if (op instanceof AssociationCreateOrUpdateOp
-            && ((AssociationCreateOrUpdateOp) op).getSchema() != null) {
-          hasInlineSchema = true;
-        }
-      }
-    }
-
-    // No inline schema anywhere in the batch means no schema payload to bound, so none of the
-    // limits below apply, regardless of how many topics or associations are in the request.
-    if (!hasInlineSchema) {
-      return;
-    }
-
-    // batchSize is defined as the number of topics (resource entries) in the request, not the
-    // number of individual association ops; a single topic may carry both a key and a value
-    // association without counting as two topics.
-    List<AssociationOpRequest> reqs = request.getRequests();
-    int numTopics = reqs.size();
-    int maxNum = config().maxAssociationNumPerMutateBatch();
-    if (numTopics > maxNum) {
-      throw new AssociationBatchLimitExceededException(String.format(
-          "Associations batchMutate request has %d topics, exceeding the configured maximum"
-              + " of %d topics per batch when any association in the batch carries an inline"
-              + " schema", numTopics, maxNum));
-    }
-
-    // Check the most granular thing first: each individual association's inline schema payload
-    // (including references, metadata, etc., i.e. the whole RegisterSchemaRequest) against the
-    // per-association limit, so a violation names the exact offending association.
-    long maxEntryBytes = config().maxAssociationMutateEntryPayloadBytes();
-    for (int i = 0; i < reqs.size(); i++) {
-      AssociationOpRequest req = reqs.get(i);
-      List<? extends AssociationOp> ops = req.getAssociations();
-      if (ops == null) {
-        continue;
-      }
-      for (AssociationOp op : ops) {
-        if (!(op instanceof AssociationCreateOrUpdateOp)) {
-          continue;
-        }
-        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
-        RegisterSchemaRequest schema = createOrUpdateOp.getSchema();
-        if (schema == null) {
-          continue;
-        }
-        long schemaPayloadBytes = jsonPayloadSize(schema);
-        if (schemaPayloadBytes > maxEntryBytes) {
-          throw new AssociationBatchLimitExceededException(String.format(
-              "The '%s' association's schema for resourceId '%s' (topic %d of %d in the"
-                  + " Associations batchMutate request) has a payload size of %d bytes,"
-                  + " exceeding the configured maximum of %d bytes per association schema",
-              createOrUpdateOp.getAssociationType(), req.getResourceId(), i + 1, reqs.size(),
-              schemaPayloadBytes, maxEntryBytes));
-        }
-      }
-    }
-
     long requestPayloadBytes = jsonPayloadSize(request);
     long maxBatchBytes = config().maxAssociationMutateBatchPayloadBytes();
     if (requestPayloadBytes > maxBatchBytes) {
       throw new AssociationBatchLimitExceededException(String.format(
           "Associations batchMutate request has a payload size of %d bytes, exceeding the"
               + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
+    }
+
+    // CREATE and UPSERT counts need no cache lookups, so they are checked before any DELETE is
+    // looked up.
+    checkMutateOpCount(request, OpType.CREATE, config().maxAssociationNumCreatePerMutateBatch());
+    checkMutateOpCount(request, OpType.UPSERT, config().maxAssociationNumUpsertPerMutateBatch());
+
+    // Only DELETEs of associations that exist count, and the lookups stop as soon as the limit
+    // is passed.
+    int maxDeletes = config().maxAssociationNumDeletePerMutateBatch();
+    int numDeletes = 0;
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null || req.getAssociations() == null) {
+        continue;
+      }
+      for (AssociationOp op : req.getAssociations()) {
+        if (!(op instanceof AssociationDeleteOp)) {
+          continue;
+        }
+        String associationType = ((AssociationDeleteOp) op).getAssociationType();
+        // Same default AssociationDeleteOp.validate() applies before the delete runs.
+        if (associationType == null || associationType.isEmpty()) {
+          associationType = "value";
+        }
+        numDeletes += getAssociationsByResourceId(
+            req.getResourceId(), resourceTypeOrDefault(req.getResourceType()),
+            Collections.singletonList(associationType), null).size();
+        if (numDeletes > maxDeletes) {
+          throw new AssociationBatchLimitExceededException(String.format(
+              "Associations batchMutate request has at least %d DELETE operations on existing"
+                  + " associations, exceeding the configured maximum of %d DELETE operations"
+                  + " per batch", numDeletes, maxDeletes));
+        }
+      }
+    }
+  }
+
+  private static void checkMutateOpCount(
+      AssociationBatchRequest request, OpType opType, int maxOps)
+      throws AssociationBatchLimitExceededException {
+    int numOps = 0;
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null || req.getAssociations() == null) {
+        continue;
+      }
+      for (AssociationOp op : req.getAssociations()) {
+        if (op.getType() == opType) {
+          numOps++;
+        }
+      }
+    }
+    if (numOps > maxOps) {
+      throw new AssociationBatchLimitExceededException(String.format(
+          "Associations batchMutate request has %d %s operations, exceeding the configured"
+              + " maximum of %d %s operations per batch", numOps, opType, maxOps, opType));
     }
   }
 
