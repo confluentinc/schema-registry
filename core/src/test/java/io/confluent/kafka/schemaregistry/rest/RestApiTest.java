@@ -2350,6 +2350,20 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testVersionsOfAnIdAreOrderedBySubjectThenVersion() throws Exception {
+    // Registered in reverse order across enough subjects that no map order sorts them by chance.
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    List<SubjectVersion> expected = new ArrayList<>();
+    int id = -1;
+    for (int i = 9; i >= 0; i--) {
+      id = restApp.restClient.registerSchema(schema, "shared-" + i);
+      expected.add(0, new SubjectVersion("shared-" + i, 1));
+    }
+
+    assertEquals(expected, restApp.restClient.getAllVersionsById(id, null, false));
+  }
+
+  @Test
   public void testSameIdTombstoneKeepsOnlyTheNewestSoftDeletedVersion() throws Exception {
     // Re-registration keeps the newest soft-deleted version with the same ID and tombstones
     // older unreferenced ones, so repeated soft deletes and re-registrations stay bounded.

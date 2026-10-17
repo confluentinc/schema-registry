@@ -1127,6 +1127,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           }
         }
       }
+      // By subject, then version, whatever order the cache's map iterates in.
+      Collections.sort(versions);
       return versions;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
