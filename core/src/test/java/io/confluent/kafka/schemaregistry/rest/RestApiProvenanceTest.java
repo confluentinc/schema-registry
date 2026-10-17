@@ -156,6 +156,19 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aMissingEndIsNotFoundBeforeTheRangeIsTooLong() throws Exception {
+    // Four versions exceed the cap of 3, but the end named is not one of them.
+    register(SUBJECT, record(field("a", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int"), field("c", "int")));
+    register(SUBJECT, record(field("a", "int"), field("b", "int"), field("c", "int"),
+        field("d", "int")));
+
+    assertError(404, Errors.VERSION_NOT_FOUND_ERROR_CODE,
+        () -> byVersion(SUBJECT, "1", "9", true));
+  }
+
+  @Test
   public void aRangeIsComputedFromItsOwnFirstVersion() throws Exception {
     register(SUBJECT, record(field("a", "int")));
     register(SUBJECT, record(field("a", "int"), field("b", "int")));
