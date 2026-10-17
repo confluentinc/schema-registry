@@ -1146,6 +1146,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  // As latestVersionWithId; a cache that does not index every version reads them the default way.
+  @Override
+  public Integer earliestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    Map<String, ? extends Set<Integer>> subjectVersions;
+    try {
+      subjectVersions = lookupCache.subjectVersionsById(id, subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+              + id + " from the backend Kafka store", e);
+    }
+    if (subjectVersions == null) {
+      return SchemaRegistry.super.earliestVersionWithId(id, subject);
+    }
+    Set<Integer> versions = subjectVersions.get(subject);
+    return versions == null ? null : versions.stream().min(Integer::compare).orElse(null);
+  }
+
   private CloseableIterator<SchemaRegistryValue> allConfigs(
           String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);

@@ -16,7 +16,9 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -72,6 +74,8 @@ class SubjectsResourceProvenanceLoadTest {
     // Any version not stubbed fails the request, so reading it is caught.
     when(registry.get(eq(SUBJECT), anyInt(), anyBoolean()))
         .thenThrow(new SchemaRegistryStoreException("read outside the range"));
+    // No earlier version with any ID unless a test says so; a mock's Integer would be 0.
+    when(registry.earliestVersionWithId(anyInt(), any())).thenReturn(null);
     resource = new SubjectsResource(registry);
   }
 
@@ -147,6 +151,26 @@ class SubjectsResourceProvenanceLoadTest {
 
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 3, 1);
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 4, 3);
+  }
+
+  @Test
+  void theRepeatedIdCheckLooksInTheSubjectAlone() throws Exception {
+    stub(2, 3);
+    when(registry.getSchemaValue(new SchemaKey(SUBJECT, 1))).thenReturn(value(1));
+    // v3's schema id was first used by v1, outside the range.
+    when(registry.earliestVersionWithId(102, SUBJECT)).thenReturn(2);
+    when(registry.earliestVersionWithId(103, SUBJECT)).thenReturn(1);
+    when(registry.isLogicallyCompatibleByProvenance(eq(SUBJECT), anyInt(), anyInt()))
+        .thenReturn(Collections.emptyList());
+
+    List<ProvenanceVersion> flagged = resource
+        .getProvenance(SUBJECT, "2", "3", null, null, true, false, "LOGICAL").getVersions();
+
+    assertTrue(flagged.get(0).getCompatible());
+    assertFalse(flagged.get(1).getCompatible());
+    assertTrue(flagged.get(1).getMessages().get(0).contains("SCHEMA_ID_REPEATED"));
+    verify(registry, never()).isLogicallyCompatibleByProvenance(SUBJECT, 3, 2);
+    verify(registry, never()).listVersionsForId(anyInt(), any(), anyBoolean());
   }
 
   @Test
