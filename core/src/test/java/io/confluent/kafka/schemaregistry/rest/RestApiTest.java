@@ -2292,6 +2292,45 @@ public abstract class RestApiTest {
     List<Integer> refs = restApp.restClient.getReferencedBy(userSubject, 2, true);
     assertTrue(refs.contains(orderId),
         "Soft-deleted referrer should still be reported as a reference of user v2");
+
+    // Again: v3 is now the newest soft-deleted version with the ID and stays; the older v2
+    // stays only because it is still referenced.
+    assertEquals((Integer) 3, restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, userSubject, "3"));
+    assertEquals(userV2Id, restApp.restClient.registerSchema(userV2, userSubject));
+    assertEquals(Integer.valueOf(userV2Id), restApp.restClient.getVersion(userSubject, 4).getId());
+    assertTrue(restApp.restClient.getVersion(userSubject, 3, true).getDeleted());
+    assertTrue(restApp.restClient.getVersion(userSubject, 2, true).getDeleted());
+  }
+
+  @Test
+  public void testHardDeletingAKeptSameIdVersionKeepsTheReferencesOfTheOther() throws Exception {
+    // referrer v1 references base v1; soft-deleted and re-registered as v2 with the same ID, v1
+    // stays. Hard-deleting v1 must leave the ID among base v1's references, as v2 still has it.
+    String baseSubject = "base";
+    String referrerSubject = "referrer";
+    restApp.restClient.registerSchema("{\"type\":\"record\",\"name\":\"Base\",\"namespace\":"
+        + "\"ns\",\"fields\":[{\"name\":\"id\",\"type\":\"long\"}]}", baseSubject);
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema("{\"type\":\"record\",\"name\":\"Referrer\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"base\",\"type\":\"ns.Base\"}]}");
+    request.setReferences(Collections.singletonList(
+        new SchemaReference("ns.Base", baseSubject, 1)));
+    int referrerId = restApp.restClient.registerSchema(request, referrerSubject, false).getId();
+
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, referrerSubject, "1");
+    assertEquals(referrerId,
+        restApp.restClient.registerSchema(request, referrerSubject, false).getId());
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, referrerSubject, "1", true);
+
+    assertEquals(Collections.singletonList(referrerId),
+        restApp.restClient.getReferencedBy(baseSubject, 1));
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, baseSubject, "1"));
+    assertEquals(Errors.REFERENCE_EXISTS_ERROR_CODE, e.getErrorCode());
   }
 
   @Test
