@@ -222,6 +222,16 @@ public abstract class RestApiLogicalProvenanceTest {
   }
 
   @Test
+  public void testAFlagIgnoresAnotherSubjectsEarlierVersionWithTheSameSchemaId()
+      throws Exception {
+    // The same schema, and so the same id, is version 2 of the other subject and version 1 here.
+    String shared = avro(field("e", enumOf("X", "Y")));
+    history("other_subject", AvroSchema.TYPE, avro(field("e", enumOf("X"))), shared);
+    register("shared_id", AvroSchema.TYPE, shared);
+    assertTrue(flag("shared_id", 1).getCompatible());
+  }
+
+  @Test
   public void testAFlagPastAnEarlierVersionThatNoLongerParsesIsA42214() throws Exception {
     // v=1 rewritten to name a type that does not exist, as if a reference no longer resolved.
     String subject = "unparseable_earlier";

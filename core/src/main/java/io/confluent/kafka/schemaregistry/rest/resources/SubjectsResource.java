@@ -22,7 +22,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
@@ -552,12 +551,8 @@ public class SubjectsResource {
   // if no earlier one does.
   private int firstVersionWithId(String subject, int id, int version)
       throws SchemaRegistryException {
-    List<SubjectVersion> versions = schemaRegistry.listVersionsForId(id, subject, true);
-    return versions == null ? version : versions.stream()
-        .filter(v -> v.getSubject().equals(subject))
-        .mapToInt(SubjectVersion::getVersion)
-        .min()
-        .orElse(version);
+    Integer earliest = schemaRegistry.earliestVersionWithId(id, subject);
+    return earliest == null ? version : earliest;
   }
 
   // The first MAX_MESSAGES - 1 messages and a count of the rest, when there are more.
