@@ -224,11 +224,12 @@ public abstract class RestApiLogicalProvenanceTest {
   @Test
   public void testAFlagIgnoresAnotherSubjectsEarlierVersionWithTheSameSchemaId()
       throws Exception {
-    // The same schema, and so the same id, is version 2 of the other subject and version 1 here.
+    // The same schema, and so the same id, is version 1 of the other subject and version 2 here;
+    // only an id lookup leaking across subjects would flag version 2.
     String shared = avro(field("e", enumOf("X", "Y")));
-    history("other_subject", AvroSchema.TYPE, avro(field("e", enumOf("X"))), shared);
-    register("shared_id", AvroSchema.TYPE, shared);
-    assertTrue(flag("shared_id", 1).getCompatible());
+    history("other_subject", AvroSchema.TYPE, shared);
+    history("shared_id", AvroSchema.TYPE, avro(field("e", enumOf("X"))), shared);
+    assertTrue(flag("shared_id", 2).getCompatible());
   }
 
   @Test
