@@ -473,6 +473,14 @@ public abstract class RestApiTest {
               schemaString, ProtobufSchema.TYPE, Collections.emptyList(), subject));
       assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
+
+    // normalizing drops the default proto2 syntax line
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema("syntax = \"proto2\";");
+    request.setSchemaType(ProtobufSchema.TYPE);
+    RestClientException rce = assertThrows(RestClientException.class,
+        () -> restApp.restClient.registerSchema(request, subject, true));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     assertEquals(Collections.emptyList(), restApp.restClient.getAllSubjects());
 
     registerAndVerifySchema(
@@ -494,6 +502,10 @@ public abstract class RestApiTest {
         () -> restApp.restClient.testCompatibility("// just a comment", ProtobufSchema.TYPE,
             Collections.emptyList(), subject, "latest", false));
     assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+
+    assertEquals(Collections.singletonList("Empty schema"),
+        restApp.restClient.testCompatibility("// just a comment", ProtobufSchema.TYPE,
+            Collections.emptyList(), subject, null, true));
   }
 
   @Test
