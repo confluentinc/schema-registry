@@ -49,6 +49,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -373,10 +374,15 @@ public class AsyncRestService implements Closeable {
                                                byte[] requestBodyData,
                                                TypeReference<T> responseFormat) {
     // Started on the executor, as resolving the auth headers may fetch a token over the network
-    return CompletableFuture.supplyAsync(
-            () -> httpRequestWithFailover(0, path, method, requestBodyData, responseFormat),
-            executor)
-        .thenCompose(Function.identity());
+    try {
+      return CompletableFuture.supplyAsync(
+              () -> httpRequestWithFailover(0, path, method, requestBodyData, responseFormat),
+              executor)
+          .thenCompose(Function.identity());
+    } catch (RejectedExecutionException e) {
+      // supplyAsync throws to the caller, but the future is what reports failure
+      return CompletableFuture.failedFuture(e);
+    }
   }
 
   private <T> CompletableFuture<T> httpRequestWithFailover(int urlAttempt,
@@ -393,13 +399,17 @@ public class AsyncRestService implements Closeable {
             return CompletableFuture.completedFuture(result);
           }
           Throwable cause = unwrap(error);
-          if (isNonRetriableException(cause) || urlAttempt >= baseUrls.size() - 1) {
+          if (isNonRetriableException(cause)) {
             return CompletableFuture.<T>failedFuture(cause);
           }
           log.warn("Request to URL {} failed with error: {}. "
                   + "Failing over to next URL if available...",
               requestUrl, cause.toString());
+          // As in RestService, so that after every URL fails the index is back where it began
           baseUrls.fail(baseUrl);
+          if (urlAttempt >= baseUrls.size() - 1) {
+            return CompletableFuture.<T>failedFuture(cause);
+          }
           return httpRequestWithFailover(
               urlAttempt + 1, path, method, requestBodyData, responseFormat);
         }, executor)
@@ -424,10 +434,12 @@ public class AsyncRestService implements Closeable {
           long delayMs = retryExecutor.computeDelayBeforeNextRetry(attempt).toMillis();
           log.debug("Retriable error on attempt {}/{}: {}. Retrying in {} ms...",
               attempt + 1, maxRetries + 1, cause.toString(), delayMs);
+          // The delay hands off to the executor in a stage, as a rejection submitted from the
+          // delay scheduler itself would be lost and leave the future incomplete
           Executor delayed = CompletableFuture.delayedExecutor(
-              delayMs, TimeUnit.MILLISECONDS, executor);
+              delayMs, TimeUnit.MILLISECONDS, Runnable::run);
           return CompletableFuture.runAsync(() -> { }, delayed)
-              .thenCompose(ignored -> sendWithRetries(attempt + 1, send));
+              .thenComposeAsync(ignored -> sendWithRetries(attempt + 1, send), executor);
         }, executor)
         .thenCompose(Function.identity());
   }
