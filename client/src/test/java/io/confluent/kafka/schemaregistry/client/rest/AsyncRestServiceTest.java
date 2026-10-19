@@ -52,6 +52,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
@@ -208,7 +209,7 @@ public class AsyncRestServiceTest {
   public void testFailsOverToNextUrlOnConnectionError() throws Exception {
     registry.enqueue(200, "{\"schema\": \"\\\"string\\\"\"}");
     String deadUrl = "http://127.0.0.1:" + unusedPort();
-    restService = newRestService(Collections.emptyMap(), deadUrl, registry.url());
+    restService = newRestService(retries(0), deadUrl, registry.url());
 
     SchemaString result = await(restService.getId(1, null));
 
@@ -216,6 +217,31 @@ public class AsyncRestServiceTest {
     assertEquals(1, registry.requests.size());
     // The dead URL is moved past, so later requests go straight to the live one
     assertEquals(registry.url(), restService.getBaseUrls().current());
+  }
+
+  @Test
+  public void testIndexIsRestoredWhenEveryUrlFails() throws Exception {
+    String firstUrl = "http://127.0.0.1:" + unusedPort();
+    String secondUrl = "http://127.0.0.1:" + unusedPort();
+    restService = newRestService(retries(0), firstUrl, secondUrl);
+
+    awaitFailure(restService.getId(1, null), IOException.class);
+
+    // As with the synchronous client, the next request starts where this one did
+    assertEquals(firstUrl, restService.getBaseUrls().current());
+  }
+
+  @Test
+  public void testRejectedExecutionFailsTheFuture() throws Exception {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    restService = new AsyncRestService(new UrlList(registry.url()), Collections.emptyMap(),
+        null, null, null, executor);
+    executor.shutdownNow();
+
+    CompletableFuture<SchemaString> future = restService.getId(1, null);
+
+    awaitFailure(future, RejectedExecutionException.class);
+    assertEquals(0, registry.requests.size());
   }
 
   @Test
@@ -314,6 +340,29 @@ public class AsyncRestServiceTest {
       assertEquals("Bearer token", registry.onlyRequest().headers.get("Authorization"));
     } finally {
       executor.shutdownNow();
+    }
+  }
+
+  @Test
+  public void testRejectedExecutionDuringRetryBackoffFailsTheFuture() throws Exception {
+    registry.enqueue(500, "{\"error_code\": 50001, \"message\": \"boom\"}");
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    // Rejects what the JDK's delay scheduler submits, as a shut-down executor would
+    Executor executor = task -> {
+      if (Thread.currentThread().getName().contains("Delay")) {
+        throw new RejectedExecutionException("shut down");
+      }
+      pool.execute(task);
+    };
+    try {
+      restService = new AsyncRestService(new UrlList(registry.url()), retries(1),
+          null, null, null, executor);
+
+      awaitFailure(restService.getId(1, null), RejectedExecutionException.class);
+
+      assertEquals(1, registry.requests.size());
+    } finally {
+      pool.shutdownNow();
     }
   }
 
