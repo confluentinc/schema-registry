@@ -435,9 +435,9 @@ public class AsyncRestService implements Closeable {
           log.debug("Retriable error on attempt {}/{}: {}. Retrying in {} ms...",
               attempt + 1, maxRetries + 1, cause.toString(), delayMs);
           // The delay hands off to the executor in a stage, as a rejection submitted from the
-          // delay scheduler itself would be lost and leave the future incomplete
-          Executor delayed = CompletableFuture.delayedExecutor(
-              delayMs, TimeUnit.MILLISECONDS, Runnable::run);
+          // delay scheduler itself would be lost. The no-op runs on the default executor so that
+          // a rejection then fails callbacks there, not on the JVM's shared delay scheduler.
+          Executor delayed = CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS);
           return CompletableFuture.runAsync(() -> { }, delayed)
               .thenComposeAsync(ignored -> sendWithRetries(attempt + 1, send), executor);
         }, executor)
