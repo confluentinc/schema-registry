@@ -484,6 +484,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       int schemaId = schema.getId();
       boolean doValidation = schemaId < 0 && isSchemaNewSchemaValidationEnabled(config);
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
+      // A stored version must have a body
+      if (parsedSchema == null) {
+        throw new InvalidSchemaException("Empty schema");
+      }
 
       if (parsedSchema != null) {
         validateReferencesNotStronglyAssociated(subject, schema);

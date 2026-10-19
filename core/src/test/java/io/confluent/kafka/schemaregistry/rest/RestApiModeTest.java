@@ -26,17 +26,20 @@ import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -1161,5 +1164,37 @@ public abstract class RestApiModeTest {
     Schema live = restApp.restClient.getVersion(subject, 1);
     assertEquals(records.get(1).timestamp(), live.getTimestamp().longValue());
     assertEquals(overwrite.getCreateTimestamp(), live.getCreateTimestamp());
+  }
+
+  @Test
+  public void testImportEmptySchemaWithId() throws Exception {
+    restApp.restClient.setMode("IMPORT");
+    int existingId = expectedSchemaId(1);
+    restApp.restClient.registerSchema(SCHEMA_STRING, "existing", 1, existingId);
+
+    String subject = "testSubject";
+    for (RegisterSchemaRequest request : Arrays.asList(
+        importRequest("JSON", "", expectedSchemaId(100)),
+        importRequest("AVRO", "", expectedSchemaId(101)),
+        // valid .proto files whose canonical form is empty
+        importRequest("PROTOBUF", "// just a comment", expectedSchemaId(102)),
+        importRequest("PROTOBUF", ";", expectedSchemaId(103)),
+        importRequest("JSON", "", existingId))) {
+      RestClientException rce = assertThrows(RestClientException.class,
+          () -> restApp.restClient.registerSchema(request, subject, false));
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+
+    assertTrue(TestUtils.schemaRecords(restApp, new SchemaKey(subject, 1)).isEmpty());
+    assertEquals(SCHEMA_STRING, restApp.restClient.getId(existingId).getSchemaString());
+  }
+
+  private static RegisterSchemaRequest importRequest(String schemaType, String schema, int id) {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchemaType(schemaType);
+    request.setSchema(schema);
+    request.setVersion(1);
+    request.setId(id);
+    return request;
   }
 }
