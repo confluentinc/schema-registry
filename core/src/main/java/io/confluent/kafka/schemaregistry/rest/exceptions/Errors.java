@@ -288,10 +288,7 @@ public class Errors {
     return new RestConstraintViolationException(message, PROVENANCE_TOO_LARGE_ERROR_CODE);
   }
 
-  /**
-   * A request for every version of a range covers more versions than one request may, or one with
-   * a compatibilityPolicy compares its versions with more earlier ones than one request may.
-   */
+  /** A request for every version of a range covers more versions than one request may. */
   public static RestConstraintViolationException provenanceRangeTooLongException(String message) {
     return new RestConstraintViolationException(message, PROVENANCE_RANGE_TOO_LONG_ERROR_CODE);
   }
