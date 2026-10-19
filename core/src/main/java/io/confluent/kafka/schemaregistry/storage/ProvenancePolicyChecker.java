@@ -51,9 +51,10 @@ import org.slf4j.LoggerFactory;
  * last, the candidate after them: they pair as they would over the whole history, and none before
  * them is parsed. A candidate that blocks provenance — one through which no range can be computed
  * — is rejected. A range already blocked by an earlier version, which only a version registered
- * before the subject was checked this way or by IMPORT can be, is checked by
+ * before the subject was checked this way or by IMPORT can be, is checked at registration by
  * {@link LogicalPolicyChecker} instead, as before, with a warning: the name-paired check converts
- * only the versions it compares, skips one it cannot convert, and needs no provenance.
+ * only the versions it compares, skips one it cannot convert, and needs no provenance. A stored
+ * version judged is rejected instead, as no provenance pairs it with the versions compared.
  * Paired {@link PairBy#NAME by name}, the comparisons are otherwise {@link LogicalPolicyChecker}'s;
  * {@link PairBy#CHECK_ID by check id}, members continue as provenance continues them, through a
  * kind change too.
@@ -96,11 +97,12 @@ final class ProvenancePolicyChecker {
    * @param pairBy how members are paired
    * @param candidateNumber the candidate's number: the stored version judged, or the number after
    *     the last for a schema being registered
+   * @param registering whether {@code newSchema} is being registered, not a stored version judged
    */
   static List<String> check(String subject, ParsedSchema newSchema,
       List<? extends ParsedSchemaHolder> history, List<Integer> versionNumbers,
       List<Integer> previousVersions, CompatibilityLevel level, PairBy pairBy,
-      int candidateNumber) {
+      int candidateNumber, boolean registering) {
     List<String> errors = new ArrayList<>();
     LogicalType newLogical;
     try {
@@ -137,11 +139,18 @@ final class ProvenancePolicyChecker {
       // Versions are converted and walked in order, so one failing before the candidate fails
       // without it too: the range is blocked already.
       if (reached[0] < candidate) {
+        if (!registering) {
+          // Registration must not be blocked by an old version; a verdict cannot skip one.
+          errors.add(describeBlocked("through an earlier version", e.getMessage()));
+          return errors;
+        }
         log.warn("An earlier version of subject {} blocks schema provenance ({}), so LOGICAL "
             + "pairs it by name", subject, e.getMessage());
         return LogicalPolicyChecker.check(newSchema, holders(history, previousVersions), level);
       }
-      errors.add(describeBlocked(e.getMessage()));
+      errors.add(describeBlocked(
+          registering ? "with the schema being registered" : "with this version",
+          e.getMessage()));
       return errors;
     }
     for (int version : toCompare) {
@@ -189,16 +198,15 @@ final class ProvenancePolicyChecker {
   }
 
   /**
-   * A candidate no provenance can be computed through, in the shape of the other findings. Every
-   * mode is named, since no pairing is known for any.
+   * Provenance that cannot be computed, {@code where} as the description says, in the shape of the
+   * other findings. Every mode is named, since no pairing is known for any.
    */
-  private static String describeBlocked(String message) {
+  private static String describeBlocked(String where, String message) {
     String modes = Arrays.stream(LogicalPolicyChecker.MODES)
         .map(mode -> "\"" + mode + "\"")
         .collect(Collectors.joining(", "));
     return "{errorType:\"PROVENANCE_UNAVAILABLE\", category:[" + modes
-        + "], description:\"Schema provenance cannot be computed with the schema being "
-        + "registered: " + message
+        + "], description:\"Schema provenance cannot be computed " + where + ": " + message
         + "\", additionalInfo:\"\"}";
   }
 
