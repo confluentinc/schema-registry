@@ -277,9 +277,9 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   /**
    * As {@link #getProvenanceById}; with {@code compatibilityPolicy} {@code "LOGICAL"}, each version
-   * also says whether registering it after the versions before it is accepted under that policy
-   * once it pairs columns by provenance, with the errors it would report. A {@code null} policy
-   * is the five-argument form.
+   * also says whether it is a valid backward step from the version just before it under that
+   * policy, columns paired by provenance, whatever the subject's config, with the errors found.
+   * A {@code null} policy is the five-argument form.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
       boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)

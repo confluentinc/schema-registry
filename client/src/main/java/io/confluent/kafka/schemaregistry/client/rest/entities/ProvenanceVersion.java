@@ -107,13 +107,14 @@ public class ProvenanceVersion {
   }
 
   /**
-   * Whether registering this version after the versions before it is accepted under
-   * compatibilityPolicy=LOGICAL once LOGICAL pairs columns by provenance; present only when the
-   * request names {@code compatibilityPolicy}.
+   * Whether this version is a valid backward step from the version just before it under
+   * compatibilityPolicy=LOGICAL, columns paired by provenance, whatever the subject's config;
+   * present only when the request names {@code compatibilityPolicy}.
    */
-  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether registering this version "
-      + "after the versions before it is accepted under compatibilityPolicy=LOGICAL, columns "
-      + "paired by provenance; present only when the request names compatibilityPolicy")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Whether this version is a valid "
+      + "backward step from the version just before it under compatibilityPolicy=LOGICAL, "
+      + "columns paired by provenance, whatever the subject's config; present only when the "
+      + "request names compatibilityPolicy")
   @JsonProperty("compatible")
   public Boolean getCompatible() {
     return compatible;
@@ -125,13 +126,13 @@ public class ProvenanceVersion {
   }
 
   /**
-   * The errors that registration would report for this version, as a compatibility check reports
-   * them, at most 100: past that, the first 99 and a last one counting the rest. Absent when it is
-   * compatible or the request names no {@code compatibilityPolicy}.
+   * The errors found for this version, as a compatibility check reports them, at most 100: past
+   * that, the first 99 and a last one counting the rest. Absent when it is compatible or the
+   * request names no {@code compatibilityPolicy}.
    */
-  @io.swagger.v3.oas.annotations.media.Schema(description = "The errors registering this "
-      + "version would report, as a compatibility check reports them; at most 100, the last "
-      + "counting any more")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The errors found for this "
+      + "version, as a compatibility check reports them; at most 100, the last counting any "
+      + "more")
   @JsonProperty("messages")
   public List<String> getMessages() {
     return messages;
