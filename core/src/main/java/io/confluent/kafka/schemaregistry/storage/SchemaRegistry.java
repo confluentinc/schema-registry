@@ -170,9 +170,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
-   * What registering {@code version} of {@code subject} after the versions before it gives under
-   * compatibilityPolicy=LOGICAL once LOGICAL pairs members by provenance check id: the errors
-   * registration would report, empty if it would be accepted.
+   * Whether {@code version} of {@code subject} is a valid backward step from the version just
+   * before it under compatibilityPolicy=LOGICAL with members paired by provenance check id,
+   * whatever the subject's config: the errors found, empty if none.
    */
   default List<String> isLogicallyCompatibleByProvenance(String subject, int version)
       throws SchemaRegistryException {
