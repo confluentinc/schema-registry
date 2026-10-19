@@ -434,10 +434,12 @@ public class AsyncRestService implements Closeable {
           long delayMs = retryExecutor.computeDelayBeforeNextRetry(attempt).toMillis();
           log.debug("Retriable error on attempt {}/{}: {}. Retrying in {} ms...",
               attempt + 1, maxRetries + 1, cause.toString(), delayMs);
+          // The delay hands off to the executor in a stage, as a rejection submitted from the
+          // delay scheduler itself would be lost and leave the future incomplete
           Executor delayed = CompletableFuture.delayedExecutor(
-              delayMs, TimeUnit.MILLISECONDS, executor);
+              delayMs, TimeUnit.MILLISECONDS, Runnable::run);
           return CompletableFuture.runAsync(() -> { }, delayed)
-              .thenCompose(ignored -> sendWithRetries(attempt + 1, send));
+              .thenComposeAsync(ignored -> sendWithRetries(attempt + 1, send), executor);
         }, executor)
         .thenCompose(Function.identity());
   }

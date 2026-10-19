@@ -344,6 +344,29 @@ public class AsyncRestServiceTest {
   }
 
   @Test
+  public void testRejectedExecutionDuringRetryBackoffFailsTheFuture() throws Exception {
+    registry.enqueue(500, "{\"error_code\": 50001, \"message\": \"boom\"}");
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    // Rejects what the JDK's delay scheduler submits, as a shut-down executor would
+    Executor executor = task -> {
+      if (Thread.currentThread().getName().contains("Delay")) {
+        throw new RejectedExecutionException("shut down");
+      }
+      pool.execute(task);
+    };
+    try {
+      restService = new AsyncRestService(new UrlList(registry.url()), retries(1),
+          null, null, null, executor);
+
+      awaitFailure(restService.getId(1, null), RejectedExecutionException.class);
+
+      assertEquals(1, registry.requests.size());
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
   public void testRequestAfterCloseFails() throws Exception {
     restService = newRestService(Collections.emptyMap(), registry.url());
     restService.close();
