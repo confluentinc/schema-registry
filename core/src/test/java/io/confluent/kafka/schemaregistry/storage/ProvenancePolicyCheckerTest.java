@@ -146,7 +146,7 @@ class ProvenancePolicyCheckerTest {
     ParsedSchema candidate = avro("{\"name\":\"c\",\"type\":[\"null\",\"int\"],"
         + "\"default\":null,\"aliases\":[\"a\",\"b\"]}");
     List<String> errors = ProvenancePolicyChecker.check("s", candidate, holders(history, 2),
-        List.of(3, 7), List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID, 8);
+        List.of(3, 7), List.of(0, 1), CompatibilityLevel.BACKWARD, PairBy.CHECK_ID, 8, true);
     assertTrue(has(errors, "PROVENANCE_UNAVAILABLE"), errors.toString());
     assertTrue(errors.toString().contains("at version 8"), errors.toString());
   }
@@ -219,6 +219,33 @@ class ProvenancePolicyCheckerTest {
     }
   }
 
+  @Test
+  void aStoredVersionJudgedPastAnEarlierBlockingVersionIsRejected() {
+    // v=2 has no logical form and v=3 drops b of v=1. Registration checks v=3 by name and skips
+    // v=2; a stored v=3 judged against v=2 alone cannot be paired, so it is rejected.
+    String node = "{\"type\":\"record\",\"name\":\"N\",\"fields\":[{\"name\":\"next\","
+        + "\"type\":[\"null\",\"N\"],\"default\":null}]}";
+    String recursive = "{\"type\":\"object\",\"properties\":{\"n\":{\"$ref\":\"#/definitions/N\"}},"
+        + "\"definitions\":{\"N\":{\"type\":\"object\",\"properties\":{\"next\":"
+        + "{\"$ref\":\"#/definitions/N\"}}}}}";
+    List<List<ParsedSchema>> histories = Arrays.asList(
+        Arrays.asList(avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"b\",\"type\":\"int\"}"),
+            avro("{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"n\",\"type\":" + node + "}"),
+            avro("{\"name\":\"a\",\"type\":\"int\"}")),
+        Arrays.asList(proto("int32 a = 1;\n  int32 b = 2;"),
+            proto("int32 a = 1;\n  N n = 3;\n  message N { N next = 1; }"),
+            proto("int32 a = 1;")),
+        Arrays.asList(json("{\"a\":" + INT + ",\"b\":" + INT + "}"), new JsonSchema(recursive),
+            json("{\"a\":" + INT + "}")));
+    for (List<ParsedSchema> history : histories) {
+      List<String> errors = ProvenancePolicyChecker.check("s", history.get(2),
+          holders(history, 2), List.of(1, 2), List.of(1), CompatibilityLevel.BACKWARD,
+          PairBy.CHECK_ID, 3, false);
+      assertTrue(has(errors, "PROVENANCE_UNAVAILABLE"), history.toString());
+      assertTrue(errors.toString().contains("through an earlier version"), errors.toString());
+    }
+  }
+
   // -------------------------------------------------------------------------------------------
 
   // Version k registered after versions 0..k-1, numbered from 1, every one compared.
@@ -227,7 +254,7 @@ class ProvenancePolicyCheckerTest {
     List<Integer> previous = IntStream.range(0, k).boxed().collect(Collectors.toList());
     List<Integer> numbers = IntStream.rangeClosed(1, k).boxed().collect(Collectors.toList());
     return ProvenancePolicyChecker.check("s", history.get(k), holders(history, k), numbers,
-        previous, level, pairBy, k + 1);
+        previous, level, pairBy, k + 1, true);
   }
 
   private static boolean has(List<String> errors, String rule) {

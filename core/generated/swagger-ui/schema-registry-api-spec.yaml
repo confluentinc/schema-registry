@@ -3059,8 +3059,9 @@ paths:
         \ id (fromId, toId), in any mix, and in either order. Soft-deleted versions\
         \ are always included, and the response names the subject as the registry\
         \ normalizes it. With compatibilityPolicy=LOGICAL, each version also says\
-        \ whether registering it after the versions before it is accepted under LOGICAL\
-        \ once LOGICAL pairs columns by provenance, with the errors it would report."
+        \ whether it is a valid backward step from the version just before it under\
+        \ LOGICAL, columns paired by provenance, whatever the subject's config, with\
+        \ the errors found."
       operationId: getProvenance
       parameters:
       - name: subject
@@ -3107,11 +3108,10 @@ paths:
           default: false
       - name: compatibilityPolicy
         in: query
-        description: "LOGICAL to say, for each version returned, whether registering\
-          \ it after the versions before it is accepted under that policy with columns\
-          \ paired by provenance, as registration will pair them, and the errors it\
-          \ would report; such a request may compare its versions with at most provenance.compatibility.max.comparisons\
-          \ earlier ones"
+        description: "LOGICAL to say, for each version returned, whether it is a valid\
+          \ backward step from the version just before it under that policy, columns\
+          \ paired by provenance, whatever the subject's compatibility config, and\
+          \ the errors found"
         schema:
           type: string
       responses:
@@ -3150,9 +3150,7 @@ paths:
             \ do not determine one provenance. Error code 42218 indicates a version\
             \ with too many locations to compute, or nesting its types too deep. Error\
             \ code 42219 indicates a range with includeInterior covering more versions\
-            \ than one request may, or with compatibilityPolicy comparing its versions\
-            \ with more earlier ones than one request may. Error code 42220 indicates\
-            \ a recursive schema."
+            \ than one request may. Error code 42220 indicates a recursive schema."
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -4100,17 +4098,17 @@ components:
             $ref: "#/components/schemas/ProvenanceField"
         compatible:
           type: boolean
-          description: "Whether registering this version after the versions before\
-            \ it is accepted under compatibilityPolicy=LOGICAL, columns paired by\
-            \ provenance; present only when the request names compatibilityPolicy"
+          description: "Whether this version is a valid backward step from the version\
+            \ just before it under compatibilityPolicy=LOGICAL, columns paired by provenance,\
+            \ whatever the subject's config; present only when the request names compatibilityPolicy"
         messages:
           type: array
-          description: "The errors registering this version would report, as a compatibility\
-            \ check reports them; at most 100, the last counting any more"
+          description: "The errors found for this version, as a compatibility check\
+            \ reports them; at most 100, the last counting any more"
           items:
             type: string
-            description: "The errors registering this version would report, as a compatibility\
-              \ check reports them; at most 100, the last counting any more"
+            description: "The errors found for this version, as a compatibility check\
+              \ reports them; at most 100, the last counting any more"
       description: One version's column provenance
     SchemaProvenance:
       type: object
