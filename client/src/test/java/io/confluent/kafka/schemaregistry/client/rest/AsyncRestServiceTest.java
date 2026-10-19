@@ -209,7 +209,7 @@ public class AsyncRestServiceTest {
   public void testFailsOverToNextUrlOnConnectionError() throws Exception {
     registry.enqueue(200, "{\"schema\": \"\\\"string\\\"\"}");
     String deadUrl = "http://127.0.0.1:" + unusedPort();
-    restService = newRestService(Collections.emptyMap(), deadUrl, registry.url());
+    restService = newRestService(retries(0), deadUrl, registry.url());
 
     SchemaString result = await(restService.getId(1, null));
 
@@ -223,7 +223,7 @@ public class AsyncRestServiceTest {
   public void testIndexIsRestoredWhenEveryUrlFails() throws Exception {
     String firstUrl = "http://127.0.0.1:" + unusedPort();
     String secondUrl = "http://127.0.0.1:" + unusedPort();
-    restService = newRestService(Collections.emptyMap(), firstUrl, secondUrl);
+    restService = newRestService(retries(0), firstUrl, secondUrl);
 
     awaitFailure(restService.getId(1, null), IOException.class);
 
