@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
@@ -698,5 +700,27 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     // Verify that isForward is set to true - this ensures that requests to the leader
     // will include the X-Forward header, which is critical for proper request forwarding
     assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
+  }
+
+  @Test
+  public void testRegisterEmptySchemaAfterVersionWithoutBody() throws Exception {
+    KafkaSchemaRegistry kafkaSchemaRegistry =
+        new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    kafkaSchemaRegistry.getKafkaStore().put(new SchemaKey("subject1", 1),
+        new SchemaValue("subject1", 1, 1, AvroSchema.TYPE, Collections.emptyList(), null, false));
+    Schema stored = kafkaSchemaRegistry.get("subject1", 1, false);
+    assertNotNull(stored);
+    assertNull(stored.getSchema());
+
+    // an empty body inherits the previous version's
+    Schema schema = new Schema(
+        "subject1", -1, -1, AvroSchema.TYPE, Collections.emptyList(), null);
+    schema.setMetadata(new Metadata(null, Collections.singletonMap("k", "v"), null));
+    InvalidSchemaException e = assertThrows(InvalidSchemaException.class,
+        () -> kafkaSchemaRegistry.register("subject1", schema));
+    assertEquals("Empty schema", e.getMessage());
+    assertNull(kafkaSchemaRegistry.get("subject1", 2, true));
   }
 }

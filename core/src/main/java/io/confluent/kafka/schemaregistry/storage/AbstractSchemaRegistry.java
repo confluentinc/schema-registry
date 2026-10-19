@@ -684,6 +684,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
     schema.setSchemaType(parsedSchema.schemaType());
     schema.setSchema(parsedSchema.canonicalString());
+    // A schema must have a non-empty canonical body
+    if (schema.getSchema() == null || schema.getSchema().trim().isEmpty()) {
+      throw new InvalidSchemaException("Empty schema");
+    }
     schema.setReferences(parsedSchema.references());
     // Merged rather than replaced: a conversion records metadata of its own that has to reach
     // storage, but a provider that does not carry the requested metadata onto what it parses
