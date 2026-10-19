@@ -347,9 +347,11 @@ public class AsyncRestServiceTest {
   public void testRejectedExecutionDuringRetryBackoffFailsTheFuture() throws Exception {
     registry.enqueue(500, "{\"error_code\": 50001, \"message\": \"boom\"}");
     ExecutorService pool = Executors.newFixedThreadPool(2);
-    // Rejects what the JDK's delay scheduler submits, as a shut-down executor would
+    // Rejects the retry dispatch, as a shut-down executor would. It follows three submissions:
+    // the initial dispatch, response parsing and the retry handling.
+    AtomicInteger submissions = new AtomicInteger();
     Executor executor = task -> {
-      if (Thread.currentThread().getName().contains("Delay")) {
+      if (submissions.incrementAndGet() == 4) {
         throw new RejectedExecutionException("shut down");
       }
       pool.execute(task);
