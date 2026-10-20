@@ -3021,7 +3021,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request)
       throws SchemaRegistryException {
-    checkAssociationBatchLimits(request);
+    checkAssociationBatchMutateLimits(request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -3175,7 +3175,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  void checkAssociationBatchLimits(AssociationBatchRequest request)
+  void checkAssociationBatchMutateLimits(AssociationBatchRequest request)
       throws SchemaRegistryException {
     if (!config().associationBatchMutateLimitsEnabled()) {
       return;

@@ -116,7 +116,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     props.put(SchemaRegistryConfig.ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG, "false");
     useConfig(props);
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchLimits(mutate(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(
         topic("t1", create("key"), create("value")),
         topic("t2", create("key"), create("value")))));
     verifyNoLookups();
@@ -127,7 +127,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     doReturn(existing(1)).when(registry)
         .getAssociationsByResourceId(eq("t3"), any(), any(), any());
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchLimits(mutate(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(
         topic("t1", create("key"), create("value")),
         topic("t2", upsertWithoutSchema("key"), upsertWithoutSchema("value")),
         topic("t3", new AssociationDeleteOp("key"), new AssociationDeleteOp("value")))));
@@ -137,7 +137,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
   void createsAreCountedAcrossTopics() {
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchLimits(mutate(
+        () -> registry.checkAssociationBatchMutateLimits(mutate(
             topic("t1", create("value")),
             topic("t2", create("value")),
             topic("t3", create("value")))));
@@ -149,7 +149,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
   void upsertsWithoutSchemasAreLimited() {
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchLimits(mutate(
+        () -> registry.checkAssociationBatchMutateLimits(mutate(
             topic("t1", upsertWithoutSchema("key"), upsertWithoutSchema("value")),
             topic("t2", upsertWithoutSchema("value")))));
     assertTrue(e.getMessage().contains("has 3 UPSERT operations"), e.getMessage());
@@ -158,7 +158,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
   @Test
   void createLimitIsCheckedBeforeAnyDeleteLookup() throws Exception {
     assertThrows(AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchLimits(mutate(
+        () -> registry.checkAssociationBatchMutateLimits(mutate(
             topic("t1", create("key"), create("value")),
             topic("t2", create("value"), new AssociationDeleteOp("key")))));
     verifyNoLookups();
@@ -166,7 +166,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
   @Test
   void deletesOfMissingAssociationsAreNotCounted() {
-    assertDoesNotThrow(() -> registry.checkAssociationBatchLimits(mutate(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(
         topic("t1", new AssociationDeleteOp("key"), new AssociationDeleteOp("value")),
         topic("t2", new AssociationDeleteOp("key"), new AssociationDeleteOp("value")),
         topic("t3", new AssociationDeleteOp("value")))));
@@ -179,7 +179,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     AssociationOpRequest emptyId = new AssociationOpRequest("t2-name", "default", "", "topic",
         Collections.singletonList(new AssociationDeleteOp("value")));
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchLimits(mutate(noId, emptyId)));
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(noId, emptyId)));
   }
 
   @Test
@@ -189,7 +189,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchLimits(mutate(
+        () -> registry.checkAssociationBatchMutateLimits(mutate(
             topic("t1", new AssociationDeleteOp("key"), new AssociationDeleteOp("value")),
             topic("t2", new AssociationDeleteOp("key"), new AssociationDeleteOp("value")))));
     assertTrue(e.getMessage().contains("at least 3 DELETE operations"), e.getMessage());
@@ -201,7 +201,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     AssociationOpRequest defaults = new AssociationOpRequest("t1-name", "default", "t1", null,
         Collections.singletonList(new AssociationDeleteOp(null)));
 
-    registry.checkAssociationBatchLimits(mutate(
+    registry.checkAssociationBatchMutateLimits(mutate(
         defaults, topic("t2", new AssociationDeleteOp("key"))));
 
     verify(registry).getAssociationsByResourceId(
@@ -215,7 +215,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     AssociationOpRequest failed = topic("t1", create("value"), create("key"));
     failed.setError(new ErrorMessage(42212, "invalid"));
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchLimits(mutate(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(
         failed, topic("t2", create("key"), create("value")))));
   }
 
@@ -229,7 +229,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchLimits(mutate(topic("t1",
+        () -> registry.checkAssociationBatchMutateLimits(mutate(topic("t1",
             new AssociationCreateOp(null, "value", null, null, schema, null)))));
     assertTrue(e.getMessage().contains("bytes per batch"), e.getMessage());
     verifyNoLookups();
