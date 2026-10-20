@@ -19,6 +19,7 @@ import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntit
 import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
 import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
@@ -98,6 +99,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -496,6 +498,11 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void loadLatestDraft() throws URISyntaxException {
+    String selfRef = selfReferencingDynamicRef(jsonNode);
+    if (selfRef != null) {
+      throw new IllegalArgumentException(
+          "Invalid JSON schema: $dynamicRef at " + selfRef + " refers to itself");
+    }
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI uri = new URI(dep.getKey());
@@ -526,6 +533,47 @@ public class JsonSchema implements ParsedSchema {
     schemaObj = ctx.schema();
   }
 
+  // json-sKema cannot load a $dynamicRef that resolves to its own node
+  private static String selfReferencingDynamicRef(JsonNode root) {
+    if (isSelfDynamicRef(root, root)) {
+      return "#";
+    }
+    // Only $defs, since json-sKema does not load definitions entries as subschemas
+    JsonNode defs = root.get("$defs");
+    if (defs != null && defs.isObject()) {
+      for (Iterator<Map.Entry<String, JsonNode>> it = defs.fields(); it.hasNext(); ) {
+        Map.Entry<String, JsonNode> entry = it.next();
+        if (isSelfDynamicRef(root, entry.getValue())) {
+          return "#/$defs/" + entry.getKey();
+        }
+      }
+    }
+    return null;
+  }
+
+  private static boolean isSelfDynamicRef(JsonNode root, JsonNode node) {
+    JsonNode ref = node.get("$dynamicRef");
+    if (ref == null || !ref.isTextual() || !ref.textValue().startsWith("#")) {
+      return false;
+    }
+    String fragment;
+    try {
+      fragment = URI.create(ref.textValue()).getFragment();
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+    if (fragment == null || fragment.isEmpty()) {
+      return node == root;
+    }
+    if (fragment.charAt(0) == '/') {
+      return root.at(JsonPointer.compile(fragment)) == node;
+    }
+    // A bare name is only decidable for the root, whose own anchor json-sKema checks first
+    JsonNode anchor = node.get("$dynamicAnchor");
+    return node == root && anchor != null && anchor.isTextual()
+        && anchor.textValue().equals(fragment);
+  }
+
   private void loadPreviousDraft(SpecificationVersion spec)
       throws JsonProcessingException {
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
@@ -553,6 +601,12 @@ public class JsonSchema implements ParsedSchema {
   // Applies this schema's remote-ref policy and registered references to an Everit loader
   private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
                                      SpecificationVersion spec) {
+    configureEveritLoader(builder, spec, JSONObject::new);
+  }
+
+  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
+                                     SpecificationVersion spec,
+                                     Function<String, JSONObject> parser) {
     org.everit.json.schema.loader.SpecificationVersion loaderSpec =
         org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
     switch (spec) {
@@ -584,7 +638,7 @@ public class JsonSchema implements ParsedSchema {
     }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+      builder.registerSchemaByURI(child, parser.apply(dep.getValue()));
     }
   }
 
@@ -1588,10 +1642,13 @@ public class JsonSchema implements ParsedSchema {
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
     // Sort composition branches with the same loader setup as this schema; null keeps the default
+    Map<String, JSONObject> parsed = new HashMap<>();
     Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
-        ? b -> configureEveritLoader(b, specVersion()) : null;
+        ? b -> configureEveritLoader(b, specVersion(),
+            ref -> parsed.computeIfAbsent(ref, JSONObject::new)) : null;
+    JsonNodeComparator comparator = new JsonNodeComparator(loaderConfig, node);
     for (SchemaEntity entity : entityToModify) {
-      JsonNode fieldNodePtr = findMatchingEntity(node, entity, loaderConfig);
+      JsonNode fieldNodePtr = findMatchingEntity(node, entity, comparator);
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
