@@ -84,11 +84,14 @@ import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -498,10 +501,8 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void loadLatestDraft() throws URISyntaxException {
-    String selfRef = selfReferencingDynamicRef(jsonNode);
-    if (selfRef != null) {
-      throw new IllegalArgumentException(
-          "Invalid JSON schema: $dynamicRef at " + selfRef + " refers to itself");
+    if (hasDynamicRefCycle(jsonNode)) {
+      throw new IllegalArgumentException("Invalid JSON schema: $dynamicRef refers to itself");
     }
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
@@ -533,45 +534,123 @@ public class JsonSchema implements ParsedSchema {
     schemaObj = ctx.schema();
   }
 
-  // json-sKema cannot load a $dynamicRef that resolves to its own node
-  private static String selfReferencingDynamicRef(JsonNode root) {
-    if (isSelfDynamicRef(root, root)) {
-      return "#";
+  private static final String[] NAME_KEYWORDS = {"$anchor", "$dynamicAnchor", "$id"};
+  private static final String[] CYCLE_KEYWORDS = {"properties", "patternProperties", "$defs"};
+  private static final String[] SCHEMA_LISTS =
+      {"allOf", "anyOf", "oneOf", "prefixItems", "dependentSchemas"};
+  private static final String[] SCHEMAS =
+      {"additionalProperties", "items", "contains", "propertyNames", "not", "if"};
+
+  // json-sKema never finishes a $dynamicRef cycle through properties, patternProperties or $defs
+  private static boolean hasDynamicRefCycle(JsonNode root) {
+    Set<String> names = new HashSet<>();
+    Deque<JsonNode> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      JsonNode node = pending.pop();
+      for (String keyword : NAME_KEYWORDS) {
+        JsonNode name = node.get(keyword);
+        if (name != null && name.isTextual()) {
+          // json-sKema resolves a registered name before a pointer
+          names.add(name.textValue().substring(name.textValue().indexOf('#') + 1));
+        }
+      }
+      node.forEach(pending::push);
     }
-    // Only $defs, since json-sKema does not load definitions entries as subschemas
-    JsonNode defs = root.get("$defs");
-    if (defs != null && defs.isObject()) {
-      for (Iterator<Map.Entry<String, JsonNode>> it = defs.fields(); it.hasNext(); ) {
-        Map.Entry<String, JsonNode> entry = it.next();
-        if (isSelfDynamicRef(root, entry.getValue())) {
-          return "#/$defs/" + entry.getKey();
+    Map<JsonNode, List<JsonNode>> graph = new IdentityHashMap<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      JsonNode node = pending.pop();
+      List<JsonNode> edges = new ArrayList<>();
+      List<JsonNode> children = new ArrayList<>();
+      for (String keyword : CYCLE_KEYWORDS) {
+        addSchemas(node.get(keyword), true, edges);
+      }
+      for (String keyword : SCHEMA_LISTS) {
+        addSchemas(node.get(keyword), true, children);
+      }
+      for (String keyword : SCHEMAS) {
+        addSchemas(node.get(keyword), false, children);
+      }
+      if (node.has("if")) {
+        addSchemas(node.get("then"), false, children);
+        addSchemas(node.get("else"), false, children);
+      }
+      graph.put(node, edges);
+      children.addAll(edges);
+      children.forEach(pending::push);
+    }
+    for (Map.Entry<JsonNode, List<JsonNode>> entry : graph.entrySet()) {
+      JsonNode target = dynamicRefTarget(root, entry.getKey(), names);
+      if (target != null && graph.containsKey(target)) {
+        entry.getValue().add(target);
+      }
+    }
+    Map<JsonNode, Boolean> finished = new IdentityHashMap<>();
+    for (Map.Entry<JsonNode, List<JsonNode>> start : graph.entrySet()) {
+      if (finished.containsKey(start.getKey())) {
+        continue;
+      }
+      Deque<JsonNode> path = new ArrayDeque<>();
+      Deque<Iterator<JsonNode>> pendingEdges = new ArrayDeque<>();
+      finished.put(start.getKey(), false);
+      path.push(start.getKey());
+      pendingEdges.push(start.getValue().iterator());
+      while (!pendingEdges.isEmpty()) {
+        if (!pendingEdges.peek().hasNext()) {
+          finished.put(path.pop(), true);
+          pendingEdges.pop();
+          continue;
+        }
+        JsonNode next = pendingEdges.peek().next();
+        Boolean done = finished.get(next);
+        if (done == null) {
+          finished.put(next, false);
+          path.push(next);
+          pendingEdges.push(graph.get(next).iterator());
+        } else if (!done) {
+          return true;
         }
       }
     }
-    return null;
+    return false;
   }
 
-  private static boolean isSelfDynamicRef(JsonNode root, JsonNode node) {
+  private static void addSchemas(JsonNode keyword, boolean entries, Collection<JsonNode> to) {
+    if (keyword == null) {
+      return;
+    }
+    for (JsonNode schema : entries ? keyword : Collections.singleton(keyword)) {
+      if (schema.isObject() && !schema.has("$id")) {
+        to.add(schema);
+      }
+    }
+  }
+
+  private static JsonNode dynamicRefTarget(JsonNode root, JsonNode node, Set<String> names) {
     JsonNode ref = node.get("$dynamicRef");
     if (ref == null || !ref.isTextual() || !ref.textValue().startsWith("#")) {
-      return false;
+      return null;
     }
     String fragment;
     try {
       fragment = URI.create(ref.textValue()).getFragment();
     } catch (IllegalArgumentException e) {
-      return false;
+      return null;
     }
-    if (fragment == null || fragment.isEmpty()) {
-      return node == root;
+    if (fragment == null) {
+      return null;
     }
-    if (fragment.charAt(0) == '/') {
-      return root.at(JsonPointer.compile(fragment)) == node;
+    if (!fragment.isEmpty() && fragment.charAt(0) != '/') {
+      // A bare name is only decidable for the root, whose own anchor json-sKema checks first
+      JsonNode anchor = node.get("$dynamicAnchor");
+      return node == root && anchor != null && anchor.isTextual()
+          && anchor.textValue().equals(fragment) ? root : null;
     }
-    // A bare name is only decidable for the root, whose own anchor json-sKema checks first
-    JsonNode anchor = node.get("$dynamicAnchor");
-    return node == root && anchor != null && anchor.isTextual()
-        && anchor.textValue().equals(fragment);
+    if (names.contains(ref.textValue().substring(1))) {
+      return null;
+    }
+    return fragment.isEmpty() ? root : root.at(JsonPointer.compile(fragment));
   }
 
   private void loadPreviousDraft(SpecificationVersion spec)

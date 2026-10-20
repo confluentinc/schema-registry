@@ -1107,7 +1107,14 @@ public class JsonSchemaTest {
         d2020 + "\"$dynamicRef\":\"#\"}",
         d2019 + "\"$dynamicRef\":\"#\"}",
         d2020 + "\"$dynamicAnchor\":\"a\",\"$dynamicRef\":\"#a\"}",
-        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/x\"}}}"}) {
+        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/x\"}}}",
+        d2020 + "\"properties\":{\"x\":{\"$dynamicRef\":\"#/properties/x\"}}}",
+        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#\"}}}",
+        d2020 + "\"properties\":{\"x\":{\"$dynamicRef\":\"#\"}}}",
+        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/y\"},"
+            + "\"y\":{\"$dynamicRef\":\"#/$defs/x\"}}}",
+        d2020 + "\"$ref\":\"#/$defs/x\",\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/x\"}}}",
+        d2020 + "\"allOf\":[{\"properties\":{\"x\":{\"$dynamicRef\":\"#/allOf/0\"}}}]}"}) {
       long start = System.nanoTime();
       IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
           () -> new JsonSchema(schema).rawSchema());
@@ -1135,9 +1142,28 @@ public class JsonSchemaTest {
         d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/y\"},"
             + "\"y\":{\"type\":\"string\"}}}",
         d2020 + "\"definitions\":{\"x\":{\"$dynamicRef\":\"#/definitions/x\"}}}",
+        d2020 + "\"$defs\":{\"x\":{\"$id\":\"child.json\",\"$dynamicRef\":\"#/$defs/x\","
+            + "\"$defs\":{\"x\":{\"type\":\"string\"}}}}}",
+        d2020 + "\"properties\":{\"x\":{\"$id\":\"child.json\",\"$dynamicRef\":\"#/properties/x\","
+            + "\"properties\":{\"x\":{\"type\":\"string\"}}}}}",
+        d2020 + "\"then\":{\"$dynamicRef\":\"#/then\"}}",
+        d2020 + "\"$defs\":{\"q\":{\"$dynamicAnchor\":\"/properties/x\",\"type\":\"string\"}},"
+            + "\"properties\":{\"x\":{\"$dynamicRef\":\"#/properties/x\"}}}",
+        d2020 + "\"$defs\":{\"r\":{\"$dynamicAnchor\":\"a\",\"type\":\"string\"},"
+            + "\"x\":{\"$dynamicAnchor\":\"a\",\"$dynamicRef\":\"#a\"}}}",
         d2020 + "\"const\":{\"$dynamicRef\":\"#\"}}",
         "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"$dynamicRef\":\"#\"}"}) {
       assertNotNull(schema, new JsonSchema(schema).rawSchema());
+    }
+    // A cycle through these keywords parses on master, so the guard must not be what rejects it
+    for (String schema : new String[] {
+        d2020 + "\"allOf\":[{\"$dynamicRef\":\"#\"}]}",
+        d2020 + "\"items\":{\"$dynamicRef\":\"#\"}}"}) {
+      try {
+        new JsonSchema(schema).rawSchema();
+      } catch (IllegalArgumentException e) {
+        assertFalse(schema, String.valueOf(e.getCause()).contains("refers to itself"));
+      }
     }
   }
 
