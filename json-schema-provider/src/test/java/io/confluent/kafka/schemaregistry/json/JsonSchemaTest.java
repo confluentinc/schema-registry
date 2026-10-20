@@ -1099,6 +1099,49 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testSelfReferencingDynamicRefRejectedEarly() {
+    String d2020 = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",";
+    String d2019 = "{\"$schema\":\"https://json-schema.org/draft/2019-09/schema\",";
+    new JsonSchema("{\"type\":\"string\"}").rawSchema();
+    for (String schema : new String[] {
+        d2020 + "\"$dynamicRef\":\"#\"}",
+        d2019 + "\"$dynamicRef\":\"#\"}",
+        d2020 + "\"$dynamicAnchor\":\"a\",\"$dynamicRef\":\"#a\"}",
+        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/x\"}}}"}) {
+      long start = System.nanoTime();
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> new JsonSchema(schema).rawSchema());
+      assertTrue(schema, (System.nanoTime() - start) / 1_000_000 < 500);
+      boolean guarded = false;
+      for (Throwable t = e; t != null; t = t.getCause()) {
+        assertFalse(schema, t instanceof StackOverflowError);
+        guarded |= t.getMessage() != null && t.getMessage().contains("refers to itself");
+      }
+      assertTrue(schema, guarded);
+    }
+  }
+
+  @Test
+  public void testNonSelfReferencingDynamicRefAccepted() {
+    String d2020 = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",";
+    for (String schema : new String[] {
+        "{\"$schema\":\"https://json-schema.org/draft/2019-09/schema\","
+            + "\"$recursiveAnchor\":true,\"type\":\"object\","
+            + "\"properties\":{\"c\":{\"$recursiveRef\":\"#\"}}}",
+        d2020 + "\"type\":\"object\",\"properties\":{\"c\":{\"$ref\":\"#\"}}}",
+        d2020 + "\"type\":\"object\",\"$defs\":{\"item\":{\"$dynamicAnchor\":\"item\","
+            + "\"type\":\"string\"}},\"properties\":{\"a\":{\"$dynamicRef\":\"#item\"}}}",
+        d2020 + "\"$dynamicAnchor\":\"a\",\"type\":\"string\"}",
+        d2020 + "\"$defs\":{\"x\":{\"$dynamicRef\":\"#/$defs/y\"},"
+            + "\"y\":{\"type\":\"string\"}}}",
+        d2020 + "\"definitions\":{\"x\":{\"$dynamicRef\":\"#/definitions/x\"}}}",
+        d2020 + "\"const\":{\"$dynamicRef\":\"#\"}}",
+        "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"$dynamicRef\":\"#\"}"}) {
+      assertNotNull(schema, new JsonSchema(schema).rawSchema());
+    }
+  }
+
+  @Test
   public void testAddTagToRecursiveSchema() {
     String schema = "{\n" +
       "  \"$id\": \"task.schema.json\",\n" +
