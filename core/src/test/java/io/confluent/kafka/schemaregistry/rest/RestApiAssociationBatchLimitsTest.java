@@ -16,29 +16,27 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
 
@@ -53,227 +51,132 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
     return props;
   }
 
-  private static AssociationOpRequest createOpRequest(String resourceName, String schema) {
-    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
-    schemaRequest.setSchema(schema);
-    AssociationCreateOp createOp = new AssociationCreateOp(
-        null, "value", null, null, schemaRequest, null);
-    return new AssociationOpRequest(
-        resourceName, "default", resourceName + "-id", "topic",
-        java.util.Collections.singletonList(createOp));
+  private static RegisterSchemaRequest schema(String schemaString) {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema(schemaString);
+    return schema;
   }
 
-  private static String padded(int bytes) {
-    StringBuilder sb = new StringBuilder(bytes);
-    for (int i = 0; i < bytes; i++) {
+  private static AssociationOp create(String associationType, String recordName) {
+    return new AssociationCreateOp(null, associationType, null, null,
+        schema("{\"type\":\"record\",\"name\":\"" + recordName + "\",\"fields\":[]}"), null);
+  }
+
+  private static AssociationOp delete(String associationType) {
+    return new AssociationDeleteOp(associationType, true);
+  }
+
+  private static AssociationOpRequest topic(String name, AssociationOp... ops) {
+    return new AssociationOpRequest(name, "default", name + "-id", "topic", Arrays.asList(ops));
+  }
+
+  private AssociationBatchResponse mutate(boolean dryRun, AssociationOpRequest... topics)
+      throws Exception {
+    return restApp.restClient.mutateAssociations(RestService.DEFAULT_REQUEST_PROPERTIES, null,
+        dryRun, new AssociationBatchRequest(Arrays.asList(topics)));
+  }
+
+  private static void assertAllSucceeded(AssociationBatchResponse response, int expected) {
+    assertEquals(expected, response.getResults().size());
+    for (AssociationResult result : response.getResults()) {
+      assertNull(result.getError());
+    }
+  }
+
+  private static void assertRejected(Executable call, String expectedMessage) {
+    RestClientException e = assertThrows(RestClientException.class, call);
+    assertEquals(422, e.getStatus());
+    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
+    assertTrue(e.getMessage().contains(expectedMessage), e.getMessage());
+  }
+
+  private static String padded(int length) {
+    StringBuilder sb = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
       sb.append('x');
     }
     return sb.toString();
   }
 
   @Test
-  public void testSingleAssociationWithSmallSchemaSucceeds() throws Exception {
-    // A batch of exactly one association is not exempt from the limits (there is no such
-    // carve-out); it simply succeeds here because its schema is well under the byte limits.
-    String smallSchema = "{\"type\":\"record\",\"name\":\"Small\",\"fields\":["
-        + "{\"name\":\"f\",\"type\":\"string\",\"default\":\"" + padded(1200) + "\"}]}";
-    List<AssociationOpRequest> requests = new ArrayList<>();
-    requests.add(createOpRequest("single-assoc-small", smallSchema));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
-
-    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
-    assertEquals(1, response.getResults().size());
-    assertNull(response.getResults().get(0).getError());
+  public void testOneTopicWithKeyAndValueCreatesSucceeds() throws Exception {
+    assertAllSucceeded(mutate(false,
+        topic("key-and-value", create("key", "KeyKv"), create("value", "ValueKv"))), 1);
   }
 
   @Test
-  public void testSingleAssociationWithOversizedSchemaFails() throws Exception {
-    // A batch of exactly one association is still subject to the per-association payload
-    // limit; there is no exemption for trivially small batches.
-    List<AssociationOpRequest> requests = new ArrayList<>();
-    requests.add(createOpRequest("single-assoc-oversized", "\"" + padded(1_150_000) + "\""));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
-
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.mutateAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
-    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("'value' association's schema"));
-    assertTrue(e.getMessage().contains("resourceId 'single-assoc-oversized-id'"));
+  public void testTopicCountIsNotLimited() throws Exception {
+    assertAllSucceeded(mutate(false,
+        topic("two-topics-a", create("value", "TwoA")),
+        topic("two-topics-b", create("value", "TwoB"))), 2);
   }
 
   @Test
-  public void testNoInlineSchemaExemptFromAllLimits() throws Exception {
-    int numResources = 12;
-    List<String> subjects = TestUtils.getRandomCanonicalAvroString(numResources);
-    List<AssociationOpRequest> requests = new ArrayList<>();
-    for (int i = 0; i < numResources; i++) {
-      String subject = "no-schema-exempt-subject-" + i;
-      restApp.restClient.registerSchema(subjects.get(i), subject);
-      AssociationCreateOp createOp = new AssociationCreateOp(
-          subject, "value", LifecyclePolicy.WEAK, false, null, null);
-      requests.add(new AssociationOpRequest(
-          "no-schema-exempt-" + i, "default", "no-schema-exempt-" + i + "-id", "topic",
-          java.util.Collections.singletonList(createOp)));
-    }
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
-
-    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
-    assertEquals(numResources, response.getResults().size());
-    for (AssociationResult result : response.getResults()) {
-      assertNull(result.getError());
-    }
+  public void testThreeCreatesAcrossTopicsRejected() {
+    assertRejected(() -> mutate(false,
+        topic("three-creates-a", create("value", "ThreeA")),
+        topic("three-creates-b", create("value", "ThreeB")),
+        topic("three-creates-c", create("value", "ThreeC"))),
+        "has 3 CREATE operations");
   }
 
   @Test
-  public void testRealisticSingleTopicWithKeyAndValueSucceedsUnderDefaultLimits() throws Exception {
-    // A single topic (1 resourceId) may carry both a key and a value association; that is a
-    // batchSize of 1 topic, not 2, so it succeeds even though the max is 1 topic per batch.
-    String valueSchema = "{\"type\":\"record\",\"name\":\"OrderEvent\",\"fields\":["
-        + "{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"customerId\",\"type\":\"string\"},"
-        + "{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"timestamp\",\"type\":\"long\"}]}";
-    String keySchema = "{\"type\":\"record\",\"name\":\"OrderKey\",\"fields\":["
-        + "{\"name\":\"orderId\",\"type\":\"string\"}]}";
-    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema(valueSchema);
-    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema(keySchema);
-
-    AssociationOpRequest opRequest = new AssociationOpRequest(
-        "orders-topic", "default", "orders-topic-id", "topic",
-        java.util.Arrays.asList(
-            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null),
-            new AssociationCreateOp(null, "key", null, null, keySchemaRequest, null)));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
-        Collections.singletonList(opRequest));
-
-    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
-    assertEquals(1, response.getResults().size());
-    assertNull(response.getResults().get(0).getError());
+  public void testThreeUpsertsWithoutSchemasRejected() {
+    // Rejected before anything runs, so the referenced subjects don't need to exist.
+    assertRejected(() -> mutate(false,
+        topic("upserts-a",
+            new AssociationUpsertOp("shared-key", "key", null, null, null, null),
+            new AssociationUpsertOp("shared-value", "value", null, null, null, null)),
+        topic("upserts-b",
+            new AssociationUpsertOp("shared-value", "value", null, null, null, null))),
+        "has 3 UPSERT operations");
   }
 
   @Test
-  public void testExceedsMaxAssociationNumPerBatch() throws Exception {
-    List<AssociationOpRequest> requests = new ArrayList<>();
-    for (int i = 0; i < 2; i++) {
-      requests.add(createOpRequest("num-limit-" + i, "{}"));
-    }
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
-
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.mutateAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
-    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("2 topics"));
-    assertTrue(e.getMessage().contains("maximum of 1 topics"));
+  public void testDryRunIsLimited() {
+    assertRejected(() -> mutate(true,
+        topic("dry-run-a", create("value", "DryA")),
+        topic("dry-run-b", create("value", "DryB")),
+        topic("dry-run-c", create("value", "DryC"))),
+        "has 3 CREATE operations");
   }
 
   @Test
-  public void testExceedsMaxAssociationEntryPayloadBytesForValueAssociation() throws Exception {
-    // A single topic (so it doesn't trip the topic-count limit) whose value association's
-    // schema alone exceeds the per-association byte limit; the small key association is
-    // unaffected, proving the check is per-association, not per-topic.
-    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("\"" + padded(1_150_000) + "\"");
-    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema("{}");
-    AssociationOpRequest opRequest = new AssociationOpRequest(
-        "entry-limit-big", "default", "entry-limit-big-id", "topic",
-        java.util.Arrays.asList(
-            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null),
-            new AssociationCreateOp(null, "key", null, null, keySchemaRequest, null)));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
-        Collections.singletonList(opRequest));
+  public void testCreatesAndDeletesInTheSameRequestSucceed() throws Exception {
+    assertAllSucceeded(mutate(false,
+        topic("mixed-existing", create("key", "MixedKey"), create("value", "MixedValue"))), 1);
 
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.mutateAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
-    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("'value' association's schema"));
-    assertTrue(e.getMessage().contains("resourceId 'entry-limit-big-id'"));
-    assertTrue(e.getMessage().contains("per association schema"));
+    assertAllSucceeded(mutate(false,
+        topic("mixed-new", create("key", "NewKey"), create("value", "NewValue")),
+        topic("mixed-existing", delete("key"), delete("value"))), 2);
   }
 
   @Test
-  public void testExceedsMaxAssociationEntryPayloadBytesForKeyAssociation() throws Exception {
-    // Same as above but with the oversized schema on the key association instead, confirming
-    // the check correctly identifies whichever association is the actual offender.
-    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("{}");
-    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema("\"" + padded(1_150_000) + "\"");
-    AssociationOpRequest opRequest = new AssociationOpRequest(
-        "entry-limit-key-big", "default", "entry-limit-key-big-id", "topic",
-        java.util.Arrays.asList(
-            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null),
-            new AssociationCreateOp(null, "key", null, null, keySchemaRequest, null)));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
-        Collections.singletonList(opRequest));
+  public void testThreeDeletesOfExistingAssociationsRejected() throws Exception {
+    assertAllSucceeded(mutate(false,
+        topic("deletes-a", create("key", "DelKeyA"), create("value", "DelValueA"))), 1);
+    assertAllSucceeded(mutate(false, topic("deletes-b", create("value", "DelValueB"))), 1);
 
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.mutateAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
-    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("'key' association's schema"));
-    assertTrue(e.getMessage().contains("resourceId 'entry-limit-key-big-id'"));
+    assertRejected(() -> mutate(false,
+        topic("deletes-a", delete("key"), delete("value")),
+        topic("deletes-b", delete("value"))),
+        "at least 3 DELETE operations");
   }
 
   @Test
-  public void testExceedsMaxAssociationBatchPayloadBytes() throws Exception {
-    // A single small association whose overall request payload still exceeds the cumulative
-    // batch byte limit because of an oversized resourceNamespace, not the schema itself; this
-    // isolates the batch-total check from the (now per-association) entry check, since the
-    // entry check only looks at each op's schema, not the surrounding topic fields.
-    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema("{}");
-    AssociationOpRequest opRequest = new AssociationOpRequest(
-        "batch-limit-big", padded(2_200_000), "batch-limit-big-id", "topic",
-        Collections.singletonList(
-            new AssociationCreateOp(null, "value", null, null, valueSchemaRequest, null)));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
-        Collections.singletonList(opRequest));
-
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.mutateAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest));
-    assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("bytes per batch"));
+  public void testDeletesOfMissingAssociationsAreNotCounted() throws Exception {
+    AssociationBatchResponse response = mutate(false,
+        topic("missing-a", delete("key"), delete("value")),
+        topic("missing-b", delete("key"), delete("value")),
+        topic("missing-c", delete("value")));
+    assertEquals(3, response.getResults().size());
   }
 
   @Test
-  public void testDeleteOnlyBatchExemptFromAllLimits() throws Exception {
-    int numResources = 5;
-    List<String> subjects = TestUtils.getRandomCanonicalAvroString(numResources);
-    List<AssociationOpRequest> deleteRequests = new ArrayList<>();
-    for (int i = 0; i < numResources; i++) {
-      String subject = "delete-only-subject-" + i;
-      restApp.restClient.registerSchema(subjects.get(i), subject);
-      AssociationCreateOp createOp = new AssociationCreateOp(
-          subject, "value", LifecyclePolicy.WEAK, false, null, null);
-      AssociationOpRequest createRequest = new AssociationOpRequest(
-          "delete-only-" + i, "default", "delete-only-" + i + "-id", "topic",
-          Collections.singletonList(createOp));
-      AssociationBatchResponse createResponse = restApp.restClient.mutateAssociations(
-          RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
-          new AssociationBatchRequest(Collections.singletonList(createRequest)));
-      assertNull(createResponse.getResults().get(0).getError());
-
-      deleteRequests.add(new AssociationOpRequest(
-          "delete-only-" + i, "default", "delete-only-" + i + "-id", "topic",
-          Collections.singletonList(new AssociationDeleteOp("value"))));
-    }
-
-    // A batch of only delete ops has no inline schemas, so it is exempt from the batch size
-    // limit even though it well exceeds the configured maximum of 1 topic per batch.
-    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
-        new AssociationBatchRequest(deleteRequests));
-    assertEquals(numResources, response.getResults().size());
-    for (AssociationResult result : response.getResults()) {
-      assertNull(result.getError());
-    }
+  public void testPayloadLimitAppliesToASingleCreate() {
+    assertRejected(() -> mutate(false, topic("oversized",
+        new AssociationCreateOp(null, "value", null, null,
+            schema("\"" + padded(1_100_000) + "\""), null))),
+        "bytes per batch");
   }
 }

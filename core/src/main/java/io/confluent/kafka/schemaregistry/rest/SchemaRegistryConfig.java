@@ -191,23 +191,29 @@ public class SchemaRegistryConfig extends RestConfig {
       "association.batch.mutate.limits.enabled";
   public static final boolean ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT = false;
   /**
-   * <code>association.batch.mutate.max.association.num.per.batch</code>
+   * <code>association.batch.mutate.max.association.num.create.per.batch</code>
    */
-  public static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG =
-      "association.batch.mutate.max.association.num.per.batch";
-  public static final int MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT = 1;
+  public static final String MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.create.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_DEFAULT = 2;
   /**
-   * <code>association.batch.mutate.max.association.entry.payload.bytes</code>
+   * <code>association.batch.mutate.max.association.num.upsert.per.batch</code>
    */
-  public static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG =
-      "association.batch.mutate.max.association.entry.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT = 1_100_000;
+  public static final String MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.upsert.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_DEFAULT = 2;
+  /**
+   * <code>association.batch.mutate.max.association.num.delete.per.batch</code>
+   */
+  public static final String MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_CONFIG =
+      "association.batch.mutate.max.association.num.delete.per.batch";
+  public static final int MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_DEFAULT = 2;
   /**
    * <code>association.batch.mutate.max.association.batch.payload.bytes</code>
    */
   public static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG =
       "association.batch.mutate.max.association.batch.payload.bytes";
-  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 2_100_000;
+  public static final int MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT = 1_048_576;
   /**
    * <code>association.batch.get.limits.enabled</code>
    */
@@ -219,7 +225,13 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG =
       "association.batch.get.max.association.num.per.batch";
-  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 1;
+  public static final int MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT = 2;
+  /**
+   * <code>association.batch.get.max.association.batch.payload.bytes</code>
+   */
+  public static final String MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_CONFIG =
+      "association.batch.get.max.association.batch.payload.bytes";
+  public static final int MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_DEFAULT = 1_048_576;
   /**
    * <code>association.delete.async.threads</code>
    */
@@ -594,40 +606,43 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ASSOCIATIONS_ENABLE_DOC =
       "If true, enable support for associations between resources and subjects.";
   protected static final String ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC =
-      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG + ", "
-      + MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG + ", and "
-      + MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchMutate API. "
-      + "When false (the default), batchMutate requests are never rejected for exceeding "
-      + "these limits.";
-  protected static final String MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC =
-      "Maximum number of topics (resource entries) allowed across an entire Associations "
-      + "batchMutate request when any association in the request carries an inline schema; a "
-      + "single topic may include both a key and a value association without counting as two "
-      + "topics. Not enforced when the request contains no inline schemas, or when "
-      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
-  protected static final String MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC =
-      "Maximum payload size in bytes of a single association's inline schema (the whole "
-      + "RegisterSchemaRequest, including any references and metadata) in an Associations "
-      + "batchMutate request; checked independently per association, so a topic's key and "
-      + "value schemas are each measured and bounded on their own. Not enforced when the "
-      + "request contains no inline schemas, or when "
+      "If true, enforce " + MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_CONFIG + ", "
+      + MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_CONFIG + ", "
+      + MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_CONFIG + ", and "
+      + MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchMutate API, "
+      + "including dry runs, whether or not the request has inline schemas. When false (the "
+      + "default), batchMutate requests are never rejected for exceeding these limits.";
+  protected static final String MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_DOC =
+      "Maximum number of CREATE association operations in an Associations batchMutate request, "
+      + "counted across all topics in the request. Each operation type is limited separately. "
+      + "Not enforced when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_DOC =
+      "Maximum number of UPSERT association operations in an Associations batchMutate request, "
+      + "counted across all topics in the request. Each operation type is limited separately. "
+      + "Not enforced when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_DOC =
+      "Maximum number of DELETE association operations in an Associations batchMutate request, "
+      + "counted across all topics in the request. Only DELETE operations on associations that "
+      + "exist are counted. Each operation type is limited separately. Not enforced when "
       + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
   protected static final String MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC =
-      "Maximum cumulative payload size in bytes of the entire Associations batchMutate "
-      + "request (all topics, subjects, and inline schemas combined). Not enforced when the "
-      + "request contains no inline schemas, or when "
-      + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG + " is false.";
+      "Maximum size in bytes of an entire Associations batchMutate request, measured as its "
+      + "re-serialized JSON. Not enforced when " + ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG
+      + " is false.";
   protected static final String ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC =
-      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " on the Associations "
-      + "batchGet API. When false (the default), batchGet requests are never rejected for "
-      + "exceeding this limit.";
+      "If true, enforce " + MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG + " and "
+      + MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_CONFIG + " on the Associations batchGet API, "
+      + "whatever the value of its includeSchemas parameter. When false (the default), "
+      + "batchGet requests are never rejected for exceeding these limits.";
   protected static final String MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC =
-      "Maximum number of topics (resource entries) that may be queried across an entire "
-      + "Associations batchGet request (relevant only when the request's includeSchemas "
-      + "parameter is true; a request with includeSchemas=false never retrieves any schemas "
-      + "and is not subject to this limit). A single topic may request both a key and a value "
-      + "association without counting as two topics. Not enforced when "
+      "Maximum number of associations an Associations batchGet request may retrieve, counted "
+      + "across all entries in the request. Only associations that exist are counted, so an "
+      + "entry for a topic without associations counts as zero. Not enforced when "
       + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG + " is false.";
+  protected static final String MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_DOC =
+      "Maximum size in bytes of an entire Associations batchGet request, measured as its "
+      + "re-serialized JSON. Not enforced when " + ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG
+      + " is false.";
   protected static final String ASSOCIATION_DELETE_ASYNC_THREADS_DOC =
       "Number of threads the leader uses to run cascaded subject deletes queued by "
       + "DELETE /associations/resources/{resourceId} with async=true. Deletes that share a "
@@ -954,16 +969,20 @@ public class SchemaRegistryConfig extends RestConfig {
         ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DEFAULT,
         ConfigDef.Importance.LOW, ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_DOC
     )
-    .define(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
-        MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DEFAULT,
-        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_DOC
+    .define(MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_DOC
     )
-    .define(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
-        MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DEFAULT,
-        ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_DOC
+    .define(MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_DOC
+    )
+    .define(MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_DOC
     )
     .define(MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
-        MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT,
+        MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DEFAULT, ConfigDef.Range.atLeast(0),
         ConfigDef.Importance.LOW, MAX_ASSOCIATION_MUTATE_BATCH_PAYLOAD_BYTES_DOC
     )
     .define(ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
@@ -971,8 +990,12 @@ public class SchemaRegistryConfig extends RestConfig {
         ConfigDef.Importance.LOW, ASSOCIATION_BATCH_GET_LIMITS_ENABLED_DOC
     )
     .define(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG, ConfigDef.Type.INT,
-        MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT,
+        MAX_ASSOCIATION_NUM_PER_GET_BATCH_DEFAULT, ConfigDef.Range.atLeast(0),
         ConfigDef.Importance.LOW, MAX_ASSOCIATION_NUM_PER_GET_BATCH_DOC
+    )
+    .define(MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_CONFIG, ConfigDef.Type.INT,
+        MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_DOC
     )
     .define(ASSOCIATION_DELETE_ASYNC_THREADS_CONFIG, ConfigDef.Type.INT,
         ASSOCIATION_DELETE_ASYNC_THREADS_DEFAULT, ConfigDef.Range.atLeast(1),
@@ -1289,12 +1312,16 @@ public class SchemaRegistryConfig extends RestConfig {
     return getBoolean(ASSOCIATION_BATCH_MUTATE_LIMITS_ENABLED_CONFIG);
   }
 
-  public int maxAssociationNumPerMutateBatch() {
-    return getInt(MAX_ASSOCIATION_NUM_PER_MUTATE_BATCH_CONFIG);
+  public int maxAssociationNumCreatePerMutateBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_CREATE_PER_MUTATE_BATCH_CONFIG);
   }
 
-  public int maxAssociationMutateEntryPayloadBytes() {
-    return getInt(MAX_ASSOCIATION_MUTATE_ENTRY_PAYLOAD_BYTES_CONFIG);
+  public int maxAssociationNumUpsertPerMutateBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_UPSERT_PER_MUTATE_BATCH_CONFIG);
+  }
+
+  public int maxAssociationNumDeletePerMutateBatch() {
+    return getInt(MAX_ASSOCIATION_NUM_DELETE_PER_MUTATE_BATCH_CONFIG);
   }
 
   public int maxAssociationMutateBatchPayloadBytes() {
@@ -1307,6 +1334,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public int maxAssociationNumPerGetBatch() {
     return getInt(MAX_ASSOCIATION_NUM_PER_GET_BATCH_CONFIG);
+  }
+
+  public int maxAssociationGetBatchPayloadBytes() {
+    return getInt(MAX_ASSOCIATION_GET_BATCH_PAYLOAD_BYTES_CONFIG);
   }
 
   public int associationDeleteAsyncThreads() {
