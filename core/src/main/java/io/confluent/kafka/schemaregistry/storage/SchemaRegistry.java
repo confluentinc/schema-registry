@@ -180,6 +180,15 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
+   * As {@link #isLogicallyCompatibleByProvenance(String, int)}, given {@code previousVersion}, the
+   * version just before {@code version}, soft-deleted or not, or 0 if none.
+   */
+  default List<String> isLogicallyCompatibleByProvenance(String subject, int version,
+      int previousVersion) throws SchemaRegistryException {
+    return isLogicallyCompatibleByProvenance(subject, version);
+  }
+
+  /**
    * Whether compatibility for {@code subject} is checked against its soft-deleted versions too,
    * as under an effective LOGICAL compatibilityPolicy: a soft-deleted version's records are still
    * read, and the tables LOGICAL protects have applied it.
@@ -311,6 +320,19 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted) throws
           SchemaRegistryException;
+
+  /**
+   * The latest version of {@code subject} carrying schema id {@code id} itself, soft-deleted or
+   * not, or null if none does.
+   */
+  default Integer latestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, subject, true);
+    return versions == null ? null : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .map(SubjectVersion::getVersion)
+        .max(Integer::compare)
+        .orElse(null);
+  }
 
   int normalizeSubjectVersionLimit(int suppliedLimit);
 
