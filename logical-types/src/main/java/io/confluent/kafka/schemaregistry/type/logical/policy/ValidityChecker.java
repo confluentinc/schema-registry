@@ -169,14 +169,14 @@ final class ValidityChecker {
       }
       switch (schema.getType()) {
         case STRUCT:
-          validateNonEmpty(schema.getFields().size(), "struct", path);
+          validateNonEmpty(schema.getFields().size(), path);
           validateNoCaseCollision(namesOf(schema), path);
           for (Schema.Field field : schema.getFields()) {
             checkInvalidTypeRecursive(field.getSchema(), childPath(path, field.getName()));
           }
           return;
         case UNION:
-          validateNonEmpty(schema.getBranches().size(), "union", path);
+          validateNonEmpty(schema.getBranches().size(), path);
           validateNoCaseCollision(namesOf(schema), path);
           for (Schema.UnionBranch branch : schema.getBranches()) {
             checkInvalidTypeRecursive(branch.getSchema(), childPath(path, branch.getName()));
@@ -208,13 +208,13 @@ final class ValidityChecker {
       final Schema body = namedTypes.get(name);
       if (body == null) {
         add(Rule.UNRESOLVED_TYPE_REF, path,
-            "named type '" + name + "' is referenced but not defined");
+            "Schema uses type '" + name + "', but doesn't define it. Define the type or remove "
+                + "the reference.");
         return;
       }
       if (cyclic.computeIfAbsent(name, logicalType::isCyclic)) {
         add(Rule.CYCLIC_TYPE, path,
-            "named type '" + name + "' refers to itself, and cannot be represented by a "
-                + "non-recursive type system");
+            "Type '" + name + "' refers to itself. Remove the self-reference.");
         return;
       }
       if (walkedNamedTypes.add(name)) {
@@ -246,7 +246,7 @@ final class ValidityChecker {
         case VARIANT:
           if (mode == Mode.ICEBERG_V2) {
             add(Rule.UNREPRESENTABLE_TYPE, path,
-                "VARIANT needs Iceberg's variant type, which arrived in format-version 3");
+                "This version doesn't support VARIANT for Iceberg tables. Use a different type.");
           }
           return;
         default:
@@ -259,8 +259,9 @@ final class ValidityChecker {
       final int scale = schema.getScale();
       if (precision < MIN_DECIMAL_PRECISION || precision > MAX_DECIMAL_PRECISION) {
         add(Rule.PRECISION_OUT_OF_RANGE, path,
-            "DECIMAL precision " + precision + " is outside the supported range "
-                + MIN_DECIMAL_PRECISION + " to " + MAX_DECIMAL_PRECISION);
+            "DECIMAL precision '" + precision + "' falls outside the supported range. Use a "
+                + "precision from " + MIN_DECIMAL_PRECISION + " to " + MAX_DECIMAL_PRECISION
+                + ".");
       }
       if (scale == Schema.NO_PARAM) {
         // SRLT's encoding of an omitted scale, which SQL reads as zero. A legitimate schema.
@@ -270,8 +271,8 @@ final class ValidityChecker {
       // has to fit the precision that was written down, whatever else is wrong with it.
       if (scale < 0 || scale > precision) {
         add(Rule.SCALE_OUT_OF_RANGE, path,
-            "DECIMAL scale " + scale + " is outside the supported range 0 to the precision "
-                + precision);
+            "DECIMAL scale '" + scale + "' falls outside the supported range. Use a scale from "
+                + "0 to '" + precision + "'.");
       }
     }
 
@@ -287,8 +288,8 @@ final class ValidityChecker {
       }
       if (schema.getPrecision() > MAX_ICEBERG_MICROS_PRECISION) {
         add(Rule.UNREPRESENTABLE_TYPE, path,
-            schema.getType() + "(" + schema.getPrecision() + ") needs Iceberg's nanosecond "
-                + "timestamp types, which arrived in format-version 3");
+            schema.getType() + "(" + schema.getPrecision() + ") exceeds the supported precision. "
+                + "Use a precision of " + MAX_ICEBERG_MICROS_PRECISION + " or lower.");
       }
     }
 
@@ -303,7 +304,8 @@ final class ValidityChecker {
       final int min = zeroMeansUnbounded ? 0 : MIN_FIXED_LENGTH;
       if (length < min) {
         add(Rule.LENGTH_OUT_OF_RANGE, path,
-            schema.getType() + " length " + length + " is below the minimum of " + min);
+            "'" + schema.getType() + "' length '" + length + "' is too small. Use a length of "
+                + "at least '" + min + "'.");
       }
     }
 
@@ -329,8 +331,8 @@ final class ValidityChecker {
         final String first = byLowerCase.putIfAbsent(key, name);
         if (first != null && reported.add(key)) {
           add(Rule.FIELD_NAME_CASE_COLLISION, path,
-              "field names '" + first + "' and '" + name + "' differ only in case, which Iceberg's "
-                  + "case-insensitive name index cannot distinguish");
+              "Fields '" + first + "' and '" + name + "' differ only by letter case. Rename one "
+                  + "of them.");
         }
       }
     }
@@ -364,12 +366,14 @@ final class ValidityChecker {
      * {@code FlinkComparison} admits it. It was applied to every mode for a while purely because
      * the walk is shared, which is not a reason.
      */
-    private void validateNonEmpty(int childCount, String kind, String path) {
+    private void validateNonEmpty(int childCount, String path) {
       if (!isIceberg()) {
         return;
       }
       if (childCount == 0) {
-        add(Rule.EMPTY_STRUCT, path, "a " + kind + " must have at least one field");
+        String subject = path.isEmpty() ? "The schema" : "'" + path + "'";
+        add(Rule.EMPTY_STRUCT, path, subject + " has no fields. Add at least one field or, for "
+            + "a union, at least one type.");
       }
     }
 
