@@ -137,6 +137,19 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testInvalidEntriesFailOnTheirOwnInsteadOfCounting() throws Exception {
+    createTopic("get-invalid", "key", "value");
+    AssociationGetRequest noNamespace =
+        new AssociationGetRequest("get-invalid", null, "topic", null, null);
+
+    AssociationBatchResponse response = batchGet(false, noNamespace, noNamespace);
+    assertEquals(2, response.getResults().size());
+    for (AssociationResult result : response.getResults()) {
+      assertNotNull(result.getError());
+    }
+  }
+
+  @Test
   public void testPayloadLimit() {
     StringBuilder longName = new StringBuilder();
     for (int i = 0; i < 1_100_000; i++) {

@@ -2976,7 +2976,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   private static String resourceTypeOrDefault(String resourceType) {
-    return resourceType == null || resourceType.isEmpty() ? "topic" : resourceType;
+    return resourceType == null || resourceType.isEmpty()
+        ? AssociationOpRequest.TOPIC_RESOURCE_TYPE
+        : resourceType;
   }
 
   private List<Association> getAssociationsForQuery(AssociationGetRequest query)
@@ -3012,6 +3014,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     int maxNum = config().maxAssociationNumPerGetBatch();
     int numAssociations = 0;
     for (AssociationGetRequest query : request.getRequests()) {
+      // Invalid entries look nothing up; the main loop reports them as per-entry errors.
+      if (query == null) {
+        continue;
+      }
+      try {
+        query.validate();
+      } catch (IllegalPropertyException e) {
+        continue;
+      }
       numAssociations += getAssociationsForQuery(query).size();
       if (numAssociations > maxNum) {
         throw new AssociationBatchLimitExceededException(String.format(
@@ -3224,7 +3235,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         String associationType = ((AssociationDeleteOp) op).getAssociationType();
         // Same default AssociationDeleteOp.validate() applies before the delete runs.
         if (associationType == null || associationType.isEmpty()) {
-          associationType = "value";
+          associationType = AssociationOp.VALUE_ASSOCIATION_TYPE;
         }
         numDeletes += getAssociationsByResourceId(
             req.getResourceId(), resourceTypeOrDefault(req.getResourceType()),
@@ -3248,7 +3259,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         continue;
       }
       for (AssociationOp op : req.getAssociations()) {
-        if (op.getType() == opType) {
+        if (op != null && op.getType() == opType) {
           numOps++;
         }
       }

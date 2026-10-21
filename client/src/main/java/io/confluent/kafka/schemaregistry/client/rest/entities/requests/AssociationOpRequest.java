@@ -37,7 +37,7 @@ import java.util.Set;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationOpRequest {
 
-  private static final String TOPIC_RESOURCE_TYPE = "topic";
+  public static final String TOPIC_RESOURCE_TYPE = "topic";
 
   private String resourceName;
   private String resourceNamespace;

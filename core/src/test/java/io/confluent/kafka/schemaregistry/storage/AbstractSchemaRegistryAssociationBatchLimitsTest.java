@@ -211,7 +211,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
   }
 
   @Test
-  void entriesWithDeserializationErrorsAreNotCounted() {
+  void entriesWithErrorsAreNotCounted() {
     AssociationOpRequest failed = topic("t1", create("value"), create("key"));
     failed.setError(new ErrorMessage(42212, "invalid"));
 
@@ -233,6 +233,13 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
             new AssociationCreateOp(null, "value", null, null, schema, null)))));
     assertTrue(e.getMessage().contains("bytes per batch"), e.getMessage());
     verifyNoLookups();
+  }
+
+  @Test
+  void nullOperationsAreNotCounted() {
+    assertDoesNotThrow(() -> registry.checkAssociationBatchMutateLimits(mutate(
+        topic("t1", create("value"), null),
+        topic("t2", null, new AssociationDeleteOp("key")))));
   }
 
   // ---------- batchGet ----------
@@ -294,6 +301,27 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     verify(registry).getAssociationsByResourceName(
         "orders", "lkc-1", "topic", Collections.emptyList(), null);
     verify(registry, never()).getAssociationsByResourceId(any(), any(), any(), any());
+  }
+
+  @Test
+  void getEntriesThatFailValidationAreNotLookedUp() throws Exception {
+    // Without a namespace, a name lookup would match the name in every namespace.
+    doReturn(existing(5)).when(registry)
+        .getAssociationsByResourceName(any(), any(), any(), any(), any());
+
+    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(get(
+        new AssociationGetRequest("orders", null, "topic", null, null),
+        new AssociationGetRequest(null, "topic", null, null))));
+    verifyNoLookups();
+  }
+
+  @Test
+  void getNullEntriesAreSkipped() throws Exception {
+    doReturn(existing(2)).when(registry)
+        .getAssociationsByResourceId(eq("t1"), any(), any(), any());
+
+    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(get(
+        null, new AssociationGetRequest("t1", "topic", null, null))));
   }
 
   @Test
