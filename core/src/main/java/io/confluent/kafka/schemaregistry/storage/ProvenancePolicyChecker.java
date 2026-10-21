@@ -108,7 +108,7 @@ final class ProvenancePolicyChecker {
     try {
       newLogical = LogicalPolicyChecker.toPolicyLogicalType(newSchema);
     } catch (RuntimeException e) {
-      errors.add(LogicalPolicyChecker.describeUnconvertible(e.getMessage()));
+      errors.add(LogicalPolicyChecker.describeUnconvertible(e));
       return errors;
     }
     errors.addAll(LogicalPolicyChecker.describeValidity(newLogical));
