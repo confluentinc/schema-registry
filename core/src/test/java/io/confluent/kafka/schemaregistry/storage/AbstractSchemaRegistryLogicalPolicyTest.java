@@ -133,8 +133,8 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityPolicy=LOGICAL"), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityLevel=" + level), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityPolicy='LOGICAL'"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel='" + level + "'"), errors.toString());
   }
 
   @ParameterizedTest

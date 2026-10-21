@@ -178,7 +178,7 @@ public final class LogicalPolicyChecker {
     try {
       newLogical = toPolicyLogicalType(newSchema);
     } catch (RuntimeException e) {
-      errors.add(describeUnconvertible(e.getMessage()));
+      errors.add(describeUnconvertible(e));
       return errors;
     }
 
@@ -258,14 +258,23 @@ public final class LogicalPolicyChecker {
    * converts, just reached here because it never got that far. {@code category} lists every mode,
    * since a schema that cannot become a {@link LogicalType} blocks all of them alike, not one in
    * particular.
+   *
+   * <p>{@link TypeTooDeepException} gets its own customer-facing wording per the error-message
+   * spec, naming the actual limit rather than the internal exception; every other conversion
+   * failure falls back to a generic, still-actionable message built around the raw exception
+   * text, which was never written to be customer-facing and is the one message in this package
+   * not fully conformed to that spec.
    */
-  static String describeUnconvertible(String message) {
+  static String describeUnconvertible(RuntimeException e) {
+    String description = e instanceof TypeTooDeepException
+        ? "The schema nesting exceeds '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels. Flatten "
+            + "it to '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels or fewer."
+        : "This schema can't be converted to a table. " + e.getMessage();
     String modes = Arrays.stream(MODES)
         .map(mode -> "\"" + mode + "\"")
         .collect(Collectors.joining(", "));
     return "{errorType:\"" + Invalidity.Rule.UNREPRESENTABLE_TYPE + "\", category:[" + modes
-        + "], description:\"Schema cannot be represented as a logical type: " + message
-        + "\", additionalInfo:\"\"}";
+        + "], description:\"" + description + "\", additionalInfo:\"\"}";
   }
 
   /**
@@ -340,9 +349,8 @@ public final class LogicalPolicyChecker {
    * The error reported for a {@code level} that {@link #supportsLevel} rejects.
    */
   public static String unsupportedLevelMessage(CompatibilityLevel level) {
-    return "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel=" + level
-        + ": LOGICAL requires BACKWARD, BACKWARD_TRANSITIVE, FULL or FULL_TRANSITIVE, since"
-        + " Iceberg only supports backward-compatible schema evolution";
+    return "compatibilityLevel='" + level + "' doesn't work with compatibilityPolicy='LOGICAL'. "
+        + "Use BACKWARD or FULL.";
   }
 
   private static List<ParsedSchemaHolder> selectForComparison(
