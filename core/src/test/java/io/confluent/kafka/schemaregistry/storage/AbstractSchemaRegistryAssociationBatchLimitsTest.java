@@ -243,7 +243,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     props.put(SchemaRegistryConfig.ASSOCIATION_BATCH_GET_LIMITS_ENABLED_CONFIG, "false");
     useConfig(props);
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(true, get(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(get(
         new AssociationGetRequest("t1", "topic", null, null),
         new AssociationGetRequest("t2", "topic", null, null),
         new AssociationGetRequest("t3", "topic", null, null))));
@@ -255,14 +255,14 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
     doReturn(existing(2)).when(registry)
         .getAssociationsByResourceId(eq("t1"), any(), any(), any());
 
-    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(true, get(
+    assertDoesNotThrow(() -> registry.checkAssociationBatchGetLimits(get(
         new AssociationGetRequest("t1", "topic", null, null),
         new AssociationGetRequest("missing-1", "topic", null, null),
         new AssociationGetRequest("missing-2", "topic", null, null))));
   }
 
   @Test
-  void getLookupsStopOnceTheLimitIsPassedEvenWithoutSchemas() throws Exception {
+  void getLookupsStopOnceTheLimitIsPassed() throws Exception {
     doReturn(existing(2)).when(registry)
         .getAssociationsByResourceId(eq("t1"), any(), any(), any());
     doReturn(existing(1)).when(registry)
@@ -272,7 +272,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchGetLimits(false, get(
+        () -> registry.checkAssociationBatchGetLimits(get(
             new AssociationGetRequest("t1", "topic", null, null),
             new AssociationGetRequest("t2", "topic", null, null),
             new AssociationGetRequest("t3", "topic", null, null))));
@@ -288,7 +288,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
         .getAssociationsByResourceName(eq("payments"), eq("lkc-1"), any(), any(), any());
 
     assertThrows(AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchGetLimits(true, get(
+        () -> registry.checkAssociationBatchGetLimits(get(
             new AssociationGetRequest("orders", "lkc-1", "topic", null, null),
             new AssociationGetRequest("payments", "lkc-1", "topic", null, null))));
     verify(registry).getAssociationsByResourceName(
@@ -298,7 +298,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
   @Test
   void getLookupUsesTheQueryFilters() throws Exception {
-    registry.checkAssociationBatchGetLimits(true, get(new AssociationGetRequest(
+    registry.checkAssociationBatchGetLimits(get(new AssociationGetRequest(
         "t1", null, Collections.singletonList("key"), null)));
 
     verify(registry).getAssociationsByResourceId(
@@ -314,7 +314,7 @@ class AbstractSchemaRegistryAssociationBatchLimitsTest {
 
     AssociationBatchLimitExceededException e = assertThrows(
         AssociationBatchLimitExceededException.class,
-        () -> registry.checkAssociationBatchGetLimits(true, get(
+        () -> registry.checkAssociationBatchGetLimits(get(
             new AssociationGetRequest(longName, "lkc-1", "topic", null, null))));
     assertTrue(e.getMessage().contains("bytes per batch"), e.getMessage());
     verifyNoLookups();
