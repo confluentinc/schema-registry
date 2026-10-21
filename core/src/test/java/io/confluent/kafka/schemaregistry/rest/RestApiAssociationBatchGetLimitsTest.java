@@ -22,23 +22,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
 
@@ -53,74 +56,93 @@ public class RestApiAssociationBatchGetLimitsTest extends ClusterTestHarness {
     return props;
   }
 
-  private static void createResource(RestApp restApp, String resourceName, int index)
-      throws Exception {
-    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
-    schemaRequest.setSchema("{\"type\":\"record\",\"name\":\"R" + index + "\",\"fields\":[]}");
-    AssociationCreateOp createOp = new AssociationCreateOp(
-        null, "value", null, null, schemaRequest, null);
-    AssociationOpRequest opRequest = new AssociationOpRequest(
-        resourceName, "default", resourceName + "-id", "topic",
-        Collections.singletonList(createOp));
-    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
-        Collections.singletonList(opRequest));
+  private void createTopic(String name, String... associationTypes) throws Exception {
+    List<AssociationOp> ops = new ArrayList<>();
+    for (String associationType : associationTypes) {
+      RegisterSchemaRequest schema = new RegisterSchemaRequest();
+      schema.setSchema("{\"type\":\"record\",\"name\":\"R" + name.replace("-", "")
+          + associationType + "\",\"fields\":[]}");
+      ops.add(new AssociationCreateOp(null, associationType, null, null, schema, null));
+    }
     AssociationBatchResponse response = restApp.restClient.mutateAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(
+            new AssociationOpRequest(name, "default", name + "-id", "topic", ops))));
     assertNull(response.getResults().get(0).getError());
   }
 
-  private static AssociationGetRequest getRequestFor(String resourceId) {
-    return new AssociationGetRequest(resourceId, "topic", Collections.emptyList(), null);
+  private static AssociationGetRequest byId(String name) {
+    return new AssociationGetRequest(name + "-id", "topic", null, null);
   }
 
-  @Test
-  public void testIncludeSchemasFalseExemptFromLimit() throws Exception {
-    int numItems = 11;
-    List<AssociationGetRequest> queries = new ArrayList<>();
-    for (int i = 0; i < numItems; i++) {
-      queries.add(getRequestFor("get-limit-exempt-" + i + "-id"));
-    }
-    AssociationBatchGetRequest getRequest = new AssociationBatchGetRequest(queries);
-
-    AssociationBatchResponse response = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, false, getRequest);
-    assertEquals(numItems, response.getResults().size());
+  private static AssociationGetRequest byName(String name) {
+    return new AssociationGetRequest(name, "default", "topic", null, null);
   }
 
-  @Test
-  public void testIncludeSchemasTrueWithinLimitSucceeds() throws Exception {
-    int numItems = 1;
-    List<AssociationGetRequest> queries = new ArrayList<>();
-    for (int i = 0; i < numItems; i++) {
-      String resourceName = "get-limit-within-" + i;
-      createResource(restApp, resourceName, i);
-      queries.add(getRequestFor(resourceName + "-id"));
-    }
-    AssociationBatchGetRequest getRequest = new AssociationBatchGetRequest(queries);
-
-    AssociationBatchResponse response = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, true, getRequest);
-    assertEquals(numItems, response.getResults().size());
-    for (AssociationResult result : response.getResults()) {
-      assertNull(result.getError());
-      assertNotNull(result.getResult().getAssociations().get(0).getSchema());
-    }
+  private AssociationBatchResponse batchGet(boolean includeSchemas,
+      AssociationGetRequest... queries) throws Exception {
+    return restApp.restClient.batchGetAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        includeSchemas, new AssociationBatchGetRequest(Arrays.asList(queries)));
   }
 
-  @Test
-  public void testIncludeSchemasTrueExceedsMaxAssociationNumPerGetBatch() throws Exception {
-    int numItems = 2;
-    List<AssociationGetRequest> queries = new ArrayList<>();
-    for (int i = 0; i < numItems; i++) {
-      queries.add(getRequestFor("get-limit-exceeded-" + i + "-id"));
-    }
-    AssociationBatchGetRequest getRequest = new AssociationBatchGetRequest(queries);
-
-    RestClientException e = assertThrows(RestClientException.class, () ->
-        restApp.restClient.batchGetAssociations(
-            RestService.DEFAULT_REQUEST_PROPERTIES, true, getRequest));
+  private static void assertRejected(Executable call, String expectedMessage) {
+    RestClientException e = assertThrows(RestClientException.class, call);
+    assertEquals(422, e.getStatus());
     assertEquals(Errors.ASSOCIATION_BATCH_LIMIT_EXCEEDED_ERROR_CODE, e.getErrorCode());
-    assertTrue(e.getMessage().contains("2 topics"));
-    assertTrue(e.getMessage().contains("maximum of 1"));
+    assertTrue(e.getMessage().contains(expectedMessage), e.getMessage());
+  }
+
+  @Test
+  public void testRetrievingTwoAssociationsSucceeds() throws Exception {
+    createTopic("get-two", "key", "value");
+
+    AssociationBatchResponse response = batchGet(true, byId("get-two"), byId("get-missing"));
+    assertEquals(2, response.getResults().size());
+    AssociationResult result = response.getResults().get(0);
+    assertNull(result.getError());
+    assertEquals(2, result.getResult().getAssociations().size());
+    for (AssociationInfo info : result.getResult().getAssociations()) {
+      assertNotNull(info.getSchema());
+    }
+  }
+
+  @Test
+  public void testRetrievingThreeAssociationsRejectedWithoutSchemas() throws Exception {
+    createTopic("get-three-a", "key", "value");
+    createTopic("get-three-b", "value");
+
+    assertRejected(() -> batchGet(false, byId("get-three-a"), byId("get-three-b")),
+        "at least 3 associations");
+  }
+
+  @Test
+  public void testEntriesWithoutAssociationsAreNotCounted() throws Exception {
+    List<AssociationGetRequest> queries = new ArrayList<>();
+    for (int i = 0; i < 11; i++) {
+      queries.add(byId("get-none-" + i));
+    }
+
+    AssociationBatchResponse response = batchGet(true,
+        queries.toArray(new AssociationGetRequest[0]));
+    assertEquals(11, response.getResults().size());
+  }
+
+  @Test
+  public void testEntriesByNameAreCounted() throws Exception {
+    createTopic("get-by-name-a", "key", "value");
+    createTopic("get-by-name-b", "value");
+
+    assertRejected(() -> batchGet(false, byName("get-by-name-a"), byName("get-by-name-b")),
+        "at least 3 associations");
+  }
+
+  @Test
+  public void testPayloadLimit() {
+    StringBuilder longName = new StringBuilder();
+    for (int i = 0; i < 1_100_000; i++) {
+      longName.append('x');
+    }
+
+    assertRejected(() -> batchGet(false, byName(longName.toString())), "bytes per batch");
   }
 }
