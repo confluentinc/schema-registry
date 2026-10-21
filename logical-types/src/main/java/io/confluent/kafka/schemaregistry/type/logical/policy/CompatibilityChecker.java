@@ -34,12 +34,13 @@ import java.util.Set;
  * <p>{@code original} is the schema data was <b>written</b> under; {@code update} is the schema
  * now doing the <b>reading</b>. That is the whole contract -- neither parameter means "the older
  * one" or "the one on file." Backward compatibility calls this with (previously-registered,
- * proposed);
- * forward compatibility calls it with the same two schemas swapped, (proposed,
- * previously-registered), to ask the mirror question. A message built from these parameters must
- * therefore be worded in terms of "the writer's schema" / "the reader's schema," never "the
- * original schema" / "the update" -- the latter reads backwards for every caller that swaps the
- * arguments. All violations are collected; see {@link CompatibilityResult}.
+ * proposed); forward compatibility calls it with the same two schemas swapped, (proposed,
+ * previously-registered), to ask the mirror question. Internally that makes {@code original} the
+ * writer's schema and {@code update} the reader's -- useful for reasoning about a rule's
+ * direction, but it must never leak into a rendered message: the customer-facing text (see
+ * {@link #describeChange}) names the field and the two types, not which side wrote and which
+ * read, per the Confluent Design error-message guidelines this package renders against. All
+ * violations are collected; see {@link CompatibilityResult}.
  *
  * <p>{@link LogicalTypeChecker} is the entry point. This class dispatches to one implementation
  * per mode — {@link IcebergComparison} and {@link FlinkComparison} — and holds the walk primitives
@@ -223,9 +224,35 @@ final class CompatibilityChecker {
     return parentPath.isEmpty() ? fieldName : parentPath + '.' + fieldName;
   }
 
-  static String describeChange(Schema original, Schema update) {
-    return "type is " + render(original) + " in the writer's schema and "
-        + render(update) + " in the reader's schema";
+  /**
+   * The field a dot/bracket path refers to, for naming in a customer-facing message -- the last
+   * path segment, with a trailing container marker ({@code []}, <code>{}</code> or
+   * <code>{key}</code>) stripped so a container-child finding names its containing field rather
+   * than nothing. Empty at the schema root, where there is no field to name.
+   */
+  static String fieldNameOf(String path) {
+    String trimmed = path;
+    if (trimmed.endsWith("{key}")) {
+      trimmed = trimmed.substring(0, trimmed.length() - "{key}".length());
+    } else if (trimmed.endsWith("[]") || trimmed.endsWith("{}")) {
+      trimmed = trimmed.substring(0, trimmed.length() - 2);
+    }
+    int lastDot = trimmed.lastIndexOf('.');
+    return lastDot < 0 ? trimmed : trimmed.substring(lastDot + 1);
+  }
+
+  /**
+   * The leading sentence every {@code TYPE_MISMATCH} and {@code UNSUPPORTED_TYPE_CHANGE} message
+   * shares, per the customer-facing error-message spec: names the field (or, lacking one at the
+   * schema root, says so plainly) and the before/after type, ending in a space so a caller
+   * concatenates its own trailing sentence directly -- a fixed "Keep the type as '&lt;A&gt;'." for
+   * {@code TYPE_MISMATCH}, one of the {@code UNSUPPORTED_TYPE_CHANGE} reasons for the other.
+   */
+  static String describeChange(String path, Schema original, Schema update) {
+    String field = fieldNameOf(path);
+    String subject = field.isEmpty() ? "the schema" : "field '" + field + "'";
+    return "The type of " + subject + " changed from '" + render(original) + "' to '"
+        + render(update) + "'. ";
   }
 
   /**
