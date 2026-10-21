@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.FieldView;
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.Kind;
+import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing.IndexPath;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.childPath;
@@ -41,7 +42,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * One comparison run in Flink mode.
@@ -98,7 +98,11 @@ final class FlinkComparison {
    */
   private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
-  FlinkComparison(LogicalType original, LogicalType update) {
+  /** Which writer member each reader member is compared with. */
+  private final FieldPairing pairing;
+
+  FlinkComparison(LogicalType original, LogicalType update, FieldPairing pairing) {
+    this.pairing = pairing;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -106,7 +110,7 @@ final class FlinkComparison {
   }
 
   CompatibilityResult run() {
-    compareTypes(originalRoot, updateRoot, "");
+    compareTypes(originalRoot, updateRoot, "", IndexPath.ROOT, IndexPath.ROOT);
     return CompatibilityResult.of(findings);
   }
 
@@ -115,6 +119,9 @@ final class FlinkComparison {
   }
 
   private boolean claimStructPair(Schema original, Schema update) {
+    if (!pairing.comparesSharedTypesOnce()) {
+      return true;
+    }
     return comparedStructPairs
         .computeIfAbsent(original, key -> Collections.newSetFromMap(new IdentityHashMap<>()))
         .add(update);
@@ -122,14 +129,14 @@ final class FlinkComparison {
 
   // -- dispatch --------------------------------------------------------------------------------
 
-  private void compareTypes(
-      Schema original, Schema update, String path) {
+  private void compareTypes(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     if (isRef(original) || isRef(update)) {
       // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so keying on a
       // one-sided ref collapses every inline counterpart onto the same key: the first
       // (inline, ref X) pair claims it and every later one returns without comparing anything,
       // silently dropping findings. Inline-to-$ref is ordinary JSON Schema evolution.
-      if (isRef(original) && isRef(update)) {
+      if (isRef(original) && isRef(update) && pairing.comparesSharedTypesOnce()) {
         final String pairKey = refKey(original) + ' ' + refKey(update);
         if (!comparedRefPairs.add(pairKey)) {
           return;
@@ -138,14 +145,14 @@ final class FlinkComparison {
       checkCompatibilityRecursive(
           resolve(original, originalNamedTypes),
           resolve(update, updateNamedTypes),
-          path);
+          path, originalPath, updatePath);
       return;
     }
-    checkCompatibilityRecursive(original, update, path);
+    checkCompatibilityRecursive(original, update, path, originalPath, updatePath);
   }
 
-  private void checkCompatibilityRecursive(
-      Schema original, Schema update, String path) {
+  private void checkCompatibilityRecursive(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
           || !original.getQualifiedName().equals(update.getQualifiedName())) {
@@ -166,17 +173,18 @@ final class FlinkComparison {
     switch (originalKind) {
       case STRUCT:
         if (claimStructPair(original, update)) {
-          validateStructs(fieldViews(original), fieldViews(update), path);
+          validateStructs(fieldViews(original), fieldViews(update), path, originalPath,
+              updatePath);
         }
         break;
       case LIST:
-        validateLists(original, update, path);
+        validateLists(original, update, path, originalPath, updatePath);
         break;
       case MULTISET:
-        validateMultisets(original, update, path);
+        validateMultisets(original, update, path, originalPath, updatePath);
         break;
       case MAP:
-        validateMaps(original, update, path);
+        validateMaps(original, update, path, originalPath, updatePath);
         break;
       case PRIMITIVE:
         validatePrimitives(original, update, path);
@@ -203,19 +211,17 @@ final class FlinkComparison {
    * located under the new name is a question about the encoding, which the format-level checker
    * owns.
    */
-  private void validateStructs(
-      List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+  private void validateStructs(List<FieldView> originalFields, List<FieldView> updateFields,
+      String path, IndexPath originalPath, IndexPath updatePath) {
 
-    final Map<String, FieldView> originalFieldMap = originalFields.stream()
-        .collect(Collectors.toMap(field -> field.name, field -> field));
+    final int[] partners =
+        pairing.partners(originalPath, originalFields, updatePath, updateFields);
 
-    int updatePosition = -1;
-    for (FieldView updateField : updateFields) {
-      updatePosition++;
+    for (int updateIndex = 0; updateIndex < updateFields.size(); updateIndex++) {
+      final FieldView updateField = updateFields.get(updateIndex);
       final String fieldPath = childPath(path, updateField.name);
-      // Struct fields are the one place both converters agree on the index convention: the
-      // field's position within its struct, appended to the parent's path.
-      final FieldView originalField = originalFieldMap.get(updateField.name);
+      final int originalIndex = partners[updateIndex];
+      final FieldView originalField = originalIndex < 0 ? null : originalFields.get(originalIndex);
 
       // A new column must be readable for rows written before it existed.
       if (originalField == null) {
@@ -238,7 +244,8 @@ final class FlinkComparison {
 
       validateDefaultNotRemoved(originalField, updateField, fieldPath);
 
-      compareTypes(originalField.schema, updateField.schema, fieldPath);
+      compareTypes(originalField.schema, updateField.schema, fieldPath,
+          originalPath.child(originalIndex), updatePath.child(updateIndex));
     }
   }
 
@@ -318,28 +325,30 @@ final class FlinkComparison {
    * element and value optionality lives on the container rather than the child type, and the
    * reference never reads it. Closing it would be a divergence from the port.
    */
-  private void compareChild(
-      Schema original, Schema update, String path) {
+  private void compareChild(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     if (original.isNullable() && !update.isNullable()) {
       add(Rule.NULLABLE_TO_NON_NULLABLE, path,
           "Items in '" + fieldNameOf(path) + "' changed to NOT NULL, but existing data may "
               + "contain null values. Keep the items nullable.");
     }
-    compareTypes(original, update, path);
+    compareTypes(original, update, path, originalPath, updatePath);
   }
 
   /** Container recursion for ARRAY. */
-  private void validateLists(
-      Schema original, Schema update, String path) {
-    compareChild(elementOf(original), elementOf(update), path + "[]");
+  private void validateLists(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
+    compareChild(elementOf(original), elementOf(update), path + "[]", originalPath.child(0),
+        updatePath.child(0));
   }
 
   /**
    * Container recursion for MULTISET, which Flink models as its own type rather than a MAP.
    */
-  private void validateMultisets(
-      Schema original, Schema update, String path) {
-    compareChild(elementOf(original), elementOf(update), path + "[]");
+  private void validateMultisets(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
+    compareChild(elementOf(original), elementOf(update), path + "[]", originalPath.child(0),
+        updatePath.child(0));
   }
 
   /**
@@ -352,12 +361,14 @@ final class FlinkComparison {
    * field, whereas Flink's MAP has no such identity and a key is just another value. An unsafe key
    * change is still rejected — as the leaf rule that applies, at the {@code {key}} path.
    */
-  private void validateMaps(
-      Schema original, Schema update, String path) {
+  private void validateMaps(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     // Nullability is checked on the key too, because SRLT can express a nullable map key even
     // though no converter emits one.
-    compareChild(original.getKeyType(), update.getKeyType(), path + "{key}");
-    compareChild(original.getValueType(), update.getValueType(), path + "{}");
+    compareChild(original.getKeyType(), update.getKeyType(), path + "{key}",
+        originalPath.child(0), updatePath.child(0));
+    compareChild(original.getValueType(), update.getValueType(), path + "{}",
+        originalPath.child(1), updatePath.child(1));
   }
 
   private static boolean isEffectivelyNullable(FieldView field) {

@@ -28,10 +28,12 @@ import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConv
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,7 +61,7 @@ public final class LogicalPolicyChecker {
 
   private static final Logger log = LoggerFactory.getLogger(LogicalPolicyChecker.class);
 
-  private static final Mode[] MODES = {Mode.FLINK, Mode.ICEBERG_V2};
+  static final Mode[] MODES = {Mode.FLINK, Mode.ICEBERG_V2};
 
   private LogicalPolicyChecker() {
   }
@@ -121,11 +123,19 @@ public final class LogicalPolicyChecker {
    * reshaping it is.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    // Its own messages: toDescriptor() follows a public import, so a file that only re-exports
-    // another would count that file's.
-    long own = schema.rawSchema().getTypes().stream()
-        .filter(type -> type instanceof MessageElement).count();
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, own > 1);
+    // A file declaring nothing but a public import is written, and read by Flink, as the file it
+    // re-exports: checked as that, not as the bare reference format=logical keeps for it.
+    schema = ProtoPublicImportWrappers.resolve(schema);
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, declaresSeveralMessages(schema));
+  }
+
+  /**
+   * Whether the policy checks a Protobuf file as several messages, each wrapped, rather than as its
+   * one message: {@code schema} as {@link ProtoPublicImportWrappers#resolve} leaves it.
+   */
+  static boolean declaresSeveralMessages(ProtobufSchema schema) {
+    return schema.rawSchema().getTypes().stream()
+        .filter(type -> type instanceof MessageElement).count() > 1;
   }
 
 
@@ -190,17 +200,17 @@ public final class LogicalPolicyChecker {
       }
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
-        addCompareErrors(errors, previousLogical, newLogical);
+        addCompareErrors(errors, previousLogical, newLogical, FieldPairing.byName());
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
-        addCompareErrors(errors, newLogical, previousLogical);
+        addCompareErrors(errors, newLogical, previousLogical, FieldPairing.byName());
       }
     }
     return errors;
   }
 
-  private static List<String> describeValidity(LogicalType newLogical) {
+  static List<String> describeValidity(LogicalType newLogical) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Invalidity invalidity
@@ -219,12 +229,12 @@ public final class LogicalPolicyChecker {
     return errors;
   }
 
-  private static void addCompareErrors(
-      List<String> errors, LogicalType original, LogicalType update) {
+  static void addCompareErrors(List<String> errors, LogicalType original, LogicalType update,
+      FieldPairing pairing) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Incompatibility incompatibility
-          : LogicalTypeChecker.compare(mode, original, update).getIncompatibilities()) {
+          : LogicalTypeChecker.compare(mode, original, update, pairing).getIncompatibilities()) {
         byFinding
             .computeIfAbsent(
                 new FindingKey(incompatibility.getRule().name(), incompatibility.getPath()),
@@ -255,7 +265,7 @@ public final class LogicalPolicyChecker {
    * text, which was never written to be customer-facing and is the one message in this package
    * not fully conformed to that spec.
    */
-  private static String describeUnconvertible(RuntimeException e) {
+  static String describeUnconvertible(RuntimeException e) {
     String description = e instanceof TypeTooDeepException
         ? "The schema nesting exceeds '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels. Flatten "
             + "it to '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels or fewer."
@@ -342,20 +352,20 @@ public final class LogicalPolicyChecker {
     return List.of(previousSchemas.get(previousSchemas.size() - 1));
   }
 
-  private static boolean isTransitive(CompatibilityLevel level) {
+  static boolean isTransitive(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksBackward(CompatibilityLevel level) {
+  static boolean checksBackward(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD
         || level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksForward(CompatibilityLevel level) {
+  static boolean checksForward(CompatibilityLevel level) {
     return level == CompatibilityLevel.FORWARD
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL
