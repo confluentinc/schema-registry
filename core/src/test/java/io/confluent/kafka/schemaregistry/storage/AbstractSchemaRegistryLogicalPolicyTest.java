@@ -130,8 +130,8 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityPolicy=LOGICAL"), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityPolicy='LOGICAL'"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel='FORWARD'"), errors.toString());
   }
 
   @Test
@@ -141,7 +141,8 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("compatibilityLevel=FORWARD_TRANSITIVE"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityPolicy='LOGICAL'"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel='FORWARD_TRANSITIVE'"), errors.toString());
   }
 
   @Test

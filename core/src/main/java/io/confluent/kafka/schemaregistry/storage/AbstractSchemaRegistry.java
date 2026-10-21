@@ -1329,8 +1329,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                 || compatibility == CompatibilityLevel.FORWARD_TRANSITIVE)) {
       // Iceberg (the only current LOGICAL target) only supports backward-compatible evolution,
       // so this pairing can never be satisfied regardless of the schema being registered.
-      errorMessages.add("compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
-              + compatibility + ": Iceberg only supports backward-compatible schema evolution");
+      errorMessages.add("compatibilityLevel='" + compatibility + "' doesn't work with "
+              + "compatibilityPolicy='LOGICAL'. Use BACKWARD or FULL.");
       return errorMessages;
     }
     String compatibilityGroup = config.getCompatibilityGroup();
