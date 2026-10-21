@@ -502,7 +502,7 @@ public abstract class RestApiCompatibilityTest {
           e.getErrorCode(),
           "Should get an invalid compatibility level error"
       );
-      assertTrue(e.getMessage().contains("compatibilityLevel=NONE"), e.getMessage());
+      assertTrue(e.getMessage().contains("compatibilityLevel='NONE'"), e.getMessage());
     }
   }
 
@@ -535,8 +535,8 @@ public abstract class RestApiCompatibilityTest {
           "Should get an invalid compatibility level error"
       );
       assertTrue(
-          e.getMessage().contains("compatibilityPolicy=LOGICAL")
-              && e.getMessage().contains("compatibilityLevel=" + expectedLevel),
+          e.getMessage().contains("compatibilityPolicy='LOGICAL'")
+              && e.getMessage().contains("compatibilityLevel='" + expectedLevel + "'"),
           "Should be rejected against the inherited level " + expectedLevel + ": "
               + e.getMessage()
       );
@@ -623,8 +623,8 @@ public abstract class RestApiCompatibilityTest {
           "Should get a conflict status"
       );
       assertTrue(
-          e.getMessage().contains("compatibilityPolicy=LOGICAL")
-              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          e.getMessage().contains("compatibilityPolicy='LOGICAL'")
+              && e.getMessage().contains("compatibilityLevel='FORWARD'"),
           "Should be rejected by the LOGICAL+FORWARD guard at registration: " + e.getMessage()
       );
     }
@@ -686,8 +686,8 @@ public abstract class RestApiCompatibilityTest {
           "Should get a conflict status"
       );
       assertTrue(
-          e.getMessage().contains("compatibilityPolicy=LOGICAL")
-              && e.getMessage().contains("compatibilityLevel=FORWARD"),
+          e.getMessage().contains("compatibilityPolicy='LOGICAL'")
+              && e.getMessage().contains("compatibilityLevel='FORWARD'"),
           "Should be rejected by the LOGICAL+FORWARD config guard specifically: "
               + e.getMessage()
       );
