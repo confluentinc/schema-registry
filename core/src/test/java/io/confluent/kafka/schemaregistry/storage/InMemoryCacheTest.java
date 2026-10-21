@@ -20,6 +20,9 @@ import static org.junit.Assert.assertNull;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.TreeSet;
 import org.junit.Test;
 
 public class InMemoryCacheTest {
@@ -51,6 +54,17 @@ public class InMemoryCacheTest {
     tombstone(cache, 2);
     assertNull(cache.schemaKeyById(7, SUBJECT));
     assertNull(cache.schemaIdAndSubjects(schema()));
+  }
+
+  @Test
+  public void anIdListsEveryVersionCarryingIt() throws Exception {
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 2, true);
+    put(cache, 3, false);
+
+    assertEquals(Collections.singletonMap(SUBJECT, new TreeSet<>(Arrays.asList(2, 3))),
+        cache.subjectVersionsById(7, SUBJECT));
+    assertEquals(Collections.emptyMap(), cache.subjectVersionsById(8, SUBJECT));
   }
 
   @Test

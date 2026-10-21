@@ -1644,7 +1644,8 @@ public class RestService implements Closeable, Configurable {
    * As {@link #getProvenanceByVersion(Map, String, String, String, boolean, boolean)}; with
    * {@code compatibilityPolicy} {@code "LOGICAL"}, each version also says whether it is a valid
    * backward step from the version just before it under that policy, columns paired by
-   * provenance, whatever the subject's config, with the errors found.
+   * provenance, whatever the subject's config, with the errors found. A version with an earlier
+   * version's schema id never is.
    */
   public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
       String subject, String fromVersion, String toVersion, boolean includeInterior,

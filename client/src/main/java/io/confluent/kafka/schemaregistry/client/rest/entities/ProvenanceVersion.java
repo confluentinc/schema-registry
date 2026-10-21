@@ -108,13 +108,14 @@ public class ProvenanceVersion {
 
   /**
    * Whether this version is a valid backward step from the version just before it under
-   * compatibilityPolicy=LOGICAL, columns paired by provenance, whatever the subject's config;
-   * present only when the request names {@code compatibilityPolicy}.
+   * compatibilityPolicy=LOGICAL, columns paired by provenance, whatever the subject's config, and
+   * never if an earlier version has its schema id; present only when the request names
+   * {@code compatibilityPolicy}.
    */
   @io.swagger.v3.oas.annotations.media.Schema(description = "Whether this version is a valid "
       + "backward step from the version just before it under compatibilityPolicy=LOGICAL, "
-      + "columns paired by provenance, whatever the subject's config; present only when the "
-      + "request names compatibilityPolicy")
+      + "columns paired by provenance, whatever the subject's config, and never if an earlier "
+      + "version has its schema id; present only when the request names compatibilityPolicy")
   @JsonProperty("compatible")
   public Boolean getCompatible() {
     return compatible;
