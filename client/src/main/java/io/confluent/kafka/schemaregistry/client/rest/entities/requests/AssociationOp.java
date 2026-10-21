@@ -38,8 +38,8 @@ import java.util.Objects;
 })
 public abstract class AssociationOp {
 
-  protected static final String KEY_ASSOCIATION_TYPE = "key";
-  protected static final String VALUE_ASSOCIATION_TYPE = "value";
+  public static final String KEY_ASSOCIATION_TYPE = "key";
+  public static final String VALUE_ASSOCIATION_TYPE = "value";
 
   protected final OpType opType;
 
