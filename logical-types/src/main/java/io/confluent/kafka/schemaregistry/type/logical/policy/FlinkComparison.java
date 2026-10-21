@@ -26,9 +26,11 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rul
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.childPath;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.describeChange;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.elementOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.fieldNameOf;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.fieldViews;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.isRef;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.refKey;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.render;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.resolve;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.scaleOf;
 
@@ -147,7 +149,8 @@ final class FlinkComparison {
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
           || !original.getQualifiedName().equals(update.getQualifiedName())) {
-        add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+        add(Rule.TYPE_MISMATCH, path, describeChange(path, original, update)
+            + "Keep the type as '" + render(original) + "'.");
       }
       return;
     }
@@ -155,7 +158,8 @@ final class FlinkComparison {
     Kind originalKind = flinkKindOf(original);
     Kind updateKind = flinkKindOf(update);
     if (originalKind != updateKind) {
-      add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+      add(Rule.TYPE_MISMATCH, path, describeChange(path, original, update)
+          + "Keep the type as '" + render(original) + "'.");
       return;
     }
 
@@ -217,8 +221,8 @@ final class FlinkComparison {
       if (originalField == null) {
         if (!isNullableOrDefaulted(updateField)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-              "column is required by the reader's schema but missing from the writer's schema, "
-                  + "so rows written under the writer's schema have no value for it");
+              "This schema adds '" + updateField.name + "' as a required field. Add it as an "
+                  + "optional field by setting its default value to null.");
         }
         continue;
       }
@@ -228,8 +232,8 @@ final class FlinkComparison {
       // present and holds null, which is exactly what a nullable column permits.
       if (isEffectivelyNullable(originalField) && !isEffectivelyNullable(updateField)) {
         add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
-            "column is nullable in the writer's schema but NOT NULL in the reader's schema; "
-                + "rows written under the writer's schema may hold nulls");
+            "Field '" + updateField.name + "' changed to NOT NULL, but existing data may contain "
+                + "null values. Keep the field nullable.");
       }
 
       validateDefaultNotRemoved(originalField, updateField, fieldPath);
@@ -283,8 +287,8 @@ final class FlinkComparison {
         originalField.hasDefault && originalField.defaultValue != null;
     if (originalHadDefault && !hasNonNullDefault(updateField)) {
       add(Rule.NON_NULLABLE_DEFAULT_REMOVED, fieldPath,
-          "NOT NULL column has a non-null default in the writer's schema but not in the "
-              + "reader's schema; rows that omitted the column have no value to read");
+          "NOT NULL field '" + updateField.name + "' no longer has a default value. Restore the "
+              + "default value.");
     }
   }
 
@@ -318,8 +322,8 @@ final class FlinkComparison {
       Schema original, Schema update, String path) {
     if (original.isNullable() && !update.isNullable()) {
       add(Rule.NULLABLE_TO_NON_NULLABLE, path,
-          "container child is nullable in the writer's schema but NOT NULL in the reader's "
-              + "schema; collections written under the writer's schema may hold nulls");
+          "Items in '" + fieldNameOf(path) + "' changed to NOT NULL, but existing data may "
+              + "contain null values. Keep the items nullable.");
     }
     compareTypes(original, update, path);
   }
@@ -382,7 +386,8 @@ final class FlinkComparison {
 
     // Part A -- the root relation, straight from Flink's table.
     if (!FlinkLogicalTypeCasts.supportsImplicitCast(originalRootType, updateRootType)) {
-      add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update));
+      add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+          + "Keep the original type.");
       return;
     }
 
@@ -394,8 +399,8 @@ final class FlinkComparison {
     if (originalParams == ParamKind.FIXED_LENGTH
         && updateParams == ParamKind.VARIABLE_LENGTH) {
       if (flinkLengthOf(update) < flinkLengthOf(original)) {
-        add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-            + " (length may not shrink)");
+        add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+            + "Increase the length or keep the original length.");
       }
       return;
     }
@@ -407,14 +412,14 @@ final class FlinkComparison {
           // fixed byte count, so widening rewrites every historical value rather than admitting
           // wider ones. Avro resolution likewise requires an identical `fixed` size.
           if (flinkLengthOf(update) != flinkLengthOf(original)) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (a fixed-length type cannot change length)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Keep the original length.");
           }
           return;
         case VARIABLE_LENGTH:
           if (flinkLengthOf(update) < flinkLengthOf(original)) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (length may not shrink)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Increase the length or keep the original length.");
           }
           return;
         case PRECISION:
@@ -423,15 +428,15 @@ final class FlinkComparison {
           // as timestamp-micros keeps its bytes and its column type but every value is then read
           // a thousandfold out.
           if (update.getPrecision() != original.getPrecision()) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (precision selects the unit of the stored value and cannot change)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Keep the original time precision.");
           }
           return;
         case PRECISION_AND_SCALE:
           if (scaleOf(update) != scaleOf(original)
               || update.getPrecision() < original.getPrecision()) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (decimal scale must be unchanged and precision may not shrink)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Keep the same scale and use the same or greater precision.");
           }
           return;
         default:
@@ -444,8 +449,9 @@ final class FlinkComparison {
       int digitsNeeded = decimalDigitsOf(originalRootType);
       if (digitsNeeded > 0
           && update.getPrecision() - scaleOf(update) < digitsNeeded) {
-        add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-            + " (target cannot represent the full range of the source)");
+        add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+            + "'" + render(update) + "' can't hold all values of '" + render(original)
+            + "'. Keep the original type.");
       }
     }
   }
