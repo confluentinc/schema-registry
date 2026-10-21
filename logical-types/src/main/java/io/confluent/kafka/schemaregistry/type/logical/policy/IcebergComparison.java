@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rul
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.childPath;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.describeChange;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.elementOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.fieldNameOf;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.fieldViews;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.isRef;
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.keyOf;
@@ -213,7 +214,8 @@ final class IcebergComparison {
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
           || !original.getQualifiedName().equals(update.getQualifiedName())) {
-        add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+        add(Rule.TYPE_MISMATCH, path, describeChange(path, original, update)
+            + "Keep the type as '" + render(original) + "'.");
       }
       return;
     }
@@ -221,7 +223,8 @@ final class IcebergComparison {
     Kind originalKind = kindOf(original);
     Kind updateKind = kindOf(update);
     if (originalKind != updateKind) {
-      add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+      add(Rule.TYPE_MISMATCH, path, describeChange(path, original, update)
+          + "Keep the type as '" + render(original) + "'.");
       return;
     }
 
@@ -273,11 +276,8 @@ final class IcebergComparison {
       if (originalField == null) {
         if (!isEffectivelyOptional(updateField, null)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-              "field is required by the reader's schema but missing from the writer's schema, "
-                  + "so rows written under the writer's schema have no value for it"
-                  + (supportsColumnDefaults()
-                      ? "; a non-null column default would make it readable"
-                      : "; format-version 2 cannot store a column default"));
+              "This schema adds '" + updateField.name + "' as a required field. Add it as an "
+                  + "optional field by setting its default value to null.");
         }
         // Do not descend into a field the original schema never had.
         continue;
@@ -295,8 +295,8 @@ final class IcebergComparison {
         // on "original"/"update" implying "old"/"new" (see CompatibilityChecker's javadoc).
         if (originalIndex < lastSeenOriginalIndex) {
           add(Rule.FIELD_REORDERED, fieldPath,
-              "'" + updateField.name + "' preceded '" + lastSeenFieldName
-                  + "' in the writer's schema, but now follows it in the reader's schema");
+              "The order of fields '" + lastSeenFieldName + "' and '" + updateField.name
+                  + "' changed. Restore the original order.");
         }
         lastSeenOriginalIndex = originalIndex;
         lastSeenFieldName = updateField.name;
@@ -305,8 +305,8 @@ final class IcebergComparison {
       if (isEffectivelyNullable(originalField)
           && !isEffectivelyOptional(updateField, originalField)) {
         add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
-            "field is nullable in the writer's schema but non-nullable in the reader's schema; "
-                + "rows written under the writer's schema may hold nulls");
+            "Field '" + updateField.name + "' changed to NOT NULL, but existing data may contain "
+                + "null values. Keep the field nullable.");
       }
 
       compareTypes(originalField.schema, updateField.schema, fieldPath,
@@ -316,7 +316,8 @@ final class IcebergComparison {
     for (int originalIndex = 0; originalIndex < originalFields.size(); originalIndex++) {
       if (!paired[originalIndex]) {
         add(Rule.FIELD_DELETED, childPath(path, originalFields.get(originalIndex).name),
-            "field present in the writer's schema is missing from the reader's schema");
+            "Schema no longer includes field '" + originalFields.get(originalIndex).name
+                + "'. Restore the field.");
       }
     }
   }
@@ -337,8 +338,9 @@ final class IcebergComparison {
       IndexPath originalPath, IndexPath updatePath) {
     if (!erasedEquals(keyOf(original), keyOf(update))) {
       add(Rule.MAP_KEY_TYPE_MISMATCH, path,
-          "map key type is " + render(keyOf(original)) + " in the writer's schema and "
-              + render(keyOf(update)) + " in the reader's schema");
+          "The key type of map '" + fieldNameOf(path) + "' changed from '"
+              + render(keyOf(original)) + "' to '" + render(keyOf(update))
+              + "'. Keep '" + render(keyOf(original)) + "'.");
     }
     compareTypes(valueOf(original), valueOf(update), path + "{}", originalPath.child(1),
         updatePath.child(1));
@@ -364,14 +366,14 @@ final class IcebergComparison {
           // re-scaling reinterprets every existing row.
           if (scaleOf(update) != scaleOf(original)
               || update.getPrecision() < original.getPrecision()) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (decimal scale must be unchanged and precision may not shrink)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Keep the same scale and use the same or greater precision.");
           }
           return;
         case FIXED:
           if (update.getLength() != original.getLength()) {
-            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                + " (fixed-length binary cannot change length)");
+            add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+                + "Keep the original length.");
           }
           return;
         case STRING:
@@ -382,10 +384,8 @@ final class IcebergComparison {
             List<String> deletedSymbols = deletedEnumSymbols(original, update);
             if (!deletedSymbols.isEmpty()) {
               add(Rule.ENUM_DELETED, path,
-                  "enum symbol(s) " + deletedSymbols + " present in the writer's schema are "
-                      + "missing from the reader's schema; rows written under the writer's "
-                      + "schema may already hold one of these values, which Iceberg has no "
-                      + "default to fall back to");
+                  "Schema no longer includes enum symbols '" + deletedSymbols
+                      + "', which existing records may use. Keep all existing symbols.");
             }
           }
           return;
@@ -395,7 +395,9 @@ final class IcebergComparison {
     }
 
     if (!isPromotionAllowed(originalClass, updateClass)) {
-      add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update));
+      add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(path, original, update)
+          + "'" + render(update) + "' can't hold all values of '" + render(original)
+          + "'. Keep the original type.");
     }
   }
 
