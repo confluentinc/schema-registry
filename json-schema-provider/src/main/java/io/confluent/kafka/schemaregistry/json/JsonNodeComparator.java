@@ -28,7 +28,9 @@ import org.json.JSONObject;
 import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -144,9 +146,31 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   private Map<JsonNode, String> refs() {
     if (refs == null) {
       refs = new IdentityHashMap<>();
-      indexRefs(root, "#");
+      // The copy loaded in the root redirects "#", so a root that refers to itself is not indexed
+      if (!refersToRoot()) {
+        indexRefs(root, "#");
+      }
     }
     return refs;
+  }
+
+  private boolean refersToRoot() {
+    JsonNode id = root.has("$id") ? root.get("$id") : root.get("id");
+    String rootId = id != null && id.isTextual() ? id.textValue().replaceAll("#$", "") : null;
+    Deque<JsonNode> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      JsonNode node = pending.pop();
+      JsonNode ref = node.get("$ref");
+      if (ref != null && ref.isTextual()) {
+        String value = ref.textValue().replaceAll("#$", "");
+        if (value.isEmpty() || value.equals(rootId)) {
+          return true;
+        }
+      }
+      node.forEach(pending::push);
+    }
+    return false;
   }
 
   private void indexRefs(JsonNode node, String ref) {

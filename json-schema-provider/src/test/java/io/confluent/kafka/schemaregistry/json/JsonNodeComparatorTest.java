@@ -283,6 +283,9 @@ public class JsonNodeComparatorTest {
     }
     assertBranchRejected(oneOf("", Collections.emptyMap(), false,
         "{\"$ref\":\"http://127.0.0.1:1/x\"}", "{\"type\":\"string\"}"));
+    assertBranchRejected(oneOf(
+        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"#\"}}}",
+        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
   }
 
   private static void assertBranchRejected(JsonSchema schema) {
