@@ -19,19 +19,34 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
+import org.everit.json.schema.SchemaException;
 import org.everit.json.schema.loader.SchemaLoader;
+import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONObject;
 
+import java.io.UncheckedIOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
-  private static final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
+  private final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
+  private final JsonNode root;
+  private final Map<JsonNode, Schema> loaded = new IdentityHashMap<>();
+  private Map<JsonNode, String> refs;
+  private JSONObject rootJson;
 
   public JsonNodeComparator() {
     this(null);
@@ -39,7 +54,12 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
 
   // Configures the loader for the compared schemas; null means the loader default
   public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+    this(loaderConfig, null);
+  }
+
+  JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig, JsonNode root) {
     this.loaderConfig = loaderConfig;
+    this.root = root;
   }
 
   @Override
@@ -67,19 +87,135 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   }
 
   private Schema load(JsonNode node) throws JsonProcessingException {
+    Schema schema = loaded.get(node);
+    if (schema == null) {
+      schema = loadUncached(node);
+      loaded.put(node, schema);
+    }
+    return schema;
+  }
+
+  private Schema loadUncached(JsonNode node) throws JsonProcessingException {
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .schemaJson(objectMapper.readValue(node.toString(), JSONObject.class));
-    if (loaderConfig == null) {
-      return builder.build().load().build();
-    }
-    loaderConfig.accept(builder);
     try {
+      if (loaderConfig != null) {
+        loaderConfig.accept(builder);
+      }
       return builder.build().load().build();
     } catch (RuntimeException e) {
-      if (JsonSchema.isRemoteRefBlocked(e)) {
-        throw new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
+      // A branch that does not load on its own may need the root document and its scope
+      String ref = root != null && loaderConfig != null
+          && !JsonSchema.isRemoteRefBlocked(e) && isLoadFailure(e) ? refs().get(node) : null;
+      if (ref == null) {
+        throw loadFailure(e);
       }
-      throw e;
+      try {
+        return loadInRoot(ref);
+      } catch (RuntimeException inRoot) {
+        inRoot.addSuppressed(e);
+        throw loadFailure(inRoot);
+      }
+    }
+  }
+
+  private Schema loadInRoot(String ref) throws JsonProcessingException {
+    if (rootJson == null) {
+      rootJson = objectMapper.readValue(root.toString(), JSONObject.class);
+    }
+    JSONObject wrapper = new JSONObject(rootJson, JSONObject.getNames(rootJson));
+    wrapper.put("$ref", ref);
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+        .draftV7Support().schemaJson(wrapper);
+    loaderConfig.accept(builder);
+    return ((ReferenceSchema) builder.build().load().build()).getReferredSchema();
+  }
+
+  private static boolean isLoadFailure(RuntimeException e) {
+    return e instanceof SchemaException || e instanceof UncheckedIOException;
+  }
+
+  private static RuntimeException loadFailure(RuntimeException e) {
+    if (JsonSchema.isRemoteRefBlocked(e)) {
+      return new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
+    }
+    if (isLoadFailure(e)) {
+      return new IllegalArgumentException(
+          "Cannot load Json Schema from JsonNode: " + e.getMessage(), e);
+    }
+    return e;
+  }
+
+  private Map<JsonNode, String> refs() {
+    if (refs == null) {
+      refs = new IdentityHashMap<>();
+      // The copy loaded in the root redirects "#", so a root that refers to itself is not indexed
+      if (!refersToRoot()) {
+        indexRefs(root, "#");
+      }
+    }
+    return refs;
+  }
+
+  private boolean refersToRoot() {
+    JsonNode id = root.has("$id") ? root.get("$id") : root.get("id");
+    Deque<JsonNode> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      JsonNode node = pending.pop();
+      JsonNode ref = node.get("$ref");
+      if (ref != null && ref.isTextual() && mayReferToRoot(ref.textValue(), id)) {
+        return true;
+      }
+      node.forEach(pending::push);
+    }
+    return false;
+  }
+
+  private static boolean mayReferToRoot(String ref, JsonNode id) {
+    int hash = ref.indexOf('#');
+    if (hash >= 0 && hash < ref.length() - 1) {
+      return false;
+    }
+    String doc = hash < 0 ? ref : ref.substring(0, hash);
+    if (doc.isEmpty()) {
+      return true;
+    }
+    if (id == null || !id.isTextual()) {
+      return false;
+    }
+    try {
+      URI base = ReferenceResolver.resolve((URI) null, id.textValue());
+      return withoutFragment(ReferenceResolver.resolve(base, doc)).equals(withoutFragment(base));
+    } catch (RuntimeException e) {
+      return true;
+    }
+  }
+
+  private static String withoutFragment(URI uri) {
+    return uri.toString().replaceAll("#.*$", "");
+  }
+
+  private void indexRefs(JsonNode node, String ref) {
+    if (!node.isContainerNode()) {
+      return;
+    }
+    refs.put(node, ref);
+    if (node.isArray()) {
+      for (int i = 0; i < node.size(); i++) {
+        indexRefs(node.get(i), ref + "/" + i);
+      }
+    } else {
+      node.fields().forEachRemaining(
+          e -> indexRefs(e.getValue(), ref + "/" + encodeToken(e.getKey())));
+    }
+  }
+
+  private static String encodeToken(String token) {
+    try {
+      return URLEncoder.encode(token.replace("~", "~0").replace("/", "~1"), "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException(e);
     }
   }
 }

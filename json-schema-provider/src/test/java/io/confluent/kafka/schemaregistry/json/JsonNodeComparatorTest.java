@@ -15,13 +15,16 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -33,6 +36,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -181,7 +185,8 @@ public class JsonNodeComparatorTest {
       oneOfSchema(url("/b"), url("/a"), true).copy(tagFirstBranch(), Collections.emptyMap());
       fail("Expected the remote $ref fetch to be rejected");
     } catch (IllegalArgumentException e) {
-      assertTrue(e.getMessage(), e.getMessage().contains(JsonSchema.REMOTE_REF_DISABLED_MESSAGE));
+      assertEquals(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e.getMessage());
+      assertTrue(JsonSchema.isRemoteRefBlocked(e.getCause()));
     }
     assertEquals(0, hits.get());
   }
@@ -203,5 +208,128 @@ public class JsonNodeComparatorTest {
     // The registered ref resolves locally; the object branch sorts first and gets the tag.
     assertTrue(result.toString(), result.get("oneOf").get(1).has("confluent:tags"));
     assertEquals(0, hits.get());
+  }
+
+  private static final String DRAFT_7 = "\"$schema\":\"http://json-schema.org/draft-07/schema#\"";
+
+  private static JsonSchema oneOf(String prefix, Map<String, String> resolved, boolean block,
+      String... branches) {
+    String json = "{" + DRAFT_7 + prefix + ",\"oneOf\":[" + String.join(",", branches) + "]}";
+    return new JsonSchema(json, Collections.emptyList(), resolved, null, null, null, block);
+  }
+
+  private static JsonNode tagged(JsonSchema schema, int index) throws IOException {
+    SchemaEntity entity =
+        new SchemaEntity("oneof." + index + ".object", SchemaEntity.EntityType.SR_RECORD);
+    return MAPPER.readTree(schema.copy(
+        Collections.singletonMap(entity, Collections.singleton("T")),
+        Collections.emptyMap()).canonicalString());
+  }
+
+  // For each sorted index, the declared index of the branch that receives the tag.
+  private static int[] order(JsonSchema schema) throws IOException {
+    JsonNode declared = schema.toJsonNode().get("oneOf");
+    int[] result = new int[declared.size()];
+    for (int k = 0; k < result.length; k++) {
+      result[k] = -1;
+      JsonNode branches = tagged(schema, k).get("oneOf");
+      for (int i = 0; i < branches.size(); i++) {
+        if (branches.get(i).has("confluent:tags")) {
+          ObjectNode hit = (ObjectNode) branches.get(i).deepCopy();
+          hit.remove("confluent:tags");
+          assertEquals(declared.get(i), hit);
+          result[k] = i;
+        }
+      }
+    }
+    return result;
+  }
+
+  @Test
+  public void copyWithTagsKeepsOrderOfBranchesWithOwnDefinitions() throws IOException {
+    // Recorded from the loader before branches could resolve against the root.
+    for (boolean block : new boolean[] {false, true}) {
+      JsonSchema schema = oneOf(",\"definitions\":{\"d\":{\"type\":\"string\"}}",
+          Collections.emptyMap(), block,
+          "{\"definitions\":{\"d\":{\"type\":\"integer\"}},\"$ref\":\"#/definitions/d\"}",
+          "{\"type\":\"string\"}",
+          "{\"definitions\":{\"d\":{\"type\":\"object\"}},\"$ref\":\"#/definitions/d\"}",
+          "{\"type\":\"object\",\"definitions\":{\"d\":{\"type\":\"integer\"}},"
+              + "\"properties\":{\"p\":{\"$ref\":\"#/definitions/d\"}}}",
+          "{\"type\":\"integer\"}");
+      assertArrayEquals(new int[] {4, 3, 0, 2, 1}, order(schema));
+    }
+  }
+
+  @Test
+  public void copyWithTagsResolvesBranchRefsAgainstRootWhenBlocked() throws IOException {
+    JsonSchema relative = oneOf(",\"$id\":\"http://acme.example/root.json\"",
+        Collections.singletonMap("http://acme.example/widget.json", "{\"type\":\"string\"}"),
+        true, "{\"$ref\":\"widget.json\"}", "{\"type\":\"integer\"}",
+        "{\"type\":\"boolean\"}");
+    assertArrayEquals(new int[] {2, 1, 0}, order(relative));
+
+    JsonSchema local = oneOf(",\"definitions\":{\"d\":{\"type\":\"integer\"}}",
+        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/d\"}",
+        "{\"type\":\"string\"}", "{\"type\":\"boolean\"}");
+    assertArrayEquals(new int[] {2, 0, 1}, order(local));
+
+    String recursive = "{\"$ref\":\"#/definitions/a\"}";
+    JsonNode result = tagged(oneOf(
+        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":" + recursive + "}}",
+        Collections.emptyMap(), true, recursive, recursive), 0);
+    assertTrue(result.toString(), result.toString().contains("confluent:tags"));
+  }
+
+  @Test
+  public void copyWithTagsReportsUnloadableBranchAsIllegalArgument() {
+    for (boolean block : new boolean[] {false, true}) {
+      assertBranchRejected(oneOf("", Collections.emptyMap(), block,
+          "{\"$ref\":\"#/definitions/missing\"}", "{\"type\":\"string\"}"));
+    }
+    assertBranchRejected(oneOf("", Collections.emptyMap(), false,
+        "{\"$ref\":\"http://127.0.0.1:1/x\"}", "{\"type\":\"string\"}"));
+    assertBranchRejected(oneOf(
+        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"#\"}}}",
+        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
+    assertBranchRejected(oneOf(",\"$id\":\"http://acme.example/root.json\","
+            + "\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"root.json\"}}}",
+        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
+  }
+
+  private static void assertBranchRejected(JsonSchema schema) {
+    try {
+      tagged(schema, 0);
+      fail("Expected the branch to be rejected");
+    } catch (IllegalArgumentException e) {
+      assertNotNull(e.getCause());
+    } catch (IOException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  @Test
+  public void copyWithTagsLoadsEachBranchOnce() {
+    int n = 30;
+    List<String> branches = new ArrayList<>();
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    for (int i = 0; i < n; i++) {
+      branches.add("{\"type\":\"object\",\"properties\":{\"p" + i + "\":{\"type\":\"string\"}}}");
+      tags.put(new SchemaEntity("oneof." + i + ".object", SchemaEntity.EntityType.SR_RECORD),
+          Collections.singleton("T" + i));
+    }
+    AtomicInteger configured = new AtomicInteger();
+    String json = "{" + DRAFT_7 + ",\"oneOf\":[" + String.join(",", branches) + "]}";
+    JsonSchema schema = new JsonSchema(json, Collections.emptyList(), Collections.emptyMap(),
+        null, null, null, true) {
+      @Override
+      protected org.everit.json.schema.loader.SchemaClient everitSchemaClient() {
+        configured.incrementAndGet();
+        return super.everitSchemaClient();
+      }
+    };
+    schema.copy(tags, Collections.emptyMap());
+    // One check up front, then one loader configuration per branch.
+    assertTrue("loaders configured: " + configured.get(), configured.get() <= n + 1);
   }
 }

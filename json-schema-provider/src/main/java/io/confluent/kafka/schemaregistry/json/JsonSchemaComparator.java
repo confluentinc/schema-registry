@@ -17,9 +17,13 @@ package io.confluent.kafka.schemaregistry.json;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -39,6 +43,9 @@ import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.TrueSchema;
 
 public class JsonSchemaComparator implements Comparator<Schema> {
+
+  // Not thread-safe: callers create one comparator per sort
+  private final Map<Schema, Set<Schema>> comparing = new IdentityHashMap<>();
 
   public enum SchemaType {
     // Keep in alphabetical order
@@ -191,7 +198,20 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       case REFERENCE:
         ReferenceSchema ref1 = (ReferenceSchema) schema1;
         ReferenceSchema ref2 = (ReferenceSchema) schema2;
-        return compare(ref1.getReferredSchema(), ref2.getReferredSchema());
+        Set<Schema> peers = comparing.computeIfAbsent(
+            ref1, k -> Collections.newSetFromMap(new IdentityHashMap<>()));
+        // A pair already being compared is a cycle; treat it as equal so recursion ends
+        if (!peers.add(ref2)) {
+          return 0;
+        }
+        try {
+          return compare(ref1.getReferredSchema(), ref2.getReferredSchema());
+        } finally {
+          peers.remove(ref2);
+          if (peers.isEmpty()) {
+            comparing.remove(ref1);
+          }
+        }
       default:
         return 0;
     }
