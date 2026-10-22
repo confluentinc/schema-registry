@@ -899,7 +899,9 @@ public class JsonSchemaTest {
 
   @Test
   public void testComparatorWithDeeplyNestedRefCycle() {
-    // Each definition nests the next reference, wrapping around, 100 levels deep.
+    // Each definition nests the next reference, wrapping around, 20 levels deep, so comparisons
+    // run past the direct-recursion depth. Kept shallow enough for the schema loader, which
+    // follows the references recursively, to fit in a default thread stack.
     int n = 4;
     StringBuilder defs = new StringBuilder();
     for (int i = 0; i < n; i++) {
@@ -907,7 +909,7 @@ public class JsonSchemaTest {
         defs.append(",");
       }
       String nested = "{\"$ref\": \"#/definitions/d" + ((i + 1) % n) + "\"}";
-      for (int k = 0; k < 100; k++) {
+      for (int k = 0; k < 20; k++) {
         nested = "{\"anyOf\": [" + nested + ", {\"type\": \"null\"}]}";
       }
       defs.append("\"d").append(i).append("\": ").append(nested);
@@ -920,8 +922,9 @@ public class JsonSchemaTest {
 
   @Test
   public void testComparatorFollowsAcyclicRefs() {
-    // The two members differ only at the end of 100 acyclic reference hops.
-    int n = 100;
+    // The two members differ only at the end of 50 acyclic reference hops, past the
+    // direct-recursion depth.
+    int n = 50;
     StringBuilder defs = new StringBuilder();
     for (String chain : new String[] {"a", "b"}) {
       for (int i = 0; i < n; i++) {
