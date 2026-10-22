@@ -26,6 +26,7 @@ import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.KmsPropsRedactor;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.storage.DataEncryptionKey;
 import io.confluent.dekregistry.storage.DekRegistry;
@@ -136,7 +137,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return dekRegistry.toKekEntity(key);
+    return KmsPropsRedactor.redact(dekRegistry.toKekEntity(key));
   }
 
   @GET
@@ -333,13 +334,22 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       if (request.isShared() && testSharing) {
+        SortedMap<String, String> kmsProps = request.getKmsProps() != null
+            ? new TreeMap<>(request.getKmsProps())
+            : new TreeMap<>();
+        // Preflight test should use the same properties the actual create will persist.
+        KeyEncryptionKey existingKey = dekRegistry.getKek(request.getName(), true);
+        if (existingKey == null || existingKey.isShared()) {
+          kmsProps = KmsPropsRedactor.merge(
+              kmsProps, existingKey != null ? existingKey.getKmsProps() : null);
+        }
         KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
-            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
+            request.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(kek);
       }
 
       Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
@@ -375,7 +385,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       dekRegistry.testKek(kek);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KeyEncryptionKeyRedactor.redact(kek));
     } catch (DekGenerationException e) {
       throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (InvalidKeyException e) {
@@ -504,9 +514,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
     try {
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
-        SortedMap<String, String> kmsProps = request.getKmsProps() != null
-            ? new TreeMap<>(request.getKmsProps())
-            : oldKek.getKmsProps();
+        // Preflight test should use the same properties the actual update will persist.
+        SortedMap<String, String> kmsProps = request.getKmsProps() == null
+            ? oldKek.getKmsProps()
+            : oldKek.isShared()
+                ? KmsPropsRedactor.merge(request.getKmsProps(), oldKek.getKmsProps())
+                : new TreeMap<>(request.getKmsProps());
         KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
             oldKek.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(newKek);
@@ -516,7 +529,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
