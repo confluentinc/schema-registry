@@ -273,6 +273,12 @@ public class JsonNodeComparatorTest {
         Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/d\"}",
         "{\"type\":\"string\"}", "{\"type\":\"boolean\"}");
     assertArrayEquals(new int[] {2, 0, 1}, order(local));
+
+    String recursive = "{\"$ref\":\"#/definitions/a\"}";
+    JsonNode result = tagged(oneOf(
+        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":" + recursive + "}}",
+        Collections.emptyMap(), true, recursive, recursive), 0);
+    assertTrue(result.toString(), result.toString().contains("confluent:tags"));
   }
 
   @Test
@@ -285,6 +291,9 @@ public class JsonNodeComparatorTest {
         "{\"$ref\":\"http://127.0.0.1:1/x\"}", "{\"type\":\"string\"}"));
     assertBranchRejected(oneOf(
         ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"#\"}}}",
+        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
+    assertBranchRejected(oneOf(",\"$id\":\"http://acme.example/root.json\","
+            + "\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"root.json\"}}}",
         Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
   }
 

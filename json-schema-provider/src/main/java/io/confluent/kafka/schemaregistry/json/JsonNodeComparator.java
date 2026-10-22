@@ -23,10 +23,12 @@ import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.SchemaException;
 import org.everit.json.schema.loader.SchemaLoader;
+import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONObject;
 
 import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.util.ArrayDeque;
 import java.util.Comparator;
@@ -37,7 +39,7 @@ import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
-  private static final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
+  private final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
@@ -138,7 +140,8 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
       return new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
     }
     if (isLoadFailure(e)) {
-      return new IllegalArgumentException("Cannot load Json Schema from JsonNode", e);
+      return new IllegalArgumentException(
+          "Cannot load Json Schema from JsonNode: " + e.getMessage(), e);
     }
     return e;
   }
@@ -156,21 +159,41 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
 
   private boolean refersToRoot() {
     JsonNode id = root.has("$id") ? root.get("$id") : root.get("id");
-    String rootId = id != null && id.isTextual() ? id.textValue().replaceAll("#$", "") : null;
     Deque<JsonNode> pending = new ArrayDeque<>();
     pending.push(root);
     while (!pending.isEmpty()) {
       JsonNode node = pending.pop();
       JsonNode ref = node.get("$ref");
-      if (ref != null && ref.isTextual()) {
-        String value = ref.textValue().replaceAll("#$", "");
-        if (value.isEmpty() || value.equals(rootId)) {
-          return true;
-        }
+      if (ref != null && ref.isTextual() && mayReferToRoot(ref.textValue(), id)) {
+        return true;
       }
       node.forEach(pending::push);
     }
     return false;
+  }
+
+  private static boolean mayReferToRoot(String ref, JsonNode id) {
+    int hash = ref.indexOf('#');
+    if (hash >= 0 && hash < ref.length() - 1) {
+      return false;
+    }
+    String doc = hash < 0 ? ref : ref.substring(0, hash);
+    if (doc.isEmpty()) {
+      return true;
+    }
+    if (id == null || !id.isTextual()) {
+      return false;
+    }
+    try {
+      URI base = ReferenceResolver.resolve((URI) null, id.textValue());
+      return withoutFragment(ReferenceResolver.resolve(base, doc)).equals(withoutFragment(base));
+    } catch (RuntimeException e) {
+      return true;
+    }
+  }
+
+  private static String withoutFragment(URI uri) {
+    return uri.toString().replaceAll("#.*$", "");
   }
 
   private void indexRefs(JsonNode node, String ref) {
