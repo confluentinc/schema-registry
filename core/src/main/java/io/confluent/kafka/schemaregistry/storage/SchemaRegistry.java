@@ -170,22 +170,14 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
-   * Whether {@code version} of {@code subject} is a valid backward step from the version just
-   * before it under compatibilityPolicy=LOGICAL with members paired by provenance check id,
-   * whatever the subject's config: the errors found, empty if none.
-   */
-  default List<String> isLogicallyCompatibleByProvenance(String subject, int version)
-      throws SchemaRegistryException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * As {@link #isLogicallyCompatibleByProvenance(String, int)}, given {@code previousVersion}, the
-   * version just before {@code version}, soft-deleted or not, or 0 if none.
+   * Whether {@code version} of {@code subject} is a valid backward step from
+   * {@code previousVersion}, the version just before it, soft-deleted or not, or 0 if none, under
+   * compatibilityPolicy=LOGICAL with members paired by provenance check id, whatever the subject's
+   * config: the errors found, empty if none.
    */
   default List<String> isLogicallyCompatibleByProvenance(String subject, int version,
       int previousVersion) throws SchemaRegistryException {
-    return isLogicallyCompatibleByProvenance(subject, version);
+    throw new UnsupportedOperationException();
   }
 
   /**
