@@ -173,6 +173,41 @@ public class RestApiAssociationBatchLimitsTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testInvalidCreatesFailOnTheirOwnInsteadOfCounting() throws Exception {
+    AssociationOpRequest badResourceType = new AssociationOpRequest("invalid-create-c", "default",
+        "invalid-create-c-id", "table", Arrays.asList(create("value", "InvalidC")));
+
+    AssociationBatchResponse response = mutate(false,
+        topic("invalid-create-a", create("value", "InvalidA")),
+        badResourceType,
+        topic("invalid-create-b", create("value", "InvalidB")));
+    assertEquals(3, response.getResults().size());
+    assertNull(response.getResults().get(0).getError());
+    assertEquals(Errors.INVALID_ASSOCIATION_ERROR_CODE,
+        response.getResults().get(1).getError().getErrorCode());
+    assertNull(response.getResults().get(2).getError());
+  }
+
+  @Test
+  public void testInvalidDeletesFailOnTheirOwnInsteadOfCounting() throws Exception {
+    assertAllSucceeded(mutate(false,
+        topic("invalid-delete-a", create("key", "InvDelKeyA"), create("value", "InvDelValueA"))),
+        1);
+    assertAllSucceeded(mutate(false,
+        topic("invalid-delete-b", create("value", "InvDelValueB"))), 1);
+    AssociationOpRequest badResourceType = new AssociationOpRequest("invalid-delete-b", "default",
+        "invalid-delete-b-id", "table", Arrays.asList(delete("value")));
+
+    AssociationBatchResponse response = mutate(false,
+        topic("invalid-delete-a", delete("key"), delete("value")),
+        badResourceType);
+    assertEquals(2, response.getResults().size());
+    assertNull(response.getResults().get(0).getError());
+    assertEquals(Errors.INVALID_ASSOCIATION_ERROR_CODE,
+        response.getResults().get(1).getError().getErrorCode());
+  }
+
+  @Test
   public void testPayloadLimitAppliesToASingleCreate() {
     assertRejected(() -> mutate(false, topic("oversized",
         new AssociationCreateOp(null, "value", null, null,
