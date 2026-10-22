@@ -1416,25 +1416,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  /**
-   * Whether {@code version} of {@code subject} is a valid backward step from the version just
-   * before it, soft-deleted or not, under compatibilityPolicy=LOGICAL with members paired by
-   * provenance check id, whatever the subject's config: the errors found, empty if none.
-   */
-  @Override
-  public List<String> isLogicallyCompatibleByProvenance(String subject, int version)
-      throws SchemaRegistryException {
-    int previous = 0;
-    Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
-    while (keys.hasNext()) {
-      int earlier = keys.next().getVersion();
-      if (earlier < version) {
-        previous = Math.max(previous, earlier);
-      }
-    }
-    return isLogicallyCompatibleByProvenance(subject, version, previous);
-  }
-
   @Override
   public List<String> isLogicallyCompatibleByProvenance(String subject, int version,
       int previous) throws SchemaRegistryException {
@@ -3074,7 +3055,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request)
       throws SchemaRegistryException {
-    checkAssociationBatchMutateLimits(request);
+    checkAssociationBatchMutateLimits(dryRun, request);
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
       if (req.getError() != null) {
@@ -3228,7 +3209,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return new AssociationBatchResponse(results);
   }
 
-  void checkAssociationBatchMutateLimits(AssociationBatchRequest request)
+  void checkAssociationBatchMutateLimits(boolean dryRun, AssociationBatchRequest request)
       throws SchemaRegistryException {
     if (!config().associationBatchMutateLimitsEnabled()) {
       return;
@@ -3241,31 +3222,40 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               + " configured maximum of %d bytes per batch", requestPayloadBytes, maxBatchBytes));
     }
 
+    // Invalid entries are not counted; the main loop reports them as per-entry errors.
+    List<AssociationOpRequest> validRequests = new ArrayList<>();
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        continue;
+      }
+      try {
+        req.validate(dryRun);
+      } catch (RuntimeException e) {
+        continue;
+      }
+      validRequests.add(req);
+    }
+
     // CREATE and UPSERT counts need no cache lookups, so they are checked before any DELETE is
     // looked up.
-    checkMutateOpCount(request, OpType.CREATE, config().maxAssociationNumCreatePerMutateBatch());
-    checkMutateOpCount(request, OpType.UPSERT, config().maxAssociationNumUpsertPerMutateBatch());
+    checkMutateOpCount(
+        validRequests, OpType.CREATE, config().maxAssociationNumCreatePerMutateBatch());
+    checkMutateOpCount(
+        validRequests, OpType.UPSERT, config().maxAssociationNumUpsertPerMutateBatch());
 
     // Only DELETEs of associations that exist count, and the lookups stop as soon as the limit
     // is passed.
     int maxDeletes = config().maxAssociationNumDeletePerMutateBatch();
     int numDeletes = 0;
-    for (AssociationOpRequest req : request.getRequests()) {
-      if (req.getError() != null || req.getAssociations() == null) {
-        continue;
-      }
+    for (AssociationOpRequest req : validRequests) {
       for (AssociationOp op : req.getAssociations()) {
         if (!(op instanceof AssociationDeleteOp)) {
           continue;
         }
-        String associationType = ((AssociationDeleteOp) op).getAssociationType();
-        // Same default AssociationDeleteOp.validate() applies before the delete runs.
-        if (associationType == null || associationType.isEmpty()) {
-          associationType = AssociationOp.VALUE_ASSOCIATION_TYPE;
-        }
         numDeletes += getAssociationsByResourceId(
-            req.getResourceId(), resourceTypeOrDefault(req.getResourceType()),
-            Collections.singletonList(associationType), null).size();
+            req.getResourceId(), req.getResourceType(),
+            Collections.singletonList(((AssociationDeleteOp) op).getAssociationType()),
+            null).size();
         if (numDeletes > maxDeletes) {
           throw new AssociationBatchLimitExceededException(String.format(
               "Associations batchMutate request has at least %d DELETE operations on existing"
@@ -3277,15 +3267,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   private static void checkMutateOpCount(
-      AssociationBatchRequest request, OpType opType, int maxOps)
+      List<AssociationOpRequest> requests, OpType opType, int maxOps)
       throws AssociationBatchLimitExceededException {
     int numOps = 0;
-    for (AssociationOpRequest req : request.getRequests()) {
-      if (req.getError() != null || req.getAssociations() == null) {
-        continue;
-      }
+    for (AssociationOpRequest req : requests) {
       for (AssociationOp op : req.getAssociations()) {
-        if (op != null && op.getType() == opType) {
+        if (op.getType() == opType) {
           numOps++;
         }
       }
