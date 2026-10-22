@@ -1416,25 +1416,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  /**
-   * Whether {@code version} of {@code subject} is a valid backward step from the version just
-   * before it, soft-deleted or not, under compatibilityPolicy=LOGICAL with members paired by
-   * provenance check id, whatever the subject's config: the errors found, empty if none.
-   */
-  @Override
-  public List<String> isLogicallyCompatibleByProvenance(String subject, int version)
-      throws SchemaRegistryException {
-    int previous = 0;
-    Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
-    while (keys.hasNext()) {
-      int earlier = keys.next().getVersion();
-      if (earlier < version) {
-        previous = Math.max(previous, earlier);
-      }
-    }
-    return isLogicallyCompatibleByProvenance(subject, version, previous);
-  }
-
   @Override
   public List<String> isLogicallyCompatibleByProvenance(String subject, int version,
       int previous) throws SchemaRegistryException {
