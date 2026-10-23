@@ -374,6 +374,14 @@ public class JsonNodeComparatorTest {
   }
 
   @Test
+  public void copyWithTagsResolvesBooleanBranchesTheSameInEveryUnion() throws IOException {
+    // 2020-12 unions are unmapped; their boolean branch must still sort as the loaded graph does
+    assertTagsReadBack(new JsonSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"oneOf\":[true,{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}}]}"));
+  }
+
+  @Test
   public void copyWithTagsOutsideUnionsDoesNotLoadTheSchema() {
     // Properties named like union steps are not unions
     String json = "{" + DRAFT_7 + ",\"type\":\"object\",\"properties\":{"

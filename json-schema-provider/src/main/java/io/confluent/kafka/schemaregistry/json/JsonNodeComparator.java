@@ -99,6 +99,10 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
     if (branches == null) {
       return loadStandalone(node);
     }
+    // Boolean nodes are shared singletons, so resolve them as the loaded graph does everywhere
+    if (node.isBoolean()) {
+      return node.booleanValue() ? TrueSchema.builder().build() : FalseSchema.builder().build();
+    }
     if (loaded == null) {
       loaded = new IdentityHashMap<>(branches.get());
     }
