@@ -72,7 +72,10 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   private static Set<Rule> rulesOf(Mode mode, LogicalType original, LogicalType update) {
-    CompatibilityResult result = CompatibilityChecker.compare(mode, original, update);
+    return rulesOf(CompatibilityChecker.compare(mode, original, update));
+  }
+
+  private static Set<Rule> rulesOf(CompatibilityResult result) {
     return result.getIncompatibilities().isEmpty()
         ? EnumSet.noneOf(Rule.class)
         : result.getIncompatibilities().stream()
@@ -709,34 +712,65 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Field reordering -- pinned from real schema text now that the check is disabled
+  // Field reordering and deletion -- the rules a caller may toggle, pinned from schema text
   // ---------------------------------------------------------------------------------------------
+
+  private static final String AVRO_A_B_C =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"string\"},"
+          + "{\"name\":\"b\",\"type\":\"string\"},"
+          + "{\"name\":\"c\",\"type\":\"string\"}]}";
+  private static final String AVRO_C_A_B =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"c\",\"type\":\"string\"},"
+          + "{\"name\":\"a\",\"type\":\"string\"},"
+          + "{\"name\":\"b\",\"type\":\"string\"}]}";
+  private static final String AVRO_A_B =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"string\"},"
+          + "{\"name\":\"b\",\"type\":\"string\"}]}";
+  private static final String AVRO_A =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"string\"}]}";
 
   @Test
   void reorderingAvroFieldsIsAcceptedByBothNowThatTheReorderCheckIsOff() {
-    // IcebergComparison.ENABLE_FIELD_REORDERED_CHECK is off (see Rule.FIELD_REORDERED's javadoc),
-    // and FlinkComparison never had this rule. reorderingProtoFieldDeclarationsIsAcceptedByBoth
-    // pins that for Protobuf; nothing pinned it for Avro, so flipping the flag back on would
-    // change this verdict silently rather than failing a test that says so.
-    LogicalType before = fromAvro(
-        "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
-            + "{\"name\":\"a\",\"type\":\"string\"},"
-            + "{\"name\":\"b\",\"type\":\"string\"},"
-            + "{\"name\":\"c\",\"type\":\"string\"}]}");
-    LogicalType after = fromAvro(
-        "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
-            + "{\"name\":\"c\",\"type\":\"string\"},"
-            + "{\"name\":\"a\",\"type\":\"string\"},"
-            + "{\"name\":\"b\",\"type\":\"string\"}]}");
+    // FIELD_REORDERED is off by default and FlinkComparison never had it. Pinned for Avro, as
+    // reorderingProtoFieldDeclarationsIsAcceptedByBoth pins it for Protobuf.
+    LogicalType before = fromAvro(AVRO_A_B_C);
+    LogicalType after = fromAvro(AVRO_C_A_B);
 
     assertCompatible(Mode.FLINK, before, after);
     assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
   @Test
+  void reorderingAvroFieldsIsAFindingForIcebergOnceFieldReorderedIsEnabled() {
+    Set<Rule> enabled = Rule.defaults();
+    enabled.add(Rule.FIELD_REORDERED);
+    LogicalType before = fromAvro(AVRO_A_B_C);
+    LogicalType after = fromAvro(AVRO_C_A_B);
+
+    assertEquals(EnumSet.of(Rule.FIELD_REORDERED), rulesOf(
+        LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after, enabled)));
+    assertTrue(LogicalTypeChecker.compare(Mode.FLINK, before, after, enabled).isCompatible());
+  }
+
+  @Test
+  void droppingAnAvroFieldIsAcceptedOnceFieldDeletedIsDisabled() {
+    Set<Rule> enabled = Rule.defaults();
+    enabled.remove(Rule.FIELD_DELETED);
+    LogicalType before = fromAvro(AVRO_A_B);
+    LogicalType after = fromAvro(AVRO_A);
+
+    assertEquals(EnumSet.of(Rule.FIELD_DELETED), rulesOf(Mode.ICEBERG_V2, before, after));
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after, enabled).isCompatible());
+  }
+
+  @Test
   void reorderingAvroUnionBranchesIsAcceptedByBothNowThatTheReorderCheckIsOff() {
-    // Same flag, exercised through a union's branches (which lower to struct fields) instead of a
-    // record's own fields -- the reachable path an Avro non-null-member union reorder actually
+    // Same default, exercised through a union's branches (which lower to struct fields) instead of
+    // a record's own fields -- the reachable path an Avro non-null-member union reorder actually
     // takes, pinned from real schema text.
     LogicalType before = fromAvro(
         "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"u\",\"type\":"

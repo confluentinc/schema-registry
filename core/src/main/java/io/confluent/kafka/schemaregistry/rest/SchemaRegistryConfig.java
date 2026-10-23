@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
@@ -200,6 +201,8 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
   public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
+
+  public static final String SCHEMA_LOGICAL_CHECKS_CONFIG = "schema.logical.checks";
 
   public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
   public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
@@ -451,6 +454,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String LOGICAL_CHECKS_DOC = "Which compatibility checks "
+      + "compatibilityPolicy=LOGICAL runs, as a comma-separated list of +CHECK to enable a check "
+      + "and -CHECK to disable it, e.g. -FIELD_DELETED. A check not listed keeps its default: "
+      + "every check is enabled except FIELD_REORDERED.";
   protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
       + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String REJECT_EMPTY_SUBJECT_DOC =
@@ -721,6 +728,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    )
+    .define(SCHEMA_LOGICAL_CHECKS_CONFIG, ConfigDef.Type.LIST, "",
+        new LogicalChecksValidator(),
+        ConfigDef.Importance.LOW, LOGICAL_CHECKS_DOC
     )
     .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
@@ -1149,5 +1160,22 @@ public class SchemaRegistryConfig extends RestConfig {
     context.setLabel(RESOURCE_LABEL_TYPE,  "schema_registry");
     context.setLabel(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     context.setLabel(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+  }
+
+  private static class LogicalChecksValidator implements ConfigDef.Validator {
+    @Override
+    @SuppressWarnings("unchecked")
+    public void ensureValid(String name, Object value) {
+      try {
+        LogicalPolicyChecker.parseChecks((List<String>) value);
+      } catch (IllegalArgumentException e) {
+        throw new ConfigException(name, value, e.getMessage());
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "+CHECK or -CHECK, comma-separated";
+    }
   }
 }

@@ -73,6 +73,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -204,6 +205,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
   protected final CompatibilityLevel defaultCompatibilityLevel;
   protected final boolean defaultValidateFields;
+  protected final Set<Incompatibility.Rule> logicalChecks;
   protected final boolean defaultValidateNewSchemas;
   protected final Mode defaultMode;
   protected final int schemaSearchDefaultLimit;
@@ -260,6 +262,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
     this.defaultValidateNewSchemas =
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
+    this.logicalChecks = LogicalPolicyChecker.parseChecks(
+        config.getList(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG));
     this.defaultMode = Mode.READWRITE;
     this.schemaSearchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -1333,7 +1337,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       // Additive: the native check below still runs, as LENIENT; LOGICAL layers the Flink/Iceberg
       // logical-type checks on top, so it can only make registration stricter than LENIENT.
       errorMessages.addAll(
-              LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
+              LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility,
+                  logicalChecks));
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));

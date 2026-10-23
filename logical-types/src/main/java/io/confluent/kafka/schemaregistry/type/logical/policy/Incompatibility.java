@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.policy;
 
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A single schema-evolution violation found by {@link LogicalTypeChecker#compare}.
@@ -45,10 +47,10 @@ public class Incompatibility {
     /** An enum symbol present in the original schema is missing from the update. */
     ENUM_DELETED,
     /**
-     * Fields common to both schemas no longer appear in the same relative order. Currently
-     * unreachable: {@code IcebergComparison.ENABLE_FIELD_REORDERED_CHECK} is off.
+     * Fields common to both schemas no longer appear in the same relative order. Off by default:
+     * Iceberg pairs fields by name here, so a reorder is invisible to that comparison.
      */
-    FIELD_REORDERED,
+    FIELD_REORDERED(false),
     /** A nullable field was tightened to non-nullable. */
     NULLABLE_TO_NON_NULLABLE,
     /** A non-nullable field lost the default that made its absence readable. */
@@ -58,7 +60,33 @@ public class Incompatibility {
     /** The structural kind changed (e.g. STRUCT became a primitive, or ARRAY became MAP). */
     TYPE_MISMATCH,
     /** A primitive type changed in a way the target type system does not allow. */
-    UNSUPPORTED_TYPE_CHANGE
+    UNSUPPORTED_TYPE_CHANGE;
+
+    private final boolean enabledByDefault;
+
+    Rule() {
+      this(true);
+    }
+
+    Rule(boolean enabledByDefault) {
+      this.enabledByDefault = enabledByDefault;
+    }
+
+    /** Whether this rule is checked when the caller does not say otherwise. */
+    public boolean isEnabledByDefault() {
+      return enabledByDefault;
+    }
+
+    /** The rules checked when the caller does not say otherwise. */
+    public static Set<Rule> defaults() {
+      Set<Rule> rules = EnumSet.noneOf(Rule.class);
+      for (Rule rule : values()) {
+        if (rule.enabledByDefault) {
+          rules.add(rule);
+        }
+      }
+      return rules;
+    }
   }
 
   private final Rule rule;
