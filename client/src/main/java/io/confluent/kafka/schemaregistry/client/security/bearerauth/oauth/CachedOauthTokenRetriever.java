@@ -18,15 +18,15 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
-import java.io.IOException;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 
 /**
  * <p>
- * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link AccessTokenRetriever} that
+ * <code>CachedOauthTokenRetriever</code> is a wrapper around {@link JwtRetriever} that
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
  * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
  * inorder to fetch an access token.
  * </p>
  * <p>
- * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
+ * This class adds caching mechanism over {@link JwtRetriever} using {@link
  * OauthTokenCache}
  * </p>
  *
@@ -44,15 +44,15 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
 
 public class CachedOauthTokenRetriever {
 
-  private AccessTokenRetriever accessTokenRetriever;
-  private AccessTokenValidator accessTokenValidator;
+  private JwtRetriever tokenRetriever;
+  private JwtValidator tokenValidator;
   private OauthTokenCache oauthTokenCache;
 
 
-  public void configure(AccessTokenRetriever accessTokenRetriever,
-      AccessTokenValidator accessTokenValidator, OauthTokenCache oauthTokenCache) {
-    this.accessTokenRetriever = accessTokenRetriever;
-    this.accessTokenValidator = accessTokenValidator;
+  public void configure(JwtRetriever tokenRetriever, JwtValidator tokenValidator,
+      OauthTokenCache oauthTokenCache) {
+    this.tokenRetriever = tokenRetriever;
+    this.tokenValidator = tokenValidator;
     this.oauthTokenCache = oauthTokenCache;
 
   }
@@ -61,16 +61,16 @@ public class CachedOauthTokenRetriever {
     if (oauthTokenCache.isTokenExpired()) {
       String token = null;
       try {
-        token = accessTokenRetriever.retrieve();
-      } catch (IOException | RuntimeException e) {
+        token = tokenRetriever.retrieve();
+      } catch (JwtRetrieverException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "Failed to Retrieve OAuth Token for Schema Registry", e);
       }
 
       OAuthBearerToken oauthBearerToken;
       try {
-        oauthBearerToken = accessTokenValidator.validate(token);
-      } catch (ValidateException e) {
+        oauthBearerToken = tokenValidator.validate(token);
+      } catch (JwtValidatorException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "OAuth Token for Schema Registry is Invalid", e);
       }

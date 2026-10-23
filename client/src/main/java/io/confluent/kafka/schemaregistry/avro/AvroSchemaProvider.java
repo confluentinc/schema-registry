@@ -41,8 +41,9 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
           validateAsNew
       );
     } catch (Exception e) {
-      throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
-          + ", details: " + e.getMessage(), e);
+      throw new IllegalArgumentException("Invalid schema " + schema
+          + " with refs " + schema.getReferences()
+          + " of type " + schema.getSchemaType() + ", details: " + e.getMessage(), e);
     }
   }
 }
