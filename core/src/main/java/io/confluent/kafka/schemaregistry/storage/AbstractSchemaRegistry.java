@@ -74,6 +74,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -207,6 +208,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
   protected final CompatibilityLevel defaultCompatibilityLevel;
   protected final boolean defaultValidateFields;
+  protected final Set<Incompatibility.Rule> logicalChecks;
   protected final boolean defaultValidateNewSchemas;
   protected final Mode defaultMode;
   protected final int schemaSearchDefaultLimit;
@@ -263,6 +265,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
     this.defaultValidateNewSchemas =
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
+    this.logicalChecks = LogicalPolicyChecker.parseChecks(
+        config.getList(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG));
     this.defaultMode = Mode.READWRITE;
     this.schemaSearchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -1354,14 +1358,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   private List<String> logicalFindings(ParsedSchema parsedSchema,
       List<ParsedSchemaHolder> previousSchemas, CompatibilityLevel level, int beforeVersion) {
     if (previousSchemas.isEmpty() || level == null || level == CompatibilityLevel.NONE) {
-      return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level);
+      return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
     }
     try {
       String subject = null;
       Map<Integer, ParsedSchemaHolder> passed = new HashMap<>();
       for (ParsedSchemaHolder holder : previousSchemas) {
         if (!(holder instanceof SchemaValueHolder)) {
-          return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level);
+          return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
         }
         SchemaValue value = ((SchemaValueHolder) holder).schemaValue();
         subject = value.getSubject();
@@ -1388,7 +1392,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (!numbers.containsAll(passed.keySet().stream()
           .filter(version -> version >= oldest).collect(Collectors.toList()))) {
         // The caller's versions are not the subject's, as they are for every caller today.
-        return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level);
+        return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
       }
       List<ParsedSchemaHolder> range = new ArrayList<>(numbers.size());
       List<Integer> compared = new ArrayList<>();
@@ -1406,7 +1410,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       int candidateNumber = beforeVersion != AFTER_LATEST ? beforeVersion
           : numbers.get(numbers.size() - 1) + 1;
       return ProvenancePolicyChecker.check(subject, parsedSchema, range, numbers, compared,
-          level, PairBy.CHECK_ID, candidateNumber, beforeVersion == AFTER_LATEST);
+          level, PairBy.CHECK_ID, candidateNumber, beforeVersion == AFTER_LATEST, logicalChecks);
     } catch (SchemaRegistryException e) {
       // As a lazy holder reports a version it cannot read.
       throw new IllegalStateException(e);
@@ -1488,7 +1492,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       // A group selects the versions compared; provenance, as the endpoint's ids, ignores groups.
       errorMessages.addAll(pairBy == PairBy.CHECK_ID
               ? logicalFindings(parsedSchema, previousSchemas, compatibility, beforeVersion)
-              : LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility));
+              : LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility,
+                  logicalChecks));
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));

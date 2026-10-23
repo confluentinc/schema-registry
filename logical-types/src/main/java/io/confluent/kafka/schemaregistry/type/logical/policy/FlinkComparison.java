@@ -101,8 +101,12 @@ final class FlinkComparison {
   /** Which writer member each reader member is compared with. */
   private final FieldPairing pairing;
 
-  FlinkComparison(LogicalType original, LogicalType update, FieldPairing pairing) {
+  private final Set<Rule> enabledRules;
+
+  FlinkComparison(LogicalType original, LogicalType update, FieldPairing pairing,
+      Set<Rule> enabledRules) {
     this.pairing = pairing;
+    this.enabledRules = enabledRules;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -115,7 +119,9 @@ final class FlinkComparison {
   }
 
   private void add(Rule rule, String path, String message) {
-    findings.add(new Incompatibility(rule, path, message));
+    if (enabledRules.contains(rule)) {
+      findings.add(new Incompatibility(rule, path, message));
+    }
   }
 
   private boolean claimStructPair(Schema original, Schema update) {
