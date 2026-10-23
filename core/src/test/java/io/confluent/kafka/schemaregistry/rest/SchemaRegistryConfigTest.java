@@ -212,4 +212,20 @@ public class SchemaRegistryConfigTest {
         config.originalProperties().getProperty("request.timeout.interrupt.enable"));
   }
 
+  @Test
+  public void logicalChecksAcceptsSignedRuleNames() throws RestConfigException {
+    Properties props = new Properties();
+    props.setProperty(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG,
+        "+FIELD_REORDERED, -FIELD_DELETED");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals(Arrays.asList("+FIELD_REORDERED", "-FIELD_DELETED"),
+        config.getList(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG));
+  }
+
+  @Test(expected = ConfigException.class)
+  public void logicalChecksRejectsAnUnknownRule() throws RestConfigException {
+    Properties props = new Properties();
+    props.setProperty(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG, "-FIELD_DELETD");
+    new SchemaRegistryConfig(props);
+  }
 }

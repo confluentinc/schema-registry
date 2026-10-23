@@ -26,8 +26,11 @@ import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -68,7 +71,14 @@ class AbstractSchemaRegistryLogicalPolicyTest {
 
   private static List<String> check(String level, String policy, ParsedSchema newSchema,
       List<ParsedSchemaHolder> previous) {
+    return check(level, policy, Rule.defaults(), newSchema, previous);
+  }
+
+  private static List<String> check(String level, String policy, Set<Rule> logicalChecks,
+      ParsedSchema newSchema, List<ParsedSchemaHolder> previous) {
     AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
+    // The mock skips the constructor, which is what normally resolves schema.logical.checks.
+    setField(registry, "logicalChecks", logicalChecks);
     Config config = new Config();
     config.setCompatibilityLevel(level);
     config.setCompatibilityPolicy(policy);
@@ -184,5 +194,24 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         new JsonSchema(OPEN_OBJECT_A_B),
         List.of(new SimpleParsedSchemaHolder(new JsonSchema(OPEN_OBJECT_A))));
     assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void logicalPolicyHonorsADisabledCheck() {
+    List<String> errors = check(
+        "BACKWARD", "LOGICAL", LogicalPolicyChecker.parseChecks(List.of("-FIELD_DELETED")),
+        new AvroSchema(RECORD_A),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  private static void setField(Object target, String name, Object value) {
+    try {
+      Field field = AbstractSchemaRegistry.class.getDeclaredField(name);
+      field.setAccessible(true);
+      field.set(target, value);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError(e);
+    }
   }
 }

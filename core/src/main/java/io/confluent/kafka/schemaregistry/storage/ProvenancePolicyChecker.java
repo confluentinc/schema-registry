@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
@@ -103,6 +104,18 @@ final class ProvenancePolicyChecker {
       List<? extends ParsedSchemaHolder> history, List<Integer> versionNumbers,
       List<Integer> previousVersions, CompatibilityLevel level, PairBy pairBy,
       int candidateNumber, boolean registering) {
+    return check(subject, newSchema, history, versionNumbers, previousVersions, level, pairBy,
+        candidateNumber, registering, Rule.defaults());
+  }
+
+  /**
+   * As {@link #check(String, ParsedSchema, List, List, List, CompatibilityLevel, PairBy, int,
+   * boolean)}, comparing with only {@code enabledRules}.
+   */
+  static List<String> check(String subject, ParsedSchema newSchema,
+      List<? extends ParsedSchemaHolder> history, List<Integer> versionNumbers,
+      List<Integer> previousVersions, CompatibilityLevel level, PairBy pairBy,
+      int candidateNumber, boolean registering, Set<Rule> enabledRules) {
     List<String> errors = new ArrayList<>();
     LogicalType newLogical;
     try {
@@ -146,7 +159,8 @@ final class ProvenancePolicyChecker {
         }
         log.warn("An earlier version of subject {} blocks schema provenance ({}), so LOGICAL "
             + "pairs it by name", subject, e.getMessage());
-        return LogicalPolicyChecker.check(newSchema, holders(history, previousVersions), level);
+        return LogicalPolicyChecker.check(newSchema, holders(history, previousVersions), level,
+            enabledRules);
       }
       errors.add(describeBlocked(
           registering ? "with the schema being registered" : "with this version",
@@ -157,11 +171,11 @@ final class ProvenancePolicyChecker {
       LogicalType previousLogical = provenance.logical(version);
       if (LogicalPolicyChecker.checksBackward(level)) {
         LogicalPolicyChecker.addCompareErrors(errors, previousLogical, newLogical,
-            provenance.pairing(pairBy, version, candidate));
+            provenance.pairing(pairBy, version, candidate), enabledRules);
       }
       if (LogicalPolicyChecker.checksForward(level)) {
         LogicalPolicyChecker.addCompareErrors(errors, newLogical, previousLogical,
-            provenance.pairing(pairBy, candidate, version));
+            provenance.pairing(pairBy, candidate, version), enabledRules);
       }
     }
     return errors;
