@@ -98,14 +98,6 @@ final class IcebergComparison {
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
 
-  /**
-   * {@link Rule#FIELD_REORDERED} was removed because Iceberg identifies fields by name here and a
-   * reorder is invisible to that comparison. Kept off by default, but field-ID work may reinstate
-   * a reason to reject it -- flip this to re-enable the check without reconstructing it from
-   * scratch.
-   */
-  private static final boolean ENABLE_FIELD_REORDERED_CHECK = false;
-
   private final Schema originalRoot;
   private final Schema updateRoot;
   private final Map<String, Schema> originalNamedTypes;
@@ -151,10 +143,13 @@ final class IcebergComparison {
   /** Which writer member each reader member is compared with. */
   private final FieldPairing pairing;
 
+  private final Set<Rule> enabledRules;
+
   IcebergComparison(LogicalType original, LogicalType update, int formatVersion,
-      FieldPairing pairing) {
+      FieldPairing pairing, Set<Rule> enabledRules) {
     this.formatVersion = formatVersion;
     this.pairing = pairing;
+    this.enabledRules = enabledRules;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -167,7 +162,9 @@ final class IcebergComparison {
   }
 
   private void add(Rule rule, String path, String message) {
-    findings.add(new Incompatibility(rule, path, message));
+    if (enabledRules.contains(rule)) {
+      findings.add(new Incompatibility(rule, path, message));
+    }
   }
 
   /**
@@ -263,7 +260,7 @@ final class IcebergComparison {
         pairing.partners(originalPath, originalFields, updatePath, updateFields);
     final boolean[] paired = new boolean[originalFields.size()];
 
-    // Consulted only when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
+    final boolean checkFieldOrder = enabledRules.contains(Rule.FIELD_REORDERED);
     int lastSeenOriginalIndex = -1;
     String lastSeenFieldName = null;
 
@@ -284,7 +281,7 @@ final class IcebergComparison {
       }
       paired[originalIndex] = true;
 
-      if (ENABLE_FIELD_REORDERED_CHECK) {
+      if (checkFieldOrder) {
         // Existing fields keep their relative order. The watermark advances even on a
         // violation, so a single swap yields one finding rather than cascading.
         //

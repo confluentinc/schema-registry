@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
+
+import java.util.Set;
 
 /**
  * Entry point for checking a {@link LogicalType} against a downstream consumer's rules.
@@ -93,6 +96,15 @@ public final class LogicalTypeChecker {
   }
 
   /**
+   * As {@link #compare(Mode, LogicalType, LogicalType)}, checking only {@code enabledRules}
+   * rather than {@link Incompatibility.Rule#defaults()}.
+   */
+  public static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
+    return CompatibilityChecker.compare(mode, original, update, enabledRules);
+  }
+
+  /**
    * As {@link #compare(Mode, LogicalType, LogicalType)}, with the writer's and the reader's
    * members paired by {@code pairing} rather than by name.
    *
@@ -105,6 +117,15 @@ public final class LogicalTypeChecker {
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update, FieldPairing pairing) {
     return CompatibilityChecker.compare(mode, original, update, pairing);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, FieldPairing)}, checking only
+   * {@code enabledRules} rather than {@link Incompatibility.Rule#defaults()}.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules) {
+    return CompatibilityChecker.compare(mode, original, update, pairing, enabledRules);
   }
 
   /**

@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.policy;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 
 import java.util.ArrayList;
@@ -79,7 +80,7 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update) {
-    return compare(mode, original, update, FieldPairing.byName());
+    return compare(mode, original, update, FieldPairing.byName(), Rule.defaults());
   }
 
   /**
@@ -88,18 +89,36 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update, FieldPairing pairing) {
+    return compare(mode, original, update, pairing, Rule.defaults());
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType)}, reporting only {@code enabledRules}.
+   */
+  public static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
+    return compare(mode, original, update, FieldPairing.byName(), enabledRules);
+  }
+
+  /**
+   * Compares {@code original} against {@code update} under {@code mode}, pairing members by
+   * {@code pairing} and reporting only {@code enabledRules}.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules) {
     Objects.requireNonNull(mode, "mode");
     Objects.requireNonNull(original, "original");
     Objects.requireNonNull(update, "update");
     Objects.requireNonNull(pairing, "pairing");
+    Objects.requireNonNull(enabledRules, "enabledRules");
 
     switch (mode) {
       case FLINK:
-        return new FlinkComparison(original, update, pairing).run();
+        return new FlinkComparison(original, update, pairing, enabledRules).run();
       case ICEBERG_V2:
-        return new IcebergComparison(original, update, 2, pairing).run();
+        return new IcebergComparison(original, update, 2, pairing, enabledRules).run();
       case ICEBERG_V3:
-        return new IcebergComparison(original, update, 3, pairing).run();
+        return new IcebergComparison(original, update, 3, pairing, enabledRules).run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
