@@ -663,4 +663,29 @@ public abstract class RestApiContextTest {
         "Context prefix filter should be case-sensitive"
     );
   }
+
+  @Test
+  public void testLookupWithWildcardContext() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    // Registering under the wildcard context creates a context named "*"
+    restApp.restClient.registerSchema(schemas.get(0), ":*:wildcardTopic");
+    restApp.restClient.registerSchema(schemas.get(1), ":.ctx1:testTopic");
+
+    // Looking up an unqualified subject tries each context, and must skip "*"
+    Schema schema = restApp.restClient.getLatestVersion("testTopic");
+    assertEquals(":.ctx1:testTopic", schema.getSubject());
+
+    try {
+      restApp.restClient.getLatestVersion("nonExistentTopic");
+      fail("Getting latest version of non-existing subject should fail with "
+          + Errors.SUBJECT_NOT_FOUND_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+
+    assertEquals(
+        Collections.singletonList(":.ctx1:testTopic"),
+        restApp.restClient.getAllSubjects(":*:testTopic", false)
+    );
+  }
 }

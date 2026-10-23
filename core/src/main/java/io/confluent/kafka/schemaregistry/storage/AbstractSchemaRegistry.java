@@ -151,6 +151,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_P
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -800,7 +801,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
     }
     List<ContextValue> contexts = new ArrayList<>();
-    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+    try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
       while (iter.hasNext()) {
         contexts.add((ContextValue) iter.next());
       }
@@ -1022,6 +1023,17 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * Returns all contexts except the wildcard context, which can be created by registering
+   * a subject such as ":*:foo". Qualifying a subject with the wildcard context yields
+   * another wildcard subject, so lookups that iterate over contexts must skip it to avoid
+   * unbounded recursion in allVersionsFromAllContexts.
+   */
+  private CloseableIterator<SchemaRegistryValue> allLookupContexts()
+          throws SchemaRegistryException {
+    return filter(allContexts(), v -> !WILDCARD.equals(((ContextValue) v).getContext()));
+  }
+
   SchemaKey getSchemaKeyUsingContexts(int id, String subject)
           throws StoreException, SchemaRegistryException {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
@@ -1034,7 +1046,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return subjectVersionKey;
     }
     // Try qualifying the subject with each known context
-    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+    try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
@@ -1056,7 +1068,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     if (id != null) {
       return new AbstractMap.SimpleEntry<>(id, DEFAULT_CONTEXT);
     }
-    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+    try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
@@ -1978,7 +1990,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       if (id != null) {
         ids.add(new ContextId(DEFAULT_CONTEXT, id));
       }
-      try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
         while (iter.hasNext()) {
           ContextValue v = (ContextValue) iter.next();
           QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
@@ -2059,7 +2071,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return null;
     }
     // Try qualifying the subject with each known context
-    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+    try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
@@ -2152,7 +2164,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return null;
     }
     // Try qualifying the subject with each known context
-    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+    try (CloseableIterator<SchemaRegistryValue> iter = allLookupContexts()) {
       while (iter.hasNext()) {
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
