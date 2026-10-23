@@ -23,15 +23,11 @@ import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.jdk.javaapi.CollectionConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -39,7 +35,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 import java.util.List;
-import java.util.LinkedList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Map;
@@ -269,6 +264,13 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final int SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
   /**
+   * <code>provenance.interior.max.versions</code>
+   */
+  public static final String PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG =
+          "provenance.interior.max.versions";
+  public static final int PROVENANCE_INTERIOR_MAX_VERSIONS_DEFAULT = 100;
+
+  /**
    * <code>subject.version.search.max.limit</code>
    */
   public static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
@@ -485,6 +487,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "The default limit for subject version searches.";
   protected static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC =
       "The max limit for subject version searches.";
+  protected static final String PROVENANCE_INTERIOR_MAX_VERSIONS_DOC =
+      "The most versions a provenance request with includeInterior may cover. A longer history is "
+      + "read in ranges overlapping by one version, whose shared version joins their ids.";
   protected static final String SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
       "The default limit for subject searches.";
   protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
@@ -774,6 +779,10 @@ public class SchemaRegistryConfig extends RestConfig {
             SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
             ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC
     )
+    .define(PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG, ConfigDef.Type.INT,
+            PROVENANCE_INTERIOR_MAX_VERSIONS_DEFAULT, atLeast(2),
+            ConfigDef.Importance.LOW, PROVENANCE_INTERIOR_MAX_VERSIONS_DOC
+    )
     .define(SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
             SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT,
             ConfigDef.Importance.LOW, SUBJECT_SEARCH_DEFAULT_LIMIT_DOC
@@ -1020,22 +1029,6 @@ public class SchemaRegistryConfig extends RestConfig {
         endpoints,
         this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
     );
-  }
-
-  static List<String> brokersToEndpoints(List<Broker> brokers) {
-    final List<String> endpoints = new LinkedList<>();
-    for (Broker broker : brokers) {
-      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
-        String
-            hostport =
-            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
-        String endpoint = ep.securityProtocol() + "://" + hostport;
-
-        endpoints.add(endpoint);
-      }
-    }
-
-    return endpoints;
   }
 
   static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {

@@ -93,6 +93,21 @@ public final class LogicalTypeChecker {
   }
 
   /**
+   * As {@link #compare(Mode, LogicalType, LogicalType)}, with the writer's and the reader's
+   * members paired by {@code pairing} rather than by name.
+   *
+   * @param mode     which consumer's rules to apply
+   * @param original the schema data was written under (the writer's schema)
+   * @param update   the schema now reading that data (the reader's schema)
+   * @param pairing  which writer member each reader member is compared with
+   * @return every violation found, or {@link CompatibilityResult#compatible()} if there are none
+   */
+  public static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, FieldPairing pairing) {
+    return CompatibilityChecker.compare(mode, original, update, pairing);
+  }
+
+  /**
    * Whether {@code type} can be used by {@code mode}'s consumer at all.
    *
    * <p>Independent of any previous version, so this is the only one of the two checks that can

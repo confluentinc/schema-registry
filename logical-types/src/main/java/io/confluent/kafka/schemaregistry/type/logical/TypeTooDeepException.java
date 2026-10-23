@@ -25,4 +25,8 @@ public class TypeTooDeepException extends ValidationException {
   public TypeTooDeepException(String message) {
     super(message);
   }
+
+  public TypeTooDeepException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }
