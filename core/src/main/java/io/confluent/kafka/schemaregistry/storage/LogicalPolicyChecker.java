@@ -49,9 +49,10 @@ import org.slf4j.LoggerFactory;
  * Runs the {@link LogicalTypeChecker} validity and compatibility checks that
  * {@code CompatibilityPolicy.LOGICAL} adds on top of a schema's native compatibility check.
  *
- * <p>These checks are <b>additive</b>: the native Avro/JSON/Protobuf compatibility check still runs
- * unchanged, and any findings here are appended to the same error list, so {@code LOGICAL} can only
- * ever make a registration stricter, never more permissive.
+ * <p>These checks are <b>additive</b>: the native Avro/JSON/Protobuf compatibility check still
+ * runs, as {@code LENIENT}, and any findings here are appended to the same error list, so
+ * {@code LOGICAL} can only ever make a registration stricter than {@code LENIENT}, never more
+ * permissive.
  *
  * <p>The checks run in {@link Mode#FLINK} and {@link Mode#ICEBERG_V2} -- the union of downstream
  * consumers currently gated, excluding {@code ICEBERG_V3}, which has no way yet to know a subject's
