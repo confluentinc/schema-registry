@@ -128,6 +128,12 @@ public class AvroSchema implements ParsedSchema {
       parser.parse(schema);
     }
     this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
+    if (validateAsNew) {
+      // The parser only checks that a union default matches some branch of the
+      // union. The Avro specification requires the default to match the first
+      // branch, so validate the defaults again with that rule.
+      AvroSchemaUtils.validateDefaults(this.schemaObj);
+    }
     if (!validateAsNew) {
       // For new schemas, strict validation is already applied.
       // For non-new schemas, validation is skipped.

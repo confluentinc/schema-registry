@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.Conversion;
 import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
@@ -198,6 +199,135 @@ public class AvroSchemaUtils {
     Result result = NameValidator.UTF_VALIDATOR.validate(name);
     if (!result.isOK()) {
       throw new SchemaParseException(result.getErrors());
+    }
+  }
+
+  // Walks a parsed Schema and validates field default values. Avro's parser
+  // validation (Schema.Parser.setValidateDefaults) accepts a union default
+  // that matches any branch of the union, but the Avro specification requires
+  // the default value of a union field to match the first branch of the union,
+  // so defaults are re-checked here with first-branch semantics.
+  public static void validateDefaults(Schema schema) {
+    if (schema == null) {
+      return;
+    }
+    validateDefaults(schema, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  private static void validateDefaults(Schema schema, Set<Schema> seen) {
+    if (schema == null || !seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        for (Schema.Field field : schema.getFields()) {
+          if (field.hasDefaultValue()) {
+            JsonNode defaultJson = fieldDefaultJson(schema, field);
+            if (!isValidDefault(field.schema(), defaultJson)) {
+              throw new AvroTypeException("Invalid default for field " + field.name()
+                  + ": " + defaultJson + " not a " + field.schema());
+            }
+          }
+          validateDefaults(field.schema(), seen);
+        }
+        break;
+      case ARRAY:
+        validateDefaults(schema.getElementType(), seen);
+        break;
+      case MAP:
+        validateDefaults(schema.getValueType(), seen);
+        break;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          validateDefaults(branch, seen);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  // Schema.Field.defaultValue() is package-private in Avro, so a field's
+  // default is read back from the record's JSON form, which carries the
+  // default verbatim as written in the schema.
+  private static JsonNode fieldDefaultJson(Schema recordSchema, Schema.Field field) {
+    try {
+      JsonNode fields = new ObjectMapper().readTree(recordSchema.toString()).get("fields");
+      if (fields != null) {
+        for (JsonNode fieldJson : fields) {
+          if (field.name().equals(fieldJson.get("name").asText())) {
+            return fieldJson.get("default");
+          }
+        }
+      }
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not read default of field " + field.name(), e);
+    }
+    return null;
+  }
+
+  // Mirrors Avro's own default value validation, except that a union is
+  // checked against its first branch only, as the specification requires.
+  // Values nested inside a record default are checked with the same default
+  // semantics, rather than the any-branch matching Avro applies to them.
+  private static boolean isValidDefault(Schema schema, JsonNode defaultValue) {
+    if (defaultValue == null) {
+      return false;
+    }
+    switch (schema.getType()) {
+      case STRING:
+      case BYTES:
+      case ENUM:
+      case FIXED:
+        return defaultValue.isTextual();
+      case INT:
+        return defaultValue.isIntegralNumber() && defaultValue.canConvertToInt();
+      case LONG:
+        return defaultValue.isIntegralNumber() && defaultValue.canConvertToLong();
+      case FLOAT:
+      case DOUBLE:
+        return defaultValue.isNumber();
+      case BOOLEAN:
+        return defaultValue.isBoolean();
+      case NULL:
+        return defaultValue.isNull();
+      case ARRAY:
+        if (!defaultValue.isArray()) {
+          return false;
+        }
+        for (JsonNode element : defaultValue) {
+          if (!isValidDefault(schema.getElementType(), element)) {
+            return false;
+          }
+        }
+        return true;
+      case MAP:
+        if (!defaultValue.isObject()) {
+          return false;
+        }
+        for (JsonNode value : defaultValue) {
+          if (!isValidDefault(schema.getValueType(), value)) {
+            return false;
+          }
+        }
+        return true;
+      case UNION:
+        return isValidDefault(schema.getTypes().get(0), defaultValue);
+      case RECORD:
+        if (!defaultValue.isObject()) {
+          return false;
+        }
+        for (Schema.Field field : schema.getFields()) {
+          JsonNode fieldValue = defaultValue.has(field.name())
+              ? defaultValue.get(field.name())
+              : fieldDefaultJson(schema, field);
+          if (!isValidDefault(field.schema(), fieldValue)) {
+            return false;
+          }
+        }
+        return true;
+      default:
+        return false;
     }
   }
 
