@@ -1599,9 +1599,13 @@ public class JsonSchema implements ParsedSchema {
     Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
         ? b -> configureEveritLoader(b, specVersion(),
             ref -> parsed.computeIfAbsent(ref, JSONObject::new)) : null;
-    JsonNodeComparator comparator = new JsonNodeComparator(loaderConfig, node);
+    JsonNodeComparator comparator = new JsonNodeComparator(loaderConfig, loadedBranches(node));
     for (SchemaEntity entity : entityToModify) {
       JsonNode fieldNodePtr = findMatchingEntity(node, entity, comparator);
+      if (!fieldNodePtr.isObject()) {
+        throw new IllegalArgumentException(String.format(
+            "Path '%s' does not refer to a schema that can be tagged", entity.getEntityPath()));
+      }
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
@@ -1619,6 +1623,15 @@ public class JsonSchema implements ParsedSchema {
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
       }
+    }
+  }
+
+  // Sorting the loaded branches keeps tag paths in line with inlineTaggedEntities
+  private Map<JsonNode, Schema> loadedBranches(JsonNode node) {
+    try {
+      return JsonNodeComparator.branchesOf(node, rawSchema());
+    } catch (RuntimeException e) {
+      return Collections.emptyMap();
     }
   }
 

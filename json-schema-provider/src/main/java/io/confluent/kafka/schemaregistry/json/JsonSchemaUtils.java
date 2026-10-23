@@ -308,7 +308,7 @@ public class JsonSchemaUtils {
   public static JsonNode findMatchingEntity(
       JsonNode node, SchemaEntity entity,
       Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
-    return findMatchingEntity(node, entity, new JsonNodeComparator(loaderConfig, node));
+    return findMatchingEntity(node, entity, new JsonNodeComparator(loaderConfig));
   }
 
   static JsonNode findMatchingEntity(
@@ -348,7 +348,7 @@ public class JsonSchemaUtils {
                                          LinkedList<String> identifiersList,
                                          JsonNodeComparator comparator) {
     String type = identifiersList.poll();
-    if (type == null) {
+    if (type == null || node == null) {
       return null;
     }
     switch (type) {
@@ -420,7 +420,11 @@ public class JsonSchemaUtils {
     if (index == null) {
       return null;
     }
-    List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
+    JsonNode union = node.get(compositionType);
+    if (union == null || !index.matches("\\d{1,9}") || Integer.parseInt(index) >= union.size()) {
+      return null;
+    }
+    List<JsonNode> jsonNodeList = Lists.newArrayList(union.elements());
     jsonNodeList.sort(comparator);
     return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)),
         entityType, identifiersList, comparator);

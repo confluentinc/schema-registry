@@ -15,38 +15,41 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import org.everit.json.schema.ArraySchema;
+import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConditionalSchema;
+import org.everit.json.schema.FalseSchema;
+import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
-import org.everit.json.schema.SchemaException;
+import org.everit.json.schema.TrueSchema;
 import org.everit.json.schema.loader.SchemaLoader;
-import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONObject;
 
-import java.io.UncheckedIOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URLEncoder;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
-  private final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
+  private final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
-  private final JsonNode root;
-  private final Map<JsonNode, Schema> loaded = new IdentityHashMap<>();
-  private Map<JsonNode, String> refs;
-  private JSONObject rootJson;
+  private final Map<JsonNode, Schema> loaded;
 
   public JsonNodeComparator() {
     this(null);
@@ -54,12 +57,14 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
 
   // Configures the loader for the compared schemas; null means the loader default
   public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
-    this(loaderConfig, null);
+    this(loaderConfig, Collections.emptyMap());
   }
 
-  JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig, JsonNode root) {
+  // Starts from branches already resolved in the loaded schema, see branchesOf
+  JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig,
+                     Map<JsonNode, Schema> branches) {
     this.loaderConfig = loaderConfig;
-    this.root = root;
+    this.loaded = new IdentityHashMap<>(branches);
   }
 
   @Override
@@ -89,13 +94,13 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   private Schema load(JsonNode node) throws JsonProcessingException {
     Schema schema = loaded.get(node);
     if (schema == null) {
-      schema = loadUncached(node);
+      schema = loadStandalone(node);
       loaded.put(node, schema);
     }
     return schema;
   }
 
-  private Schema loadUncached(JsonNode node) throws JsonProcessingException {
+  private Schema loadStandalone(JsonNode node) throws JsonProcessingException {
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .schemaJson(objectMapper.readValue(node.toString(), JSONObject.class));
     try {
@@ -104,118 +109,100 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
       }
       return builder.build().load().build();
     } catch (RuntimeException e) {
-      // A branch that does not load on its own may need the root document and its scope
-      String ref = root != null && loaderConfig != null
-          && !JsonSchema.isRemoteRefBlocked(e) && isLoadFailure(e) ? refs().get(node) : null;
-      if (ref == null) {
-        throw loadFailure(e);
+      if (JsonSchema.isRemoteRefBlocked(e)) {
+        throw new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
       }
-      try {
-        return loadInRoot(ref);
-      } catch (RuntimeException inRoot) {
-        inRoot.addSuppressed(e);
-        throw loadFailure(inRoot);
+      if (e instanceof IllegalArgumentException) {
+        throw e;
       }
-    }
-  }
-
-  private Schema loadInRoot(String ref) throws JsonProcessingException {
-    if (rootJson == null) {
-      rootJson = objectMapper.readValue(root.toString(), JSONObject.class);
-    }
-    JSONObject wrapper = new JSONObject(rootJson, JSONObject.getNames(rootJson));
-    wrapper.put("$ref", ref);
-    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-        .draftV7Support().schemaJson(wrapper);
-    loaderConfig.accept(builder);
-    return ((ReferenceSchema) builder.build().load().build()).getReferredSchema();
-  }
-
-  private static boolean isLoadFailure(RuntimeException e) {
-    return e instanceof SchemaException || e instanceof UncheckedIOException;
-  }
-
-  private static RuntimeException loadFailure(RuntimeException e) {
-    if (JsonSchema.isRemoteRefBlocked(e)) {
-      return new IllegalArgumentException(JsonSchema.REMOTE_REF_DISABLED_MESSAGE, e);
-    }
-    if (isLoadFailure(e)) {
-      return new IllegalArgumentException(
+      throw new IllegalArgumentException(
           "Cannot load Json Schema from JsonNode: " + e.getMessage(), e);
     }
-    return e;
   }
 
-  private Map<JsonNode, String> refs() {
-    if (refs == null) {
-      refs = new IdentityHashMap<>();
-      // The copy loaded in the root redirects "#", so a root that refers to itself is not indexed
-      if (!refersToRoot()) {
-        indexRefs(root, "#");
-      }
-    }
-    return refs;
-  }
-
-  private boolean refersToRoot() {
-    JsonNode id = root.has("$id") ? root.get("$id") : root.get("id");
-    Deque<JsonNode> pending = new ArrayDeque<>();
-    pending.push(root);
+  // Maps union branches of root to their schemas in the loaded graph, the same schemas that
+  // inlineTaggedEntities sorts; a union that cannot be matched exactly is left out
+  static Map<JsonNode, Schema> branchesOf(JsonNode root, Schema schema) {
+    Map<JsonNode, Schema> branches = new IdentityHashMap<>();
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    Deque<Schema> pending = new ArrayDeque<>();
+    pending.push(schema);
     while (!pending.isEmpty()) {
-      JsonNode node = pending.pop();
-      JsonNode ref = node.get("$ref");
-      if (ref != null && ref.isTextual() && mayReferToRoot(ref.textValue(), id)) {
-        return true;
+      Schema s = pending.pop();
+      if (!seen.add(s)) {
+        continue;
       }
-      node.forEach(pending::push);
+      List<Schema> children = new ArrayList<>();
+      if (s instanceof CombinedSchema) {
+        mapUnion(root, (CombinedSchema) s, branches);
+        children.addAll(((CombinedSchema) s).getSubschemas());
+      } else if (s instanceof ObjectSchema) {
+        children.addAll(((ObjectSchema) s).getPropertySchemas().values());
+      } else if (s instanceof ArraySchema) {
+        children.add(((ArraySchema) s).getAllItemSchema());
+      } else if (s instanceof NotSchema) {
+        children.add(((NotSchema) s).getMustNotMatch());
+      } else if (s instanceof ConditionalSchema) {
+        ConditionalSchema c = (ConditionalSchema) s;
+        c.getIfSchema().ifPresent(children::add);
+        c.getThenSchema().ifPresent(children::add);
+        c.getElseSchema().ifPresent(children::add);
+      }
+      for (Schema child : children) {
+        if (child != null) {
+          pending.push(child);
+        }
+      }
     }
-    return false;
+    return branches;
   }
 
-  private static boolean mayReferToRoot(String ref, JsonNode id) {
-    int hash = ref.indexOf('#');
-    if (hash >= 0 && hash < ref.length() - 1) {
-      return false;
-    }
-    String doc = hash < 0 ? ref : ref.substring(0, hash);
-    if (doc.isEmpty()) {
-      return true;
-    }
-    if (id == null || !id.isTextual()) {
-      return false;
-    }
-    try {
-      URI base = ReferenceResolver.resolve((URI) null, id.textValue());
-      return withoutFragment(ReferenceResolver.resolve(base, doc)).equals(withoutFragment(base));
-    } catch (RuntimeException e) {
-      return true;
-    }
-  }
-
-  private static String withoutFragment(URI uri) {
-    return uri.toString().replaceAll("#.*$", "");
-  }
-
-  private void indexRefs(JsonNode node, String ref) {
-    if (!node.isContainerNode()) {
+  private static void mapUnion(JsonNode root, CombinedSchema union,
+                               Map<JsonNode, Schema> branches) {
+    String criterion = JsonSchemaComparator.getCriterion(union);
+    if (criterion == null) {
       return;
     }
-    refs.put(node, ref);
-    if (node.isArray()) {
-      for (int i = 0; i < node.size(); i++) {
-        indexRefs(node.get(i), ref + "/" + i);
+    String keyword = criterion.substring(0, 3) + "Of";
+    // A union Everit wrapped with its sibling keywords has no location; its paths keep today's sort
+    String base = union.getSchemaLocation();
+    // Everit does not escape \ or " in locations, so those keys cannot be resolved exactly
+    if (base == null || !base.startsWith("#")
+        || base.indexOf('\\') >= 0 || base.indexOf('"') >= 0) {
+      return;
+    }
+    List<Schema> subschemas = new ArrayList<>(union.getSubschemas());
+    JsonNode array = root.at(JsonPointer.compile(base.substring(1) + "/" + keyword));
+    if (!array.isArray() || array.size() != subschemas.size()) {
+      return;
+    }
+    for (int i = 0; i < subschemas.size(); i++) {
+      if (!matches(subschemas.get(i), array.get(i), base + "/" + keyword + "/" + i)) {
+        return;
       }
-    } else {
-      node.fields().forEachRemaining(
-          e -> indexRefs(e.getValue(), ref + "/" + encodeToken(e.getKey())));
+    }
+    for (int i = 0; i < subschemas.size(); i++) {
+      branches.put(array.get(i), subschemas.get(i));
     }
   }
 
-  private static String encodeToken(String token) {
-    try {
-      return URLEncoder.encode(token.replace("~", "~0").replace("/", "~1"), "UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      throw new IllegalStateException(e);
+  private static boolean matches(Schema schema, JsonNode node, String location) {
+    if (node.isBoolean()) {
+      return node.booleanValue() ? schema instanceof TrueSchema : schema instanceof FalseSchema;
     }
+    if (schema instanceof ReferenceSchema) {
+      JsonNode ref = node.get("$ref");
+      return ref != null && sameRef(ref.asText(), ((ReferenceSchema) schema).getReferenceValue());
+    }
+    return location.equals(schema.getSchemaLocation());
+  }
+
+  // Everit may store a fragment-only ref resolved against the base URI
+  private static boolean sameRef(String ref, String value) {
+    if (ref.equals(value)) {
+      return true;
+    }
+    return ref.startsWith("#") && value.endsWith(ref)
+        && value.indexOf('#') == value.lastIndexOf('#');
   }
 }

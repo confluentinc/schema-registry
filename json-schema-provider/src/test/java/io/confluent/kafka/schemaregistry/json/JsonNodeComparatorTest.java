@@ -273,12 +273,6 @@ public class JsonNodeComparatorTest {
         Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/d\"}",
         "{\"type\":\"string\"}", "{\"type\":\"boolean\"}");
     assertArrayEquals(new int[] {2, 0, 1}, order(local));
-
-    String recursive = "{\"$ref\":\"#/definitions/a\"}";
-    JsonNode result = tagged(oneOf(
-        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":" + recursive + "}}",
-        Collections.emptyMap(), true, recursive, recursive), 0);
-    assertTrue(result.toString(), result.toString().contains("confluent:tags"));
   }
 
   @Test
@@ -289,12 +283,53 @@ public class JsonNodeComparatorTest {
     }
     assertBranchRejected(oneOf("", Collections.emptyMap(), false,
         "{\"$ref\":\"http://127.0.0.1:1/x\"}", "{\"type\":\"string\"}"));
-    assertBranchRejected(oneOf(
-        ",\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"#\"}}}",
-        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
-    assertBranchRejected(oneOf(",\"$id\":\"http://acme.example/root.json\","
-            + "\"definitions\":{\"a\":{\"type\":\"array\",\"items\":{\"$ref\":\"root.json\"}}}",
-        Collections.emptyMap(), true, "{\"$ref\":\"#/definitions/a\"}", "{\"type\":\"string\"}"));
+  }
+
+  @Test
+  public void copyWithTagsWritesWhereInlineTaggedEntitiesReads() throws IOException {
+    String objA = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}";
+    String objB = "{\"type\":\"object\",\"default\":{\"b\":\"x\"},"
+        + "\"properties\":{\"b\":{\"$ref\":\"#/definitions/s\"}}}";
+    String defs = ",\"definitions\":{\"s\":{\"type\":\"string\"},"
+        + "\"tree\":{\"type\":\"array\",\"items\":{\"$ref\":\"#\"}},"
+        + "\"list\":{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/list\"}},"
+        + "\"self\":{\"type\":\"array\",\"items\":{\"$ref\":\"root.json\"}}}";
+    for (boolean block : new boolean[] {false, true}) {
+      assertTagsReadBack(oneOf(defs, Collections.emptyMap(), block, objB, objA,
+          "{\"type\":\"string\",\"const\":\"c\"}", "{\"$ref\":\"#/definitions/tree\"}",
+          "{\"$ref\":\"#/definitions/list\"}", "{\"$ref\":\"#/definitions/list\"}"));
+      assertTagsReadBack(oneOf(defs, Collections.emptyMap(), block, objA, "true",
+          "{\"$ref\":\"#/definitions/s\"}", objB));
+      assertTagsReadBack(oneOf(",\"$id\":\"http://acme.example/root.json\"",
+          Collections.emptyMap(), block, "{\"type\":\"string\",\"const\":\"b\"}",
+          "{\"$ref\":\"#\"}", "{\"$ref\":\"#\"}", objA));
+      assertTagsReadBack(oneOf(",\"$id\":\"http://acme.example/root.json\"" + defs,
+          Collections.emptyMap(), block, objA, "{\"$ref\":\"#/definitions/self\"}", objB));
+    }
+  }
+
+  // Each object branch tagged at oneof.k must be read back at oneof.k
+  private static void assertTagsReadBack(JsonSchema schema) throws IOException {
+    int checked = 0;
+    for (int k = 0; k < schema.toJsonNode().get("oneOf").size(); k++) {
+      SchemaEntity entity =
+          new SchemaEntity("oneof." + k + ".object", SchemaEntity.EntityType.SR_RECORD);
+      JsonSchema result;
+      try {
+        result = (JsonSchema) schema.copy(
+            Collections.singletonMap(entity, Collections.singleton("T")), Collections.emptyMap());
+      } catch (IllegalArgumentException e) {
+        continue;
+      }
+      for (JsonNode branch : result.toJsonNode().get("oneOf")) {
+        if (branch.has("confluent:tags") && "object".equals(branch.path("type").asText())) {
+          assertEquals(result.toJsonNode().toString(), Collections.singleton("T"),
+              result.inlineTaggedEntities().get(entity));
+          checked++;
+        }
+      }
+    }
+    assertTrue(checked > 0);
   }
 
   private static void assertBranchRejected(JsonSchema schema) {
@@ -305,6 +340,35 @@ public class JsonNodeComparatorTest {
       assertNotNull(e.getCause());
     } catch (IOException e) {
       throw new AssertionError(e);
+    }
+  }
+
+  @Test
+  public void copyWithTagsKeepsTodaysSortForWrappedRootUnion() throws IOException {
+    String json = "{" + DRAFT_7 + ",\"type\":\"object\","
+        + "\"properties\":{\"h\":{\"type\":\"string\"}},"
+        + "\"allOf\":[{\"type\":\"string\",\"const\":\"b\"},"
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}]}";
+    SchemaEntity entity =
+        new SchemaEntity("allof.0.allof.1.object", SchemaEntity.EntityType.SR_RECORD);
+    JsonSchema result = (JsonSchema) new JsonSchema(json).copy(
+        Collections.singletonMap(entity, Collections.singleton("T")), Collections.emptyMap());
+    assertEquals(Collections.singleton("T"), result.inlineTaggedEntities().get(entity));
+  }
+
+  @Test
+  public void copyWithTagsRejectsPathsOutsideTheSchema() {
+    JsonSchema schema = oneOf("", Collections.emptyMap(), true, "{\"type\":\"string\"}",
+        "{\"type\":\"integer\"}");
+    for (String path : new String[] {"oneof.2.object", "oneof.x.object"}) {
+      SchemaEntity entity = new SchemaEntity(path, SchemaEntity.EntityType.SR_RECORD);
+      try {
+        schema.copy(Collections.singletonMap(entity, Collections.singleton("T")),
+            Collections.emptyMap());
+        fail("Expected " + path + " to be rejected");
+      } catch (IllegalArgumentException e) {
+        assertTrue(e.getMessage(), e.getMessage().contains("No matching path"));
+      }
     }
   }
 
