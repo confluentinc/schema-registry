@@ -248,6 +248,9 @@ public class RestService implements Closeable, Configurable {
   private SSLSocketFactory sslSocketFactory;
   private volatile int httpConnectTimeoutMs;
   private volatile int httpReadTimeoutMs;
+  private volatile int httpConnectionRequestTimeoutMs;
+  private volatile int httpClientPoolMaxTotalConnections;
+  private volatile int httpClientPoolMaxPerRouteConnections;
   private HostnameVerifier hostnameVerifier;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
@@ -303,6 +306,12 @@ public class RestService implements Closeable, Configurable {
 
     setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
     setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));
+    setHttpConnectionRequestTimeoutMs(
+        SchemaRegistryClientConfig.getHttpConnectionRequestTimeoutMs(configs));
+    setHttpClientPoolMaxTotalConnections(
+        SchemaRegistryClientConfig.getHttpClientPoolMaxTotalConnections(configs));
+    setHttpClientPoolMaxPerRouteConnections(
+        SchemaRegistryClientConfig.getHttpClientPoolMaxPerRouteConnections(configs));
 
     String basicCredentialsSource = (String) configs.get(
         SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
@@ -359,7 +368,11 @@ public class RestService implements Closeable, Configurable {
   private HttpClient createNewHttpClient() {
     RequestConfig requestConfig = RequestConfig.custom()
         .setResponseTimeout(Timeout.ofMilliseconds(
-            this.httpReadTimeoutMs)).build();
+            this.httpReadTimeoutMs))
+        // Fail fast instead of blocking a thread when the pool is exhausted (e.g. during an
+        // outage), rather than letting callers pile up waiting for a free connection.
+        .setConnectionRequestTimeout(Timeout.ofMilliseconds(this.httpConnectionRequestTimeoutMs))
+        .build();
 
 
     HttpClientBuilder httpClientBuilder = HttpClients.custom();
@@ -368,7 +381,12 @@ public class RestService implements Closeable, Configurable {
         .setDefaultRequestConfig(requestConfig);
 
     PoolingHttpClientConnectionManagerBuilder connectionManagerBuilder =
-        PoolingHttpClientConnectionManagerBuilder.create();
+        PoolingHttpClientConnectionManagerBuilder.create()
+            // Kept small and bounded by default: successful lookups are served from the
+            // client-side cache, so the pool is mainly exercised on cache misses/failures, and a
+            // small bound limits connection/port usage during a Schema Registry outage.
+            .setMaxConnTotal(this.httpClientPoolMaxTotalConnections)
+            .setMaxConnPerRoute(this.httpClientPoolMaxPerRouteConnections);
 
     connectionManagerBuilder.setDefaultConnectionConfig(ConnectionConfig.custom()
         .setConnectTimeout(Timeout.ofMilliseconds(this.httpConnectTimeoutMs)).build());
@@ -464,6 +482,21 @@ public class RestService implements Closeable, Configurable {
 
   public void setHttpReadTimeoutMs(int httpReadTimeoutMs) {
     this.httpReadTimeoutMs = httpReadTimeoutMs;
+    closeHttpClient();
+  }
+
+  public void setHttpConnectionRequestTimeoutMs(int httpConnectionRequestTimeoutMs) {
+    this.httpConnectionRequestTimeoutMs = httpConnectionRequestTimeoutMs;
+    closeHttpClient();
+  }
+
+  public void setHttpClientPoolMaxTotalConnections(int httpClientPoolMaxTotalConnections) {
+    this.httpClientPoolMaxTotalConnections = httpClientPoolMaxTotalConnections;
+    closeHttpClient();
+  }
+
+  public void setHttpClientPoolMaxPerRouteConnections(int httpClientPoolMaxPerRouteConnections) {
+    this.httpClientPoolMaxPerRouteConnections = httpClientPoolMaxPerRouteConnections;
     closeHttpClient();
   }
 

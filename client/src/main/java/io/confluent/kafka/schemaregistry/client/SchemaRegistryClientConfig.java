@@ -36,16 +36,16 @@ public class SchemaRegistryClientConfig {
       "schema.registry.basic.auth.user.info";
   public static final String USER_INFO_CONFIG = "basic.auth.user.info";
   public static final String HTTP_CONNECT_TIMEOUT_MS = "http.connect.timeout.ms";
-  public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 60000;
+  public static final int HTTP_CONNECT_TIMEOUT_MS_DEFAULT = 800;
   public static final String HTTP_READ_TIMEOUT_MS = "http.read.timeout.ms";
-  public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
+  public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 6000;
 
   public static final String MAX_RETRIES_CONFIG = "max.retries";
   public static final int MAX_RETRIES_DEFAULT = 3;
   public static final String RETRIES_WAIT_MS_CONFIG = "retries.wait.ms";
-  public static final int RETRIES_WAIT_MS_DEFAULT = 1000;
+  public static final int RETRIES_WAIT_MS_DEFAULT = 2000;
   public static final String RETRIES_MAX_WAIT_MS_CONFIG = "retries.max.wait.ms";
-  public static final int RETRIES_MAX_WAIT_MS_DEFAULT = 20000;
+  public static final int RETRIES_MAX_WAIT_MS_DEFAULT = 30000;
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
@@ -65,7 +65,22 @@ public class SchemaRegistryClientConfig {
   public static final boolean URL_RANDOMIZE_DEFAULT = false;
 
   public static final String USE_APACHE_HTTP_CLIENT = "use.apache.http.client";
-  public static final boolean USE_APACHE_HTTP_CLIENT_DEFAULT = false;
+  public static final boolean USE_APACHE_HTTP_CLIENT_DEFAULT = true;
+
+  // Pool is only exercised on cache misses/failures; most successful lookups are served from the
+  // client-side cache, so a small bounded pool is enough and limits blast radius during outages.
+  public static final String HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS =
+      "http.client.pool.max.total.connections";
+  public static final int HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS_DEFAULT = 10;
+  public static final String HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS =
+      "http.client.pool.max.per.route.connections";
+  public static final int HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS_DEFAULT = 10;
+
+  // Time to wait for a connection to become available from the pool. Kept short so threads
+  // fail fast (instead of blocking indefinitely) once the pool is exhausted during an outage.
+  public static final String HTTP_CONNECTION_REQUEST_TIMEOUT_MS =
+      "http.connection.request.timeout.ms";
+  public static final int HTTP_CONNECTION_REQUEST_TIMEOUT_MS_DEFAULT = 500;
 
   //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
@@ -135,7 +150,25 @@ public class SchemaRegistryClientConfig {
     return configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)
         ? Integer.parseInt(configs.get(HTTP_READ_TIMEOUT_MS).toString())
         : HTTP_READ_TIMEOUT_MS_DEFAULT;
-  } 
+  }
+
+  public static Integer getHttpConnectionRequestTimeoutMs(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(HTTP_CONNECTION_REQUEST_TIMEOUT_MS)
+        ? Integer.parseInt(configs.get(HTTP_CONNECTION_REQUEST_TIMEOUT_MS).toString())
+        : HTTP_CONNECTION_REQUEST_TIMEOUT_MS_DEFAULT;
+  }
+
+  public static Integer getHttpClientPoolMaxTotalConnections(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS)
+        ? Integer.parseInt(configs.get(HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS).toString())
+        : HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS_DEFAULT;
+  }
+
+  public static Integer getHttpClientPoolMaxPerRouteConnections(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS)
+        ? Integer.parseInt(configs.get(HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS).toString())
+        : HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS_DEFAULT;
+  }
 
   public static Integer getMaxRetries(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MAX_RETRIES_CONFIG)
