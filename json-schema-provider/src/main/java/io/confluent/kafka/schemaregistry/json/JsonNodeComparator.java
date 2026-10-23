@@ -45,9 +45,9 @@ import java.util.function.Consumer;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
+  private static final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
-  private final JsonSchemaComparator jsonSchemaComparator = new JsonSchemaComparator();
   private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
   private final Map<JsonNode, Schema> loaded;
 
@@ -57,10 +57,11 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
 
   // Configures the loader for the compared schemas; null means the loader default
   public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
-    this(loaderConfig, Collections.emptyMap());
+    this.loaderConfig = loaderConfig;
+    this.loaded = null;
   }
 
-  // Starts from branches already resolved in the loaded schema, see branchesOf
+  // Caches loaded branches for its lifetime, starting from those resolved by branchesOf
   JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig,
                      Map<JsonNode, Schema> branches) {
     this.loaderConfig = loaderConfig;
@@ -92,6 +93,9 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   }
 
   private Schema load(JsonNode node) throws JsonProcessingException {
+    if (loaded == null) {
+      return loadStandalone(node);
+    }
     Schema schema = loaded.get(node);
     if (schema == null) {
       schema = loadStandalone(node);
@@ -166,7 +170,7 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
     String keyword = criterion.substring(0, 3) + "Of";
     // A union Everit wrapped with its sibling keywords has no location; its paths keep today's sort
     String base = union.getSchemaLocation();
-    // Everit does not escape \ or " in locations, so those keys cannot be resolved exactly
+    // Everit escapes \ and " in locations as in JSON strings, so those keys cannot be resolved
     if (base == null || !base.startsWith("#")
         || base.indexOf('\\') >= 0 || base.indexOf('"') >= 0) {
       return;

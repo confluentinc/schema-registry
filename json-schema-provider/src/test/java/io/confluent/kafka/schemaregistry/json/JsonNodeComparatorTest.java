@@ -319,6 +319,7 @@ public class JsonNodeComparatorTest {
         result = (JsonSchema) schema.copy(
             Collections.singletonMap(entity, Collections.singleton("T")), Collections.emptyMap());
       } catch (IllegalArgumentException e) {
+        assertTrue(e.getMessage(), e.getMessage().contains("can be tagged"));
         continue;
       }
       for (JsonNode branch : result.toJsonNode().get("oneOf")) {
@@ -360,7 +361,7 @@ public class JsonNodeComparatorTest {
   public void copyWithTagsRejectsPathsOutsideTheSchema() {
     JsonSchema schema = oneOf("", Collections.emptyMap(), true, "{\"type\":\"string\"}",
         "{\"type\":\"integer\"}");
-    for (String path : new String[] {"oneof.2.object", "oneof.x.object"}) {
+    for (String path : new String[] {"oneof.2.object", "oneof.-1.object", "oneof.x.object"}) {
       SchemaEntity entity = new SchemaEntity(path, SchemaEntity.EntityType.SR_RECORD);
       try {
         schema.copy(Collections.singletonMap(entity, Collections.singleton("T")),
@@ -370,6 +371,18 @@ public class JsonNodeComparatorTest {
         assertTrue(e.getMessage(), e.getMessage().contains("No matching path"));
       }
     }
+  }
+
+  @Test
+  public void copyWithTagsOutsideUnionsDoesNotLoadTheSchema() {
+    String json = "{" + DRAFT_7 + ",\"type\":\"object\",\"properties\":{"
+        + "\"q\":{\"type\":\"string\"},\"r\":{\"$ref\":\"" + url("/a") + "\"}}}";
+    SchemaEntity entity = new SchemaEntity("object.q", SchemaEntity.EntityType.SR_FIELD);
+    JsonSchema result = (JsonSchema) new JsonSchema(json, Collections.emptyList(),
+        Collections.emptyMap(), null, null, null, false)
+        .copy(Collections.singletonMap(entity, Collections.singleton("T")), Collections.emptyMap());
+    assertEquals(0, hits.get());
+    assertEquals(Collections.singleton("T"), result.inlineTaggedEntities().get(entity));
   }
 
   @Test
@@ -393,7 +406,7 @@ public class JsonNodeComparatorTest {
       }
     };
     schema.copy(tags, Collections.emptyMap());
-    // One check up front, then one loader configuration per branch.
-    assertTrue("loaders configured: " + configured.get(), configured.get() <= n + 1);
+    // One check up front and one load of the whole schema; no branch is loaded on its own.
+    assertEquals(2, configured.get());
   }
 }

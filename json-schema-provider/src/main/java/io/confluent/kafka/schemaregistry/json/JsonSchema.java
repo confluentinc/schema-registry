@@ -127,6 +127,9 @@ public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
 
+  private static final java.util.regex.Pattern UNION_PATH =
+      java.util.regex.Pattern.compile("(.*\\.)?(oneof|anyof|allof)\\..*");
+
   public static final String DEFAULT_BASE_URI = "mem://input";
 
   public static final String TYPE = "JSON";
@@ -1599,7 +1602,11 @@ public class JsonSchema implements ParsedSchema {
     Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
         ? b -> configureEveritLoader(b, specVersion(),
             ref -> parsed.computeIfAbsent(ref, JSONObject::new)) : null;
-    JsonNodeComparator comparator = new JsonNodeComparator(loaderConfig, loadedBranches(node));
+    // Only paths through a union need the loaded schema, so others do not load or fetch anything
+    boolean hasUnionPaths = entityToModify.stream()
+        .anyMatch(e -> UNION_PATH.matcher(e.getEntityPath()).matches());
+    JsonNodeComparator comparator = new JsonNodeComparator(
+        loaderConfig, hasUnionPaths ? loadedBranches(node) : Collections.emptyMap());
     for (SchemaEntity entity : entityToModify) {
       JsonNode fieldNodePtr = findMatchingEntity(node, entity, comparator);
       if (!fieldNodePtr.isObject()) {
@@ -1631,6 +1638,7 @@ public class JsonSchema implements ParsedSchema {
     try {
       return JsonNodeComparator.branchesOf(node, rawSchema());
     } catch (RuntimeException e) {
+      log.debug("Sorting tag-path branches without the loaded schema", e);
       return Collections.emptyMap();
     }
   }
