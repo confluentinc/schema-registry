@@ -22,6 +22,11 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.Closeable;
@@ -80,7 +85,7 @@ public interface AsyncSchemaRegistryClient extends Closeable {
   CompletableFuture<SchemaMetadata> getLatestWithMetadata(
       String subject, Map<String, String> metadata, boolean lookupDeletedSchema);
 
-  // Associations. Live reads, not cached.
+  // Associations. Reads are live (not cached); writes mutate the registry.
 
   CompletableFuture<List<Association>> getAssociationsBySubject(
       String subject, String resourceType, List<String> associationTypes,
@@ -89,6 +94,26 @@ public interface AsyncSchemaRegistryClient extends Closeable {
   CompletableFuture<List<Association>> getAssociationsByResourceId(
       String resourceId, String resourceType, List<String> associationTypes,
       String lifecycle, int offset, int limit);
+
+  CompletableFuture<List<Association>> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace, String resourceType,
+      List<String> associationTypes, String lifecycle, int offset, int limit);
+
+  CompletableFuture<AssociationResponse> createAssociation(
+      AssociationCreateOrUpdateRequest request);
+
+  CompletableFuture<AssociationResponse> createOrUpdateAssociation(
+      AssociationCreateOrUpdateRequest request);
+
+  CompletableFuture<Void> deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle);
+
+  CompletableFuture<AssociationBatchResponse> batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request);
+
+  CompletableFuture<AssociationBatchResponse> mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request);
 
   // Write path, as used by serializers. Results are cached.
 

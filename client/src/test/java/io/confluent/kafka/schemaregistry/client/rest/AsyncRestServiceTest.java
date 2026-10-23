@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.client.rest;
 
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -26,6 +30,9 @@ import com.sun.net.httpserver.HttpServer;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -124,6 +131,103 @@ public class AsyncRestServiceTest {
     assertEquals(
         "/associations/resources/my-resource?resourceType=TABLE&associationType=DATA_SCHEMA",
         request.uri);
+  }
+
+  @Test
+  public void testGetAssociationsByResourceNameSendsGetWithQueryParams() throws Exception {
+    registry.enqueue(200, "[]");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    List<Association> result = await(restService.getAssociationsByResourceName(
+        "my-res", "my-ns", "TABLE", List.of("DATA_SCHEMA"), null, 0, -1));
+
+    assertTrue(result.isEmpty());
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("GET", request.method);
+    assertEquals(
+        "/associations/resources/my-ns/my-res?resourceType=TABLE&associationType=DATA_SCHEMA",
+        request.uri);
+  }
+
+  @Test
+  public void testDeleteAssociationsSendsDeleteWithQueryParams() throws Exception {
+    registry.enqueue(204, null);
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    await(restService.deleteAssociations("my-res", "TABLE", List.of("DATA_SCHEMA"), true, false));
+
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("DELETE", request.method);
+    assertEquals(
+        "/associations/resources/my-res?resourceType=TABLE&associationType=DATA_SCHEMA"
+            + "&cascadeLifecycle=true&dryRun=false",
+        request.uri);
+  }
+
+  @Test
+  public void testCreateAssociationPostsToAssociations() throws Exception {
+    AssociationCreateOrUpdateRequest payload = createMock(AssociationCreateOrUpdateRequest.class);
+    expect(payload.toJson()).andReturn("{\"a\":1}");
+    replay(payload);
+    registry.enqueue(200, "{}");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    await(restService.createAssociation(null, false, payload));
+
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("POST", request.method);
+    assertEquals("/associations?dryRun=false", request.uri);
+    assertEquals("{\"a\":1}", request.body);
+    verify(payload);
+  }
+
+  @Test
+  public void testCreateOrUpdateAssociationPutsToResource() throws Exception {
+    AssociationCreateOrUpdateRequest payload = createMock(AssociationCreateOrUpdateRequest.class);
+    expect(payload.getResourceId()).andReturn("res-1");
+    expect(payload.toJson()).andReturn("{\"a\":1}");
+    replay(payload);
+    registry.enqueue(200, "{}");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    await(restService.createOrUpdateAssociation(null, false, payload));
+
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("PUT", request.method);
+    assertEquals("/associations/resources/res-1?dryRun=false", request.uri);
+    verify(payload);
+  }
+
+  @Test
+  public void testBatchGetAssociationsPostsToBatchGet() throws Exception {
+    AssociationBatchGetRequest payload = createMock(AssociationBatchGetRequest.class);
+    expect(payload.toJson()).andReturn("{\"a\":1}");
+    replay(payload);
+    registry.enqueue(200, "{}");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    await(restService.batchGetAssociations(true, payload));
+
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("POST", request.method);
+    assertEquals("/associations:batchGet?includeSchemas=true", request.uri);
+    verify(payload);
+  }
+
+  @Test
+  public void testMutateAssociationsPostsToBatchMutate() throws Exception {
+    AssociationBatchRequest payload = createMock(AssociationBatchRequest.class);
+    expect(payload.toJson()).andReturn("{\"a\":1}");
+    replay(payload);
+    registry.enqueue(200, "{}");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    await(restService.mutateAssociations("ctx", false, payload));
+
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("POST", request.method);
+    assertEquals("/associations:batchMutate?context=ctx&dryRun=false", request.uri);
+    verify(payload);
   }
 
   @Test
