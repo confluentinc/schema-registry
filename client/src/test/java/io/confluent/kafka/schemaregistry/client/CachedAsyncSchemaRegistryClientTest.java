@@ -26,11 +26,13 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.AsyncRestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -499,6 +501,40 @@ public class CachedAsyncSchemaRegistryClientTest {
     await(client.getSchemaById(ID));
     client.reset();
     await(client.getSchemaById(ID));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetAssociationsBySubjectDelegatesAndIsNotCached() throws Exception {
+    List<Association> associations = Collections.emptyList();
+    expect(restService.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1))
+        .andReturn(completedFuture(associations)).times(2);
+    replay(restService);
+
+    // Delegates to the REST service and passes the result straight through
+    assertSame(associations,
+        await(client.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1)));
+    // A second identical call hits the registry again — associations are live, not cached
+    assertSame(associations,
+        await(client.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetAssociationsByResourceIdDelegatesAndIsNotCached() throws Exception {
+    List<Association> associations = Collections.emptyList();
+    expect(restService.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1))
+        .andReturn(completedFuture(associations)).times(2);
+    replay(restService);
+
+    // Delegates to the REST service and passes the result straight through
+    assertSame(associations,
+        await(client.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1)));
+    // A second identical call hits the registry again — associations are live, not cached
+    assertSame(associations,
+        await(client.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1)));
 
     verify(restService);
   }

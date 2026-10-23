@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -78,6 +79,16 @@ public interface AsyncSchemaRegistryClient extends Closeable {
 
   CompletableFuture<SchemaMetadata> getLatestWithMetadata(
       String subject, Map<String, String> metadata, boolean lookupDeletedSchema);
+
+  // Associations. Live reads, not cached.
+
+  CompletableFuture<List<Association>> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit);
+
+  CompletableFuture<List<Association>> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit);
 
   // Write path, as used by serializers. Results are cached.
 
