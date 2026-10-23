@@ -1486,8 +1486,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               .collect(Collectors.toList());
     }
     if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
-      // Additive: the native check below still runs; LOGICAL layers the Flink/Iceberg logical-type
-      // validity and compatibility checks on top, so it can only make registration stricter.
+      // Additive: the native check below still runs, as LENIENT; LOGICAL layers the Flink/Iceberg
+      // logical-type checks on top, so it can only make registration stricter than LENIENT.
       // A group selects the versions compared; provenance, as the endpoint's ids, ignores groups.
       errorMessages.addAll(pairBy == PairBy.CHECK_ID
               ? logicalFindings(parsedSchema, previousSchemas, compatibility, beforeVersion)

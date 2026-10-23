@@ -99,7 +99,10 @@ public class CompatibilityChecker {
     List<ParsedSchemaHolder> previousSchemasCopy = new ArrayList<>(previousSchemas);
     // Validator checks in list order, but checks should occur in reverse chronological order
     Collections.reverse(previousSchemasCopy);
-    return validator.validate(policy, newSchema, previousSchemasCopy);
+    // LOGICAL judges the logical shape with its own checks, so the native check runs as LENIENT.
+    CompatibilityPolicy nativePolicy = policy == CompatibilityPolicy.LOGICAL
+        ? CompatibilityPolicy.LENIENT : policy;
+    return validator.validate(nativePolicy, newSchema, previousSchemasCopy);
   }
 
   public static CompatibilityChecker checker(CompatibilityLevel level) {
