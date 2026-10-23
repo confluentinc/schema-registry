@@ -33,9 +33,11 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -481,5 +483,38 @@ class LogicalPolicyCheckerTest {
         CompatibilityLevel.BACKWARD);
 
     assertTrue(errors.stream().anyMatch(e -> e.contains("TYPE_MISMATCH")), errors.toString());
+  }
+
+  @Test
+  void parseChecksWithNoEntriesIsEveryRuleButFieldReordered() {
+    Set<Rule> checks = LogicalPolicyChecker.parseChecks(List.of());
+    assertEquals(Rule.defaults(), checks);
+    assertFalse(checks.contains(Rule.FIELD_REORDERED));
+    assertTrue(checks.contains(Rule.FIELD_DELETED));
+  }
+
+  @Test
+  void parseChecksAppliesEachEntryOverItsRuleDefault() {
+    // Disabling one rule leaves the other at its default rather than resetting it.
+    Set<Rule> checks = LogicalPolicyChecker.parseChecks(List.of("-FIELD_DELETED"));
+    assertFalse(checks.contains(Rule.FIELD_DELETED));
+    assertFalse(checks.contains(Rule.FIELD_REORDERED));
+
+    checks = LogicalPolicyChecker.parseChecks(List.of(" +field_reordered ", "-FIELD_DELETED"));
+    assertTrue(checks.contains(Rule.FIELD_REORDERED));
+    assertFalse(checks.contains(Rule.FIELD_DELETED));
+    assertTrue(checks.contains(Rule.ENUM_DELETED));
+  }
+
+  @Test
+  void parseChecksRejectsAMissingSignAnUnknownRuleAndAConflict() {
+    assertThrows(IllegalArgumentException.class,
+        () -> LogicalPolicyChecker.parseChecks(List.of("FIELD_DELETED")));
+    assertThrows(IllegalArgumentException.class,
+        () -> LogicalPolicyChecker.parseChecks(List.of("")));
+    assertThrows(IllegalArgumentException.class,
+        () -> LogicalPolicyChecker.parseChecks(List.of("-FIELD_DELETD")));
+    assertThrows(IllegalArgumentException.class,
+        () -> LogicalPolicyChecker.parseChecks(List.of("+FIELD_DELETED", "-FIELD_DELETED")));
   }
 }

@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.policy;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 
 import java.util.ArrayList;
@@ -79,17 +80,26 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update) {
+    return compare(mode, original, update, Rule.defaults());
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType)}, reporting only {@code enabledRules}.
+   */
+  public static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
     Objects.requireNonNull(mode, "mode");
     Objects.requireNonNull(original, "original");
     Objects.requireNonNull(update, "update");
+    Objects.requireNonNull(enabledRules, "enabledRules");
 
     switch (mode) {
       case FLINK:
-        return new FlinkComparison(original, update).run();
+        return new FlinkComparison(original, update, enabledRules).run();
       case ICEBERG_V2:
-        return new IcebergComparison(original, update, 2).run();
+        return new IcebergComparison(original, update, 2, enabledRules).run();
       case ICEBERG_V3:
-        return new IcebergComparison(original, update, 3).run();
+        return new IcebergComparison(original, update, 3, enabledRules).run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
