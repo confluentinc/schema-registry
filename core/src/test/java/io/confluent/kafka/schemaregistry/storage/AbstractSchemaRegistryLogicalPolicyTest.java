@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,14 @@ class AbstractSchemaRegistryLogicalPolicyTest {
   private static final String RECORD_A =
       "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
           + "{\"name\":\"a\",\"type\":\"int\"}]}";
+
+  // An open content model gaining an optional property: incompatible under STRICT only, since an
+  // old record may hold an undeclared property of that name, which no logical type can see.
+  private static final String OPEN_OBJECT_A =
+      "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}";
+  private static final String OPEN_OBJECT_A_B =
+      "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
+          + "\"b\":{\"type\":\"string\"}}}";
 
   private static List<String> check(String policy, ParsedSchema newSchema,
       List<ParsedSchemaHolder> previous) {
@@ -154,6 +163,26 @@ class AbstractSchemaRegistryLogicalPolicyTest {
         "FORWARD", "STRICT",
         new AvroSchema(RECORD_A_B),
         List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void strictPolicyRejectsAnOptionalPropertyAddedToAnOpenModel() {
+    List<String> errors = check(
+        "STRICT",
+        new JsonSchema(OPEN_OBJECT_A_B),
+        List.of(new SimpleParsedSchemaHolder(new JsonSchema(OPEN_OBJECT_A))));
+    assertTrue(errors.stream()
+            .anyMatch(e -> e.contains("OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL")),
+        errors.toString());
+  }
+
+  @Test
+  void logicalPolicyRunsTheNativeCheckAsLenient() {
+    List<String> errors = check(
+        "LOGICAL",
+        new JsonSchema(OPEN_OBJECT_A_B),
+        List.of(new SimpleParsedSchemaHolder(new JsonSchema(OPEN_OBJECT_A))));
     assertTrue(errors.isEmpty(), errors.toString());
   }
 }
