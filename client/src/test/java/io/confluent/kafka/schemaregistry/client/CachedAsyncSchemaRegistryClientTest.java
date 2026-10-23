@@ -26,14 +26,20 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.AsyncRestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -499,6 +505,113 @@ public class CachedAsyncSchemaRegistryClientTest {
     await(client.getSchemaById(ID));
     client.reset();
     await(client.getSchemaById(ID));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetAssociationsBySubjectDelegatesAndIsNotCached() throws Exception {
+    List<Association> associations = Collections.emptyList();
+    expect(restService.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1))
+        .andReturn(completedFuture(associations)).times(2);
+    replay(restService);
+
+    // Delegates to the REST service and passes the result straight through
+    assertSame(associations,
+        await(client.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1)));
+    // A second identical call hits the registry again — associations are live, not cached
+    assertSame(associations,
+        await(client.getAssociationsBySubject(SUBJECT, "RT", List.of("AT"), null, 0, -1)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetAssociationsByResourceIdDelegatesAndIsNotCached() throws Exception {
+    List<Association> associations = Collections.emptyList();
+    expect(restService.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1))
+        .andReturn(completedFuture(associations)).times(2);
+    replay(restService);
+
+    // Delegates to the REST service and passes the result straight through
+    assertSame(associations,
+        await(client.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1)));
+    // A second identical call hits the registry again — associations are live, not cached
+    assertSame(associations,
+        await(client.getAssociationsByResourceId("rid", "RT", List.of("AT"), null, 0, -1)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetAssociationsByResourceNameDelegatesAndIsNotCached() throws Exception {
+    List<Association> associations = Collections.emptyList();
+    expect(restService.getAssociationsByResourceName("res", "ns", "RT", List.of("AT"), null, 0, -1))
+        .andReturn(completedFuture(associations)).times(2);
+    replay(restService);
+
+    assertSame(associations,
+        await(client.getAssociationsByResourceName("res", "ns", "RT", List.of("AT"), null, 0, -1)));
+    assertSame(associations,
+        await(client.getAssociationsByResourceName("res", "ns", "RT", List.of("AT"), null, 0, -1)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testCreateAssociationDelegatesWithDefaults() throws Exception {
+    AssociationCreateOrUpdateRequest request = createMock(AssociationCreateOrUpdateRequest.class);
+    // Client supplies context=null, dryRun=false
+    expect(restService.createAssociation(null, false, request)).andReturn(completedFuture(null));
+    replay(restService);
+
+    assertNull(await(client.createAssociation(request)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testCreateOrUpdateAssociationDelegatesWithDefaults() throws Exception {
+    AssociationCreateOrUpdateRequest request = createMock(AssociationCreateOrUpdateRequest.class);
+    expect(restService.createOrUpdateAssociation(null, false, request))
+        .andReturn(completedFuture(null));
+    replay(restService);
+
+    assertNull(await(client.createOrUpdateAssociation(request)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testDeleteAssociationsDelegatesWithDefaultDryRun() throws Exception {
+    // Client supplies dryRun=false
+    expect(restService.deleteAssociations("res", "RT", List.of("AT"), true, false))
+        .andReturn(completedFuture(null));
+    replay(restService);
+
+    assertNull(await(client.deleteAssociations("res", "RT", List.of("AT"), true)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testBatchGetAssociationsDelegates() throws Exception {
+    AssociationBatchGetRequest request = createMock(AssociationBatchGetRequest.class);
+    expect(restService.batchGetAssociations(true, request)).andReturn(completedFuture(null));
+    replay(restService);
+
+    assertNull(await(client.batchGetAssociations(true, request)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testMutateAssociationsDelegates() throws Exception {
+    AssociationBatchRequest request = createMock(AssociationBatchRequest.class);
+    expect(restService.mutateAssociations("ctx", false, request)).andReturn(completedFuture(null));
+    replay(restService);
+
+    assertNull(await(client.mutateAssociations("ctx", false, request)));
 
     verify(restService);
   }
