@@ -31,7 +31,9 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.Subje
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.SubjectAndMetadata;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.SubjectAndSchema;
 import io.confluent.kafka.schemaregistry.client.rest.AsyncRestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -220,6 +222,25 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     return cached(latestWithMetadataCache, new SubjectAndMetadata(subject, metadata),
         () -> restService.getLatestWithMetadata(subject, metadata, true)
             .thenApply(SchemaMetadata::new));
+  }
+
+  // Not cached: associations are live and change independently of schemas.
+  @Override
+  public CompletableFuture<List<Association>> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsBySubject(
+        subject, resourceType, associationTypes, lifecyclePolicy, offset, limit);
+  }
+
+  @Override
+  public CompletableFuture<List<Association>> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceId(
+        resourceId, resourceType, associationTypes, lifecyclePolicy, offset, limit);
   }
 
   @Override

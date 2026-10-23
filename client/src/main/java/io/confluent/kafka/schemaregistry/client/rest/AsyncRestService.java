@@ -22,7 +22,9 @@ import static java.lang.String.format;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
@@ -105,6 +107,9 @@ public class AsyncRestService implements Closeable {
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
       new TypeReference<CompatibilityCheckResponse>() {
+      };
+  private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
+      new TypeReference<List<Association>>() {
       };
 
   private static final ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
@@ -351,6 +356,54 @@ public class AsyncRestService implements Closeable {
         .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     return httpRequest(path, "GET", null, GET_CONFIG_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<List<Association>> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/subjects/{subject}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 0) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(subject).toString();
+
+    return httpRequest(path, "GET", null, ASSOCIATIONS_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<List<Association>> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 1) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(resourceId).toString();
+
+    return httpRequest(path, "GET", null, ASSOCIATIONS_RESPONSE_TYPE);
   }
 
   private <T> CompletableFuture<T> postJson(String path,

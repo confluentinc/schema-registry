@@ -24,6 +24,7 @@ import static org.junit.Assert.fail;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -91,6 +92,38 @@ public class AsyncRestServiceTest {
     assertEquals("GET", request.method);
     assertEquals("/schemas/ids/42?fetchMaxId=false&subject=my-subject", request.uri);
     assertEquals("true", request.headers.get(RestService.ACCEPT_UNKNOWN_PROPERTIES));
+  }
+
+  @Test
+  public void testGetAssociationsBySubjectSendsGetWithQueryParams() throws Exception {
+    registry.enqueue(200, "[]");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    List<Association> result = await(restService.getAssociationsBySubject(
+        "my-subject", "TABLE", List.of("DATA_SCHEMA"), null, 0, -1));
+
+    assertTrue(result.isEmpty());
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("GET", request.method);
+    assertEquals(
+        "/associations/subjects/my-subject?resourceType=TABLE&associationType=DATA_SCHEMA",
+        request.uri);
+  }
+
+  @Test
+  public void testGetAssociationsByResourceIdSendsGetWithQueryParams() throws Exception {
+    registry.enqueue(200, "[]");
+    restService = newRestService(Collections.emptyMap(), registry.url());
+
+    List<Association> result = await(restService.getAssociationsByResourceId(
+        "my-resource", "TABLE", List.of("DATA_SCHEMA"), null, 0, -1));
+
+    assertTrue(result.isEmpty());
+    RecordedRequest request = registry.onlyRequest();
+    assertEquals("GET", request.method);
+    assertEquals(
+        "/associations/resources/my-resource?resourceType=TABLE&associationType=DATA_SCHEMA",
+        request.uri);
   }
 
   @Test
