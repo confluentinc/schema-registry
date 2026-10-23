@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class JsonNodeComparator implements Comparator<JsonNode> {
 
@@ -49,7 +50,8 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   private final Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig;
-  private final Map<JsonNode, Schema> loaded;
+  private final Supplier<Map<JsonNode, Schema>> branches;
+  private Map<JsonNode, Schema> loaded;
 
   public JsonNodeComparator() {
     this(null);
@@ -58,14 +60,15 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   // Configures the loader for the compared schemas; null means the loader default
   public JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
     this.loaderConfig = loaderConfig;
-    this.loaded = null;
+    this.branches = null;
   }
 
-  // Caches loaded branches for its lifetime, starting from those resolved by branchesOf
+  // Caches loaded branches for its lifetime, seeded on the first compare so that paths
+  // that never sort a union do not load anything
   JsonNodeComparator(Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig,
-                     Map<JsonNode, Schema> branches) {
+                     Supplier<Map<JsonNode, Schema>> branches) {
     this.loaderConfig = loaderConfig;
-    this.loaded = new IdentityHashMap<>(branches);
+    this.branches = branches;
   }
 
   @Override
@@ -93,8 +96,11 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
   }
 
   private Schema load(JsonNode node) throws JsonProcessingException {
-    if (loaded == null) {
+    if (branches == null) {
       return loadStandalone(node);
+    }
+    if (loaded == null) {
+      loaded = new IdentityHashMap<>(branches.get());
     }
     Schema schema = loaded.get(node);
     if (schema == null) {

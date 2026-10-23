@@ -375,14 +375,22 @@ public class JsonNodeComparatorTest {
 
   @Test
   public void copyWithTagsOutsideUnionsDoesNotLoadTheSchema() {
+    // Properties named like union steps are not unions
     String json = "{" + DRAFT_7 + ",\"type\":\"object\",\"properties\":{"
-        + "\"q\":{\"type\":\"string\"},\"r\":{\"$ref\":\"" + url("/a") + "\"}}}";
-    SchemaEntity entity = new SchemaEntity("object.q", SchemaEntity.EntityType.SR_FIELD);
+        + "\"q\":{\"type\":\"string\"},"
+        + "\"oneof\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}}},"
+        + "\"anyof.q\":{\"type\":\"string\"},"
+        + "\"r\":{\"$ref\":\"" + url("/a") + "\"}}}";
+    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
+    for (String path : new String[] {"object.q", "object.oneof.object.q", "object.anyof.q"}) {
+      tags.put(new SchemaEntity(path, SchemaEntity.EntityType.SR_FIELD),
+          Collections.singleton("T"));
+    }
     JsonSchema result = (JsonSchema) new JsonSchema(json, Collections.emptyList(),
         Collections.emptyMap(), null, null, null, false)
-        .copy(Collections.singletonMap(entity, Collections.singleton("T")), Collections.emptyMap());
+        .copy(tags, Collections.emptyMap());
     assertEquals(0, hits.get());
-    assertEquals(Collections.singleton("T"), result.inlineTaggedEntities().get(entity));
+    assertEquals(tags, result.inlineTaggedEntities());
   }
 
   @Test

@@ -309,7 +309,7 @@ public class JsonSchemaUtils {
       JsonNode node, SchemaEntity entity,
       Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
     return findMatchingEntity(
-        node, entity, new JsonNodeComparator(loaderConfig, Collections.emptyMap()));
+        node, entity, new JsonNodeComparator(loaderConfig, Collections::emptyMap));
   }
 
   static JsonNode findMatchingEntity(
