@@ -22,9 +22,16 @@ import static java.lang.String.format;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -44,6 +51,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -105,6 +113,18 @@ public class AsyncRestService implements Closeable {
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
       new TypeReference<CompatibilityCheckResponse>() {
+      };
+  private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
+      new TypeReference<List<Association>>() {
+      };
+  private static final TypeReference<AssociationResponse> ASSOCIATION_RESPONSE_TYPE =
+      new TypeReference<AssociationResponse>() {
+      };
+  private static final TypeReference<AssociationBatchResponse> ASSOCIATION_BATCH_RESPONSE_TYPE =
+      new TypeReference<AssociationBatchResponse>() {
+      };
+  private static final TypeReference<Void> VOID_RESPONSE_TYPE =
+      new TypeReference<Void>() {
       };
 
   private static final ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
@@ -351,6 +371,163 @@ public class AsyncRestService implements Closeable {
         .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     return httpRequest(path, "GET", null, GET_CONFIG_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<List<Association>> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/subjects/{subject}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 0) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(subject).toString();
+
+    return httpRequest(path, "GET", null, ASSOCIATIONS_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<List<Association>> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 1) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(resourceId).toString();
+
+    return httpRequest(path, "GET", null, ASSOCIATIONS_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<List<Association>> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace, String resourceType,
+      List<String> associationTypes, LifecyclePolicy lifecycle, int offset, int limit) {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 1) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(resourceNamespace, resourceName).toString();
+
+    return httpRequest(path, "GET", null, ASSOCIATIONS_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<AssociationResponse> createAssociation(
+      String context, Boolean dryRun, AssociationCreateOrUpdateRequest request) {
+    UriBuilder builder = UriBuilder.fromPath("/associations");
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+    String path = builder.build().toString();
+
+    return sendJson(path, "POST", request::toJson, ASSOCIATION_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<AssociationResponse> createOrUpdateAssociation(
+      String context, Boolean dryRun, AssociationCreateOrUpdateRequest request) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+    String path = builder.build(request.getResourceId()).toString();
+
+    return sendJson(path, "PUT", request::toJson, ASSOCIATION_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<Void> deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, Boolean dryRun) {
+    UriBuilder builder = UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    builder.queryParam("cascadeLifecycle", cascadeLifecycle);
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+    String path = builder.build(resourceId).toString();
+
+    return httpRequest(path, "DELETE", null, VOID_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<AssociationBatchResponse> batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request) {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchGet");
+    if (includeSchemas) {
+      builder.queryParam("includeSchemas", true);
+    }
+    String path = builder.build().toString();
+
+    return sendJson(path, "POST", request::toJson, ASSOCIATION_BATCH_RESPONSE_TYPE);
+  }
+
+  public CompletableFuture<AssociationBatchResponse> mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request) {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchMutate");
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+    String path = builder.build().toString();
+
+    return sendJson(path, "POST", request::toJson, ASSOCIATION_BATCH_RESPONSE_TYPE);
+  }
+
+  // Serializes the request body and sends it; a serialization failure completes exceptionally.
+  private <T> CompletableFuture<T> sendJson(
+      String path, String method, Callable<String> toJson, TypeReference<T> responseFormat) {
+    byte[] body;
+    try {
+      body = toJson.call().getBytes(StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      return CompletableFuture.failedFuture(e);
+    }
+    return httpRequest(path, method, body, responseFormat);
   }
 
   private <T> CompletableFuture<T> postJson(String path,
