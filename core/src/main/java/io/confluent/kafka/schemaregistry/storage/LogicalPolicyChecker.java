@@ -29,16 +29,20 @@ import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -163,6 +167,18 @@ public final class LogicalPolicyChecker {
       ParsedSchema newSchema,
       List<ParsedSchemaHolder> previousSchemas,
       CompatibilityLevel level) {
+    return check(newSchema, previousSchemas, level, Rule.defaults());
+  }
+
+  /**
+   * As {@link #check(ParsedSchema, List, CompatibilityLevel)}, comparing with only
+   * {@code enabledRules}, as {@link #parseChecks} resolves them.
+   */
+  static List<String> check(
+      ParsedSchema newSchema,
+      List<ParsedSchemaHolder> previousSchemas,
+      CompatibilityLevel level,
+      Set<Rule> enabledRules) {
     List<String> errors = new ArrayList<>();
 
     LogicalType newLogical;
@@ -191,11 +207,11 @@ public final class LogicalPolicyChecker {
       }
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
-        addCompareErrors(errors, previousLogical, newLogical);
+        addCompareErrors(errors, previousLogical, newLogical, enabledRules);
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
-        addCompareErrors(errors, newLogical, previousLogical);
+        addCompareErrors(errors, newLogical, previousLogical, enabledRules);
       }
     }
     return errors;
@@ -221,11 +237,12 @@ public final class LogicalPolicyChecker {
   }
 
   private static void addCompareErrors(
-      List<String> errors, LogicalType original, LogicalType update) {
+      List<String> errors, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Incompatibility incompatibility
-          : LogicalTypeChecker.compare(mode, original, update).getIncompatibilities()) {
+          : LogicalTypeChecker.compare(mode, original, update, enabledRules)
+              .getIncompatibilities()) {
         byFinding
             .computeIfAbsent(
                 new FindingKey(incompatibility.getRule().name(), incompatibility.getPath()),
@@ -313,6 +330,44 @@ public final class LogicalPolicyChecker {
     public int hashCode() {
       return Objects.hash(rule, path);
     }
+  }
+
+  /**
+   * Resolves {@code schema.logical.checks} entries, each {@code +RULE} or {@code -RULE}, against
+   * {@link Rule#defaults()}: a rule not named keeps its default.
+   *
+   * @throws IllegalArgumentException for an entry without a sign, an unknown rule, or a rule both
+   *     enabled and disabled
+   */
+  public static Set<Rule> parseChecks(List<String> entries) {
+    Set<Rule> enabled = Rule.defaults();
+    Map<Rule, Boolean> seen = new EnumMap<>(Rule.class);
+    for (String entry : entries) {
+      String trimmed = entry.trim();
+      if (trimmed.isEmpty() || (trimmed.charAt(0) != '+' && trimmed.charAt(0) != '-')) {
+        throw new IllegalArgumentException("Entry '" + entry + "' must start with '+' to enable "
+            + "a check or '-' to disable it");
+      }
+      boolean enable = trimmed.charAt(0) == '+';
+      String name = trimmed.substring(1).trim().toUpperCase(Locale.ROOT);
+      Rule rule;
+      try {
+        rule = Rule.valueOf(name);
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("Unknown check '" + trimmed.substring(1)
+            + "'; expected one of " + Arrays.toString(Rule.values()));
+      }
+      Boolean previous = seen.put(rule, enable);
+      if (previous != null && previous != enable) {
+        throw new IllegalArgumentException("Check '" + rule + "' is both enabled and disabled");
+      }
+      if (enable) {
+        enabled.add(rule);
+      } else {
+        enabled.remove(rule);
+      }
+    }
+    return enabled;
   }
 
   /**

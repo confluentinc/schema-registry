@@ -98,7 +98,10 @@ final class FlinkComparison {
    */
   private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
-  FlinkComparison(LogicalType original, LogicalType update) {
+  private final Set<Rule> enabledRules;
+
+  FlinkComparison(LogicalType original, LogicalType update, Set<Rule> enabledRules) {
+    this.enabledRules = enabledRules;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -111,7 +114,9 @@ final class FlinkComparison {
   }
 
   private void add(Rule rule, String path, String message) {
-    findings.add(new Incompatibility(rule, path, message));
+    if (enabledRules.contains(rule)) {
+      findings.add(new Incompatibility(rule, path, message));
+    }
   }
 
   private boolean claimStructPair(Schema original, Schema update) {

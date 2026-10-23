@@ -97,14 +97,6 @@ final class IcebergComparison {
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
 
-  /**
-   * {@link Rule#FIELD_REORDERED} was removed because Iceberg identifies fields by name here and a
-   * reorder is invisible to that comparison. Kept off by default, but field-ID work may reinstate
-   * a reason to reject it -- flip this to re-enable the check without reconstructing it from
-   * scratch.
-   */
-  private static final boolean ENABLE_FIELD_REORDERED_CHECK = false;
-
   private final Schema originalRoot;
   private final Schema updateRoot;
   private final Map<String, Schema> originalNamedTypes;
@@ -147,8 +139,12 @@ final class IcebergComparison {
   /** Iceberg table format version being targeted. */
   private final int formatVersion;
 
-  IcebergComparison(LogicalType original, LogicalType update, int formatVersion) {
+  private final Set<Rule> enabledRules;
+
+  IcebergComparison(LogicalType original, LogicalType update, int formatVersion,
+      Set<Rule> enabledRules) {
     this.formatVersion = formatVersion;
+    this.enabledRules = enabledRules;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -161,7 +157,9 @@ final class IcebergComparison {
   }
 
   private void add(Rule rule, String path, String message) {
-    findings.add(new Incompatibility(rule, path, message));
+    if (enabledRules.contains(rule)) {
+      findings.add(new Incompatibility(rule, path, message));
+    }
   }
 
   /**
@@ -252,12 +250,12 @@ final class IcebergComparison {
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
 
-    // Built and consulted only when ENABLE_FIELD_REORDERED_CHECK is flipped on; see its javadoc.
-    // Guarding the whole block, not just the finding, avoids paying its O(n^2) index lookups on
-    // every struct comparison while the check is off.
+    // Guarding the whole reorder block, not just the finding, avoids paying its O(n^2) index
+    // lookups on every struct comparison while FIELD_REORDERED is off.
+    final boolean checkFieldOrder = enabledRules.contains(Rule.FIELD_REORDERED);
     int lastSeenOriginalIndex = -1;
     String lastSeenFieldName = null;
-    final List<String> originalFieldOrder = ENABLE_FIELD_REORDERED_CHECK
+    final List<String> originalFieldOrder = checkFieldOrder
         ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
         : null;
 
@@ -278,7 +276,7 @@ final class IcebergComparison {
         continue;
       }
 
-      if (ENABLE_FIELD_REORDERED_CHECK) {
+      if (checkFieldOrder) {
         // Existing fields keep their relative order. The watermark advances even on a
         // violation, so a single swap yields one finding rather than cascading.
         //
