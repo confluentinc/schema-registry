@@ -98,6 +98,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -553,6 +554,12 @@ public class JsonSchema implements ParsedSchema {
   // Applies this schema's remote-ref policy and registered references to an Everit loader
   private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
                                      SpecificationVersion spec) {
+    configureEveritLoader(builder, spec, JSONObject::new);
+  }
+
+  private void configureEveritLoader(SchemaLoader.SchemaLoaderBuilder builder,
+                                     SpecificationVersion spec,
+                                     Function<String, JSONObject> parser) {
     org.everit.json.schema.loader.SpecificationVersion loaderSpec =
         org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
     switch (spec) {
@@ -584,7 +591,7 @@ public class JsonSchema implements ParsedSchema {
     }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+      builder.registerSchemaByURI(child, parser.apply(dep.getValue()));
     }
   }
 
@@ -1588,10 +1595,17 @@ public class JsonSchema implements ParsedSchema {
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
     // Sort composition branches with the same loader setup as this schema; null keeps the default
+    Map<String, JSONObject> parsed = new HashMap<>();
     Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig = everitSchemaClient() != null
-        ? b -> configureEveritLoader(b, specVersion()) : null;
+        ? b -> configureEveritLoader(b, specVersion(),
+            ref -> parsed.computeIfAbsent(ref, JSONObject::new)) : null;
+    JsonNodeComparator comparator = new JsonNodeComparator(loaderConfig, loadedBranches(node));
     for (SchemaEntity entity : entityToModify) {
-      JsonNode fieldNodePtr = findMatchingEntity(node, entity, loaderConfig);
+      JsonNode fieldNodePtr = findMatchingEntity(node, entity, comparator);
+      if (!fieldNodePtr.isObject()) {
+        throw new IllegalArgumentException(String.format(
+            "Path '%s' does not refer to a schema that can be tagged", entity.getEntityPath()));
+      }
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
@@ -1609,6 +1623,15 @@ public class JsonSchema implements ParsedSchema {
       } else {
         ((ObjectNode) fieldNodePtr).replace(TAGS, objectMapper.valueToTree(allTags));
       }
+    }
+  }
+
+  // Sorting the loaded branches keeps tag paths in line with inlineTaggedEntities
+  private Map<JsonNode, Schema> loadedBranches(JsonNode node) {
+    try {
+      return JsonNodeComparator.branchesOf(node, rawSchema());
+    } catch (RuntimeException e) {
+      return Collections.emptyMap();
     }
   }
 
