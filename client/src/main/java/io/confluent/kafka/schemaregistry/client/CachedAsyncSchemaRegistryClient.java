@@ -31,9 +31,16 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.Subje
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.SubjectAndMetadata;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient.SubjectAndSchema;
 import io.confluent.kafka.schemaregistry.client.rest.AsyncRestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -220,6 +227,67 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     return cached(latestWithMetadataCache, new SubjectAndMetadata(subject, metadata),
         () -> restService.getLatestWithMetadata(subject, metadata, true)
             .thenApply(SchemaMetadata::new));
+  }
+
+  // Not cached: associations are live and change independently of schemas.
+  @Override
+  public CompletableFuture<List<Association>> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsBySubject(
+        subject, resourceType, associationTypes, lifecyclePolicy, offset, limit);
+  }
+
+  @Override
+  public CompletableFuture<List<Association>> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceId(
+        resourceId, resourceType, associationTypes, lifecyclePolicy, offset, limit);
+  }
+
+  @Override
+  public CompletableFuture<List<Association>> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace, String resourceType,
+      List<String> associationTypes, String lifecycle, int offset, int limit) {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceName(
+        resourceName, resourceNamespace, resourceType, associationTypes, lifecyclePolicy,
+        offset, limit);
+  }
+
+  @Override
+  public CompletableFuture<AssociationResponse> createAssociation(
+      AssociationCreateOrUpdateRequest request) {
+    return restService.createAssociation(null, false, request);
+  }
+
+  @Override
+  public CompletableFuture<AssociationResponse> createOrUpdateAssociation(
+      AssociationCreateOrUpdateRequest request) {
+    return restService.createOrUpdateAssociation(null, false, request);
+  }
+
+  @Override
+  public CompletableFuture<Void> deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle) {
+    return restService.deleteAssociations(
+        resourceId, resourceType, associationTypes, cascadeLifecycle, false);
+  }
+
+  @Override
+  public CompletableFuture<AssociationBatchResponse> batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request) {
+    return restService.batchGetAssociations(includeSchemas, request);
+  }
+
+  @Override
+  public CompletableFuture<AssociationBatchResponse> mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request) {
+    return restService.mutateAssociations(context, dryRun, request);
   }
 
   @Override
