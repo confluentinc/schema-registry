@@ -1469,6 +1469,25 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testDefaultDecimalZeroWithoutIntegerDigits() {
+    assertEquals(new java.math.BigDecimal("0"),
+        firstField("DECIMAL(1, 1) DEFAULT 0").getDefaultValue());
+    assertEquals(new java.math.BigDecimal("0"),
+        firstField("DECIMAL(2, 2) DEFAULT '0'").getDefaultValue());
+  }
+
+  @Test
+  void testDefaultDecimalWithExponentCountsIntegerDigits() {
+    // 1E3 is 1000: BigDecimal precision 1, scale -3.
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> firstField("DECIMAL(2, 0) DEFAULT 1E3"));
+    assertTrue(e.getMessage().contains("integer-part digits 4 > 2"),
+        "got: " + e.getMessage());
+    assertEquals(new java.math.BigDecimal("1E3"),
+        firstField("DECIMAL(4, 0) DEFAULT 1E3").getDefaultValue());
+  }
+
+  @Test
   void testDefaultDate() {
     assertEquals(java.time.LocalDate.of(2026, 4, 17),
         firstField("DATE DEFAULT '2026-04-17'").getDefaultValue());
