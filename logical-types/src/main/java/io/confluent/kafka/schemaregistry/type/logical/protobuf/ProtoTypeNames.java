@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,11 +46,13 @@ final class ProtoTypeNames {
 
   private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
-  // A message's pins, by the name its types derive from (a field's, or <oneof>_<branch>), and the
-  // names taken in it.
+  // A message's pins, by field and by oneof member (whose derived <oneof>_<branch> can be a
+  // field's name), the names taken in it, and the member being written, if any.
   private static final class Scope {
     private final Map<String, String> pins = new HashMap<>();
+    private final Map<List<String>, String> branchPins = new HashMap<>();
     private final Set<String> taken = new HashSet<>();
+    private List<String> branch;
   }
 
   private final Deque<Scope> scopes = new ArrayDeque<>();
@@ -62,10 +65,16 @@ final class ProtoTypeNames {
       scope.taken.add(field.getName());
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
-          pin(scope, field.getName() + "_" + branch.getName(), branch.getParams());
+          String pin = pin(scope, branch.getParams());
+          if (pin != null) {
+            scope.branchPins.put(Arrays.asList(field.getName(), branch.getName()), pin);
+          }
         }
       } else {
-        pin(scope, field.getName(), field.getParams());
+        String pin = pin(scope, field.getParams());
+        if (pin != null) {
+          scope.pins.put(field.getName(), pin);
+        }
       }
     }
     scopes.push(scope);
@@ -75,13 +84,23 @@ final class ProtoTypeNames {
     scopes.pop();
   }
 
+  // Names the type of oneof member branch of union until exitBranch.
+  void enterBranch(String union, String branch) {
+    scopes.peek().branch = Arrays.asList(union, branch);
+  }
+
+  void exitBranch() {
+    scopes.peek().branch = null;
+  }
+
   // The name of the type generated for fieldName, which would otherwise be derived.
   String name(String fieldName, String suffix, String derived) {
     Scope scope = scopes.peek();
     if (scope == null) {
       return derived;
     }
-    String pin = scope.pins.get(fieldName);
+    String pin = scope.branch != null
+        ? scope.branchPins.get(scope.branch) : scope.pins.get(fieldName);
     if (pin != null) {
       // The reader knows a map entry by its suffix.
       if (suffix.equals(CommonConstants.MAP_ENTRY_SUFFIX) && !pin.endsWith(suffix)) {
@@ -102,17 +121,17 @@ final class ProtoTypeNames {
     return name;
   }
 
-  private static void pin(Scope scope, String name, Map<String, Object> params) {
+  private static String pin(Scope scope, Map<String, Object> params) {
     Object value = params.get(NAME);
     if (value == null) {
-      return;
+      return null;
     }
     String pin = value.toString();
     if (!IDENTIFIER.matcher(pin).matches()) {
       throw new ValidationException(
           "Param " + NAME + " must be a Protobuf identifier, got '" + pin + "'");
     }
-    scope.pins.put(name, pin);
     scope.taken.add(pin);
+    return pin;
   }
 }

@@ -189,6 +189,25 @@ class NativeTypeNamesTest {
         "home STRUCT(street STRING) WITH('protobuf.name' = 'Home2Row'");
   }
 
+  // A oneof member's pin is its own, though it derives its name from <oneof>_<branch>, which can
+  // be a field's name.
+  @Test
+  void testProtoBranchAndFieldPinsKeptApart() {
+    assertThat(proto("STRUCT p (f1_b0 STRUCT(y STRING) WITH ('protobuf.name' = 'F1B02Row'), "
+        + "f1 UNION(b0 STRUCT(x INT), s STRING));"))
+        .contains(".p.F1B02Row f1_b0", ".p.F1B0Row b0");
+    assertThat(proto("STRUCT p (f1_b0 STRUCT(y STRING), "
+        + "f1 UNION(b0 STRUCT(x INT) WITH ('protobuf.name' = 'F1B02Row'), s STRING));"))
+        .contains(".p.F1B0Row f1_b0", ".p.F1B02Row b0");
+    for (String ddl : new String[] {
+        "STRUCT p (f1 UNION(b0 STRUCT(x INT), s STRING), f1_b0 STRUCT(y STRING));",
+        "STRUCT p (f1_b0 STRUCT(y STRING), f1 UNION(b0 STRUCT(x INT), s STRING));"}) {
+      String readBack = protoRoundTrip(ddl);
+      assertThat(readBack).contains("'protobuf.name' = 'F1B02Row'");
+      assertEquals(readBack, protoRoundTrip(readBack));
+    }
+  }
+
   @Test
   void testProtoDerivedNamesReadBackWithoutParams() {
     assertThat(protoRoundTrip("STRUCT p (f0 STRUCT(s STRUCT(x INT)), "

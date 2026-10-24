@@ -656,6 +656,46 @@ public class LogicalTypeToProtoConverter {
         + "; rename one of the fields it is generated from");
   }
 
+  // A oneof member's field, whose type is named by the member's pin.
+  private static FieldDescriptorProto.Builder fromBranch(
+      Field union, UnionBranch branch, int branchNumber,
+      List<DescriptorProto> nestedRows,
+      List<EnumDescriptorProto> nestedEnums,
+      Set<String> dependencies,
+      FromLogicalContext<GenericDescriptor> ctx) {
+    // Nested messages are always qualified, so a member's rename never renames its type.
+    final String qualifiedName = union.getName() + "_" + branch.getName();
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    names.enterBranch(union.getName(), branch.getName());
+    try {
+      // Proto3 oneof can't contain repeated/map fields. Composite branches
+      // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
+      // regardless of nullability — fromField only wraps when nullable, so
+      // we force the wrap here for the non-nullable composite case.
+      if (isCompositeRepeated(branch.getSchema())) {
+        return wrapRepeatedType(
+            branch.getSchema(),
+            qualifiedName,
+            branch.getDoc(),
+            branchNumber,
+            nestedRows,
+            dependencies,
+            ctx);
+      }
+      return fromField(
+          branch.getSchema(),
+          qualifiedName,
+          branch.getDoc(),
+          branchNumber,
+          nestedRows,
+          nestedEnums,
+          dependencies,
+          ctx);
+    } finally {
+      names.exitBranch();
+    }
+  }
+
   // Members share the message's field namespace: a branch name already taken is qualified by the
   // oneof, and kept in logical.branch.
   private static String memberName(
@@ -810,40 +850,15 @@ public class LogicalTypeToProtoConverter {
             OneofDescriptorProto.newBuilder().setName(field.getName()).build());
         Schema unionSchema = field.getSchema();
         for (UnionBranch branch : unionSchema.getBranches()) {
-          final FieldDescriptorProto.Builder fieldProtoBuilder;
           // A oneof member is a Protobuf field: use its recorded number when present, else the next
           // free number — same rule as a regular field.
           final Integer branchDeclared = branch.getFieldNumber();
           final int branchNumber = branchDeclared != null
               ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           validateFieldNumber(branchNumber, branch.getName(), rowName);
-          // Nested messages are always qualified, so a member's rename never renames its type.
-          final String qualifiedName = field.getName() + "_" + branch.getName();
           final String memberName = memberName(field, branch, takenNames, rowName);
-          // Proto3 oneof can't contain repeated/map fields. Composite branches
-          // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
-          // regardless of nullability — fromField only wraps when nullable, so
-          // we force the wrap here for the non-nullable composite case.
-          if (isCompositeRepeated(branch.getSchema())) {
-            fieldProtoBuilder = wrapRepeatedType(
-                branch.getSchema(),
-                qualifiedName,
-                branch.getDoc(),
-                branchNumber,
-                nestedRows,
-                dependencies,
-                ctx);
-          } else {
-            fieldProtoBuilder = fromField(
-                branch.getSchema(),
-                qualifiedName,
-                branch.getDoc(),
-                branchNumber,
-                nestedRows,
-                nestedEnums,
-                dependencies,
-                ctx);
-          }
+          final FieldDescriptorProto.Builder fieldProtoBuilder = fromBranch(
+              field, branch, branchNumber, nestedRows, nestedEnums, dependencies, ctx);
           fieldProtoBuilder.setName(memberName);
           // Strip the format-native number (emitted via the native slot) from the branch meta.
           Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
