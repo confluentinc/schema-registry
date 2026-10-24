@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,6 +83,11 @@ final class ProtoTypeNames {
 
   void exit() {
     scopes.pop();
+  }
+
+  // Takes names in the message entered last, which no derived name then takes.
+  void reserve(Collection<String> names) {
+    scopes.peek().taken.addAll(names);
   }
 
   // Names the type of oneof member branch of union until exitBranch.

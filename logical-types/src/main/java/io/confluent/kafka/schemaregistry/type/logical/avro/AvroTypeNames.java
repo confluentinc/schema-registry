@@ -19,8 +19,10 @@ package io.confluent.kafka.schemaregistry.type.logical.avro;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -84,6 +86,8 @@ final class AvroTypeNames {
   private int pinnedDepth;
   private int depth;
   private final Map<String, Map<String, Object>> exceptionsByBase = new HashMap<>();
+  // The exceptions each entered field or branch replaced, restored on exit: {base, previous}.
+  private final Deque<Object[]> replacedExceptions = new ArrayDeque<>();
 
   AvroTypeNames() {
     this(Collections.emptyList(), Collections.emptyMap());
@@ -176,33 +180,57 @@ final class AvroTypeNames {
     if (pin != null) {
       pinnedDepth++;
     }
-    if (params.containsKey(ENTRY_NAME) || params.containsKey(KEY_NAME)
-        || params.containsKey(VALUE_NAME)) {
-      exceptionsByBase.put(base, params);
-    }
+    putExceptions(base, params);
     return base;
+  }
+
+  // A field's or branch's map name exceptions hold only while it is entered.
+  private void putExceptions(String base, Map<String, Object> params) {
+    if (hasExceptions(params)) {
+      replacedExceptions.push(new Object[] {base, exceptionsByBase.put(base, params)});
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void restoreExceptions(Map<String, Object> params) {
+    if (hasExceptions(params)) {
+      Object[] replaced = replacedExceptions.pop();
+      if (replaced[1] != null) {
+        exceptionsByBase.put((String) replaced[0], (Map<String, Object>) replaced[1]);
+      } else {
+        exceptionsByBase.remove((String) replaced[0]);
+      }
+    }
+  }
+
+  private static boolean hasExceptions(Map<String, Object> params) {
+    return params.containsKey(ENTRY_NAME) || params.containsKey(KEY_NAME)
+        || params.containsKey(VALUE_NAME);
   }
 
   void exitField(Map<String, Object> params) {
     depth--;
+    restoreExceptions(params);
     if (params.containsKey(NAME)) {
       pinnedDepth--;
     }
   }
 
-  // A union branch's base: its NAME param, entered until exitBranch.
+  // A union branch's base, as a field's: its NAME param, entered until exitBranch.
   String enterBranch(String derived, Map<String, Object> params) {
     depth++;
     String pin = name(params, NAME);
-    if (pin == null) {
-      return derived;
+    String base = pin != null ? pin : derived;
+    if (pin != null) {
+      pinnedDepth++;
     }
-    pinnedDepth++;
-    return pin;
+    putExceptions(base, params);
+    return base;
   }
 
   void exitBranch(Map<String, Object> params) {
     depth--;
+    restoreExceptions(params);
     if (params.containsKey(NAME)) {
       pinnedDepth--;
     }

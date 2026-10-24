@@ -819,15 +819,19 @@ public class LogicalTypeToProtoConverter {
     // around them, and reject a schema that declares the same number twice — an invalid proto that
     // would otherwise surface as an opaque DescriptorValidationException from FileDescriptor build.
     final Set<Integer> reservedNumbers = new LinkedHashSet<>();
-    // Field and oneof names, which a oneof member must not take; members are added as named.
+    // Field and oneof names, which a oneof member must not take; members are added as named, and
+    // no generated type takes their names either.
     final Set<String> takenNames = new HashSet<>();
     for (Field field : fields) {
       takenNames.add(field.getName());
     }
+    final Map<List<String>, String> memberNames = new HashMap<>();
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
           reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
+          memberNames.put(Arrays.asList(field.getName(), branch.getName()),
+              memberName(field, branch, takenNames, rowName));
         }
       } else {
         reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);
@@ -837,6 +841,7 @@ public class LogicalTypeToProtoConverter {
     // gets the next number not already reserved, so a positional fallback can never collide with an
     // explicit number. The cursor is a 1-element array so nextFieldNumber can advance it.
     final int[] numberCursor = {1};
+    ((ProtoTypeNames) ctx.getTypeNames()).reserve(memberNames.values());
 
     for (int i = 0; i < fields.size(); i++) {
       final Field field = fields.get(i);
@@ -856,7 +861,8 @@ public class LogicalTypeToProtoConverter {
           final int branchNumber = branchDeclared != null
               ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           validateFieldNumber(branchNumber, branch.getName(), rowName);
-          final String memberName = memberName(field, branch, takenNames, rowName);
+          final String memberName =
+              memberNames.get(Arrays.asList(field.getName(), branch.getName()));
           final FieldDescriptorProto.Builder fieldProtoBuilder = fromBranch(
               field, branch, branchNumber, nestedRows, nestedEnums, dependencies, ctx);
           fieldProtoBuilder.setName(memberName);

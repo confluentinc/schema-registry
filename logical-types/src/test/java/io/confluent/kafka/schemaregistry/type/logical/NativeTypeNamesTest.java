@@ -95,7 +95,8 @@ class NativeTypeNamesTest {
   void testAvroDerivedNamesReadBackWithoutParams() {
     assertThat(avroRoundTrip("STRUCT p (f0 STRUCT(s STRUCT(x INT)), "
         + "u UNION(b STRUCT(x INT), s STRING), m MAP<INT, STRUCT(y STRING)>, "
-        + "n MAP<STRING, STRUCT(z INT)>, a ARRAY<STRUCT(q INT)>, h BINARY(4));"))
+        + "n MAP<STRING, STRUCT(z INT)>, a ARRAY<STRUCT(q INT)>, h BINARY(4), "
+        + "mu MAP<INT, UNION(f BINARY(4), s STRING)>);"))
         .doesNotContain("avro.");
   }
 
@@ -133,6 +134,48 @@ class NativeTypeNamesTest {
     assertEquals(Collections.singletonMap("avro.name", "p_h"),
         LogicalTypeToAvroConverter.typeNameParams(logicalType, "p", "h"));
     assertThat(LogicalTypeToAvroConverter.typeNameParams(logicalType, "p", "i")).isEmpty();
+  }
+
+  // A union member's types under a collection are named from its base, as a field's are.
+  @Test
+  void testAvroNamesUnderUnionCollectionsKept() {
+    for (String pin : new String[] {"a ARRAY<STRUCT(x INT)> WITH ('avro.name' = 'Kept')",
+        "m MAP<INT, STRING> WITH ('avro.entry.name' = 'Kept')"}) {
+      String ddl = "STRUCT p (u UNION(" + pin + ", b BOOLEAN));";
+      assertThat(avro(ddl)).contains("\"name\":\"Kept\"");
+      String readBack = avroRoundTrip(ddl);
+      assertThat(readBack).contains("= 'Kept'");
+      assertEquals(readBack, avroRoundTrip(readBack));
+    }
+    assertEquals(Collections.singletonMap("avro.name", "p_u"), LogicalTypeToAvroConverter
+        .typeNameParams(parse("STRUCT p (u UNION(a ARRAY<STRUCT(x INT)>, b BOOLEAN));"), "p", "u"));
+  }
+
+  // A field's map name exceptions are its own, though another field derives the same base.
+  @Test
+  void testAvroMapNameExceptionsScopedToField() {
+    String ddl = "STRUCT p (a STRUCT(b MAP<INT, STRING> WITH ('avro.entry.name' = 'Special')), "
+        + "a_b MAP<INT, BIGINT>);";
+    assertThat(avro(ddl)).contains("\"name\":\"Special\"", "\"name\":\"p_a_b_Entry\"");
+    String readBack = avroRoundTrip(ddl);
+    assertEquals(readBack, avroRoundTrip(readBack));
+  }
+
+  // A union with no base to derive from, as at the root, keeps its members' names; a union in a
+  // map's value derives from the value's.
+  @Test
+  void testAvroUnionMemberNamesKeptWithoutBase() {
+    AvroSchema original =
+        new AvroSchema("[{\"type\":\"fixed\",\"name\":\"MD5\",\"size\":16},\"string\"]");
+    AvroSchema written = LogicalTypeToAvroConverter.fromLogicalType(
+        AvroToLogicalTypeConverter.toLogicalType(original), "Holder");
+    assertThat(written.isBackwardCompatible(original)).isEmpty();
+    assertWritesBack("{\"type\":\"record\",\"name\":\"Order\",\"fields\":[{\"name\":\"m\","
+        + "\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"MapEntry\","
+        + "\"namespace\":\"io.confluent.connect.avro\",\"fields\":["
+        + "{\"name\":\"key\",\"type\":\"int\"},"
+        + "{\"name\":\"value\",\"type\":[{\"type\":\"fixed\",\"name\":\"Tok\",\"size\":2},"
+        + "\"string\"]}]}}}]}");
   }
 
   // A schema reference's types, used or not, keep their names: a generated type yields, and a
@@ -234,6 +277,38 @@ class NativeTypeNamesTest {
     ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(logicalType, "Order");
     assertThat(written.canonicalString()).containsOnlyOnce("message Address");
     assertThat(written.isBackwardCompatible(original)).isEmpty();
+  }
+
+  // A shared message keeps its name though it is one field's derived name, and a message keeps
+  // a name derived as another kind's.
+  @Test
+  void testProtoNamesLikeDerivedOnesWriteBackCompatibly() {
+    assertProtoWritesBack("syntax = \"proto3\";\n"
+        + "message p {\n"
+        + "  AddrRow addr = 1;\n"
+        + "  AddrRow billing = 2;\n"
+        + "  message AddrRow { string city = 1; }\n"
+        + "}\n");
+    assertProtoWritesBack("syntax = \"proto3\";\n"
+        + "message p {\n"
+        + "  AddrEnum addr = 1;\n"
+        + "  message AddrEnum { string city = 1; }\n"
+        + "}\n");
+  }
+
+  private static void assertProtoWritesBack(String proto) {
+    ProtobufSchema original = new ProtobufSchema(proto);
+    LogicalType logicalType = ProtoToLogicalTypeConverter.toLogicalType(original);
+    ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(logicalType, "p");
+    assertThat(written.isBackwardCompatible(original)).isEmpty();
+    assertEquals(ddl(logicalType), ddl(ProtoToLogicalTypeConverter.toLogicalType(written)));
+  }
+
+  // A oneof member's name is taken in its message, so a generated type yields to it.
+  @Test
+  void testProtoDerivedNameTakenByMemberGetsSuffix() {
+    assertThat(proto("STRUCT p (u UNION(b STRUCT(x INT), UBRow STRING));"))
+        .contains(".p.UB2Row b", "string UBRow");
   }
 
   // A declared type is referred to absolutely, so a message generated under its name in the

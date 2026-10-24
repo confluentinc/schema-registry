@@ -666,12 +666,16 @@ public class AvroToLogicalTypeConverter {
           if (hintParams != null) {
             hintParams = Schema.stripFormatNativeParams(hintParams);
           }
+          // With no base known, as at the root, a member's names are pinned as they are.
           String nameBase = ctx.getUnionNameBase(avroSchema);
-          if (nameBase != null && isGeneratedName(memberSchemas.get(i))
-              && !member.getNativeName().equals(nameBase + "_" + branchName)) {
-            hintParams = hintParams != null
-                ? new LinkedHashMap<>(hintParams) : new LinkedHashMap<>();
-            hintParams.put(AvroTypeNames.NAME, member.getNativeName());
+          String derived = nameBase != null ? nameBase + "_" + branchName : null;
+          GeneratedNames at = new GeneratedNames(memberSchemas.get(i));
+          String base = at.base(null);
+          Map<String, Object> names =
+              nameParams(at, base != null ? base : derived, derived, nameBase == null);
+          if (!names.isEmpty()) {
+            hintParams = withNameParams(
+                hintParams != null ? hintParams : Collections.emptyMap(), names);
           }
           // Natively a branch is found by its type's full name, which Avro keeps unique.
           UnionBranch branch = new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
@@ -1147,23 +1151,40 @@ public class AvroToLogicalTypeConverter {
     if (base == null) {
       base = derived;
     }
+    if (ctx != null) {
+      putUnionNameBase(ctx, at.union, base);
+      putUnionNameBase(ctx, at.keyUnion, base + AvroTypeNames.KEY_SUFFIX);
+      putUnionNameBase(ctx, at.valueUnion, base + AvroTypeNames.VALUE_SUFFIX);
+    }
+    return nameParams(at, base, derived, pin);
+  }
+
+  // The params of the names at finds, derived from base where derived would not be: base, and
+  // each name that does not follow it. With no base, every name found is kept.
+  private static Map<String, Object> nameParams(
+      GeneratedNames at, String base, String derived, boolean pin) {
     Map<String, Object> params = new LinkedHashMap<>();
-    if (pin ? at.generatesAny() : !base.equals(derived)) {
+    if (base != null && (pin ? at.generatesAny() : !base.equals(derived))) {
       params.put(AvroTypeNames.NAME, base);
     }
-    if (at.entry != null && !at.entry.getFullName().equals(base + AvroTypeNames.ENTRY_SUFFIX)) {
-      params.put(AvroTypeNames.ENTRY_NAME, at.entry.getFullName());
-    }
-    if (at.key != null && !at.key.getFullName().equals(base + AvroTypeNames.KEY_SUFFIX)) {
-      params.put(AvroTypeNames.KEY_NAME, at.key.getFullName());
-    }
-    if (at.value != null && !at.value.getFullName().equals(base + AvroTypeNames.VALUE_SUFFIX)) {
-      params.put(AvroTypeNames.VALUE_NAME, at.value.getFullName());
-    }
-    if (at.union != null && ctx != null) {
-      ctx.putUnionNameBase(at.union, base);
-    }
+    putException(params, AvroTypeNames.ENTRY_NAME, at.entry, base, AvroTypeNames.ENTRY_SUFFIX);
+    putException(params, AvroTypeNames.KEY_NAME, at.key, base, AvroTypeNames.KEY_SUFFIX);
+    putException(params, AvroTypeNames.VALUE_NAME, at.value, base, AvroTypeNames.VALUE_SUFFIX);
     return params;
+  }
+
+  private static void putUnionNameBase(ToLogicalContext<org.apache.avro.Schema> ctx,
+      org.apache.avro.Schema union, String base) {
+    if (union != null) {
+      ctx.putUnionNameBase(union, base);
+    }
+  }
+
+  private static void putException(Map<String, Object> params, String key,
+      org.apache.avro.Schema type, String base, String suffix) {
+    if (type != null && (base == null || !type.getFullName().equals(base + suffix))) {
+      params.put(key, type.getFullName());
+    }
   }
 
   private static Map<String, Object> withNameParams(
@@ -1192,9 +1213,10 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
-   * The generated-name types under a field, where the writer names them from the field's base:
-   * its own type, through nullable unions, arrays and string-keyed maps; a map's entry, key and
-   * value types; and its union. Types further down, as in a map's value map, keep path names.
+   * The generated-name types under a field or union member, where the writer names them from
+   * its base: its own type, through nullable unions, arrays and string-keyed maps; a map's entry,
+   * key and value types; and its union, and the unions of a map's key and value. Types further
+   * down, as in a map's value map, keep path names.
    */
   private static final class GeneratedNames {
     private org.apache.avro.Schema self;
@@ -1202,6 +1224,8 @@ public class AvroToLogicalTypeConverter {
     private org.apache.avro.Schema key;
     private org.apache.avro.Schema value;
     private org.apache.avro.Schema union;
+    private org.apache.avro.Schema keyUnion;
+    private org.apache.avro.Schema valueUnion;
 
     private GeneratedNames(org.apache.avro.Schema schema) {
       walk(schema);
@@ -1221,8 +1245,14 @@ public class AvroToLogicalTypeConverter {
         case ARRAY:
           if (isLogicalMap(schema)) {
             entry = schema.getElementType();
-            key = new GeneratedNames(entry.getField(CommonConstants.KEY_FIELD).schema()).self;
-            value = new GeneratedNames(entry.getField(CommonConstants.VALUE_FIELD).schema()).self;
+            GeneratedNames keyNames =
+                new GeneratedNames(entry.getField(CommonConstants.KEY_FIELD).schema());
+            GeneratedNames valueNames =
+                new GeneratedNames(entry.getField(CommonConstants.VALUE_FIELD).schema());
+            key = keyNames.self;
+            keyUnion = keyNames.union;
+            value = valueNames.self;
+            valueUnion = valueNames.union;
           } else {
             walk(schema.getElementType());
           }
@@ -1242,7 +1272,8 @@ public class AvroToLogicalTypeConverter {
       if (self != null || entry != null) {
         return true;
       }
-      return union != null && nonNull(union).stream().anyMatch(s -> isGeneratedName(s));
+      return union != null
+          && nonNull(union).stream().anyMatch(s -> new GeneratedNames(s).generatesAny());
     }
 
     // The base the names derive from, or null if none of them says.
@@ -1261,8 +1292,9 @@ public class AvroToLogicalTypeConverter {
         List<org.apache.avro.Schema> members = nonNull(union);
         for (int i = 0; i < members.size() && i < hints.size() && base == null; i++) {
           Object name = hints.get(i).get("name");
-          if (name != null && isGeneratedName(members.get(i))) {
-            base = strip(members.get(i), "_" + name);
+          if (name != null) {
+            // A member's names derive from <base>_<branch>, as a field's from its own base.
+            base = strip(new GeneratedNames(members.get(i)).base(null), "_" + name);
           }
         }
       }
@@ -1276,10 +1308,13 @@ public class AvroToLogicalTypeConverter {
     }
 
     private static String strip(org.apache.avro.Schema schema, String suffix) {
-      if (schema == null) {
+      return schema != null ? strip(schema.getFullName(), suffix) : null;
+    }
+
+    private static String strip(String name, String suffix) {
+      if (name == null) {
         return null;
       }
-      String name = schema.getFullName();
       return name.endsWith(suffix) && name.length() > suffix.length()
           ? name.substring(0, name.length() - suffix.length()) : null;
     }

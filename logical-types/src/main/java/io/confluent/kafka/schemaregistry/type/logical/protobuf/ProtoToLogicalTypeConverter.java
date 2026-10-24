@@ -39,7 +39,6 @@ import io.confluent.protobuf.MetaProto.Meta;
 import java.time.DateTimeException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -1010,30 +1009,50 @@ public class ProtoToLogicalTypeConverter {
     return null;
   }
 
-  private static final List<String> TYPE_SUFFIXES = Arrays.asList(
-      CommonConstants.FLINK_ROW_SUFFIX, CommonConstants.FLINK_ENUM_SUFFIX,
-      CommonConstants.MAP_ENTRY_SUFFIX, CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX,
-      CommonConstants.FLINK_ELEMENT_WRAPPER_SUFFIX, CommonConstants.FLINK_ONEOF_WRAPPER_SUFFIX);
-
   /**
    * The protobuf.name param of a field or oneof member whose own message or enum, inlined and
    * declared in the field's message, is not named as the writer derives it from
-   * {@code derivedFrom}; null otherwise. A type declared elsewhere keeps no name.
+   * {@code derivedFrom}, or is shared with another field, which only a pin on each keeps; null
+   * otherwise. A type declared elsewhere keeps no name.
    */
   static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema) {
     final String name = fieldSchema.getType() == Schema.Type.NAMED_TYPE_REF
         ? null : ownTypeName(field);
-    if (name == null) {
+    if (name == null || isShared(field)) {
+      return name;
+    }
+    String suffix = typeSuffix(field, fieldSchema);
+    if (name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, false))
+        || name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, true))) {
       return null;
     }
-    for (String suffix : TYPE_SUFFIXES) {
-      if (name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, false))
-          || name.equals(
-              LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, true))) {
-        return null;
-      }
-    }
     return name;
+  }
+
+  // The suffix of the type the writer generates for a field read as fieldSchema.
+  private static String typeSuffix(FieldDescriptor field, Schema fieldSchema) {
+    if (field.getType() == Type.ENUM) {
+      return CommonConstants.FLINK_ENUM_SUFFIX;
+    }
+    if (isFlinkWrapped(field)) {
+      if (field.isRepeated()) {
+        return CommonConstants.FLINK_ELEMENT_WRAPPER_SUFFIX;
+      }
+      return fieldSchema.getType() == Schema.Type.UNION
+          ? CommonConstants.FLINK_ONEOF_WRAPPER_SUFFIX
+          : CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX;
+    }
+    return fieldSchema.getType() == Schema.Type.MAP || fieldSchema.getType() == Schema.Type.MULTISET
+        ? CommonConstants.MAP_ENTRY_SUFFIX : CommonConstants.FLINK_ROW_SUFFIX;
+  }
+
+  // True if another field of the message, a oneof member included, has field's own type.
+  private static boolean isShared(FieldDescriptor field) {
+    Object type = field.getType() == Type.ENUM ? field.getEnumType() : field.getMessageType();
+    return field.getContainingType().getFields().stream()
+        .filter(f -> f.getType() == field.getType()
+            && type.equals(f.getType() == Type.ENUM ? f.getEnumType() : f.getMessageType()))
+        .count() > 1;
   }
 
   // The name of a field's message or enum when it is declared in the field's message, else null.
