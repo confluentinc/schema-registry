@@ -1261,6 +1261,56 @@ class LogicalTypeToProtoConverterTest {
   // MULTISET of complex types
   // =========================================================================
 
+  // A map's UNION value is a oneof named "value" in its entry, which still reads back as a map.
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testRoundTripMapOfUnion(boolean nullable) {
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+        new UnionBranch("b1", Schema.createString().setNullable(false))))
+        .setNullable(false);
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("m", Schema.createMap(Schema.createString().setNullable(false), union)
+            .setNullable(nullable), 0)))
+        .setNullable(false);
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(convertSchema(rootSchema).canonicalString()));
+    Schema rt = roundTripped.getRootSchema().getField("m").getSchema();
+    assertEquals(Schema.Type.MAP, rt.getType());
+    assertEquals(nullable, rt.isNullable());
+    assertEquals(Schema.Type.UNION, rt.getValueType().getType());
+    assertEquals(Arrays.asList("b0", "b1"), branchNames(rt.getValueType()));
+  }
+
+  @Test
+  void testRoundTripMapOfUnionWithStructBranch() {
+    Schema branch = Schema.createStruct(Arrays.asList(
+        new Field("s0", Schema.createString(), 0)))
+        .setNullable(false);
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", branch),
+        new UnionBranch("b1", Schema.create(Schema.Type.DOUBLE).setNullable(false))))
+        .setNullable(false);
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("n", Schema.createMap(Schema.create(Schema.Type.INT).setNullable(false),
+            union).setNullable(false), 0)))
+        .setNullable(false);
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(convertSchema(rootSchema).canonicalString()));
+    Schema rt = roundTripped.getRootSchema().getField("n").getSchema();
+    assertEquals(Schema.Type.MAP, rt.getType());
+    assertEquals(Schema.Type.INT, rt.getKeyType().getType());
+    assertEquals(Schema.Type.STRUCT, rt.getValueType().getBranches().get(0).getSchema().getType());
+  }
+
+  private static List<String> branchNames(Schema union) {
+    List<String> names = new ArrayList<>();
+    for (UnionBranch b : union.getBranches()) {
+      names.add(b.getName());
+    }
+    return names;
+  }
+
   @Test
   void testRoundTripMultisetOfStruct() {
     Schema elementType = Schema.createStruct(Arrays.asList(
