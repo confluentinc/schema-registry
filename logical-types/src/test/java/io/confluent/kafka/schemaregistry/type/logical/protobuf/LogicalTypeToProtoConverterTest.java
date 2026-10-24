@@ -1321,6 +1321,88 @@ class LogicalTypeToProtoConverterTest {
     assertEquals(Schema.Type.STRUCT, rt.getValueType().getBranches().get(0).getSchema().getType());
   }
 
+  // Two unions with the same branch names: the second's members are qualified by the oneof and
+  // read back from logical.branch; nested messages are always qualified.
+  @Test
+  void testRoundTripUnionsWithSameBranchNames() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("f0", sameNamedBranches(Schema.createString()), 0),
+        new Field("f1", sameNamedBranches(Schema.create(Schema.Type.TINYINT)), 1)))
+        .setNullable(false);
+    ProtobufSchema proto = convertSchema(rootSchema);
+    Descriptor descriptor = proto.toDescriptor();
+    List<String> members = new ArrayList<>();
+    for (FieldDescriptor f : descriptor.getFields()) {
+      members.add(f.getName());
+    }
+    assertEquals(Arrays.asList("b0", "b1", "b2", "f1_b0", "f1_b1", "f1_b2"), members);
+    assertEquals("Holder.F0B0Row", descriptor.findFieldByName("b0").getMessageType()
+        .getFullName());
+    assertEquals("Holder.F1B0Row", descriptor.findFieldByName("f1_b0").getMessageType()
+        .getFullName());
+    assertEquals("Holder.F1B2RepeatedWrapper", descriptor.findFieldByName("f1_b2")
+        .getMessageType().getFullName());
+
+    Schema rt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto.canonicalString())).getRootSchema();
+    for (String f : Arrays.asList("f0", "f1")) {
+      assertEquals(Arrays.asList("b0", "b1", "b2"), branchNames(rt.getField(f).getSchema()));
+      assertTrue(rt.getField(f).getSchema().getBranches().get(0).getParams().isEmpty());
+    }
+    assertEquals(Schema.Type.VARCHAR, rt.getField("f0").getSchema().getBranches().get(0)
+        .getSchema().getField("s0").getSchema().getType());
+    assertEquals(Schema.Type.TINYINT, rt.getField("f1").getSchema().getBranches().get(0)
+        .getSchema().getField("s0").getSchema().getType());
+  }
+
+  // A branch named like a regular field is qualified, whichever comes first.
+  @Test
+  void testRoundTripUnionBranchNamedLikeField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+            new UnionBranch("b1", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("b0", Schema.create(Schema.Type.INT), 1)))
+        .setNullable(false);
+    ProtobufSchema proto = convertSchema(rootSchema);
+    Descriptor descriptor = proto.toDescriptor();
+    assertEquals(FieldDescriptor.Type.INT32, descriptor.findFieldByName("b0").getType());
+    assertEquals(FieldDescriptor.Type.BOOL, descriptor.findFieldByName("u_b0").getType());
+    assertEquals(FieldDescriptor.Type.STRING, descriptor.findFieldByName("b1").getType());
+
+    Schema rt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto.canonicalString())).getRootSchema();
+    assertEquals(Arrays.asList("b0", "b1"), branchNames(rt.getField("u").getSchema()));
+    assertEquals(Schema.Type.INT, rt.getField("b0").getSchema().getType());
+  }
+
+  // A qualified name that is itself taken is refused by name.
+  @Test
+  void testUnionBranchQualifiedNameTaken() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+            new UnionBranch("b1", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("b0", Schema.create(Schema.Type.INT), 1),
+        new Field("u_b0", Schema.create(Schema.Type.INT), 2)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> convertSchema(rootSchema));
+    assertThat(e.getMessage()).contains("'u_b0'");
+  }
+
+  private static Schema sameNamedBranches(Schema s0) {
+    return Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", Schema.createStruct(Arrays.asList(new Field("s0", s0, 0)))
+            .setNullable(false)),
+        new UnionBranch("b1", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+        new UnionBranch("b2", Schema.createArray(Schema.create(Schema.Type.INT)
+            .setNullable(false)).setNullable(false))))
+        .setNullable(true);
+  }
+
   private static List<String> branchNames(Schema union) {
     List<String> names = new ArrayList<>();
     for (UnionBranch b : union.getBranches()) {
@@ -1860,7 +1942,7 @@ class LogicalTypeToProtoConverterTest {
   // UNION inside UNION (oneof inside oneof)
   //
   // proto3 forbids `oneof` directly inside `oneof`. A UNION branch that is
-  // itself a UNION is wrapped as `<UpperCamelBranch>OneofWrapper { value: UNION }` —
+  // itself a UNION is wrapped as `<UpperCamelMember>OneofWrapper { value: UNION }` —
   // the wrapper struct re-hosts the inner UNION as a regular field, where
   // fromStructType emits it as a legal nested oneof.
   // =========================================================================
@@ -1881,9 +1963,9 @@ class LogicalTypeToProtoConverterTest {
         new Field("u", outerUnion, 0))).setNullable(false);
     ProtobufSchema proto = convertSchema(rootSchema);
     Descriptor root = proto.toDescriptor();
-    // The inner UNION is wrapped as a nested message named after its branch.
-    Descriptor wrapper = root.findNestedTypeByName("InnerOneofWrapper");
-    assertNotNull(wrapper, "Expected nested InnerOneofWrapper");
+    // The inner UNION is wrapped as a nested message named after its qualified member.
+    Descriptor wrapper = root.findNestedTypeByName("UInnerOneofWrapper");
+    assertNotNull(wrapper, "Expected nested UInnerOneofWrapper");
     // Inside the wrapper, the inner UNION lives as a oneof named "value".
     List<OneofDescriptor> wrapperOneofs = wrapper.getRealOneofs();
     assertEquals(1, wrapperOneofs.size());

@@ -772,8 +772,12 @@ public class ProtoToLogicalTypeConverter {
             ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
         branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
       }
+      // A member the writer renamed <oneof>_<branch> records the branch name.
+      final String branchName = getMeta(fieldDescriptor)
+          .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
+          .orElse(fieldDescriptor.getName());
       branches.add(new UnionBranch(
-          fieldDescriptor.getName(), fieldSchema, description, branchParams)
+          branchName, fieldSchema, description, branchParams)
           .setNativeNames(Collections.singletonList(fieldDescriptor.getName())));
     }
     return Schema.createUnion(branches).setNullable(true);
