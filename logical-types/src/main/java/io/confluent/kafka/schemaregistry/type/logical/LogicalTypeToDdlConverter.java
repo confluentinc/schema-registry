@@ -17,6 +17,13 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import com.google.protobuf.ByteString;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -655,11 +662,12 @@ public final class LogicalTypeToDdlConverter {
         case SMALLINT:
         case INT:
         case BIGINT:
+          return value.toString();
         case DATE:
         case TIME:
         case TIMESTAMP:
         case TIMESTAMP_LTZ:
-          return value.toString();
+          return stringLiteral(temporalText(value));
         case FLOAT:
         case DOUBLE:
         case DECIMAL:
@@ -676,6 +684,31 @@ public final class LogicalTypeToDdlConverter {
           // this won't round-trip cleanly but is better than a silent drop.
           return stringLiteral(String.valueOf(value));
       }
+    }
+
+    // Seconds always, then only the fraction digits that are set: the parser refuses a literal
+    // with more fraction digits than the declared precision, and toString() pads to 3, 6 or 9.
+    private static final DateTimeFormatter TIME_TEXT = new DateTimeFormatterBuilder()
+        .appendPattern("HH:mm:ss")
+        .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+        .toFormatter();
+
+    private static final DateTimeFormatter TIMESTAMP_TEXT = new DateTimeFormatterBuilder()
+        .append(DateTimeFormatter.ISO_LOCAL_DATE)
+        .appendLiteral('T')
+        .append(TIME_TEXT)
+        .toFormatter();
+
+    private static String temporalText(Object value) {
+      if (value instanceof LocalTime) {
+        return TIME_TEXT.format((LocalTime) value);
+      } else if (value instanceof LocalDateTime) {
+        return TIMESTAMP_TEXT.format((LocalDateTime) value);
+      } else if (value instanceof Instant) {
+        return TIMESTAMP_TEXT.format(LocalDateTime.ofInstant((Instant) value, ZoneOffset.UTC))
+            + "Z";
+      }
+      return value.toString();
     }
 
     private static String bytesLiteral(Object value) {
