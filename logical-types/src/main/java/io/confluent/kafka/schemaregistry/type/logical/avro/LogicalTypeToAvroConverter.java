@@ -121,7 +121,7 @@ public class LogicalTypeToAvroConverter {
       List<Map<String, Object>> unionMeta = new ArrayList<>();
       for (UnionBranch branch : schema.getBranches()) {
         avroMembers.add(fromLogicalTypeIgnoreNullable(
-            branch.getSchema(), branch.getName(), ctx));
+            branch.getSchema(), branchRowName(rowName, branch), ctx));
         unionMeta.add(buildBranchMeta(branch));
       }
       org.apache.avro.Schema avroSchema =
@@ -181,6 +181,15 @@ public class LogicalTypeToAvroConverter {
     // normalize. Normalize would sort props alphabetically — visible deviation
     // from Flink's insertion-order emission.
     return isV1 ? result : result.normalize();
+  }
+
+  /**
+   * The name for a union branch's record, enum or fixed: the union's own name plus the branch's,
+   * as a struct field's record is named after its parent. A branch name alone repeats across
+   * unions, and Avro would make every type of that name the first one written.
+   */
+  private static String branchRowName(String unionRowName, UnionBranch branch) {
+    return unionRowName + "_" + branch.getName();
   }
 
   private static org.apache.avro.Schema fromLogicalTypeRaw(
@@ -377,7 +386,7 @@ public class LogicalTypeToAvroConverter {
           // Union members must not be nullable (Avro doesn't allow nested unions)
           org.apache.avro.Schema memberSchema =
               fromLogicalTypeIgnoreNullable(
-                  branch.getSchema(), branch.getName(), ctx);
+                  branch.getSchema(), branchRowName(rowName, branch), ctx);
           avroMembers.add(memberSchema);
         }
         return org.apache.avro.Schema.createUnion(avroMembers);
