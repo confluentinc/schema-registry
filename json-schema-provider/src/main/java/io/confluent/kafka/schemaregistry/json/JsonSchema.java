@@ -66,6 +66,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
+import io.confluent.kafka.schemaregistry.json.diff.InvalidReferenceException;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
@@ -1146,6 +1147,13 @@ public class JsonSchema implements ParsedSchema {
           compatibleChanges,
           ((JsonSchema) previousSchema).rawSchema(),
           rawSchema());
+    } catch (InvalidReferenceException e) {
+      // mutable: the FULL compatibility check appends to the returned list
+      List<String> errors = new ArrayList<>();
+      errors.add("{errorType:\"INVALID_REFERENCE\", description:\""
+              + e.getMessage().replace("\\", "\\\\").replace("\"", "\\\"").replace("%", "%%")
+              + "\", additionalInfo:\"\"}");
+      return errors;
     } catch (RuntimeException e) {
       if (isRemoteRefBlocked(e)) {
         // mutable: the FULL compatibility check appends to the returned list
