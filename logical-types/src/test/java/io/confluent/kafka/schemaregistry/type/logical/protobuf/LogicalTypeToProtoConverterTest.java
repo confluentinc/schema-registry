@@ -1261,6 +1261,24 @@ class LogicalTypeToProtoConverterTest {
   // MULTISET of complex types
   // =========================================================================
 
+  // Converting reads the logical type and leaves it as it was, nullable collections included.
+  @Test
+  void testConversionLeavesNullableCollectionsNullable() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.createArray(Schema.create(Schema.Type.INT)), 0),
+        new Field("m", Schema.createMap(Schema.createString().setNullable(false),
+            Schema.create(Schema.Type.INT)), 1),
+        new Field("s", Schema.createMultiset(Schema.create(Schema.Type.INT)), 2)))
+        .setNullable(false);
+    LogicalType lt = new LogicalType(rootSchema);
+    String before = lt.getRootSchema().toDdl();
+    LogicalTypeToProtoConverter.fromLogicalType(lt, "Holder");
+    assertEquals(before, lt.getRootSchema().toDdl());
+    for (Field f : lt.getRootSchema().getFields()) {
+      assertTrue(f.getSchema().isNullable(), f.getName());
+    }
+  }
+
   // A map's UNION value is a oneof named "value" in its entry, which still reads back as a map.
   @ParameterizedTest
   @ValueSource(booleans = {false, true})

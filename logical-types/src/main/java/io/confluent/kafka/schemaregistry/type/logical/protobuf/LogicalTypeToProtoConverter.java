@@ -1224,13 +1224,19 @@ public class LogicalTypeToProtoConverter {
     final String typeName = toMessageName(
         fieldName, CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX, ctx);
 
-    Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
-        new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME,
-            repeatedType.setNullable(false), 0,
-            null, false, null, null, null)))
-        .setNullable(false);
-
-    nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    // The wrapper's payload is NOT NULL only while the wrapper is converted: the type is the
+    // caller's, whose logical type would otherwise come back with the collection NOT NULL.
+    boolean nullable = repeatedType.isNullable();
+    repeatedType.setNullable(false);
+    try {
+      Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
+          new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME, repeatedType, 0,
+              null, false, null, null, null)))
+          .setNullable(false);
+      nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    } finally {
+      repeatedType.setNullable(nullable);
+    }
     addMetaParam(builder, CommonConstants.FLINK_WRAPPER, "true");
     addComment(builder, comment);
     builder.setType(Type.TYPE_MESSAGE);
