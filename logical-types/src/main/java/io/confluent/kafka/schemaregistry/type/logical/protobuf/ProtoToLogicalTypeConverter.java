@@ -39,6 +39,7 @@ import io.confluent.protobuf.MetaProto.Meta;
 import java.time.DateTimeException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -772,8 +773,19 @@ public class ProtoToLogicalTypeConverter {
             ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
         branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
       }
+      // A member the writer renamed <oneof>_<branch> records the branch name.
+      final String branchName = getMeta(fieldDescriptor)
+          .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
+          .orElse(fieldDescriptor.getName());
+      final String typeName = typeNameParam(
+          fieldDescriptor, oneOfDescriptor.getName() + "_" + branchName, fieldSchema);
+      if (typeName != null) {
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(ProtoTypeNames.NAME, typeName);
+      }
       branches.add(new UnionBranch(
-          fieldDescriptor.getName(), fieldSchema, description, branchParams)
+          branchName, fieldSchema, description, branchParams)
           .setNativeNames(Collections.singletonList(fieldDescriptor.getName())));
     }
     return Schema.createUnion(branches).setNullable(true);
@@ -885,6 +897,12 @@ public class ProtoToLogicalTypeConverter {
           ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
       effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
     }
+    final String typeName = typeNameParam(field, field.getName(), fieldSchema);
+    if (typeName != null) {
+      effectiveParams = effectiveParams != null
+          ? new LinkedHashMap<>(effectiveParams) : new LinkedHashMap<>();
+      effectiveParams.put(ProtoTypeNames.NAME, typeName);
+    }
     List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
         getFieldRules(field);
     return new Field(field.getName(), fieldSchema, field.getIndex(),
@@ -990,6 +1008,75 @@ public class ProtoToLogicalTypeConverter {
       return (doc == null || doc.trim().isEmpty()) ? null : doc;
     }
     return null;
+  }
+
+  private static final List<String> TYPE_SUFFIXES = Arrays.asList(
+      CommonConstants.FLINK_ROW_SUFFIX, CommonConstants.FLINK_ENUM_SUFFIX,
+      CommonConstants.MAP_ENTRY_SUFFIX, CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX,
+      CommonConstants.FLINK_ELEMENT_WRAPPER_SUFFIX, CommonConstants.FLINK_ONEOF_WRAPPER_SUFFIX);
+
+  /**
+   * The protobuf.name param of a field or oneof member whose own message or enum, inlined and
+   * declared in the field's message, is not named as the writer derives it from
+   * {@code derivedFrom}; null otherwise. A type declared elsewhere keeps no name.
+   */
+  static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema) {
+    final String name = fieldSchema.getType() == Schema.Type.NAMED_TYPE_REF
+        ? null : ownTypeName(field);
+    if (name == null) {
+      return null;
+    }
+    for (String suffix : TYPE_SUFFIXES) {
+      if (name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, false))
+          || name.equals(
+              LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, true))) {
+        return null;
+      }
+    }
+    return name;
+  }
+
+  // The name of a field's message or enum when it is declared in the field's message, else null.
+  // A native map's entry is named by its map<> syntax, not by anyone.
+  private static String ownTypeName(FieldDescriptor field) {
+    final String name;
+    final Descriptor declaredIn;
+    if (field.getType() == Type.MESSAGE && field.getMessageType().getOptions().getMapEntry()) {
+      return null;
+    } else if (field.getType() == Type.MESSAGE) {
+      name = field.getMessageType().getName();
+      declaredIn = field.getMessageType().getContainingType();
+    } else if (field.getType() == Type.ENUM) {
+      name = field.getEnumType().getName();
+      declaredIn = field.getEnumType().getContainingType();
+    } else {
+      return null;
+    }
+    return declaredIn != null && declaredIn.equals(field.getContainingType()) ? name : null;
+  }
+
+  /** The protobuf.name param pinning a regular field's own type, or null if it has none. */
+  static String pinTypeName(Descriptor message, String fieldName) {
+    FieldDescriptor field = message.findFieldByName(fieldName);
+    return field != null && field.getRealContainingOneof() == null ? ownTypeName(field) : null;
+  }
+
+  /** The protobuf.name params pinning a oneof's members' own types, by branch name. */
+  static Map<String, String> pinBranchTypeNames(Descriptor message, String oneofName) {
+    Map<String, String> names = new LinkedHashMap<>();
+    for (OneofDescriptor oneof : message.getRealOneofs()) {
+      if (!oneof.getName().equals(oneofName)) {
+        continue;
+      }
+      for (FieldDescriptor member : oneof.getFields()) {
+        String name = ownTypeName(member);
+        if (name != null) {
+          names.put(getMeta(member).flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
+              .orElse(member.getName()), name);
+        }
+      }
+    }
+    return names;
   }
 
   private static Map<String, Object> getBranchParams(FieldDescriptor field) {
@@ -1526,9 +1613,10 @@ public class ProtoToLogicalTypeConverter {
   /**
    * Structural map-entry detection: the descriptor's name ends with
    * {@code Entry} and it has exactly two logical entities, named {@code key}
-   * (regular field or oneof) and {@code value} (regular field). A oneof
-   * counts as one entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;}
-   * entry — where {@code key} is a oneof — still matches.
+   * and {@code value}, each a regular field or a oneof. A oneof counts as one
+   * entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;} entry — where
+   * {@code key} is a oneof — or a {@code MAP&lt;K, UNION&lt;...&gt;&gt;} entry —
+   * where {@code value} is — still matches.
    *
    * <p>{@link #isMapDescriptor} uses it to route a repeated field to {@link #toMapSchema}, which
    * walks the entry with its key and value recording no implicit defaults.
@@ -1557,7 +1645,10 @@ public class ProtoToLogicalTypeConverter {
     }
     boolean hasKeyOneof = oneofs.stream()
         .anyMatch(o -> CommonConstants.KEY_FIELD.equals(o.getName()));
-    return (hasKeyRegular || hasKeyOneof) && hasValueRegular;
+    // A UNION value is a oneof too, as in MAP<K, UNION<...>>.
+    boolean hasValueOneof = oneofs.stream()
+        .anyMatch(o -> CommonConstants.VALUE_FIELD.equals(o.getName()));
+    return (hasKeyRegular || hasKeyOneof) && (hasValueRegular || hasValueOneof);
   }
 
   private static boolean isMapDescriptor(final FieldDescriptor fieldDescriptor) {
