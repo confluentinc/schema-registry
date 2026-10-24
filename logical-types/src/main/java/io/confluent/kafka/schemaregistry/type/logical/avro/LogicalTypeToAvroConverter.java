@@ -792,10 +792,19 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
+  // Avro forbids a union in a union, so a nullable UNION, as an array element or map value
+  // say, gets null among its members, as a nullable field's does.
   private static org.apache.avro.Schema nullableSchema(org.apache.avro.Schema schema) {
-    return schema.isNullable()
-        ? schema
-        : org.apache.avro.Schema.createUnion(SchemaBuilder.builder().nullType(), schema);
+    if (schema.isNullable()) {
+      return schema;
+    }
+    if (schema.getType() == org.apache.avro.Schema.Type.UNION) {
+      List<org.apache.avro.Schema> members = new ArrayList<>();
+      members.add(SchemaBuilder.builder().nullType());
+      members.addAll(schema.getTypes());
+      return org.apache.avro.Schema.createUnion(members);
+    }
+    return org.apache.avro.Schema.createUnion(SchemaBuilder.builder().nullType(), schema);
   }
 
   /**

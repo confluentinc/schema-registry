@@ -146,6 +146,39 @@ class LogicalTypeToAvroConverterTest {
     assertEquals("MyUnion_b0", result.rawSchema().getTypes().get(0).getName());
   }
 
+  // A nullable UNION nested in a collection gets null among its members: Avro has no union in
+  // a union.
+  @Test
+  void testNullableUnionsInCollections() {
+    String avro = toAvroText("STRUCT p ("
+        + "f0 ARRAY<UNION(b0 STRUCT(x INT), b1 STRING)>, "
+        + "m MAP<STRING, UNION(b0 INT, b1 BOOLEAN)>, "
+        + "n MAP<INT, UNION(b0 INT, b1 BOOLEAN)>, "
+        + "s MULTISET<UNION(b0 INT, b1 STRING)>);");
+    org.apache.avro.Schema record = new org.apache.avro.Schema.Parser().parse(avro);
+    assertNullableUnion(nonNull(record.getField("f0").schema()).getElementType(), 2);
+    assertNullableUnion(nonNull(record.getField("m").schema()).getValueType(), 2);
+    assertNullableUnion(nonNull(record.getField("n").schema()).getElementType()
+        .getField("value").schema(), 2);
+    assertNullableUnion(nonNull(record.getField("s").schema()).getElementType()
+        .getField("key").schema(), 2);
+    assertThat(roundTrip(avro)).contains("f0 ARRAY<UNION(", "STRUCT(x INT) NOT NULL",
+        "m MAP<STRING NOT NULL, UNION(", "n MAP<INT, UNION(", "s MULTISET<UNION(");
+  }
+
+  private static org.apache.avro.Schema nonNull(org.apache.avro.Schema nullable) {
+    return nullable.getTypes().get(1);
+  }
+
+  private static void assertNullableUnion(org.apache.avro.Schema union, int branches) {
+    assertTrue(union.isUnion());
+    assertEquals(org.apache.avro.Schema.Type.NULL, union.getTypes().get(0).getType());
+    assertEquals(branches + 1, union.getTypes().size());
+    for (org.apache.avro.Schema member : union.getTypes()) {
+      assertFalse(member.isUnion());
+    }
+  }
+
   private static String toAvroText(String ddl) {
     LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
     visitor.visit(LogicalTypesParserFactory.parse(ddl));
