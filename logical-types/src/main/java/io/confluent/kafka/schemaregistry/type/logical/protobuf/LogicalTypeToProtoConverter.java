@@ -750,7 +750,7 @@ public class LogicalTypeToProtoConverter {
       List<NestedChild> userNested,
       FromLogicalContext<GenericDescriptor> ctx) {
     ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
-    names.enter(schema);
+    names.enter(schema, userNested.stream().map(c -> c.simpleName).collect(Collectors.toList()));
     try {
       return buildStructType(schema, rowName, dependencies, userNested, ctx);
     } finally {
@@ -1075,7 +1075,8 @@ public class LogicalTypeToProtoConverter {
           Schema typeDef = ctx.getNamedType(name);
           builder.setType(typeDef.getType() == Schema.Type.ENUM
               ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
-          builder.setTypeName(name);
+          // Absolute, or a type generated in this message under the same name would shadow it.
+          builder.setTypeName(makeItTopLevelScoped(name));
           return builder;
         }
         GenericDescriptor external = ctx.getConverted(name);

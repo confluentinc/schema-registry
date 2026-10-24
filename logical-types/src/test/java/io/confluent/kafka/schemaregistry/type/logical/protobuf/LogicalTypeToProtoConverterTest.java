@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -1393,7 +1394,7 @@ class LogicalTypeToProtoConverterTest {
     assertThat(e.getMessage()).contains("'u_b0'");
   }
 
-  // Branch u.b and field u_b both name their message UBRow in p.
+  // Branch u.b and field u_b both derive UBRow in p; the later one takes the next free name.
   @Test
   void testUnionBranchMessageNameTakenByField() {
     Schema rootSchema = Schema.createStruct(Arrays.asList(
@@ -1403,15 +1404,13 @@ class LogicalTypeToProtoConverterTest {
             .setNullable(true), 0),
         new Field("u_b", struct("y"), 1)))
         .setNullable(false);
-    ValidationException e = assertThrows(ValidationException.class,
-        () -> convertSchema(rootSchema));
-    assertThat(e.getMessage()).contains("'UBRow'", "used by fields b, u_b");
+    assertMessageName(convertSchema(rootSchema), "u_b", "Holder.UB2Row");
   }
 
   @Test
   void testMessageNamesThatDifferOnlyInUnderscoresOrCase() {
-    assertMessageNameTaken("a_b", "aB", "'ABRow'");
-    assertMessageNameTaken("ab", "Ab", "'AbRow'");
+    assertMessageName(twoStructs("a_b", "aB"), "aB", "Holder.AB2Row");
+    assertMessageName(twoStructs("ab", "Ab"), "Ab", "Holder.Ab2Row");
   }
 
   // V1 names a struct field's message <field>_Row, which a field of that name already takes.
@@ -1421,20 +1420,33 @@ class LogicalTypeToProtoConverterTest {
         new Field("a", struct("x"), 0),
         new Field("a_Row", Schema.create(Schema.Type.INT), 1)))
         .setNullable(false);
-    ValidationException e = assertThrows(ValidationException.class, () ->
-        LogicalTypeToProtoConverter.fromLogicalType(
-            new LogicalType(rootSchema), "p", LogicalTypeVersion.V1));
-    assertThat(e.getMessage()).contains("'a_Row'", "as a field and a message");
+    assertMessageName(LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(rootSchema), "p", LogicalTypeVersion.V1), "a", "p.a2_Row");
   }
 
-  private static void assertMessageNameTaken(String field0, String field1, String name) {
+  // A pinned name is never suffixed, so two pinned to one name with different bodies are refused.
+  @Test
+  void testMessageNamePinnedTwice() {
+    Map<String, Object> pin = Collections.singletonMap(Schema.PROTOBUF_NAME, "T");
     Schema rootSchema = Schema.createStruct(Arrays.asList(
-        new Field(field0, struct("x"), 0),
-        new Field(field1, struct("y"), 1)))
+        new Field("a", struct("x"), 0, null, false, null, null, pin, null),
+        new Field("b", struct("y"), 1, null, false, null, null, pin, null)))
         .setNullable(false);
     ValidationException e = assertThrows(ValidationException.class,
         () -> convertSchema(rootSchema));
-    assertThat(e.getMessage()).contains(name, "used by fields " + field0 + ", " + field1);
+    assertThat(e.getMessage()).contains("'T'", "used by fields a, b");
+  }
+
+  private static ProtobufSchema twoStructs(String field0, String field1) {
+    return convertSchema(Schema.createStruct(Arrays.asList(
+        new Field(field0, struct("x"), 0),
+        new Field(field1, struct("y"), 1)))
+        .setNullable(false));
+  }
+
+  private static void assertMessageName(ProtobufSchema schema, String field, String message) {
+    assertEquals(message,
+        schema.toDescriptor().findFieldByName(field).getMessageType().getFullName());
   }
 
   private static Schema struct(String field) {

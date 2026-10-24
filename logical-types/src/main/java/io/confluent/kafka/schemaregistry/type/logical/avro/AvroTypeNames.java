@@ -19,10 +19,12 @@ package io.confluent.kafka.schemaregistry.type.logical.avro;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -31,9 +33,12 @@ import java.util.regex.Pattern;
  * The names of the record, enum, fixed and map entry types the Avro writer generates, which derive
  * from a field's base: {@code <record>_<field>} unless the field's {@link #NAME} param pins one.
  *
- * <p>Names under a pinned base are pinned too. A first pass records them and the names under each
- * derived base; when any are pinned, a second pass gives a derived base whose names would take a
- * pinned one the next free suffix ({@code p_f0_2}), so a renamed field keeps its types' names.
+ * <p>Two types can derive one name ({@code a.b} and {@code a_b} are both {@code p_a_b}), and a
+ * derived name can be one a param pins or a named type has. A first pass records every name with
+ * the type built under it. When two different types share one, a second pass gives a derived type
+ * the next free suffix ({@code p_a_b_2}) if a pinned or named type has its name, or a derived type
+ * before it keeps the name; the reader then pins the suffix. Identical types share a name, since
+ * Avro writes the second as a reference to the first.
  */
 final class AvroTypeNames {
 
@@ -52,46 +57,124 @@ final class AvroTypeNames {
 
   private static final Pattern NAME_PART = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
-  // Pass 1 output, or for pass 2 the first pass's: names pinned, derived names under each base.
-  private final Set<String> pinned = new HashSet<>();
-  private final Map<String, Set<String>> namesByBase = new HashMap<>();
-  private final Set<String> all = new HashSet<>();
-  private final AvroTypeNames first;
+  // How a type got its name: derived from its field, pinned by a param, or its own (a named
+  // type's, the root's).
+  enum Kind { DERIVED, PINNED, FIXED }
+
+  private static final class Site {
+    private final String name;
+    private final Kind kind;
+    private Object type;
+
+    private Site(String name, Kind kind) {
+      this.name = name;
+      this.kind = kind;
+    }
+  }
+
+  // Every generated type, in the order the writer builds them, which both passes share.
+  private final List<Site> sites = new ArrayList<>();
+  // Names of named types outside the logical type, which a derived name yields to.
+  private final Set<String> reserved = new HashSet<>();
+  // For a second pass: its first pass's sites, and the suffixed names of those that yield.
+  private final List<Site> firstSites;
+  private final Map<Integer, String> renamed;
 
   // Walk state.
   private int pinnedDepth;
-  private Deque<String> openBases = new ArrayDeque<>();
+  private int depth;
   private final Map<String, Map<String, Object>> exceptionsByBase = new HashMap<>();
 
   AvroTypeNames() {
-    this(null);
+    this(Collections.emptyList(), Collections.emptyMap());
   }
 
-  private AvroTypeNames(AvroTypeNames first) {
-    this.first = first;
+  private AvroTypeNames(List<Site> firstSites, Map<Integer, String> renamed) {
+    this.firstSites = firstSites;
+    this.renamed = renamed;
   }
 
-  boolean hasPinned() {
-    return !pinned.isEmpty();
+  void reserve(Set<String> names) {
+    reserved.addAll(names);
   }
 
-  // A second pass, which suffixes a derived base whose names would take a pinned one.
+  // A second pass that suffixes the derived types that yield their names, or null if none does.
   AvroTypeNames forSuffixing() {
-    return new AvroTypeNames(this);
+    Map<String, List<Integer>> byName = new LinkedHashMap<>();
+    for (int i = 0; i < sites.size(); i++) {
+      byName.computeIfAbsent(sites.get(i).name, n -> new ArrayList<>()).add(i);
+    }
+    Set<String> taken = new HashSet<>(reserved);
+    taken.addAll(byName.keySet());
+    Map<Integer, String> suffixed = new HashMap<>();
+    for (Map.Entry<String, List<Integer>> e : byName.entrySet()) {
+      List<String> kept = new ArrayList<>();
+      for (int i : e.getValue()) {
+        if (sites.get(i).kind != Kind.DERIVED) {
+          kept.add(body(i));
+        }
+      }
+      for (int i : e.getValue()) {
+        if (sites.get(i).kind != Kind.DERIVED) {
+          continue;
+        }
+        String body = body(i);
+        if (!reserved.contains(e.getKey()) && (kept.isEmpty() || kept.contains(body))) {
+          kept.add(body);
+          continue;
+        }
+        String candidate;
+        for (int n = 2; taken.contains(candidate = e.getKey() + "_" + n); n++) {
+          // the next free suffix
+        }
+        taken.add(candidate);
+        suffixed.put(i, candidate);
+      }
+    }
+    if (suffixed.isEmpty()) {
+      return null;
+    }
+    AvroTypeNames second = new AvroTypeNames(sites, suffixed);
+    second.reserve(reserved);
+    return second;
+  }
+
+  private String body(int index) {
+    Object type = sites.get(index).type;
+    return type != null ? type.toString() : "#" + index;
+  }
+
+  // The name a generated type takes: its own, or the suffix the first pass gave it.
+  String allocate(String name, Kind kind) {
+    int index = sites.size();
+    Kind effective = kind == Kind.DERIVED && pinnedDepth > 0 ? Kind.PINNED : kind;
+    String result = name;
+    String suffix = renamed.get(index);
+    // Under a type renamed this pass, a type's name derives from the new one and stands.
+    if (suffix != null && firstSites.get(index).name.equals(name)) {
+      result = suffix;
+    }
+    sites.add(new Site(result, effective));
+    return result;
+  }
+
+  // The type of the name last allocated.
+  void attach(Object type) {
+    sites.get(sites.size() - 1).type = type;
+  }
+
+  // True outside every field and branch: the root's own type.
+  boolean atRoot() {
+    return depth == 0;
   }
 
   // The base of a field's types, and enters it until exitField.
   String enterField(String rowName, String fieldName, Map<String, Object> params) {
+    depth++;
     String pin = name(params, NAME);
-    String base;
+    String base = pin != null ? pin : rowName + "_" + fieldName;
     if (pin != null) {
-      base = pin;
       pinnedDepth++;
-    } else {
-      // Under a pinned base every name is pinned, so none of them yields.
-      String derived = rowName + "_" + fieldName;
-      base = pinnedDepth > 0 ? derived : suffixed(derived);
-      openBases.push(base);
     }
     if (params.containsKey(ENTRY_NAME) || params.containsKey(KEY_NAME)
         || params.containsKey(VALUE_NAME)) {
@@ -101,15 +184,15 @@ final class AvroTypeNames {
   }
 
   void exitField(Map<String, Object> params) {
+    depth--;
     if (params.containsKey(NAME)) {
       pinnedDepth--;
-    } else {
-      openBases.pop();
     }
   }
 
   // A union branch's base: its NAME param, entered until exitBranch.
   String enterBranch(String derived, Map<String, Object> params) {
+    depth++;
     String pin = name(params, NAME);
     if (pin == null) {
       return derived;
@@ -119,24 +202,23 @@ final class AvroTypeNames {
   }
 
   void exitBranch(Map<String, Object> params) {
+    depth--;
     if (params.containsKey(NAME)) {
       pinnedDepth--;
     }
   }
 
   // A declared named type's names are its own; no field's base or pin reaches into it.
-  Object enterNamedType() {
-    Object saved = new Object[] {pinnedDepth, openBases};
+  int[] enterNamedType() {
+    int[] saved = {pinnedDepth, depth};
     pinnedDepth = 0;
-    openBases = new ArrayDeque<>();
+    depth = 0;
     return saved;
   }
 
-  @SuppressWarnings("unchecked")
-  void exitNamedType(Object saved) {
-    Object[] state = (Object[]) saved;
-    pinnedDepth = (Integer) state[0];
-    openBases = (Deque<String>) state[1];
+  void exitNamedType(int[] saved) {
+    pinnedDepth = saved[0];
+    depth = saved[1];
   }
 
   // The name of the map entry record under base.
@@ -170,37 +252,6 @@ final class AvroTypeNames {
     String key = suffix.equals(ENTRY_SUFFIX) ? ENTRY_NAME
         : suffix.equals(KEY_SUFFIX) ? KEY_NAME : VALUE_NAME;
     return exceptions != null ? name(exceptions, key) : null;
-  }
-
-  // Records a generated type's name; pinned for one a param names directly.
-  void created(String name, boolean pinned) {
-    all.add(name);
-    if (pinned || pinnedDepth > 0) {
-      this.pinned.add(name);
-    } else {
-      for (String base : openBases) {
-        namesByBase.computeIfAbsent(base, b -> new HashSet<>()).add(name);
-      }
-    }
-  }
-
-  private String suffixed(String base) {
-    if (first == null) {
-      return base;
-    }
-    Set<String> names = first.namesByBase.get(base);
-    if (names == null || names.stream().noneMatch(first.pinned::contains)) {
-      return base;
-    }
-    for (int n = 2; ; n++) {
-      String candidate = base + "_" + n;
-      boolean free = names.stream()
-          .map(name -> candidate + name.substring(base.length()))
-          .noneMatch(name -> first.pinned.contains(name) || first.all.contains(name));
-      if (free) {
-        return candidate;
-      }
-    }
   }
 
   private static String name(Map<String, Object> params, String key) {

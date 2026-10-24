@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
@@ -28,6 +29,8 @@ import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConv
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -132,6 +135,33 @@ class NativeTypeNamesTest {
     assertThat(LogicalTypeToAvroConverter.typeNameParams(logicalType, "p", "i")).isEmpty();
   }
 
+  // A schema reference's types, used or not, keep their names: a generated type yields, and a
+  // pinned one is refused, rather than become a reference to the other.
+  @Test
+  void testAvroNamesOfReferencedTypesKept() {
+    assertThat(avroWithReference("STRUCT p (u UNION(b STRUCT(x INT), s STRING));",
+        "{\"type\":\"record\",\"name\":\"p_u_b\",\"fields\":["
+            + "{\"name\":\"z\",\"type\":\"string\"}]}"))
+        .contains("\"name\":\"p_u_b_2\"");
+    assertThat(avroWithReference("STRUCT p (h BINARY(4));",
+        "{\"type\":\"record\",\"name\":\"E\",\"fields\":[{\"name\":\"z\",\"type\":"
+            + "{\"type\":\"fixed\",\"name\":\"p_h\",\"size\":8}}]}"))
+        .contains("\"name\":\"p_h_2\"");
+    ValidationException e = assertThrows(ValidationException.class, () -> avroWithReference(
+        "STRUCT p (f STRUCT(x INT) WITH ('avro.name' = 'E'));",
+        "{\"type\":\"record\",\"name\":\"E\",\"fields\":[{\"name\":\"z\",\"type\":\"string\"}]}"));
+    assertThat(e.getMessage()).contains("'E'", "at a schema reference and f");
+  }
+
+  private static String avroWithReference(String ddl, String reference) {
+    LogicalType parsed = parse(ddl);
+    LogicalType logicalType = new LogicalType(parsed.getName(), parsed.getNamespace(),
+        parsed.getRootSchema(), parsed.getNamedTypes(), new LinkedHashSet<>(),
+        new LinkedHashMap<>(), Collections.singletonList(new SchemaReference("ext", "ext", 1)),
+        Collections.singletonMap("ext", reference), Collections.emptyMap());
+    return LogicalTypeToAvroConverter.fromLogicalType(logicalType, "p").canonicalString();
+  }
+
   @Test
   void testAvroInvalidNameRefused() {
     ValidationException e = assertThrows(ValidationException.class,
@@ -185,6 +215,19 @@ class NativeTypeNamesTest {
     ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(logicalType, "Order");
     assertThat(written.canonicalString()).containsOnlyOnce("message Address");
     assertThat(written.isBackwardCompatible(original)).isEmpty();
+  }
+
+  // A declared type is referred to absolutely, so a message generated under its name in the
+  // referring message, as branch u.b's UBRow, does not shadow it.
+  @Test
+  void testProtoGeneratedMessageDoesNotShadowDeclaredType() {
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(parse(
+        "STRUCT Holder (u UNION(b STRUCT(x INT), s STRING), o UBRow); STRUCT UBRow (y STRING);"),
+        "Holder");
+    assertEquals("UBRow",
+        schema.toDescriptor("Holder").findFieldByName("o").getMessageType().getFullName());
+    assertEquals("Holder.UBRow",
+        schema.toDescriptor("Holder").findFieldByName("b").getMessageType().getFullName());
   }
 
   // A native map's entry is named by its map<> syntax, so it is not kept.

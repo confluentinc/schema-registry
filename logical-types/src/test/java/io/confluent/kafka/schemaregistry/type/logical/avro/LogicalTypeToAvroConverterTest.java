@@ -216,20 +216,33 @@ class LogicalTypeToAvroConverterTest {
         AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(avro))).replaceAll("\\s+", " ");
   }
 
-  // Path names can repeat (a.b and a_b are both p_a_b); Avro would write the second type as a
-  // reference to the first, so the converter refuses them unless the two are identical.
+  // Path names can repeat (a.b and a_b are both p_a_b), and Avro would write the second type as
+  // a reference to the first: unless the two are identical, the later one takes the next free
+  // name, which reads back pinned.
   @Test
   void testTypeNameGeneratedTwice() {
-    assertTypeNameTaken("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(y STRING));",
-        "'p_a_b'", "at a.b and a_b");
-    assertTypeNameTaken(
+    assertSuffixed("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(y STRING));",
+        "p_a_b_2", "a_b STRUCT(y STRING) WITH('avro.name' = 'p_a_b_2')");
+    assertSuffixed(
         "STRUCT p (a STRUCT(b STRUCT(x INT COMMENT 'one')), a_b STRUCT(x INT COMMENT 'two'));",
-        "'p_a_b'", "at a.b and a_b");
-    assertTypeNameTaken(
-        "STRUCT p (a STRUCT(b_c STRUCT(x INT)), a_b STRUCT(c STRUCT(y STRING)));",
-        "'p_a_b_c'", "at a.b_c and a_b.c");
-    assertTypeNameTaken("STRUCT p (u UNION(b STRUCT(x INT), s STRING), u_b STRUCT(y STRING));",
-        "'p_u_b'", "at u and u_b");
+        "p_a_b_2", "WITH('avro.name' = 'p_a_b_2')");
+    assertSuffixed("STRUCT p (a STRUCT(b_c STRUCT(x INT)), a_b STRUCT(c STRUCT(y STRING)));",
+        "p_a_b_c_2", "c STRUCT(y STRING) WITH('avro.name' = 'p_a_b_c_2')");
+    assertSuffixed("STRUCT p (u UNION(b STRUCT(x INT), s STRING), u_b STRUCT(y STRING));",
+        "p_u_b_2", "u_b STRUCT(y STRING) WITH('avro.name' = 'p_u_b_2')");
+  }
+
+  private static void assertSuffixed(String ddl, String name, String readBack) {
+    String avro = toAvroText(ddl);
+    assertThat(avro).contains("\"name\":\"" + name + "\"");
+    assertThat(roundTrip(avro)).contains(readBack);
+  }
+
+  // A pinned name is never suffixed, so two pinned to one name with different bodies are refused.
+  @Test
+  void testTypeNamePinnedTwice() {
+    assertTypeNameTaken("STRUCT p (a STRUCT(x INT) WITH ('avro.name' = 'T'), "
+        + "b STRUCT(y STRING) WITH ('avro.name' = 'T'));", "'T'", "at a and b");
   }
 
   @Test

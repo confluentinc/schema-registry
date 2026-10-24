@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.avro.AvroTypeNames.Kind;
 import io.confluent.kafka.schemaregistry.type.logical.common.FromLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -88,10 +89,11 @@ public class LogicalTypeToAvroConverter {
     }
     AvroTypeNames names = new AvroTypeNames();
     Emitted emitted = emit(logicalType, rowName, version, names);
-    if (names.hasPinned()) {
-      emitted = emit(logicalType, rowName, version, names.forSuffixing());
+    AvroTypeNames suffixing = names.forSuffixing();
+    if (suffixing != null) {
+      emitted = emit(logicalType, rowName, version, suffixing);
     }
-    checkDistinctNames(emitted.schema, emitted.externalNames);
+    checkDistinctNames(emitted.schema, emitted.externalTypes);
     return applyMetadata(emitted.schema, emitted.metadataProps, logicalType,
         version == LogicalTypeVersion.V1);
   }
@@ -121,13 +123,13 @@ public class LogicalTypeToAvroConverter {
   private static final class Emitted {
     private final org.apache.avro.Schema schema;
     private final Map<String, String> metadataProps;
-    private final Set<String> externalNames;
+    private final Map<String, org.apache.avro.Schema> externalTypes;
 
     private Emitted(org.apache.avro.Schema schema, Map<String, String> metadataProps,
-        Set<String> externalNames) {
+        Map<String, org.apache.avro.Schema> externalTypes) {
       this.schema = schema;
       this.metadataProps = metadataProps;
-      this.externalNames = externalNames;
+      this.externalTypes = externalTypes;
     }
   }
 
@@ -144,14 +146,20 @@ public class LogicalTypeToAvroConverter {
     // references external B, B's types appear inside both parsed schemas, but
     // should only be registered once.
     Set<String> visited = new HashSet<>();
+    // Every named type of the externals, fixed ones too, which no generated type may take.
+    Map<String, org.apache.avro.Schema> externalTypes = new HashMap<>();
     for (Map.Entry<String, String> entry :
             logicalType.getResolvedReferences().entrySet()) {
       AvroSchema parsed = new AvroSchema(entry.getValue(),
           logicalType.getReferences(), logicalType.getResolvedReferences(),
           null, null, null, false);
       collectNamedSchemas(parsed.rawSchema(), visited, ctx);
+      collectFixedSchemas(parsed.rawSchema(), new HashSet<>(), externalTypes);
     }
-    Set<String> externalNames = new HashSet<>(visited);
+    for (String name : visited) {
+      externalTypes.put(name, ctx.getConverted(name));
+    }
+    names.reserve(externalTypes.keySet());
 
     Map<String, String> metadataProps = new LinkedHashMap<>();
     metadataProps.put(CONFLUENT_EDITION_PROP, version == LogicalTypeVersion.V1 ? "1" : "2");
@@ -181,7 +189,7 @@ public class LogicalTypeToAvroConverter {
       } catch (JsonProcessingException e) {
         throw new ValidationException("Failed to serialize union metadata", e);
       }
-      return new Emitted(avroSchema, metadataProps, externalNames);
+      return new Emitted(avroSchema, metadataProps, externalTypes);
     }
     // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits under its own name, taking
     // precedence over the caller's rowName. The reader unwraps only when the root's namespace
@@ -196,7 +204,7 @@ public class LogicalTypeToAvroConverter {
         fromLogicalTypeIgnoreNullable(schema, rootName, ctx);
     org.apache.avro.Schema result = schema.isNullable()
         ? nullableSchema(notNullSchema) : notNullSchema;
-    return new Emitted(result, metadataProps, externalNames);
+    return new Emitted(result, metadataProps, externalTypes);
   }
 
   /**
@@ -317,9 +325,14 @@ public class LogicalTypeToAvroConverter {
         }
         return stringType;
       }
-      case BINARY:
-        names(ctx).created(rowName, false);
-        return SchemaBuilder.fixed(rowName).size(schema.getLength());
+      case BINARY: {
+        AvroTypeNames names = names(ctx);
+        org.apache.avro.Schema fixed = SchemaBuilder.fixed(
+            names.allocate(rowName, names.atRoot() ? Kind.FIXED : Kind.DERIVED))
+            .size(schema.getLength());
+        names.attach(fixed);
+        return fixed;
+      }
       case VARBINARY: {
         int length = schema.getLength();
         final BytesBuilder<org.apache.avro.Schema> bytesBuilder =
@@ -364,7 +377,7 @@ public class LogicalTypeToAvroConverter {
         if (ctx.hasNamedType(name)) {
           if (!ctx.isAlreadyConverted(name)) {
             Schema typeDef = ctx.getNamedType(name);
-            Object saved = names(ctx).enterNamedType();
+            int[] saved = names(ctx).enterNamedType();
             try {
               if (typeDef.getType() == Schema.Type.STRUCT) {
                 // Use the placeholder pattern so a recursive self-reference can
@@ -390,9 +403,12 @@ public class LogicalTypeToAvroConverter {
         // Build the record manually so we can control union ordering for
         // nullable fields (Avro requires the default's type to match the
         // first union branch).
+        AvroTypeNames names = names(ctx);
+        String recordName = names.allocate(rowName,
+            names.atRoot() || isNamedRoot(rowName, ctx) ? Kind.FIXED : Kind.DERIVED);
         org.apache.avro.Schema recordSchema = org.apache.avro.Schema.createRecord(
-            rowName, schema.getDoc(), null, false);
-        names(ctx).created(rowName, false);
+            recordName, schema.getDoc(), null, false);
+        names.attach(recordSchema);
         List<org.apache.avro.Schema.Field> avroFields = new ArrayList<>();
         for (Field field : schema.getFields()) {
           String fieldName = field.getName();
@@ -400,7 +416,7 @@ public class LogicalTypeToAvroConverter {
             throw getInvalidFieldNameException(fieldName);
           }
           Schema fieldType = field.getSchema();
-          org.apache.avro.Schema notNullSchema = fromField(field, rowName, ctx);
+          org.apache.avro.Schema notNullSchema = fromField(field, recordName, ctx);
           boolean hasNonNullDefault =
               field.hasDefaultValue() && !field.hasDerivedDefault()
               && field.getDefaultValue() != null;
@@ -443,10 +459,13 @@ public class LogicalTypeToAvroConverter {
         List<String> symbols = schema.getEnumValues().stream()
             .map(EnumValue::getSymbol)
             .collect(Collectors.toList());
-        org.apache.avro.Schema enumSchema =
-            SchemaBuilder.enumeration(rowName).doc(schema.getDoc())
-                .symbols(symbols.toArray(new String[0]));
-        names(ctx).created(rowName, false);
+        AvroTypeNames names = names(ctx);
+        org.apache.avro.Schema enumSchema = SchemaBuilder.enumeration(names.allocate(rowName,
+                ctx.hasNamedType(rowName) || isNamedRoot(rowName, ctx) || names.atRoot()
+                    ? Kind.FIXED : Kind.DERIVED))
+            .doc(schema.getDoc())
+            .symbols(symbols.toArray(new String[0]));
+        names.attach(enumSchema);
         if (!ctx.isV1()) {
           addSchemaTags(enumSchema, schema);
           // Anonymous unless this enum was reached as a named-type reference
@@ -576,9 +595,10 @@ public class LogicalTypeToAvroConverter {
     // V2: per-map unique name + LogicalMap on the array + connect.internal.type
     // prop on the entry record (latter for AvroData compat).
     AvroTypeNames names = names(ctx);
-    String entryName = names.entryName(rowName);
-    names.created(entryName, names.isPinnedEntry(rowName));
+    String entryName = names.allocate(names.entryName(rowName),
+        names.isPinnedEntry(rowName) ? Kind.PINNED : Kind.DERIVED);
     org.apache.avro.Schema arr = LogicalMap.createMap(entryName, keySchema, valueSchema);
+    names.attach(arr.getElementType());
     arr.getElementType().addProp(
         CommonConstants.CONNECT_INTERNAL_TYPE_PROP, CommonConstants.MAP_ENTRY_TYPE_NAME);
     addNestedUnionMeta(arr.getElementType().getField(CommonConstants.KEY_FIELD), keyType, ctx);
@@ -601,6 +621,8 @@ public class LogicalTypeToAvroConverter {
     }
     org.apache.avro.Schema placeholder = org.apache.avro.Schema.createRecord(
         simpleName, typeDef.getDoc(), namespace, false);
+    names(ctx).allocate(name, Kind.FIXED);
+    names(ctx).attach(placeholder);
     ctx.putConverted(name, placeholder);
 
     List<org.apache.avro.Schema.Field> avroFields = new ArrayList<>();
@@ -870,18 +892,21 @@ public class LogicalTypeToAvroConverter {
    * named type in the converter cache, keyed by full name. FIXED is skipped.
    */
   /**
-   * Refuses two different named types with the same full name, e.g. the records of {@code a.b}
-   * and {@code a_b}: Avro would write the second as a reference to the first, replacing it.
-   * Identical JSON bodies are allowed; {@code equals} would miss docs and aliases.
+   * Refuses two different named types with the same full name, e.g. a type a param pins and a
+   * schema reference's type: Avro would write the second as a reference to the first, replacing
+   * it. Identical JSON bodies are allowed; {@code equals} would miss docs and aliases.
    */
   private static void checkDistinctNames(
-      org.apache.avro.Schema schema, Set<String> externalNames) {
-    checkDistinctNames(schema, "", new HashMap<>(), new HashMap<>(), externalNames);
+      org.apache.avro.Schema schema, Map<String, org.apache.avro.Schema> externalTypes) {
+    Map<String, String> seenAt = new HashMap<>();
+    externalTypes.keySet().forEach(name -> seenAt.put(name, null));
+    // A reference's types are seeded, so the walk stops at one it uses rather than enter it.
+    checkDistinctNames(schema, "", new HashMap<>(externalTypes), seenAt);
   }
 
   private static void checkDistinctNames(
       org.apache.avro.Schema schema, String path, Map<String, org.apache.avro.Schema> seen,
-      Map<String, String> seenAt, Set<String> externalNames) {
+      Map<String, String> seenAt) {
     switch (schema.getType()) {
       case RECORD:
       case ENUM:
@@ -897,27 +922,24 @@ public class LogicalTypeToAvroConverter {
           return;
         }
         seenAt.put(name, path);
-        // An external's own nested types may be separate copies of one type; they aren't ours.
-        if (schema.getType() == org.apache.avro.Schema.Type.RECORD
-            && !externalNames.contains(name)) {
+        if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
           for (org.apache.avro.Schema.Field field : schema.getFields()) {
             checkDistinctNames(field.schema(),
-                path.isEmpty() ? field.name() : path + "." + field.name(),
-                seen, seenAt, externalNames);
+                path.isEmpty() ? field.name() : path + "." + field.name(), seen, seenAt);
           }
         }
         break;
       }
       case UNION:
         for (org.apache.avro.Schema member : schema.getTypes()) {
-          checkDistinctNames(member, path, seen, seenAt, externalNames);
+          checkDistinctNames(member, path, seen, seenAt);
         }
         break;
       case ARRAY:
-        checkDistinctNames(schema.getElementType(), path, seen, seenAt, externalNames);
+        checkDistinctNames(schema.getElementType(), path, seen, seenAt);
         break;
       case MAP:
-        checkDistinctNames(schema.getValueType(), path, seen, seenAt, externalNames);
+        checkDistinctNames(schema.getValueType(), path, seen, seenAt);
         break;
       default:
         break;
@@ -925,7 +947,37 @@ public class LogicalTypeToAvroConverter {
   }
 
   private static String describePath(String path) {
-    return path.isEmpty() ? "the root" : path;
+    return path == null ? "a schema reference" : path.isEmpty() ? "the root" : path;
+  }
+
+  // The fixed types of an external, which no named type reference reaches.
+  private static void collectFixedSchemas(org.apache.avro.Schema schema, Set<String> visited,
+      Map<String, org.apache.avro.Schema> fixed) {
+    switch (schema.getType()) {
+      case RECORD:
+        if (visited.add(schema.getFullName())) {
+          for (org.apache.avro.Schema.Field field : schema.getFields()) {
+            collectFixedSchemas(field.schema(), visited, fixed);
+          }
+        }
+        break;
+      case FIXED:
+        fixed.putIfAbsent(schema.getFullName(), schema);
+        break;
+      case UNION:
+        for (org.apache.avro.Schema member : schema.getTypes()) {
+          collectFixedSchemas(member, visited, fixed);
+        }
+        break;
+      case ARRAY:
+        collectFixedSchemas(schema.getElementType(), visited, fixed);
+        break;
+      case MAP:
+        collectFixedSchemas(schema.getValueType(), visited, fixed);
+        break;
+      default:
+        break;
+    }
   }
 
   private static void collectNamedSchemas(
