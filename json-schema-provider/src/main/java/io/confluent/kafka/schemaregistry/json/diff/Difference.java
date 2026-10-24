@@ -126,6 +126,8 @@ public class Difference {
       Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL));
 
   private String error() {
+    // Callers pass the message to String.format to fill in the %s placeholders
+    final String jsonPath = this.jsonPath.replace("%", "%%");
     String message = "";
     if (keywordAddedOrRemoved.contains(type)) {
       message = "The keyword at path '" + jsonPath + "' in the %s schema is not present in "

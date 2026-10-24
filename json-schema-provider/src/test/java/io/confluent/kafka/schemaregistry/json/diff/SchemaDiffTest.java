@@ -22,6 +22,8 @@ import static org.junit.Assert.assertEquals;
 
 import static org.junit.Assert.assertFalse;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
 import java.util.concurrent.CancellationException;
@@ -341,6 +343,30 @@ public class SchemaDiffTest {
     assertEquals(Collections.emptyList(), diff(nullConst, nullConst));
     assertEquals(Collections.singletonList(Difference.Type.ENUM_ARRAY_CHANGED),
         types(diff(nullConst, oneConst)));
+  }
+
+  @Test
+  public void testPercentInPropertyNameSurvivesMessageFormatting() {
+    final List<String> errors = backwardErrors(
+        "{\"properties\":{\"a%d\":{\"type\":\"string\"}}}",
+        "{\"properties\":{\"a%d\":{\"type\":\"number\"}}}");
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("'#/properties/a%d'"));
+  }
+
+  @Test(timeout = 10000)
+  public void testPercentInInvalidReferenceSurvivesMessageFormatting() {
+    // "A%20" is the URI-escaped form of the definition name "A "
+    final String schema = "{\"$schema\":\"" + DRAFT_07 + "\","
+        + "\"properties\":{\"a\":{\"$ref\":\"#/definitions/A%20\"}},"
+        + "\"definitions\":{\"A \":{\"$ref\":\"#/definitions/A%20\"}}}";
+    final List<String> errors = backwardErrors(schema, schema);
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("Cyclic $ref '#/definitions/A%20'"));
+  }
+
+  // Goes through isCompatible, which passes each message to String.format
+  private static List<String> backwardErrors(final String original, final String update) {
+    return new JsonSchema(update).isCompatible(CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(new JsonSchema(original))));
   }
 
   private static List<Difference.Type> types(final List<Difference> differences) {

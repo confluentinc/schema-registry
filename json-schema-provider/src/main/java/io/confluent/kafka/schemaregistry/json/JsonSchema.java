@@ -1151,7 +1151,7 @@ public class JsonSchema implements ParsedSchema {
       // mutable: the FULL compatibility check appends to the returned list
       List<String> errors = new ArrayList<>();
       errors.add("{errorType:\"INVALID_REFERENCE\", description:\""
-              + e.getMessage().replace("\\", "\\\\").replace("\"", "\\\"")
+              + e.getMessage().replace("\\", "\\\\").replace("\"", "\\\"").replace("%", "%%")
               + "\", additionalInfo:\"\"}");
       return errors;
     } catch (RuntimeException e) {
