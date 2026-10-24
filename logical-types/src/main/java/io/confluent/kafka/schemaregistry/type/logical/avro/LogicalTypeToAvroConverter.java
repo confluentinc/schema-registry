@@ -121,7 +121,7 @@ public class LogicalTypeToAvroConverter {
       List<Map<String, Object>> unionMeta = new ArrayList<>();
       for (UnionBranch branch : schema.getBranches()) {
         avroMembers.add(fromLogicalTypeIgnoreNullable(
-            branch.getSchema(), branch.getName(), ctx));
+            branch.getSchema(), branchRowName(rowName, branch), ctx));
         unionMeta.add(buildBranchMeta(branch));
       }
       org.apache.avro.Schema avroSchema =
@@ -181,6 +181,15 @@ public class LogicalTypeToAvroConverter {
     // normalize. Normalize would sort props alphabetically — visible deviation
     // from Flink's insertion-order emission.
     return isV1 ? result : result.normalize();
+  }
+
+  /**
+   * The name for a union branch's record, enum or fixed: the union's own name plus the branch's,
+   * as a struct field's record is named after its parent. A branch name alone repeats across
+   * unions, and Avro would make every type of that name the first one written.
+   */
+  private static String branchRowName(String unionRowName, UnionBranch branch) {
+    return unionRowName + "_" + branch.getName();
   }
 
   private static org.apache.avro.Schema fromLogicalTypeRaw(
@@ -377,18 +386,21 @@ public class LogicalTypeToAvroConverter {
           // Union members must not be nullable (Avro doesn't allow nested unions)
           org.apache.avro.Schema memberSchema =
               fromLogicalTypeIgnoreNullable(
-                  branch.getSchema(), branch.getName(), ctx);
+                  branch.getSchema(), branchRowName(rowName, branch), ctx);
           avroMembers.add(memberSchema);
         }
         return org.apache.avro.Schema.createUnion(avroMembers);
       }
       case MAP:
         return convertMap(schema, rowName, ctx);
-      case ARRAY:
-        return SchemaBuilder.builder()
+      case ARRAY: {
+        org.apache.avro.Schema array = SchemaBuilder.builder()
             .array()
             .items(fromLogicalTypeRaw(
                 schema.getElementType(), rowName, ctx));
+        addNestedUnionMeta(array, schema.getElementType(), ctx);
+        return array;
+      }
       case MULTISET:
         return convertMultiset(schema, rowName, ctx);
       default:
@@ -435,6 +447,7 @@ public class LogicalTypeToAvroConverter {
       org.apache.avro.Schema mapSchema =
           SchemaBuilder.builder().map().values(
               fromLogicalTypeRaw(valueType, rowName, ctx));
+      addNestedUnionMeta(mapSchema, valueType, ctx);
       int keyLength = keyType.getLength();
       if (keyLength < Schema.MAX_LENGTH && !ctx.isV1()) {
         // V1 (Flink-compat) drops key-length / CHAR-vs-VARCHAR info — Flink
@@ -474,6 +487,9 @@ public class LogicalTypeToAvroConverter {
         LogicalMap.createMap(rowName + "_Entry", keySchema, valueSchema);
     arr.getElementType().addProp(
         CommonConstants.CONNECT_INTERNAL_TYPE_PROP, CommonConstants.MAP_ENTRY_TYPE_NAME);
+    addNestedUnionMeta(arr.getElementType().getField(CommonConstants.KEY_FIELD), keyType, ctx);
+    addNestedUnionMeta(arr.getElementType().getField(CommonConstants.VALUE_FIELD), valueType,
+        ctx);
     return arr;
   }
 
@@ -693,6 +709,22 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
+  /**
+   * A union in a collection has no field of its own for {@code confluent:union}, so the branch
+   * names go on what holds it: the array, the map, or the entry record's key or value field.
+   */
+  private static void addNestedUnionMeta(
+      JsonProperties holder, Schema type, FromLogicalContext<org.apache.avro.Schema> ctx) {
+    if (ctx.isV1() || type.getType() != Schema.Type.UNION) {
+      return;
+    }
+    List<Map<String, Object>> unionMeta = new ArrayList<>();
+    for (UnionBranch branch : type.getBranches()) {
+      unionMeta.add(buildBranchMeta(branch));
+    }
+    holder.addProp(CONFLUENT_UNION_PROP, unionMeta);
+  }
+
   private static Map<String, Object> buildBranchMeta(UnionBranch branch) {
     Map<String, Object> entry = new LinkedHashMap<>();
     entry.put("name", branch.getName());
@@ -783,10 +815,19 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
+  // Avro forbids a union in a union, so a nullable UNION, as an array element or map value
+  // say, gets null among its members, as a nullable field's does.
   private static org.apache.avro.Schema nullableSchema(org.apache.avro.Schema schema) {
-    return schema.isNullable()
-        ? schema
-        : org.apache.avro.Schema.createUnion(SchemaBuilder.builder().nullType(), schema);
+    if (schema.isNullable()) {
+      return schema;
+    }
+    if (schema.getType() == org.apache.avro.Schema.Type.UNION) {
+      List<org.apache.avro.Schema> members = new ArrayList<>();
+      members.add(SchemaBuilder.builder().nullType());
+      members.addAll(schema.getTypes());
+      return org.apache.avro.Schema.createUnion(members);
+    }
+    return org.apache.avro.Schema.createUnion(SchemaBuilder.builder().nullType(), schema);
   }
 
   /**

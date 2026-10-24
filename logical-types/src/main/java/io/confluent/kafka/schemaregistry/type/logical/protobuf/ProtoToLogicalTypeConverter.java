@@ -772,8 +772,12 @@ public class ProtoToLogicalTypeConverter {
             ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
         branchParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(fieldDescriptor.getNumber()));
       }
+      // A member the writer renamed <oneof>_<branch> records the branch name.
+      final String branchName = getMeta(fieldDescriptor)
+          .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
+          .orElse(fieldDescriptor.getName());
       branches.add(new UnionBranch(
-          fieldDescriptor.getName(), fieldSchema, description, branchParams)
+          branchName, fieldSchema, description, branchParams)
           .setNativeNames(Collections.singletonList(fieldDescriptor.getName())));
     }
     return Schema.createUnion(branches).setNullable(true);
@@ -1526,9 +1530,10 @@ public class ProtoToLogicalTypeConverter {
   /**
    * Structural map-entry detection: the descriptor's name ends with
    * {@code Entry} and it has exactly two logical entities, named {@code key}
-   * (regular field or oneof) and {@code value} (regular field). A oneof
-   * counts as one entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;}
-   * entry — where {@code key} is a oneof — still matches.
+   * and {@code value}, each a regular field or a oneof. A oneof counts as one
+   * entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;} entry — where
+   * {@code key} is a oneof — or a {@code MAP&lt;K, UNION&lt;...&gt;&gt;} entry —
+   * where {@code value} is — still matches.
    *
    * <p>{@link #isMapDescriptor} uses it to route a repeated field to {@link #toMapSchema}, which
    * walks the entry with its key and value recording no implicit defaults.
@@ -1557,7 +1562,10 @@ public class ProtoToLogicalTypeConverter {
     }
     boolean hasKeyOneof = oneofs.stream()
         .anyMatch(o -> CommonConstants.KEY_FIELD.equals(o.getName()));
-    return (hasKeyRegular || hasKeyOneof) && hasValueRegular;
+    // A UNION value is a oneof too, as in MAP<K, UNION<...>>.
+    boolean hasValueOneof = oneofs.stream()
+        .anyMatch(o -> CommonConstants.VALUE_FIELD.equals(o.getName()));
+    return (hasKeyRegular || hasKeyOneof) && (hasValueRegular || hasValueOneof);
   }
 
   private static boolean isMapDescriptor(final FieldDescriptor fieldDescriptor) {
