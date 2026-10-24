@@ -557,6 +557,7 @@ public class AvroToLogicalTypeConverter {
         int pos = 0;
         for (org.apache.avro.Schema.Field field : avroSchema.getFields()) {
           final List<Integer> fieldIndex = appendToList(indexPath, field.pos());
+          final Map<String, Object> nameParams = readNameParams(avroSchema, field, ctx);
           ctx.pushFieldPath(field.name());
           // Temporarily set field-level union branch metadata
           Map<String, Object> savedMetadata = ctx.getUnionMetadata();
@@ -586,7 +587,7 @@ public class AvroToLogicalTypeConverter {
           }
 
           List<String> fieldTags = readFieldTags(field);
-          Map<String, Object> fieldParams = readFieldParams(field);
+          Map<String, Object> fieldParams = withNameParams(readFieldParams(field), nameParams);
           List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
               readFieldRules(field);
           fields.add(new Field(field.name(), fieldType, pos++,
@@ -665,6 +666,13 @@ public class AvroToLogicalTypeConverter {
           if (hintParams != null) {
             hintParams = Schema.stripFormatNativeParams(hintParams);
           }
+          String nameBase = ctx.getUnionNameBase(avroSchema);
+          if (nameBase != null && isGeneratedName(memberSchemas.get(i))
+              && !member.getNativeName().equals(nameBase + "_" + branchName)) {
+            hintParams = hintParams != null
+                ? new LinkedHashMap<>(hintParams) : new LinkedHashMap<>();
+            hintParams.put(AvroTypeNames.NAME, member.getNativeName());
+          }
           // Natively a branch is found by its type's full name, which Avro keeps unique.
           UnionBranch branch = new UnionBranch(branchName, member.getSchema(), hintDoc, hintParams)
               .setNativeNames(Collections.singletonList(member.getNativeName()));
@@ -695,6 +703,7 @@ public class AvroToLogicalTypeConverter {
     int pos = 0;
     for (org.apache.avro.Schema.Field field : avroSchema.getFields()) {
       final List<Integer> fieldIndex = appendToList(indexPath, field.pos());
+      final Map<String, Object> nameParams = readNameParams(avroSchema, field, ctx);
       ctx.pushFieldPath(field.name());
       Map<String, Object> savedMetadata = ctx.getUnionMetadata();
       ctx.setUnionMetadata(extractUnionMetadata(field));
@@ -718,7 +727,7 @@ public class AvroToLogicalTypeConverter {
       }
 
       List<String> fieldTags = readFieldTags(field);
-      Map<String, Object> fieldParams = readFieldParams(field);
+      Map<String, Object> fieldParams = withNameParams(readFieldParams(field), nameParams);
       List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
           readFieldRules(field);
       fields.add(new Field(field.name(), fieldType, pos++,
@@ -1110,6 +1119,169 @@ public class AvroToLogicalTypeConverter {
         readRules(avroSchema.getObjectProp("confluent:rules"));
     if (!rules.isEmpty()) {
       schema.setRules(rules);
+    }
+  }
+
+  /**
+   * The avro.* name params of a field whose generated type names do not all derive from
+   * {@code <record>_<field>}: the base they derive from instead, and any name that follows neither.
+   * Registers the base of the field's union, whose branches carry their own exceptions.
+   */
+  private static Map<String, Object> readNameParams(org.apache.avro.Schema record,
+      org.apache.avro.Schema.Field field, ToLogicalContext<org.apache.avro.Schema> ctx) {
+    return nameParams(record, field, ctx, false);
+  }
+
+  /** The params that pin the names of a field's generated types, as a rename must keep them. */
+  static Map<String, Object> pinNameParams(
+      org.apache.avro.Schema record, org.apache.avro.Schema.Field field) {
+    return nameParams(record, field, null, true);
+  }
+
+  private static Map<String, Object> nameParams(org.apache.avro.Schema record,
+      org.apache.avro.Schema.Field field, ToLogicalContext<org.apache.avro.Schema> ctx,
+      boolean pin) {
+    String derived = record.getFullName() + "_" + field.name();
+    GeneratedNames at = new GeneratedNames(field.schema());
+    String base = at.base(unionHints(extractUnionMetadata(field).get(CONFLUENT_UNION_PROP)));
+    if (base == null) {
+      base = derived;
+    }
+    Map<String, Object> params = new LinkedHashMap<>();
+    if (pin ? at.generatesAny() : !base.equals(derived)) {
+      params.put(AvroTypeNames.NAME, base);
+    }
+    if (at.entry != null && !at.entry.getFullName().equals(base + AvroTypeNames.ENTRY_SUFFIX)) {
+      params.put(AvroTypeNames.ENTRY_NAME, at.entry.getFullName());
+    }
+    if (at.key != null && !at.key.getFullName().equals(base + AvroTypeNames.KEY_SUFFIX)) {
+      params.put(AvroTypeNames.KEY_NAME, at.key.getFullName());
+    }
+    if (at.value != null && !at.value.getFullName().equals(base + AvroTypeNames.VALUE_SUFFIX)) {
+      params.put(AvroTypeNames.VALUE_NAME, at.value.getFullName());
+    }
+    if (at.union != null && ctx != null) {
+      ctx.putUnionNameBase(at.union, base);
+    }
+    return params;
+  }
+
+  private static Map<String, Object> withNameParams(
+      Map<String, Object> params, Map<String, Object> nameParams) {
+    if (nameParams.isEmpty()) {
+      return params;
+    }
+    Map<String, Object> result = new LinkedHashMap<>(params);
+    result.putAll(nameParams);
+    return result;
+  }
+
+  // A type whose name the writer generates rather than takes from a named type.
+  private static boolean isGeneratedName(org.apache.avro.Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        return isAnonymous(schema) && !isVariantRecord(schema);
+      case ENUM:
+        return isAnonymous(schema);
+      case FIXED:
+        return !CommonConstants.AVRO_LOGICAL_DECIMAL.equalsIgnoreCase(
+            schema.getProp(CommonConstants.AVRO_LOGICAL_TYPE_PROP));
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * The generated-name types under a field, where the writer names them from the field's base:
+   * its own type, through nullable unions, arrays and string-keyed maps; a map's entry, key and
+   * value types; and its union. Types further down, as in a map's value map, keep path names.
+   */
+  private static final class GeneratedNames {
+    private org.apache.avro.Schema self;
+    private org.apache.avro.Schema entry;
+    private org.apache.avro.Schema key;
+    private org.apache.avro.Schema value;
+    private org.apache.avro.Schema union;
+
+    private GeneratedNames(org.apache.avro.Schema schema) {
+      walk(schema);
+    }
+
+    private void walk(org.apache.avro.Schema schema) {
+      switch (schema.getType()) {
+        case UNION: {
+          List<org.apache.avro.Schema> members = nonNull(schema);
+          if (members.size() == 1) {
+            walk(members.get(0));
+          } else {
+            union = schema;
+          }
+          break;
+        }
+        case ARRAY:
+          if (isLogicalMap(schema)) {
+            entry = schema.getElementType();
+            key = new GeneratedNames(entry.getField(CommonConstants.KEY_FIELD).schema()).self;
+            value = new GeneratedNames(entry.getField(CommonConstants.VALUE_FIELD).schema()).self;
+          } else {
+            walk(schema.getElementType());
+          }
+          break;
+        case MAP:
+          walk(schema.getValueType());
+          break;
+        default:
+          if (isGeneratedName(schema)) {
+            self = schema;
+          }
+          break;
+      }
+    }
+
+    private boolean generatesAny() {
+      if (self != null || entry != null) {
+        return true;
+      }
+      return union != null && nonNull(union).stream().anyMatch(s -> isGeneratedName(s));
+    }
+
+    // The base the names derive from, or null if none of them says.
+    private String base(List<Map<String, Object>> hints) {
+      if (self != null) {
+        return self.getFullName();
+      }
+      String base = strip(entry, AvroTypeNames.ENTRY_SUFFIX);
+      if (base == null) {
+        base = strip(key, AvroTypeNames.KEY_SUFFIX);
+      }
+      if (base == null) {
+        base = strip(value, AvroTypeNames.VALUE_SUFFIX);
+      }
+      if (base == null && union != null && hints != null) {
+        List<org.apache.avro.Schema> members = nonNull(union);
+        for (int i = 0; i < members.size() && i < hints.size() && base == null; i++) {
+          Object name = hints.get(i).get("name");
+          if (name != null && isGeneratedName(members.get(i))) {
+            base = strip(members.get(i), "_" + name);
+          }
+        }
+      }
+      return base;
+    }
+
+    private static List<org.apache.avro.Schema> nonNull(org.apache.avro.Schema union) {
+      return union.getTypes().stream()
+          .filter(s -> s.getType() != NULL)
+          .collect(Collectors.toList());
+    }
+
+    private static String strip(org.apache.avro.Schema schema, String suffix) {
+      if (schema == null) {
+        return null;
+      }
+      String name = schema.getFullName();
+      return name.endsWith(suffix) && name.length() > suffix.length()
+          ? name.substring(0, name.length() - suffix.length()) : null;
     }
   }
 

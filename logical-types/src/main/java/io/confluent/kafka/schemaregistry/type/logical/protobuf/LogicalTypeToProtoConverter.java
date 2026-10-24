@@ -92,6 +92,44 @@ public class LogicalTypeToProtoConverter {
           Schema.Type.STRUCT);
 
   /**
+   * The params that pin the name of the message or enum the root struct's regular field
+   * {@code fieldName} generates, as {@code fromLogicalType} names it now: put on the field before
+   * renaming it, they keep the name, which the Protobuf compatibility checks compare. Empty for a
+   * field that generates none.
+   */
+  public static Map<String, Object> typeNameParams(
+      LogicalType logicalType, String rowName, String fieldName) {
+    String name = ProtoToLogicalTypeConverter.pinTypeName(rootMessage(logicalType, rowName),
+        fieldName);
+    return name != null && !isNamedTypeRef(logicalType, fieldName)
+        ? Collections.singletonMap(ProtoTypeNames.NAME, name) : Collections.emptyMap();
+  }
+
+  /**
+   * The params that pin the names of the messages and enums the members of the root struct's
+   * UNION field {@code fieldName} generate, by branch name, as {@link #typeNameParams} for a field.
+   */
+  public static Map<String, Map<String, Object>> branchTypeNameParams(
+      LogicalType logicalType, String rowName, String fieldName) {
+    Map<String, Map<String, Object>> params = new LinkedHashMap<>();
+    ProtoToLogicalTypeConverter.pinBranchTypeNames(rootMessage(logicalType, rowName), fieldName)
+        .forEach((branch, name) -> params.put(branch,
+            Collections.singletonMap(ProtoTypeNames.NAME, name)));
+    return params;
+  }
+
+  private static Descriptor rootMessage(LogicalType logicalType, String rowName) {
+    // The writer emits the root message first.
+    return fromLogicalType(logicalType, rowName).toDescriptor().getFile().getMessageTypes().get(0);
+  }
+
+  private static boolean isNamedTypeRef(LogicalType logicalType, String fieldName) {
+    Schema root = logicalType.getRootSchema();
+    return root.getType() == Schema.Type.STRUCT && root.getField(fieldName) != null
+        && root.getField(fieldName).getSchema().getType() == Schema.Type.NAMED_TYPE_REF;
+  }
+
+  /**
    * LT leaf types that wrap as their canonical well-known proto message at
    * root. Mirrors ProtobufData's wrapper-at-root pattern: the resulting
    * ProtobufSchema's root descriptor IS the well-known wrapper, with no
@@ -218,6 +256,7 @@ public class LogicalTypeToProtoConverter {
 
     FromLogicalContext<GenericDescriptor> ctx =
         new FromLogicalContext<>(logicalType, version);
+    ctx.setTypeNames(new ProtoTypeNames());
 
     // Pre-populate cache with all named types (messages and enums, including
     // nested) from each external schema. Each registered type gets a renamed
@@ -356,7 +395,14 @@ public class LogicalTypeToProtoConverter {
    */
   private static String toMessageName(String fieldName, String suffix,
                                       FromLogicalContext<?> ctx) {
-    if (ctx.isV1()) {
+    String derived = derivedMessageName(fieldName, suffix, ctx.isV1());
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    return names != null ? names.name(fieldName, suffix, derived) : derived;
+  }
+
+  // The name toMessageName gives a type when no param pins one or takes it.
+  static String derivedMessageName(String fieldName, String suffix, boolean v1) {
+    if (v1) {
       if (suffix.equals(CommonConstants.MAP_ENTRY_SUFFIX)) {
         // Match Flink's exact algorithm: concatenate field + "_" + suffix,
         // then run the whole thing through LOWER_UNDERSCORE → UPPER_CAMEL.
@@ -703,6 +749,20 @@ public class LogicalTypeToProtoConverter {
       Schema schema, String rowName, Set<String> dependencies,
       List<NestedChild> userNested,
       FromLogicalContext<GenericDescriptor> ctx) {
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    names.enter(schema);
+    try {
+      return buildStructType(schema, rowName, dependencies, userNested, ctx);
+    } finally {
+      names.exit();
+    }
+  }
+
+  // Fields pinned to one name with one body, as a shared hand-written message, define it once.
+  private static DescriptorProto buildStructType(
+      Schema schema, String rowName, Set<String> dependencies,
+      List<NestedChild> userNested,
+      FromLogicalContext<GenericDescriptor> ctx) {
     final DescriptorProto.Builder builder = DescriptorProto.newBuilder();
     builder.setName(rowName);
     // Add schema-level doc/tags/params via MessageOptions (skipped in V1).
@@ -822,8 +882,8 @@ public class LogicalTypeToProtoConverter {
         builder.addField(fieldProtoBuilder.build());
       }
     }
-    builder.addAllNestedType(nestedRows);
-    builder.addAllEnumType(nestedEnums);
+    builder.addAllNestedType(new LinkedHashSet<>(nestedRows));
+    builder.addAllEnumType(new LinkedHashSet<>(nestedEnums));
     // User-declared nested types (Outer.Inner under Outer) emitted last so
     // they don't interleave with synthesized wrapper messages. The
     // logical.named marker lets the reader distinguish user-marked named
