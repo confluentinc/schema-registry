@@ -216,6 +216,52 @@ class LogicalTypeToAvroConverterTest {
         AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(avro))).replaceAll("\\s+", " ");
   }
 
+  // Path names can repeat (a.b and a_b are both p_a_b); Avro would write the second type as a
+  // reference to the first, so the converter refuses them unless the two are identical.
+  @Test
+  void testTypeNameGeneratedTwice() {
+    assertTypeNameTaken("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(y STRING));",
+        "'p_a_b'", "at a.b and a_b");
+    assertTypeNameTaken(
+        "STRUCT p (a STRUCT(b STRUCT(x INT COMMENT 'one')), a_b STRUCT(x INT COMMENT 'two'));",
+        "'p_a_b'", "at a.b and a_b");
+    assertTypeNameTaken(
+        "STRUCT p (a STRUCT(b_c STRUCT(x INT)), a_b STRUCT(c STRUCT(y STRING)));",
+        "'p_a_b_c'", "at a.b_c and a_b.c");
+    assertTypeNameTaken("STRUCT p (u UNION(b STRUCT(x INT), s STRING), u_b STRUCT(y STRING));",
+        "'p_u_b'", "at u and u_b");
+  }
+
+  @Test
+  void testTypeNameGeneratedTwiceForIdenticalTypes() {
+    String avro = toAvroText("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(x INT));");
+    assertThat(avro).contains("{\"name\":\"a_b\",\"type\":[\"null\",\"p_a_b\"]}");
+    assertThat(roundTrip(avro)).contains("a STRUCT(b STRUCT(x INT)), a_b STRUCT(x INT)");
+  }
+
+  // V1 names every map entry record io.confluent.connect.avro.MapEntry, as Flink does.
+  @Test
+  void testV1MapEntriesOfTwoMaps() {
+    assertThat(toV1AvroText("STRUCT p (m MAP<INT, STRING>, n MAP<INT, STRING>);"))
+        .contains("\"name\":\"n\",\"type\":[\"null\",{\"type\":\"array\","
+            + "\"items\":\"io.confluent.connect.avro.MapEntry\"");
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> toV1AvroText("STRUCT p (m MAP<INT, STRING>, n MAP<INT, BIGINT>);"));
+    assertThat(e.getMessage()).contains("'io.confluent.connect.avro.MapEntry'", "at m and n");
+  }
+
+  private static String toV1AvroText(String ddl) {
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    return LogicalTypeToAvroConverter.fromLogicalType(
+        visitor.toLogicalType(), "p", LogicalTypeVersion.V1).canonicalString();
+  }
+
+  private static void assertTypeNameTaken(String ddl, String name, String paths) {
+    ValidationException e = assertThrows(ValidationException.class, () -> toAvroText(ddl));
+    assertThat(e.getMessage()).contains(name, paths);
+  }
+
   @Test
   void testInvalidFieldNames() {
     Schema struct = Schema.createStruct(Arrays.asList(

@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -102,6 +103,7 @@ public class LogicalTypeToAvroConverter {
           null, null, null, false);
       collectNamedSchemas(parsed.rawSchema(), visited, ctx);
     }
+    Set<String> externalNames = new HashSet<>(visited);
 
     Map<String, String> metadataProps = new LinkedHashMap<>();
     metadataProps.put(CONFLUENT_EDITION_PROP, version == LogicalTypeVersion.V1 ? "1" : "2");
@@ -132,7 +134,7 @@ public class LogicalTypeToAvroConverter {
       } catch (JsonProcessingException e) {
         throw new ValidationException("Failed to serialize union metadata", e);
       }
-
+      checkDistinctNames(avroSchema, externalNames);
       return applyMetadata(avroSchema, metadataProps, logicalType, ctx.isV1());
     }
     // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits under its own name, taking
@@ -148,6 +150,7 @@ public class LogicalTypeToAvroConverter {
         fromLogicalTypeIgnoreNullable(schema, rootName, ctx);
     org.apache.avro.Schema result = schema.isNullable()
         ? nullableSchema(notNullSchema) : notNullSchema;
+    checkDistinctNames(result, externalNames);
     return applyMetadata(result, metadataProps, logicalType, ctx.isV1());
   }
 
@@ -776,6 +779,65 @@ public class LogicalTypeToAvroConverter {
    * Recursively walks an Avro schema and registers every RECORD and ENUM
    * named type in the converter cache, keyed by full name. FIXED is skipped.
    */
+  /**
+   * Refuses two different named types with the same full name, e.g. the records of {@code a.b}
+   * and {@code a_b}: Avro would write the second as a reference to the first, replacing it.
+   * Identical JSON bodies are allowed; {@code equals} would miss docs and aliases.
+   */
+  private static void checkDistinctNames(
+      org.apache.avro.Schema schema, Set<String> externalNames) {
+    checkDistinctNames(schema, "", new HashMap<>(), new HashMap<>(), externalNames);
+  }
+
+  private static void checkDistinctNames(
+      org.apache.avro.Schema schema, String path, Map<String, org.apache.avro.Schema> seen,
+      Map<String, String> seenAt, Set<String> externalNames) {
+    switch (schema.getType()) {
+      case RECORD:
+      case ENUM:
+      case FIXED: {
+        String name = schema.getFullName();
+        org.apache.avro.Schema prior = seen.putIfAbsent(name, schema);
+        if (prior != null) {
+          if (prior != schema && !prior.toString().equals(schema.toString())) {
+            throw new ValidationException("Avro type name '" + name + "' is used for two "
+                + "different types, at " + describePath(seenAt.get(name)) + " and "
+                + describePath(path) + "; rename one of them");
+          }
+          return;
+        }
+        seenAt.put(name, path);
+        // An external's own nested types may be separate copies of one type; they aren't ours.
+        if (schema.getType() == org.apache.avro.Schema.Type.RECORD
+            && !externalNames.contains(name)) {
+          for (org.apache.avro.Schema.Field field : schema.getFields()) {
+            checkDistinctNames(field.schema(),
+                path.isEmpty() ? field.name() : path + "." + field.name(),
+                seen, seenAt, externalNames);
+          }
+        }
+        break;
+      }
+      case UNION:
+        for (org.apache.avro.Schema member : schema.getTypes()) {
+          checkDistinctNames(member, path, seen, seenAt, externalNames);
+        }
+        break;
+      case ARRAY:
+        checkDistinctNames(schema.getElementType(), path, seen, seenAt, externalNames);
+        break;
+      case MAP:
+        checkDistinctNames(schema.getValueType(), path, seen, seenAt, externalNames);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static String describePath(String path) {
+    return path.isEmpty() ? "the root" : path;
+  }
+
   private static void collectNamedSchemas(
       org.apache.avro.Schema schema,
       java.util.Set<String> visited,

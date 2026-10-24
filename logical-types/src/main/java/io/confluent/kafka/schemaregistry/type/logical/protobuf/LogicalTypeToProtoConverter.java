@@ -58,11 +58,13 @@ import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -534,6 +536,7 @@ public class LogicalTypeToProtoConverter {
         fileBuilder.setPackage(packageName);
       }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
+      checkDistinctNames(fileDescriptorProto);
       return FileDescriptor.buildFrom(
               fileDescriptorProto,
               Stream.concat(
@@ -552,6 +555,59 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  /**
+   * Refuses a name defined twice in one scope, e.g. the messages of union branch {@code f0.b0} and
+   * field {@code f0_b0}, which are both F0B0Row; the descriptor build would only fail opaquely.
+   */
+  private static void checkDistinctNames(FileDescriptorProto file) {
+    final Map<String, String> kinds = new HashMap<>();
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      claimName(kinds, message.getName(), "message", "the schema", List.of());
+    }
+    for (EnumDescriptorProto enumType : file.getEnumTypeList()) {
+      claimName(kinds, enumType.getName(), "enum", "the schema", List.of());
+    }
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      checkDistinctNames(message, message.getName());
+    }
+  }
+
+  private static void checkDistinctNames(DescriptorProto message, String scope) {
+    final Map<String, String> kinds = new HashMap<>();
+    final List<FieldDescriptorProto> fields = message.getFieldList();
+    for (FieldDescriptorProto field : fields) {
+      claimName(kinds, field.getName(), "field", scope, List.of());
+    }
+    for (OneofDescriptorProto oneof : message.getOneofDeclList()) {
+      claimName(kinds, oneof.getName(), "oneof", scope, List.of());
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      claimName(kinds, nested.getName(), "message", scope, fields);
+    }
+    for (EnumDescriptorProto nested : message.getEnumTypeList()) {
+      claimName(kinds, nested.getName(), "enum", scope, fields);
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      checkDistinctNames(nested, scope + "." + nested.getName());
+    }
+  }
+
+  private static void claimName(Map<String, String> kinds, String name, String kind,
+      String scope, List<FieldDescriptorProto> fields) {
+    final String prior = kinds.putIfAbsent(name, kind);
+    if (prior == null) {
+      return;
+    }
+    final List<String> users = fields.stream()
+        .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
+        .map(FieldDescriptorProto::getName)
+        .collect(Collectors.toList());
+    throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
+        + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
+        + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
+        + "; rename one of the fields it is generated from");
   }
 
   // Members share the message's field namespace: a branch name already taken is qualified by the

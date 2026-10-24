@@ -1393,6 +1393,55 @@ class LogicalTypeToProtoConverterTest {
     assertThat(e.getMessage()).contains("'u_b0'");
   }
 
+  // Branch u.b and field u_b both name their message UBRow in p.
+  @Test
+  void testUnionBranchMessageNameTakenByField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b", struct("x").setNullable(false)),
+            new UnionBranch("s", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("u_b", struct("y"), 1)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> convertSchema(rootSchema));
+    assertThat(e.getMessage()).contains("'UBRow'", "used by fields b, u_b");
+  }
+
+  @Test
+  void testMessageNamesThatDifferOnlyInUnderscoresOrCase() {
+    assertMessageNameTaken("a_b", "aB", "'ABRow'");
+    assertMessageNameTaken("ab", "Ab", "'AbRow'");
+  }
+
+  // V1 names a struct field's message <field>_Row, which a field of that name already takes.
+  @Test
+  void testV1MessageNameTakenByField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("a", struct("x"), 0),
+        new Field("a_Row", Schema.create(Schema.Type.INT), 1)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class, () ->
+        LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(rootSchema), "p", LogicalTypeVersion.V1));
+    assertThat(e.getMessage()).contains("'a_Row'", "as a field and a message");
+  }
+
+  private static void assertMessageNameTaken(String field0, String field1, String name) {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field(field0, struct("x"), 0),
+        new Field(field1, struct("y"), 1)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> convertSchema(rootSchema));
+    assertThat(e.getMessage()).contains(name, "used by fields " + field0 + ", " + field1);
+  }
+
+  private static Schema struct(String field) {
+    return Schema.createStruct(Arrays.asList(
+        new Field(field, Schema.create(Schema.Type.INT), 0)));
+  }
+
   private static Schema sameNamedBranches(Schema s0) {
     return Schema.createUnion(Arrays.asList(
         new UnionBranch("b0", Schema.createStruct(Arrays.asList(new Field("s0", s0, 0)))
