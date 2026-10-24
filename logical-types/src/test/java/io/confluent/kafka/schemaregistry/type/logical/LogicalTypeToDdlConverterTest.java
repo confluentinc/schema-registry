@@ -452,4 +452,58 @@ class LogicalTypeToDdlConverterTest {
             + "  optional bytes b = 1 [default = \"ab\"];\n}\n")));
     assertTrue(ddl.contains("DEFAULT x'6162'"), ddl);
   }
+
+  @Test
+  void temporalDefaultsAreQuotedAndRoundTrip() {
+    // {column as written, literal expected in the emitted DDL}
+    String[][] cases = {
+        {"d DATE DEFAULT '2026-01-02'", "'2026-01-02'"},
+        {"t TIME DEFAULT '03:04:05'", "'03:04:05'"},
+        {"t TIME DEFAULT '03:04:00'", "'03:04:00'"},
+        {"ts TIMESTAMP DEFAULT '2026-01-02T03:04:05'", "'2026-01-02T03:04:05'"},
+        {"ts TIMESTAMP DEFAULT '2026-01-02T03:04:00'", "'2026-01-02T03:04:00'"},
+        {"ltz TIMESTAMP_LTZ DEFAULT '2026-01-02T03:04:05Z'", "'2026-01-02T03:04:05Z'"},
+        // Instant's range ends, beyond LocalDateTime's
+        {"ltz TIMESTAMP_LTZ DEFAULT '+1000000000-01-01T00:00:00Z'",
+            "'+1000000000-01-01T00:00:00Z'"},
+        {"ltz TIMESTAMP_LTZ DEFAULT '-1000000000-01-01T00:00:00Z'",
+            "'-1000000000-01-01T00:00:00Z'"},
+    };
+    for (String[] c : cases) {
+      assertTemporalDefaultRoundTrips(c[0], c[1]);
+    }
+  }
+
+  @Test
+  void temporalDefaultFractionsAreTrimmedToTheirSetDigits() {
+    // toString() pads a fraction to 3, 6 or 9 digits, which the parser refuses beyond the precision
+    String[][] cases = {
+        {"t TIME(1) DEFAULT '03:04:05.1'", "'03:04:05.1'"},
+        {"t TIME(3) DEFAULT '03:04:05.123'", "'03:04:05.123'"},
+        {"t TIME(3) DEFAULT '03:04:05.120'", "'03:04:05.12'"},
+        {"t TIME(3) DEFAULT '03:04:05'", "'03:04:05'"},
+        {"t TIME(4) DEFAULT '03:04:05.1234'", "'03:04:05.1234'"},
+        {"ts TIMESTAMP(1) DEFAULT '2026-01-02T03:04:05.1'", "'2026-01-02T03:04:05.1'"},
+        {"ts TIMESTAMP(3) DEFAULT '2026-01-02T03:04:05.123'", "'2026-01-02T03:04:05.123'"},
+        {"ts TIMESTAMP(4) DEFAULT '2026-01-02T03:04:05.1234'", "'2026-01-02T03:04:05.1234'"},
+        {"ltz TIMESTAMP_LTZ(1) DEFAULT '2026-01-02T03:04:05.1Z'", "'2026-01-02T03:04:05.1Z'"},
+        {"ltz TIMESTAMP_LTZ(3) DEFAULT '2026-01-02T03:04:05.123Z'",
+            "'2026-01-02T03:04:05.123Z'"},
+        {"ltz TIMESTAMP_LTZ(4) DEFAULT '2026-01-02T03:04:05.1234Z'",
+            "'2026-01-02T03:04:05.1234Z'"},
+    };
+    for (String[] c : cases) {
+      assertTemporalDefaultRoundTrips(c[0], c[1]);
+    }
+  }
+
+  // Emits the column's DDL, checks the default literal, and parses the emitted DDL back.
+  private static void assertTemporalDefaultRoundTrips(String column, String expectedLiteral) {
+    LogicalType original = parse("STRUCT T (" + column + ");");
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.contains("DEFAULT " + expectedLiteral), column + " emitted:\n" + ddl);
+    assertEquals(original.getRootSchema().getFields().get(0).getDefaultValue(),
+        parse(ddl).getRootSchema().getFields().get(0).getDefaultValue(), ddl);
+    assertRoundTrip(original);
+  }
 }
