@@ -151,13 +151,13 @@ public class Difference {
       message = "A type at path '" + jsonPath + "' is different between the "
                   + "%s schema and the %s schema";
     } else {
-      message = propertyOrItemError();
+      message = propertyOrItemError(jsonPath);
     }
     return message;
   }
 
   @SuppressWarnings("CyclomaticComplexity")
-  private String propertyOrItemError() {
+  private String propertyOrItemError(final String jsonPath) {
     if (propertyOrItemAddedToOpen.contains(type)) {
       return "The %s schema has an open content model and has a property or item at "
                + "path '" + jsonPath + "' which is missing in the %s schema";

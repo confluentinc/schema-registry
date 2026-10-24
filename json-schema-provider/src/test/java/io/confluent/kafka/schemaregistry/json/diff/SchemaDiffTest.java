@@ -347,9 +347,17 @@ public class SchemaDiffTest {
 
   @Test
   public void testPercentInPropertyNameSurvivesMessageFormatting() {
-    final List<String> errors = backwardErrors(
+    // A type change, and a required property added to an open content model
+    List<String> errors = backwardErrors(
         "{\"properties\":{\"a%d\":{\"type\":\"string\"}}}",
         "{\"properties\":{\"a%d\":{\"type\":\"number\"}}}");
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("'#/properties/a%d'"));
+    errors = backwardErrors(
+        "{\"type\":\"object\"}",
+        "{\"type\":\"object\",\"properties\":{\"a%d\":{\"type\":\"string\"}},"
+            + "\"required\":[\"a%d\"]}");
+    Assert.assertTrue(errors.get(0), errors.get(0).startsWith(
+        "{errorType:\"REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL\""));
     Assert.assertTrue(errors.get(0), errors.get(0).contains("'#/properties/a%d'"));
   }
 
