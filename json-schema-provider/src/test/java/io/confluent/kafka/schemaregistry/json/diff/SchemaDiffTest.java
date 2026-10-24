@@ -27,6 +27,7 @@ import java.io.BufferedReader;
 import java.util.concurrent.CancellationException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -250,6 +251,133 @@ public class SchemaDiffTest {
       oneOf.put(new JSONObject().put("$ref", "#/definitions/" + type));
     }
     return new JSONObject().put("oneOf", oneOf);
+  }
+
+  private static final String DRAFT_07 = "http://json-schema.org/draft-07/schema#";
+  private static final String DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
+
+  @Test
+  public void testReferenceChainsAreFollowedToTheirTarget() {
+    for (String draft : new String[] {DRAFT_07, DRAFT_2020_12}) {
+      for (boolean nullable : new boolean[] {false, true}) {
+        for (int originalHops : new int[] {1, 2, 3}) {
+          for (int updateHops : new int[] {1, 2, 3}) {
+            final String label = draft + " nullable=" + nullable
+                + " hops " + originalHops + "->" + updateHops;
+            assertEquals(label, Collections.emptyList(), diff(
+                refHopsSchema(draft, nullable, originalHops, "integer"),
+                refHopsSchema(draft, nullable, updateHops, "integer")));
+            Assert.assertTrue(label, diff(
+                refHopsSchema(draft, nullable, originalHops, "integer"),
+                refHopsSchema(draft, nullable, updateHops, "string")).stream()
+                .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(d.getType())));
+          }
+        }
+      }
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void testReferenceOnlyCycleFailsCleanly() {
+    final Schema schema = new JsonSchema(referenceOnlyCycleSchema("B")).rawSchema();
+    InvalidReferenceException e = Assert.assertThrows(InvalidReferenceException.class,
+        () -> SchemaDiff.compare(schema, schema));
+    Assert.assertTrue(e.getMessage(), e.getMessage().startsWith("Cyclic $ref"));
+  }
+
+  @Test(timeout = 10000)
+  public void testReferenceOnlyCycleIsReportedAsIncompatible() {
+    // A → B → A and the self-reference A → A
+    for (String target : new String[] {"B", "A"}) {
+      final JsonSchema schema = new JsonSchema(referenceOnlyCycleSchema(target));
+      final List<String> errors = schema.isBackwardCompatible(schema);
+      assertEquals(target, 1, errors.size());
+      Assert.assertTrue(errors.get(0), errors.get(0).startsWith(
+          "{errorType:\"INVALID_REFERENCE\", description:\"Cyclic $ref '#/definitions/"));
+    }
+  }
+
+  // Property "addr" refers to definition A, which is only a $ref to aTarget; B refers back to A.
+  private static String referenceOnlyCycleSchema(final String aTarget) {
+    final JSONObject definitions = new JSONObject()
+        .put("A", new JSONObject().put("$ref", "#/definitions/" + aTarget))
+        .put("B", new JSONObject().put("$ref", "#/definitions/A"));
+    return new JSONObject()
+        .put("$schema", DRAFT_07)
+        .put("type", "object")
+        .put("definitions", definitions)
+        .put("properties", new JSONObject()
+            .put("addr", new JSONObject().put("$ref", "#/definitions/A")))
+        .toString();
+  }
+
+  @Test
+  public void testExclusiveMaximumDecreaseIsDetected() {
+    // Without a maximum, and with an unchanged maximum above both limits
+    for (String maximum : new String[] {"", ",\"maximum\":20"}) {
+      assertEquals(maximum, Collections.singletonList(Difference.Type.EXCLUSIVE_MAXIMUM_DECREASED),
+          types(diff(
+              "{\"$schema\":\"" + DRAFT_07 + "\",\"type\":\"number\",\"exclusiveMaximum\":10"
+                  + maximum + "}",
+              "{\"$schema\":\"" + DRAFT_07 + "\",\"type\":\"number\",\"exclusiveMaximum\":5"
+                  + maximum + "}")));
+    }
+  }
+
+  @Test
+  public void testNonStringConnectTypeIsATypeChange() {
+    for (String connectType : new String[] {"1", "{}"}) {
+      assertEquals(connectType, Collections.singletonList(Difference.Type.TYPE_CHANGED),
+          types(diff(
+              "{\"type\":\"string\",\"connect.type\":" + connectType + "}",
+              "{\"type\":\"number\",\"connect.type\":" + connectType + "}")));
+    }
+  }
+
+  @Test
+  public void testNullConstIsCompared() {
+    final String nullConst = "{\"$schema\":\"" + DRAFT_07 + "\",\"const\":null}";
+    final String oneConst = "{\"$schema\":\"" + DRAFT_07 + "\",\"const\":1}";
+    assertEquals(Collections.emptyList(), diff(nullConst, nullConst));
+    assertEquals(Collections.singletonList(Difference.Type.ENUM_ARRAY_CHANGED),
+        types(diff(nullConst, oneConst)));
+  }
+
+  private static List<Difference.Type> types(final List<Difference> differences) {
+    return differences.stream().map(Difference::getType).collect(toList());
+  }
+
+  private static List<Difference> diff(final String original, final String update) {
+    return SchemaDiff.compare(
+        new JsonSchema(original).rawSchema(), new JsonSchema(update).rawSchema());
+  }
+
+  // Property "addr" reaches object A (with property "n" of type nType) through hops references:
+  // 1 is a direct $ref to A; each extra hop is a definition that is only a $ref to the next.
+  private static String refHopsSchema(
+      final String draft, final boolean nullable, final int hops, final String nType) {
+    final String defsKeyword = DRAFT_07.equals(draft) ? "definitions" : "$defs";
+    final String prefix = "#/" + defsKeyword + "/";
+    final JSONObject defs = new JSONObject().put("A", new JSONObject()
+        .put("type", "object")
+        .put("properties", new JSONObject().put("n", new JSONObject().put("type", nType))));
+    String target = "A";
+    for (int i = 1; i < hops; i++) {
+      defs.put("R" + i, new JSONObject().put("$ref", prefix + target));
+      target = "R" + i;
+    }
+    JSONObject addr = new JSONObject().put("$ref", prefix + target);
+    if (nullable) {
+      addr = new JSONObject().put("oneOf", new JSONArray()
+          .put(new JSONObject().put("type", "null"))
+          .put(addr));
+    }
+    return new JSONObject()
+        .put("$schema", draft)
+        .put("type", "object")
+        .put(defsKeyword, defs)
+        .put("properties", new JSONObject().put("addr", addr))
+        .toString();
   }
 
   @Test
