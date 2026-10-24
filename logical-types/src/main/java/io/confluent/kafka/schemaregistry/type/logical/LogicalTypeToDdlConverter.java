@@ -20,7 +20,6 @@ import com.google.protobuf.ByteString;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -699,14 +698,19 @@ public final class LogicalTypeToDdlConverter {
         .append(TIME_TEXT)
         .toFormatter();
 
+    // Formats the Instant directly: converting to LocalDateTime (or setting a zone) fails for
+    // instants in years +/-1000000000, which Instant allows and LocalDateTime does not.
+    private static final DateTimeFormatter INSTANT_TEXT = new DateTimeFormatterBuilder()
+        .appendInstant(-1)
+        .toFormatter();
+
     private static String temporalText(Object value) {
       if (value instanceof LocalTime) {
         return TIME_TEXT.format((LocalTime) value);
       } else if (value instanceof LocalDateTime) {
         return TIMESTAMP_TEXT.format((LocalDateTime) value);
       } else if (value instanceof Instant) {
-        return TIMESTAMP_TEXT.format(LocalDateTime.ofInstant((Instant) value, ZoneOffset.UTC))
-            + "Z";
+        return INSTANT_TEXT.format((Instant) value);
       }
       return value.toString();
     }

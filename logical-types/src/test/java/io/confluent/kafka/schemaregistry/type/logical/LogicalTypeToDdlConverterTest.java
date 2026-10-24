@@ -463,6 +463,11 @@ class LogicalTypeToDdlConverterTest {
         {"ts TIMESTAMP DEFAULT '2026-01-02T03:04:05'", "'2026-01-02T03:04:05'"},
         {"ts TIMESTAMP DEFAULT '2026-01-02T03:04:00'", "'2026-01-02T03:04:00'"},
         {"ltz TIMESTAMP_LTZ DEFAULT '2026-01-02T03:04:05Z'", "'2026-01-02T03:04:05Z'"},
+        // Instant's range ends, beyond LocalDateTime's
+        {"ltz TIMESTAMP_LTZ DEFAULT '+1000000000-01-01T00:00:00Z'",
+            "'+1000000000-01-01T00:00:00Z'"},
+        {"ltz TIMESTAMP_LTZ DEFAULT '-1000000000-01-01T00:00:00Z'",
+            "'-1000000000-01-01T00:00:00Z'"},
     };
     for (String[] c : cases) {
       assertTemporalDefaultRoundTrips(c[0], c[1]);
