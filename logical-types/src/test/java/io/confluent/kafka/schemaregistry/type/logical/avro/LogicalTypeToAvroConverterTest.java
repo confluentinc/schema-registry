@@ -166,6 +166,30 @@ class LogicalTypeToAvroConverterTest {
         "m MAP<STRING NOT NULL, UNION(", "n MAP<INT, UNION(", "s MULTISET<UNION(");
   }
 
+  // A union in a collection has no field of its own, so its collection carries the branch
+  // names; without them, branches read back named after their Avro types.
+  @Test
+  void testUnionsInCollectionsKeepTheirBranchNames() {
+    String avro = toAvroText("STRUCT p ("
+        + "f0 ARRAY<UNION(b0 STRUCT(x INT), b1 STRING)>, "
+        + "m MAP<STRING, UNION(c0 INT, c1 BOOLEAN)>, "
+        + "n MAP<INT, UNION(d0 INT, d1 BOOLEAN)>, "
+        + "s MULTISET<UNION(e0 INT, e1 STRING)>);");
+    assertThat(roundTrip(avro)).contains(
+        "f0 ARRAY<UNION(b0 STRUCT(x INT) NOT NULL, b1 STRING NOT NULL)>",
+        "m MAP<STRING NOT NULL, UNION(c0 INT NOT NULL, c1 BOOLEAN NOT NULL)>",
+        "n MAP<INT, UNION(d0 INT NOT NULL, d1 BOOLEAN NOT NULL)>",
+        "s MULTISET<UNION(e0 INT NOT NULL, e1 STRING NOT NULL)>");
+  }
+
+  // An enclosing field's branch names are its own union's, not those of a union nested in it.
+  @Test
+  void testNestedUnionDoesNotTakeTheEnclosingUnionsBranchNames() {
+    String avro = toAvroText(
+        "STRUCT p (f0 UNION(a ARRAY<UNION(x INT, y STRING) NOT NULL>, b BOOLEAN));");
+    assertThat(roundTrip(avro)).contains("UNION(a ARRAY<UNION(x INT NOT NULL, y STRING NOT NULL)");
+  }
+
   private static org.apache.avro.Schema nonNull(org.apache.avro.Schema nullable) {
     return nullable.getTypes().get(1);
   }

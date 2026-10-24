@@ -393,11 +393,14 @@ public class LogicalTypeToAvroConverter {
       }
       case MAP:
         return convertMap(schema, rowName, ctx);
-      case ARRAY:
-        return SchemaBuilder.builder()
+      case ARRAY: {
+        org.apache.avro.Schema array = SchemaBuilder.builder()
             .array()
             .items(fromLogicalTypeRaw(
                 schema.getElementType(), rowName, ctx));
+        addNestedUnionMeta(array, schema.getElementType(), ctx);
+        return array;
+      }
       case MULTISET:
         return convertMultiset(schema, rowName, ctx);
       default:
@@ -444,6 +447,7 @@ public class LogicalTypeToAvroConverter {
       org.apache.avro.Schema mapSchema =
           SchemaBuilder.builder().map().values(
               fromLogicalTypeRaw(valueType, rowName, ctx));
+      addNestedUnionMeta(mapSchema, valueType, ctx);
       int keyLength = keyType.getLength();
       if (keyLength < Schema.MAX_LENGTH && !ctx.isV1()) {
         // V1 (Flink-compat) drops key-length / CHAR-vs-VARCHAR info — Flink
@@ -483,6 +487,9 @@ public class LogicalTypeToAvroConverter {
         LogicalMap.createMap(rowName + "_Entry", keySchema, valueSchema);
     arr.getElementType().addProp(
         CommonConstants.CONNECT_INTERNAL_TYPE_PROP, CommonConstants.MAP_ENTRY_TYPE_NAME);
+    addNestedUnionMeta(arr.getElementType().getField(CommonConstants.KEY_FIELD), keyType, ctx);
+    addNestedUnionMeta(arr.getElementType().getField(CommonConstants.VALUE_FIELD), valueType,
+        ctx);
     return arr;
   }
 
@@ -700,6 +707,22 @@ public class LogicalTypeToAvroConverter {
     if (enumMeta.stream().anyMatch(e -> e.size() > 1)) {
       avroSchema.addProp("confluent:enum", enumMeta);
     }
+  }
+
+  /**
+   * A union in a collection has no field of its own for {@code confluent:union}, so the branch
+   * names go on what holds it: the array, the map, or the entry record's key or value field.
+   */
+  private static void addNestedUnionMeta(
+      JsonProperties holder, Schema type, FromLogicalContext<org.apache.avro.Schema> ctx) {
+    if (ctx.isV1() || type.getType() != Schema.Type.UNION) {
+      return;
+    }
+    List<Map<String, Object>> unionMeta = new ArrayList<>();
+    for (UnionBranch branch : type.getBranches()) {
+      unionMeta.add(buildBranchMeta(branch));
+    }
+    holder.addProp(CONFLUENT_UNION_PROP, unionMeta);
   }
 
   private static Map<String, Object> buildBranchMeta(UnionBranch branch) {
