@@ -58,10 +58,13 @@ import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -533,6 +536,7 @@ public class LogicalTypeToProtoConverter {
         fileBuilder.setPackage(packageName);
       }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
+      checkDistinctNames(fileDescriptorProto);
       return FileDescriptor.buildFrom(
               fileDescriptorProto,
               Stream.concat(
@@ -551,6 +555,75 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  /**
+   * Refuses a name defined twice in one scope, e.g. the messages of union branch {@code f0.b0} and
+   * field {@code f0_b0}, which are both F0B0Row; the descriptor build would only fail opaquely.
+   */
+  private static void checkDistinctNames(FileDescriptorProto file) {
+    final Map<String, String> kinds = new HashMap<>();
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      claimName(kinds, message.getName(), "message", "the schema", List.of());
+    }
+    for (EnumDescriptorProto enumType : file.getEnumTypeList()) {
+      claimName(kinds, enumType.getName(), "enum", "the schema", List.of());
+    }
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      checkDistinctNames(message, message.getName());
+    }
+  }
+
+  private static void checkDistinctNames(DescriptorProto message, String scope) {
+    final Map<String, String> kinds = new HashMap<>();
+    final List<FieldDescriptorProto> fields = message.getFieldList();
+    for (FieldDescriptorProto field : fields) {
+      claimName(kinds, field.getName(), "field", scope, List.of());
+    }
+    for (OneofDescriptorProto oneof : message.getOneofDeclList()) {
+      claimName(kinds, oneof.getName(), "oneof", scope, List.of());
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      claimName(kinds, nested.getName(), "message", scope, fields);
+    }
+    for (EnumDescriptorProto nested : message.getEnumTypeList()) {
+      claimName(kinds, nested.getName(), "enum", scope, fields);
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      checkDistinctNames(nested, scope + "." + nested.getName());
+    }
+  }
+
+  private static void claimName(Map<String, String> kinds, String name, String kind,
+      String scope, List<FieldDescriptorProto> fields) {
+    final String prior = kinds.putIfAbsent(name, kind);
+    if (prior == null) {
+      return;
+    }
+    final List<String> users = fields.stream()
+        .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
+        .map(FieldDescriptorProto::getName)
+        .collect(Collectors.toList());
+    throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
+        + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
+        + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
+        + "; rename one of the fields it is generated from");
+  }
+
+  // Members share the message's field namespace: a branch name already taken is qualified by the
+  // oneof, and kept in logical.branch.
+  private static String memberName(
+      Field union, UnionBranch branch, Set<String> takenNames, String rowName) {
+    if (takenNames.add(branch.getName())) {
+      return branch.getName();
+    }
+    final String qualifiedName = union.getName() + "_" + branch.getName();
+    if (!takenNames.add(qualifiedName)) {
+      throw new ValidationException("Union branch '" + branch.getName() + "' of '"
+          + union.getName() + "' in " + rowName + " cannot be named '" + qualifiedName
+          + "', which is already taken");
+    }
+    return qualifiedName;
   }
 
   private static EnumDescriptorProto buildEnumDescriptor(
@@ -646,6 +719,11 @@ public class LogicalTypeToProtoConverter {
     // around them, and reject a schema that declares the same number twice — an invalid proto that
     // would otherwise surface as an opaque DescriptorValidationException from FileDescriptor build.
     final Set<Integer> reservedNumbers = new LinkedHashSet<>();
+    // Field and oneof names, which a oneof member must not take; members are added as named.
+    final Set<String> takenNames = new HashSet<>();
+    for (Field field : fields) {
+      takenNames.add(field.getName());
+    }
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
@@ -679,6 +757,9 @@ public class LogicalTypeToProtoConverter {
           final int branchNumber = branchDeclared != null
               ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           validateFieldNumber(branchNumber, branch.getName(), rowName);
+          // Nested messages are always qualified, so a member's rename never renames its type.
+          final String qualifiedName = field.getName() + "_" + branch.getName();
+          final String memberName = memberName(field, branch, takenNames, rowName);
           // Proto3 oneof can't contain repeated/map fields. Composite branches
           // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
           // regardless of nullability — fromField only wraps when nullable, so
@@ -686,7 +767,7 @@ public class LogicalTypeToProtoConverter {
           if (isCompositeRepeated(branch.getSchema())) {
             fieldProtoBuilder = wrapRepeatedType(
                 branch.getSchema(),
-                branch.getName(),
+                qualifiedName,
                 branch.getDoc(),
                 branchNumber,
                 nestedRows,
@@ -695,7 +776,7 @@ public class LogicalTypeToProtoConverter {
           } else {
             fieldProtoBuilder = fromField(
                 branch.getSchema(),
-                branch.getName(),
+                qualifiedName,
                 branch.getDoc(),
                 branchNumber,
                 nestedRows,
@@ -703,13 +784,15 @@ public class LogicalTypeToProtoConverter {
                 dependencies,
                 ctx);
           }
+          fieldProtoBuilder.setName(memberName);
           // Strip the format-native number (emitted via the native slot) from the branch meta.
           Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
-          if (!branchParams.isEmpty()) {
-            Map<String, String> stringParams = new LinkedHashMap<>();
-            branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
-            addMetaParams(fieldProtoBuilder, stringParams);
+          Map<String, String> stringParams = new LinkedHashMap<>();
+          branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+          if (!memberName.equals(branch.getName())) {
+            stringParams.put(CommonConstants.LOGICAL_BRANCH_PROP, branch.getName());
           }
+          addMetaParams(fieldProtoBuilder, stringParams);
           fieldProtoBuilder.setOneofIndex(oneofIndex);
           // Clear optional label for oneof fields
           fieldProtoBuilder.clearProto3Optional();
@@ -1224,13 +1307,19 @@ public class LogicalTypeToProtoConverter {
     final String typeName = toMessageName(
         fieldName, CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX, ctx);
 
-    Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
-        new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME,
-            repeatedType.setNullable(false), 0,
-            null, false, null, null, null)))
-        .setNullable(false);
-
-    nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    // The wrapper's payload is NOT NULL only while the wrapper is converted: the type is the
+    // caller's, whose logical type would otherwise come back with the collection NOT NULL.
+    boolean nullable = repeatedType.isNullable();
+    repeatedType.setNullable(false);
+    try {
+      Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
+          new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME, repeatedType, 0,
+              null, false, null, null, null)))
+          .setNullable(false);
+      nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    } finally {
+      repeatedType.setNullable(nullable);
+    }
     addMetaParam(builder, CommonConstants.FLINK_WRAPPER, "true");
     addComment(builder, comment);
     builder.setType(Type.TYPE_MESSAGE);

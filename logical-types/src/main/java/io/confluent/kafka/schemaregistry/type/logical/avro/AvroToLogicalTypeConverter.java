@@ -225,10 +225,10 @@ public class AvroToLogicalTypeConverter {
     }
   }
 
-  private static Map<String, Object> extractUnionMetadata(
-      org.apache.avro.Schema.Field field) {
+  // A field's, or for a union in a collection the array's, map's or entry field's.
+  private static Map<String, Object> extractUnionMetadata(JsonProperties holder) {
     Map<String, Object> metadata = new LinkedHashMap<>();
-    Object unionMeta = field.getObjectProp("confluent:union");
+    Object unionMeta = holder.getObjectProp("confluent:union");
     if (unionMeta != null) {
       metadata.put("confluent:union", unionMeta);
     }
@@ -303,6 +303,24 @@ public class AvroToLogicalTypeConverter {
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * Converts a collection's element, key or value. A union there takes its branch names from
+   * the collection (or entry field) that carries them, never from an enclosing field's union.
+   */
+  private static Schema convertNested(
+      org.apache.avro.Schema schema,
+      JsonProperties holder,
+      ToLogicalContext<org.apache.avro.Schema> ctx,
+      List<Integer> indexPath) {
+    Map<String, Object> saved = ctx.getUnionMetadata();
+    ctx.setUnionMetadata(extractUnionMetadata(holder));
+    try {
+      return convertWithCycleDetection(schema, false, ctx, indexPath);
+    } finally {
+      ctx.setUnionMetadata(saved);
     }
   }
 
@@ -479,22 +497,22 @@ public class AvroToLogicalTypeConverter {
               Objects.equals(
                   CommonConstants.FLINK_MULTISET_TYPE,
                   avroSchema.getProp(CommonConstants.FLINK_TYPE));
-          final Schema keyType =
-              convertWithCycleDetection(
-                  elemSchema.getField(CommonConstants.KEY_FIELD).schema(),
-                  false, ctx, appendToList(indexPath, 0));
-          final Schema valueType =
-              convertWithCycleDetection(
-                  elemSchema.getField(CommonConstants.VALUE_FIELD).schema(),
-                  false, ctx, appendToList(indexPath, 1));
+          final org.apache.avro.Schema.Field keyField =
+              elemSchema.getField(CommonConstants.KEY_FIELD);
+          final org.apache.avro.Schema.Field valueField =
+              elemSchema.getField(CommonConstants.VALUE_FIELD);
+          final Schema keyType = convertNested(
+              keyField.schema(), keyField, ctx, appendToList(indexPath, 0));
+          final Schema valueType = convertNested(
+              valueField.schema(), valueField, ctx, appendToList(indexPath, 1));
           // Natively an array element, then the entry record's key or value field.
           return withMapSteps(createMapLikeType(isNullable, keyType, valueType, isMultisetType),
               Arrays.asList(null, CommonConstants.KEY_FIELD),
               Arrays.asList(null, CommonConstants.VALUE_FIELD));
         } else {
           return Schema.createArray(
-              convertWithCycleDetection(
-                  avroSchema.getElementType(), false, ctx, appendToList(indexPath, 0)))
+              convertNested(
+                  avroSchema.getElementType(), avroSchema, ctx, appendToList(indexPath, 0)))
               .setNullable(isNullable)
               .setElementNativeNames(Collections.singletonList(null));
         }
@@ -508,8 +526,8 @@ public class AvroToLogicalTypeConverter {
         return withMapSteps(createMapLikeType(
             isNullable,
             readMapKeyType(avroSchema),
-            convertWithCycleDetection(
-                avroSchema.getValueType(), false, ctx, appendToList(indexPath, 1)),
+            convertNested(
+                avroSchema.getValueType(), avroSchema, ctx, appendToList(indexPath, 1)),
             isMultisetType2),
             Collections.emptyList(),
             Collections.singletonList(null));
