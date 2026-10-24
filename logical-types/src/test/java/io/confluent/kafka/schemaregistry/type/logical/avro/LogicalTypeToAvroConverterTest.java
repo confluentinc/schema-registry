@@ -20,6 +20,9 @@ import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
@@ -92,6 +95,171 @@ class LogicalTypeToAvroConverterTest {
     assertEquals(org.apache.avro.Schema.Type.NULL, result.rawSchema().getTypes().get(0).getType());
     assertEquals(org.apache.avro.Schema.Type.INT, result.rawSchema().getTypes().get(1).getType());
     assertEquals(org.apache.avro.Schema.Type.STRING, result.rawSchema().getTypes().get(2).getType());
+  }
+
+  // A branch's record is named after its union, as a struct field's is after its parent, so
+  // same-named branches of two unions stay two types instead of the second becoming the first.
+  @Test
+  void testUnionBranchTypesAreNamedByPath() {
+    String avro = toAvroText("STRUCT p ("
+        + "f0 UNION(b0 STRUCT(s0 STRUCT(x INT)), b1 BOOLEAN), "
+        + "f1 UNION(b0 STRUCT(s0 STRUCT(y TINYINT)), b1 BIGINT));");
+    assertThat(avro).contains("\"name\":\"p_f0_b0\"", "\"name\":\"p_f1_b0\"",
+        "\"name\":\"p_f0_b0_s0\"", "\"name\":\"p_f1_b0_s0\"");
+    assertThat(roundTrip(avro)).contains(
+        "f0 UNION(b0 STRUCT(s0 STRUCT(x INT)) NOT NULL, b1 BOOLEAN NOT NULL)",
+        "f1 UNION(b0 STRUCT(s0 STRUCT(y TINYINT)) NOT NULL, b1 BIGINT NOT NULL)");
+  }
+
+  @Test
+  void testUnionBranchFixedTypesAreNamedByPath() {
+    String avro = toAvroText(
+        "STRUCT p (f0 UNION(fx BINARY(4), s STRING), f1 UNION(fx BINARY(2), s INT));");
+    assertThat(avro).contains("\"name\":\"p_f0_fx\"", "\"name\":\"p_f1_fx\"");
+    assertThat(roundTrip(avro)).contains("f1 UNION(fx BINARY(2) NOT NULL, s INT NOT NULL)");
+  }
+
+  @Test
+  void testUnionBranchTypesInCollectionsAreNamedByPath() {
+    String arrays = toAvroText("STRUCT p ("
+        + "f0 ARRAY<UNION(b0 STRUCT(x INT), b1 STRING) NOT NULL>, "
+        + "f1 ARRAY<UNION(b0 STRUCT(y STRING), b1 INT) NOT NULL>);");
+    assertThat(arrays).contains("\"name\":\"p_f0_b0\"", "\"name\":\"p_f1_b0\"");
+    assertThat(roundTrip(arrays)).contains("STRUCT(x INT)", "STRUCT(y STRING)");
+    // A string-keyed map's values take the map's name; other maps' are inside its entry.
+    String maps = toAvroText("STRUCT p ("
+        + "m MAP<STRING, UNION(b0 STRUCT(x INT), b1 STRING) NOT NULL>, "
+        + "n MAP<INT, UNION(b0 STRUCT(y STRING), b1 INT) NOT NULL>);");
+    assertThat(maps).contains("\"name\":\"p_m_b0\"", "\"name\":\"p_n_value_b0\"");
+    assertThat(roundTrip(maps)).contains("STRUCT(x INT)", "STRUCT(y STRING)");
+  }
+
+  @Test
+  void testRootUnionBranchTypesAreNamedByPath() {
+    Schema unionSchema = Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", Schema.createStruct(Collections.singletonList(
+            new Field("x", Schema.create(Schema.Type.INT), 0))).setNullable(false)),
+        new UnionBranch("b1", Schema.createString().setNullable(false))))
+        .setNullable(false);
+    AvroSchema result = LogicalTypeToAvroConverter.fromLogicalType(
+        new LogicalType(unionSchema), "MyUnion");
+    assertEquals("MyUnion_b0", result.rawSchema().getTypes().get(0).getName());
+  }
+
+  // A nullable UNION nested in a collection gets null among its members: Avro has no union in
+  // a union.
+  @Test
+  void testNullableUnionsInCollections() {
+    String avro = toAvroText("STRUCT p ("
+        + "f0 ARRAY<UNION(b0 STRUCT(x INT), b1 STRING)>, "
+        + "m MAP<STRING, UNION(b0 INT, b1 BOOLEAN)>, "
+        + "n MAP<INT, UNION(b0 INT, b1 BOOLEAN)>, "
+        + "s MULTISET<UNION(b0 INT, b1 STRING)>);");
+    org.apache.avro.Schema record = new org.apache.avro.Schema.Parser().parse(avro);
+    assertNullableUnion(nonNull(record.getField("f0").schema()).getElementType(), 2);
+    assertNullableUnion(nonNull(record.getField("m").schema()).getValueType(), 2);
+    assertNullableUnion(nonNull(record.getField("n").schema()).getElementType()
+        .getField("value").schema(), 2);
+    assertNullableUnion(nonNull(record.getField("s").schema()).getElementType()
+        .getField("key").schema(), 2);
+    assertThat(roundTrip(avro)).contains("f0 ARRAY<UNION(", "STRUCT(x INT) NOT NULL",
+        "m MAP<STRING NOT NULL, UNION(", "n MAP<INT, UNION(", "s MULTISET<UNION(");
+  }
+
+  // A union in a collection has no field of its own, so its collection carries the branch
+  // names; without them, branches read back named after their Avro types.
+  @Test
+  void testUnionsInCollectionsKeepTheirBranchNames() {
+    String avro = toAvroText("STRUCT p ("
+        + "f0 ARRAY<UNION(b0 STRUCT(x INT), b1 STRING)>, "
+        + "m MAP<STRING, UNION(c0 INT, c1 BOOLEAN)>, "
+        + "n MAP<INT, UNION(d0 INT, d1 BOOLEAN)>, "
+        + "s MULTISET<UNION(e0 INT, e1 STRING)>);");
+    assertThat(roundTrip(avro)).contains(
+        "f0 ARRAY<UNION(b0 STRUCT(x INT) NOT NULL, b1 STRING NOT NULL)>",
+        "m MAP<STRING NOT NULL, UNION(c0 INT NOT NULL, c1 BOOLEAN NOT NULL)>",
+        "n MAP<INT, UNION(d0 INT NOT NULL, d1 BOOLEAN NOT NULL)>",
+        "s MULTISET<UNION(e0 INT NOT NULL, e1 STRING NOT NULL)>");
+  }
+
+  // An enclosing field's branch names are its own union's, not those of a union nested in it.
+  @Test
+  void testNestedUnionDoesNotTakeTheEnclosingUnionsBranchNames() {
+    String avro = toAvroText(
+        "STRUCT p (f0 UNION(a ARRAY<UNION(x INT, y STRING) NOT NULL>, b BOOLEAN));");
+    assertThat(roundTrip(avro)).contains("UNION(a ARRAY<UNION(x INT NOT NULL, y STRING NOT NULL)");
+  }
+
+  private static org.apache.avro.Schema nonNull(org.apache.avro.Schema nullable) {
+    return nullable.getTypes().get(1);
+  }
+
+  private static void assertNullableUnion(org.apache.avro.Schema union, int branches) {
+    assertTrue(union.isUnion());
+    assertEquals(org.apache.avro.Schema.Type.NULL, union.getTypes().get(0).getType());
+    assertEquals(branches + 1, union.getTypes().size());
+    for (org.apache.avro.Schema member : union.getTypes()) {
+      assertFalse(member.isUnion());
+    }
+  }
+
+  private static String toAvroText(String ddl) {
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    return LogicalTypeToAvroConverter.fromLogicalType(visitor.toLogicalType(), "p")
+        .canonicalString();
+  }
+
+  // The logical type read back from the Avro text, as a registry's readers get it.
+  private static String roundTrip(String avro) {
+    return LogicalTypeToDdlConverter.toDdl(
+        AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(avro))).replaceAll("\\s+", " ");
+  }
+
+  // Path names can repeat (a.b and a_b are both p_a_b); Avro would write the second type as a
+  // reference to the first, so the converter refuses them unless the two are identical.
+  @Test
+  void testTypeNameGeneratedTwice() {
+    assertTypeNameTaken("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(y STRING));",
+        "'p_a_b'", "at a.b and a_b");
+    assertTypeNameTaken(
+        "STRUCT p (a STRUCT(b STRUCT(x INT COMMENT 'one')), a_b STRUCT(x INT COMMENT 'two'));",
+        "'p_a_b'", "at a.b and a_b");
+    assertTypeNameTaken(
+        "STRUCT p (a STRUCT(b_c STRUCT(x INT)), a_b STRUCT(c STRUCT(y STRING)));",
+        "'p_a_b_c'", "at a.b_c and a_b.c");
+    assertTypeNameTaken("STRUCT p (u UNION(b STRUCT(x INT), s STRING), u_b STRUCT(y STRING));",
+        "'p_u_b'", "at u and u_b");
+  }
+
+  @Test
+  void testTypeNameGeneratedTwiceForIdenticalTypes() {
+    String avro = toAvroText("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(x INT));");
+    assertThat(avro).contains("{\"name\":\"a_b\",\"type\":[\"null\",\"p_a_b\"]}");
+    assertThat(roundTrip(avro)).contains("a STRUCT(b STRUCT(x INT)), a_b STRUCT(x INT)");
+  }
+
+  // V1 names every map entry record io.confluent.connect.avro.MapEntry, as Flink does.
+  @Test
+  void testV1MapEntriesOfTwoMaps() {
+    assertThat(toV1AvroText("STRUCT p (m MAP<INT, STRING>, n MAP<INT, STRING>);"))
+        .contains("\"name\":\"n\",\"type\":[\"null\",{\"type\":\"array\","
+            + "\"items\":\"io.confluent.connect.avro.MapEntry\"");
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> toV1AvroText("STRUCT p (m MAP<INT, STRING>, n MAP<INT, BIGINT>);"));
+    assertThat(e.getMessage()).contains("'io.confluent.connect.avro.MapEntry'", "at m and n");
+  }
+
+  private static String toV1AvroText(String ddl) {
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    return LogicalTypeToAvroConverter.fromLogicalType(
+        visitor.toLogicalType(), "p", LogicalTypeVersion.V1).canonicalString();
+  }
+
+  private static void assertTypeNameTaken(String ddl, String name, String paths) {
+    ValidationException e = assertThrows(ValidationException.class, () -> toAvroText(ddl));
+    assertThat(e.getMessage()).contains(name, paths);
   }
 
   @Test
