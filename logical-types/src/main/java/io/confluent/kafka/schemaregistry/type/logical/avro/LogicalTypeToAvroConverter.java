@@ -493,10 +493,9 @@ public class LogicalTypeToAvroConverter {
       case MAP:
         return convertMap(schema, rowName, ctx);
       case ARRAY: {
-        org.apache.avro.Schema array = SchemaBuilder.builder()
-            .array()
-            .items(fromLogicalTypeRaw(
-                schema.getElementType(), rowName, ctx));
+        org.apache.avro.Schema items = fromLogicalTypeRaw(schema.getElementType(), rowName, ctx);
+        refuseMapEntryName(items, rowName);
+        org.apache.avro.Schema array = SchemaBuilder.builder().array().items(items);
         addNestedUnionMeta(array, schema.getElementType(), ctx);
         return array;
       }
@@ -505,6 +504,16 @@ public class LogicalTypeToAvroConverter {
       default:
         throw new ValidationException(
             "Unsupported to derive an Avro Schema for type " + schema);
+    }
+  }
+
+  // The reader takes an array of records with Connect's map entry name for a map's entries.
+  private static void refuseMapEntryName(org.apache.avro.Schema items, String rowName) {
+    if (items.getType() == org.apache.avro.Schema.Type.RECORD
+        && CommonConstants.CONNECT_AVRO_NAMESPACE.equals(items.getNamespace())
+        && CommonConstants.MAP_ENTRY_TYPE_NAME.equals(items.getName())) {
+      throw new ValidationException("The elements of array " + rowName + " cannot be named "
+          + items.getFullName() + ", which would read back as a map's entries");
     }
   }
 

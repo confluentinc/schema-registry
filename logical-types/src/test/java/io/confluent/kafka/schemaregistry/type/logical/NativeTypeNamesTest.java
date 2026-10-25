@@ -218,6 +218,15 @@ class NativeTypeNamesTest {
     return LogicalTypeToAvroConverter.fromLogicalType(logicalType, "p").canonicalString();
   }
 
+  // The reader would take an array of records named as Connect's map entries for a map.
+  @Test
+  void testAvroMapEntryNameOnArrayRefused() {
+    ValidationException e = assertThrows(ValidationException.class, () -> avro(
+        "STRUCT p (xs ARRAY<STRUCT(key INT, value STRING) NOT NULL> NOT NULL "
+            + "WITH ('avro.name' = 'io.confluent.connect.avro.MapEntry'));"));
+    assertThat(e.getMessage()).contains("io.confluent.connect.avro.MapEntry");
+  }
+
   @Test
   void testAvroInvalidNameRefused() {
     ValidationException e = assertThrows(ValidationException.class,
