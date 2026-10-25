@@ -277,8 +277,27 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       return schemaId;
     } else {
+      ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
+      if (next != null) {
+        return getIdFromRegistry(subject, next, false, id);
+      }
       throw new RestClientException("Schema Not Found", 404, 40403);
     }
+  }
+
+  // As the registry looks a schema up again, with the latest version's metadata and rule set
+  // where it has none of its own; null if that changes nothing.
+  private ParsedSchema withLatestMetadataRuleSet(String subject, ParsedSchema schema) {
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+    if (versions == null || versions.isEmpty()) {
+      return null;
+    }
+    ParsedSchema latest = Collections.max(versions.entrySet(), Map.Entry.comparingByValue())
+        .getKey();
+    ParsedSchema next = schema.copy(
+        schema.metadata() != null ? schema.metadata() : latest.metadata(),
+        schema.ruleSet() != null ? schema.ruleSet() : latest.ruleSet());
+    return next.equals(schema) ? null : next;
   }
 
   private boolean schemasEqual(ParsedSchema schema1, ParsedSchema schema2) {
@@ -639,9 +658,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     if (versions != null && versions.containsKey(schema)) {
       return versions.get(schema);
-    } else {
-      throw new RestClientException("Subject Not Found", 404, 40401);
     }
+    ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
+    if (next != null && versions.containsKey(next)) {
+      return versions.get(next);
+    }
+    throw new RestClientException("Subject Not Found", 404, 40401);
   }
 
   @Override

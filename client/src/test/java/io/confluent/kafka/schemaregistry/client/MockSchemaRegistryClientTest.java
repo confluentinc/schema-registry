@@ -396,6 +396,16 @@ public class MockSchemaRegistryClientTest {
     }
   }
 
+    // As in the registry, a schema without metadata finds the version registered with some.
+    @Test
+    public void testGetIdWithoutMetadataFindsSchemaWithMetadata() throws Exception {
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema.copy(
+          new Metadata(null, Collections.singletonMap("confluent:edition", "2"), null), null));
+      assertEquals(id, client.getId(defaultValueSubject, schema));
+      assertEquals(1, client.getVersion(defaultValueSubject, schema));
+    }
+
     @Test
     public void testCreateOneAssociation() {
       // Call createAssociation endpoint.

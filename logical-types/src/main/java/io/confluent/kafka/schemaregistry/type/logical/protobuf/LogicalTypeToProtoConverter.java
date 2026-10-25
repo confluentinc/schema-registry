@@ -58,10 +58,13 @@ import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -87,6 +90,44 @@ public class LogicalTypeToProtoConverter {
           Schema.Type.TIMESTAMP_LTZ,
           Schema.Type.VARIANT,
           Schema.Type.STRUCT);
+
+  /**
+   * The params that pin the name of the message or enum the root struct's regular field
+   * {@code fieldName} generates, as {@code fromLogicalType} names it now: put on the field before
+   * renaming it, they keep the name, which the Protobuf compatibility checks compare. Empty for a
+   * field that generates none.
+   */
+  public static Map<String, Object> typeNameParams(
+      LogicalType logicalType, String rowName, String fieldName) {
+    String name = ProtoToLogicalTypeConverter.pinTypeName(rootMessage(logicalType, rowName),
+        fieldName);
+    return name != null && !isNamedTypeRef(logicalType, fieldName)
+        ? Collections.singletonMap(ProtoTypeNames.NAME, name) : Collections.emptyMap();
+  }
+
+  /**
+   * The params that pin the names of the messages and enums the members of the root struct's
+   * UNION field {@code fieldName} generate, by branch name, as {@link #typeNameParams} for a field.
+   */
+  public static Map<String, Map<String, Object>> branchTypeNameParams(
+      LogicalType logicalType, String rowName, String fieldName) {
+    Map<String, Map<String, Object>> params = new LinkedHashMap<>();
+    ProtoToLogicalTypeConverter.pinBranchTypeNames(rootMessage(logicalType, rowName), fieldName)
+        .forEach((branch, name) -> params.put(branch,
+            Collections.singletonMap(ProtoTypeNames.NAME, name)));
+    return params;
+  }
+
+  private static Descriptor rootMessage(LogicalType logicalType, String rowName) {
+    // The writer emits the root message first.
+    return fromLogicalType(logicalType, rowName).toDescriptor().getFile().getMessageTypes().get(0);
+  }
+
+  private static boolean isNamedTypeRef(LogicalType logicalType, String fieldName) {
+    Schema root = logicalType.getRootSchema();
+    return root.getType() == Schema.Type.STRUCT && root.getField(fieldName) != null
+        && root.getField(fieldName).getSchema().getType() == Schema.Type.NAMED_TYPE_REF;
+  }
 
   /**
    * LT leaf types that wrap as their canonical well-known proto message at
@@ -215,6 +256,7 @@ public class LogicalTypeToProtoConverter {
 
     FromLogicalContext<GenericDescriptor> ctx =
         new FromLogicalContext<>(logicalType, version);
+    ctx.setTypeNames(new ProtoTypeNames());
 
     // Pre-populate cache with all named types (messages and enums, including
     // nested) from each external schema. Each registered type gets a renamed
@@ -353,7 +395,14 @@ public class LogicalTypeToProtoConverter {
    */
   private static String toMessageName(String fieldName, String suffix,
                                       FromLogicalContext<?> ctx) {
-    if (ctx.isV1()) {
+    String derived = derivedMessageName(fieldName, suffix, ctx.isV1());
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    return names != null ? names.name(fieldName, suffix, derived) : derived;
+  }
+
+  // The name toMessageName gives a type when no param pins one or takes it.
+  static String derivedMessageName(String fieldName, String suffix, boolean v1) {
+    if (v1) {
       if (suffix.equals(CommonConstants.MAP_ENTRY_SUFFIX)) {
         // Match Flink's exact algorithm: concatenate field + "_" + suffix,
         // then run the whole thing through LOWER_UNDERSCORE → UPPER_CAMEL.
@@ -533,6 +582,7 @@ public class LogicalTypeToProtoConverter {
         fileBuilder.setPackage(packageName);
       }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
+      checkDistinctNames(fileDescriptorProto);
       return FileDescriptor.buildFrom(
               fileDescriptorProto,
               Stream.concat(
@@ -551,6 +601,115 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  /**
+   * Refuses a name defined twice in one scope, e.g. the messages of union branch {@code f0.b0} and
+   * field {@code f0_b0}, which are both F0B0Row; the descriptor build would only fail opaquely.
+   */
+  private static void checkDistinctNames(FileDescriptorProto file) {
+    final Map<String, String> kinds = new HashMap<>();
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      claimName(kinds, message.getName(), "message", "the schema", List.of());
+    }
+    for (EnumDescriptorProto enumType : file.getEnumTypeList()) {
+      claimName(kinds, enumType.getName(), "enum", "the schema", List.of());
+    }
+    for (DescriptorProto message : file.getMessageTypeList()) {
+      checkDistinctNames(message, message.getName());
+    }
+  }
+
+  private static void checkDistinctNames(DescriptorProto message, String scope) {
+    final Map<String, String> kinds = new HashMap<>();
+    final List<FieldDescriptorProto> fields = message.getFieldList();
+    for (FieldDescriptorProto field : fields) {
+      claimName(kinds, field.getName(), "field", scope, List.of());
+    }
+    for (OneofDescriptorProto oneof : message.getOneofDeclList()) {
+      claimName(kinds, oneof.getName(), "oneof", scope, List.of());
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      claimName(kinds, nested.getName(), "message", scope, fields);
+    }
+    for (EnumDescriptorProto nested : message.getEnumTypeList()) {
+      claimName(kinds, nested.getName(), "enum", scope, fields);
+    }
+    for (DescriptorProto nested : message.getNestedTypeList()) {
+      checkDistinctNames(nested, scope + "." + nested.getName());
+    }
+  }
+
+  private static void claimName(Map<String, String> kinds, String name, String kind,
+      String scope, List<FieldDescriptorProto> fields) {
+    final String prior = kinds.putIfAbsent(name, kind);
+    if (prior == null) {
+      return;
+    }
+    final List<String> users = fields.stream()
+        .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
+        .map(FieldDescriptorProto::getName)
+        .collect(Collectors.toList());
+    throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
+        + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
+        + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
+        + "; rename one of the fields it is generated from");
+  }
+
+  // A oneof member's field, whose type is named by the member's pin.
+  private static FieldDescriptorProto.Builder fromBranch(
+      Field union, UnionBranch branch, int branchNumber,
+      List<DescriptorProto> nestedRows,
+      List<EnumDescriptorProto> nestedEnums,
+      Set<String> dependencies,
+      FromLogicalContext<GenericDescriptor> ctx) {
+    // Nested messages are always qualified, so a member's rename never renames its type.
+    final String qualifiedName = union.getName() + "_" + branch.getName();
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    names.enterBranch(union.getName(), branch.getName());
+    try {
+      // Proto3 oneof can't contain repeated/map fields. Composite branches
+      // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
+      // regardless of nullability — fromField only wraps when nullable, so
+      // we force the wrap here for the non-nullable composite case.
+      if (isCompositeRepeated(branch.getSchema())) {
+        return wrapRepeatedType(
+            branch.getSchema(),
+            qualifiedName,
+            branch.getDoc(),
+            branchNumber,
+            nestedRows,
+            dependencies,
+            ctx);
+      }
+      return fromField(
+          branch.getSchema(),
+          qualifiedName,
+          branch.getDoc(),
+          branchNumber,
+          nestedRows,
+          nestedEnums,
+          dependencies,
+          ctx);
+    } finally {
+      names.exitBranch();
+    }
+  }
+
+  // Members share the message's field namespace: a branch name already taken is qualified by the
+  // oneof, and kept in logical.branch.
+  private static String memberName(
+      Field union, UnionBranch branch, Set<String> takenNames, String rowName) {
+    if (takenNames.add(branch.getName())) {
+      return branch.getName();
+    }
+    final String qualifiedName = union.getName() + "_" + branch.getName();
+    if (!takenNames.add(qualifiedName)) {
+      throw new ValidationException("Union branch '" + branch.getName() + "' of '"
+          + union.getName() + "' in " + rowName + " cannot be named '" + qualifiedName
+          + "', which is already taken");
+    }
+    return qualifiedName;
   }
 
   private static EnumDescriptorProto buildEnumDescriptor(
@@ -630,6 +789,20 @@ public class LogicalTypeToProtoConverter {
       Schema schema, String rowName, Set<String> dependencies,
       List<NestedChild> userNested,
       FromLogicalContext<GenericDescriptor> ctx) {
+    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
+    names.enter(schema, userNested.stream().map(c -> c.simpleName).collect(Collectors.toList()));
+    try {
+      return buildStructType(schema, rowName, dependencies, userNested, ctx);
+    } finally {
+      names.exit();
+    }
+  }
+
+  // Fields pinned to one name with one body, as a shared hand-written message, define it once.
+  private static DescriptorProto buildStructType(
+      Schema schema, String rowName, Set<String> dependencies,
+      List<NestedChild> userNested,
+      FromLogicalContext<GenericDescriptor> ctx) {
     final DescriptorProto.Builder builder = DescriptorProto.newBuilder();
     builder.setName(rowName);
     // Add schema-level doc/tags/params via MessageOptions (skipped in V1).
@@ -646,10 +819,19 @@ public class LogicalTypeToProtoConverter {
     // around them, and reject a schema that declares the same number twice — an invalid proto that
     // would otherwise surface as an opaque DescriptorValidationException from FileDescriptor build.
     final Set<Integer> reservedNumbers = new LinkedHashSet<>();
+    // Field and oneof names, which a oneof member must not take; members are added as named, and
+    // no generated type takes their names either.
+    final Set<String> takenNames = new HashSet<>();
+    for (Field field : fields) {
+      takenNames.add(field.getName());
+    }
+    final Map<List<String>, String> memberNames = new HashMap<>();
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
           reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
+          memberNames.put(Arrays.asList(field.getName(), branch.getName()),
+              memberName(field, branch, takenNames, rowName));
         }
       } else {
         reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);
@@ -659,6 +841,7 @@ public class LogicalTypeToProtoConverter {
     // gets the next number not already reserved, so a positional fallback can never collide with an
     // explicit number. The cursor is a 1-element array so nextFieldNumber can advance it.
     final int[] numberCursor = {1};
+    ((ProtoTypeNames) ctx.getTypeNames()).reserve(memberNames.values());
 
     for (int i = 0; i < fields.size(); i++) {
       final Field field = fields.get(i);
@@ -672,44 +855,25 @@ public class LogicalTypeToProtoConverter {
             OneofDescriptorProto.newBuilder().setName(field.getName()).build());
         Schema unionSchema = field.getSchema();
         for (UnionBranch branch : unionSchema.getBranches()) {
-          final FieldDescriptorProto.Builder fieldProtoBuilder;
           // A oneof member is a Protobuf field: use its recorded number when present, else the next
           // free number — same rule as a regular field.
           final Integer branchDeclared = branch.getFieldNumber();
           final int branchNumber = branchDeclared != null
               ? branchDeclared : nextFieldNumber(numberCursor, reservedNumbers);
           validateFieldNumber(branchNumber, branch.getName(), rowName);
-          // Proto3 oneof can't contain repeated/map fields. Composite branches
-          // (ARRAY/MAP/MULTISET) must be wrapped in a single message field
-          // regardless of nullability — fromField only wraps when nullable, so
-          // we force the wrap here for the non-nullable composite case.
-          if (isCompositeRepeated(branch.getSchema())) {
-            fieldProtoBuilder = wrapRepeatedType(
-                branch.getSchema(),
-                branch.getName(),
-                branch.getDoc(),
-                branchNumber,
-                nestedRows,
-                dependencies,
-                ctx);
-          } else {
-            fieldProtoBuilder = fromField(
-                branch.getSchema(),
-                branch.getName(),
-                branch.getDoc(),
-                branchNumber,
-                nestedRows,
-                nestedEnums,
-                dependencies,
-                ctx);
-          }
+          final String memberName =
+              memberNames.get(Arrays.asList(field.getName(), branch.getName()));
+          final FieldDescriptorProto.Builder fieldProtoBuilder = fromBranch(
+              field, branch, branchNumber, nestedRows, nestedEnums, dependencies, ctx);
+          fieldProtoBuilder.setName(memberName);
           // Strip the format-native number (emitted via the native slot) from the branch meta.
           Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
-          if (!branchParams.isEmpty()) {
-            Map<String, String> stringParams = new LinkedHashMap<>();
-            branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
-            addMetaParams(fieldProtoBuilder, stringParams);
+          Map<String, String> stringParams = new LinkedHashMap<>();
+          branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
+          if (!memberName.equals(branch.getName())) {
+            stringParams.put(CommonConstants.LOGICAL_BRANCH_PROP, branch.getName());
           }
+          addMetaParams(fieldProtoBuilder, stringParams);
           fieldProtoBuilder.setOneofIndex(oneofIndex);
           // Clear optional label for oneof fields
           fieldProtoBuilder.clearProto3Optional();
@@ -739,8 +903,8 @@ public class LogicalTypeToProtoConverter {
         builder.addField(fieldProtoBuilder.build());
       }
     }
-    builder.addAllNestedType(nestedRows);
-    builder.addAllEnumType(nestedEnums);
+    builder.addAllNestedType(new LinkedHashSet<>(nestedRows));
+    builder.addAllEnumType(new LinkedHashSet<>(nestedEnums));
     // User-declared nested types (Outer.Inner under Outer) emitted last so
     // they don't interleave with synthesized wrapper messages. The
     // logical.named marker lets the reader distinguish user-marked named
@@ -932,7 +1096,8 @@ public class LogicalTypeToProtoConverter {
           Schema typeDef = ctx.getNamedType(name);
           builder.setType(typeDef.getType() == Schema.Type.ENUM
               ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
-          builder.setTypeName(name);
+          // Absolute, or a type generated in this message under the same name would shadow it.
+          builder.setTypeName(makeItTopLevelScoped(name));
           return builder;
         }
         GenericDescriptor external = ctx.getConverted(name);
@@ -1224,13 +1389,19 @@ public class LogicalTypeToProtoConverter {
     final String typeName = toMessageName(
         fieldName, CommonConstants.FLINK_REPEATED_WRAPPER_SUFFIX, ctx);
 
-    Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
-        new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME,
-            repeatedType.setNullable(false), 0,
-            null, false, null, null, null)))
-        .setNullable(false);
-
-    nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    // The wrapper's payload is NOT NULL only while the wrapper is converted: the type is the
+    // caller's, whose logical type would otherwise come back with the collection NOT NULL.
+    boolean nullable = repeatedType.isNullable();
+    repeatedType.setNullable(false);
+    try {
+      Schema wrapperStruct = Schema.createStruct(Collections.singletonList(
+          new Field(CommonConstants.FLINK_WRAPPER_FIELD_NAME, repeatedType, 0,
+              null, false, null, null, null)))
+          .setNullable(false);
+      nestedRows.add(fromStructType(wrapperStruct, typeName, dependencies, ctx));
+    } finally {
+      repeatedType.setNullable(nullable);
+    }
     addMetaParam(builder, CommonConstants.FLINK_WRAPPER, "true");
     addComment(builder, comment);
     builder.setType(Type.TYPE_MESSAGE);
@@ -1319,10 +1490,28 @@ public class LogicalTypeToProtoConverter {
       builder = fromField(
           elementType, fieldName, fieldComment, fieldIndex,
           nestedRows, nestedEnums, dependencies, ctx);
+      refuseMapEntryName(elementType, builder.getTypeName(), fieldName);
     }
     builder.setLabel(Label.LABEL_REPEATED);
     builder.clearProto3Optional();
     return builder;
+  }
+
+  // The reader takes repeated messages named ...Entry with only key and value fields for a map's
+  // entries, so a pin cannot give an array's struct elements such a name.
+  private static void refuseMapEntryName(Schema element, String typeName, String fieldName) {
+    String name = typeName.substring(typeName.lastIndexOf('.') + 1);
+    if (name.endsWith(CommonConstants.MAP_ENTRY_SUFFIX) && isEntryShaped(element)) {
+      throw new ValidationException("Param " + ProtoTypeNames.NAME + " of array field "
+          + fieldName + " cannot end with " + CommonConstants.MAP_ENTRY_SUFFIX + ", got '" + name
+          + "': its key and value elements would read back as a map");
+    }
+  }
+
+  private static boolean isEntryShaped(Schema struct) {
+    return struct.getType() == Schema.Type.STRUCT && struct.getFields().size() == 2
+        && struct.getField(CommonConstants.KEY_FIELD) != null
+        && struct.getField(CommonConstants.VALUE_FIELD) != null;
   }
 
   private static void addComment(FieldDescriptorProto.Builder builder, String fieldComment) {
