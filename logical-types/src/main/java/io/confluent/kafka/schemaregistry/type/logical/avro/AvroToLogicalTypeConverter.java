@@ -670,7 +670,7 @@ public class AvroToLogicalTypeConverter {
           String nameBase = ctx.getUnionNameBase(avroSchema);
           String derived = nameBase != null ? nameBase + "_" + branchName : null;
           GeneratedNames at = new GeneratedNames(memberSchemas.get(i), null);
-          String base = at.base();
+          String base = at.base(derived);
           Map<String, Object> names =
               nameParams(at, base != null ? base : derived, derived, nameBase == null);
           if (!names.isEmpty()) {
@@ -1147,7 +1147,7 @@ public class AvroToLogicalTypeConverter {
       boolean pin) {
     String derived = record.getFullName() + "_" + field.name();
     GeneratedNames at = new GeneratedNames(field.schema(), field);
-    String base = at.base();
+    String base = at.base(derived);
     if (base == null) {
       base = derived;
     }
@@ -1283,8 +1283,13 @@ public class AvroToLogicalTypeConverter {
           && nonNull(union).stream().anyMatch(s -> new GeneratedNames(s, null).generatesAny());
     }
 
-    // The base the names derive from, or null if none of them says.
     private String base() {
+      return base(null);
+    }
+
+    // The base the names derive from, or null if none of them says; of a union's members, the
+    // derived base when one follows it, as a pinned branch says nothing of the others.
+    private String base(String derived) {
       if (self != null) {
         return self.getFullName();
       }
@@ -1299,11 +1304,17 @@ public class AvroToLogicalTypeConverter {
           ? unionHints(extractUnionMetadata(unionHolder).get(CONFLUENT_UNION_PROP)) : null;
       if (base == null && union != null && hints != null) {
         List<org.apache.avro.Schema> members = nonNull(union);
-        for (int i = 0; i < members.size() && i < hints.size() && base == null; i++) {
+        for (int i = 0; i < members.size() && i < hints.size(); i++) {
           Object name = hints.get(i).get("name");
           if (name != null) {
             // A member's names derive from <base>_<branch>, as a field's from its own base.
-            base = strip(new GeneratedNames(members.get(i), null).base(), "_" + name);
+            String implied = strip(new GeneratedNames(members.get(i), null).base(), "_" + name);
+            if (implied != null && implied.equals(derived)) {
+              return derived;
+            }
+            if (base == null) {
+              base = implied;
+            }
           }
         }
       }

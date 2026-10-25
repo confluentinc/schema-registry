@@ -164,6 +164,20 @@ class NativeTypeNamesTest {
     }
   }
 
+  // A pinned branch says nothing of its field's base, which the other branches derive from.
+  @Test
+  void testAvroPinnedBranchLeavesFieldBase() {
+    String ddl = "STRUCT p (u UNION(b STRUCT(x INT) WITH ('avro.name' = 'Old_b'), "
+        + "c STRUCT(y STRING)));";
+    assertThat(avro(ddl)).contains("\"name\":\"Old_b\"", "\"name\":\"p_u_c\"");
+    assertEquals(Collections.singletonMap("avro.name", "p_u"),
+        LogicalTypeToAvroConverter.typeNameParams(parse(ddl), "p", "u"));
+    String readBack = avroRoundTrip(ddl);
+    assertThat(readBack).contains("'avro.name' = 'Old_b'")
+        .doesNotContain("'avro.name' = 'Old'").doesNotContain("p_u_c");
+    assertEquals(readBack, avroRoundTrip(readBack));
+  }
+
   // A map's key or value that is itself a map is named by its entry's base, which reads back.
   @Test
   void testAvroNamesOfMapInMapKept() {
