@@ -446,6 +446,45 @@ class LogicalTypeToProtoConverterTest {
     assertTrue(roundTripped.getField("name").getParams().isEmpty());
   }
 
+  // A NOT NULL message of a referenced or local named type is marked as an inline struct is, so
+  // it reads back NOT NULL, and writes back the same.
+  @Test
+  void testRoundTripNotNullNamedTypeRef() {
+    String addressProtoSchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "message Address {\n"
+        + "  string street = 1;\n"
+        + "}";
+    List<SchemaReference> references = Arrays.asList(
+        new SchemaReference("com.example.Address", "address-value", 1));
+    Map<String, String> resolvedReferences = new LinkedHashMap<>();
+    resolvedReferences.put("com.example.Address", addressProtoSchema);
+    Schema money = Schema.createStruct(Arrays.asList(
+        new Field("amount", Schema.createString().setNullable(false), 0)))
+        .setNullable(false);
+
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("home",
+            Schema.createNamedTypeRef("com.example.Address").setNullable(false), 0),
+        new Field("work",
+            Schema.createNamedTypeRef("com.example.Address").setNullable(true), 1),
+        new Field("price", Schema.createNamedTypeRef("Money").setNullable(false), 2),
+        new Field("tip", Schema.createNamedTypeRef("Money").setNullable(true), 3)))
+        .setNullable(false);
+
+    ProtobufSchema proto = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(rootSchema, Map.of("Money", money), references, resolvedReferences),
+        "Person");
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(proto);
+    Schema root = roundTripped.getRootSchema();
+    assertFalse(root.getField("home").getSchema().isNullable());
+    assertTrue(root.getField("work").getSchema().isNullable());
+    assertFalse(root.getField("price").getSchema().isNullable());
+    assertTrue(root.getField("tip").getSchema().isNullable());
+    assertEquals(proto.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(roundTripped, "Person").canonicalString());
+  }
+
   @Test
   void testRoundTripExternalNamedTypeRef() {
     String addressProtoSchema = "syntax = \"proto3\";\n"

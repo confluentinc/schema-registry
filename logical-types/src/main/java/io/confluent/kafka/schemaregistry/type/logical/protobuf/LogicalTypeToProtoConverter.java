@@ -1007,6 +1007,40 @@ public class LogicalTypeToProtoConverter {
     return out;
   }
 
+  private static FieldDescriptorProto.Builder fromNamedTypeRef(
+      Schema schema, FieldDescriptorProto.Builder builder, Set<String> dependencies,
+      FromLogicalContext<GenericDescriptor> ctx) {
+    String name = schema.getQualifiedName();
+    // Externals live in namedTypes too (lazy-promoted) but must be
+    // emitted as imports — so guard local branch with !isExternal.
+    if (ctx.hasNamedType(name)
+        && !ctx.getLogicalType().isExternal(name)) {
+      Schema typeDef = ctx.getNamedType(name);
+      builder.setType(typeDef.getType() == Schema.Type.ENUM
+          ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
+      // Absolute, or a type generated in this message under the same name would shadow it.
+      builder.setTypeName(makeItTopLevelScoped(name));
+    } else {
+      GenericDescriptor external = ctx.getConverted(name);
+      if (external == null) {
+        throw new ValidationException("Unknown named type reference: " + name);
+      }
+      // External type — add import and reference; dispatch on descriptor kind
+      builder.setType(external instanceof EnumDescriptor
+          ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
+      builder.setTypeName(makeItTopLevelScoped(name));
+      // Use the de-duped import name when multiple FQNs share a source
+      // file; falls back to the FQN for the legacy 1-type-per-file case.
+      String importName = ctx.externalImportNameFor(name);
+      dependencies.add(importName != null ? importName : name);
+    }
+    // A message field is nullable unless marked, as an inline struct is, whatever its label.
+    if (!schema.isNullable() && builder.getType() == Type.TYPE_MESSAGE) {
+      addMetaParam(builder, CommonConstants.FLINK_NOT_NULL, "true");
+    }
+    return builder;
+  }
+
   private static FieldDescriptorProto.Builder fromField(
       Schema schema,
       String fieldName,
@@ -1087,33 +1121,8 @@ public class LogicalTypeToProtoConverter {
         builder.setTypeName(makeItTopLevelScoped(CommonConstants.PROTOBUF_VARIANT_TYPE));
         dependencies.add(CommonConstants.PROTOBUF_VARIANT_LOCATION);
         return builder;
-      case NAMED_TYPE_REF: {
-        String name = schema.getQualifiedName();
-        // Externals live in namedTypes too (lazy-promoted) but must be
-        // emitted as imports — so guard local branch with !isExternal.
-        if (ctx.hasNamedType(name)
-            && !ctx.getLogicalType().isExternal(name)) {
-          Schema typeDef = ctx.getNamedType(name);
-          builder.setType(typeDef.getType() == Schema.Type.ENUM
-              ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
-          // Absolute, or a type generated in this message under the same name would shadow it.
-          builder.setTypeName(makeItTopLevelScoped(name));
-          return builder;
-        }
-        GenericDescriptor external = ctx.getConverted(name);
-        if (external != null) {
-          // External type — add import and reference; dispatch on descriptor kind
-          builder.setType(external instanceof EnumDescriptor
-              ? Type.TYPE_ENUM : Type.TYPE_MESSAGE);
-          builder.setTypeName(makeItTopLevelScoped(name));
-          // Use the de-duped import name when multiple FQNs share a source
-          // file; falls back to the FQN for the legacy 1-type-per-file case.
-          String importName = ctx.externalImportNameFor(name);
-          dependencies.add(importName != null ? importName : name);
-          return builder;
-        }
-        throw new ValidationException("Unknown named type reference: " + name);
-      }
+      case NAMED_TYPE_REF:
+        return fromNamedTypeRef(schema, builder, dependencies, ctx);
       case STRUCT:
         return createMessageField(
             schema, fieldName, nestedRows, dependencies, builder, ctx);
