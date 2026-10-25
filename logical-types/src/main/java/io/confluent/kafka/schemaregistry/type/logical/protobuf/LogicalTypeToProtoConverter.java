@@ -1490,10 +1490,28 @@ public class LogicalTypeToProtoConverter {
       builder = fromField(
           elementType, fieldName, fieldComment, fieldIndex,
           nestedRows, nestedEnums, dependencies, ctx);
+      refuseMapEntryName(elementType, builder.getTypeName(), fieldName);
     }
     builder.setLabel(Label.LABEL_REPEATED);
     builder.clearProto3Optional();
     return builder;
+  }
+
+  // The reader takes repeated messages named ...Entry with only key and value fields for a map's
+  // entries, so a pin cannot give an array's struct elements such a name.
+  private static void refuseMapEntryName(Schema element, String typeName, String fieldName) {
+    String name = typeName.substring(typeName.lastIndexOf('.') + 1);
+    if (name.endsWith(CommonConstants.MAP_ENTRY_SUFFIX) && isEntryShaped(element)) {
+      throw new ValidationException("Param " + ProtoTypeNames.NAME + " of array field "
+          + fieldName + " cannot end with " + CommonConstants.MAP_ENTRY_SUFFIX + ", got '" + name
+          + "': its key and value elements would read back as a map");
+    }
+  }
+
+  private static boolean isEntryShaped(Schema struct) {
+    return struct.getType() == Schema.Type.STRUCT && struct.getFields().size() == 2
+        && struct.getField(CommonConstants.KEY_FIELD) != null
+        && struct.getField(CommonConstants.VALUE_FIELD) != null;
   }
 
   private static void addComment(FieldDescriptorProto.Builder builder, String fieldComment) {

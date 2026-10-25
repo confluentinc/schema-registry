@@ -151,6 +151,19 @@ class NativeTypeNamesTest {
         .typeNameParams(parse("STRUCT p (u UNION(a ARRAY<STRUCT(x INT)>, b BOOLEAN));"), "p", "u"));
   }
 
+  // A union in a collection takes its branch names from the collection, and its base with them.
+  @Test
+  void testAvroBaseOfUnionInCollectionKept() {
+    for (String type : new String[] {"ARRAY<UNION(b STRUCT(x INT), s STRING)>",
+        "MAP<STRING, UNION(b STRUCT(x INT), s STRING)>"}) {
+      String ddl = "STRUCT p (a " + type + " WITH ('avro.name' = 'Kept'));";
+      assertThat(avro(ddl)).contains("\"name\":\"Kept_b\"");
+      assertThat(avroRoundTrip(ddl)).contains("'avro.name' = 'Kept'").doesNotContain("Kept_b");
+      assertEquals(Collections.singletonMap("avro.name", "Kept"),
+          LogicalTypeToAvroConverter.typeNameParams(parse(ddl), "p", "a"));
+    }
+  }
+
   // A field's map name exceptions are its own, though another field derives the same base.
   @Test
   void testAvroMapNameExceptionsScopedToField() {
@@ -346,6 +359,18 @@ class NativeTypeNamesTest {
         LogicalTypeToProtoConverter.branchTypeNameParams(logicalType, "p", "u");
     assertEquals(Collections.singletonMap("b",
         Collections.singletonMap("protobuf.name", "UBRow")), branches);
+  }
+
+  // The reader would take key and value elements named ...Entry for a map's entries.
+  @Test
+  void testProtoEntryPinOnArrayRefused() {
+    String array = "STRUCT p (xs ARRAY<STRUCT(key INT, value STRING) NOT NULL> NOT NULL "
+        + "WITH ('protobuf.name' = '%s'));";
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> proto(String.format(array, "CustomEntry")));
+    assertThat(e.getMessage()).contains("protobuf.name", "'CustomEntry'");
+    assertThat(protoRoundTrip(String.format(array, "Custom")))
+        .contains("ARRAY<STRUCT(", "'protobuf.name' = 'Custom'");
   }
 
   @Test
