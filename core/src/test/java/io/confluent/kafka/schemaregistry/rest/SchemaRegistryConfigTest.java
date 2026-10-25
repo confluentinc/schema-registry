@@ -228,4 +228,28 @@ public class SchemaRegistryConfigTest {
     props.setProperty(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG, "-FIELD_DELETD");
     new SchemaRegistryConfig(props);
   }
+
+  @Test
+  public void provenanceFieldPairingDefaultsToName() throws RestConfigException {
+    SchemaRegistryConfig config = new SchemaRegistryConfig(new Properties());
+    assertEquals("NAME",
+        config.getString(SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG));
+  }
+
+  @Test
+  public void provenanceFieldPairingAcceptsEitherCase() throws RestConfigException {
+    for (String value : Arrays.asList("CHECK_ID", "check_id", "name")) {
+      Properties props = new Properties();
+      props.setProperty(SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG, value);
+      assertEquals(value, new SchemaRegistryConfig(props)
+          .getString(SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG));
+    }
+  }
+
+  @Test(expected = ConfigException.class)
+  public void provenanceFieldPairingRejectsAnUnknownValue() throws RestConfigException {
+    Properties props = new Properties();
+    props.setProperty(SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG, "ID");
+    new SchemaRegistryConfig(props);
+  }
 }
