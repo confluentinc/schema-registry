@@ -238,7 +238,10 @@ public class SchemaDiff {
       }
     }
 
-    if (!schemaTypesEqual(original, update)) {
+    // A const is an enum of one value, so the two are compared as one type.
+    boolean constAndEnum = EnumSchemaDiff.isConstOrEnum(original)
+        && EnumSchemaDiff.isConstOrEnum(update);
+    if (!schemaTypesEqual(original, update) && !constAndEnum) {
       // TrueSchema extends EmptySchema
       if (original instanceof FalseSchema || update instanceof EmptySchema) {
         return;
@@ -274,10 +277,12 @@ public class SchemaDiff {
       StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
     } else if (original instanceof NumberSchema) {
       NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
-    } else if (original instanceof ConstSchema) {
+    } else if (original instanceof ConstSchema && update instanceof ConstSchema) {
       ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
-    } else if (original instanceof EnumSchema) {
+    } else if (original instanceof EnumSchema && update instanceof EnumSchema) {
       EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
+    } else if (EnumSchemaDiff.isConstOrEnum(original)) {
+      EnumSchemaDiff.compareConstAndEnum(ctx, original, update);
     } else if (original instanceof CombinedSchema) {
       CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
     } else if (original instanceof NotSchema) {
