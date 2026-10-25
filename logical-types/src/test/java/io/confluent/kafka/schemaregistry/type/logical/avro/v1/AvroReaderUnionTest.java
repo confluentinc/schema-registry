@@ -27,7 +27,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -59,9 +61,23 @@ class AvroReaderUnionTest {
   @ParameterizedTest
   @MethodSource("unionMappings")
   void testUnionTypeMapping(UnionMapping mapping) {
-    assertThat(AvroToLogicalTypeConverter.toRootSchema(
-            new AvroSchema(mapping.avroSchema)))
+    assertThat(withoutTypeNames(AvroToLogicalTypeConverter.toRootSchema(
+            new AvroSchema(mapping.avroSchema))))
         .isEqualTo(mapping.logicalType);
+  }
+
+  // A root union has no base to derive its members' type names from, so it pins them; this test
+  // is about types.
+  private static Schema withoutTypeNames(Schema union) {
+    List<UnionBranch> branches = new ArrayList<>();
+    for (UnionBranch branch : union.getBranches()) {
+      Map<String, Object> params = branch.getParams().entrySet().stream()
+          .filter(e -> !Schema.isTypeNameParam(e.getKey()))
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      branches.add(new UnionBranch(branch.getName(), branch.getSchema(), branch.getDoc(),
+          params.isEmpty() ? null : params));
+    }
+    return Schema.createUnion(branches).setNullable(union.isNullable());
   }
 
   // ---------- helpers ----------
