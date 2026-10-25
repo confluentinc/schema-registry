@@ -400,10 +400,13 @@ public class MockSchemaRegistryClientTest {
     @Test
     public void testGetIdWithoutMetadataFindsSchemaWithMetadata() throws Exception {
       AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
-      int id = client.register(defaultValueSubject, schema.copy(
-          new Metadata(null, Collections.singletonMap("confluent:edition", "2"), null), null));
+      Metadata metadata =
+          new Metadata(null, Collections.singletonMap("confluent:edition", "2"), null);
+      int id = client.register(defaultValueSubject, schema.copy(metadata, null));
       assertEquals(id, client.getId(defaultValueSubject, schema));
       assertEquals(1, client.getVersion(defaultValueSubject, schema));
+      // The lookup leaves the registered schema as it was.
+      assertEquals(metadata, client.getSchemaById(id).metadata());
     }
 
     @Test

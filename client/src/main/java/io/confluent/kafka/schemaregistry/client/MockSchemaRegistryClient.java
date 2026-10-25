@@ -772,6 +772,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
+      // The schema found, as registered: a lookup may omit its metadata and rule set.
+      Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
+          .get(retrievedId);
+      if (registered != null) {
+        schemaResponse = new RegisterSchemaResponse(registered);
+        schemaResponseMap.put(schema, schemaResponse);
+        return schemaResponse;
+      }
       Schema schemaEntity = new Schema(subject, schema.version(), retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
