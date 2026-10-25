@@ -407,6 +407,11 @@ public class MockSchemaRegistryClientTest {
       assertEquals(1, client.getVersion(defaultValueSubject, schema));
       // The lookup leaves the registered schema as it was.
       assertEquals(metadata, client.getSchemaById(id).metadata());
+      // Registered again with other metadata, the schema is found as the newer version.
+      int newer = client.register(defaultValueSubject, schema.copy(
+          new Metadata(null, Collections.singletonMap("confluent:edition", "3"), null), null));
+      assertEquals(newer, client.getId(defaultValueSubject, schema));
+      assertEquals(2, client.getVersion(defaultValueSubject, schema));
     }
 
     @Test

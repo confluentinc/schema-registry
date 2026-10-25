@@ -777,7 +777,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           .get(retrievedId);
       if (registered != null) {
         schemaResponse = new RegisterSchemaResponse(registered);
-        schemaResponseMap.put(schema, schemaResponse);
+        // Found by the latest version's metadata, the answer can change with a newer version.
+        if (schema.equals(parseSchemaOrElseThrow(registered))) {
+          schemaResponseMap.put(schema, schemaResponse);
+        }
         return schemaResponse;
       }
       Schema schemaEntity = new Schema(subject, schema.version(), retrievedId, schema);
