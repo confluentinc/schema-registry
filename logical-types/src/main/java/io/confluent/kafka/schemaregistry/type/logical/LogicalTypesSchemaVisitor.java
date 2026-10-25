@@ -1174,9 +1174,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
                 + value.toPlainString() + "' has scale " + value.scale()
                 + " (more digits after the decimal point than declared scale)");
           }
-          int valuePrecision = value.precision();
-          int valueScale = Math.max(value.scale(), 0);
-          int intDigits = valuePrecision - valueScale;
+          // Zero has no integer digits, and a negative scale adds them (1E+3 has four).
+          int intDigits = value.signum() == 0
+              ? 0 : Math.max(value.precision() - value.scale(), 0);
           int allowedIntDigits =
               p - (s == Schema.NO_PARAM ? Schema.DEFAULT_DECIMAL_SCALE : s);
           if (intDigits > allowedIntDigits) {
