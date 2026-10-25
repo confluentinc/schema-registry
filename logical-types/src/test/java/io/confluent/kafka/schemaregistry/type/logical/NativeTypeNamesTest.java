@@ -193,6 +193,17 @@ class NativeTypeNamesTest {
     assertEquals(readBack, avroRoundTrip(readBack));
   }
 
+  // A declared type's names are its own: the map name exceptions of the field using it do not
+  // reach into it, though one of its fields derives the field's base.
+  @Test
+  void testAvroMapNameExceptionsNotInDeclaredType() {
+    String ddl = "STRUCT p (f MAP<INT, N> WITH ('avro.name' = 'N_m', 'avro.entry.name' = 'Kept'));"
+        + " STRUCT N (m MAP<INT, STRING>);";
+    assertThat(avro(ddl)).contains("\"name\":\"Kept\"", "\"name\":\"N_m_Entry\"");
+    String readBack = avroRoundTrip(ddl);
+    assertEquals(readBack, avroRoundTrip(readBack));
+  }
+
   // A union with no base to derive from, as at the root, keeps its members' names; a union in a
   // map's value derives from the value's.
   @Test

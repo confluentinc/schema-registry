@@ -236,17 +236,33 @@ final class AvroTypeNames {
     }
   }
 
+  // The walk state a declared named type's names are made apart from, restored after it.
+  static final class Saved {
+    private final int pinnedDepth;
+    private final int depth;
+    private final Map<String, Map<String, Object>> exceptions;
+
+    private Saved(int pinnedDepth, int depth, Map<String, Map<String, Object>> exceptions) {
+      this.pinnedDepth = pinnedDepth;
+      this.depth = depth;
+      this.exceptions = exceptions;
+    }
+  }
+
   // A declared named type's names are its own; no field's base or pin reaches into it.
-  int[] enterNamedType() {
-    int[] saved = {pinnedDepth, depth};
+  Saved enterNamedType() {
+    final Saved saved = new Saved(pinnedDepth, depth, new HashMap<>(exceptionsByBase));
     pinnedDepth = 0;
     depth = 0;
+    exceptionsByBase.clear();
     return saved;
   }
 
-  void exitNamedType(int[] saved) {
-    pinnedDepth = saved[0];
-    depth = saved[1];
+  void exitNamedType(Saved saved) {
+    pinnedDepth = saved.pinnedDepth;
+    depth = saved.depth;
+    exceptionsByBase.clear();
+    exceptionsByBase.putAll(saved.exceptions);
   }
 
   // The name of the map entry record under base.

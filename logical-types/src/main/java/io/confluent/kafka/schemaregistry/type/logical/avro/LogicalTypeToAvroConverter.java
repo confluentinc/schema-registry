@@ -377,7 +377,7 @@ public class LogicalTypeToAvroConverter {
         if (ctx.hasNamedType(name)) {
           if (!ctx.isAlreadyConverted(name)) {
             Schema typeDef = ctx.getNamedType(name);
-            int[] saved = names(ctx).enterNamedType();
+            AvroTypeNames.Saved saved = names(ctx).enterNamedType();
             try {
               if (typeDef.getType() == Schema.Type.STRUCT) {
                 // Use the placeholder pattern so a recursive self-reference can
