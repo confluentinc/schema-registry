@@ -567,6 +567,12 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   @Override
+  public Schema visitEnumTypeExpr(LogicalTypesParser.EnumTypeExprContext ctx) {
+    Schema schema = buildEnum(ctx.enumBody());
+    return applyNullability(schema, ctx.nullability());
+  }
+
+  @Override
   public Schema visitUnionTypeExpr(LogicalTypesParser.UnionTypeExprContext ctx) {
     Schema schema = (Schema) visit(ctx.unionType());
     return applyNullability(schema, ctx.nullability());
