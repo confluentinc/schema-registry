@@ -164,6 +164,25 @@ class NativeTypeNamesTest {
     }
   }
 
+  // A map's key or value that is itself a map is named by its entry's base, which reads back.
+  @Test
+  void testAvroNamesOfMapInMapKept() {
+    for (String ddl : new String[] {
+        "STRUCT p (m MAP<INT, MAP<INT, STRING>> WITH ('avro.value.name' = 'Kept'));",
+        "STRUCT p (m MAP<MAP<INT, STRING>, INT> WITH ('avro.key.name' = 'Kept'));"}) {
+      assertThat(avro(ddl)).contains("\"name\":\"Kept_Entry\"");
+      String readBack = avroRoundTrip(ddl);
+      assertThat(readBack).contains("= 'Kept'");
+      assertEquals(readBack, avroRoundTrip(readBack));
+    }
+    assertWritesBack("{\"type\":\"record\",\"name\":\"Order\",\"fields\":[{\"name\":\"m\","
+        + "\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"M_Entry\","
+        + "\"connect.internal.type\":\"MapEntry\",\"fields\":[{\"name\":\"key\",\"type\":\"int\"},"
+        + "{\"name\":\"value\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\","
+        + "\"name\":\"Inner_Entry\",\"connect.internal.type\":\"MapEntry\",\"fields\":["
+        + "{\"name\":\"key\",\"type\":\"int\"},{\"name\":\"value\",\"type\":\"string\"}]}}}]}}}]}");
+  }
+
   // A field's map name exceptions are its own, though another field derives the same base.
   @Test
   void testAvroMapNameExceptionsScopedToField() {

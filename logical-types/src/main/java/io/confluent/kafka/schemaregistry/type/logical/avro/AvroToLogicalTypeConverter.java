@@ -1153,8 +1153,10 @@ public class AvroToLogicalTypeConverter {
     }
     if (ctx != null) {
       putUnionNameBase(ctx, at.union, base);
-      putUnionNameBase(ctx, at.keyUnion, base + AvroTypeNames.KEY_SUFFIX);
-      putUnionNameBase(ctx, at.valueUnion, base + AvroTypeNames.VALUE_SUFFIX);
+      putUnionNameBase(ctx, at.keyUnion,
+          at.key != null ? at.key : base + AvroTypeNames.KEY_SUFFIX);
+      putUnionNameBase(ctx, at.valueUnion,
+          at.value != null ? at.value : base + AvroTypeNames.VALUE_SUFFIX);
     }
     return nameParams(at, base, derived, pin);
   }
@@ -1167,7 +1169,8 @@ public class AvroToLogicalTypeConverter {
     if (base != null && (pin ? at.generatesAny() : !base.equals(derived))) {
       params.put(AvroTypeNames.NAME, base);
     }
-    putException(params, AvroTypeNames.ENTRY_NAME, at.entry, base, AvroTypeNames.ENTRY_SUFFIX);
+    putException(params, AvroTypeNames.ENTRY_NAME,
+        at.entry != null ? at.entry.getFullName() : null, base, AvroTypeNames.ENTRY_SUFFIX);
     putException(params, AvroTypeNames.KEY_NAME, at.key, base, AvroTypeNames.KEY_SUFFIX);
     putException(params, AvroTypeNames.VALUE_NAME, at.value, base, AvroTypeNames.VALUE_SUFFIX);
     return params;
@@ -1180,10 +1183,10 @@ public class AvroToLogicalTypeConverter {
     }
   }
 
-  private static void putException(Map<String, Object> params, String key,
-      org.apache.avro.Schema type, String base, String suffix) {
-    if (type != null && (base == null || !type.getFullName().equals(base + suffix))) {
-      params.put(key, type.getFullName());
+  private static void putException(Map<String, Object> params, String key, String name,
+      String base, String suffix) {
+    if (name != null && (base == null || !name.equals(base + suffix))) {
+      params.put(key, name);
     }
   }
 
@@ -1221,8 +1224,9 @@ public class AvroToLogicalTypeConverter {
   private static final class GeneratedNames {
     private org.apache.avro.Schema self;
     private org.apache.avro.Schema entry;
-    private org.apache.avro.Schema key;
-    private org.apache.avro.Schema value;
+    // A map's key and value type names: its own, or the base of what it holds, as a map's entry.
+    private String key;
+    private String value;
     private org.apache.avro.Schema union;
     // What carries the union's branch hints: the field, or the array, map or entry field it is in.
     private JsonProperties unionHolder;
@@ -1252,9 +1256,9 @@ public class AvroToLogicalTypeConverter {
             org.apache.avro.Schema.Field valueField = entry.getField(CommonConstants.VALUE_FIELD);
             GeneratedNames keyNames = new GeneratedNames(keyField.schema(), keyField);
             GeneratedNames valueNames = new GeneratedNames(valueField.schema(), valueField);
-            key = keyNames.self;
+            key = keyNames.base();
             keyUnion = keyNames.union;
-            value = valueNames.self;
+            value = valueNames.base();
             valueUnion = valueNames.union;
           } else {
             walk(schema.getElementType(), schema);
