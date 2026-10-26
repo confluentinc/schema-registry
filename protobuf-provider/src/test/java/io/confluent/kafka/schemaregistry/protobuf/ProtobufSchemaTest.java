@@ -25,18 +25,21 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
@@ -3806,6 +3809,52 @@ public class ProtobufSchemaTest {
     ProtobufSchema normalized = new ProtobufSchema(schema.normalize().canonicalString());
     assertEquals("google.protobuf.Int64Value", normalized.name());
     schema.validate(false);
+  }
+
+  // A generated class's schema finds a primitive or external DDL root stored as a public-import
+  // wrapper of its file, comparing the file's references as registered.
+  @Test
+  public void testNativeFileLooksUpItsPublicImportWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int bigint = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    assertEquals(bigint,
+        client.getId("bigint", new ProtobufSchema(Int64Value.getDescriptor())));
+
+    String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
+        + "message Foo {\n  string id = 1;\n}\nmessage Bar {\n  com.Other o = 1;\n}\n";
+    List<SchemaReference> otherRef =
+        Collections.singletonList(new SchemaReference("other.proto", "other", 1));
+    Map<String, String> resolved = Collections.singletonMap("other.proto", other);
+    client.register("other", new ProtobufSchema(other));
+    client.register("leaf", new ProtobufSchema(leaf, otherRef, resolved, null, null));
+    int external = client.register("external", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        Collections.singletonMap("com.Bar", leaf), null, null));
+    assertEquals(external, client.getId("external",
+        new ProtobufSchema(leaf, otherRef, resolved, null, null)));
+
+    // Other text, or other references, find nothing
+    assertNotFound(client, "external", new ProtobufSchema(
+        leaf.replace("string id", "bytes id"), otherRef, resolved, null, null));
+    assertNotFound(client, "external", new ProtobufSchema(leaf,
+        Collections.singletonList(new SchemaReference("other.proto", "other2", 1)),
+        resolved, null, null));
+    // The wrapper does not find a version holding the file
+    assertNotFound(client, "leaf", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        Collections.singletonMap("com.Bar", leaf), null, null));
+  }
+
+  private static void assertNotFound(
+      MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId(subject, schema));
+    assertEquals(404, e.getStatus());
   }
 
   @Test
