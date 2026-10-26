@@ -241,23 +241,31 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     Map<Integer, Schema> idSchemaMap =
         idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
+      // As in the registry, the newest version a schema looks up is the one found, and a schema
+      // registered that a version looks up is that version.
+      Map<ParsedSchema, Integer> versions =
+          schemaToVersionCache.getOrDefault(subject, Collections.emptyMap());
+      Integer found = null;
+      int foundVersion = 0;
       for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
+        if (registerRequest && id >= 0 && id != entry.getKey()) {
+          continue;
+        }
         ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
         if (schemasEqual(parsedSchema, schema)) {
-          if (registerRequest) {
-            if (id < 0 || id == entry.getKey()) {
-              // As in the registry, a schema a version looks up is that version.
-              Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-              if (versions == null
-                  || versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema))) {
-                generateVersion(subject, schema);
-              }
-            } else {
-              continue;
-            }
+          int version = versions.getOrDefault(parsedSchema, 0);
+          if (found == null || version > foundVersion) {
+            found = entry.getKey();
+            foundVersion = version;
           }
-          return entry.getKey();
         }
+      }
+      if (found != null) {
+        if (registerRequest
+            && versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema))) {
+          generateVersion(subject, schema);
+        }
+        return found;
       }
     } else {
       if (!registerRequest) {
@@ -392,13 +400,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
       // Found as another form of a registered schema, it is answered with that one, which is
-      // left as it was, as in the registry.
+      // left as it was, as in the registry. Not cached: deleting the version would not clear it.
       Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
           .get(retrievedId);
       if (registered != null && !schema.equals(parseSchemaOrElseThrow(registered))) {
-        schemaResponse = new RegisterSchemaResponse(registered);
-        schemaResponseMap.put(schema, schemaResponse);
-        return schemaResponse;
+        return new RegisterSchemaResponse(registered);
       }
       Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);

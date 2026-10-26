@@ -3868,6 +3868,31 @@ public class ProtobufSchemaTest {
         wrapperResolved, null, null));
   }
 
+  // As in the registry, a native file finds the newest wrapper of its file, and a permanently
+  // deleted wrapper is not found again.
+  @Test
+  public void testNativeFileFindsTheNewestLiveWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String wrappers = "google/protobuf/wrappers.proto";
+    client.register("number",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    int newest = client.register("number", new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"" + wrappers + "\";\n"));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(newest, client.getId("number", generated));
+    assertEquals(newest, client.register("number", generated));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("number"));
+
+    client.register("bigint",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    client.register("bigint", generated);
+    client.deleteSchemaVersion("bigint", "1", true);
+    int again = client.register("bigint", generated);
+    assertFalse(client.getAllVersions("bigint").isEmpty());
+    assertEquals(again, client.getId("bigint", generated));
+  }
+
   private static void assertNotFound(
       MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
     RestClientException e = assertThrows(RestClientException.class,
