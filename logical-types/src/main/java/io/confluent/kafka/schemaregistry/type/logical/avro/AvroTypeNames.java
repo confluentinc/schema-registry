@@ -125,6 +125,12 @@ final class AvroTypeNames {
     taken.addAll(byName.keySet());
     Map<Integer, String> suffixed = new HashMap<>();
     for (Map.Entry<String, List<Integer>> e : byName.entrySet()) {
+      // A name only one type has, and that need not yield, collides with nothing: its body,
+      // which serializes the whole subtree, is never compared.
+      if (e.getValue().size() == 1 && !reserved.contains(e.getKey())
+          && !mustYield.contains(e.getValue().get(0))) {
+        continue;
+      }
       List<String> kept = new ArrayList<>();
       for (int i : e.getValue()) {
         if (sites.get(i).kind != Kind.DERIVED) {
