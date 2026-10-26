@@ -347,6 +347,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       default:
         break;
     }
+    checkNamedClassIsSpecificRecord(writerSchema);
     Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
     if (readerClass == null) {
       if (allowFallback) {
@@ -371,6 +372,31 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                        + " specified by the "
                                        + "writers schema is not allowed to be instantiated "
                                        + "to find the readers schema.");
+    }
+  }
+
+  // SpecificData.getClass initializes the class it loads, so check it first without initializing.
+  private static void checkNamedClassIsSpecificRecord(Schema writerSchema) {
+    Schema.Type type = writerSchema.getType();
+    if (type != Schema.Type.RECORD && type != Schema.Type.ENUM && type != Schema.Type.FIXED) {
+      return;
+    }
+    Class<?> namedClass = loadWithoutInitializing(SpecificData.getClassName(writerSchema));
+    if (namedClass != null && !SpecificRecord.class.isAssignableFrom(namedClass)) {
+      throw new SerializationException(writerSchema.getFullName() + " specified by the writers "
+          + "schema is not a " + SpecificRecord.class.getName() + ", so it will not be loaded to "
+          + "find the readers schema.");
+    }
+  }
+
+  // Same lookup order as Avro's ClassUtils.forName, retrying with '$' for nested classes.
+  private static Class<?> loadWithoutInitializing(String name) {
+    try {
+      return Class.forName(name, false, SpecificData.get().getClassLoader());
+    } catch (ClassNotFoundException e) {
+      int dot = name.lastIndexOf('.');
+      return dot < 0 ? null
+          : loadWithoutInitializing(name.substring(0, dot) + '$' + name.substring(dot + 1));
     }
   }
 
