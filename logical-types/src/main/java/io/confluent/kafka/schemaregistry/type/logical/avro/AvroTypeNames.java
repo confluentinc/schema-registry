@@ -188,6 +188,13 @@ final class AvroTypeNames {
   List<org.apache.avro.Schema> distinctMembers(List<org.apache.avro.Schema> members) {
     Map<String, org.apache.avro.Schema> byName = new HashMap<>();
     List<org.apache.avro.Schema> distinct = new ArrayList<>();
+    // A stand-in takes a name no member has, nor an earlier stand-in.
+    Set<String> taken = new HashSet<>();
+    for (org.apache.avro.Schema member : members) {
+      if (isNamed(member)) {
+        taken.add(member.getFullName());
+      }
+    }
     for (org.apache.avro.Schema member : members) {
       if (!isNamed(member)) {
         distinct.add(member);
@@ -208,8 +215,12 @@ final class AvroTypeNames {
             + "of one union; rename one of them");
       }
       mustYield.add(yielding);
+      String standIn;
+      for (int n = 1; !taken.add(standIn = name + "_standin" + n); n++) {
+        // the next free name
+      }
       distinct.add(org.apache.avro.Schema.createRecord(
-          name + "_standin" + distinct.size(), null, null, false, Collections.emptyList()));
+          standIn, null, null, false, Collections.emptyList()));
     }
     return distinct;
   }

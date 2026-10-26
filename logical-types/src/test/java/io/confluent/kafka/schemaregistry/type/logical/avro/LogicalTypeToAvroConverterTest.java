@@ -258,6 +258,10 @@ class LogicalTypeToAvroConverterTest {
     assertSuffixed("STRUCT p (u UNION(a STRUCT(x INT) WITH ('avro.name' = 'p_u_b'), "
             + "b STRUCT(x INT)));",
         "p_u_b_2", "b STRUCT(x INT) NOT NULL WITH('avro.name' = 'p_u_b_2')");
+    // The stand-in holding b's place takes a name no member has
+    assertThat(toAvroText("STRUCT p (u UNION(a STRUCT(x INT) WITH ('avro.name' = 'p_u_b'), "
+            + "b STRUCT(y STRING), c STRUCT(z INT) WITH ('avro.name' = 'p_u_b_standin1')));"))
+        .contains("\"name\":\"p_u_b_2\"", "\"name\":\"p_u_b_standin1\"");
     assertSuffixed("STRUCT p (a ARRAY<UNION(b ENUM('X'), r p_a_b)>); ENUM p_a_b ('Y');",
         "p_a_b_2", "b ENUM('X') NOT NULL WITH('avro.name' = 'p_a_b_2')");
     assertThat(toAvroText("STRUCT p_b (y STRING); TYPE UNION(b STRUCT(x INT), r p_b) NOT NULL;"))
