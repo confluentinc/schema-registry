@@ -122,8 +122,8 @@ public class ConfigResource {
         && (effectiveLevel == CompatibilityLevel.FORWARD
             || effectiveLevel == CompatibilityLevel.FORWARD_TRANSITIVE)) {
       throw new RestInvalidCompatibilityException(
-          "compatibilityPolicy=LOGICAL cannot be combined with compatibilityLevel="
-              + effectiveLevel + ": Iceberg only supports backward-compatible schema evolution");
+          "compatibilityLevel='" + effectiveLevel + "' doesn't work with "
+              + "compatibilityPolicy='LOGICAL'. Use BACKWARD or FULL.");
     }
   }
 

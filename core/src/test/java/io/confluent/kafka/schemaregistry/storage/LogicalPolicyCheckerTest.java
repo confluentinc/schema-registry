@@ -103,7 +103,7 @@ class LogicalPolicyCheckerTest {
     assertTrue(result.get() instanceof List, "the check threw " + result.get());
     List<?> errors = (List<?>) result.get();
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).toString().contains("named types inlined"), errors.toString());
+    assertTrue(errors.get(0).toString().contains("nesting exceeds"), errors.toString());
   }
 
   @Test
@@ -123,7 +123,7 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(chain(150, false),
         List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("named types inlined"), errors.toString());
+    assertTrue(errors.get(0).contains("nesting exceeds"), errors.toString());
     errors = LogicalPolicyChecker.check(chain(90, false),
         List.of(new SimpleParsedSchemaHolder(chain(150, true))), CompatibilityLevel.BACKWARD);
     assertTrue(errors.isEmpty(), errors.toString());
@@ -281,30 +281,32 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void backwardAndForwardMessagesNameTheWriterAndReaderCorrectly() {
+  void backwardAndForwardMessagesNameTheFieldCorrectly() {
     // Same pair as backwardAndForwardCheckOppositeDirections, but pinning the actual wording
     // rather than just which Rule fired -- this is exactly the fact that swapping which schema is
-    // "original" and which is "update" between the two directions is meant to preserve.
+    // "original" and which is "update" between the two directions must still name the same field
+    // correctly, per the customer-facing error-message spec (no "writer's/reader's schema").
     //
     // REQUIRED_FIELD_ADDED fires in both FLINK and ICEBERG_V2 at the same path, and
     // describeFinding keeps only one representative message -- FLINK's, since it precedes
-    // ICEBERG_V2 in MODES -- so this pins FLINK's wording ("column..."), not ICEBERG's ("field...").
+    // ICEBERG_V2 in MODES -- so this pins FLINK's wording ("This schema adds..."), not ICEBERG's.
     // FIELD_DELETED has no FlinkComparison counterpart, so that one is unambiguous.
     List<String> backwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.BACKWARD);
     assertTrue(backwardErrors.stream().anyMatch(e -> e.contains(
-        "column is required by the reader's schema but missing from the writer's schema")),
+        "This schema adds 'b' as a required field. Add it as an optional field by setting its "
+            + "default value to null.")),
         backwardErrors.toString());
 
     List<String> forwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_B), List.of(holder(RECORD_A)), CompatibilityLevel.FORWARD);
     assertTrue(forwardErrors.stream().anyMatch(e -> e.contains(
-        "field present in the writer's schema is missing from the reader's schema")),
+        "Schema no longer includes field 'b'. Restore the field.")),
         forwardErrors.toString());
   }
 
   @Test
-  void backwardAndForwardTypeChangeMessagesNameTheWriterAndReaderCorrectly() {
+  void backwardAndForwardTypeChangeMessagesNameTheFieldCorrectly() {
     // A shared-helper message (describeChange, behind UNSUPPORTED_TYPE_CHANGE) rather than a
     // field-presence one. Unlike field presence, narrowing is genuinely asymmetric: long-write /
     // int-read is unsafe (truncates), but int-write / long-read is safe (widens) -- so reusing the
@@ -313,19 +315,21 @@ class LogicalPolicyCheckerTest {
     // hazard (data written as BIGINT, read as INT) via both directions, BACKWARD takes it with
     // new=NARROW/previous=LONG, and FORWARD takes it with the pair swapped, new=LONG/previous=
     // NARROW -- both then resolve to writer=LONG, reader=NARROW, and both must report the same
-    // message.
+    // message. FLINK's wording wins the merge (it precedes ICEBERG_V2 in MODES): BIGINT->INT
+    // isn't a supported Flink implicit cast at all, so Part A's generic reason fires, not
+    // Iceberg's more specific "can't hold all values of" one.
     List<String> backwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_NARROW), List.of(holder(RECORD_A_LONG)),
         CompatibilityLevel.BACKWARD);
     assertTrue(backwardErrors.stream().anyMatch(e -> e.contains(
-        "type is BIGINT in the writer's schema and INT in the reader's schema")),
+        "The type of field 'n' changed from 'BIGINT' to 'INT'. Keep the original type.")),
         backwardErrors.toString());
 
     List<String> forwardErrors = LogicalPolicyChecker.check(
         new AvroSchema(RECORD_A_LONG), List.of(holder(RECORD_A_NARROW)),
         CompatibilityLevel.FORWARD);
     assertTrue(forwardErrors.stream().anyMatch(e -> e.contains(
-        "type is BIGINT in the writer's schema and INT in the reader's schema")),
+        "The type of field 'n' changed from 'BIGINT' to 'INT'. Keep the original type.")),
         forwardErrors.toString());
   }
 
@@ -370,7 +374,7 @@ class LogicalPolicyCheckerTest {
     List<String> errors = LogicalPolicyChecker.check(
         unconvertible, List.of(), CompatibilityLevel.BACKWARD);
     assertEquals(1, errors.size());
-    assertTrue(errors.get(0).contains("cannot be represented as a logical type"), errors.toString());
+    assertTrue(errors.get(0).contains("can't be converted to a table"), errors.toString());
   }
 
   @Test
@@ -385,7 +389,7 @@ class LogicalPolicyCheckerTest {
         unconvertible, List.of(), CompatibilityLevel.BACKWARD);
     assertEquals(1, errors.size());
     assertEquals("{errorType:\"UNREPRESENTABLE_TYPE\", category:[\"FLINK\", \"ICEBERG_V2\"], "
-        + "description:\"Schema cannot be represented as a logical type: "
+        + "description:\"This schema can't be converted to a table. "
         + "format=logical is not supported for schema type 'XML'\", additionalInfo:\"\"}",
         errors.get(0));
   }
