@@ -232,6 +232,19 @@ class LogicalTypeToAvroConverterTest {
         "p_u_b_2", "u_b STRUCT(y STRING) WITH('avro.name' = 'p_u_b_2')");
   }
 
+  // An inline enum's derived name yields to a declared type's, as an inline struct's does, and
+  // stays anonymous.
+  @Test
+  void testInlineEnumNameTakenByDeclaredType() {
+    assertSuffixed("STRUCT p (f ENUM('X'), n p_f); ENUM p_f ('Y');",
+        "p_f_2", "f ENUM('X') WITH('avro.name' = 'p_f_2'), n p_f); ENUM p_f ('Y');");
+    assertSuffixed("STRUCT p (n p_f, f ENUM('X')); STRUCT p_f (b STRING);",
+        "p_f_2", "f ENUM('X') WITH('avro.name' = 'p_f_2')); STRUCT p_f (b STRING);");
+    assertThat(toAvroText("STRUCT p (f ENUM('X'), n p_f); ENUM p_f ('Y');"))
+        .contains("\"name\":\"p_f_2\",\"symbols\":[\"X\"],\"logical.anonymous\":\"true\"")
+        .contains("\"name\":\"p_f\",\"symbols\":[\"Y\"]}");
+  }
+
   private static void assertSuffixed(String ddl, String name, String readBack) {
     String avro = toAvroText(ddl);
     assertThat(avro).contains("\"name\":\"" + name + "\"");

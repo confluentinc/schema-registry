@@ -460,20 +460,20 @@ public class LogicalTypeToAvroConverter {
             .map(EnumValue::getSymbol)
             .collect(Collectors.toList());
         AvroTypeNames names = names(ctx);
+        // A declared enum is converted outside every field, so an inline enum whose derived name
+        // is a declared type's is not taken for it.
+        boolean named = names.atRoot() && ctx.hasNamedType(rowName) || isNamedRoot(rowName, ctx);
         org.apache.avro.Schema enumSchema = SchemaBuilder.enumeration(names.allocate(rowName,
-                ctx.hasNamedType(rowName) || isNamedRoot(rowName, ctx) || names.atRoot()
-                    ? Kind.FIXED : Kind.DERIVED))
+                named || names.atRoot() ? Kind.FIXED : Kind.DERIVED))
             .doc(schema.getDoc())
             .symbols(symbols.toArray(new String[0]));
         names.attach(enumSchema);
         if (!ctx.isV1()) {
           addSchemaTags(enumSchema, schema);
-          // Anonymous unless this enum was reached as a named-type reference
-          // (rowName equals the qualified name of a registered named type), or it
+          // Anonymous unless this enum was reached as a named-type reference, or it
           // is the named root (a bare inline ENUM carrying LogicalType.name).
           addNamedTypeAliases(enumSchema, schema);
-          addSchemaParams(enumSchema, schema,
-              !ctx.hasNamedType(rowName) && !isNamedRoot(rowName, ctx));
+          addSchemaParams(enumSchema, schema, !named);
           addEnumValueMeta(enumSchema, schema);
         }
         return enumSchema;
