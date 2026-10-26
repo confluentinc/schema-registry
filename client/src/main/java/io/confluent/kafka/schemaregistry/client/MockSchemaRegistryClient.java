@@ -246,7 +246,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         if (schemasEqual(parsedSchema, schema)) {
           if (registerRequest) {
             if (id < 0 || id == entry.getKey()) {
-              generateVersion(subject, schema);
+              // As in the registry, a schema a version looks up is that version.
+              Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+              if (versions == null
+                  || versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema))) {
+                generateVersion(subject, schema);
+              }
             } else {
               continue;
             }
@@ -386,6 +391,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
+      // Found as another form of a registered schema, it is answered with that one, which is
+      // left as it was, as in the registry.
+      Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
+          .get(retrievedId);
+      if (registered != null && !schema.equals(parseSchemaOrElseThrow(registered))) {
+        schemaResponse = new RegisterSchemaResponse(registered);
+        schemaResponseMap.put(schema, schemaResponse);
+        return schemaResponse;
+      }
       Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
@@ -662,6 +676,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
     if (next != null && versions.containsKey(next)) {
       return versions.get(next);
+    }
+    // As in the registry, a version is found by any form that looks it up, the latest first.
+    if (versions != null) {
+      for (ParsedSchema form : next != null ? Arrays.asList(schema, next)
+          : Collections.singletonList(schema)) {
+        Optional<Integer> found = versions.entrySet().stream()
+            .filter(entry -> schemasEqual(entry.getKey(), form))
+            .map(Map.Entry::getValue)
+            .max(Integer::compare);
+        if (found.isPresent()) {
+          return found.get();
+        }
+      }
     }
     throw new RestClientException("Subject Not Found", 404, 40401);
   }
