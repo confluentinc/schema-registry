@@ -19,7 +19,9 @@ import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
+import io.confluent.kafka.schemaregistry.storage.ProvenancePolicyChecker.PairBy;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -198,6 +200,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
 
   public static final String SCHEMA_LOGICAL_CHECKS_CONFIG = "schema.logical.checks";
+
+  public static final String PROVENANCE_FIELD_PAIRING_CONFIG = "provenance.field.pairing";
+  public static final String PROVENANCE_FIELD_PAIRING_DEFAULT = PairBy.NAME.name();
 
   public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
   public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
@@ -464,6 +469,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "compatibilityPolicy=LOGICAL runs, as a comma-separated list of +CHECK to enable a check "
       + "and -CHECK to disable it, e.g. -FIELD_DELETED. A check not listed keeps its default: "
       + "every check is enabled except FIELD_REORDERED.";
+  protected static final String PROVENANCE_FIELD_PAIRING_DOC = "How the provenance check of "
+      + "compatibilityPolicy=LOGICAL pairs the fields of a version with those of the versions it "
+      + "is checked against: NAME pairs them by name, as without provenance, and CHECK_ID by "
+      + "provenance check id.";
   protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
       + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String REJECT_EMPTY_SUBJECT_DOC =
@@ -744,6 +753,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_LOGICAL_CHECKS_CONFIG, ConfigDef.Type.LIST, "",
         new LogicalChecksValidator(),
         ConfigDef.Importance.LOW, LOGICAL_CHECKS_DOC
+    )
+    .define(PROVENANCE_FIELD_PAIRING_CONFIG, ConfigDef.Type.STRING,
+        PROVENANCE_FIELD_PAIRING_DEFAULT, EnumRecommender.in(PairBy.values()),
+        ConfigDef.Importance.LOW, PROVENANCE_FIELD_PAIRING_DOC
     )
     .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
