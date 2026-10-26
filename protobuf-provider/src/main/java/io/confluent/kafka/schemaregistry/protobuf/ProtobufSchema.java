@@ -2569,9 +2569,27 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ProtobufSchema imported = prev instanceof ProtobufSchema
         ? ((ProtobufSchema) prev).importedFile(this) : null;
-    // The lookup may be normalized, while a built-in file is only ever in its raw form.
-    return imported != null && (ParsedSchema.super.canLookup(imported, fetcher)
-        || ParsedSchema.super.canLookup(imported.normalize(), fetcher));
+    if (imported == null) {
+      return false;
+    }
+    if (ParsedSchema.super.canLookup(imported, fetcher)) {
+      return true;
+    }
+    // The lookup may be normalized, while a built-in file is only ever in its raw form; but not
+    // past a map entry message, whose removal would move the indexes a reader resolves.
+    return !hasMapEntry(imported.schemaObj.getTypes())
+        && ParsedSchema.super.canLookup(imported.normalize(), fetcher);
+  }
+
+  private static boolean hasMapEntry(List<TypeElement> types) {
+    for (TypeElement type : types) {
+      if (type instanceof MessageElement && (findOption(MAP_ENTRY, type.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false)
+          || hasMapEntry(type.getNestedTypes()))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

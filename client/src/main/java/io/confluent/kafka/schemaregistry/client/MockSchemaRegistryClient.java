@@ -258,7 +258,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
         ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
         if (schemasEqual(parsedSchema, schema)) {
-          Integer live = versions.get(parsedSchema);
+          // Live whatever version it carries: a parse is shared by subjects registering it.
+          ParsedSchema versionless = parsedSchema.copy((Integer) null);
+          Integer live = versions.entrySet().stream()
+              .filter(v -> v.getKey().copy((Integer) null).equals(versionless))
+              .map(Map.Entry::getValue)
+              .max(Integer::compare)
+              .orElse(null);
           // A deleted version is found again only by the schema registered as it.
           if (live == null && !parsedSchema.equals(schema)) {
             continue;

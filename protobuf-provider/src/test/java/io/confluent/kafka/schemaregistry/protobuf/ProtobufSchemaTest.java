@@ -3938,6 +3938,45 @@ public class ProtobufSchemaTest {
     assertEquals(Arrays.asList(1, 2), client.getAllVersions("explicit"));
   }
 
+  // A normalized lookup drops a map entry message, which moves a later message's indexes; it does
+  // not find a wrapper of a raw file holding one, whose indexes a reader resolves.
+  @Test
+  public void testNormalizedLookupSkipsAWrapperOfAFileWithMapEntries() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String leaf = "syntax = \"proto3\";\npackage com;\n"
+        + "message Parent {\n  repeated ItemsEntry items = 1;\n"
+        + "  message ItemsEntry {\n    option map_entry = true;\n"
+        + "    string key = 1;\n    string value = 2;\n  }\n"
+        + "  message Child {\n    int32 n = 1;\n  }\n}\n";
+    ProtobufSchema generated = new ProtobufSchema(leaf);
+    assertFalse(generated.toMessageIndexes("com.Parent.Child", false)
+        .equals(generated.toMessageIndexes("com.Parent.Child", true)));
+    client.register("leaf", generated);
+    int id = client.register("child", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Parent.Child"),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", leaf), null, null));
+    assertEquals(id, client.getId("child", generated));
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId("child", generated, true));
+    assertEquals(404, e.getStatus());
+  }
+
+  // A wrapper registered in two subjects carrying different versions is live in each.
+  @Test
+  public void testNativeFileFindsAWrapperRegisteredInAnotherSubjectToo() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema wrapper = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    int a = client.register("a", wrapper.copy(1));
+    int b = client.register("b", wrapper.copy(2));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(a, client.getId("a", generated));
+    assertEquals(b, client.getId("b", generated));
+  }
+
   private static void assertNotFound(
       MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
     RestClientException e = assertThrows(RestClientException.class,
