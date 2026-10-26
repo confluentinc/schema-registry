@@ -38,9 +38,11 @@ import java.util.Arrays;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
@@ -67,8 +69,10 @@ import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1678,6 +1682,42 @@ public class KafkaAvroSerializerTest {
         new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
   }
 
+  // A static initializer runs once per JVM, so each test has its own probe. The flags live here
+  // so that reading one does not initialize its probe.
+  static final AtomicBoolean TOP_LEVEL_PROBE_INITIALIZED = new AtomicBoolean(false);
+  static final AtomicBoolean NESTED_PROBE_INITIALIZED = new AtomicBoolean(false);
+
+  private static Schema probeSchema(String name) {
+    return SchemaBuilder.record(name).namespace("io.confluent.kafka.serializers")
+        .fields().requiredString("field1").endRecord();
+  }
+
+  @Test
+  public void testRecordNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema schema = probeSchema("TopLevelInitProbe");
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    assertThrows(SerializationException.class,
+        () -> specificAvroDeserializer.deserialize(topic, bytes));
+    assertFalse("class named by the writer schema must not be initialized",
+        TOP_LEVEL_PROBE_INITIALIZED.get());
+  }
+
+  @Test
+  public void testRecordInsideArrayNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema elementSchema = probeSchema("NestedInitProbe");
+    GenericData.Array<GenericRecord> array =
+        new GenericData.Array<>(1, Schema.createArray(elementSchema));
+    array.add(new GenericRecordBuilder(elementSchema).set("field1", "hello").build());
+    byte[] bytes = avroSerializer.serialize(topic, array);
+
+    assertThrows(SerializationException.class,
+        () -> specificAvroDeserializer.deserialize(topic, bytes));
+    assertFalse("class named by the writer schema must not be initialized",
+        NESTED_PROBE_INITIALIZED.get());
+  }
+
   static class RecordWithUUID {
     UUID uuid;
 
@@ -1697,5 +1737,19 @@ public class KafkaAvroSerializerTest {
       RecordWithUUID that = (RecordWithUUID) obj;
       return Objects.equals(this.uuid, that.uuid);
     }
+  }
+}
+
+/** Stands in for a class on the consumer classpath with a side effect in its initializer. */
+class TopLevelInitProbe {
+  static {
+    KafkaAvroSerializerTest.TOP_LEVEL_PROBE_INITIALIZED.set(true);
+  }
+}
+
+/** Same, for the test where the record is nested inside an array. */
+class NestedInitProbe {
+  static {
+    KafkaAvroSerializerTest.NESTED_PROBE_INITIALIZED.set(true);
   }
 }
