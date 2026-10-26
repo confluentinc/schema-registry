@@ -126,6 +126,8 @@ public class Difference {
       Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL));
 
   private String error() {
+    // Callers pass the message to String.format to fill in the %s placeholders
+    final String jsonPath = this.jsonPath.replace("%", "%%");
     String message = "";
     if (keywordAddedOrRemoved.contains(type)) {
       message = "The keyword at path '" + jsonPath + "' in the %s schema is not present in "
@@ -149,13 +151,13 @@ public class Difference {
       message = "A type at path '" + jsonPath + "' is different between the "
                   + "%s schema and the %s schema";
     } else {
-      message = propertyOrItemError();
+      message = propertyOrItemError(jsonPath);
     }
     return message;
   }
 
   @SuppressWarnings("CyclomaticComplexity")
-  private String propertyOrItemError() {
+  private String propertyOrItemError(final String jsonPath) {
     if (propertyOrItemAddedToOpen.contains(type)) {
       return "The %s schema has an open content model and has a property or item at "
                + "path '" + jsonPath + "' which is missing in the %s schema";
