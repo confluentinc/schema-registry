@@ -54,6 +54,8 @@ public final class FromLogicalContext<T> {
   // Source-ref-name → already-emitted rename, so a file with N contained
   // types only contributes ONE renamed clone to externalDependencies.
   private final Map<String, String> externalFileRenamedTo = new LinkedHashMap<>();
+  // The writer's state for the names of the types it generates, which is format-specific.
+  private Object typeNames;
 
   public FromLogicalContext(LogicalType logicalType) {
     this(logicalType, LogicalTypeVersion.V2);
@@ -125,6 +127,14 @@ public final class FromLogicalContext<T> {
 
   public void unmarkInProgress(String name) {
     inProgressNamedTypes.remove(name);
+  }
+
+  public Object getTypeNames() {
+    return typeNames;
+  }
+
+  public void setTypeNames(Object typeNames) {
+    this.typeNames = typeNames;
   }
 
   public List<FileDescriptor> getExternalDependencies() {
