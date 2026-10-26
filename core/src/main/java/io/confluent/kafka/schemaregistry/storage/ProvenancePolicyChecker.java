@@ -67,10 +67,10 @@ import org.slf4j.LoggerFactory;
  * <p>A compatibility group selects the versions compared; provenance ignores groups, as the
  * endpoint's ids do, so the range includes other groups' versions between them.
  */
-final class ProvenancePolicyChecker {
+public final class ProvenancePolicyChecker {
 
   /** How the writer's and the reader's members are paired. */
-  enum PairBy {
+  public enum PairBy {
     /**
      * As {@link LogicalPolicyChecker} pairs them.
      */
