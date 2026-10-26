@@ -112,6 +112,9 @@ public class CommonConstants {
   // LT-internal markers — reserved namespace; not user-defined params.
   static final String LOGICAL_PREFIX = "logical.";
   static final String LOGICAL_DEFAULT_PROP = "logical.default";
+  // A union branch's name, on a oneof member renamed <oneof>_<branch> because the branch name
+  // was already taken in the message.
+  static final String LOGICAL_BRANCH_PROP = "logical.branch";
 
   /**
    * Marker placed on a nested message's or enum's {@code Meta} params to
