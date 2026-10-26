@@ -3936,6 +3936,17 @@ public class ProtobufSchemaTest {
     int id = client.register("explicit", schema);
     assertEquals(id, client.register("explicit", schema.copy(2), 2, id));
     assertEquals(Arrays.asList(1, 2), client.getAllVersions("explicit"));
+
+    // Another form that looks up a version is a schema of its own, which leaves that one as it was
+    ProtobufSchema wrapper = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    int wrapperId = client.register("bigint", wrapper);
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertFalse(wrapperId == client.register("bigint", generated.copy(2), 2, -1));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("bigint"));
+    assertEquals(wrapper.canonicalString(),
+        client.getSchemaBySubjectAndId("bigint", wrapperId).canonicalString());
+    assertEquals(wrapper.canonicalString(), client.getSchemaById(wrapperId).canonicalString());
   }
 
   // A normalized lookup drops a map entry message, which moves a later message's indexes; it does
