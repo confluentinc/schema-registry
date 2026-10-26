@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaCancellation;
 import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -237,16 +238,17 @@ public class SchemaDiff {
       }
     }
 
-    if (!schemaTypesEqual(original, update)) {
+    // A const is an enum of one value, so the two are compared as one type.
+    boolean constAndEnum = EnumSchemaDiff.isConstOrEnum(original)
+        && EnumSchemaDiff.isConstOrEnum(update);
+    if (!schemaTypesEqual(original, update) && !constAndEnum) {
       // TrueSchema extends EmptySchema
       if (original instanceof FalseSchema || update instanceof EmptySchema) {
         return;
       }
 
-      String originalConnectType =
-          (String) original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
-      String updateConnectType =
-          (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      Object originalConnectType = original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      Object updateConnectType = update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
         // Allow two types with connect.type of bytes to be considered equivalent.
         // This is to allow a fix for decimal conversions in the JSON converter to
@@ -275,10 +277,12 @@ public class SchemaDiff {
       StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
     } else if (original instanceof NumberSchema) {
       NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
-    } else if (original instanceof ConstSchema) {
+    } else if (original instanceof ConstSchema && update instanceof ConstSchema) {
       ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
-    } else if (original instanceof EnumSchema) {
+    } else if (original instanceof EnumSchema && update instanceof EnumSchema) {
       EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
+    } else if (EnumSchemaDiff.isConstOrEnum(original)) {
+      EnumSchemaDiff.compareConstAndEnum(ctx, original, update);
     } else if (original instanceof CombinedSchema) {
       CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
     } else if (original instanceof NotSchema) {
@@ -290,18 +294,28 @@ public class SchemaDiff {
     }
   }
 
+  // Follows a chain of references (a definition that is itself only a $ref) to its end, so both
+  // sides are compared by what they refer to rather than by how many hops it takes to get there.
   private static Schema normalizeSchema(final Schema schema) {
-    if (schema instanceof ReferenceSchema) {
-      ReferenceSchema referenceSchema = (ReferenceSchema) schema;
+    Schema current = schema;
+    Set<Schema> seen = null;
+    while (current instanceof ReferenceSchema) {
+      ReferenceSchema referenceSchema = (ReferenceSchema) current;
+      if (seen == null) {
+        seen = Collections.newSetFromMap(new IdentityHashMap<>());
+      }
+      if (!seen.add(referenceSchema)) {
+        throw new InvalidReferenceException(
+            "Cyclic $ref '" + referenceSchema.getReferenceValue() + "'");
+      }
       Schema referredSchema = referenceSchema.getReferredSchema();
       if (referredSchema == null) {
-        throw new IllegalStateException(
+        throw new InvalidReferenceException(
             "Unresolved $ref '" + referenceSchema.getReferenceValue() + "'");
       }
-      return referredSchema;
-    } else {
-      return schema;
+      current = referredSchema;
     }
+    return current;
   }
 
   public static boolean schemaTypesEqual(final Schema schema1, final Schema schema2) {
