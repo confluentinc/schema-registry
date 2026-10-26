@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -443,6 +444,45 @@ class LogicalTypeToProtoConverterTest {
     assertEquals("high", roundTripped.getField("email").getParams().get("sensitivity"));
     assertTrue(roundTripped.getField("name").getTags().isEmpty());
     assertTrue(roundTripped.getField("name").getParams().isEmpty());
+  }
+
+  // A NOT NULL message of a referenced or local named type is marked as an inline struct is, so
+  // it reads back NOT NULL, and writes back the same.
+  @Test
+  void testRoundTripNotNullNamedTypeRef() {
+    String addressProtoSchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "message Address {\n"
+        + "  string street = 1;\n"
+        + "}";
+    List<SchemaReference> references = Arrays.asList(
+        new SchemaReference("com.example.Address", "address-value", 1));
+    Map<String, String> resolvedReferences = new LinkedHashMap<>();
+    resolvedReferences.put("com.example.Address", addressProtoSchema);
+    Schema money = Schema.createStruct(Arrays.asList(
+        new Field("amount", Schema.createString().setNullable(false), 0)))
+        .setNullable(false);
+
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("home",
+            Schema.createNamedTypeRef("com.example.Address").setNullable(false), 0),
+        new Field("work",
+            Schema.createNamedTypeRef("com.example.Address").setNullable(true), 1),
+        new Field("price", Schema.createNamedTypeRef("Money").setNullable(false), 2),
+        new Field("tip", Schema.createNamedTypeRef("Money").setNullable(true), 3)))
+        .setNullable(false);
+
+    ProtobufSchema proto = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(rootSchema, Map.of("Money", money), references, resolvedReferences),
+        "Person");
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(proto);
+    Schema root = roundTripped.getRootSchema();
+    assertFalse(root.getField("home").getSchema().isNullable());
+    assertTrue(root.getField("work").getSchema().isNullable());
+    assertFalse(root.getField("price").getSchema().isNullable());
+    assertTrue(root.getField("tip").getSchema().isNullable());
+    assertEquals(proto.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(roundTripped, "Person").canonicalString());
   }
 
   @Test
@@ -1261,6 +1301,216 @@ class LogicalTypeToProtoConverterTest {
   // MULTISET of complex types
   // =========================================================================
 
+  // Converting reads the logical type and leaves it as it was, nullable collections included.
+  @Test
+  void testConversionLeavesNullableCollectionsNullable() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("a", Schema.createArray(Schema.create(Schema.Type.INT)), 0),
+        new Field("m", Schema.createMap(Schema.createString().setNullable(false),
+            Schema.create(Schema.Type.INT)), 1),
+        new Field("s", Schema.createMultiset(Schema.create(Schema.Type.INT)), 2)))
+        .setNullable(false);
+    LogicalType lt = new LogicalType(rootSchema);
+    String before = lt.getRootSchema().toDdl();
+    LogicalTypeToProtoConverter.fromLogicalType(lt, "Holder");
+    assertEquals(before, lt.getRootSchema().toDdl());
+    for (Field f : lt.getRootSchema().getFields()) {
+      assertTrue(f.getSchema().isNullable(), f.getName());
+    }
+  }
+
+  // A map's UNION value is a oneof named "value" in its entry, which still reads back as a map.
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testRoundTripMapOfUnion(boolean nullable) {
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+        new UnionBranch("b1", Schema.createString().setNullable(false))))
+        .setNullable(false);
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("m", Schema.createMap(Schema.createString().setNullable(false), union)
+            .setNullable(nullable), 0)))
+        .setNullable(false);
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(convertSchema(rootSchema).canonicalString()));
+    Schema rt = roundTripped.getRootSchema().getField("m").getSchema();
+    assertEquals(Schema.Type.MAP, rt.getType());
+    assertEquals(nullable, rt.isNullable());
+    assertEquals(Schema.Type.UNION, rt.getValueType().getType());
+    assertEquals(Arrays.asList("b0", "b1"), branchNames(rt.getValueType()));
+  }
+
+  @Test
+  void testRoundTripMapOfUnionWithStructBranch() {
+    Schema branch = Schema.createStruct(Arrays.asList(
+        new Field("s0", Schema.createString(), 0)))
+        .setNullable(false);
+    Schema union = Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", branch),
+        new UnionBranch("b1", Schema.create(Schema.Type.DOUBLE).setNullable(false))))
+        .setNullable(false);
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("n", Schema.createMap(Schema.create(Schema.Type.INT).setNullable(false),
+            union).setNullable(false), 0)))
+        .setNullable(false);
+    LogicalType roundTripped = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(convertSchema(rootSchema).canonicalString()));
+    Schema rt = roundTripped.getRootSchema().getField("n").getSchema();
+    assertEquals(Schema.Type.MAP, rt.getType());
+    assertEquals(Schema.Type.INT, rt.getKeyType().getType());
+    assertEquals(Schema.Type.STRUCT, rt.getValueType().getBranches().get(0).getSchema().getType());
+  }
+
+  // Two unions with the same branch names: the second's members are qualified by the oneof and
+  // read back from logical.branch; nested messages are always qualified.
+  @Test
+  void testRoundTripUnionsWithSameBranchNames() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("f0", sameNamedBranches(Schema.createString()), 0),
+        new Field("f1", sameNamedBranches(Schema.create(Schema.Type.TINYINT)), 1)))
+        .setNullable(false);
+    ProtobufSchema proto = convertSchema(rootSchema);
+    Descriptor descriptor = proto.toDescriptor();
+    List<String> members = new ArrayList<>();
+    for (FieldDescriptor f : descriptor.getFields()) {
+      members.add(f.getName());
+    }
+    assertEquals(Arrays.asList("b0", "b1", "b2", "f1_b0", "f1_b1", "f1_b2"), members);
+    assertEquals("Holder.F0B0Row", descriptor.findFieldByName("b0").getMessageType()
+        .getFullName());
+    assertEquals("Holder.F1B0Row", descriptor.findFieldByName("f1_b0").getMessageType()
+        .getFullName());
+    assertEquals("Holder.F1B2RepeatedWrapper", descriptor.findFieldByName("f1_b2")
+        .getMessageType().getFullName());
+
+    Schema rt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto.canonicalString())).getRootSchema();
+    for (String f : Arrays.asList("f0", "f1")) {
+      assertEquals(Arrays.asList("b0", "b1", "b2"), branchNames(rt.getField(f).getSchema()));
+      assertTrue(rt.getField(f).getSchema().getBranches().get(0).getParams().isEmpty());
+    }
+    assertEquals(Schema.Type.VARCHAR, rt.getField("f0").getSchema().getBranches().get(0)
+        .getSchema().getField("s0").getSchema().getType());
+    assertEquals(Schema.Type.TINYINT, rt.getField("f1").getSchema().getBranches().get(0)
+        .getSchema().getField("s0").getSchema().getType());
+  }
+
+  // A branch named like a regular field is qualified, whichever comes first.
+  @Test
+  void testRoundTripUnionBranchNamedLikeField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+            new UnionBranch("b1", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("b0", Schema.create(Schema.Type.INT), 1)))
+        .setNullable(false);
+    ProtobufSchema proto = convertSchema(rootSchema);
+    Descriptor descriptor = proto.toDescriptor();
+    assertEquals(FieldDescriptor.Type.INT32, descriptor.findFieldByName("b0").getType());
+    assertEquals(FieldDescriptor.Type.BOOL, descriptor.findFieldByName("u_b0").getType());
+    assertEquals(FieldDescriptor.Type.STRING, descriptor.findFieldByName("b1").getType());
+
+    Schema rt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto.canonicalString())).getRootSchema();
+    assertEquals(Arrays.asList("b0", "b1"), branchNames(rt.getField("u").getSchema()));
+    assertEquals(Schema.Type.INT, rt.getField("b0").getSchema().getType());
+  }
+
+  // A qualified name that is itself taken is refused by name.
+  @Test
+  void testUnionBranchQualifiedNameTaken() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b0", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+            new UnionBranch("b1", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("b0", Schema.create(Schema.Type.INT), 1),
+        new Field("u_b0", Schema.create(Schema.Type.INT), 2)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> convertSchema(rootSchema));
+    assertThat(e.getMessage()).contains("'u_b0'");
+  }
+
+  // Branch u.b and field u_b both derive UBRow in p; the later one takes the next free name.
+  @Test
+  void testUnionBranchMessageNameTakenByField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("u", Schema.createUnion(Arrays.asList(
+            new UnionBranch("b", struct("x").setNullable(false)),
+            new UnionBranch("s", Schema.createString().setNullable(false))))
+            .setNullable(true), 0),
+        new Field("u_b", struct("y"), 1)))
+        .setNullable(false);
+    assertMessageName(convertSchema(rootSchema), "u_b", "Holder.UB2Row");
+  }
+
+  @Test
+  void testMessageNamesThatDifferOnlyInUnderscoresOrCase() {
+    assertMessageName(twoStructs("a_b", "aB"), "aB", "Holder.AB2Row");
+    assertMessageName(twoStructs("ab", "Ab"), "Ab", "Holder.Ab2Row");
+  }
+
+  // V1 names a struct field's message <field>_Row, which a field of that name already takes.
+  @Test
+  void testV1MessageNameTakenByField() {
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("a", struct("x"), 0),
+        new Field("a_Row", Schema.create(Schema.Type.INT), 1)))
+        .setNullable(false);
+    assertMessageName(LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(rootSchema), "p", LogicalTypeVersion.V1), "a", "p.a2_Row");
+  }
+
+  // A pinned name is never suffixed, so two pinned to one name with different bodies are refused.
+  @Test
+  void testMessageNamePinnedTwice() {
+    Map<String, Object> pin = Collections.singletonMap(Schema.PROTOBUF_NAME, "T");
+    Schema rootSchema = Schema.createStruct(Arrays.asList(
+        new Field("a", struct("x"), 0, null, false, null, null, pin, null),
+        new Field("b", struct("y"), 1, null, false, null, null, pin, null)))
+        .setNullable(false);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> convertSchema(rootSchema));
+    assertThat(e.getMessage()).contains("'T'", "used by fields a, b");
+  }
+
+  private static ProtobufSchema twoStructs(String field0, String field1) {
+    return convertSchema(Schema.createStruct(Arrays.asList(
+        new Field(field0, struct("x"), 0),
+        new Field(field1, struct("y"), 1)))
+        .setNullable(false));
+  }
+
+  private static void assertMessageName(ProtobufSchema schema, String field, String message) {
+    assertEquals(message,
+        schema.toDescriptor().findFieldByName(field).getMessageType().getFullName());
+  }
+
+  private static Schema struct(String field) {
+    return Schema.createStruct(Arrays.asList(
+        new Field(field, Schema.create(Schema.Type.INT), 0)));
+  }
+
+  private static Schema sameNamedBranches(Schema s0) {
+    return Schema.createUnion(Arrays.asList(
+        new UnionBranch("b0", Schema.createStruct(Arrays.asList(new Field("s0", s0, 0)))
+            .setNullable(false)),
+        new UnionBranch("b1", Schema.create(Schema.Type.BOOLEAN).setNullable(false)),
+        new UnionBranch("b2", Schema.createArray(Schema.create(Schema.Type.INT)
+            .setNullable(false)).setNullable(false))))
+        .setNullable(true);
+  }
+
+  private static List<String> branchNames(Schema union) {
+    List<String> names = new ArrayList<>();
+    for (UnionBranch b : union.getBranches()) {
+      names.add(b.getName());
+    }
+    return names;
+  }
+
   @Test
   void testRoundTripMultisetOfStruct() {
     Schema elementType = Schema.createStruct(Arrays.asList(
@@ -1792,7 +2042,7 @@ class LogicalTypeToProtoConverterTest {
   // UNION inside UNION (oneof inside oneof)
   //
   // proto3 forbids `oneof` directly inside `oneof`. A UNION branch that is
-  // itself a UNION is wrapped as `<UpperCamelBranch>OneofWrapper { value: UNION }` —
+  // itself a UNION is wrapped as `<UpperCamelMember>OneofWrapper { value: UNION }` —
   // the wrapper struct re-hosts the inner UNION as a regular field, where
   // fromStructType emits it as a legal nested oneof.
   // =========================================================================
@@ -1813,9 +2063,9 @@ class LogicalTypeToProtoConverterTest {
         new Field("u", outerUnion, 0))).setNullable(false);
     ProtobufSchema proto = convertSchema(rootSchema);
     Descriptor root = proto.toDescriptor();
-    // The inner UNION is wrapped as a nested message named after its branch.
-    Descriptor wrapper = root.findNestedTypeByName("InnerOneofWrapper");
-    assertNotNull(wrapper, "Expected nested InnerOneofWrapper");
+    // The inner UNION is wrapped as a nested message named after its qualified member.
+    Descriptor wrapper = root.findNestedTypeByName("UInnerOneofWrapper");
+    assertNotNull(wrapper, "Expected nested UInnerOneofWrapper");
     // Inside the wrapper, the inner UNION lives as a oneof named "value".
     List<OneofDescriptor> wrapperOneofs = wrapper.getRealOneofs();
     assertEquals(1, wrapperOneofs.size());
@@ -2043,6 +2293,66 @@ class LogicalTypeToProtoConverterTest {
     assertThrows(ValidationException.class, () ->
         LogicalTypeToProtoConverter.fromLogicalType(
             new LogicalType(root, namedTypes), "Holder"));
+  }
+
+  @Test
+  void testWrappedRootSurvivesItsText() {
+    // The registry stores only the text, so the root must come back from it
+    List<Schema> roots = Arrays.asList(
+        Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.INT),
+        Schema.create(Schema.Type.BIGINT), Schema.create(Schema.Type.FLOAT),
+        Schema.create(Schema.Type.DOUBLE), Schema.createString(), Schema.createBytes(),
+        Schema.create(Schema.Type.VARIANT));
+    for (LogicalTypeVersion version : LogicalTypeVersion.values()) {
+      for (Schema root : roots) {
+        ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(root.setNullable(false)), "Holder", version);
+        ProtobufSchema stored = new ProtobufSchema(emitted.canonicalString());
+        assertEquals(emitted.name(), stored.name(), () -> version + " " + root);
+        assertEquals(root.getType(),
+            ProtoToLogicalTypeConverter.toLogicalType(stored).getRootSchema().getType());
+      }
+    }
+  }
+
+  @Test
+  void testWrappedRootRoundTripsInMemory() {
+    // Without the text, the schema lists the built-in files it imports as dependencies
+    List<Schema> roots = Arrays.asList(
+        Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.BIGINT),
+        Schema.create(Schema.Type.DOUBLE), Schema.create(Schema.Type.VARIANT));
+    for (LogicalTypeVersion version : LogicalTypeVersion.values()) {
+      for (Schema root : roots) {
+        ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(root.setNullable(false)), "Holder", version);
+        LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(emitted);
+        assertTrue(read.getResolvedReferences().isEmpty(), () -> version + " " + root);
+        assertEquals(emitted.canonicalString(), LogicalTypeToProtoConverter
+            .fromLogicalType(read, "Holder", version).canonicalString());
+      }
+    }
+  }
+
+  @Test
+  void testWrappedRootRecordsItsRootOnlyWhenNotFirst() {
+    String bigint = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.BIGINT).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(bigint).contains("import public \"google/protobuf/wrappers.proto\"")
+        .contains("import \"confluent/meta.proto\"")
+        .contains("value: \"google.protobuf.Int64Value\"")
+        .doesNotContain("message ");
+    // DoubleValue is first in wrappers.proto, and Variant is alone in its file
+    String dbl = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.DOUBLE).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(dbl).contains("import public \"google/protobuf/wrappers.proto\"")
+        .doesNotContain("confluent");
+    String variant = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.VARIANT).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(variant).contains("import public \"confluent/type/variant.proto\"")
+        .doesNotContain("meta.proto");
   }
 
   // =========================================================================
@@ -2927,6 +3237,8 @@ class LogicalTypeToProtoConverterTest {
     // toDescriptor() resolves through the public import (via
     // ProtobufSchema.name()'s fall-through) to com.Foo.
     assertEquals("com.Foo", proto.toDescriptor().getFullName());
+    // The root is the imported file's first message, so it isn't recorded
+    assertFalse(text.contains("file_meta"), text);
   }
 
   /**
@@ -2959,6 +3271,39 @@ class LogicalTypeToProtoConverterTest {
     assertEquals("com.Foo", rt.getRootSchema().getQualifiedName());
     assertTrue(rt.getNamedTypes().isEmpty(),
         "public-import round-trip should produce no local namedTypes");
+  }
+
+  @Test
+  void testExternalRootThatIsNotFirstSurvivesItsText() {
+    String externalProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Bar {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Foo {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "  Inner inner = 1;\n"
+        + "}\n";
+    for (String root : Arrays.asList("com.Foo", "com.Foo.Inner")) {
+      Map<String, String> resolved = Collections.singletonMap(root, externalProto);
+      List<SchemaReference> refs =
+          Collections.singletonList(new SchemaReference(root, "foo-subject", 1));
+      LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef(root).setNullable(false),
+          Collections.emptyMap(), refs, resolved);
+      ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+      ProtobufSchema stored =
+          new ProtobufSchema(emitted.canonicalString(), refs, resolved, null, null);
+      assertEquals(root, stored.name());
+      assertEquals(root, ProtoToLogicalTypeConverter.toLogicalType(stored)
+          .getRootSchema().getQualifiedName());
+      // In memory too, where the meta import's files are dependencies
+      LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(emitted);
+      assertEquals(resolved.keySet(), read.getResolvedReferences().keySet());
+      assertEquals(emitted.canonicalString(),
+          LogicalTypeToProtoConverter.fromLogicalType(read, "ignored").canonicalString());
+    }
   }
 
   @Test
