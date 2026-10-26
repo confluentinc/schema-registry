@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
@@ -3823,11 +3824,16 @@ public class ProtobufSchemaTest {
     assertEquals(bigint, client.getId("bigint", generated));
     // Normalized, the lookup still finds it
     assertEquals(bigint, client.getId("bigint", generated, true));
-    // Registered, it is the wrapper's version, which is left as it was
-    assertEquals(bigint, client.register("bigint", generated));
+    // Registered, it is the wrapper's version, which is left as it was and answers for it
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(bigint, response.getId());
     assertEquals(Collections.singletonList(1), client.getAllVersions("bigint"));
-    assertEquals("google.protobuf.Int64Value",
-        ((ProtobufSchema) client.getSchemaBySubjectAndId("bigint", bigint)).name());
+    assertEquals(1, client.getVersion("bigint", generated));
+    ProtobufSchema stored = (ProtobufSchema) client.getSchemaBySubjectAndId("bigint", bigint);
+    assertEquals("google.protobuf.Int64Value", stored.name());
+    assertEquals(stored.canonicalString(), response.getSchema());
+    assertEquals(stored, client.getSchemaByGuid(response.getGuid(), null));
 
     String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
     String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"

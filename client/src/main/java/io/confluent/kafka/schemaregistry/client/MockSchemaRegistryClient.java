@@ -391,14 +391,22 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
+      // Found as another form of a registered schema, it is answered with that one, which is
+      // left as it was, as in the registry.
+      Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
+          .get(retrievedId);
+      if (registered != null && !schema.equals(parseSchemaOrElseThrow(registered))) {
+        schemaResponse = new RegisterSchemaResponse(registered);
+        schemaResponseMap.put(schema, schemaResponse);
+        return schemaResponse;
+      }
       Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      // A schema found as another form of a registered one leaves that one as it was.
-      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
+      idSchemaMap.put(retrievedId, schemaEntity);
       parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
       return schemaResponse;
@@ -668,6 +676,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
     if (next != null && versions.containsKey(next)) {
       return versions.get(next);
+    }
+    // As in the registry, a version is found by any form that looks it up, the latest first.
+    if (versions != null) {
+      for (ParsedSchema form : next != null ? Arrays.asList(schema, next)
+          : Collections.singletonList(schema)) {
+        Optional<Integer> found = versions.entrySet().stream()
+            .filter(entry -> schemasEqual(entry.getKey(), form))
+            .map(Map.Entry::getValue)
+            .max(Integer::compare);
+        if (found.isPresent()) {
+          return found.get();
+        }
+      }
     }
     throw new RestClientException("Subject Not Found", 404, 40401);
   }
