@@ -420,8 +420,7 @@ public class LogicalTypeToProtoConverter {
   private static String toMessageName(String fieldName, String suffix,
                                       FromLogicalContext<?> ctx) {
     String derived = derivedMessageName(fieldName, suffix, ctx.isV1());
-    ProtoTypeNames names = (ProtoTypeNames) ctx.getTypeNames();
-    return names != null ? names.name(fieldName, suffix, derived) : derived;
+    return ((ProtoTypeNames) ctx.getTypeNames()).name(fieldName, suffix, derived);
   }
 
   // The name toMessageName gives a type when no param pins one or takes it.

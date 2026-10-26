@@ -899,10 +899,6 @@ public class LogicalTypeToAvroConverter {
   }
 
   /**
-   * Recursively walks an Avro schema and registers every RECORD and ENUM
-   * named type in the converter cache, keyed by full name. FIXED is skipped.
-   */
-  /**
    * Refuses two different named types with the same full name, e.g. a type a param pins and a
    * schema reference's type: Avro would write the second as a reference to the first, replacing
    * it. Identical JSON bodies are allowed; {@code equals} would miss docs and aliases. Each type
@@ -995,6 +991,10 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
+  /**
+   * Recursively walks an Avro schema and registers every RECORD and ENUM
+   * named type in the converter cache, keyed by full name. FIXED is skipped.
+   */
   private static void collectNamedSchemas(
       org.apache.avro.Schema schema,
       java.util.Set<String> visited,
