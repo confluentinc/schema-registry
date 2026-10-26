@@ -813,8 +813,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           .get(retrievedId);
       if (registered != null) {
         schemaResponse = new RegisterSchemaResponse(registered);
-        // Found by the latest version's metadata, the answer can change with a newer version.
-        if (schema.equals(parseSchemaOrElseThrow(registered))) {
+        // Found by the latest version's metadata, the answer can change with a newer version;
+        // a soft-deleted schema is found but not kept, as below.
+        if (schema.equals(parseSchemaOrElseThrow(registered)) && hasLiveVersion(subject, schema)) {
           schemaResponseMap.put(schema, schemaResponse);
         }
         return schemaResponse;

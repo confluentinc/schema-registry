@@ -302,6 +302,18 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testASoftDeletedVersionLookedUpAsRegisteredIsANewVersionRegisteredAgain()
+        throws Exception {
+      // A lookup by the registered form itself must not keep a soft-deleted schema either.
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      client.deleteSchemaVersion(defaultValueSubject, "1");
+      assertEquals(id, client.getId(defaultValueSubject, schema));
+      assertEquals(id, client.register(defaultValueSubject, schema));
+      assertEquals(Collections.singletonList(2), client.getAllVersions(defaultValueSubject));
+    }
+
+    @Test
     public void testInvalidCreateAssociationRequest() {
       // Call createAssociation endpoint.
       testInvalidCreateAssociationRequestHelper(client::createAssociation);
