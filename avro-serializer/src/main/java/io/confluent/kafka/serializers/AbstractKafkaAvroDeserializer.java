@@ -24,13 +24,16 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 
@@ -325,6 +328,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Schema getSpecificReaderSchema(Schema writerSchema) {
+    checkNamedClasses(writerSchema, new HashSet<>());
     return getSpecificReaderSchema(writerSchema, false);
   }
 
@@ -372,6 +376,61 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                        + "writers schema is not allowed to be instantiated "
                                        + "to find the readers schema.");
     }
+  }
+
+  // SpecificData.getClass initializes the class it loads, so first check, without initializing,
+  // every class the reader schema can name. A record with no class falls back to its writer
+  // schema, so its fields are checked too.
+  private static void checkNamedClasses(Schema schema, Set<String> seen) {
+    switch (schema.getType()) {
+      case RECORD:
+        if (seen.add(schema.getFullName())
+            && checkNamedClass(schema, SpecificRecord.class) == null) {
+          schema.getFields().forEach(field -> checkNamedClasses(field.schema(), seen));
+        }
+        break;
+      case ENUM:
+      case FIXED:
+        checkNamedClass(schema,
+            schema.getType() == Schema.Type.ENUM ? Enum.class : GenericFixed.class);
+        break;
+      case ARRAY:
+        checkNamedClasses(schema.getElementType(), seen);
+        break;
+      case MAP:
+        checkNamedClasses(schema.getValueType(), seen);
+        break;
+      case UNION:
+        schema.getTypes().forEach(type -> checkNamedClasses(type, seen));
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static Class<?> checkNamedClass(Schema schema, Class<?> expected) {
+    Class<?> namedClass = loadWithoutInitializing(SpecificData.getClassName(schema));
+    if (namedClass != null && !expected.isAssignableFrom(namedClass)) {
+      throw new SerializationException(schema.getFullName() + " specified by the writers schema "
+          + "is not a " + expected.getName() + ", so it will not be loaded to find the readers "
+          + "schema.");
+    }
+    return namedClass;
+  }
+
+  // The same loaders, in the same order, as Avro's ClassUtils.forName.
+  private static Class<?> loadWithoutInitializing(String name) {
+    for (ClassLoader loader : new ClassLoader[] {
+        SpecificData.get().getClassLoader(), Thread.currentThread().getContextClassLoader()}) {
+      if (loader != null) {
+        try {
+          return Class.forName(name, false, loader);
+        } catch (ClassNotFoundException e) {
+          // try the next loader
+        }
+      }
+    }
+    return null;
   }
 
   private Schema getReflectionReaderSchema(Schema writerSchema) {

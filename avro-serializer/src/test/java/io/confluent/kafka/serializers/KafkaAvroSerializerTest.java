@@ -29,7 +29,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,9 +42,12 @@ import java.util.Arrays;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.tools.ToolProvider;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
@@ -53,6 +60,7 @@ import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
@@ -67,8 +75,11 @@ import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1678,6 +1689,88 @@ public class KafkaAvroSerializerTest {
         new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
   }
 
+  // A static initializer runs once per JVM, so each test has its own probe. The set lives here so
+  // that reading it does not initialize a probe.
+  static final Set<String> INITIALIZED_PROBES = ConcurrentHashMap.newKeySet();
+
+  private static Schema probeSchema(String name) {
+    return SchemaBuilder.record(name).namespace("io.confluent.kafka.serializers")
+        .fields().requiredString("field1").endRecord();
+  }
+
+  private void assertRejectedUninitialized(byte[] bytes, String probe) {
+    assertThrows(SerializationException.class,
+        () -> specificAvroDeserializer.deserialize(topic, bytes));
+    assertFalse("class named by the writer schema must not be initialized",
+        INITIALIZED_PROBES.contains(probe));
+  }
+
+  @Test
+  public void testRecordNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema schema = probeSchema("TopLevelInitProbe");
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    assertRejectedUninitialized(bytes, "TopLevelInitProbe");
+  }
+
+  @Test
+  public void testRecordInsideArrayNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema elementSchema = probeSchema("NestedInitProbe");
+    GenericData.Array<GenericRecord> array =
+        new GenericData.Array<>(1, Schema.createArray(elementSchema));
+    array.add(new GenericRecordBuilder(elementSchema).set("field1", "hello").build());
+    byte[] bytes = avroSerializer.serialize(topic, array);
+
+    assertRejectedUninitialized(bytes, "NestedInitProbe");
+  }
+
+  @Test
+  public void testFieldOfFallbackRecordNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    // An array element with no class falls back to the writer schema, fields included.
+    Schema fieldSchema = probeSchema("FallbackFieldInitProbe");
+    Schema elementSchema = SchemaBuilder.record("RecordWithNoClass")
+        .namespace("io.confluent.kafka.serializers")
+        .fields().name("inner").type(fieldSchema).noDefault().endRecord();
+    GenericData.Array<GenericRecord> array =
+        new GenericData.Array<>(1, Schema.createArray(elementSchema));
+    array.add(new GenericRecordBuilder(elementSchema)
+        .set("inner", new GenericRecordBuilder(fieldSchema).set("field1", "hello").build())
+        .build());
+    byte[] bytes = avroSerializer.serialize(topic, array);
+
+    assertRejectedUninitialized(bytes, "FallbackFieldInitProbe");
+  }
+
+  @Test
+  public void testClassOnlyOnContextClassLoaderIsNotInitialized() throws Exception {
+    // Avro also resolves classes through the thread context class loader, so compile a probe
+    // the test class path cannot see and expose it only through that loader.
+    Path dir = Files.createTempDirectory("ctxprobe");
+    Path source = Files.createDirectories(dir.resolve("ctxprobe"))
+        .resolve("ContextLoaderInitProbe.java");
+    Files.write(source, ("package ctxprobe; public class ContextLoaderInitProbe { static { "
+        + "System.setProperty(\"ctxprobe.initialized\", \"true\"); } }").getBytes());
+    assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, source.toString()));
+    Schema schema = SchemaBuilder.record("ContextLoaderInitProbe").namespace("ctxprobe")
+        .fields().requiredString("field1").endRecord();
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader =
+        new URLClassLoader(new URL[] {dir.toUri().toURL()}, original)) {
+      thread.setContextClassLoader(loader);
+      assertThrows(SerializationException.class,
+          () -> specificAvroDeserializer.deserialize(topic, bytes));
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    assertNull("class named by the writer schema must not be initialized",
+        System.getProperty("ctxprobe.initialized"));
+  }
+
   static class RecordWithUUID {
     UUID uuid;
 
@@ -1697,5 +1790,23 @@ public class KafkaAvroSerializerTest {
       RecordWithUUID that = (RecordWithUUID) obj;
       return Objects.equals(this.uuid, that.uuid);
     }
+  }
+}
+
+class TopLevelInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("TopLevelInitProbe");
+  }
+}
+
+class NestedInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("NestedInitProbe");
+  }
+}
+
+class FallbackFieldInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("FallbackFieldInitProbe");
   }
 }
