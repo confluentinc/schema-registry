@@ -3707,9 +3707,8 @@ public class ProtobufSchemaTest {
         1,
         null);
 
-    // Without a path or java_outer_classname there's nothing to derive the
-    // class name from, so fullName() with no path returns null (existing
-    // contract for any schema with no java_outer_classname).
+    // Without a path, the class is the root's, and the imported file has no
+    // java_outer_classname or java_multiple_files to derive it from.
     assertNull(top.fullName());
     // With an originalPath, fullName derives the outer class name from the
     // file name — for an empty wrapper that's the file-level class protoc
@@ -3826,6 +3825,28 @@ public class ProtobufSchemaTest {
     // An enum can't be a root
     assertThrows(IllegalArgumentException.class,
         () -> leafWrapper(leafProto, "com.Kind").validate(false));
+  }
+
+  // derive.type asks without a path, and gets the root's class from the imported file.
+  @Test
+  public void testFullNameOfAPublicImportWrapperIsItsRoot() {
+    assertEquals("com.google.protobuf.Int64Value", new ProtobufSchema(rootParamWrapper(
+        "google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")).fullName());
+    assertEquals("com.google.protobuf.DoubleValue", new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"google/protobuf/wrappers.proto\";\n").fullName());
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "option java_package = \"com.acme\";\n"
+        + "option java_outer_classname = \"Leaf\";\n"
+        + "message Outer {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "}\n";
+    ProtobufSchema schema = leafWrapper(leafProto, "com.Outer.Inner");
+    assertEquals("com.acme.Leaf$Outer$Inner", schema.fullName());
+    // A path still names the wrapper file's own class
+    assertTrue(schema.fullName("Wrapper.proto").endsWith(".Wrapper"));
   }
 
   private static ProtobufSchema leafWrapper(String leafProto, String root) {

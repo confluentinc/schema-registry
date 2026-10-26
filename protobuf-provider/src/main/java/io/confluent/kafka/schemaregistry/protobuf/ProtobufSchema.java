@@ -2758,7 +2758,10 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public String fullName(String originalPath) {
-    Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
+    // A path names this file's own class; without one, as derive.type asks, an empty
+    // public-import wrapper's class is its root's, in the imported file.
+    ProtoFileElement file = originalPath == null ? effectiveFile() : schemaObj;
+    Map<String, OptionElement> options = mergeOptions(file.getOptions());
     OptionElement javaPackageName = options.get(JAVA_PACKAGE);
     OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
     OptionElement javaMultipleFiles = options.get(JAVA_MULTIPLE_FILES);
@@ -2776,7 +2779,7 @@ public class ProtobufSchema implements ParsedSchema {
             fileName = fileName.substring(0, fileName.length() - ".proto".length());
           }
           outer = underscoresToCamelCase(fileName, true);
-          if (hasConflictingClassName(outer)) {
+          if (hasConflictingClassName(file, outer)) {
             outer += "OuterClass";
           }
         }
@@ -2787,13 +2790,13 @@ public class ProtobufSchema implements ParsedSchema {
     }
     String p = javaPackageName != null
         ? javaPackageName.getValue().toString()
-        : schemaObj.getPackageName();
+        : file.getPackageName();
     StringBuilder inner = new StringBuilder();
     String typeName = name;
-    if (typeName == null && !schemaObj.getTypes().isEmpty()) {
+    if (typeName == null && !file.getTypes().isEmpty()) {
       typeName = name();
     }
-    List<TypeElement> typeElems = toTypeElements(typeName);
+    List<TypeElement> typeElems = toTypeElements(file, typeName);
     for (TypeElement typeElem : typeElems) {
       if (inner.length() > 0) {
         inner.append("$");
@@ -2805,8 +2808,8 @@ public class ProtobufSchema implements ParsedSchema {
     return p + d1 + outer + d2 + inner;
   }
 
-  private boolean hasConflictingClassName(String className) {
-    for (TypeElement type : schemaObj.getTypes()) {
+  private static boolean hasConflictingClassName(ProtoFileElement file, String className) {
+    for (TypeElement type : file.getTypes()) {
       if (type.getName().equals(className)) {
         return true;
       }
@@ -2816,7 +2819,7 @@ public class ProtobufSchema implements ParsedSchema {
         }
       }
     }
-    for (ServiceElement service : schemaObj.getServices()) {
+    for (ServiceElement service : file.getServices()) {
       if (service.getName().equals(className)) {
         return true;
       }
@@ -2824,7 +2827,7 @@ public class ProtobufSchema implements ParsedSchema {
     return false;
   }
 
-  private boolean messageHasConflictingClassName(String className, MessageElement message) {
+  private static boolean messageHasConflictingClassName(String className, MessageElement message) {
     for (TypeElement type : message.getNestedTypes()) {
       if (type.getName().equals(className)) {
         return true;
@@ -2922,13 +2925,13 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
-  private List<TypeElement> toTypeElements(String name) {
+  private static List<TypeElement> toTypeElements(ProtoFileElement file, String name) {
     List<TypeElement> typeElems = new ArrayList<>();
     if (name == null) {
       return Collections.emptyList();
     }
     String[] parts = name.split("\\.");
-    List<TypeElement> types = schemaObj.getTypes();
+    List<TypeElement> types = file.getTypes();
     for (String part : parts) {
       for (TypeElement type : types) {
         if (type.getName().equals(part)) {
