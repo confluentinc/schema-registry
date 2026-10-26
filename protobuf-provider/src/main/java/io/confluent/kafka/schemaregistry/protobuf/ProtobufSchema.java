@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.protobuf.AnyProto;
 import com.google.protobuf.ApiProto;
@@ -120,6 +121,7 @@ import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -2552,6 +2554,61 @@ public class ProtobufSchema implements ParsedSchema {
   public ProtoFileElement effectiveFile() {
     ProtoFileElement leaf = resolvePublicImportWrapper();
     return leaf != null ? leaf : schemaObj;
+  }
+
+  /**
+   * A primitive or external DDL root is stored as an empty file publicly importing the root's
+   * file, which a schema made from the root's generated class also finds, as any message of that
+   * file would. Not the reverse, so registering such a wrapper after a version holding the
+   * imported file is a new version.
+   */
+  @Override
+  public boolean canLookup(ParsedSchema prev, SchemaVersionFetcher fetcher) {
+    if (ParsedSchema.super.canLookup(prev, fetcher)) {
+      return true;
+    }
+    ProtobufSchema imported = prev instanceof ProtobufSchema
+        ? ((ProtobufSchema) prev).importedFile(this) : null;
+    // The lookup may be normalized, while a built-in file is only ever in its raw form.
+    return imported != null && (ParsedSchema.super.canLookup(imported, fetcher)
+        || ParsedSchema.super.canLookup(imported.normalize(), fetcher));
+  }
+
+  /**
+   * For an empty public-import wrapper, the file it imports, with the wrapper's version, metadata
+   * and rules, if the files it imports in turn have the text of those the lookup imports; else
+   * null. Both were resolved in the subject's context, so they compare by content, not reference.
+   */
+  private ProtobufSchema importedFile(ProtobufSchema lookup) {
+    ProtoFileElement imported = resolvePublicImportWrapper();
+    if (imported == null || !importedTexts(imported, dependencies)
+        .equals(importedTexts(lookup.schemaObj, lookup.dependencies))) {
+      return null;
+    }
+    return new ProtobufSchema(imported, version, null, lookup.references, dependencies,
+        metadata, ruleSet, null, null, null);
+  }
+
+  // The text of each file a file imports, directly or not, by import name; built-ins excepted.
+  private static Map<String, String> importedTexts(
+      ProtoFileElement file, Map<String, ProtoFileElement> dependencies) {
+    Map<String, String> texts = new HashMap<>();
+    addImportedTexts(file, dependencies, texts);
+    return texts;
+  }
+
+  private static void addImportedTexts(ProtoFileElement file,
+      Map<String, ProtoFileElement> dependencies, Map<String, String> texts) {
+    for (String name : Iterables.concat(file.getImports(), file.getPublicImports())) {
+      if (KNOWN_DEPENDENCIES.containsKey(name) || texts.containsKey(name)) {
+        continue;
+      }
+      ProtoFileElement dependency = dependencies.get(name);
+      texts.put(name, dependency != null ? ProtobufSchemaUtils.toString(dependency) : null);
+      if (dependency != null) {
+        addImportedTexts(dependency, dependencies, texts);
+      }
+    }
   }
 
   @Override
