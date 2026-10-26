@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.type.logical.json;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
@@ -395,6 +398,22 @@ class LogicalTypeToJsonConverterTest {
     assertEquals("currency", rtParams.get("format"));
     assertEquals("2", rtParams.get("precision"));
     assertTrue(roundTripped.getBranches().get(1).getParams().isEmpty());
+  }
+
+  // Branch structs are inline subschemas whose titles are annotations, so same-named branches of
+  // two unions keep their own types.
+  @Test
+  void testRoundTripUnionsWithSameBranchNames() {
+    String ddl = "STRUCT p (f0 UNION(b0 STRUCT(s0 STRING), b1 BOOLEAN), "
+        + "f1 UNION(b0 STRUCT(s0 TINYINT), b1 BIGINT));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    JsonSchema json = LogicalTypeToJsonConverter.fromLogicalType(visitor.toLogicalType(), "p");
+    LogicalType back = JsonToLogicalTypeConverter.toLogicalType(
+        new JsonSchema(json.canonicalString()));
+    assertThat(LogicalTypeToDdlConverter.toDdl(back).replaceAll("\\s+", " ")).contains(
+        "f0 UNION(b0 STRUCT(s0 STRING), b1 BOOLEAN)",
+        "f1 UNION(b0 STRUCT(s0 TINYINT), b1 BIGINT)");
   }
 
   @Test

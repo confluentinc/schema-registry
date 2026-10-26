@@ -329,7 +329,8 @@ check_expr_list
 // ─── enum body ────────────────────────────────────────────────────────────────
 //
 // The leading `ENUM` keyword has moved to the declaration head; the body is
-// just the parenthesized value list.
+// just the parenthesized value list. An anonymous enum, as `ENUM('a', 'b')`
+// where a type is expected, takes the same body.
 
 enumBody
     : '(' enumValue ( ',' enumValue )* ')'
@@ -345,6 +346,7 @@ typeExpr
     : primitiveType nullability?              # PrimitiveTypeExpr
     | variantType nullability?                # VariantTypeExpr
     | rowType nullability?                    # RowTypeExpr
+    | ENUM enumBody nullability?              # EnumTypeExpr
     | unionType nullability?                  # UnionTypeExpr
     | mapType nullability?                    # MapTypeExpr
     | qualifiedName nullability?              # QualifiedNameExpr
