@@ -426,6 +426,29 @@ class NativeTypeNamesTest {
         .contains("ARRAY<STRUCT(", "'protobuf.name' = 'Custom'");
   }
 
+  // Nor can the elements be a declared or referenced message of that name and shape.
+  @Test
+  void testProtoEntryTypeOnArrayRefused() {
+    String declared = "STRUCT p (xs ARRAY<%1$s NOT NULL> NOT NULL); "
+        + "STRUCT %1$s (key INT NOT NULL, value UNION(b BOOLEAN, s STRING));";
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> proto(String.format(declared, "CustomEntry")));
+    assertThat(e.getMessage()).contains("xs", "CustomEntry", "read back as a map");
+    assertThat(protoRoundTrip(String.format(declared, "Pair"))).contains("xs ARRAY<Pair");
+
+    LogicalType parsed = parse("STRUCT p (xs ARRAY<com.CustomEntry NOT NULL> NOT NULL);");
+    LogicalType referencing = new LogicalType(parsed.getName(), parsed.getNamespace(),
+        parsed.getRootSchema(), parsed.getNamedTypes(), parsed.getExternalTypes(),
+        new LinkedHashMap<>(),
+        Collections.singletonList(new SchemaReference("com.CustomEntry", "entry", 1)),
+        Collections.singletonMap("com.CustomEntry", "syntax = \"proto3\";\npackage com;\n"
+            + "message CustomEntry {\n  int32 key = 1;\n  string value = 2;\n}\n"),
+        Collections.emptyMap());
+    e = assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(referencing, "p"));
+    assertThat(e.getMessage()).contains("xs", "com.CustomEntry", "read back as a map");
+  }
+
   @Test
   void testProtoInvalidNamesRefused() {
     ValidationException e = assertThrows(ValidationException.class,

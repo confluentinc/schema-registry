@@ -44,6 +44,7 @@ import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.GenericDescriptor;
 import com.google.protobuf.Timestamp;
@@ -1522,7 +1523,7 @@ public class LogicalTypeToProtoConverter {
       builder = fromField(
           elementType, fieldName, fieldComment, fieldIndex,
           nestedRows, nestedEnums, dependencies, ctx);
-      refuseMapEntryName(elementType, builder.getTypeName(), fieldName);
+      refuseMapEntryName(elementType, builder.getTypeName(), fieldName, ctx);
     }
     builder.setLabel(Label.LABEL_REPEATED);
     builder.clearProto3Optional();
@@ -1530,10 +1531,25 @@ public class LogicalTypeToProtoConverter {
   }
 
   // The reader takes repeated messages named ...Entry with only key and value fields for a map's
-  // entries, so a pin cannot give an array's struct elements such a name.
-  private static void refuseMapEntryName(Schema element, String typeName, String fieldName) {
+  // entries, so an array's elements cannot be such a message, pinned or declared.
+  private static void refuseMapEntryName(Schema element, String typeName, String fieldName,
+      FromLogicalContext<GenericDescriptor> ctx) {
     String name = typeName.substring(typeName.lastIndexOf('.') + 1);
-    if (name.endsWith(CommonConstants.MAP_ENTRY_SUFFIX) && isEntryShaped(element)) {
+    if (!name.endsWith(CommonConstants.MAP_ENTRY_SUFFIX)) {
+      return;
+    }
+    if (element.getType() == Schema.Type.NAMED_TYPE_REF) {
+      // Resolved as fromNamedTypeRef does: a local type, else an external one
+      String ref = element.getQualifiedName();
+      boolean local = ctx.hasNamedType(ref) && !ctx.getLogicalType().isExternal(ref);
+      GenericDescriptor external = local ? null : ctx.getConverted(ref);
+      if (local ? isEntryShaped(ctx.getNamedType(ref))
+          : external instanceof Descriptor && isEntryShaped((Descriptor) external)) {
+        throw new ValidationException("Array field " + fieldName + " cannot hold " + ref
+            + ": a message named ..." + CommonConstants.MAP_ENTRY_SUFFIX
+            + " with only key and value fields would read back as a map");
+      }
+    } else if (isEntryShaped(element)) {
       throw new ValidationException("Param " + ProtoTypeNames.NAME + " of array field "
           + fieldName + " cannot end with " + CommonConstants.MAP_ENTRY_SUFFIX + ", got '" + name
           + "': its key and value elements would read back as a map");
@@ -1544,6 +1560,17 @@ public class LogicalTypeToProtoConverter {
     return struct.getType() == Schema.Type.STRUCT && struct.getFields().size() == 2
         && struct.getField(CommonConstants.KEY_FIELD) != null
         && struct.getField(CommonConstants.VALUE_FIELD) != null;
+  }
+
+  // As the reader counts them: a oneof is one part, named key or value as a field would be.
+  private static boolean isEntryShaped(Descriptor message) {
+    Set<String> parts = new HashSet<>();
+    for (FieldDescriptor f : message.getFields()) {
+      parts.add(f.getRealContainingOneof() != null
+          ? f.getRealContainingOneof().getName() : f.getName());
+    }
+    return parts.size() == 2 && parts.contains(CommonConstants.KEY_FIELD)
+        && parts.contains(CommonConstants.VALUE_FIELD);
   }
 
   private static void addComment(FieldDescriptorProto.Builder builder, String fieldComment) {
