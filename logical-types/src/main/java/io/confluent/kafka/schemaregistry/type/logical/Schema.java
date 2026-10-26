@@ -66,6 +66,53 @@ public abstract class Schema {
   public static final String AVRO_ALIASES = "avro.aliases";
 
   /**
+   * Reserved {@code params} key on a field or union branch: the base the Avro writer names the
+   * record, enum, fixed and map entry types under it from ({@code <base>}, {@code <base>_<field>},
+   * {@code <base>_Entry}, {@code <base>_<branch>}), when that is not {@code <record>_<field>}.
+   * Pinned before a rename, it keeps those names. Format-native on the same terms as
+   * {@link #AVRO_ALIASES}.
+   */
+  public static final String AVRO_NAME = "avro.name";
+
+  /**
+   * Reserved {@code params} key on a field: its map entry record's Avro name, when that is not
+   * {@code <base>_Entry} (see {@link #AVRO_NAME}), as a Connect map's entry. Format-native.
+   */
+  public static final String AVRO_ENTRY_NAME = "avro.entry.name";
+
+  /**
+   * Reserved {@code params} key on a field: its map key type's Avro name, when that is not
+   * {@code <base>_key} (see {@link #AVRO_NAME}). Format-native.
+   */
+  public static final String AVRO_KEY_NAME = "avro.key.name";
+
+  /**
+   * Reserved {@code params} key on a field: its map value type's Avro name, when that is not
+   * {@code <base>_value} (see {@link #AVRO_NAME}). Format-native.
+   */
+  public static final String AVRO_VALUE_NAME = "avro.value.name";
+
+  /**
+   * Reserved {@code params} key on a field or union branch: the exact name of the message or enum
+   * the Protobuf writer generates for it in its message, when that is not derived from the field's
+   * name ({@code <Field>Row}, {@code <Field>Entry}, ...). Format-native on the same terms as
+   * {@link #PROTOBUF_FIELD_NUMBER}.
+   */
+  public static final String PROTOBUF_NAME = "protobuf.name";
+
+  /**
+   * True if {@code key} names a type a writer generates: {@link #AVRO_NAME} and its exceptions,
+   * or {@link #PROTOBUF_NAME}.
+   */
+  public static boolean isTypeNameParam(String key) {
+    return TYPE_NAME_PARAMS.contains(key);
+  }
+
+  private static final java.util.Set<String> TYPE_NAME_PARAMS = Collections
+      .unmodifiableSet(new java.util.HashSet<>(Arrays.asList(
+          AVRO_NAME, AVRO_ENTRY_NAME, AVRO_KEY_NAME, AVRO_VALUE_NAME, PROTOBUF_NAME)));
+
+  /**
    * True if {@code key} belongs to a format-native reserved param namespace ({@code avro.} or
    * {@code protobuf.}). Such params are authoritative only through their owning format's native
    * slot (Avro aliases, Protobuf field number); in every generic param container
