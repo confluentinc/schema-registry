@@ -2607,7 +2607,8 @@ public class ProtobufSchema implements ParsedSchema {
         metadata, ruleSet, null, null, null);
   }
 
-  // The text of each file a file imports, directly or not, by import name; built-ins excepted.
+  // The text of each file a file imports, directly or not, by import name: the dependency of that
+  // name, which descriptor resolution prefers, else the built-in file.
   private static Map<String, String> importedTexts(
       ProtoFileElement file, Map<String, ProtoFileElement> dependencies) {
     Map<String, String> texts = new HashMap<>();
@@ -2618,10 +2619,13 @@ public class ProtobufSchema implements ParsedSchema {
   private static void addImportedTexts(ProtoFileElement file,
       Map<String, ProtoFileElement> dependencies, Map<String, String> texts) {
     for (String name : Iterables.concat(file.getImports(), file.getPublicImports())) {
-      if (KNOWN_DEPENDENCIES.containsKey(name) || texts.containsKey(name)) {
+      if (texts.containsKey(name)) {
         continue;
       }
       ProtoFileElement dependency = dependencies.get(name);
+      if (dependency == null) {
+        dependency = KNOWN_DEPENDENCIES.get(name);
+      }
       texts.put(name, dependency != null ? ProtobufSchemaUtils.toString(dependency) : null);
       if (dependency != null) {
         addImportedTexts(dependency, dependencies, texts);

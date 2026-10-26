@@ -3977,6 +3977,56 @@ public class ProtobufSchemaTest {
     assertEquals(b, client.getId("b", generated));
   }
 
+  // As in the registry, a version of the native file's own content comes before a newer wrapper
+  // of it, in lookups and in the ids the metadata reads give.
+  @Test
+  public void testNativeFileFindsItsOwnVersionBeforeAWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    int own = client.register("bigint", generated.copy(1));
+    int wrapper = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    assertFalse(own == wrapper);
+    assertEquals(own, client.getId("bigint", generated));
+    assertEquals(1, client.getVersion("bigint", generated));
+    assertEquals(own, (int) client.getSchemaMetadata("bigint", 1).getId());
+    assertEquals(own, (int) client.getByVersion("bigint", 1, false).getId());
+    assertEquals(wrapper, (int) client.getSchemaMetadata("bigint", 2).getId());
+  }
+
+  // An import of a built-in file compares by its text, a dependency of its name before the built-in.
+  @Test
+  public void testNativeFileComparesBuiltInImportsByText() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String leaf = "syntax = \"proto3\";\npackage com;\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "message Event {\n  google.protobuf.Timestamp at = 1;\n}\n";
+    // Made from a descriptor, as a generated class's schema is, with the built-in among its
+    // dependencies
+    ProtobufSchema generated = new ProtobufSchema(new ProtobufSchema(leaf).toDescriptor());
+    assertTrue(generated.dependencies().containsKey("google/protobuf/timestamp.proto"));
+    client.register("leaf", generated);
+    int id = client.register("event", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Event"),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", generated.canonicalString()), null, null));
+    assertEquals(id, client.getId("event", generated));
+
+    String custom = "syntax = \"proto3\";\npackage google.protobuf;\n"
+        + "message Timestamp {\n  string at = 1;\n}\n";
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leaf);
+    resolved.put("google/protobuf/timestamp.proto", custom);
+    client.register("custom", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Event"),
+        Arrays.asList(new SchemaReference("leaf.proto", "leaf", 1),
+            new SchemaReference("google/protobuf/timestamp.proto", "ts", 1)),
+        resolved, null, null));
+    assertNotFound(client, "custom", new ProtobufSchema(leaf));
+  }
+
   private static void assertNotFound(
       MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
     RestClientException e = assertThrows(RestClientException.class,
