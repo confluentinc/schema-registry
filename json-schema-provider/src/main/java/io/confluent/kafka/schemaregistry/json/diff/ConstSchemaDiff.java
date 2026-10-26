@@ -17,13 +17,14 @@ package io.confluent.kafka.schemaregistry.json.diff;
 
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ENUM_ARRAY_CHANGED;
 
+import java.util.Objects;
 import org.everit.json.schema.ConstSchema;
 
 class ConstSchemaDiff {
   static void compare(
       final Context ctx, final ConstSchema original, final ConstSchema update
   ) {
-    if (!original.getPermittedValue().equals(update.getPermittedValue())) {
+    if (!Objects.equals(original.getPermittedValue(), update.getPermittedValue())) {
       ctx.addDifference("const", ENUM_ARRAY_CHANGED);
     }
   }

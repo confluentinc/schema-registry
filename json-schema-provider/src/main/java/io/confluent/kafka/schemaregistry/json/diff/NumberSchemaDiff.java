@@ -78,8 +78,8 @@ class NumberSchemaDiff {
       } else if (original.getExclusiveMaximumLimit().doubleValue()
           < update.getExclusiveMaximumLimit().doubleValue()) {
         ctx.addDifference("exclusiveMaximum", EXCLUSIVE_MAXIMUM_INCREASED);
-      } else if (original.getExclusiveMaximumLimit().doubleValue() > update.getMaximum()
-          .doubleValue()) {
+      } else if (original.getExclusiveMaximumLimit().doubleValue()
+          > update.getExclusiveMaximumLimit().doubleValue()) {
         ctx.addDifference("exclusiveMaximum", EXCLUSIVE_MAXIMUM_DECREASED);
       }
     }
