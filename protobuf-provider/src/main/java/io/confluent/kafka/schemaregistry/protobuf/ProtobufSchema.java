@@ -120,9 +120,11 @@ import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
@@ -2552,6 +2554,50 @@ public class ProtobufSchema implements ParsedSchema {
   public ProtoFileElement effectiveFile() {
     ProtoFileElement leaf = resolvePublicImportWrapper();
     return leaf != null ? leaf : schemaObj;
+  }
+
+  /**
+   * A primitive or external DDL root is stored as an empty file publicly importing the root's
+   * file, which a schema made from the root's generated class also finds. Not the reverse, so
+   * registering such a wrapper after a version holding the imported file is a new version.
+   */
+  @Override
+  public boolean canLookup(ParsedSchema prev, SchemaVersionFetcher fetcher) {
+    if (ParsedSchema.super.canLookup(prev, fetcher)) {
+      return true;
+    }
+    ProtobufSchema imported = prev instanceof ProtobufSchema
+        ? ((ProtobufSchema) prev).importedFile(fetcher) : null;
+    return imported != null && ParsedSchema.super.canLookup(imported, fetcher);
+  }
+
+  // For an empty public-import wrapper, the file it imports as registered, with the wrapper's
+  // version, metadata and rules; else null.
+  private ProtobufSchema importedFile(SchemaVersionFetcher fetcher) {
+    ProtoFileElement imported = resolvePublicImportWrapper();
+    if (imported == null) {
+      return null;
+    }
+    String location = schemaObj.getPublicImports().get(0);
+    SchemaReference reference = references.stream()
+        .filter(ref -> location.equals(ref.getName()))
+        .findFirst()
+        .orElse(null);
+    List<SchemaReference> importedReferences = Collections.emptyList();
+    if (reference != null) {
+      Schema registered = fetcher.getByVersion(
+          reference.getSubject(), reference.getVersion(), reference.getVersion() != -1);
+      if (registered == null) {
+        return null;
+      }
+      if (registered.getReferences() != null) {
+        importedReferences = registered.getReferences();
+      }
+    } else if (!KNOWN_DEPENDENCIES.containsKey(location)) {
+      return null;
+    }
+    return new ProtobufSchema(imported, version, null, importedReferences, dependencies,
+        metadata, ruleSet, null, null, null);
   }
 
   @Override

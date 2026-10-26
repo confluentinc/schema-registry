@@ -19,11 +19,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.protobuf.Int64Value;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -108,5 +112,55 @@ public abstract class RestApiLogicalTypeTest {
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1);
     assertEquals(AvroSchema.TYPE, stored.getSchemaType());
     assertTrue(stored.getSchema().contains("Widget"), stored.getSchema());
+  }
+
+  /**
+   * A primitive Protobuf root is stored as an empty file publicly importing wrappers.proto. A
+   * generated wrapper class's schema, the whole of wrappers.proto, must still find it, whether
+   * looked up or registered.
+   */
+  @Test
+  public void testGeneratedWrapperFindsAProtobufPrimitiveRoot() throws Exception {
+    String subject = "bigint-key";
+    int id = restApp.restClient.registerSchema(
+        "TYPE BIGINT", ProtobufSchema.TYPE, Collections.emptyList(), subject).getId();
+
+    String generated = new ProtobufSchema(Int64Value.getDescriptor()).canonicalString();
+    assertFoundAsVersionOne(id, generated, Collections.emptyList(), subject);
+  }
+
+  /**
+   * An external Protobuf root is stored as an empty file publicly importing the referenced file.
+   * A schema made from the root's generated class, with the references that file was registered
+   * with, must still find it.
+   */
+  @Test
+  public void testGeneratedClassFindsAProtobufExternalRoot() throws Exception {
+    String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
+        + "message Foo {\n  string id = 1;\n}\nmessage Bar {\n  com.Other o = 1;\n}\n";
+    List<SchemaReference> otherRef =
+        Collections.singletonList(new SchemaReference("other.proto", "other", 1));
+    restApp.restClient.registerSchema(
+        other, ProtobufSchema.TYPE, Collections.emptyList(), "other");
+    restApp.restClient.registerSchema(leaf, ProtobufSchema.TYPE, otherRef, "leaf");
+
+    String subject = "bar-value";
+    int id = restApp.restClient.registerSchema("TYPE com.Bar NOT NULL", ProtobufSchema.TYPE,
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)), subject).getId();
+    Schema stored = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1);
+    assertTrue(stored.getSchema().contains("import public"), stored.getSchema());
+
+    assertFoundAsVersionOne(id, leaf, otherRef, subject);
+  }
+
+  private void assertFoundAsVersionOne(
+      int id, String schema, List<SchemaReference> references, String subject) throws Exception {
+    assertEquals(id, (int) restApp.restClient.lookUpSubjectVersion(
+        schema, ProtobufSchema.TYPE, references, subject, false).getId());
+    assertEquals(id, restApp.restClient.registerSchema(
+        schema, ProtobufSchema.TYPE, references, subject).getId());
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
   }
 }
