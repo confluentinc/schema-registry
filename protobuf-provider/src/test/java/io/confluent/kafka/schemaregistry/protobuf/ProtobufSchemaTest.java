@@ -3785,6 +3785,81 @@ public class ProtobufSchemaTest {
     assertEquals("com.Local", top.toMessageName(localIdx));
   }
 
+  private static String rootParamWrapper(String publicImport, String otherImport, String root) {
+    return "syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + (otherImport != null ? "import \"" + otherImport + "\";\n" : "")
+        + "import public \"" + publicImport + "\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n";
+  }
+
+  @Test
+  public void testRootParamPicksTheRootOfAPublicImportWrapper() {
+    ProtobufSchema schema = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    assertEquals("google.protobuf.Int64Value", schema.name());
+    assertEquals("google.protobuf.Int64Value", schema.toDescriptor().getFullName());
+    MessageIndexes indexes = schema.toMessageIndexes(schema.name());
+    assertEquals(Collections.singletonList(2), indexes.indexes());
+    assertEquals("google.protobuf.Int64Value", schema.toMessageName(indexes));
+    // Normalizing keeps the param and the meta import
+    ProtobufSchema normalized = new ProtobufSchema(schema.normalize().canonicalString());
+    assertEquals("google.protobuf.Int64Value", normalized.name());
+    schema.validate(false);
+  }
+
+  @Test
+  public void testRootParamCanNameANestedMessage() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Outer {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "  Inner inner = 1;\n"
+        + "}\n"
+        + "enum Kind { KIND_UNSPECIFIED = 0; }\n";
+    ProtobufSchema schema = leafWrapper(leafProto, "com.Outer.Inner");
+    assertEquals("com.Outer.Inner", schema.name());
+    assertEquals("com.Outer.Inner", schema.toDescriptor().getFullName());
+    // An enum can't be a root
+    assertThrows(IllegalArgumentException.class,
+        () -> leafWrapper(leafProto, "com.Kind").validate(false));
+  }
+
+  private static ProtobufSchema leafWrapper(String leafProto, String root) {
+    return new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, root),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        Collections.singletonMap("leaf.proto", leafProto), null, null);
+  }
+
+  @Test
+  public void testRootParamNamingNoMessageIsRejected() {
+    for (String root : Arrays.asList("google.protobuf.Missing", "Int64Value")) {
+      ProtobufSchema schema = new ProtobufSchema(
+          rootParamWrapper("google/protobuf/wrappers.proto", null, root));
+      assertThrows(root, IllegalArgumentException.class, () -> schema.validate(false));
+    }
+  }
+
+  @Test
+  public void testRootParamIsIgnoredOutsideAPublicImportWrapper() {
+    // A file with its own messages
+    ProtobufSchema local = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"B\" } ] };\n"
+        + "message A { int32 a = 1; }\n"
+        + "message B { int32 b = 1; }\n");
+    assertEquals("A", local.name());
+    // A private import other than the meta import means no wrapper, so no types at all
+    ProtobufSchema notWrapper = new ProtobufSchema(rootParamWrapper(
+        "google/protobuf/wrappers.proto", "google/protobuf/timestamp.proto",
+        "google.protobuf.Int64Value"));
+    assertThrows(IllegalArgumentException.class, notWrapper::name);
+  }
+
   /**
    * A message-level rule binds {@code this} to the message and its CEL environment is built
    * from the registered schema, so the message it evaluates has to be in the schema's terms
