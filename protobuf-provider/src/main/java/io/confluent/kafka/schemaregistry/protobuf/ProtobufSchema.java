@@ -2547,9 +2547,9 @@ public class ProtobufSchema implements ParsedSchema {
    * a resolvable empty public-import wrapper, this is the imported file.
    * Used to centralize the "look at the imported file's types instead of
    * mine" logic across {@link #toMessageIndexes}, {@link #toMessageName},
-   * {@link #hasTopLevelField}, etc.
+   * {@link #hasTopLevelField}, compatibility checks, etc.
    */
-  private ProtoFileElement effectiveFile() {
+  public ProtoFileElement effectiveFile() {
     ProtoFileElement leaf = resolvePublicImportWrapper();
     return leaf != null ? leaf : schemaObj;
   }
