@@ -389,6 +389,188 @@
     "compatible": false
   },
   {
+    "description": "A const is the same as an enum of its one value",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            "red"
+          ]
+        }
+      }
+    },
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "An enum of one value is the same as a const of it",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            "red"
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "A const widened to an enum of more values is compatible",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            "red",
+            "blue"
+          ]
+        }
+      }
+    },
+    "changes": [
+      "ENUM_ARRAY_EXTENDED #/properties/foo/enum"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "An enum narrowed to a const of one of its values is incompatible",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            "red",
+            "blue"
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "changes": [
+      "ENUM_ARRAY_NARROWED #/properties/foo/enum"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "A const changed to an enum of another value is incompatible",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            "blue"
+          ]
+        }
+      }
+    },
+    "changes": [
+      "ENUM_ARRAY_CHANGED #/properties/foo/enum"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "A const made nullable as an enum is compatible",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": "red"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "red"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "An object const is the same as an enum of that object",
+    "original_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "const": {
+            "a": 1
+          }
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "foo": {
+          "enum": [
+            {
+              "a": 1
+            }
+          ]
+        }
+      }
+    },
+    "changes": [],
+    "compatible": true
+  },
+  {
     "description": "Detect incompatible changes to enum schema",
     "original_schema": {
       "allOf": [
