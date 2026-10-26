@@ -210,6 +210,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final CompatibilityLevel defaultCompatibilityLevel;
   protected final boolean defaultValidateFields;
   protected final Set<Incompatibility.Rule> logicalChecks;
+  protected final PairBy provenancePairBy;
   protected final boolean defaultValidateNewSchemas;
   protected final Mode defaultMode;
   protected final int schemaSearchDefaultLimit;
@@ -268,6 +269,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
     this.logicalChecks = LogicalPolicyChecker.parseChecks(
         config.getList(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG));
+    this.provenancePairBy = PairBy.valueOf(config.getString(
+        SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG).toUpperCase(Locale.ROOT));
     this.defaultMode = Mode.READWRITE;
     this.schemaSearchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -1456,10 +1459,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected List<String> isCompatibleWithPrevious(Config config,
                                         ParsedSchema parsedSchema,
                                         List<ParsedSchemaHolder> previousSchemas) {
-    // LOGICAL pairs by name until it switches to provenance check ids, CHECK_ID here. The
-    // endpoint's flag pairs by check id but always at BACKWARD against the version just before,
-    // so for transitive, grouped or validateFields subjects the two will still differ.
-    return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, PairBy.NAME,
+    // LOGICAL pairs as provenance.field.pairing says. By check id, the endpoint's flag still
+    // checks at BACKWARD against the version just before, so for transitive, grouped or
+    // validateFields subjects the two will still differ.
+    return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, provenancePairBy,
         AFTER_LATEST);
   }
 
