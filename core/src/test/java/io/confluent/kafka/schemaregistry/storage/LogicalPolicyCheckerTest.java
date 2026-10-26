@@ -101,7 +101,8 @@ class LogicalPolicyCheckerTest {
       }
     }, "check", 512 << 10);
     check.start();
-    check.join();
+    check.join(30_000);
+    assertFalse(check.isAlive(), "the check did not finish");
     assertTrue(result.get() instanceof List, "the check threw " + result.get());
     List<?> errors = (List<?>) result.get();
     assertEquals(1, errors.size(), errors.toString());
@@ -203,6 +204,15 @@ class LogicalPolicyCheckerTest {
     assertTrue(errors.isEmpty(), errors.toString());
   }
 
+  @Test
+  void aJsonDefinitionReferringOnlyToItselfIsReportedRatherThanLooping() {
+    String schema = "{\"type\":\"object\",\"properties\":{\"d\":{\"$ref\":\"#/definitions/D\"}},"
+        + "\"definitions\":{\"D\":{\"$ref\":\"#/definitions/D\"}}}";
+    List<String> errors = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+        LogicalPolicyChecker.check(new JsonSchema(schema), List.of(), CompatibilityLevel.NONE));
+    assertTrue(errors.stream().anyMatch(e -> e.contains("CYCLIC_TYPE")), errors.toString());
+  }
+
   // -- compatibility ------------------------------------------------------------------------------
 
   @Test
@@ -224,15 +234,42 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void aProtobufFileThatOnlyReExportsAnotherIsReadAsItsOwnFile() {
-    // Its own file declares no message, whatever the file it re-exports declares: it is not read
-    // as a multi-message file, and converts as format=logical shows it.
-    String dependency = "syntax = \"proto3\";\npackage d;\n" + ORDER + SHIP;
-    ProtobufSchema reExporting = new ProtobufSchema(
-        "syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
-        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", dependency), null, null);
-    assertEquals(LogicalPolicyChecker.toLogicalType(reExporting).getRootSchema(),
-        LogicalPolicyChecker.toPolicyLogicalType(reExporting).getRootSchema());
+  void aProtobufFileThatOnlyReExportsAnotherIsCheckedAsTheFileItReExports() {
+    // Its records carry the re-exported file's messages, and Flink reads that file's row: valid,
+    // and interchangeable with the file itself, one message or several.
+    String one = "syntax = \"proto3\";\npackage d;\n" + ORDER;
+    String two = one + SHIP;
+    assertTrue(LogicalPolicyChecker.check(reExport(one), List.of(), CompatibilityLevel.NONE)
+        .isEmpty());
+    assertTrue(checkFull(reExport(one), new ProtobufSchema(one)).isEmpty());
+    assertTrue(checkFull(new ProtobufSchema(one), reExport(one)).isEmpty());
+    assertTrue(checkFull(reExport(two), new ProtobufSchema(two)).isEmpty());
+    // Re-exporting a file of two messages after one reshapes Flink's row, as the file would.
+    assertFalse(checkFull(reExport(two), new ProtobufSchema(one)).isEmpty());
+  }
+
+  @Test
+  void aReExportOfABuiltInFileIsCheckedAsTheFileItself() {
+    // confluent/type/decimal.proto is bundled, not referenced: the wrapper is that file.
+    ProtobufSchema wrapper = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"confluent/type/decimal.proto\";\n");
+    ProtobufSchema direct = new ProtobufSchema(
+        new ProtobufSchema(wrapper.toDescriptor()).canonicalString());
+    assertEquals(LogicalPolicyChecker.toPolicyLogicalType(direct).getRootSchema(),
+        LogicalPolicyChecker.toPolicyLogicalType(wrapper).getRootSchema());
+    assertEquals(LogicalPolicyChecker.check(direct, List.of(), CompatibilityLevel.NONE),
+        LogicalPolicyChecker.check(wrapper, List.of(), CompatibilityLevel.NONE));
+    assertTrue(checkFull(wrapper, direct).isEmpty());
+  }
+
+  private static ProtobufSchema reExport(String file) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
+        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", file), null, null);
+  }
+
+  private static List<String> checkFull(ProtobufSchema next, ProtobufSchema previous) {
+    return LogicalPolicyChecker.check(next, List.of(new SimpleParsedSchemaHolder(previous)),
+        CompatibilityLevel.FULL);
   }
 
   @Test
