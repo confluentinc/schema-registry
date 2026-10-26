@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -171,6 +172,28 @@ public final class AvroDefaultValueConverter {
   }
 
   /**
+   * The unscaled bytes of {@code value} at the schema's scale, since readers apply that scale.
+   * Refuses a value that would need rounding or does not fit the declared precision.
+   */
+  private static byte[] decimalToBytes(final Schema type, final BigDecimal value) {
+    int precision = type.getPrecision();
+    int scale = type.getScale() == Schema.NO_PARAM
+        ? Schema.DEFAULT_DECIMAL_SCALE : type.getScale();
+    BigDecimal scaled;
+    try {
+      scaled = value.setScale(scale, RoundingMode.UNNECESSARY);
+    } catch (ArithmeticException e) {
+      throw new ValidationException("DECIMAL(" + precision + ", " + scale + ") default value '"
+          + value.toPlainString() + "' has more digits after the decimal point than its scale");
+    }
+    if (scaled.precision() > precision) {
+      throw new ValidationException("DECIMAL(" + precision + ", " + scale + ") default value '"
+          + value.toPlainString() + "' exceeds its precision");
+    }
+    return scaled.unscaledValue().toByteArray();
+  }
+
+  /**
    * Encode a typed Java default value into the Avro-friendly form expected by
    * org.apache.avro.Schema.Field's defaultVal argument.
    */
@@ -204,7 +227,7 @@ public final class AvroDefaultValueConverter {
         return value;
       case DECIMAL:
         if (value instanceof BigDecimal) {
-          return new String(((BigDecimal) value).unscaledValue().toByteArray(),
+          return new String(decimalToBytes(type, (BigDecimal) value),
               java.nio.charset.StandardCharsets.ISO_8859_1);
         }
         return value;
