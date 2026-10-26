@@ -126,6 +126,9 @@ public abstract class RestApiLogicalTypeTest {
         "TYPE BIGINT", ProtobufSchema.TYPE, Collections.emptyList(), subject).getId();
 
     String generated = new ProtobufSchema(Int64Value.getDescriptor()).canonicalString();
+    // Normalized, the lookup still finds it, though wrappers.proto is stored only in its raw form
+    assertEquals(id, (int) restApp.restClient.lookUpSubjectVersion(
+        generated, ProtobufSchema.TYPE, Collections.emptyList(), subject, true, false).getId());
     assertFoundAsVersionOne(id, generated, Collections.emptyList(), subject);
   }
 
@@ -136,16 +139,28 @@ public abstract class RestApiLogicalTypeTest {
    */
   @Test
   public void testGeneratedClassFindsAProtobufExternalRoot() throws Exception {
+    assertGeneratedClassFindsAProtobufExternalRoot("");
+  }
+
+  /**
+   * In a named context, the references resolve within it, and so must the lookup's comparison.
+   */
+  @Test
+  public void testGeneratedClassFindsAProtobufExternalRootInAContext() throws Exception {
+    assertGeneratedClassFindsAProtobufExternalRoot(":.ctx:");
+  }
+
+  private void assertGeneratedClassFindsAProtobufExternalRoot(String context) throws Exception {
     String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
     String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
         + "message Foo {\n  string id = 1;\n}\nmessage Bar {\n  com.Other o = 1;\n}\n";
     List<SchemaReference> otherRef =
         Collections.singletonList(new SchemaReference("other.proto", "other", 1));
     restApp.restClient.registerSchema(
-        other, ProtobufSchema.TYPE, Collections.emptyList(), "other");
-    restApp.restClient.registerSchema(leaf, ProtobufSchema.TYPE, otherRef, "leaf");
+        other, ProtobufSchema.TYPE, Collections.emptyList(), context + "other");
+    restApp.restClient.registerSchema(leaf, ProtobufSchema.TYPE, otherRef, context + "leaf");
 
-    String subject = "bar-value";
+    String subject = context + "bar-value";
     int id = restApp.restClient.registerSchema("TYPE com.Bar NOT NULL", ProtobufSchema.TYPE,
         Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)), subject).getId();
     Schema stored = restApp.restClient.getVersion(

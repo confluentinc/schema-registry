@@ -246,7 +246,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         if (schemasEqual(parsedSchema, schema)) {
           if (registerRequest) {
             if (id < 0 || id == entry.getKey()) {
-              generateVersion(subject, schema);
+              // As in the registry, a schema a version looks up is that version.
+              Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+              if (versions == null
+                  || versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema))) {
+                generateVersion(subject, schema);
+              }
             } else {
               continue;
             }
@@ -392,7 +397,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schemaEntity);
+      // A schema found as another form of a registered one leaves that one as it was.
+      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
       parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
       return schemaResponse;

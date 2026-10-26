@@ -3812,15 +3812,22 @@ public class ProtobufSchemaTest {
   }
 
   // A generated class's schema finds a primitive or external DDL root stored as a public-import
-  // wrapper of its file, comparing the file's references as registered.
+  // wrapper of its file, comparing the files that file imports by their text.
   @Test
   public void testNativeFileLooksUpItsPublicImportWrapper() throws Exception {
     MockSchemaRegistryClient client = new MockSchemaRegistryClient(
         Collections.singletonList(new ProtobufSchemaProvider()));
     int bigint = client.register("bigint", new ProtobufSchema(
         rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
-    assertEquals(bigint,
-        client.getId("bigint", new ProtobufSchema(Int64Value.getDescriptor())));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(bigint, client.getId("bigint", generated));
+    // Normalized, the lookup still finds it
+    assertEquals(bigint, client.getId("bigint", generated, true));
+    // Registered, it is the wrapper's version, which is left as it was
+    assertEquals(bigint, client.register("bigint", generated));
+    assertEquals(Collections.singletonList(1), client.getAllVersions("bigint"));
+    assertEquals("google.protobuf.Int64Value",
+        ((ProtobufSchema) client.getSchemaBySubjectAndId("bigint", bigint)).name());
 
     String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
     String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
@@ -3830,24 +3837,29 @@ public class ProtobufSchemaTest {
     Map<String, String> resolved = Collections.singletonMap("other.proto", other);
     client.register("other", new ProtobufSchema(other));
     client.register("leaf", new ProtobufSchema(leaf, otherRef, resolved, null, null));
+    // Resolved as the registry resolves references, transitively
+    Map<String, String> wrapperResolved = new HashMap<>(resolved);
+    wrapperResolved.put("com.Bar", leaf);
     int external = client.register("external", new ProtobufSchema(
         rootParamWrapper("com.Bar", null, "com.Bar"),
         Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
-        Collections.singletonMap("com.Bar", leaf), null, null));
+        wrapperResolved, null, null));
     assertEquals(external, client.getId("external",
         new ProtobufSchema(leaf, otherRef, resolved, null, null)));
 
-    // Other text, or other references, find nothing
+    // Other text, or an import of other text, finds nothing
     assertNotFound(client, "external", new ProtobufSchema(
         leaf.replace("string id", "bytes id"), otherRef, resolved, null, null));
+    String other2 = other.replace("int32 n", "int64 n");
+    client.register("other2", new ProtobufSchema(other2));
     assertNotFound(client, "external", new ProtobufSchema(leaf,
         Collections.singletonList(new SchemaReference("other.proto", "other2", 1)),
-        resolved, null, null));
+        Collections.singletonMap("other.proto", other2), null, null));
     // The wrapper does not find a version holding the file
     assertNotFound(client, "leaf", new ProtobufSchema(
         rootParamWrapper("com.Bar", null, "com.Bar"),
         Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
-        Collections.singletonMap("com.Bar", leaf), null, null));
+        wrapperResolved, null, null));
   }
 
   private static void assertNotFound(
