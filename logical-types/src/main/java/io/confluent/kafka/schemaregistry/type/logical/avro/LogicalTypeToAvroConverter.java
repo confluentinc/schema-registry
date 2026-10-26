@@ -40,8 +40,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -903,52 +905,56 @@ public class LogicalTypeToAvroConverter {
   /**
    * Refuses two different named types with the same full name, e.g. a type a param pins and a
    * schema reference's type: Avro would write the second as a reference to the first, replacing
-   * it. Identical JSON bodies are allowed; {@code equals} would miss docs and aliases.
+   * it. Identical JSON bodies are allowed; {@code equals} would miss docs and aliases. Each type
+   * is still walked, since a body prints a name it repeats as a reference, so two equal bodies
+   * can hold different types of one name.
    */
   private static void checkDistinctNames(
       org.apache.avro.Schema schema, Map<String, org.apache.avro.Schema> externalTypes) {
     Map<String, String> seenAt = new HashMap<>();
     externalTypes.keySet().forEach(name -> seenAt.put(name, null));
     // A reference's types are seeded, so the walk stops at one it uses rather than enter it.
-    checkDistinctNames(schema, "", new HashMap<>(externalTypes), seenAt);
+    Set<org.apache.avro.Schema> walked = Collections.newSetFromMap(new IdentityHashMap<>());
+    walked.addAll(externalTypes.values());
+    checkDistinctNames(schema, "", new HashMap<>(externalTypes), seenAt, walked);
   }
 
   private static void checkDistinctNames(
       org.apache.avro.Schema schema, String path, Map<String, org.apache.avro.Schema> seen,
-      Map<String, String> seenAt) {
+      Map<String, String> seenAt, Set<org.apache.avro.Schema> walked) {
     switch (schema.getType()) {
       case RECORD:
       case ENUM:
       case FIXED: {
         String name = schema.getFullName();
         org.apache.avro.Schema prior = seen.putIfAbsent(name, schema);
-        if (prior != null) {
-          if (prior != schema && !prior.toString().equals(schema.toString())) {
-            throw new ValidationException("Avro type name '" + name + "' is used for two "
-                + "different types, at " + describePath(seenAt.get(name)) + " and "
-                + describePath(path) + "; rename one of them");
-          }
+        if (prior != null && prior != schema && !prior.toString().equals(schema.toString())) {
+          throw new ValidationException("Avro type name '" + name + "' is used for two "
+              + "different types, at " + describePath(seenAt.get(name)) + " and "
+              + describePath(path) + "; rename one of them");
+        }
+        if (!walked.add(schema)) {
           return;
         }
-        seenAt.put(name, path);
+        seenAt.putIfAbsent(name, path);
         if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
           for (org.apache.avro.Schema.Field field : schema.getFields()) {
             checkDistinctNames(field.schema(),
-                path.isEmpty() ? field.name() : path + "." + field.name(), seen, seenAt);
+                path.isEmpty() ? field.name() : path + "." + field.name(), seen, seenAt, walked);
           }
         }
         break;
       }
       case UNION:
         for (org.apache.avro.Schema member : schema.getTypes()) {
-          checkDistinctNames(member, path, seen, seenAt);
+          checkDistinctNames(member, path, seen, seenAt, walked);
         }
         break;
       case ARRAY:
-        checkDistinctNames(schema.getElementType(), path, seen, seenAt);
+        checkDistinctNames(schema.getElementType(), path, seen, seenAt, walked);
         break;
       case MAP:
-        checkDistinctNames(schema.getValueType(), path, seen, seenAt);
+        checkDistinctNames(schema.getValueType(), path, seen, seenAt, walked);
         break;
       default:
         break;

@@ -299,6 +299,16 @@ class LogicalTypeToAvroConverterTest {
         + "b STRUCT(y STRING) WITH ('avro.name' = 'T'));", "'T'", "at a and b");
   }
 
+  // A body prints a name it repeats as a reference, so two equal bodies of T can still hold
+  // different types named T_x_y: b's x_y must not silently become a's.
+  @Test
+  void testTypeNamePinnedTwiceOverDifferentTypes() {
+    assertTypeNameTaken("STRUCT p ("
+        + "a STRUCT(x STRUCT(y STRUCT(z INT)), x_y STRUCT(z INT)) WITH ('avro.name' = 'T'), "
+        + "b STRUCT(x STRUCT(y STRUCT(z INT)), x_y STRUCT(z STRING)) WITH ('avro.name' = 'T'));",
+        "'T_x_y'", "b.x_y");
+  }
+
   @Test
   void testTypeNameGeneratedTwiceForIdenticalTypes() {
     String avro = toAvroText("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(x INT));");
