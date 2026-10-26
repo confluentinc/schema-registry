@@ -238,11 +238,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private int getIdFromRegistry(
       String subject, ParsedSchema schema, boolean registerRequest, int id)
       throws IOException, RestClientException {
+    return getIdFromRegistry(subject, schema, registerRequest, id, false);
+  }
+
+  private int getIdFromRegistry(String subject, ParsedSchema schema, boolean registerRequest,
+      int id, boolean explicitVersion) throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap =
         idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
       // As in the registry, the newest version a schema looks up is the one found, and a schema
-      // registered that a version looks up is that version.
+      // registered that a version looks up is that version, unless a version is given.
       Map<ParsedSchema, Integer> versions =
           schemaToVersionCache.getOrDefault(subject, Collections.emptyMap());
       Integer found = null;
@@ -253,7 +258,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
         ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
         if (schemasEqual(parsedSchema, schema)) {
-          int version = versions.getOrDefault(parsedSchema, 0);
+          Integer live = versions.get(parsedSchema);
+          // A deleted version is found again only by the schema registered as it.
+          if (live == null && !parsedSchema.equals(schema)) {
+            continue;
+          }
+          int version = live != null ? live : 0;
           if (found == null || version > foundVersion) {
             found = entry.getKey();
             foundVersion = version;
@@ -261,8 +271,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
       }
       if (found != null) {
-        if (registerRequest
-            && versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema))) {
+        if (registerRequest && (explicitVersion
+            || versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema)))) {
           generateVersion(subject, schema);
         }
         return found;
@@ -398,12 +408,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         return schemaResponse;
       }
 
-      int retrievedId = getIdFromRegistry(subject, schema, true, id);
+      boolean explicitVersion = version != 0 && version != -1;
+      int retrievedId = getIdFromRegistry(subject, schema, true, id, explicitVersion);
       // Found as another form of a registered schema, it is answered with that one, which is
       // left as it was, as in the registry. Not cached: deleting the version would not clear it.
       Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
           .get(retrievedId);
-      if (registered != null && !schema.equals(parseSchemaOrElseThrow(registered))) {
+      if (!explicitVersion && registered != null
+          && !schema.equals(parseSchemaOrElseThrow(registered))) {
         return new RegisterSchemaResponse(registered);
       }
       Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
@@ -676,27 +688,30 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null && versions.containsKey(schema)) {
-      return versions.get(schema);
-    }
-    ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
-    if (next != null && versions.containsKey(next)) {
-      return versions.get(next);
-    }
-    // As in the registry, a version is found by any form that looks it up, the latest first.
     if (versions != null) {
-      for (ParsedSchema form : next != null ? Arrays.asList(schema, next)
-          : Collections.singletonList(schema)) {
-        Optional<Integer> found = versions.entrySet().stream()
-            .filter(entry -> schemasEqual(entry.getKey(), form))
-            .map(Map.Entry::getValue)
-            .max(Integer::compare);
-        if (found.isPresent()) {
-          return found.get();
-        }
+      // As in the registry: the schema in any form, then with the latest version's metadata.
+      Integer version = versionOf(versions, schema);
+      ParsedSchema next = version == null ? withLatestMetadataRuleSet(subject, schema) : null;
+      if (next != null) {
+        version = versionOf(versions, next);
+      }
+      if (version != null) {
+        return version;
       }
     }
     throw new RestClientException("Subject Not Found", 404, 40401);
+  }
+
+  // The version registered as schema, or else the latest one schema looks up; null if none.
+  private Integer versionOf(Map<ParsedSchema, Integer> versions, ParsedSchema schema) {
+    if (versions.containsKey(schema)) {
+      return versions.get(schema);
+    }
+    return versions.entrySet().stream()
+        .filter(entry -> schemasEqual(entry.getKey(), schema))
+        .map(Map.Entry::getValue)
+        .max(Integer::compare)
+        .orElse(null);
   }
 
   @Override

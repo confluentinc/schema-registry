@@ -3893,6 +3893,51 @@ public class ProtobufSchemaTest {
     assertEquals(again, client.getId("bigint", generated));
   }
 
+  // As in the registry, a deleted wrapper is not found by its native file, which registered is
+  // a version of its own.
+  @Test
+  public void testNativeFileDoesNotFindADeletedWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    client.deleteSchemaVersion("bigint", "1");
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertNotFound(client, "bigint", generated);
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(generated.canonicalString(), response.getSchema());
+    assertEquals(1, client.getAllVersions("bigint").size());
+  }
+
+  // As in the registry, a lookup by the schema in any form comes before one with the latest
+  // version's metadata, so the version found is the one whose id is found.
+  @Test
+  public void testVersionOfANativeFileIsTheOneItsIdIsFoundAt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int wrapper = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    client.register("bigint", generated.copy(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null), null));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("bigint"));
+    assertEquals(wrapper, client.getId("bigint", generated));
+    assertEquals(1, client.getVersion("bigint", generated));
+  }
+
+  // A version given on registration is a version of its own, as in an import.
+  @Test
+  public void testRegisteringAGivenVersionAddsIt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema schema = new ProtobufSchema(
+        "syntax = \"proto3\";\nmessage M {\n  int32 n = 1;\n}\n");
+    int id = client.register("explicit", schema);
+    assertEquals(id, client.register("explicit", schema.copy(2), 2, id));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("explicit"));
+  }
+
   private static void assertNotFound(
       MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
     RestClientException e = assertThrows(RestClientException.class,
