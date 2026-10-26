@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -76,6 +77,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // dedupe Ref<N> assignment so the same URI seen in multiple field positions
   // resolves to a single synthesized name.
   private final Map<String, String> assignedRefNameByUri = new LinkedHashMap<>();
+  // The base its branches' generated type names derive from, by native union (Avro).
+  private final Map<Object, String> unionNameBases = new IdentityHashMap<>();
   // Per-LT counter for Ref<N> synthesis. Bumps past names already in
   // namedTypes (populated by the active schema's $defs walk before the body
   // walk runs) so a synthesized name never silently shadows an authored one.
@@ -108,6 +111,14 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
         externalTypes.add(ref.getName());
       }
     }
+  }
+
+  public void putUnionNameBase(Object union, String base) {
+    unionNameBases.put(union, base);
+  }
+
+  public String getUnionNameBase(Object union) {
+    return unionNameBases.get(union);
   }
 
   public ParsedSchema getParsedSchema() {
