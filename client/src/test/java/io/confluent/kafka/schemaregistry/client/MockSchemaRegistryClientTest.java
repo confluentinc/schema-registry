@@ -302,6 +302,18 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testASoftDeletedVersionLookedUpAsRegisteredIsANewVersionRegisteredAgain()
+        throws Exception {
+      // A lookup by the registered form itself must not keep a soft-deleted schema either.
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      client.deleteSchemaVersion(defaultValueSubject, "1");
+      assertEquals(id, client.getId(defaultValueSubject, schema));
+      assertEquals(id, client.register(defaultValueSubject, schema));
+      assertEquals(Collections.singletonList(2), client.getAllVersions(defaultValueSubject));
+    }
+
+    @Test
     public void testInvalidCreateAssociationRequest() {
       // Call createAssociation endpoint.
       testInvalidCreateAssociationRequestHelper(client::createAssociation);
@@ -408,6 +420,24 @@ public class MockSchemaRegistryClientTest {
       assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
     }
   }
+
+    // As in the registry, a schema without metadata finds the version registered with some.
+    @Test
+    public void testGetIdWithoutMetadataFindsSchemaWithMetadata() throws Exception {
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      Metadata metadata =
+          new Metadata(null, Collections.singletonMap("confluent:edition", "2"), null);
+      int id = client.register(defaultValueSubject, schema.copy(metadata, null));
+      assertEquals(id, client.getId(defaultValueSubject, schema));
+      assertEquals(1, client.getVersion(defaultValueSubject, schema));
+      // The lookup leaves the registered schema as it was.
+      assertEquals(metadata, client.getSchemaById(id).metadata());
+      // Registered again with other metadata, the schema is found as the newer version.
+      int newer = client.register(defaultValueSubject, schema.copy(
+          new Metadata(null, Collections.singletonMap("confluent:edition", "3"), null), null));
+      assertEquals(newer, client.getId(defaultValueSubject, schema));
+      assertEquals(2, client.getVersion(defaultValueSubject, schema));
+    }
 
     @Test
     public void testCreateOneAssociation() {

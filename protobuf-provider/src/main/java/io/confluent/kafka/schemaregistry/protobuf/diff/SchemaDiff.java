@@ -79,7 +79,13 @@ public class SchemaDiff {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     ctx.collectTypeInfo(original, true);
     ctx.collectTypeInfo(update, false);
-    compare(ctx, original.rawSchema(), update.rawSchema());
+    // An empty public-import wrapper compares as the file it imports, as a copy of it would,
+    // resolving its types in that file's package.
+    ProtoFileElement originalFile = original.effectiveFile();
+    ProtoFileElement updateFile = update.effectiveFile();
+    ctx.setPackageName(originalFile.getPackageName(), true);
+    ctx.setPackageName(updateFile.getPackageName(), false);
+    compare(ctx, originalFile, updateFile);
     return ctx.getDifferences();
   }
 
