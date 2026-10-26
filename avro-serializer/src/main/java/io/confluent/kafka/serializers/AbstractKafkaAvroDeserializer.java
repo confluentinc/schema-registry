@@ -34,7 +34,6 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 
-import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -347,7 +346,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       default:
         break;
     }
-    Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+    // Loaded without initializing; only a SpecificRecord is instantiated below.
+    Class<?> readerClass = AvroSchemaUtils.getGuardedSpecificData().getClass(writerSchema);
     if (readerClass == null) {
       if (allowFallback) {
         // For union/map/array, if the reader schema can't be found,
@@ -359,8 +359,18 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           + " specified in writer's schema whilst finding reader's "
           + "schema for a SpecificRecord.");
     }
+    if (!SpecificRecord.class.isAssignableFrom(readerClass)) {
+      if (allowFallback) {
+        // As when there is no class: only a SpecificRecord can provide the reader schema.
+        return writerSchema;
+      }
+      throw new SerializationException(writerSchema.getFullName()
+                                       + " specified by the writers schema is not a "
+                                       + "SpecificRecord, so it cannot provide the readers "
+                                       + "schema.");
+    }
     try {
-      return readerClass.newInstance().getSchema();
+      return ((SpecificRecord) readerClass.newInstance()).getSchema();
     } catch (InstantiationException e) {
       throw new SerializationException(writerSchema.getFullName()
                                        + " specified by the "

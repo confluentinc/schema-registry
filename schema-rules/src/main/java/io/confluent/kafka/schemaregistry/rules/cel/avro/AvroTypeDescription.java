@@ -146,7 +146,8 @@ public final class AvroTypeDescription implements TypeDescription {
   @Override
   public Class<?> reflectType() {
     try {
-      return Class.forName(fullName);
+      // The name comes from the schema, so don't initialize the class.
+      return Class.forName(fullName, false, AvroTypeDescription.class.getClassLoader());
     } catch (ClassNotFoundException e) {
       throw new RuntimeException(e);
     }

@@ -34,9 +34,11 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversion;
 import org.apache.avro.Conversions;
@@ -49,12 +51,14 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.FastReaderBuilder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectData.AllowNull;
@@ -94,6 +98,20 @@ public class AvroSchemaUtils {
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
   }
+
+  private static final GuardedSpecificData GUARDED_DEFAULT =
+      new GuardedSpecificData(SpecificData.get());
+  private static final GuardedSpecificData GUARDED_WITH_LOGICAL =
+      new GuardedSpecificData(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
+  // Like Avro's per-class model cache, so an entry goes away with its class.
+  private static final ClassValue<SpecificData> GUARDED_MODELS = new ClassValue<SpecificData>() {
+    @Override
+    protected SpecificData computeValue(Class<?> generated) {
+      SpecificData model = SpecificData.getForClass(generated);
+      // A custom SpecificData subclass stays unwrapped: wrapping would drop its overrides.
+      return model.getClass() == SpecificData.class ? new GuardedSpecificData(model) : model;
+    }
+  };
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
   private static final ThreadLocal<ReflectData> reflectData = new ThreadLocal<>();
@@ -145,19 +163,162 @@ public class AvroSchemaUtils {
     return REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL;
   }
 
+  // SpecificData.getForSchema's choice, but guarded.
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
-    return useLogicalTypes ? getSpecificDataForSchema(reader) : SpecificData.getForSchema(reader);
+    GuardedSpecificData fallback = useLogicalTypes ? GUARDED_WITH_LOGICAL : GUARDED_DEFAULT;
+    Class<?> c = reader != null && (reader.getType() == Schema.Type.RECORD
+        || reader.getType() == Schema.Type.UNION) ? fallback.getClass(reader) : null;
+    return c != null && SpecificRecordBase.class.isAssignableFrom(c) ? GUARDED_MODELS.get(c)
+        : fallback;
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader) {
-    if (reader != null && (reader.getType() == org.apache.avro.Schema.Type.RECORD
-            || reader.getType() == org.apache.avro.Schema.Type.UNION)) {
-      Class<?> clazz = getSpecificData().getClass(reader);
-      if (clazz != null) {
-        return getSpecificDataForClass(clazz);
+    return getSpecificDataForSchema(reader, true);
+  }
+
+  /**
+   * A SpecificData for resolving classes named by schemas that may not be trusted. Its state is
+   * SpecificData.get()'s, so its setters change SpecificData.get() too.
+   */
+  public static SpecificData getGuardedSpecificData() {
+    return GUARDED_DEFAULT;
+  }
+
+  /**
+   * Behaves as the model it wraps, except that getClass(Schema) loads the named class without
+   * initializing it, and treats a class of the wrong kind as absent, so Avro reads that type
+   * generically. Avro's own getClass initializes whatever class an untrusted schema names. Like
+   * SpecificData.get(), the shared instances cache what they resolve for good.
+   */
+  static final class GuardedSpecificData extends SpecificData {
+    private final SpecificData model;
+    private final Map<String, Optional<Class<?>>> classes = new ConcurrentHashMap<>();
+    private FastReaderBuilder fastReaderBuilder;
+
+    GuardedSpecificData(SpecificData model) {
+      super(model.getClassLoader());
+      this.model = model;
+    }
+
+    // Conversions and flags added to the model later still apply.
+
+    @Override
+    public Collection<Conversion<?>> getConversions() {
+      return model.getConversions();
+    }
+
+    @Override
+    public void addLogicalTypeConversion(Conversion<?> conversion) {
+      // Avro's constructor calls this (loading Conversion services) before model is set.
+      if (model != null) {
+        model.addLogicalTypeConversion(conversion);
+      } else {
+        super.addLogicalTypeConversion(conversion);
       }
     }
-    return getSpecificData();
+
+    @Override
+    public <T> Conversion<T> getConversionByClass(Class<T> datumClass) {
+      return model.getConversionByClass(datumClass);
+    }
+
+    @Override
+    public <T> Conversion<T> getConversionByClass(Class<T> datumClass, LogicalType logicalType) {
+      return model.getConversionByClass(datumClass, logicalType);
+    }
+
+    @Override
+    public <T> Conversion<T> getConversionFor(LogicalType logicalType) {
+      return model.getConversionFor(logicalType);
+    }
+
+    // Reads the conversions directly, not through the getters above.
+    @Override
+    public int resolveUnion(Schema union, Object datum) {
+      return model.resolveUnion(union, datum);
+    }
+
+    @Override
+    public boolean useCustomCoders() {
+      return model.useCustomCoders();
+    }
+
+    @Override
+    public void setCustomCoders(boolean flag) {
+      model.setCustomCoders(flag);
+    }
+
+    @Override
+    public boolean isFastReaderEnabled() {
+      return model.isFastReaderEnabled();
+    }
+
+    @Override
+    public GenericData setFastReaderEnabled(boolean flag) {
+      model.setFastReaderEnabled(flag);
+      return this;
+    }
+
+    // Own builder so the fast reader resolves classes through this instance; the model builder's
+    // settings are copied once.
+    @Override
+    public synchronized FastReaderBuilder getFastReaderBuilder() {
+      if (fastReaderBuilder == null) {
+        FastReaderBuilder settings = model.getFastReaderBuilder();
+        fastReaderBuilder = new FastReaderBuilder(this)
+            .withKeyClassEnabled(settings.isKeyClassEnabled())
+            .withClassPropEnabled(settings.isClassPropEnabled());
+      }
+      return fastReaderBuilder;
+    }
+
+    @Override
+    public Class getClass(Schema schema) {
+      Schema.Type type = schema.getType();
+      if (type != Schema.Type.RECORD && type != Schema.Type.ENUM && type != Schema.Type.FIXED) {
+        return super.getClass(schema);
+      }
+      Class<?> c = lookUp(schema);
+      Class<?> expected = type == Schema.Type.RECORD ? IndexedRecord.class
+          : type == Schema.Type.ENUM ? Enum.class : GenericFixed.class;
+      return c != null && expected.isAssignableFrom(c) ? c : null;
+    }
+
+    // SpecificData.getClass's lookup and cache, without initializing: the class name, then '$'
+    // for dots from the right (nested classes), via this loader then the context loader.
+    Class<?> lookUp(Schema schema) {
+      if (schema.getFullName() == null) {
+        return null;
+      }
+      Optional<Class<?>> cached = classes.get(schema.getFullName());
+      if (cached != null) {
+        return cached.orElse(null);
+      }
+      return classes.computeIfAbsent(schema.getFullName(), fullName -> {
+        Class<?> c = load(SpecificData.getClassName(schema));
+        StringBuilder nestedName = new StringBuilder(fullName);
+        for (int dot = fullName.lastIndexOf('.'); c == null && dot != -1;
+            dot = fullName.lastIndexOf('.', dot - 1)) {
+          nestedName.setCharAt(dot, '$');
+          c = load(nestedName.toString());
+        }
+        return Optional.ofNullable(c);
+      }).orElse(null);
+    }
+
+    private Class<?> load(String name) {
+      for (ClassLoader loader : new ClassLoader[] {
+          getClassLoader(), Thread.currentThread().getContextClassLoader()}) {
+        if (loader != null) {
+          try {
+            return Class.forName(name, false, loader);
+          } catch (ClassNotFoundException e) {
+            // try the next loader
+          }
+        }
+      }
+      return null;
+    }
   }
 
   public static <T> SpecificData getSpecificDataForClass(Class<T> c) {
