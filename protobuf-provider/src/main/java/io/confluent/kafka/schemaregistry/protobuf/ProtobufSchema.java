@@ -198,6 +198,8 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String SQL_FIELD = "sql";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
+  // The file_meta param naming the root of an empty public-import wrapper.
+  public static final String ROOT_KEY = "root";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
@@ -2438,7 +2440,16 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    ProtoFileElement file = effectiveFile();
+    ProtoFileElement leaf = resolvePublicImportWrapper();
+    String root = leaf != null ? rootParam() : null;
+    if (root != null) {
+      if (!definesMessage(leaf, root)) {
+        throw new IllegalArgumentException("Protobuf schema root '" + root
+            + "' is not a message in " + schemaObj.getPublicImports().get(0));
+      }
+      return root;
+    }
+    ProtoFileElement file = leaf != null ? leaf : schemaObj;
     TypeElement typeElement = firstMessage(file);
     if (typeElement == null) {
       typeElement = firstEnum(file);
@@ -2455,10 +2466,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   /**
    * For an empty file with exactly one {@code import public} and no private
-   * imports, returns the directly-imported {@link ProtoFileElement} provided
+   * imports other than {@code confluent/meta.proto} (for the root param),
+   * returns the directly-imported {@link ProtoFileElement} provided
    * it has at least one local type. Returns null if the shape is malformed
-   * (zero or multiple public imports, any private imports, missing dep, or
-   * the dep itself has no local types).
+   * (zero or multiple public imports, any other private imports, missing dep,
+   * or the dep itself has no local types).
    *
    * <p>Resolution is depth-1 only: the empty wrapper must directly import a
    * non-empty file. Chains of empty wrappers are not supported.
@@ -2470,7 +2482,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (!schemaObj.getTypes().isEmpty()) {
       return null;
     }
-    if (!schemaObj.getImports().isEmpty()) {
+    if (!schemaObj.getImports().stream().allMatch(CFLT_META_LOCATION::equals)) {
       return null;
     }
     if (!schemaObj.getServices().isEmpty()) {
@@ -2495,6 +2507,38 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     return leaf;
+  }
+
+  private String rootParam() {
+    ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, schemaObj.getOptions());
+    return meta != null && meta.getParams() != null ? meta.getParams().get(ROOT_KEY) : null;
+  }
+
+  // Whether the file defines a message, top-level or nested, with this full name.
+  private static boolean definesMessage(ProtoFileElement file, String fullName) {
+    String name = fullName;
+    String packageName = file.getPackageName();
+    if (packageName != null && !packageName.isEmpty()) {
+      if (!name.startsWith(packageName + ".")) {
+        return false;
+      }
+      name = name.substring(packageName.length() + 1);
+    }
+    List<TypeElement> types = file.getTypes();
+    for (String part : name.split("\\.", -1)) {
+      MessageElement found = null;
+      for (TypeElement type : types) {
+        if (type instanceof MessageElement && type.getName().equals(part)) {
+          found = (MessageElement) type;
+          break;
+        }
+      }
+      if (found == null) {
+        return false;
+      }
+      types = found.getNestedTypes();
+    }
+    return true;
   }
 
   /**
@@ -2615,6 +2659,10 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
+    if (resolvePublicImportWrapper() != null) {
+      // Rejects a root param naming no message
+      name();
+    }
     if (strict) {
       toDynamicSchema();
     }
