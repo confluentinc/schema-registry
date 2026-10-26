@@ -2316,6 +2316,24 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
+  void testWrappedRootRoundTripsInMemory() {
+    // Without the text, the schema lists the built-in files it imports as dependencies
+    List<Schema> roots = Arrays.asList(
+        Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.BIGINT),
+        Schema.create(Schema.Type.DOUBLE), Schema.create(Schema.Type.VARIANT));
+    for (LogicalTypeVersion version : LogicalTypeVersion.values()) {
+      for (Schema root : roots) {
+        ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(root.setNullable(false)), "Holder", version);
+        LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(emitted);
+        assertTrue(read.getResolvedReferences().isEmpty(), () -> version + " " + root);
+        assertEquals(emitted.canonicalString(), LogicalTypeToProtoConverter
+            .fromLogicalType(read, "Holder", version).canonicalString());
+      }
+    }
+  }
+
+  @Test
   void testWrappedRootRecordsItsRootOnlyWhenNotFirst() {
     String bigint = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(Schema.create(Schema.Type.BIGINT).setNullable(false)), "Holder")
@@ -3280,6 +3298,11 @@ class LogicalTypeToProtoConverterTest {
       assertEquals(root, stored.name());
       assertEquals(root, ProtoToLogicalTypeConverter.toLogicalType(stored)
           .getRootSchema().getQualifiedName());
+      // In memory too, where the meta import's files are dependencies
+      LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(emitted);
+      assertEquals(resolved.keySet(), read.getResolvedReferences().keySet());
+      assertEquals(emitted.canonicalString(),
+          LogicalTypeToProtoConverter.fromLogicalType(read, "ignored").canonicalString());
     }
   }
 

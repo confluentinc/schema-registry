@@ -306,13 +306,14 @@ public class ProtoToLogicalTypeConverter {
 
   private static LogicalType reExportLogicalType(final ProtobufSchema schema) {
     String packageName = emptyToNull(schema.rawSchema().getPackageName());
+    Map<String, String> resolvedReferences = withoutBuiltIns(schema);
     // A built-in wrapper's file (not a reference) is a wrapped root, read as its leaf type.
     String publicImport = schema.rawSchema().getPublicImports().get(0);
-    if (schema.references().stream().noneMatch(r -> r.getName().equals(publicImport))) {
+    if (!isReference(schema, publicImport)) {
       Optional<Schema> unwrapped = toUnwrappedSchema(schema.toDescriptor());
       if (unwrapped.isPresent()) {
         return new LogicalType(packageName, unwrapped.get(), Collections.emptyMap(),
-            schema.references(), schema.resolvedReferences(), Collections.emptyMap());
+            schema.references(), resolvedReferences, Collections.emptyMap());
       }
     }
     // schema.name() already does the public-import fall-through (with
@@ -323,8 +324,21 @@ public class ProtoToLogicalTypeConverter {
         Schema.createNamedTypeRef(schema.name()).setNullable(false),
         Collections.emptyMap(),
         schema.references(),
-        schema.resolvedReferences(),
+        resolvedReferences,
         Collections.emptyMap());
+  }
+
+  // A schema built from a descriptor lists the built-in files it imports as dependencies; a
+  // logical type keeps only those it references, as when the schema is parsed from its text.
+  private static Map<String, String> withoutBuiltIns(final ProtobufSchema schema) {
+    Map<String, String> resolvedReferences = new LinkedHashMap<>(schema.resolvedReferences());
+    resolvedReferences.keySet().removeIf(name ->
+        ProtobufSchema.knownTypes().contains(name) && !isReference(schema, name));
+    return resolvedReferences;
+  }
+
+  private static boolean isReference(final ProtobufSchema schema, final String name) {
+    return schema.references().stream().anyMatch(r -> r.getName().equals(name));
   }
 
   private static void collectReferencedTypeNames(final ProtobufSchema schema,
