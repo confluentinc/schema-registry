@@ -180,16 +180,7 @@ public class ProtoToLogicalTypeConverter {
     if (schema.rawSchema() != null
         && schema.rawSchema().getTypes().isEmpty()
         && !schema.rawSchema().getPublicImports().isEmpty()) {
-      // schema.name() already does the public-import fall-through (with
-      // transitive resolution + cycle protection), so reader and
-      // ProtobufSchema agree on which type counts as the root.
-      return new LogicalType(
-          emptyToNull(schema.rawSchema().getPackageName()),
-          Schema.createNamedTypeRef(schema.name()).setNullable(false),
-          Collections.emptyMap(),
-          schema.references(),
-          schema.resolvedReferences(),
-          Collections.emptyMap());
+      return reExportLogicalType(schema);
     }
     final Descriptor rootDescriptor = schema.toDescriptor();
     if (rootDescriptor == null) {
@@ -311,6 +302,29 @@ public class ProtoToLogicalTypeConverter {
         schema.references(),
         schema.resolvedReferences(),
         ctx.getDefaultValues());
+  }
+
+  private static LogicalType reExportLogicalType(final ProtobufSchema schema) {
+    String packageName = emptyToNull(schema.rawSchema().getPackageName());
+    // A built-in wrapper's file (not a reference) is a wrapped root, read as its leaf type.
+    String publicImport = schema.rawSchema().getPublicImports().get(0);
+    if (schema.references().stream().noneMatch(r -> r.getName().equals(publicImport))) {
+      Optional<Schema> unwrapped = toUnwrappedSchema(schema.toDescriptor());
+      if (unwrapped.isPresent()) {
+        return new LogicalType(packageName, unwrapped.get(), Collections.emptyMap(),
+            schema.references(), schema.resolvedReferences(), Collections.emptyMap());
+      }
+    }
+    // schema.name() already does the public-import fall-through (with
+    // transitive resolution + cycle protection), so reader and
+    // ProtobufSchema agree on which type counts as the root.
+    return new LogicalType(
+        packageName,
+        Schema.createNamedTypeRef(schema.name()).setNullable(false),
+        Collections.emptyMap(),
+        schema.references(),
+        schema.resolvedReferences(),
+        Collections.emptyMap());
   }
 
   private static void collectReferencedTypeNames(final ProtobufSchema schema,

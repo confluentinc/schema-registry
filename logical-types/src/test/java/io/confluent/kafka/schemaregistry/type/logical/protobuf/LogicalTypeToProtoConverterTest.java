@@ -2295,6 +2295,48 @@ class LogicalTypeToProtoConverterTest {
             new LogicalType(root, namedTypes), "Holder"));
   }
 
+  @Test
+  void testWrappedRootSurvivesItsText() {
+    // The registry stores only the text, so the root must come back from it
+    List<Schema> roots = Arrays.asList(
+        Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.INT),
+        Schema.create(Schema.Type.BIGINT), Schema.create(Schema.Type.FLOAT),
+        Schema.create(Schema.Type.DOUBLE), Schema.createString(), Schema.createBytes(),
+        Schema.create(Schema.Type.VARIANT));
+    for (LogicalTypeVersion version : LogicalTypeVersion.values()) {
+      for (Schema root : roots) {
+        ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(
+            new LogicalType(root.setNullable(false)), "Holder", version);
+        ProtobufSchema stored = new ProtobufSchema(emitted.canonicalString());
+        assertEquals(emitted.name(), stored.name(), () -> version + " " + root);
+        assertEquals(root.getType(),
+            ProtoToLogicalTypeConverter.toLogicalType(stored).getRootSchema().getType());
+      }
+    }
+  }
+
+  @Test
+  void testWrappedRootRecordsItsRootOnlyWhenNotFirst() {
+    String bigint = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.BIGINT).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(bigint).contains("import public \"google/protobuf/wrappers.proto\"")
+        .contains("import \"confluent/meta.proto\"")
+        .contains("value: \"google.protobuf.Int64Value\"")
+        .doesNotContain("message ");
+    // DoubleValue is first in wrappers.proto, and Variant is alone in its file
+    String dbl = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.DOUBLE).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(dbl).contains("import public \"google/protobuf/wrappers.proto\"")
+        .doesNotContain("confluent");
+    String variant = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(Schema.create(Schema.Type.VARIANT).setNullable(false)), "Holder")
+        .canonicalString();
+    assertThat(variant).contains("import public \"confluent/type/variant.proto\"")
+        .doesNotContain("meta.proto");
+  }
+
   // =========================================================================
   // Tags + params combined on the same field/struct
   // =========================================================================
@@ -3177,6 +3219,8 @@ class LogicalTypeToProtoConverterTest {
     // toDescriptor() resolves through the public import (via
     // ProtobufSchema.name()'s fall-through) to com.Foo.
     assertEquals("com.Foo", proto.toDescriptor().getFullName());
+    // The root is the imported file's first message, so it isn't recorded
+    assertFalse(text.contains("file_meta"), text);
   }
 
   /**
@@ -3209,6 +3253,34 @@ class LogicalTypeToProtoConverterTest {
     assertEquals("com.Foo", rt.getRootSchema().getQualifiedName());
     assertTrue(rt.getNamedTypes().isEmpty(),
         "public-import round-trip should produce no local namedTypes");
+  }
+
+  @Test
+  void testExternalRootThatIsNotFirstSurvivesItsText() {
+    String externalProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Bar {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Foo {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "  Inner inner = 1;\n"
+        + "}\n";
+    for (String root : Arrays.asList("com.Foo", "com.Foo.Inner")) {
+      Map<String, String> resolved = Collections.singletonMap(root, externalProto);
+      List<SchemaReference> refs =
+          Collections.singletonList(new SchemaReference(root, "foo-subject", 1));
+      LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef(root).setNullable(false),
+          Collections.emptyMap(), refs, resolved);
+      ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+      ProtobufSchema stored =
+          new ProtobufSchema(emitted.canonicalString(), refs, resolved, null, null);
+      assertEquals(root, stored.name());
+      assertEquals(root, ProtoToLogicalTypeConverter.toLogicalType(stored)
+          .getRootSchema().getQualifiedName());
+    }
   }
 
   @Test

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 
 import com.google.common.base.CaseFormat;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -37,6 +38,7 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.EnumOptions;
 import com.google.protobuf.DescriptorProtos.FieldOptions;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileOptions;
 import com.google.protobuf.DescriptorProtos.MessageOptions;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -232,13 +234,14 @@ public class LogicalTypeToProtoConverter {
       }
     }
 
-    // If root is a wrappable leaf type, emit the canonical well-known proto
-    // message as the schema's root descriptor. No local message definition,
-    // no rowName usage, no namedTypes/references processing.
+    // If root is a wrappable leaf type, publicly import the well-known proto
+    // file defining its message, as for an external root. No local message
+    // definition, no rowName usage, no namedTypes/references processing.
     if (ROOT_WRAPPER_DESCRIPTORS.containsKey(schema.getType())) {
       validateWrappableRoot(logicalType, schema);
-      return applyEditionMetadata(
-          new ProtobufSchema(ROOT_WRAPPER_DESCRIPTORS.get(schema.getType())), version);
+      Descriptor wrapper = ROOT_WRAPPER_DESCRIPTORS.get(schema.getType());
+      return applyEditionMetadata(publicImportFile(wrapper.getFile(), wrapper.getFullName(),
+          logicalType.getNamespace(), Collections.emptyList()), version);
     }
 
     // A proto file declares a single `package`; every LOCAL named type lives in
@@ -322,25 +325,45 @@ public class LogicalTypeToProtoConverter {
       FileDescriptor renamedExternal = FileDescriptor.buildFrom(
           externalFile.toProto().toBuilder().setName(externalFileName).build(),
           externalFile.getDependencies().toArray(new FileDescriptor[0]));
-
-      FileDescriptorProto.Builder fileBuilder = FileDescriptorProto.newBuilder()
-          .setSyntax("proto3")
-          .addDependency(externalFileName)
-          .addPublicDependency(0);
-      String packageName = logicalType.getNamespace();
-      if (packageName != null && !packageName.isEmpty()) {
-        fileBuilder.setPackage(packageName);
-      }
-
-      FileDescriptor file = FileDescriptor.buildFrom(
-          fileBuilder.build(),
-          new FileDescriptor[] {renamedExternal});
-      return applyEditionMetadata(
-          new ProtobufSchema(file, logicalType.getReferences()), version);
+      return applyEditionMetadata(publicImportFile(renamedExternal, externalTypeFullName,
+          logicalType.getNamespace(), logicalType.getReferences()), version);
     } catch (DescriptorValidationException e) {
       throw new ValidationException(
           "Failed to build public-import proto for '"
               + externalTypeFullName + "'", e);
+    }
+  }
+
+  /**
+   * An otherwise-empty file publicly importing the root's file. The root is recorded in the
+   * file_meta params only when {@link ProtobufSchema#name()} would not pick it anyway.
+   */
+  private static ProtobufSchema publicImportFile(FileDescriptor imported, String rootFullName,
+      String packageName, List<SchemaReference> references) {
+    FileDescriptorProto.Builder fileBuilder = FileDescriptorProto.newBuilder()
+        .setSyntax("proto3")
+        .addDependency(imported.getName())
+        .addPublicDependency(0);
+    if (packageName != null && !packageName.isEmpty()) {
+      fileBuilder.setPackage(packageName);
+    }
+    try {
+      ProtobufSchema schema = new ProtobufSchema(FileDescriptor.buildFrom(
+          fileBuilder.build(), new FileDescriptor[] {imported}), references);
+      if (schema.name().equals(rootFullName)) {
+        return schema;
+      }
+      fileBuilder.addDependency(MetaProto.getDescriptor().getName())
+          .setOptions(FileOptions.newBuilder().setExtension(MetaProto.fileMeta,
+              Meta.newBuilder().putParams(ProtobufSchema.ROOT_KEY, rootFullName).build()));
+      schema = new ProtobufSchema(FileDescriptor.buildFrom(fileBuilder.build(),
+          new FileDescriptor[] {imported, MetaProto.getDescriptor()}), references);
+      // Fails for a root that isn't a message, such as an enum beside messages
+      schema.name();
+      return schema;
+    } catch (DescriptorValidationException | IllegalArgumentException e) {
+      throw new ValidationException(
+          "Failed to build public-import proto for '" + rootFullName + "'", e);
     }
   }
 
