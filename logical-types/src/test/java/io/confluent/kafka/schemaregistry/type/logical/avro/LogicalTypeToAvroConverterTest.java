@@ -232,6 +232,40 @@ class LogicalTypeToAvroConverterTest {
         "p_u_b_2", "u_b STRUCT(y STRING) WITH('avro.name' = 'p_u_b_2')");
   }
 
+  // A suffix renames the types derived under it, which can collide anew: a_b becomes p_a_b_2, so
+  // its c becomes p_a_b_2_c, the next field's type, which then yields in turn.
+  @Test
+  void testTypeNameCollidingAfterParentSuffixed() {
+    assertSuffixed("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(c STRUCT(y STRING)), "
+            + "a_b_2_c STRUCT(z INT));",
+        "p_a_b_2_c_2", "a_b_2_c STRUCT(z INT) WITH('avro.name' = 'p_a_b_2_c_2')");
+    assertSuffixed("STRUCT p (a STRUCT(b STRUCT(x INT)), a_b STRUCT(c STRUCT(d STRUCT(y STRING))), "
+            + "a_b_2_c STRUCT(z INT), a_b_2_c_2_d STRUCT(w INT));",
+        "p_a_b_2_c_2", "a_b_2_c_2_d STRUCT(w INT) );");
+  }
+
+  // Avro refuses two members of one union with one name, even identical ones, so a derived member
+  // yields to a pinned or declared one before the union is built.
+  @Test
+  void testUnionMemberNameTakenByAnother() {
+    assertSuffixed("STRUCT p (u UNION(a STRUCT(x INT) WITH ('avro.name' = 'p_u_b'), "
+            + "b STRUCT(y STRING)));",
+        "p_u_b_2", "b STRUCT(y STRING) NOT NULL WITH('avro.name' = 'p_u_b_2')");
+    assertSuffixed("STRUCT p (u UNION(b STRUCT(x INT), r p_u_b)); STRUCT p_u_b (y STRING);",
+        "p_u_b_2", "b STRUCT(x INT) NOT NULL WITH('avro.name' = 'p_u_b_2'), r p_u_b NOT NULL");
+    assertSuffixed("STRUCT p (u UNION(b STRUCT(y STRING), r p_u_b)); STRUCT p_u_b (y STRING);",
+        "p_u_b_2", "b STRUCT(y STRING) NOT NULL WITH('avro.name' = 'p_u_b_2')");
+    assertSuffixed("STRUCT p (u UNION(a STRUCT(x INT) WITH ('avro.name' = 'p_u_b'), "
+            + "b STRUCT(x INT)));",
+        "p_u_b_2", "b STRUCT(x INT) NOT NULL WITH('avro.name' = 'p_u_b_2')");
+    assertSuffixed("STRUCT p (a ARRAY<UNION(b ENUM('X'), r p_a_b)>); ENUM p_a_b ('Y');",
+        "p_a_b_2", "b ENUM('X') NOT NULL WITH('avro.name' = 'p_a_b_2')");
+    assertThat(toAvroText("STRUCT p_b (y STRING); TYPE UNION(b STRUCT(x INT), r p_b) NOT NULL;"))
+        .contains("\"name\":\"p_b_2\"").doesNotContain("standin");
+    assertTypeNameTaken("STRUCT p (u UNION(a STRUCT(x INT) WITH ('avro.name' = 'T'), "
+        + "b STRUCT(y INT) WITH ('avro.name' = 'T')));", "'T'", "two members of one union");
+  }
+
   // An inline enum's derived name yields to a declared type's, as an inline struct's does, and
   // stays anonymous.
   @Test
@@ -247,8 +281,11 @@ class LogicalTypeToAvroConverterTest {
 
   private static void assertSuffixed(String ddl, String name, String readBack) {
     String avro = toAvroText(ddl);
-    assertThat(avro).contains("\"name\":\"" + name + "\"");
+    assertThat(avro).contains("\"name\":\"" + name + "\"").doesNotContain("standin");
     assertThat(roundTrip(avro)).contains(readBack);
+    // Written back, the pinned suffixes keep the schema
+    assertThat(new AvroSchema(toAvroText(roundTrip(avro))).deepEquals(new AvroSchema(avro)))
+        .isTrue();
   }
 
   // A pinned name is never suffixed, so two pinned to one name with different bodies are refused.

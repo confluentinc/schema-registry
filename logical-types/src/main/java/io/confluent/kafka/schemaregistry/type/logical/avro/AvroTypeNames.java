@@ -40,7 +40,9 @@ import java.util.regex.Pattern;
  * the type built under it. When two different types share one, a second pass gives a derived type
  * the next free suffix ({@code p_a_b_2}) if a pinned or named type has its name, or a derived type
  * before it keeps the name; the reader then pins the suffix. Identical types share a name, since
- * Avro writes the second as a reference to the first.
+ * Avro writes the second as a reference to the first, except as members of one union, which Avro
+ * refuses. A suffix renames the types derived under it, which can collide anew, so passes repeat
+ * until none does.
  */
 final class AvroTypeNames {
 
@@ -64,23 +66,33 @@ final class AvroTypeNames {
   enum Kind { DERIVED, PINNED, FIXED }
 
   private static final class Site {
+    // The name the walk asked for, and the one given, a suffix if it yielded
+    private final String requested;
     private final String name;
     private final Kind kind;
     private Object type;
 
-    private Site(String name, Kind kind) {
+    private Site(String requested, String name, Kind kind) {
+      this.requested = requested;
       this.name = name;
       this.kind = kind;
     }
   }
 
-  // Every generated type, in the order the writer builds them, which both passes share.
+  // Passes beyond this many mean the suffixes do not settle.
+  private static final int MAX_PASSES = 100;
+
+  // Every generated type, in the order the writer builds them, which every pass shares.
   private final List<Site> sites = new ArrayList<>();
   // Names of named types outside the logical type, which a derived name yields to.
   private final Set<String> reserved = new HashSet<>();
-  // For a second pass: its first pass's sites, and the suffixed names of those that yield.
-  private final List<Site> firstSites;
+  // Derived types that must yield to another member of their union of the same name.
+  private final Set<Integer> mustYield = new HashSet<>();
+  // For a later pass: the previous pass's sites, the suffixed names of those that yield so far,
+  // and how many passes came before.
+  private final List<Site> previousSites;
   private final Map<Integer, String> renamed;
+  private final int pass;
 
   // Walk state.
   private int pinnedDepth;
@@ -90,19 +102,20 @@ final class AvroTypeNames {
   private final Deque<Object[]> replacedExceptions = new ArrayDeque<>();
 
   AvroTypeNames() {
-    this(Collections.emptyList(), Collections.emptyMap());
+    this(Collections.emptyList(), Collections.emptyMap(), 0);
   }
 
-  private AvroTypeNames(List<Site> firstSites, Map<Integer, String> renamed) {
-    this.firstSites = firstSites;
+  private AvroTypeNames(List<Site> previousSites, Map<Integer, String> renamed, int pass) {
+    this.previousSites = previousSites;
     this.renamed = renamed;
+    this.pass = pass;
   }
 
   void reserve(Set<String> names) {
     reserved.addAll(names);
   }
 
-  // A second pass that suffixes the derived types that yield their names, or null if none does.
+  // A next pass that suffixes the derived types that yield their names, or null if none does.
   AvroTypeNames forSuffixing() {
     Map<String, List<Integer>> byName = new LinkedHashMap<>();
     for (int i = 0; i < sites.size(); i++) {
@@ -123,7 +136,8 @@ final class AvroTypeNames {
           continue;
         }
         String body = body(i);
-        if (!reserved.contains(e.getKey()) && (kept.isEmpty() || kept.contains(body))) {
+        if (!mustYield.contains(i) && !reserved.contains(e.getKey())
+            && (kept.isEmpty() || kept.contains(body))) {
           kept.add(body);
           continue;
         }
@@ -138,9 +152,14 @@ final class AvroTypeNames {
     if (suffixed.isEmpty()) {
       return null;
     }
-    AvroTypeNames second = new AvroTypeNames(sites, suffixed);
-    second.reserve(reserved);
-    return second;
+    if (pass == MAX_PASSES) {
+      throw new ValidationException("Could not give the Avro types distinct names");
+    }
+    Map<Integer, String> allRenamed = new HashMap<>(renamed);
+    allRenamed.putAll(suffixed);
+    AvroTypeNames next = new AvroTypeNames(sites, allRenamed, pass + 1);
+    next.reserve(reserved);
+    return next;
   }
 
   private String body(int index) {
@@ -148,18 +167,72 @@ final class AvroTypeNames {
     return type != null ? type.toString() : "#" + index;
   }
 
-  // The name a generated type takes: its own, or the suffix the first pass gave it.
+  // The name a generated type takes: its own, or the suffix an earlier pass gave it.
   String allocate(String name, Kind kind) {
     int index = sites.size();
     Kind effective = kind == Kind.DERIVED && pinnedDepth > 0 ? Kind.PINNED : kind;
     String result = name;
     String suffix = renamed.get(index);
-    // Under a type renamed this pass, a type's name derives from the new one and stands.
-    if (suffix != null && firstSites.get(index).name.equals(name)) {
+    // Under a type renamed since, a type's name derives from the new one and stands.
+    if (suffix != null && previousSites.get(index).requested.equals(name)) {
       result = suffix;
     }
-    sites.add(new Site(result, effective));
+    sites.add(new Site(name, result, effective));
     return result;
+  }
+
+  /**
+   * The members of a union, which Avro refuses two of one name. A derived member yields to the
+   * other, whatever its body; until a next pass suffixes it, a stand-in keeps its place.
+   */
+  List<org.apache.avro.Schema> distinctMembers(List<org.apache.avro.Schema> members) {
+    Map<String, org.apache.avro.Schema> byName = new HashMap<>();
+    List<org.apache.avro.Schema> distinct = new ArrayList<>();
+    for (org.apache.avro.Schema member : members) {
+      if (!isNamed(member)) {
+        distinct.add(member);
+        continue;
+      }
+      String name = member.getFullName();
+      org.apache.avro.Schema prior = byName.putIfAbsent(name, member);
+      if (prior == null) {
+        distinct.add(member);
+        continue;
+      }
+      int yielding = derivedSite(member);
+      if (yielding < 0) {
+        yielding = derivedSite(prior);
+      }
+      if (yielding < 0) {
+        throw new ValidationException("Avro type name '" + name + "' is used for two members "
+            + "of one union; rename one of them");
+      }
+      mustYield.add(yielding);
+      distinct.add(org.apache.avro.Schema.createRecord(
+          name + "_standin" + distinct.size(), null, null, false, Collections.emptyList()));
+    }
+    return distinct;
+  }
+
+  private static boolean isNamed(org.apache.avro.Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+      case ENUM:
+      case FIXED:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // The site of a derived type, or -1 if the type was not derived.
+  private int derivedSite(org.apache.avro.Schema type) {
+    for (int i = 0; i < sites.size(); i++) {
+      if (sites.get(i).type == type) {
+        return sites.get(i).kind == Kind.DERIVED ? i : -1;
+      }
+    }
+    return -1;
   }
 
   // The type of the name last allocated.

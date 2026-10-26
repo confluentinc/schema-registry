@@ -89,9 +89,9 @@ public class LogicalTypeToAvroConverter {
     }
     AvroTypeNames names = new AvroTypeNames();
     Emitted emitted = emit(logicalType, rowName, version, names);
-    AvroTypeNames suffixing = names.forSuffixing();
-    if (suffixing != null) {
-      emitted = emit(logicalType, rowName, version, suffixing);
+    // A suffix renames the types derived under it, which can collide anew.
+    for (AvroTypeNames next = names.forSuffixing(); next != null; next = next.forSuffixing()) {
+      emitted = emit(logicalType, rowName, version, next);
     }
     checkDistinctNames(emitted.schema, emitted.externalTypes);
     return applyMetadata(emitted.schema, emitted.metadataProps, logicalType,
@@ -182,7 +182,7 @@ public class LogicalTypeToAvroConverter {
         unionMeta.add(buildBranchMeta(branch));
       }
       org.apache.avro.Schema avroSchema =
-          org.apache.avro.Schema.createUnion(avroMembers);
+          org.apache.avro.Schema.createUnion(names.distinctMembers(avroMembers));
       try {
         metadataProps.put(CONFLUENT_UNION_PROP,
             JacksonMapper.INSTANCE.writeValueAsString(unionMeta));
@@ -488,7 +488,7 @@ public class LogicalTypeToAvroConverter {
           org.apache.avro.Schema memberSchema = fromBranch(branch, rowName, ctx);
           avroMembers.add(memberSchema);
         }
-        return org.apache.avro.Schema.createUnion(avroMembers);
+        return org.apache.avro.Schema.createUnion(names(ctx).distinctMembers(avroMembers));
       }
       case MAP:
         return convertMap(schema, rowName, ctx);
