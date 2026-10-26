@@ -280,8 +280,27 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       return schemaId;
     } else {
+      ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
+      if (next != null) {
+        return getIdFromRegistry(subject, next, false, id);
+      }
       throw new RestClientException("Schema Not Found", 404, 40403);
     }
+  }
+
+  // As the registry looks a schema up again, with the latest version's metadata and rule set
+  // where it has none of its own; null if that changes nothing.
+  private ParsedSchema withLatestMetadataRuleSet(String subject, ParsedSchema schema) {
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+    if (versions == null || versions.isEmpty()) {
+      return null;
+    }
+    ParsedSchema latest = Collections.max(versions.entrySet(), Map.Entry.comparingByValue())
+        .getKey();
+    ParsedSchema next = schema.copy(
+        schema.metadata() != null ? schema.metadata() : latest.metadata(),
+        schema.ruleSet() != null ? schema.ruleSet() : latest.ruleSet());
+    return next.equals(schema) ? null : next;
   }
 
   private boolean schemasEqual(ParsedSchema schema1, ParsedSchema schema2) {
@@ -649,18 +668,31 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
     if (versions != null) {
-      if (versions.containsKey(schema)) {
-        return versions.get(schema);
+      Integer version = versionOf(versions, schema);
+      ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
+      if (version == null && next != null) {
+        version = versionOf(versions, next);
       }
-      for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
-        ParsedSchema key = entry.getKey();
-        // Registered with a version or not, a schema is found by its content.
-        if (key.version() != null && key.copy((Integer) null).equals(schema)) {
-          return entry.getValue();
-        }
+      if (version != null) {
+        return version;
       }
     }
     throw new RestClientException("Subject Not Found", 404, 40401);
+  }
+
+  // The version registered with schema's content, or null.
+  private static Integer versionOf(Map<ParsedSchema, Integer> versions, ParsedSchema schema) {
+    if (versions.containsKey(schema)) {
+      return versions.get(schema);
+    }
+    for (Map.Entry<ParsedSchema, Integer> entry : versions.entrySet()) {
+      ParsedSchema key = entry.getKey();
+      // Registered with a version or not, a schema is found by its content.
+      if (key.version() != null && key.copy((Integer) null).equals(schema)) {
+        return entry.getValue();
+      }
+    }
+    return null;
   }
 
   @Override
@@ -776,6 +808,17 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
+      // The schema found, as registered: a lookup may omit its metadata and rule set.
+      Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
+          .get(retrievedId);
+      if (registered != null) {
+        schemaResponse = new RegisterSchemaResponse(registered);
+        // Found by the latest version's metadata, the answer can change with a newer version.
+        if (schema.equals(parseSchemaOrElseThrow(registered))) {
+          schemaResponseMap.put(schema, schemaResponse);
+        }
+        return schemaResponse;
+      }
       Schema schemaEntity = new Schema(subject, schema.version(), retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       // A soft-deleted schema is found but not kept: registered again, it is a new version.
@@ -964,7 +1007,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+  public SchemaRegistryDeployment getSchemaRegistryDeployment()
       throws IOException, RestClientException {
     // For the mock client, return an empty deployment (default behavior)
     return new SchemaRegistryDeployment();

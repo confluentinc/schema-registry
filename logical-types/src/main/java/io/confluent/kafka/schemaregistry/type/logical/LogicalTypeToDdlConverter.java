@@ -352,6 +352,8 @@ public final class LogicalTypeToDdlConverter {
       switch (schema.getType()) {
         case STRUCT:
           return rowExpr(schema);
+        case ENUM:
+          return enumExpr(schema);
         case UNION:
           return unionExpr(schema);
         case ARRAY:
@@ -368,7 +370,7 @@ public final class LogicalTypeToDdlConverter {
           // named "Row" would lex as the ROW keyword). Quote per-segment.
           return wrapNullable(qualifiedName(displayName(schema.getQualifiedName())), schema);
         default:
-          // Primitive / decimal / parametric / ENUM — Schema.toDdl already
+          // Primitive / decimal / parametric — Schema.toDdl already
           // emits the right syntax including the " NOT NULL" suffix when
           // appropriate.
           return schema.toDdl();
@@ -397,6 +399,20 @@ public final class LogicalTypeToDdlConverter {
       }
       local.append(")");
       return wrapNullable(local.toString(), struct);
+    }
+
+    // An anonymous enum, with each value's comment and params, as the grammar's enumBody takes
+    // them; the same swap-and-restore pattern as rowExpr.
+    private String enumExpr(Schema enumSchema) {
+      StringBuilder local = new StringBuilder("ENUM");
+      StringBuilder outer = sb;
+      sb = local;
+      try {
+        appendEnumBody(enumSchema);
+      } finally {
+        sb = outer;
+      }
+      return wrapNullable(local.toString(), enumSchema);
     }
 
     private String unionExpr(Schema union) {

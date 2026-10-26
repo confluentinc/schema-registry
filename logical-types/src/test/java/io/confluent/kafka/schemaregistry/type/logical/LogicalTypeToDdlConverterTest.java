@@ -20,7 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -441,6 +443,39 @@ class LogicalTypeToDdlConverterTest {
     assertEquals("Order", parsed.getName());
     assertEquals(original.getRootSchema(), parsed.getRootSchema());
     assertTrue(parsed.getNamedTypes().isEmpty(), parsed.getNamedTypes().keySet().toString());
+  }
+
+  // An anonymous enum prints inline, as ENUM('a', ...), wherever a type goes, and parses back.
+  @Test
+  void anonymousEnumsRoundTripThroughDdl() {
+    LogicalType original = parse("STRUCT p (e ENUM('A', 'B') NOT NULL, s STRUCT(e ENUM('C')), "
+        + "xs ARRAY<ENUM('D') NOT NULL>, m MAP<STRING, ENUM('E', 'F')>, "
+        + "u UNION(b ENUM('X', 'Y'), t STRING));");
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.contains("e ENUM('A', 'B') NOT NULL"), ddl);
+    assertEquals(original.getRootSchema(), parse(ddl).getRootSchema());
+    assertRoundTrip(original);
+  }
+
+  // A Protobuf nested enum keeps its values' numbers, gaps and aliases included, through DDL.
+  @Test
+  void aProtobufNestedEnumKeepsItsNumbersThroughDdl() {
+    LogicalType original = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\nmessage M {\n  Color c = 1;\n"
+            + "  enum Color { option allow_alias = true; RED = 0; GREEN = 2; VERDE = 2; }\n}\n"));
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.contains("'GREEN' WITH('protobuf.enum.number' = '2')"), ddl);
+    assertEquals(original.getRootSchema(), parse(ddl).getRootSchema());
+  }
+
+  // JSON enums and consts, which have no names, are anonymous enums that parse back.
+  @Test
+  void jsonEnumsRoundTripThroughDdl() {
+    LogicalType original = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+        "{\"type\":\"object\",\"properties\":{\"e\":{\"enum\":[\"A\",\"B\"]},"
+            + "\"c\":{\"const\":\"C\"}},\"required\":[\"e\"],\"additionalProperties\":false}"));
+    assertEquals(original.getRootSchema(),
+        parse(LogicalTypeToDdlConverter.toDdl(original)).getRootSchema());
   }
 
   @Test
