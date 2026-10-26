@@ -25,18 +25,22 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
@@ -3806,6 +3810,178 @@ public class ProtobufSchemaTest {
     ProtobufSchema normalized = new ProtobufSchema(schema.normalize().canonicalString());
     assertEquals("google.protobuf.Int64Value", normalized.name());
     schema.validate(false);
+  }
+
+  // A generated class's schema finds a primitive or external DDL root stored as a public-import
+  // wrapper of its file, comparing the files that file imports by their text.
+  @Test
+  public void testNativeFileLooksUpItsPublicImportWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int bigint = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(bigint, client.getId("bigint", generated));
+    // Normalized, the lookup still finds it
+    assertEquals(bigint, client.getId("bigint", generated, true));
+    // Registered, it is the wrapper's version, which is left as it was and answers for it
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(bigint, response.getId());
+    assertEquals(Collections.singletonList(1), client.getAllVersions("bigint"));
+    assertEquals(1, client.getVersion("bigint", generated));
+    ProtobufSchema stored = (ProtobufSchema) client.getSchemaBySubjectAndId("bigint", bigint);
+    assertEquals("google.protobuf.Int64Value", stored.name());
+    assertEquals(stored.canonicalString(), response.getSchema());
+    assertEquals(stored, client.getSchemaByGuid(response.getGuid(), null));
+
+    String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
+        + "message Foo {\n  string id = 1;\n}\nmessage Bar {\n  com.Other o = 1;\n}\n";
+    List<SchemaReference> otherRef =
+        Collections.singletonList(new SchemaReference("other.proto", "other", 1));
+    Map<String, String> resolved = Collections.singletonMap("other.proto", other);
+    client.register("other", new ProtobufSchema(other));
+    client.register("leaf", new ProtobufSchema(leaf, otherRef, resolved, null, null));
+    // Resolved as the registry resolves references, transitively
+    Map<String, String> wrapperResolved = new HashMap<>(resolved);
+    wrapperResolved.put("com.Bar", leaf);
+    int external = client.register("external", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        wrapperResolved, null, null));
+    assertEquals(external, client.getId("external",
+        new ProtobufSchema(leaf, otherRef, resolved, null, null)));
+
+    // Other text, or an import of other text, finds nothing
+    assertNotFound(client, "external", new ProtobufSchema(
+        leaf.replace("string id", "bytes id"), otherRef, resolved, null, null));
+    String other2 = other.replace("int32 n", "int64 n");
+    client.register("other2", new ProtobufSchema(other2));
+    assertNotFound(client, "external", new ProtobufSchema(leaf,
+        Collections.singletonList(new SchemaReference("other.proto", "other2", 1)),
+        Collections.singletonMap("other.proto", other2), null, null));
+    // The wrapper does not find a version holding the file
+    assertNotFound(client, "leaf", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        wrapperResolved, null, null));
+  }
+
+  // As in the registry, a native file finds the newest wrapper of its file, and a permanently
+  // deleted wrapper is not found again.
+  @Test
+  public void testNativeFileFindsTheNewestLiveWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String wrappers = "google/protobuf/wrappers.proto";
+    client.register("number",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    int newest = client.register("number", new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"" + wrappers + "\";\n"));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(newest, client.getId("number", generated));
+    assertEquals(newest, client.register("number", generated));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("number"));
+
+    client.register("bigint",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    client.register("bigint", generated);
+    client.deleteSchemaVersion("bigint", "1", true);
+    int again = client.register("bigint", generated);
+    assertFalse(client.getAllVersions("bigint").isEmpty());
+    assertEquals(again, client.getId("bigint", generated));
+  }
+
+  // As in the registry, a deleted wrapper is not found by its native file, which registered is
+  // a version of its own.
+  @Test
+  public void testNativeFileDoesNotFindADeletedWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    client.deleteSchemaVersion("bigint", "1");
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertNotFound(client, "bigint", generated);
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(generated.canonicalString(), response.getSchema());
+    assertEquals(1, client.getAllVersions("bigint").size());
+  }
+
+  // As in the registry, a lookup by the schema in any form comes before one with the latest
+  // version's metadata, so the version found is the one whose id is found.
+  @Test
+  public void testVersionOfANativeFileIsTheOneItsIdIsFoundAt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int wrapper = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    client.register("bigint", generated.copy(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null), null));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("bigint"));
+    assertEquals(wrapper, client.getId("bigint", generated));
+    assertEquals(1, client.getVersion("bigint", generated));
+  }
+
+  // A version given on registration is a version of its own, as in an import.
+  @Test
+  public void testRegisteringAGivenVersionAddsIt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema schema = new ProtobufSchema(
+        "syntax = \"proto3\";\nmessage M {\n  int32 n = 1;\n}\n");
+    int id = client.register("explicit", schema);
+    assertEquals(id, client.register("explicit", schema.copy(2), 2, id));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("explicit"));
+  }
+
+  // A normalized lookup drops a map entry message, which moves a later message's indexes; it does
+  // not find a wrapper of a raw file holding one, whose indexes a reader resolves.
+  @Test
+  public void testNormalizedLookupSkipsAWrapperOfAFileWithMapEntries() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String leaf = "syntax = \"proto3\";\npackage com;\n"
+        + "message Parent {\n  repeated ItemsEntry items = 1;\n"
+        + "  message ItemsEntry {\n    option map_entry = true;\n"
+        + "    string key = 1;\n    string value = 2;\n  }\n"
+        + "  message Child {\n    int32 n = 1;\n  }\n}\n";
+    ProtobufSchema generated = new ProtobufSchema(leaf);
+    assertFalse(generated.toMessageIndexes("com.Parent.Child", false)
+        .equals(generated.toMessageIndexes("com.Parent.Child", true)));
+    client.register("leaf", generated);
+    int id = client.register("child", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Parent.Child"),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", leaf), null, null));
+    assertEquals(id, client.getId("child", generated));
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId("child", generated, true));
+    assertEquals(404, e.getStatus());
+  }
+
+  // A wrapper registered in two subjects carrying different versions is live in each.
+  @Test
+  public void testNativeFileFindsAWrapperRegisteredInAnotherSubjectToo() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema wrapper = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    int a = client.register("a", wrapper.copy(1));
+    int b = client.register("b", wrapper.copy(2));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(a, client.getId("a", generated));
+    assertEquals(b, client.getId("b", generated));
+  }
+
+  private static void assertNotFound(
+      MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId(subject, schema));
+    assertEquals(404, e.getStatus());
   }
 
   @Test
