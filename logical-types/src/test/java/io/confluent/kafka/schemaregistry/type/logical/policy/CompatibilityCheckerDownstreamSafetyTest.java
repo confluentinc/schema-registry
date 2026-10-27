@@ -177,8 +177,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void fieldReordering() {
-    assertAllowedByBoth(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
-        rec(fld("b", "\"string\"") + "," + fld("a", "\"string\"")));
+    assertIcebergOnly(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
+        rec(fld("b", "\"string\"") + "," + fld("a", "\"string\"")), Rule.FIELD_REORDERED);
   }
 
 
@@ -283,10 +283,9 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void avroUnionBranchReordering() {
-    // Reordering two or more non-null branches reads as a struct-field reorder, which neither
-    // checker rejects.
-    assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
-        rec(fld("u", "[\"null\",\"int\",\"string\"]")));
+    // Reordering two or more non-null branches reads as a struct-field reorder.
+    assertIcebergOnly(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
+        rec(fld("u", "[\"null\",\"int\",\"string\"]")), Rule.FIELD_REORDERED);
     // Flipping only the null branch is a no-op: a two-member union containing a null collapses to a
     // nullable type regardless of branch order.
     assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\"]")),
