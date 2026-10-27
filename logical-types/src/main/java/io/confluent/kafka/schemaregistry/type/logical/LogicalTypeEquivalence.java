@@ -117,7 +117,7 @@ final class LogicalTypeEquivalence {
       case STRUCT:
         return fields(a, b);
       case ENUM:
-        return enumValues(a.getEnumValues(), b.getEnumValues());
+        return enumValues(a, b);
       case UNION:
         return branches(a, b);
       case ARRAY:
@@ -212,14 +212,16 @@ final class LogicalTypeEquivalence {
   }
 
   // Symbols are paired by name; a Protobuf one's number, recorded or its position, must match.
-  private boolean enumValues(List<Schema.EnumValue> a, List<Schema.EnumValue> b) {
+  private boolean enumValues(Schema enumA, Schema enumB) {
+    List<Schema.EnumValue> a = enumA.getEnumValues();
+    List<Schema.EnumValue> b = enumB.getEnumValues();
     if (a.size() != b.size()) {
       return false;
     }
     List<Schema.EnumValue> xs = sorted(a, Schema.EnumValue::getSymbol);
     List<Schema.EnumValue> ys = sorted(b, Schema.EnumValue::getSymbol);
-    Map<Schema.EnumValue, Integer> numbersA = enumNumbers(a);
-    Map<Schema.EnumValue, Integer> numbersB = enumNumbers(b);
+    Map<Schema.EnumValue, Integer> numbersA = enumNumbers(enumA);
+    Map<Schema.EnumValue, Integer> numbersB = enumNumbers(enumB);
     for (int i = 0; i < xs.size(); i++) {
       if (!xs.get(i).getSymbol().equals(ys.get(i).getSymbol())
           || !Objects.equals(numbersA.get(xs.get(i)), numbersB.get(ys.get(i)))
@@ -281,17 +283,18 @@ final class LogicalTypeEquivalence {
         ? ProtoToLogicalTypeConverter.impliedFieldNumbers(struct) : Map.of();
   }
 
-  private Integer number(Integer recorded, Object member, Map<Object, Integer> implied) {
+  private Integer number(Integer recorded, Object member, Map<?, Integer> implied) {
     return recorded != null ? recorded : implied.get(member);
   }
 
   // Each Protobuf symbol's number: recorded, or its position when the enum records none.
-  private Map<Schema.EnumValue, Integer> enumNumbers(List<Schema.EnumValue> values) {
+  private Map<Schema.EnumValue, Integer> enumNumbers(Schema enumSchema) {
     Map<Schema.EnumValue, Integer> numbers = new IdentityHashMap<>();
     if (schemaType == SchemaType.PROTOBUF) {
-      boolean recordsAny = values.stream().anyMatch(v -> v.getEnumNumber() != null);
-      for (int i = 0; i < values.size(); i++) {
-        numbers.put(values.get(i), recordsAny ? values.get(i).getEnumNumber() : i);
+      Map<Schema.EnumValue, Integer> implied =
+          ProtoToLogicalTypeConverter.impliedEnumNumbers(enumSchema);
+      for (Schema.EnumValue value : enumSchema.getEnumValues()) {
+        numbers.put(value, number(value.getEnumNumber(), value, implied));
       }
     }
     return numbers;

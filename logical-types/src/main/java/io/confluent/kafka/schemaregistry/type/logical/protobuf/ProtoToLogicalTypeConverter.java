@@ -122,6 +122,23 @@ public class ProtoToLogicalTypeConverter {
     return implied;
   }
 
+  /**
+   * The numbers an enum implies by recording none: this converter omits them all-or-nothing,
+   * precisely when the values take 0..n-1 in declaration order. Keyed by value, by identity;
+   * empty when any number is recorded.
+   */
+  public static Map<EnumValue, Integer> impliedEnumNumbers(Schema enumSchema) {
+    List<EnumValue> values = enumSchema.getEnumValues();
+    if (values.stream().anyMatch(v -> v.getEnumNumber() != null)) {
+      return Collections.emptyMap();
+    }
+    Map<EnumValue, Integer> implied = new IdentityHashMap<>();
+    for (int i = 0; i < values.size(); i++) {
+      implied.put(values.get(i), i);
+    }
+    return implied;
+  }
+
   private static boolean recordsAnyNumber(Schema struct) {
     for (Field field : struct.getFields()) {
       if (field.getFieldNumber() != null) {
