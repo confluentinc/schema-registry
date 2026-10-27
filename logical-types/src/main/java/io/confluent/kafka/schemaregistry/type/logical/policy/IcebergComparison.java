@@ -391,8 +391,7 @@ final class IcebergComparison {
           }
         }
       }
-      // Only a number known on both sides decides. One side's can be unknown: a map entry's value
-      // union loses the entry message that implies its members' numbers.
+      // Only a number known on both sides decides; a field missing one pairs by name.
       for (FieldView update : updateFields) {
         final FieldView original = originalsByName.get(update.name);
         if (original != null && (numberOf(update) == null || numberOf(original) == null)) {
@@ -478,6 +477,11 @@ final class IcebergComparison {
           "The key type of map '" + fieldNameOf(path) + "' changed from '"
               + render(keyOf(original)) + "' to '" + render(keyOf(update))
               + "'. Keep '" + render(keyOf(original)) + "'.");
+    }
+    // A Protobuf map's entry message is gone, so its oneof members' implied numbers come from it.
+    if (schemaType == SchemaType.PROTOBUF) {
+      impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(original));
+      impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(update));
     }
     compareTypes(valueOf(original), valueOf(update), path + "{}");
   }

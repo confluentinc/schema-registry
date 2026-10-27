@@ -1001,6 +1001,21 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void swappingAMapEntrysValueOneofNumbersIsTwoRenames() {
+    // Old 'x' values decode into 'y': the members follow the numbers the entry implied.
+    LogicalType before = fromProto(proto("message M { repeated XEntry m = 1; }\n"
+        + "message XEntry { string key = 1; oneof value { string x = 2; string y = 3; } }"));
+    LogicalType after = fromProto(proto("message M { repeated XEntry m = 1; }\n"
+        + "message XEntry { string key = 1; oneof value { string x = 3; string y = 2; } }"));
+
+    CompatibilityResult result = compare(Mode.ICEBERG_V2, before, after, SchemaType.PROTOBUF);
+    List<String> renamed = result.getIncompatibilities().stream()
+        .filter(found -> found.getRule() == Rule.FIELD_RENAMED)
+        .map(Incompatibility::getPath).collect(Collectors.toList());
+    assertEquals(List.of("m{}.x", "m{}.y"), renamed, result.describe());
+  }
+
+  @Test
   void jsonPropertiesAtTheSamePositionAreNotPaired() {
     String jsonAB = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
         + "\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"b\"]}";
