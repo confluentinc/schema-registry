@@ -238,21 +238,57 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private int getIdFromRegistry(
       String subject, ParsedSchema schema, boolean registerRequest, int id)
       throws IOException, RestClientException {
+    return getIdFromRegistry(subject, schema, registerRequest, id, false);
+  }
+
+  private int getIdFromRegistry(String subject, ParsedSchema schema, boolean registerRequest,
+      int id, boolean explicitVersion) throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap =
         idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
+      // As in the registry, a live version of the schema's content is the one found, else the
+      // newest version it looks up; a schema registered that a version looks up is that version,
+      // unless a version is given.
+      Map<ParsedSchema, Integer> versions =
+          schemaToVersionCache.getOrDefault(subject, Collections.emptyMap());
+      ParsedSchema versionlessSchema = schema.copy((Integer) null);
+      Integer found = null;
+      int foundRank = 0;
+      int foundVersion = 0;
       for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
+        if (registerRequest && id >= 0 && id != entry.getKey()) {
+          continue;
+        }
         ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
         if (schemasEqual(parsedSchema, schema)) {
-          if (registerRequest) {
-            if (id < 0 || id == entry.getKey()) {
-              generateVersion(subject, schema);
-            } else {
-              continue;
-            }
+          // Live whatever version it carries: a parse is shared by subjects registering it.
+          ParsedSchema versionless = parsedSchema.copy((Integer) null);
+          Integer live = versions.entrySet().stream()
+              .filter(v -> v.getKey().copy((Integer) null).equals(versionless))
+              .map(Map.Entry::getValue)
+              .max(Integer::compare)
+              .orElse(null);
+          // A deleted version is found again only by the schema registered as it, and a version
+          // given on registration only by its own content: another form is a new schema.
+          boolean exact = versionless.equals(versionlessSchema);
+          if (live == null && !parsedSchema.equals(schema) || explicitVersion && !exact) {
+            continue;
           }
-          return entry.getKey();
+          int version = live != null ? live : 0;
+          int rank = live == null ? 0 : exact ? 2 : 1;
+          if (found == null || rank > foundRank || rank == foundRank && version > foundVersion) {
+            found = entry.getKey();
+            foundRank = rank;
+            foundVersion = version;
+          }
         }
+      }
+      if (found != null) {
+        if (registerRequest && (explicitVersion
+            || versions.keySet().stream().noneMatch(v -> schemasEqual(v, schema)))) {
+          generateVersion(subject, schema);
+        }
+        return found;
       }
     } else {
       if (!registerRequest) {
@@ -385,7 +421,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         return schemaResponse;
       }
 
-      int retrievedId = getIdFromRegistry(subject, schema, true, id);
+      boolean explicitVersion = version != 0 && version != -1;
+      int retrievedId = getIdFromRegistry(subject, schema, true, id, explicitVersion);
+      // Found as another form of a registered schema, it is answered with that one, which is
+      // left as it was, as in the registry. Not cached: deleting the version would not clear it.
+      Schema registered = idToSchemaCache.getOrDefault(subject, Collections.emptyMap())
+          .get(retrievedId);
+      if (!explicitVersion && registered != null
+          && !schema.equals(parseSchemaOrElseThrow(registered))) {
+        return new RegisterSchemaResponse(registered);
+      }
       Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
@@ -558,17 +603,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (maxVersion != -1) {
       version = maxVersion;
     }
-    int id = -1;
-    Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
-      try {
-        ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
-        if (schemasEqual(parsedSchema, schema)) {
-          id = entry.getKey();
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+    int id;
+    try {
+      id = idOf(subject, schema);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
     return new Schema(subject, version, id, schema);
   }
@@ -595,14 +634,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (schema == null) {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
-    int id = -1;
-    Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
-      ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
-      if (schemasEqual(parsedSchema, schema)) {
-        id = entry.getKey();
-      }
-    }
+    int id = idOf(subject, schema);
     return new SchemaMetadata(new Schema(subject, version, id, schema));
   }
 
@@ -628,14 +660,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       if (schemaMetadata != null) {
         Map<String, String> props = schemaMetadata.getProperties();
         if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
-          int id = -1;
-          Map<Integer, Schema> idSchemaMap = idToSchemaCache.get(subject);
-          for (Map.Entry<Integer, Schema> e : idSchemaMap.entrySet()) {
-            ParsedSchema parsedSchema = parseSchemaOrElseThrow(e.getValue());
-            if (schemasEqual(parsedSchema, schema)) {
-              id = e.getKey();
-            }
-          }
+          int id = idOf(subject, schema);
           return new SchemaMetadata(new Schema(subject, version, id, schema));
         }
       }
@@ -656,14 +681,53 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null && versions.containsKey(schema)) {
-      return versions.get(schema);
-    }
-    ParsedSchema next = withLatestMetadataRuleSet(subject, schema);
-    if (next != null && versions.containsKey(next)) {
-      return versions.get(next);
+    if (versions != null) {
+      // As in the registry: the schema in any form, then with the latest version's metadata.
+      Integer version = versionOf(versions, schema);
+      ParsedSchema next = version == null ? withLatestMetadataRuleSet(subject, schema) : null;
+      if (next != null) {
+        version = versionOf(versions, next);
+      }
+      if (version != null) {
+        return version;
+      }
     }
     throw new RestClientException("Subject Not Found", 404, 40401);
+  }
+
+  // The version registered as schema, whatever version it carries, or else the latest one schema
+  // looks up; null if none.
+  private Integer versionOf(Map<ParsedSchema, Integer> versions, ParsedSchema schema) {
+    if (versions.containsKey(schema)) {
+      return versions.get(schema);
+    }
+    ParsedSchema versionless = schema.copy((Integer) null);
+    Optional<Integer> exact = versions.entrySet().stream()
+        .filter(entry -> entry.getKey().copy((Integer) null).equals(versionless))
+        .map(Map.Entry::getValue)
+        .max(Integer::compare);
+    return exact.orElseGet(() -> versions.entrySet().stream()
+        .filter(entry -> schemasEqual(entry.getKey(), schema))
+        .map(Map.Entry::getValue)
+        .max(Integer::compare)
+        .orElse(null));
+  }
+
+  // The id registered under subject with schema's content, whatever version it carries, or else
+  // one schema looks up; -1 if none.
+  private int idOf(String subject, ParsedSchema schema) throws IOException {
+    ParsedSchema versionless = schema.copy((Integer) null);
+    int id = -1;
+    for (Map.Entry<Integer, Schema> entry : idToSchemaCache.get(subject).entrySet()) {
+      ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
+      if (parsedSchema.copy((Integer) null).equals(versionless)) {
+        return entry.getKey();
+      }
+      if (schemasEqual(parsedSchema, schema)) {
+        id = entry.getKey();
+      }
+    }
+    return id;
   }
 
   @Override
