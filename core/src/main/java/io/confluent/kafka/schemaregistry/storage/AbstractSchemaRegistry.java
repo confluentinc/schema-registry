@@ -20,6 +20,7 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
+import io.confluent.kafka.schemaregistry.storage.ProvenancePolicyChecker.PairBy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -123,7 +124,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
@@ -161,6 +161,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         SslFactory.SslFactoryCreated {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractSchemaRegistry.class);
+
+  // A beforeVersion bounding nothing: the candidate comes after every stored version.
+  private static final int AFTER_LATEST = Integer.MAX_VALUE;
 
   protected static final Lock NO_OP_LOCK = new Lock() {
 
@@ -207,6 +210,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final CompatibilityLevel defaultCompatibilityLevel;
   protected final boolean defaultValidateFields;
   protected final Set<Incompatibility.Rule> logicalChecks;
+  protected final PairBy provenancePairBy;
   protected final boolean defaultValidateNewSchemas;
   protected final Mode defaultMode;
   protected final int schemaSearchDefaultLimit;
@@ -265,6 +269,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
     this.logicalChecks = LogicalPolicyChecker.parseChecks(
         config.getList(SchemaRegistryConfig.SCHEMA_LOGICAL_CHECKS_CONFIG));
+    this.provenancePairBy = PairBy.valueOf(config.getString(
+        SchemaRegistryConfig.PROVENANCE_FIELD_PAIRING_CONFIG).toUpperCase(Locale.ROOT));
     this.defaultMode = Mode.READWRITE;
     this.schemaSearchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -478,7 +484,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT) {
+      if (!getModeInScope(subject).isImportOrForwardMode()) {
         throw new OperationNotPermittedException("Subject " + subject
                 + " in context " + context + " is not in import mode");
       }
@@ -669,7 +675,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                                                          boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
         if (normalize) {
           parsedSchema = parsedSchema.normalize();
@@ -1113,33 +1120,72 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       Schema schemaEntity = toSchemaEntity(schema);
       logSchemaOp(schemaEntity, "READ");
 
-      SchemaIdAndSubjects schemaIdAndSubjects =
-              this.lookupCache.schemaIdAndSubjects(schemaEntity);
-      if (schemaIdAndSubjects == null) {
+      // Every version of each subject carrying the ID, not only the latest that
+      // schemaIdAndSubjects names: a soft-deleted version re-registered keeps the same ID.
+      Map<String, ? extends Set<Integer>> subjectVersions =
+              this.lookupCache.subjectVersionsById(id, subjectVersionKey.getSubject());
+      if (subjectVersions == null) {
+        // A cache that does not index them; each subject's latest, as before.
+        SchemaIdAndSubjects schemaIdAndSubjects =
+                this.lookupCache.schemaIdAndSubjects(schemaEntity);
+        subjectVersions = schemaIdAndSubjects == null ? Collections.emptyMap()
+                : schemaIdAndSubjects.allSubjectVersions().entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> Collections.singleton(e.getValue())));
+      }
+      if (subjectVersions.isEmpty()) {
         return null;
       }
-      return schemaIdAndSubjects
-              .allSubjectVersions()
-              .entrySet()
-              .stream()
-              .flatMap(e -> {
-                try {
-                  SchemaValue schemaValue =
-                          (SchemaValue) store.get(new SchemaKey(e.getKey(), e.getValue()));
-                  if (schemaValue != null && (!schemaValue.isDeleted() || lookupDeleted)) {
-                    return Stream.of(new SubjectVersion(e.getKey(), e.getValue()));
-                  } else {
-                    return Stream.empty();
-                  }
-                } catch (StoreException ex) {
-                  return Stream.empty();
-                }
-              })
-              .collect(Collectors.toList());
+      List<SubjectVersion> versions = new ArrayList<>();
+      for (Map.Entry<String, ? extends Set<Integer>> entry : subjectVersions.entrySet()) {
+        for (int version : entry.getValue()) {
+          try {
+            SchemaValue schemaValue =
+                    (SchemaValue) store.get(new SchemaKey(entry.getKey(), version));
+            if (schemaValue != null && (!schemaValue.isDeleted() || lookupDeleted)) {
+              versions.add(new SubjectVersion(entry.getKey(), version));
+            }
+          } catch (StoreException e) {
+            // Skipped, as a version that cannot be read always has been.
+          }
+        }
+      }
+      // By subject, then version, whatever order the cache's map iterates in.
+      Collections.sort(versions);
+      return versions;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
               + id + " from the backend Kafka store", e);
     }
+  }
+
+  // Looked up by the ID itself, not its content's hash, and in the subject alone.
+  @Override
+  public Integer latestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    try {
+      SchemaKey key = lookupCache.schemaKeyById(id, subject);
+      return key != null && key.getSubject().equals(subject) ? key.getVersion() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+              + id + " from the backend Kafka store", e);
+    }
+  }
+
+  // As latestVersionWithId; a cache that does not index every version reads them the default way.
+  @Override
+  public Integer earliestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    Map<String, ? extends Set<Integer>> subjectVersions;
+    try {
+      subjectVersions = lookupCache.subjectVersionsById(id, subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+              + id + " from the backend Kafka store", e);
+    }
+    if (subjectVersions == null) {
+      return SchemaRegistry.super.earliestVersionWithId(id, subject);
+    }
+    Set<Integer> versions = subjectVersions.get(subject);
+    return versions == null ? null : versions.stream().min(Integer::compare).orElse(null);
   }
 
   private CloseableIterator<SchemaRegistryValue> allConfigs(
@@ -1315,9 +1361,119 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
+  /**
+   * LOGICAL's findings with the members of two versions paired by their provenance check ids
+   * ({@link ProvenancePolicyChecker}). Provenance is computed over the subject's versions from the
+   * oldest one the level compares to the last below {@code beforeVersion}, soft-deleted ones
+   * included, the candidate after them: the caller's holders are reused and any other version in
+   * that range is loaded, as is another compatibility group's. Holders that do not say which
+   * version they are are checked by name, as before. A stored version judged at a non-transitive
+   * level is given the version just before it, so the range is that version alone.
+   */
+  private List<String> logicalFindings(ParsedSchema parsedSchema,
+      List<ParsedSchemaHolder> previousSchemas, CompatibilityLevel level, int beforeVersion) {
+    if (previousSchemas.isEmpty() || level == null || level == CompatibilityLevel.NONE) {
+      return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
+    }
+    try {
+      String subject = null;
+      Map<Integer, ParsedSchemaHolder> passed = new HashMap<>();
+      for (ParsedSchemaHolder holder : previousSchemas) {
+        if (!(holder instanceof SchemaValueHolder)) {
+          return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
+        }
+        SchemaValue value = ((SchemaValueHolder) holder).schemaValue();
+        subject = value.getSubject();
+        passed.put(value.getVersion(), holder);
+      }
+      List<Integer> passedVersions = new ArrayList<>(passed.keySet());
+      Collections.sort(passedVersions);
+      // A non-transitive level compares the latest version passed only.
+      int oldest = LogicalPolicyChecker.isTransitive(level)
+          ? passedVersions.get(0) : passedVersions.get(passedVersions.size() - 1);
+      List<Integer> numbers = new ArrayList<>();
+      if (beforeVersion != AFTER_LATEST && !LogicalPolicyChecker.isTransitive(level)) {
+        numbers.add(oldest);
+      } else {
+        Iterator<SchemaKey> keys = getAllVersions(subject, LookupFilter.INCLUDE_DELETED);
+        while (keys.hasNext()) {
+          int version = keys.next().getVersion();
+          if (version >= oldest && version < beforeVersion) {
+            numbers.add(version);
+          }
+        }
+        Collections.sort(numbers);
+      }
+      if (!numbers.containsAll(passed.keySet().stream()
+          .filter(version -> version >= oldest).collect(Collectors.toList()))) {
+        // The caller's versions are not the subject's, as they are for every caller today.
+        return LogicalPolicyChecker.check(parsedSchema, previousSchemas, level, logicalChecks);
+      }
+      List<ParsedSchemaHolder> range = new ArrayList<>(numbers.size());
+      List<Integer> compared = new ArrayList<>();
+      for (int i = 0; i < numbers.size(); i++) {
+        int version = numbers.get(i);
+        ParsedSchemaHolder holder = passed.get(version);
+        if (holder != null) {
+          compared.add(i);
+        } else {
+          holder = new LazyParsedSchemaHolder(this, new SchemaKey(subject, version));
+        }
+        range.add(holder);
+      }
+      // The version judged, or the number registration gives the schema after the last.
+      int candidateNumber = beforeVersion != AFTER_LATEST ? beforeVersion
+          : numbers.get(numbers.size() - 1) + 1;
+      return ProvenancePolicyChecker.check(subject, parsedSchema, range, numbers, compared,
+          level, PairBy.CHECK_ID, candidateNumber, beforeVersion == AFTER_LATEST, logicalChecks);
+    } catch (SchemaRegistryException e) {
+      // As a lazy holder reports a version it cannot read.
+      throw new IllegalStateException(e);
+    }
+  }
+
+  @Override
+  public List<String> isLogicallyCompatibleByProvenance(String subject, int version,
+      int previous) throws SchemaRegistryException {
+    // A table applies versions one at a time, so the subject's level, group and field
+    // validation do not apply.
+    Config config = new Config(CompatibilityLevel.BACKWARD.name);
+    config.setCompatibilityPolicy(CompatibilityPolicy.LOGICAL.name());
+    config.setValidateFields(false);
+    ParsedSchema parsedSchema = parseSchema(get(subject, version, true));
+    List<ParsedSchemaHolder> previousSchemas = previous == 0
+        ? Collections.emptyList()
+        : Collections.singletonList(
+            new LazyParsedSchemaHolder(this, new SchemaKey(subject, previous)));
+    try {
+      return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, PairBy.CHECK_ID,
+          version);
+    } catch (IllegalStateException e) {
+      if (e.getCause() instanceof SchemaRegistryException) {
+        throw (SchemaRegistryException) e.getCause();
+      }
+      throw e;
+    }
+  }
+
   protected List<String> isCompatibleWithPrevious(Config config,
                                         ParsedSchema parsedSchema,
                                         List<ParsedSchemaHolder> previousSchemas) {
+    // LOGICAL pairs as provenance.field.pairing says. By check id, the endpoint's flag still
+    // checks at BACKWARD against the version just before, so for transitive, grouped or
+    // validateFields subjects the two will still differ.
+    return isCompatibleWithPrevious(config, parsedSchema, previousSchemas, provenancePairBy,
+        AFTER_LATEST);
+  }
+
+  /**
+   * As registration checks {@code parsedSchema} after {@code previousSchemas}, LOGICAL's members
+   * paired by {@code pairBy}. By check id, provenance covers only the versions below
+   * {@code beforeVersion}: the stored version being judged, or {@link #AFTER_LATEST} for a
+   * candidate after every stored one, as at registration.
+   */
+  private List<String> isCompatibleWithPrevious(Config config, ParsedSchema parsedSchema,
+      List<ParsedSchemaHolder> previousSchemas, PairBy pairBy, int beforeVersion) {
     List<String> errorMessages = new ArrayList<>();
     ParsedSchemaHolder previousSchemaHolder = !previousSchemas.isEmpty()
             ? previousSchemas.get(previousSchemas.size() - 1)
@@ -1348,13 +1504,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     if (compatibilityPolicy == CompatibilityPolicy.LOGICAL) {
       // Additive: the native check below still runs, as LENIENT; LOGICAL layers the Flink/Iceberg
       // logical-type checks on top, so it can only make registration stricter than LENIENT.
-      errorMessages.addAll(
-              LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility,
+      // A group selects the versions compared; provenance, as the endpoint's ids, ignores groups.
+      errorMessages.addAll(pairBy == PairBy.CHECK_ID
+              ? logicalFindings(parsedSchema, previousSchemas, compatibility, beforeVersion)
+              : LogicalPolicyChecker.check(parsedSchema, previousSchemas, compatibility,
                   logicalChecks));
     }
     errorMessages.addAll(
             parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
-    if (!errorMessages.isEmpty()) {
+    // A stored version judged is checked whatever the subject's config, which this would misstate.
+    if (!errorMessages.isEmpty() && beforeVersion == AFTER_LATEST) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
                 isSchemaFieldValidationEnabled(config),
