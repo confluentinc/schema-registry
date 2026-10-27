@@ -40,9 +40,9 @@ import static io.confluent.kafka.schemaregistry.type.logical.policy.Compatibilit
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -260,14 +260,11 @@ final class IcebergComparison {
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with three intentional
    * departures: findings accumulate instead of throwing, the nullability relaxation is folded in
-   * via {@link #isEffectivelyOptional} rather than applied as a pre-pass, and a renamed field is
-   * paired with its old name (see {@link #renames}) rather than read as a drop plus an add.
+   * via {@link #isEffectivelyOptional} rather than applied as a pre-pass, and fields are paired as
+   * their format decodes them (see {@link #pair}) rather than only by name.
    */
   private void validateStructs(
       List<FieldView> originalFields, List<FieldView> updateFields, String path) {
-
-    final Map<String, FieldView> originalFieldMap = originalFields.stream()
-        .collect(Collectors.toMap(field -> field.name, field -> field));
 
     // Guarding the whole reorder block, not just the finding, avoids paying its O(n^2) index
     // lookups on every struct comparison while FIELD_REORDERED is off.
@@ -278,23 +275,16 @@ final class IcebergComparison {
         ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
         : null;
 
-    final Set<String> updateFieldNames = updateFields.stream()
-        .map(field -> field.name)
-        .collect(Collectors.toSet());
-    // Each update field paired with the original field it renames, by identity.
-    final Map<FieldView, FieldView> renamed =
-        renames(originalFields, originalFieldMap.keySet(), updateFields, updateFieldNames);
+    // Each update field paired with the original field it reads, by identity.
+    final Map<FieldView, FieldView> pairs = pair(originalFields, updateFields);
     for (FieldView updateField : updateFields) {
       final String fieldPath = childPath(path, updateField.name);
-      FieldView originalField = originalFieldMap.get(updateField.name);
-      if (originalField == null) {
-        originalField = renamed.get(updateField);
-        if (originalField != null) {
-          add(Rule.FIELD_RENAMED, fieldPath,
-              "Fields '" + originalField.name + "' and '" + updateField.name + "' are one field "
-                  + "under two names, " + renameBasis(originalField) + ". Use one name for it in "
-                  + "both schemas.");
-        }
+      final FieldView originalField = pairs.get(updateField);
+      if (originalField != null && !originalField.name.equals(updateField.name)) {
+        add(Rule.FIELD_RENAMED, fieldPath,
+            "Fields '" + originalField.name + "' and '" + updateField.name + "' are one field "
+                + "under two names, " + renameBasis(originalField) + ". Use one name for it in "
+                + "both schemas.");
       }
 
       if (originalField == null) {
@@ -336,11 +326,10 @@ final class IcebergComparison {
       compareTypes(originalField.schema, updateField.schema, fieldPath);
     }
 
-    final Set<FieldView> renamedOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
-    renamedOriginals.addAll(renamed.values());
+    final Set<FieldView> pairedOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
+    pairedOriginals.addAll(pairs.values());
     for (FieldView originalField : originalFields) {
-      if (!updateFieldNames.contains(originalField.name)
-          && !renamedOriginals.contains(originalField)) {
+      if (!pairedOriginals.contains(originalField)) {
         add(Rule.FIELD_DELETED, childPath(path, originalField.name),
             "Schema no longer includes field '" + originalField.name + "'. Restore the field.");
       }
@@ -356,47 +345,86 @@ final class IcebergComparison {
   }
 
   /**
-   * Pairs each field present by name on one side only with the field it renames on the other, if
-   * any: by an Avro alias in the update, or by the same Protobuf field number. Each original field
-   * pairs at most once. Without a known format nothing pairs.
+   * Pairs each update field with the original field it reads, as the format decodes it; each
+   * original field pairs at most once.
+   *
+   * <ul>
+   *   <li>Protobuf: by field number, recorded or implied, whatever the names. Only fields with
+   *       no number pair otherwise: by name, then a oneof by a member it keeps.
+   *   <li>Avro: a reader field the writer lacks by name takes the writer field its alias names,
+   *       even over a reader field keeping that name, as Avro's decoder applies aliases. The
+   *       rest pair by name.
+   *   <li>Otherwise, by name.
+   * </ul>
    */
-  private Map<FieldView, FieldView> renames(List<FieldView> originalFields,
-      Set<String> originalNames, List<FieldView> updateFields, Set<String> updateNames) {
-    if (schemaType != SchemaType.AVRO && schemaType != SchemaType.PROTOBUF) {
-      return Collections.emptyMap();
-    }
-    final List<FieldView> unpaired = originalFields.stream()
-        .filter(field -> !updateNames.contains(field.name))
-        .collect(Collectors.toList());
+  private Map<FieldView, FieldView> pair(
+      List<FieldView> originalFields, List<FieldView> updateFields) {
     final Map<FieldView, FieldView> pairs = new IdentityHashMap<>();
-    for (FieldView updateField : updateFields) {
-      if (originalNames.contains(updateField.name)) {
-        continue;
-      }
-      for (Iterator<FieldView> it = unpaired.iterator(); it.hasNext(); ) {
-        FieldView originalField = it.next();
-        if (sameField(originalField, updateField)) {
-          pairs.put(updateField, originalField);
-          it.remove();
-          break;
+    final Set<FieldView> claimed = Collections.newSetFromMap(new IdentityHashMap<>());
+    final Map<String, FieldView> originalsByName = new HashMap<>();
+    for (FieldView field : originalFields) {
+      originalsByName.put(field.name, field);
+    }
+    if (schemaType == SchemaType.PROTOBUF) {
+      final Map<Integer, FieldView> originalsByNumber = new HashMap<>();
+      for (FieldView field : originalFields) {
+        final Integer number = numberOf(field);
+        if (number != null) {
+          originalsByNumber.putIfAbsent(number, field);
         }
+      }
+      for (FieldView update : updateFields) {
+        final Integer number = numberOf(update);
+        if (number != null) {
+          claim(pairs, claimed, update, originalsByNumber.get(number));
+        }
+      }
+      for (FieldView update : updateFields) {
+        final FieldView original = originalsByName.get(update.name);
+        if (numberOf(update) == null && original != null && numberOf(original) == null) {
+          claim(pairs, claimed, update, original);
+        }
+      }
+      for (FieldView update : updateFields) {
+        if (!pairs.containsKey(update) && isOneof(update)) {
+          for (FieldView original : originalFields) {
+            if (!claimed.contains(original) && isOneof(original) && !Collections.disjoint(
+                memberNumbers(original.schema), memberNumbers(update.schema))) {
+              claim(pairs, claimed, update, original);
+              break;
+            }
+          }
+        }
+      }
+      return pairs;
+    }
+    if (schemaType == SchemaType.AVRO) {
+      for (FieldView update : updateFields) {
+        if (originalsByName.containsKey(update.name)) {
+          continue;
+        }
+        for (String alias : update.aliases) {
+          if (claim(pairs, claimed, update, originalsByName.get(alias))) {
+            break;
+          }
+        }
+      }
+    }
+    for (FieldView update : updateFields) {
+      if (!pairs.containsKey(update)) {
+        claim(pairs, claimed, update, originalsByName.get(update.name));
       }
     }
     return pairs;
   }
 
-  private boolean sameField(FieldView original, FieldView update) {
-    if (schemaType == SchemaType.AVRO) {
-      // As in Avro, only the reader's aliases count: the update reads data the original wrote.
-      return update.aliases.contains(original.name);
+  private static boolean claim(Map<FieldView, FieldView> pairs, Set<FieldView> claimed,
+      FieldView update, FieldView original) {
+    if (original == null || pairs.containsKey(update) || !claimed.add(original)) {
+      return false;
     }
-    final Integer number = numberOf(original);
-    if (number != null) {
-      return number.equals(numberOf(update));
-    }
-    // A oneof has no number of its own, and is the same oneof while it keeps a member.
-    return isOneof(original) && isOneof(update)
-        && !Collections.disjoint(memberNumbers(original.schema), memberNumbers(update.schema));
+    pairs.put(update, original);
+    return true;
   }
 
   private String renameBasis(FieldView original) {

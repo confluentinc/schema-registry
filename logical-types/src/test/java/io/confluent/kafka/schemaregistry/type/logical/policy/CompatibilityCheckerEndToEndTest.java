@@ -841,6 +841,72 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void anAvroAliasClaimsTheWriterFieldEvenWhenTheReaderKeepsItsName() {
+    // Avro's decoder reads v1's 'a' into v2's 'b', and v2's 'a' takes its default.
+    LogicalType v1 = fromAvro(AVRO_A);
+    LogicalType v2 = fromAvro("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null,"
+        + "\"aliases\":[\"a\"]},"
+        + "{\"name\":\"a\",\"type\":[\"null\",\"string\"],\"default\":null}]}");
+
+    assertRenamedAt(v1, v2, SchemaType.AVRO, "b");
+    // Forward, the v1 reader keeps 'a' by name, so v2's 'b' is dropped.
+    CompatibilityResult forward = compare(Mode.ICEBERG_V2, v2, v1, SchemaType.AVRO);
+    assertTrue(forward.getIncompatibilities().stream().anyMatch(found ->
+        found.getRule() == Rule.FIELD_DELETED && found.getPath().equals("b")), forward.describe());
+    assertTrue(!rulesOf(forward).contains(Rule.FIELD_RENAMED), forward.describe());
+    // Allowed, the pairing stands: v2's 'a' is an added field, here an optional one.
+    Set<Rule> enabled = Rule.defaults();
+    enabled.remove(Rule.FIELD_RENAMED);
+    assertTrue(LogicalTypeChecker.compare(
+        Mode.ICEBERG_V2, v1, v2, enabled, SchemaType.AVRO).isCompatible());
+    // An alias carried into a later version renames nothing more.
+    assertTrue(compare(Mode.ICEBERG_V2, v2, v2, SchemaType.AVRO).isCompatible());
+  }
+
+  @Test
+  void anAvroAliasClaimingAFieldTheReaderStillRequiresLeavesThatFieldAdded() {
+    LogicalType v2 = fromAvro("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"b\",\"type\":[\"null\",\"string\"],\"default\":null,"
+        + "\"aliases\":[\"a\"]},"
+        + "{\"name\":\"a\",\"type\":\"string\"}]}");
+    assertEquals(EnumSet.of(Rule.FIELD_RENAMED, Rule.REQUIRED_FIELD_ADDED),
+        rulesOf(compare(Mode.ICEBERG_V2, fromAvro(AVRO_A), v2, SchemaType.AVRO)));
+  }
+
+  @Test
+  void aProtobufFieldNumberMovingToANewNameIsAFieldRenamed() {
+    // Old data's field 1 decodes as 'b'; 'a' is a new field under number 2.
+    CompatibilityResult result = compare(Mode.ICEBERG_V2,
+        fromProto(proto("message M { string a = 1; }")),
+        fromProto(proto("message M { string b = 1; string a = 2; }")), SchemaType.PROTOBUF);
+    List<Incompatibility> renamed = result.getIncompatibilities().stream()
+        .filter(found -> found.getRule() == Rule.FIELD_RENAMED).collect(Collectors.toList());
+    assertEquals(1, renamed.size(), result.describe());
+    assertEquals("b", renamed.get(0).getPath(), result.describe());
+    assertTrue(!rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
+  }
+
+  @Test
+  void swappingTwoProtobufFieldNumbersIsTwoRenames() {
+    CompatibilityResult result = compare(Mode.ICEBERG_V2,
+        fromProto(proto("message M { string a = 1; string b = 2; }")),
+        fromProto(proto("message M { string a = 2; string b = 1; }")), SchemaType.PROTOBUF);
+    assertEquals(2, result.getIncompatibilities().stream()
+        .filter(found -> found.getRule() == Rule.FIELD_RENAMED).count(), result.describe());
+  }
+
+  @Test
+  void aProtobufFieldKeepingItsNameUnderANewNumberIsADrop() {
+    // Old data's field 1 is unknown to the new schema, so 'a' reads empty.
+    CompatibilityResult result = compare(Mode.ICEBERG_V2,
+        fromProto(proto("message M { string a = 1; string b = 2; }")),
+        fromProto(proto("message M { string a = 3; string b = 2; }")), SchemaType.PROTOBUF);
+    assertTrue(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
+    assertTrue(!rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
+  }
+
+  @Test
   void aProtobufFieldKeepingItsNumberUnderANewNameIsAFieldRenamed() {
     // Sequential numbering records no numbers, so they are implied by position.
     assertRenamedAt(fromProto(proto("message M { string a = 1; string b = 2; }")),
