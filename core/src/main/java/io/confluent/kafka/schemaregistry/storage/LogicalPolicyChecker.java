@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -205,13 +206,16 @@ public final class LogicalPolicyChecker {
             + "converted to a logical type: {}", e.getMessage());
         continue;
       }
+      // Renames are recognised by format, so only between two versions of the same one.
+      SchemaType schemaType = newSchema.schemaType().equals(holder.schema().schemaType())
+          ? SchemaType.of(newSchema.schemaType()) : null;
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
-        addCompareErrors(errors, previousLogical, newLogical, enabledRules);
+        addCompareErrors(errors, previousLogical, newLogical, enabledRules, schemaType);
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
-        addCompareErrors(errors, newLogical, previousLogical, enabledRules);
+        addCompareErrors(errors, newLogical, previousLogical, enabledRules, schemaType);
       }
     }
     return errors;
@@ -236,12 +240,12 @@ public final class LogicalPolicyChecker {
     return errors;
   }
 
-  private static void addCompareErrors(
-      List<String> errors, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
+  private static void addCompareErrors(List<String> errors, LogicalType original,
+      LogicalType update, Set<Rule> enabledRules, SchemaType schemaType) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Incompatibility incompatibility
-          : LogicalTypeChecker.compare(mode, original, update, enabledRules)
+          : LogicalTypeChecker.compare(mode, original, update, enabledRules, schemaType)
               .getIncompatibilities()) {
         byFinding
             .computeIfAbsent(

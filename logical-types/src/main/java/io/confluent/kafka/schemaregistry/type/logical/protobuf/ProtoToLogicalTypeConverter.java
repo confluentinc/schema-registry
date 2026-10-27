@@ -39,6 +39,7 @@ import io.confluent.protobuf.MetaProto.Meta;
 import java.time.DateTimeException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -127,6 +128,22 @@ public class ProtoToLogicalTypeConverter {
    * precisely when the values take 0..n-1 in declaration order. Keyed by value, by identity;
    * empty when any number is recorded.
    */
+  /**
+   * As {@link #impliedFieldNumbers}, for the entry message a map was read from, which reading it as
+   * a map discards: rebuilt from the map's key and value, the entry's own schemas, so its oneof
+   * members are keyed as the map holds them. Empty when the key and value are both oneofs: which
+   * was declared first decides the numbers, and a map cannot tell.
+   */
+  public static Map<Object, Integer> impliedMapEntryNumbers(Schema map) {
+    if (map.getType() != Schema.Type.MAP
+        || isUnion(map.getKeyType()) && isUnion(map.getValueType())) {
+      return Collections.emptyMap();
+    }
+    return impliedFieldNumbers(Schema.createStruct(Arrays.asList(
+        new Field(CommonConstants.KEY_FIELD, map.getKeyType(), 0),
+        new Field(CommonConstants.VALUE_FIELD, map.getValueType(), 1))));
+  }
+
   public static Map<EnumValue, Integer> impliedEnumNumbers(Schema enumSchema) {
     List<EnumValue> values = enumSchema.getEnumValues();
     if (values.stream().anyMatch(v -> v.getEnumNumber() != null)) {
