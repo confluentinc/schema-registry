@@ -271,10 +271,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
               .map(Map.Entry::getValue)
               .max(Integer::compare)
               .orElse(null);
-          // A deleted version is found again only by the schema registered as it, and a version
-          // given on registration only by its own content: another form is a new schema.
+          // A deleted version is found again only by the schema registered as it, whatever
+          // version either carries, and a version given on registration only by its own content:
+          // another form is a new schema.
           boolean exact = versionless.equals(versionlessSchema);
-          if (live == null && !parsedSchema.equals(schema) || explicitVersion && !exact) {
+          if (!exact && (live == null || explicitVersion)) {
             continue;
           }
           int version = live != null ? live : 0;
