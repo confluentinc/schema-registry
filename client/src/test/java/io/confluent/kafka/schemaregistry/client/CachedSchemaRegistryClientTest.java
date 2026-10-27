@@ -58,6 +58,7 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
@@ -908,6 +909,21 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+  }
+
+  @Test
+  public void testGetSchemaMetadataInAFormatFindsADeletedVersion() throws Exception {
+    expect(restService.getVersion(anyObject(), eq(SUBJECT_0), eq(VERSION_1), eq("logical"),
+        eq(true), isNull()))
+        .andReturn(SCHEMA_DETAILS);
+
+    replay(restService);
+
+    SchemaMetadata metadata = client.getSchemaMetadata(SUBJECT_0, VERSION_1, "logical", true);
+    assertEquals(ID_25, metadata.getId());
+    assertEquals(SCHEMA_STR_0, metadata.getSchema());
+
+    verify(restService);
   }
 
   @Test

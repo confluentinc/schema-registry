@@ -693,6 +693,12 @@ public final class LogicalTypeToDdlConverter {
         case BINARY:
         case VARBINARY:
           return bytesLiteral(value);
+        case UNION:
+          // As in Avro, a union's default is a value of its first branch.
+          if (!schema.getBranches().isEmpty()) {
+            return literal(value, schema.getBranches().get(0).getSchema());
+          }
+          return stringLiteral(String.valueOf(value));
         default:
           // Defaults on composite types or NAMED_TYPE_REF aren't supported by
           // the grammar. Fall back to a quoted string so something is emitted;

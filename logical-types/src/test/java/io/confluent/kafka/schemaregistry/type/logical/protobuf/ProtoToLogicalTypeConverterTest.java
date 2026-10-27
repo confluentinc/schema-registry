@@ -176,6 +176,21 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void impliedEnumNumbersAreThePositionsOfAnUnrecordedEnum() throws Exception {
+    Schema enumSchema = enumSchemaWithNumbers(0, 1, 2);
+    List<Schema.EnumValue> values = enumSchema.getEnumValues();
+    Map<Schema.EnumValue, Integer> implied =
+        ProtoToLogicalTypeConverter.impliedEnumNumbers(enumSchema);
+    assertEquals(3, implied.size());
+    for (int i = 0; i < values.size(); i++) {
+      assertEquals(i, implied.get(values.get(i)));
+    }
+    // A recorded enum implies none: its values carry their own.
+    assertTrue(ProtoToLogicalTypeConverter.impliedEnumNumbers(enumSchemaWithNumbers(0, 5, 9))
+        .isEmpty());
+  }
+
+  @Test
   void enumNotStartingAtZeroIsRecorded() throws Exception {
     // proto2 may start at 1. Recorded faithfully even though the proto3 writer can't emit it —
     // dropping the numbers would let the writer silently renumber from 0.
