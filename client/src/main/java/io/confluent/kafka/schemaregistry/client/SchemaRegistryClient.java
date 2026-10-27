@@ -220,6 +220,24 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * As {@link #getLatestSchemaMetadata(String)}, with the latest being the highest version, a
+   * soft-deleted one included, if {@code lookupDeletedSchema}.
+   */
+  default SchemaMetadata getLatestSchemaMetadata(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * As {@link #getLatestSchemaMetadata(String, String)}, with the latest being the highest
+   * version, a soft-deleted one included, if {@code lookupDeletedSchema}.
+   */
+  default SchemaMetadata getLatestSchemaMetadata(String subject, String format,
+      boolean lookupDeletedSchema) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
 
