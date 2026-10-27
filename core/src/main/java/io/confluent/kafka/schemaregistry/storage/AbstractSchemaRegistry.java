@@ -1313,13 +1313,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   private Schema getLatestVersionFromSubjectSchemas(
-          CloseableIterator<SchemaRegistryValue> schemas) throws SchemaRegistryException {
+          CloseableIterator<SchemaRegistryValue> schemas, boolean returnDeletedSchema)
+          throws SchemaRegistryException {
     int latestVersionId = -1;
     SchemaValue latestSchemaValue = null;
 
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
-      if (schemaValue.isDeleted()) {
+      if (schemaValue.isDeleted() && !returnDeletedSchema) {
         continue;
       }
       if (schemaValue.getVersion() > latestVersionId) {
@@ -1760,9 +1761,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
-  public Schema getLatestVersion(String subject) throws SchemaRegistryException {
+  public Schema getLatestVersion(String subject, boolean returnDeletedSchema)
+      throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
-      return getLatestVersionFromSubjectSchemas(allVersions);
+      return getLatestVersionFromSubjectSchemas(allVersions, returnDeletedSchema);
     }
   }
 
@@ -1866,7 +1868,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       int version = versionId.getVersionId();
       if (versionId.isLatest()) {
-        version = getLatestVersion(subject).getVersion();
+        version = getLatestVersion(subject, lookupDeletedSchema).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
       List<ContextId> ids = new ArrayList<>(getReferencedBy(key, lookupDeletedSchema));
@@ -2060,10 +2062,22 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return (schema != null);
   }
 
+  /**
+   * As {@link #get}, except that "latest" is the highest version, a soft-deleted one included,
+   * if {@code returnDeletedSchema}.
+   */
+  private Schema getForRead(String subject, int version, boolean returnDeletedSchema)
+          throws SchemaRegistryException {
+    if (returnDeletedSchema && new VersionId(version).isLatest()) {
+      return getLatestVersion(subject, true);
+    }
+    return get(subject, version, returnDeletedSchema);
+  }
+
   @Override
   public Schema getUsingContexts(String subject, int version, boolean
           returnDeletedSchema) throws SchemaRegistryException {
-    Schema schema = get(subject, version, returnDeletedSchema);
+    Schema schema = getForRead(subject, version, returnDeletedSchema);
     if (schema != null) {
       logSchemaOp(schema, "READ");
       return schema;
@@ -2079,7 +2093,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
                 new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
-        schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
+        schema = getForRead(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
         if (schema != null) {
           logSchemaOp(schema, "READ");
           return schema;
