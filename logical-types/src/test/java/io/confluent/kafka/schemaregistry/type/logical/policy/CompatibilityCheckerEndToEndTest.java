@@ -984,6 +984,23 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void reorderingAMapEntrysValueOneofIsOnlyAReorder() {
+    // Reading the entry as a map drops the message implying v1's member numbers, while v2's
+    // declaration order makes them recorded; the members still pair by name.
+    LogicalType before = fromProto(proto("message M { repeated XEntry m = 1; }\n"
+        + "message XEntry { string key = 1; oneof value { string x = 2; string y = 3; } }"));
+    LogicalType after = fromProto(proto("message M { repeated XEntry m = 1; }\n"
+        + "message XEntry { string key = 1; oneof value { string y = 3; string x = 2; } }"));
+
+    CompatibilityResult result = compare(Mode.ICEBERG_V2, before, after, SchemaType.PROTOBUF);
+    assertEquals(EnumSet.of(Rule.FIELD_REORDERED), rulesOf(result), result.describe());
+    Set<Rule> enabled = Rule.defaults();
+    enabled.remove(Rule.FIELD_REORDERED);
+    assertTrue(LogicalTypeChecker.compare(
+        Mode.ICEBERG_V2, before, after, enabled, SchemaType.PROTOBUF).isCompatible());
+  }
+
+  @Test
   void jsonPropertiesAtTheSamePositionAreNotPaired() {
     String jsonAB = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
         + "\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"b\"]}";

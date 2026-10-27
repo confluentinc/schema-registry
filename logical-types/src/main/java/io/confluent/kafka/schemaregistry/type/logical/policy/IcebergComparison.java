@@ -349,8 +349,8 @@ final class IcebergComparison {
    * original field pairs at most once.
    *
    * <ul>
-   *   <li>Protobuf: by field number, recorded or implied, whatever the names. Only fields with
-   *       no number pair otherwise: a oneof by a member it keeps, then by name.
+   *   <li>Protobuf: by field number, recorded or implied, whatever the names. A field without a
+   *       known number on both sides pairs otherwise: a oneof by a member it keeps, then by name.
    *   <li>Avro: a reader field the writer lacks by name takes the writer field its alias names,
    *       even over a reader field keeping that name, as Avro's decoder applies aliases. The
    *       rest pair by name.
@@ -391,9 +391,11 @@ final class IcebergComparison {
           }
         }
       }
+      // Only a number known on both sides decides. One side's can be unknown: a map entry's value
+      // union loses the entry message that implies its members' numbers.
       for (FieldView update : updateFields) {
         final FieldView original = originalsByName.get(update.name);
-        if (numberOf(update) == null && original != null && numberOf(original) == null) {
+        if (original != null && (numberOf(update) == null || numberOf(original) == null)) {
           claim(pairs, claimed, update, original);
         }
       }
