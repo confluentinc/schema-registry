@@ -24,12 +24,23 @@ import io.confluent.kafka.example.Widget;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,21 +49,36 @@ import java.util.Arrays;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
@@ -67,9 +93,14 @@ import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeNotNull;
 import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
@@ -1678,6 +1709,346 @@ public class KafkaAvroSerializerTest {
         new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
   }
 
+  // Static initializers run once per JVM, so each test has its own probe; probes record here.
+  static final Set<String> INITIALIZED_PROBES = ConcurrentHashMap.newKeySet();
+
+  private static Schema probeSchema(String name) {
+    return SchemaBuilder.record(name).namespace("io.confluent.kafka.serializers")
+        .fields().requiredString("field1").endRecord();
+  }
+
+  // A record with no class, inside an array, is read with its writer schema, fields included.
+  private static Schema noClassRecord(String field, Schema type) {
+    return SchemaBuilder.record("RecordWithNoClass").namespace("io.confluent.kafka.serializers")
+        .fields().name(field).type(type).noDefault().endRecord();
+  }
+
+  private static Schema noClassRecordWithOptional(Schema type) {
+    return SchemaBuilder.record("RecordWithNoClass").namespace("io.confluent.kafka.serializers")
+        .fields().name("f").type().unionOf().nullType().and().type(type).endUnion().nullDefault()
+        .endRecord();
+  }
+
+  // The wire format, framed by hand so the serializer runs no rules.
+  private static byte[] frame(int id, Schema schema, Object datum) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(0);
+    out.write(ByteBuffer.allocate(4).putInt(id).array());
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(schema).write(datum, encoder);
+    encoder.flush();
+    return out.toByteArray();
+  }
+
+  private byte[] serializeArrayOf(GenericRecord element) {
+    GenericData.Array<GenericRecord> array =
+        new GenericData.Array<>(1, Schema.createArray(element.getSchema()));
+    array.add(element);
+    return avroSerializer.serialize(topic, array);
+  }
+
+  // A class of the wrong kind is treated as absent, so the type is read generically.
+  private GenericRecord readElementUninitialized(byte[] bytes, String probe) {
+    Object element = ((List<?>) specificAvroDeserializer.deserialize(topic, bytes)).get(0);
+    assertFalse("class named by the writer schema must not be initialized",
+        INITIALIZED_PROBES.contains(probe));
+    return (GenericRecord) element;
+  }
+
+  private void assertRejectedUninitialized(byte[] bytes, String probe) {
+    assertThrows(SerializationException.class,
+        () -> specificAvroDeserializer.deserialize(topic, bytes));
+    assertFalse("class named by the writer schema must not be initialized",
+        INITIALIZED_PROBES.contains(probe));
+  }
+
+  @Test
+  public void testRecordNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema schema = probeSchema("TopLevelInitProbe");
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    assertRejectedUninitialized(bytes, "TopLevelInitProbe");
+  }
+
+  @Test
+  public void testRecordInsideArrayNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    byte[] bytes = serializeArrayOf(
+        new GenericRecordBuilder(probeSchema("NestedInitProbe")).set("field1", "hello").build());
+
+    assertTrue(readElementUninitialized(bytes, "NestedInitProbe") instanceof GenericData.Record);
+  }
+
+  @Test
+  public void testFieldOfFallbackRecordNamedAfterNonSpecificRecordClassIsNotInitialized() {
+    Schema fieldSchema = probeSchema("FallbackFieldInitProbe");
+    byte[] bytes = serializeArrayOf(new GenericRecordBuilder(noClassRecord("inner", fieldSchema))
+        .set("inner", new GenericRecordBuilder(fieldSchema).set("field1", "hello").build())
+        .build());
+
+    assertTrue(readElementUninitialized(bytes, "FallbackFieldInitProbe").get("inner")
+        instanceof GenericData.Record);
+  }
+
+  @Test
+  public void testClassOnlyOnContextClassLoaderIsNotInitialized() throws Exception {
+    // Avro also tries the context class loader, so compile a probe only that loader can see.
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assumeNotNull(compiler);
+    Path dir = Files.createTempDirectory("ctxprobe");
+    // A new name each run, so no class resolved earlier in this JVM can stand in for it.
+    String name = "ContextLoaderInitProbe" + UUID.randomUUID().toString().replace("-", "");
+    Path source = Files.createDirectories(dir.resolve("ctxprobe")).resolve(name + ".java");
+    // An IndexedRecord, so that "found but not a SpecificRecord" shows the loader was consulted.
+    Files.write(source, ("package ctxprobe; public class " + name + " implements "
+        + "org.apache.avro.generic.IndexedRecord { static { "
+        + "System.setProperty(\"ctxprobe.initialized\", \"true\"); } "
+        + "public void put(int i, Object v) {} public Object get(int i) { return null; } "
+        + "public org.apache.avro.Schema getSchema() { return null; } }").getBytes());
+    String avroJar = Paths.get(IndexedRecord.class.getProtectionDomain().getCodeSource()
+        .getLocation().toURI()).toString();
+    assertEquals(0, compiler.run(null, null, null, "-classpath", avroJar, source.toString()));
+    Schema schema = SchemaBuilder.record(name).namespace("ctxprobe")
+        .fields().requiredString("field1").endRecord();
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader =
+        new URLClassLoader(new URL[] {dir.toUri().toURL()}, original)) {
+      thread.setContextClassLoader(loader);
+      Throwable e = assertThrows(SerializationException.class,
+          () -> specificAvroDeserializer.deserialize(topic, bytes));
+      while (e.getCause() != null && !e.getMessage().contains("is not a SpecificRecord")) {
+        e = e.getCause();
+      }
+      assertTrue(e.getMessage(), e.getMessage().contains("is not a SpecificRecord"));
+    } finally {
+      thread.setContextClassLoader(original);
+      try (Stream<Path> paths = Files.walk(dir)) {
+        paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+      }
+    }
+    assertNull("class named by the writer schema must not be initialized",
+        System.clearProperty("ctxprobe.initialized"));
+  }
+
+  @Test
+  public void testLatestReaderSchemaNamedAfterNonSpecificRecordClassIsNotInitialized()
+      throws Exception {
+    Map<String, Object> props = new HashMap<>();
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, "true");
+    KafkaAvroDeserializer latestDeserializer = new KafkaAvroDeserializer(schemaRegistry, props);
+    Schema writerSchema = probeSchema("LatestWriter");
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(writerSchema).set("field1", "hello").build());
+    // The registry, not the consumer, supplies the reader schema.
+    schemaRegistry.register(topic + "-value", new AvroSchema(probeSchema("LatestReaderInitProbe")));
+
+    assertTrue(latestDeserializer.deserialize(topic, bytes) instanceof GenericData.Record);
+    assertFalse(INITIALIZED_PROBES.contains("LatestReaderInitProbe"));
+  }
+
+  @Test
+  public void testFieldOfGeneratedRecordInsideFallbackIsNotInitialized() {
+    // Inside a fallback record, a generated record keeps its writer-defined fields too.
+    Schema fieldSchema = probeSchema("FallbackUserFieldInitProbe");
+    Schema userSchema = SchemaBuilder.record("User").namespace("io.confluent.kafka.example")
+        .fields().requiredString("name").name("p").type(fieldSchema).noDefault().endRecord();
+    GenericRecord user = new GenericRecordBuilder(userSchema)
+        .set("name", "u")
+        .set("p", new GenericRecordBuilder(fieldSchema).set("field1", "hello").build())
+        .build();
+    byte[] bytes = serializeArrayOf(
+        new GenericRecordBuilder(noClassRecord("user", userSchema)).set("user", user).build());
+
+    assertRejectedUninitialized(bytes, "FallbackUserFieldInitProbe");
+  }
+
+  @Test
+  public void testEnumNamedAfterEnumClassIsNotInitialized() {
+    Schema schema = SchemaBuilder.enumeration("EnumInitProbe")
+        .namespace("io.confluent.kafka.serializers").symbols("A");
+    byte[] bytes = avroSerializer.serialize(topic, new GenericData.EnumSymbol(schema, "A"));
+
+    assertRejectedUninitialized(bytes, "EnumInitProbe");
+  }
+
+  @Test
+  public void testRecordNamedAfterNestedClassIsNotInitialized() {
+    // Avro retries pkg.Outer.Inner as pkg.Outer$Inner.
+    Schema schema = SchemaBuilder.record("NestedClassInitProbe")
+        .namespace("io.confluent.kafka.serializers.KafkaAvroSerializerTest")
+        .fields().requiredString("field1").endRecord();
+    byte[] bytes = avroSerializer.serialize(
+        topic, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    assertRejectedUninitialized(bytes, "NestedClassInitProbe");
+  }
+
+  @Test
+  public void testGenericConsumerOfSchemaWithDomainRuleDoesNotInitializeNamedClass()
+      throws Exception {
+    // Any domain rule makes the deserializer pick a SpecificData, even for generic records.
+    Schema schema = probeSchema("DomainRuleInitProbe");
+    RuleSet ruleSet = new RuleSet(null, Collections.singletonList(new Rule("r", null,
+        RuleKind.CONDITION, RuleMode.READ, NoOpRuleExecutor.TYPE, null, null, "true", null, null,
+        false)));
+    int id = schemaRegistry.register(topic + "-value", new AvroSchema(schema.toString(),
+        Collections.emptyList(), Collections.emptyMap(), null, ruleSet, null, false));
+    byte[] bytes =
+        frame(id, schema, new GenericRecordBuilder(schema).set("field1", "hello").build());
+
+    Map<String, Object> props = new HashMap<>();
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS, "noop");
+    props.put(KafkaAvroDeserializerConfig.RULE_EXECUTORS + ".noop.class",
+        NoOpRuleExecutor.class.getName());
+    Object result = new KafkaAvroDeserializer(schemaRegistry, props).deserialize(topic, bytes);
+
+    assertTrue(result instanceof GenericRecord);
+    assertFalse(INITIALIZED_PROBES.contains("DomainRuleInitProbe"));
+  }
+
+  @Test
+  public void testSpecificDataForSchemaMatchesAvrosChoice() {
+    // A generated class keeps its own model's conversions (ExtendedUser has a logical type).
+    SpecificData model = SpecificData.getForClass(ExtendedUser.class);
+    Schema optional = Schema.createUnion(Schema.create(Schema.Type.NULL), ExtendedUser.SCHEMA$);
+    for (boolean logicalTypes : new boolean[] {false, true}) {
+      for (Schema schema : new Schema[] {ExtendedUser.SCHEMA$, optional}) {
+        SpecificData data = AvroSchemaUtils.getSpecificDataForSchema(schema, logicalTypes);
+        assertEquals(conversionTypes(model), conversionTypes(data));
+        assertSame(model.getClassLoader(), data.getClassLoader());
+        assertSame(ExtendedUser.class, data.getClass(ExtendedUser.SCHEMA$));
+      }
+      // Anything else keeps the default for that setting.
+      SpecificData fallback = logicalTypes ? AvroSchemaUtils.getSpecificData() : SpecificData.get();
+      assertEquals(conversionTypes(fallback), conversionTypes(
+          AvroSchemaUtils.getSpecificDataForSchema(probeSchema("NoSuchClass"), logicalTypes)));
+    }
+  }
+
+  private static Set<String> conversionTypes(SpecificData data) {
+    return data.getConversions().stream()
+        .map(conversion -> conversion.getClass().getName()).collect(Collectors.toSet());
+  }
+
+  @Test
+  public void testUnreadBranchNamedAfterNonSpecificRecordClassStillWorks() {
+    // A named type is only checked when read, so an unread branch keeps working.
+    Schema elementSchema = noClassRecordWithOptional(probeSchema("UnreadBranchInitProbe"));
+    byte[] bytes = serializeArrayOf(new GenericRecordBuilder(elementSchema).set("f", null).build());
+
+    assertEquals(1, ((List<?>) specificAvroDeserializer.deserialize(topic, bytes)).size());
+    assertFalse(INITIALIZED_PROBES.contains("UnreadBranchInitProbe"));
+  }
+
+  @Test
+  public void testFastReaderKeepsUnreadBranchesAndInitializesNothing() {
+    // The fast reader builds readers for every branch up front, read or not.
+    boolean fastReader = SpecificData.get().isFastReaderEnabled();
+    SpecificData.get().setFastReaderEnabled(true);
+    try {
+      // The deserializer's data sees the setting, so the fast reader is really used.
+      assertTrue(AvroSchemaUtils.getSpecificDataForSchema(
+          Schema.createArray(Schema.create(Schema.Type.STRING)), false).isFastReaderEnabled());
+      Schema withUnread = noClassRecordWithOptional(probeSchema("FastUnreadBranchInitProbe"));
+      readElementUninitialized(serializeArrayOf(
+          new GenericRecordBuilder(withUnread).set("f", null).build()),
+          "FastUnreadBranchInitProbe");
+
+      Schema fieldSchema = probeSchema("FastFallbackFieldInitProbe");
+      readElementUninitialized(serializeArrayOf(
+          new GenericRecordBuilder(noClassRecord("inner", fieldSchema))
+              .set("inner", new GenericRecordBuilder(fieldSchema).set("field1", "hello").build())
+              .build()), "FastFallbackFieldInitProbe");
+    } finally {
+      SpecificData.get().setFastReaderEnabled(fastReader);
+    }
+  }
+
+  @Test
+  public void testTopLevelNullableUnionOfGeneratedRecordReads() throws Exception {
+    // null has no SpecificRecord class, so that branch keeps the writer schema.
+    Schema optionalUser = Schema.createUnion(Schema.create(Schema.Type.NULL), User.SCHEMA$);
+    int id = schemaRegistry.register(topic + "-value", new AvroSchema(optionalUser));
+    byte[] bytes = frame(id, optionalUser, new User("u"));
+
+    assertEquals(new User("u"), specificAvroDeserializer.deserialize(topic, bytes));
+  }
+
+  @Test
+  public void testFieldOfFallbackRecordNamedAfterIndexedRecordClassStillWorks() {
+    // Avro only needs an IndexedRecord to read into, so such a class keeps working, as it did.
+    Schema fieldSchema = FallbackIndexedRecord.SCHEMA;
+    byte[] bytes = serializeArrayOf(new GenericRecordBuilder(noClassRecord("f", fieldSchema))
+        .set("f", new GenericRecordBuilder(fieldSchema).set("field1", "hello").build())
+        .build());
+
+    Object element = ((List<?>) specificAvroDeserializer.deserialize(topic, bytes)).get(0);
+    assertTrue(((GenericRecord) element).get("f") instanceof FallbackIndexedRecord);
+  }
+
+  public static class FallbackIndexedRecord implements IndexedRecord {
+    static final Schema SCHEMA = SchemaBuilder.record("FallbackIndexedRecord")
+        .namespace("io.confluent.kafka.serializers.KafkaAvroSerializerTest")
+        .fields().requiredString("field1").endRecord();
+    private Object field1;
+
+    @Override
+    public void put(int i, Object v) {
+      field1 = v;
+    }
+
+    @Override
+    public Object get(int i) {
+      return field1;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA;
+    }
+  }
+
+  @Test
+  public void testRuleDeepCopyDoesNotInitializeClassNamedBySchema() {
+    // Rules deep-copy SpecificRecord messages with the thread-local data against the schema.
+    Schema schema = probeSchema("DeepCopyInitProbe");
+    AvroSchemaUtils.setThreadLocalData(schema, false, false);
+    try {
+      assertTrue(new AvroSchema(schema).copyMessage(new User("u")) instanceof GenericData.Record);
+    } finally {
+      AvroSchemaUtils.clearThreadLocalData();
+    }
+    assertFalse(INITIALIZED_PROBES.contains("DeepCopyInitProbe"));
+  }
+
+  /** Accepts every message, so a test can run a domain rule end to end. */
+  public static class NoOpRuleExecutor implements RuleExecutor {
+    static final String TYPE = "NOOP";
+
+    @Override
+    public String type() {
+      return TYPE;
+    }
+
+    @Override
+    public Object transform(RuleContext ctx, Object message) {
+      return true;
+    }
+  }
+
+  static class NestedClassInitProbe {
+    static {
+      INITIALIZED_PROBES.add("NestedClassInitProbe");
+    }
+  }
+
   static class RecordWithUUID {
     UUID uuid;
 
@@ -1697,5 +2068,73 @@ public class KafkaAvroSerializerTest {
       RecordWithUUID that = (RecordWithUUID) obj;
       return Objects.equals(this.uuid, that.uuid);
     }
+  }
+}
+
+class TopLevelInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("TopLevelInitProbe");
+  }
+}
+
+class NestedInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("NestedInitProbe");
+  }
+}
+
+class FallbackFieldInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("FallbackFieldInitProbe");
+  }
+}
+
+class FallbackUserFieldInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("FallbackUserFieldInitProbe");
+  }
+}
+
+class LatestReaderInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("LatestReaderInitProbe");
+  }
+}
+
+class DomainRuleInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("DomainRuleInitProbe");
+  }
+}
+
+enum EnumInitProbe {
+  A;
+
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("EnumInitProbe");
+  }
+}
+
+class UnreadBranchInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("UnreadBranchInitProbe");
+  }
+}
+
+class DeepCopyInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("DeepCopyInitProbe");
+  }
+}
+
+class FastUnreadBranchInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("FastUnreadBranchInitProbe");
+  }
+}
+
+class FastFallbackFieldInitProbe {
+  static {
+    KafkaAvroSerializerTest.INITIALIZED_PROBES.add("FastFallbackFieldInitProbe");
   }
 }
