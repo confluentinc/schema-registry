@@ -40,6 +40,7 @@ public class SchemaProvenance {
 
   private String subject;
   private List<ProvenanceVersion> versions;
+  private List<Integer> missingVersions;
 
   @JsonCreator
   public SchemaProvenance(@JsonProperty("subject") String subject,
@@ -72,6 +73,20 @@ public class SchemaProvenance {
     this.versions = versions;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "The version numbers strictly "
+      + "between the range's ends that no version of the subject has, in ascending order, absent "
+      + "if none. Provenance across such a gap differs from what it was before the version was "
+      + "removed. A trailing 0 means more are missing than are listed")
+  @JsonProperty("missingVersions")
+  public List<Integer> getMissingVersions() {
+    return missingVersions;
+  }
+
+  @JsonProperty("missingVersions")
+  public void setMissingVersions(List<Integer> missingVersions) {
+    this.missingVersions = missingVersions;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -82,16 +97,18 @@ public class SchemaProvenance {
     }
     SchemaProvenance that = (SchemaProvenance) o;
     return Objects.equals(subject, that.subject)
-        && Objects.equals(versions, that.versions);
+        && Objects.equals(versions, that.versions)
+        && Objects.equals(missingVersions, that.missingVersions);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(subject, versions);
+    return Objects.hash(subject, versions, missingVersions);
   }
 
   @Override
   public String toString() {
-    return "{subject=" + subject + ",versions=" + versions + "}";
+    return "{subject=" + subject + ",versions=" + versions
+        + (missingVersions != null ? ",missingVersions=" + missingVersions : "") + "}";
   }
 }
