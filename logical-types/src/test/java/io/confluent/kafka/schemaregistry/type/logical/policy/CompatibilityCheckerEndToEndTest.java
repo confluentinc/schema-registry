@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -258,14 +259,14 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void reorderingProtoFieldDeclarationsIsAcceptedByBoth() {
+  void reorderingProtoFieldDeclarationsIsAFindingForIcebergOnly() {
     LogicalType before = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string a = 1; string b = 2; }\n");
     LogicalType after = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string b = 2; string a = 1; }\n");
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG_V2, before, after);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
   }
 
   @Test
@@ -734,26 +735,165 @@ class CompatibilityCheckerEndToEndTest {
           + "{\"name\":\"a\",\"type\":\"string\"}]}";
 
   @Test
-  void reorderingAvroFieldsIsAcceptedByBothNowThatTheReorderCheckIsOff() {
-    // FIELD_REORDERED is off by default and FlinkComparison never had it. Pinned for Avro, as
-    // reorderingProtoFieldDeclarationsIsAcceptedByBoth pins it for Protobuf.
+  void reorderingAvroFieldsIsAFindingForIcebergOnly() {
+    // FlinkComparison never had FIELD_REORDERED. Pinned for Avro, as
+    // reorderingProtoFieldDeclarationsIsAFindingForIcebergOnly pins it for Protobuf.
     LogicalType before = fromAvro(AVRO_A_B_C);
     LogicalType after = fromAvro(AVRO_C_A_B);
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG_V2, before, after);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
   }
 
   @Test
-  void reorderingAvroFieldsIsAFindingForIcebergOnceFieldReorderedIsEnabled() {
+  void reorderingAvroFieldsIsAcceptedOnceFieldReorderedIsDisabled() {
     Set<Rule> enabled = Rule.defaults();
-    enabled.add(Rule.FIELD_REORDERED);
+    enabled.remove(Rule.FIELD_REORDERED);
     LogicalType before = fromAvro(AVRO_A_B_C);
     LogicalType after = fromAvro(AVRO_C_A_B);
 
-    assertEquals(EnumSet.of(Rule.FIELD_REORDERED), rulesOf(
-        LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after, enabled)));
-    assertTrue(LogicalTypeChecker.compare(Mode.FLINK, before, after, enabled).isCompatible());
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after, enabled).isCompatible());
+  }
+
+  // -- FIELD_RENAMED ------------------------------------------------------------------------------
+
+  private static final String AVRO_A_B_REQUIRED =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"string\"},"
+          + "{\"name\":\"b\",\"type\":\"string\"}]}";
+  private static final String AVRO_C_ALIASING_A_B =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"c\",\"type\":\"string\",\"aliases\":[\"a\"]},"
+          + "{\"name\":\"b\",\"type\":\"string\"}]}";
+  private static final String AVRO_C_B =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"c\",\"type\":\"string\"},"
+          + "{\"name\":\"b\",\"type\":\"string\"}]}";
+
+  private static String proto(String body) {
+    return "syntax = \"proto3\";\npackage t;\n" + body + "\n";
+  }
+
+  private static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, SchemaType schemaType) {
+    return LogicalTypeChecker.compare(mode, original, update, Rule.defaults(), schemaType);
+  }
+
+  private static void assertRenamedAt(LogicalType original, LogicalType update,
+      SchemaType schemaType, String expectedPath) {
+    CompatibilityResult result = compare(Mode.ICEBERG_V2, original, update, schemaType);
+    List<Incompatibility> found = result.getIncompatibilities();
+    assertEquals(1, found.size(), result.describe());
+    assertEquals(Rule.FIELD_RENAMED, found.get(0).getRule(), result.describe());
+    assertEquals(expectedPath, found.get(0).getPath(), result.describe());
+  }
+
+  @Test
+  void anAvroAliasRenameIsAFieldRenamedOnlyWhereTheReaderHasTheAlias() {
+    LogicalType before = fromAvro(AVRO_A_B_REQUIRED);
+    LogicalType after = fromAvro(AVRO_C_ALIASING_A_B);
+
+    // Backward, the reader has the alias: one finding, not a drop plus a required add.
+    assertRenamedAt(before, after, SchemaType.AVRO, "c");
+    // Forward, as Avro reads it, the writer's alias does not count.
+    EnumSet<Rule> dropPlusAdd = EnumSet.of(Rule.FIELD_DELETED, Rule.REQUIRED_FIELD_ADDED);
+    assertEquals(dropPlusAdd,
+        rulesOf(compare(Mode.ICEBERG_V2, after, before, SchemaType.AVRO)));
+    // Nor does it renaming back without one: v1 'c' aliasing 'a', then v2 plain 'a'.
+    assertEquals(dropPlusAdd, rulesOf(compare(Mode.ICEBERG_V2,
+        fromAvro(AVRO_C_ALIASING_A_B), fromAvro(AVRO_A_B_REQUIRED), SchemaType.AVRO)));
+  }
+
+  @Test
+  void aRenameIsAcceptedOnceFieldRenamedIsDisabled() {
+    Set<Rule> enabled = Rule.defaults();
+    enabled.remove(Rule.FIELD_RENAMED);
+    LogicalType before = fromAvro(AVRO_A_B_REQUIRED);
+    LogicalType after = fromAvro(AVRO_C_ALIASING_A_B);
+
+    assertTrue(LogicalTypeChecker.compare(
+        Mode.ICEBERG_V2, before, after, enabled, SchemaType.AVRO).isCompatible());
+  }
+
+  @Test
+  void aRenameIsADropPlusAnAddWithoutAnAliasTheFormatOrInFlinkMode() {
+    EnumSet<Rule> dropPlusAdd = EnumSet.of(Rule.FIELD_DELETED, Rule.REQUIRED_FIELD_ADDED);
+    assertEquals(dropPlusAdd, rulesOf(compare(Mode.ICEBERG_V2,
+        fromAvro(AVRO_A_B_REQUIRED), fromAvro(AVRO_C_B), SchemaType.AVRO)));
+    assertEquals(dropPlusAdd, rulesOf(compare(Mode.ICEBERG_V2,
+        fromAvro(AVRO_A_B_REQUIRED), fromAvro(AVRO_C_ALIASING_A_B), null)));
+    // Flink pairs by name and tolerates the drop, so only the add is reported there.
+    assertEquals(EnumSet.of(Rule.REQUIRED_FIELD_ADDED), rulesOf(compare(Mode.FLINK,
+        fromAvro(AVRO_A_B_REQUIRED), fromAvro(AVRO_C_ALIASING_A_B), SchemaType.AVRO)));
+  }
+
+  @Test
+  void anAvroAliasThatRenamesNothingIsNoFinding() {
+    // An alias naming a field neither schema has, and one carried over unchanged.
+    String aliasingX = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},"
+        + "{\"name\":\"c\",\"type\":[\"null\",\"string\"],\"default\":null,"
+        + "\"aliases\":[\"x\"]}]}";
+    assertTrue(compare(Mode.ICEBERG_V2, fromAvro(AVRO_A), fromAvro(aliasingX), SchemaType.AVRO)
+        .isCompatible());
+    assertTrue(compare(Mode.ICEBERG_V2, fromAvro(AVRO_C_ALIASING_A_B),
+        fromAvro(AVRO_C_ALIASING_A_B), SchemaType.AVRO).isCompatible());
+  }
+
+  @Test
+  void aProtobufFieldKeepingItsNumberUnderANewNameIsAFieldRenamed() {
+    // Sequential numbering records no numbers, so they are implied by position.
+    assertRenamedAt(fromProto(proto("message M { string a = 1; string b = 2; }")),
+        fromProto(proto("message M { string c = 1; string b = 2; }")), SchemaType.PROTOBUF, "c");
+    // Recorded numbers.
+    assertRenamedAt(fromProto(proto("message M { string a = 3; string b = 5; }")),
+        fromProto(proto("message M { string c = 3; string b = 5; }")), SchemaType.PROTOBUF, "c");
+    // A nested message.
+    assertRenamedAt(
+        fromProto(proto("message M { N n = 1; }\nmessage N { string a = 1; }")),
+        fromProto(proto("message M { N n = 1; }\nmessage N { string c = 1; }")),
+        SchemaType.PROTOBUF, "n.c");
+  }
+
+  @Test
+  void aRenamedProtobufFieldStillHasItsTypeCompared() {
+    CompatibilityResult result = compare(Mode.ICEBERG_V2,
+        fromProto(proto("message M { string a = 1; }")),
+        fromProto(proto("message M { int64 c = 1; }")), SchemaType.PROTOBUF);
+    assertEquals(EnumSet.of(Rule.FIELD_RENAMED, Rule.UNSUPPORTED_TYPE_CHANGE), rulesOf(result),
+        result.describe());
+  }
+
+  @Test
+  void aProtobufFieldGivenANewNumberAndNameIsNotARename() {
+    CompatibilityResult result = compare(Mode.ICEBERG_V2,
+        fromProto(proto("message M { string a = 1; string b = 2; }")),
+        fromProto(proto("message M { string c = 3; string b = 2; }")), SchemaType.PROTOBUF);
+    assertTrue(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
+    assertTrue(!rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
+  }
+
+  @Test
+  void aRenamedOneofOrOneofMemberIsAFieldRenamed() {
+    String before = "message M { string a = 1; oneof o { string x = 2; int32 y = 3; } }";
+    // A member keeping its number, implied by position.
+    assertRenamedAt(fromProto(proto(before)),
+        fromProto(proto("message M { string a = 1; oneof o { string z = 2; int32 y = 3; } }")),
+        SchemaType.PROTOBUF, "o.z");
+    // The oneof itself, which has no number and follows its members'.
+    assertRenamedAt(fromProto(proto(before)),
+        fromProto(proto("message M { string a = 1; oneof p { string x = 2; int32 y = 3; } }")),
+        SchemaType.PROTOBUF, "p");
+  }
+
+  @Test
+  void jsonPropertiesAtTheSamePositionAreNotPaired() {
+    String jsonAB = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
+        + "\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"b\"]}";
+    String jsonCB = "{\"type\":\"object\",\"properties\":{\"c\":{\"type\":\"string\"},"
+        + "\"b\":{\"type\":\"string\"}},\"required\":[\"c\",\"b\"]}";
+    assertTrue(!rulesOf(compare(Mode.ICEBERG_V2, fromJson(jsonAB), fromJson(jsonCB),
+        SchemaType.JSON)).contains(Rule.FIELD_RENAMED));
   }
 
   @Test
@@ -768,8 +908,8 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void reorderingAvroUnionBranchesIsAcceptedByBothNowThatTheReorderCheckIsOff() {
-    // Same default, exercised through a union's branches (which lower to struct fields) instead of
+  void reorderingAvroUnionBranchesIsAFindingForIcebergOnly() {
+    // Same rule, exercised through a union's branches (which lower to struct fields) instead of
     // a record's own fields -- the reachable path an Avro non-null-member union reorder actually
     // takes, pinned from real schema text.
     LogicalType before = fromAvro(
@@ -780,7 +920,7 @@ class CompatibilityCheckerEndToEndTest {
             + "[\"int\",\"string\"]}]}");
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG_V2, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED, "u.string");
   }
 
   // ---------------------------------------------------------------------------------------------
