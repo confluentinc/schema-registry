@@ -272,6 +272,27 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
+  public void aHardDeletedInteriorVersionIsMissingWhateverIsReturned() throws Exception {
+    register(SUBJECT, record(field("id", "int")));
+    register(SUBJECT, record(field("id", "int"), field("name", "string")));
+    register(SUBJECT, record(field("id", "int"), field("name", "string"), field("zip", "int")));
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "2");
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "2", true);
+
+    for (boolean includeInterior : new boolean[] {false, true}) {
+      SchemaProvenance provenance = byVersion(SUBJECT, "1", "3", includeInterior);
+      assertEquals(Arrays.asList(1, 3), versions(provenance));
+      assertEquals(Collections.singletonList(2), provenance.getMissingVersions());
+    }
+    // A soft-deleted version is not missing.
+    register(SUBJECT, record(field("id", "int"), field("zip", "int")));
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "3");
+    assertEquals(Collections.singletonList(2),
+        byVersion(SUBJECT, "1", "4", false).getMissingVersions());
+  }
+
+  @Test
   public void aSubjectInAContextIsReadInThatContext() throws Exception {
     String qualified = ":.ctx:" + SUBJECT;
     register(qualified, record(field("id", "int")));
