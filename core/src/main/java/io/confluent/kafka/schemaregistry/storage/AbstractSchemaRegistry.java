@@ -1868,7 +1868,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       int version = versionId.getVersionId();
       if (versionId.isLatest()) {
-        version = getLatestVersion(subject, lookupDeletedSchema).getVersion();
+        version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
       List<ContextId> ids = new ArrayList<>(getReferencedBy(key, lookupDeletedSchema));
