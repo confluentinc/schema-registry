@@ -20,6 +20,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
@@ -506,8 +507,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throw rce;
     }
     Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
-    return schema.orElseThrow(() -> new IOException("Invalid schema of type "
-        + restSchema.getSchemaType()));
+    return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
+        + " with refs " + restSchema.getReferences()
+        + " of type " + restSchema.getSchemaType()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
@@ -920,6 +922,58 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         subject, lookupDeletedSchema);
   }
 
+  /**
+   * Not cached here: the registry caches provenance per subject history, and a caller holding a
+   * mapping caches that.
+   */
+  @Override
+  public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, fromId, toId, includeInterior, includeMultipleMessages);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject, fromId, toId, includeInterior, includeMultipleMessages, compatibilityPolicy);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromVersion, toVersion, includeInterior, includeMultipleMessages);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
+      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String compatibilityPolicy) throws IOException, RestClientException {
+    return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromVersion, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages)
+      throws IOException, RestClientException {
+    return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromId, toVersion, includeInterior, includeMultipleMessages);
+  }
+
+  @Override
+  public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
+      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+        fromId, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
+  }
+
   @Override
   public int getId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
@@ -1255,7 +1309,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment()
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
       throws IOException, RestClientException {
     return restService.getSchemaRegistryDeployment();
   }

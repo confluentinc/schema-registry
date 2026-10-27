@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.9-0</version>
+        <version>8.1.7-0</version>
     </parent>
 
     <licenses>
@@ -88,24 +88,6 @@
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-avro-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-json-schema-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
