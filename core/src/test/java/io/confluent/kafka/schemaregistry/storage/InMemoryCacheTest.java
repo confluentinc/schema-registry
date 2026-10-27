@@ -20,6 +20,9 @@ import static org.junit.Assert.assertNull;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.TreeSet;
 import org.junit.Test;
 
 public class InMemoryCacheTest {
@@ -54,6 +57,17 @@ public class InMemoryCacheTest {
   }
 
   @Test
+  public void anIdListsEveryVersionCarryingIt() throws Exception {
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 2, true);
+    put(cache, 3, false);
+
+    assertEquals(Collections.singletonMap(SUBJECT, new TreeSet<>(Arrays.asList(2, 3))),
+        cache.subjectVersionsById(7, SUBJECT));
+    assertEquals(Collections.emptyMap(), cache.subjectVersionsById(8, SUBJECT));
+  }
+
+  @Test
   public void tombstoningAnUnindexedVersionIsANoOp() throws Exception {
     InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
 
@@ -68,6 +82,37 @@ public class InMemoryCacheTest {
     cache.schemaTombstoned(key, new SchemaValue(SUBJECT, 4, 8, SCHEMA, false));
 
     assertEquals(new SchemaKey(SUBJECT, 3), cache.schemaKeyById(7, SUBJECT));
+  }
+
+  @Test
+  public void anImportOverwriteUnderAnotherIdLeavesTheOldIdItsOtherVersions() throws Exception {
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 1, false);
+    put(cache, 2, false);
+
+    // v2 imported again under ID 9: ID 7 is left with v1 alone, then with nothing.
+    overwrite(cache, 2, 9);
+    assertEquals(new SchemaKey(SUBJECT, 1), cache.schemaKeyById(7, SUBJECT));
+    assertEquals(new SchemaKey(SUBJECT, 2), cache.schemaKeyById(9, SUBJECT));
+    overwrite(cache, 1, 9);
+    assertNull(cache.schemaKeyById(7, SUBJECT));
+  }
+
+  @Test
+  public void aSoftDeletedOverwriteUnderAnotherIdLeavesTheOldIdItsOtherVersions()
+      throws Exception {
+    // A lagging reader whose overwrite record was compacted away sees it as a soft delete.
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, 1, false);
+    put(cache, 2, false);
+
+    SchemaKey key = new SchemaKey(SUBJECT, 2);
+    SchemaValue value = new SchemaValue(SUBJECT, 2, 9, SCHEMA, true);
+    SchemaValue old = (SchemaValue) cache.put(key, value);
+    cache.schemaDeleted(key, value, old);
+
+    assertEquals(new SchemaKey(SUBJECT, 1), cache.schemaKeyById(7, SUBJECT));
+    assertEquals(new SchemaKey(SUBJECT, 2), cache.schemaKeyById(9, SUBJECT));
   }
 
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {
@@ -88,6 +133,15 @@ public class InMemoryCacheTest {
     } else {
       cache.schemaRegistered(key, value, null);
     }
+  }
+
+  // As an IMPORT overwrite: the version's record replaced by one under another ID.
+  private static void overwrite(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,
+      int version, int id) throws Exception {
+    SchemaKey key = new SchemaKey(SUBJECT, version);
+    SchemaValue value = new SchemaValue(SUBJECT, version, id, SCHEMA, false);
+    SchemaValue old = (SchemaValue) cache.put(key, value);
+    cache.schemaRegistered(key, value, old);
   }
 
   private static void tombstone(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,

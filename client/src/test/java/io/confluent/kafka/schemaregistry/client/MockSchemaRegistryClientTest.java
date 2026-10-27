@@ -299,6 +299,31 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testASoftDeletedVersionLookedUpInAnotherFormIsANewVersionRegisteredAgain()
+        throws Exception {
+      // A lookup by a copy carrying its version caches that form beside the registered one.
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      AvroSchema versioned = schema.copy(1);
+      assertEquals(id, client.getId(defaultValueSubject, versioned));
+      client.deleteSchemaVersion(defaultValueSubject, "1");
+      assertEquals(id, client.register(defaultValueSubject, versioned));
+      assertEquals(Collections.singletonList(2), client.getAllVersions(defaultValueSubject));
+    }
+
+    @Test
+    public void testASoftDeletedVersionLookedUpAsRegisteredIsANewVersionRegisteredAgain()
+        throws Exception {
+      // A lookup by the registered form itself must not keep a soft-deleted schema either.
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      client.deleteSchemaVersion(defaultValueSubject, "1");
+      assertEquals(id, client.getId(defaultValueSubject, schema));
+      assertEquals(id, client.register(defaultValueSubject, schema));
+      assertEquals(Collections.singletonList(2), client.getAllVersions(defaultValueSubject));
+    }
+
+    @Test
     public void testInvalidCreateAssociationRequest() {
       // Call createAssociation endpoint.
       testInvalidCreateAssociationRequestHelper(client::createAssociation);
@@ -405,6 +430,16 @@ public class MockSchemaRegistryClientTest {
       assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
     }
   }
+
+    // This mock keeps no soft-deleted versions, so the flag changes nothing.
+    @Test
+    public void testGetLatestSchemaMetadata() throws Exception {
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject).getId());
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject, false).getId());
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject, true).getId());
+    }
 
     // As in the registry, a schema without metadata finds the version registered with some.
     @Test
@@ -1224,4 +1259,48 @@ public class MockSchemaRegistryClientTest {
         }
     }
 
+    @Test
+    public void aLookupByAVersionedCopyLeavesTheRegisteredSchemaAsItWas() throws Exception {
+      // A lookup finds what was registered; the version the copy carries is not stored.
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      AvroSchema schema = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":"
+          + "[{\"name\":\"a\",\"type\":\"int\"}]}");
+      int id = mock.register("s", schema);
+      assertEquals(id, mock.getId("s", schema.copy(1)));
+
+      ParsedSchema registered = mock.getSchemaBySubjectAndId("s", id);
+      assertNull(registered.version());
+      assertEquals(1, mock.getVersion("s", registered));
+    }
+
+    @Test
+    public void aSchemaCarryingAVersionIsFoundByItsContent() throws Exception {
+      // As the registry finds a version, whatever version the schema carries.
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      AvroSchema schema = new AvroSchema("{\"type\":\"record\",\"name\":\"R\",\"fields\":"
+          + "[{\"name\":\"a\",\"type\":\"int\"}]}");
+      mock.register("s", schema);
+      assertEquals(1, mock.getVersion("s", schema.copy(3)));
+
+      // Registered carrying a version, it is found by its content too.
+      mock.register("t", schema.copy(3));
+      assertEquals(1, mock.getVersion("t", schema));
+      assertEquals(1, mock.getVersion("t", schema.copy(3)));
+    }
+
+    @Test
+    public void aVersionKeepsItsIdWhenALaterOneMerelyLooksItUp() throws Exception {
+      // A bare root name can look up the record it names; v1's id is still its own.
+      String record = "{\"type\":\"record\",\"name\":\"O\",\"namespace\":\"q\","
+          + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+      MockSchemaRegistryClient mock = new MockSchemaRegistryClient();
+      mock.register("o", new AvroSchema(record));
+      int v1 = mock.register("s", new AvroSchema(record));
+      int v2 = mock.register("s", new AvroSchema("\"q.O\"",
+          Collections.singletonList(new SchemaReference("o.avsc", "o", 1)),
+          Collections.singletonMap("o.avsc", record), null));
+      assertEquals(v1, mock.getSchemaMetadata("s", 1).getId());
+      assertEquals(v1, (int) mock.getByVersion("s", 1, false).getId());
+      assertEquals(v2, mock.getSchemaMetadata("s", 2).getId());
+    }
 }

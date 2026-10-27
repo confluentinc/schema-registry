@@ -105,6 +105,14 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         throws RuleException {
       return transform.transform(ctx, fieldCtx.getType(), fieldValue);
     }
+
+    @Override
+    public void close() throws RuleException {
+      // Called by FieldRuleExecutor once the field walk is done. If the kek could not
+      // be resolved, every targeted field has now recorded a FAILED status, so fail
+      // the rule; throwing here discards the walk's result, leaving the message as is.
+      transform.checkDeferredFailure();
+    }
   }
 }
 

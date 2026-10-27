@@ -72,6 +72,19 @@ public interface LookupCache<K,V> extends Store<K,V> {
   SchemaKey schemaKeyById(Integer id, String subject) throws StoreException;
 
   /**
+   * Provides every version of each subject carrying the schema id, soft-deleted ones included,
+   * in the context of {@code subject}.
+   *
+   * @param id the schema id
+   * @param subject a qualified subject in the context to look in
+   * @return the versions by subject, or null if this cache does not index them
+   */
+  default Map<String, ? extends Set<Integer>> subjectVersionsById(int id, String subject)
+      throws StoreException {
+    return null;
+  }
+
+  /**
    * Provides the id for the provided guid and context.
    *
    * @param guid the schema guid; never {@code null}

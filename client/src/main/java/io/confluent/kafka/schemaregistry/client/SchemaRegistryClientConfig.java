@@ -92,6 +92,13 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS =
       "bearer.auth.custom.provider.class";
 
+  //UAMI (User Assigned Managed Identity) related configs
+  public static final String BEARER_AUTH_UAMI_ENDPOINT_URL = "bearer.auth.uami.endpoint.url";
+  public static final String BEARER_AUTH_UAMI_ENDPOINT_URL_DEFAULT =
+      "http://169.254.169.254/metadata/identity/oauth2/token";
+  public static final String BEARER_AUTH_UAMI_ENDPOINT_QUERY =
+      "bearer.auth.uami.endpoint.query";
+
   public static final String SSL_PREFIX = "ssl.";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
@@ -213,5 +220,11 @@ public class SchemaRegistryClientConfig {
     return configs != null && configs.containsKey(USE_APACHE_HTTP_CLIENT)
         ? Boolean.parseBoolean(configs.get(USE_APACHE_HTTP_CLIENT).toString())
         : USE_APACHE_HTTP_CLIENT_DEFAULT;
+  }
+
+  public static String getUamiEndpointUrl(String configuredValue) {
+    return configuredValue != null && !configuredValue.isEmpty()
+        ? configuredValue
+        : BEARER_AUTH_UAMI_ENDPOINT_URL_DEFAULT;
   }
 }

@@ -151,7 +151,16 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       boolean latestOnly, Predicate<Schema> postFilter)
       throws SchemaRegistryException;
 
-  Schema getLatestVersion(String subject) throws SchemaRegistryException;
+  default Schema getLatestVersion(String subject) throws SchemaRegistryException {
+    return getLatestVersion(subject, false);
+  }
+
+  /**
+   * The latest version of {@code subject}: the highest version number, counting soft-deleted
+   * versions if {@code returnDeletedSchema}; null if there is none.
+   */
+  Schema getLatestVersion(String subject, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
@@ -167,6 +176,17 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throw new OperationNotPermittedException("Permanent delete is not allowed for subject "
           + subject + " because compatibilityPolicy=LOGICAL");
     }
+  }
+
+  /**
+   * Whether {@code version} of {@code subject} is a valid backward step from
+   * {@code previousVersion}, the version just before it, soft-deleted or not, or 0 if none, under
+   * compatibilityPolicy=LOGICAL with members paired by provenance check id, whatever the subject's
+   * config: the errors found, empty if none.
+   */
+  default List<String> isLogicallyCompatibleByProvenance(String subject, int version,
+      int previousVersion) throws SchemaRegistryException {
+    throw new UnsupportedOperationException();
   }
 
   /**
@@ -301,6 +321,32 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted) throws
           SchemaRegistryException;
+
+  /**
+   * The latest version of {@code subject} carrying schema id {@code id} itself, soft-deleted or
+   * not, or null if none does.
+   */
+  default Integer latestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, subject, true);
+    return versions == null ? null : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .map(SubjectVersion::getVersion)
+        .max(Integer::compare)
+        .orElse(null);
+  }
+
+  /**
+   * The earliest version of {@code subject} carrying schema id {@code id} itself, soft-deleted or
+   * not, or null if none does.
+   */
+  default Integer earliestVersionWithId(int id, String subject) throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, subject, true);
+    return versions == null ? null : versions.stream()
+        .filter(v -> v.getSubject().equals(subject))
+        .map(SubjectVersion::getVersion)
+        .min(Integer::compare)
+        .orElse(null);
+  }
 
   int normalizeSubjectVersionLimit(int suppliedLimit);
 
