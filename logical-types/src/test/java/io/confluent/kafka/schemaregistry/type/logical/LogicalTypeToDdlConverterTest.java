@@ -20,8 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.Arrays;
@@ -486,6 +488,23 @@ class LogicalTypeToDdlConverterTest {
         new ProtobufSchema("syntax = \"proto2\";\nmessage M {\n"
             + "  optional bytes b = 1 [default = \"ab\"];\n}\n")));
     assertTrue(ddl.contains("DEFAULT x'6162'"), ddl);
+  }
+
+  @Test
+  void anAvroUnionDefaultIsItsFirstBranchsLiteralAndRoundTrips() {
+    LogicalType original = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\": \"record\", \"name\": \"ud\", \"fields\": ["
+            + "{\"name\": \"u\", \"type\": [\"int\", \"string\", \"null\"], \"default\": 3}, "
+            + "{\"name\": \"n\", \"type\": [\"null\", \"string\"], \"default\": null}]}"));
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.contains("DEFAULT 3"), ddl);
+    assertTrue(ddl.contains("DEFAULT NULL"), ddl);
+    LogicalType parsed = parse(ddl);
+    for (int i = 0; i < 2; i++) {
+      assertEquals(original.getRootSchema().getFields().get(i).getDefaultValue(),
+          parsed.getRootSchema().getFields().get(i).getDefaultValue(), ddl);
+    }
+    assertRoundTrip(original);
   }
 
   @Test

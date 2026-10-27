@@ -1225,10 +1225,15 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
             ctx, s, targetType.getPrecision(), "TIMESTAMP_LTZ");
         return java.time.Instant.parse(s);
       }
+      case UNION:
+        // As in Avro, a union's default is a value of its first branch.
+        if (!targetType.getBranches().isEmpty()) {
+          return buildLiteralForType(ctx, targetType.getBranches().get(0).getSchema());
+        }
+        throw error(ctx, "Default values are not supported for type: " + type);
       case VARIANT:
       case STRUCT:
       case ENUM:
-      case UNION:
       case ARRAY:
       case MAP:
       case MULTISET:
