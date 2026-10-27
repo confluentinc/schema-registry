@@ -350,7 +350,7 @@ final class IcebergComparison {
    *
    * <ul>
    *   <li>Protobuf: by field number, recorded or implied, whatever the names. Only fields with
-   *       no number pair otherwise: by name, then a oneof by a member it keeps.
+   *       no number pair otherwise: a oneof by a member it keeps, then by name.
    *   <li>Avro: a reader field the writer lacks by name takes the writer field its alias names,
    *       even over a reader field keeping that name, as Avro's decoder applies aliases. The
    *       rest pair by name.
@@ -379,14 +379,9 @@ final class IcebergComparison {
           claim(pairs, claimed, update, originalsByNumber.get(number));
         }
       }
+      // A oneof's name is not on the wire, so its members' numbers pair it before its name does.
       for (FieldView update : updateFields) {
-        final FieldView original = originalsByName.get(update.name);
-        if (numberOf(update) == null && original != null && numberOf(original) == null) {
-          claim(pairs, claimed, update, original);
-        }
-      }
-      for (FieldView update : updateFields) {
-        if (!pairs.containsKey(update) && isOneof(update)) {
+        if (isOneof(update)) {
           for (FieldView original : originalFields) {
             if (!claimed.contains(original) && isOneof(original) && !Collections.disjoint(
                 memberNumbers(original.schema), memberNumbers(update.schema))) {
@@ -394,6 +389,12 @@ final class IcebergComparison {
               break;
             }
           }
+        }
+      }
+      for (FieldView update : updateFields) {
+        final FieldView original = originalsByName.get(update.name);
+        if (numberOf(update) == null && original != null && numberOf(original) == null) {
+          claim(pairs, claimed, update, original);
         }
       }
       return pairs;

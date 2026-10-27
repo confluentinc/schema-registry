@@ -953,6 +953,37 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void swappingTwoProtobufOneofNamesIsTwoRenames() {
+    // A oneof's name is not on the wire: its members keep their numbers, so nothing moved.
+    LogicalType before = fromProto(
+        proto("message M { oneof a { int32 n = 1; } oneof b { string s = 2; } }"));
+    LogicalType after = fromProto(
+        proto("message M { oneof b { int32 n = 1; } oneof a { string s = 2; } }"));
+
+    CompatibilityResult result = compare(Mode.ICEBERG_V2, before, after, SchemaType.PROTOBUF);
+    assertEquals(EnumSet.of(Rule.FIELD_RENAMED), rulesOf(result), result.describe());
+    assertEquals(2, result.getIncompatibilities().size(), result.describe());
+    Set<Rule> enabled = Rule.defaults();
+    enabled.remove(Rule.FIELD_RENAMED);
+    assertTrue(LogicalTypeChecker.compare(
+        Mode.ICEBERG_V2, before, after, enabled, SchemaType.PROTOBUF).isCompatible());
+  }
+
+  @Test
+  void aOneofNameReusedForAnotherOneofsMembersFollowsTheMembers() {
+    // 'a' now holds what was 'b'; the members that were in 'a' moved to the new 'c'.
+    LogicalType before = fromProto(
+        proto("message M { oneof a { int32 n = 1; } oneof b { string s = 2; } }"));
+    LogicalType after = fromProto(
+        proto("message M { oneof c { int32 n = 1; } oneof a { string s = 2; } }"));
+
+    CompatibilityResult result = compare(Mode.ICEBERG_V2, before, after, SchemaType.PROTOBUF);
+    assertEquals(EnumSet.of(Rule.FIELD_RENAMED), rulesOf(result), result.describe());
+    assertEquals(List.of("c", "a"), result.getIncompatibilities().stream()
+        .map(Incompatibility::getPath).collect(Collectors.toList()), result.describe());
+  }
+
+  @Test
   void jsonPropertiesAtTheSamePositionAreNotPaired() {
     String jsonAB = "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
         + "\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"b\"]}";
