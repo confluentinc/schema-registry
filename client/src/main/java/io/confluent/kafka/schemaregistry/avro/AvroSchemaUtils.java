@@ -193,7 +193,32 @@ public class AvroSchemaUtils {
   static final class GuardedSpecificData extends SpecificData {
     private final SpecificData model;
     private final Map<String, Optional<Class<?>>> classes = new ConcurrentHashMap<>();
-    private FastReaderBuilder fastReaderBuilder;
+    // Own builder so the fast reader resolves classes through this instance. Its settings are the
+    // model builder's, both ways (Avro reads them only through these getters), and still pass
+    // Avro's own check: from 1.12.2 it turns both off for a SpecificData subclass like this one.
+    private final FastReaderBuilder fastReaderBuilder = new FastReaderBuilder(this) {
+      @Override
+      public boolean isKeyClassEnabled() {
+        return model.getFastReaderBuilder().isKeyClassEnabled() && super.isKeyClassEnabled();
+      }
+
+      @Override
+      public FastReaderBuilder withKeyClassEnabled(boolean enabled) {
+        model.getFastReaderBuilder().withKeyClassEnabled(enabled);
+        return this;
+      }
+
+      @Override
+      public boolean isClassPropEnabled() {
+        return model.getFastReaderBuilder().isClassPropEnabled() && super.isClassPropEnabled();
+      }
+
+      @Override
+      public FastReaderBuilder withClassPropEnabled(boolean enabled) {
+        model.getFastReaderBuilder().withClassPropEnabled(enabled);
+        return this;
+      }
+    };
 
     GuardedSpecificData(SpecificData model) {
       super(model.getClassLoader());
@@ -259,16 +284,8 @@ public class AvroSchemaUtils {
       return this;
     }
 
-    // Own builder so the fast reader resolves classes through this instance; the model builder's
-    // settings are copied once.
     @Override
-    public synchronized FastReaderBuilder getFastReaderBuilder() {
-      if (fastReaderBuilder == null) {
-        FastReaderBuilder settings = model.getFastReaderBuilder();
-        fastReaderBuilder = new FastReaderBuilder(this)
-            .withKeyClassEnabled(settings.isKeyClassEnabled())
-            .withClassPropEnabled(settings.isClassPropEnabled());
-      }
+    public FastReaderBuilder getFastReaderBuilder() {
       return fastReaderBuilder;
     }
 

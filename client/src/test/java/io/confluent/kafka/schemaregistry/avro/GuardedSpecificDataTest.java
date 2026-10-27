@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -33,6 +35,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.FastReaderBuilder;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.junit.Test;
@@ -54,6 +57,23 @@ public class GuardedSpecificDataTest {
     assertEquals(model.useCustomCoders(), guarded.useCustomCoders());
   }
 
+  @Test
+  public void testFastReaderSettingsStayLive() {
+    SpecificData model = new SpecificData();
+    FastReaderBuilder guarded = new AvroSchemaUtils.GuardedSpecificData(model)
+        .getFastReaderBuilder();
+
+    model.getFastReaderBuilder().withKeyClassEnabled(false).withClassPropEnabled(false);
+    assertFalse(guarded.isKeyClassEnabled());
+    assertFalse(guarded.isClassPropEnabled());
+
+    guarded.withKeyClassEnabled(true).withClassPropEnabled(true);
+    assertTrue(model.getFastReaderBuilder().isKeyClassEnabled());
+    assertTrue(model.getFastReaderBuilder().isClassPropEnabled());
+  }
+
+  // Fails from Avro 1.12.2, whose getClass no longer initializes and only loads trusted classes
+  // (org.apache.avro.SERIALIZABLE_*): GuardedSpecificData should defer to Avro there.
   @Test
   public void testResolvesTheSameClassesAsAvro() {
     Schema[] schemas = {
