@@ -2603,6 +2603,8 @@ public class ProtobufSchema implements ParsedSchema {
         .equals(importedTexts(lookup.schemaObj, lookup.dependencies))) {
       return null;
     }
+    // The lookup's own references, so the base check's reference comparison passes: the texts
+    // above stand in for it, and an import resolved on neither side compares as equal.
     return new ProtobufSchema(imported, version, null, lookup.references, dependencies,
         metadata, ruleSet, null, null, null);
   }

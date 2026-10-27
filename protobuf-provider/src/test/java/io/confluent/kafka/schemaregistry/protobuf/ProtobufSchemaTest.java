@@ -25,6 +25,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
@@ -3986,6 +3987,19 @@ public class ProtobufSchemaTest {
     ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
     assertEquals(a, client.getId("a", generated));
     assertEquals(b, client.getId("b", generated));
+  }
+
+  // As a version holding a file is found by any of its messages, the wrapper is found by another
+  // message of its file than its root; the payload's message indexes pick the type read.
+  @Test
+  public void testAnotherMessageOfTheFileFindsTheWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int bigint = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    assertEquals(bigint, client.getId("bigint", new ProtobufSchema(Int32Value.getDescriptor())));
+    int file = client.register("native", new ProtobufSchema(Int64Value.getDescriptor()));
+    assertEquals(file, client.getId("native", new ProtobufSchema(Int32Value.getDescriptor())));
   }
 
   // As in the registry, a version of the native file's own content comes before a newer wrapper
