@@ -925,6 +925,25 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testGetLatestSchemaMetadataFindsADeletedVersion() throws Exception {
+    // a lookup of deleted versions is never served from the latest cache
+    expect(restService.getLatestVersion(anyObject(), eq(SUBJECT_0), isNull(), eq(true), isNull()))
+        .andReturn(SCHEMA_DETAILS)
+        .times(2);
+    expect(restService.getLatestVersion(anyObject(), eq(SUBJECT_0), eq("logical"), eq(true),
+        isNull()))
+        .andReturn(SCHEMA_DETAILS);
+
+    replay(restService);
+
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, true).getId());
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, true).getId());
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, "logical", true).getId());
+
+    verify(restService);
+  }
+
+  @Test
   public void testGetSchemaRegistryDeployment() throws Exception {
     List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
     SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);

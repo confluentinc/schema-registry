@@ -569,7 +569,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getLatestVersion(String subject)
       throws IOException, RestClientException {
-    List<Integer> versions = getAllVersions(subject);
+    return getLatestVersion(subject, false);
+  }
+
+  private int getLatestVersion(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    List<Integer> versions = getAllVersions(subject, lookupDeletedSchema);
     if (versions.isEmpty()) {
       throw new IOException("No schema registered under subject!");
     } else {
@@ -643,6 +648,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     int version = getLatestVersion(subject);
     return getSchemaMetadata(subject, version);
+  }
+
+  @Override
+  public SchemaMetadata getLatestSchemaMetadata(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    int version = getLatestVersion(subject, lookupDeletedSchema);
+    return getSchemaMetadata(subject, version, lookupDeletedSchema);
   }
 
   @Override
