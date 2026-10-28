@@ -277,14 +277,16 @@ final class IcebergComparison {
 
     // Each update field paired with the original field it reads, by identity.
     final Map<FieldView, FieldView> pairs = pair(originalFields, updateFields);
+    final Set<String> originalNames = new HashSet<>();
+    originalFields.forEach(field -> originalNames.add(field.name));
+    final Set<String> updateNames = new HashSet<>();
+    updateFields.forEach(field -> updateNames.add(field.name));
     for (FieldView updateField : updateFields) {
       final String fieldPath = childPath(path, updateField.name);
       final FieldView originalField = pairs.get(updateField);
       if (originalField != null && !originalField.name.equals(updateField.name)) {
         add(Rule.FIELD_RENAMED, fieldPath,
-            "Fields '" + originalField.name + "' and '" + updateField.name + "' are one field "
-                + "under two names, " + renameBasis(originalField) + ". Use one name for it in "
-                + "both schemas.");
+            renameMessage(originalField, updateField, originalNames, updateNames));
       }
 
       if (originalField == null) {
@@ -429,18 +431,51 @@ final class IcebergComparison {
     return true;
   }
 
-  private String renameBasis(FieldView original) {
+  /**
+   * A plain rename is undone by keeping the old field and adding the new one; otherwise both
+   * names are in use, so the fix is to undo what pairs them: the alias or the moved number.
+   */
+  private String renameMessage(FieldView original, FieldView update,
+      Set<String> originalNames, Set<String> updateNames) {
+    final String renamed = "Field '" + original.name + "' was renamed to '" + update.name
+        + "'. Renaming a field isn't supported. ";
+    final boolean newNameIsNew = !originalNames.contains(update.name);
+    if (newNameIsNew && !updateNames.contains(original.name)) {
+      return renamed + "Keep '" + original.name + "', and add '" + update.name
+          + "' as a new optional field.";
+    }
     if (schemaType == SchemaType.AVRO) {
-      return "matched by an Avro alias";
+      return renamed + "Remove the alias '" + original.name + "' from '" + update.name + "'.";
     }
     final Integer number = numberOf(original);
-    return number != null
-        ? "matched by Protobuf field number " + number
-        : "matched by the field numbers of its members";
+    if (number == null) {
+      return renamed + "Name the oneof holding '" + sharedMember(original, update) + "' '"
+          + original.name + "' again.";
+    }
+    return renamed + "Give field number " + number + " back to '" + original.name + "'"
+        + (newNameIsNew ? ", and give '" + update.name + "' a new field number." : ".");
+  }
+
+  /**
+   * The name of a member {@code update} holds under a number {@code original}'s members had.
+   */
+  private String sharedMember(FieldView original, FieldView update) {
+    final Set<Integer> originalNumbers = memberNumbers(original.schema);
+    for (Schema.UnionBranch branch : update.schema.getBranches()) {
+      if (originalNumbers.contains(numberOf(branch))) {
+        return branch.getName();
+      }
+    }
+    throw new IllegalStateException("Oneofs paired without a shared member: " + update.name);
   }
 
   private Integer numberOf(FieldView field) {
     return field.fieldNumber != null ? field.fieldNumber : impliedNumbers.get(field.member);
+  }
+
+  private Integer numberOf(Schema.UnionBranch branch) {
+    return branch.getFieldNumber() != null
+        ? branch.getFieldNumber() : impliedNumbers.get(branch);
   }
 
   private boolean isOneof(FieldView field) {
@@ -450,8 +485,7 @@ final class IcebergComparison {
   private Set<Integer> memberNumbers(Schema oneof) {
     final Set<Integer> numbers = new HashSet<>();
     for (Schema.UnionBranch branch : oneof.getBranches()) {
-      final Integer number = branch.getFieldNumber() != null
-          ? branch.getFieldNumber() : impliedNumbers.get(branch);
+      final Integer number = numberOf(branch);
       if (number != null) {
         numbers.add(number);
       }

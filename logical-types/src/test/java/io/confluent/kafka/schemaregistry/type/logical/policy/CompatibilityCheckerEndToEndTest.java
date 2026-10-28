@@ -789,6 +789,16 @@ class CompatibilityCheckerEndToEndTest {
     assertEquals(expectedPath, found.get(0).getPath(), result.describe());
   }
 
+  private static List<String> renameMessagesOf(CompatibilityResult result) {
+    return result.getIncompatibilities().stream()
+        .filter(found -> found.getRule() == Rule.FIELD_RENAMED)
+        .map(Incompatibility::getMessage).collect(Collectors.toList());
+  }
+
+  private static String renamed(String from, String to) {
+    return "Field '" + from + "' was renamed to '" + to + "'. Renaming a field isn't supported. ";
+  }
+
   @Test
   void anAvroAliasRenameIsAFieldRenamedOnlyWhereTheReaderHasTheAlias() {
     LogicalType before = fromAvro(AVRO_A_B_REQUIRED);
@@ -796,6 +806,8 @@ class CompatibilityCheckerEndToEndTest {
 
     // Backward, the reader has the alias: one finding, not a drop plus a required add.
     assertRenamedAt(before, after, SchemaType.AVRO, "c");
+    assertEquals(List.of(renamed("a", "c") + "Keep 'a', and add 'c' as a new optional field."),
+        renameMessagesOf(compare(Mode.ICEBERG_V2, before, after, SchemaType.AVRO)));
     // Forward, as Avro reads it, the writer's alias does not count.
     EnumSet<Rule> dropPlusAdd = EnumSet.of(Rule.FIELD_DELETED, Rule.REQUIRED_FIELD_ADDED);
     assertEquals(dropPlusAdd,
@@ -851,6 +863,8 @@ class CompatibilityCheckerEndToEndTest {
         + "{\"name\":\"a\",\"type\":[\"null\",\"string\"],\"default\":null}]}");
 
     assertRenamedAt(v1, v2, SchemaType.AVRO, "b");
+    assertEquals(List.of(renamed("a", "b") + "Remove the alias 'a' from 'b'."),
+        renameMessagesOf(compare(Mode.ICEBERG_V2, v1, v2, SchemaType.AVRO)));
     // Forward, the v1 reader keeps 'a' by name, so v2's 'b' is dropped.
     CompatibilityResult forward = compare(Mode.ICEBERG_V2, v2, v1, SchemaType.AVRO);
     assertTrue(forward.getIncompatibilities().stream().anyMatch(found ->
@@ -885,6 +899,9 @@ class CompatibilityCheckerEndToEndTest {
         .filter(found -> found.getRule() == Rule.FIELD_RENAMED).collect(Collectors.toList());
     assertEquals(1, renamed.size(), result.describe());
     assertEquals("b", renamed.get(0).getPath(), result.describe());
+    assertEquals(renamed("a", "b")
+            + "Give field number 1 back to 'a', and give 'b' a new field number.",
+        renamed.get(0).getMessage());
     assertFalse(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
   }
 
@@ -893,8 +910,9 @@ class CompatibilityCheckerEndToEndTest {
     CompatibilityResult result = compare(Mode.ICEBERG_V2,
         fromProto(proto("message M { string a = 1; string b = 2; }")),
         fromProto(proto("message M { string a = 2; string b = 1; }")), SchemaType.PROTOBUF);
-    assertEquals(2, result.getIncompatibilities().stream()
-        .filter(found -> found.getRule() == Rule.FIELD_RENAMED).count(), result.describe());
+    assertEquals(List.of(renamed("b", "a") + "Give field number 2 back to 'b'.",
+            renamed("a", "b") + "Give field number 1 back to 'a'."),
+        renameMessagesOf(result), result.describe());
   }
 
   @Test
@@ -912,6 +930,10 @@ class CompatibilityCheckerEndToEndTest {
     // Sequential numbering records no numbers, so they are implied by position.
     assertRenamedAt(fromProto(proto("message M { string a = 1; string b = 2; }")),
         fromProto(proto("message M { string c = 1; string b = 2; }")), SchemaType.PROTOBUF, "c");
+    assertEquals(List.of(renamed("a", "c") + "Keep 'a', and add 'c' as a new optional field."),
+        renameMessagesOf(compare(Mode.ICEBERG_V2,
+            fromProto(proto("message M { string a = 1; string b = 2; }")),
+            fromProto(proto("message M { string c = 1; string b = 2; }")), SchemaType.PROTOBUF)));
     // Recorded numbers.
     assertRenamedAt(fromProto(proto("message M { string a = 3; string b = 5; }")),
         fromProto(proto("message M { string c = 3; string b = 5; }")), SchemaType.PROTOBUF, "c");
@@ -963,7 +985,9 @@ class CompatibilityCheckerEndToEndTest {
 
     CompatibilityResult result = compare(Mode.ICEBERG_V2, before, after, SchemaType.PROTOBUF);
     assertEquals(EnumSet.of(Rule.FIELD_RENAMED), rulesOf(result), result.describe());
-    assertEquals(2, result.getIncompatibilities().size(), result.describe());
+    assertEquals(List.of(renamed("a", "b") + "Name the oneof holding 'n' 'a' again.",
+            renamed("b", "a") + "Name the oneof holding 's' 'b' again."),
+        renameMessagesOf(result), result.describe());
     Set<Rule> enabled = Rule.defaults();
     enabled.remove(Rule.FIELD_RENAMED);
     assertTrue(LogicalTypeChecker.compare(
@@ -982,6 +1006,9 @@ class CompatibilityCheckerEndToEndTest {
     assertEquals(EnumSet.of(Rule.FIELD_RENAMED), rulesOf(result), result.describe());
     assertEquals(List.of("c", "a"), result.getIncompatibilities().stream()
         .map(Incompatibility::getPath).collect(Collectors.toList()), result.describe());
+    assertEquals(List.of(renamed("a", "c") + "Name the oneof holding 'n' 'a' again.",
+            renamed("b", "a") + "Name the oneof holding 's' 'b' again."),
+        renameMessagesOf(result), result.describe());
   }
 
   @Test
