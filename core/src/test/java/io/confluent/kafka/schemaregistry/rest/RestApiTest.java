@@ -1944,6 +1944,68 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testGetLatestVersionIncludingDeleted() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), expectedSchemaId(1), subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), expectedSchemaId(2), subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    assertEquals((Integer) 1, restApp.restClient.getLatestVersion(subject).getVersion());
+    Schema latest = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, null, true, null);
+    assertEquals((Integer) 2, latest.getVersion());
+    assertTrue(latest.getDeleted());
+    assertEquals(
+        (Integer) 1,
+        restApp.restClient.getLatestVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, null, false, null).getVersion());
+
+    // all versions deleted: the live latest is gone, the highest version is still found
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+    try {
+      restApp.restClient.getLatestVersion(subject);
+      fail("Getting the latest version of a fully deleted subject should fail");
+    } catch (RestClientException rce) {
+      assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+    assertEquals(
+        (Integer) 2,
+        restApp.restClient.getLatestVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject, null, true, null).getVersion());
+  }
+
+  @Test
+  public void testGetLatestReferencedByWithDeletedLatest() throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String subject = "my_reference";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), expectedSchemaId(1), subject);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    request.setReferences(
+        Collections.singletonList(new SchemaReference("otherns.Subrecord", subject, 1)));
+    int referrerId = restApp.restClient.registerSchema(request, "my_referrer", false).getId();
+
+    // v2 is soft-deleted and has no referrers
+    TestUtils.registerAndVerifySchema(restApp.restClient,
+        TestUtils.getRandomCanonicalAvroString(1).get(0), expectedSchemaId(3), subject);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+
+    // without deleted, latest is the live v1, which the referrer references
+    assertEquals(Collections.singletonList(referrerId),
+        restApp.restClient.getReferencedBy(subject, -1));
+    // with deleted, latest is the soft-deleted v2
+    assertEquals(Collections.emptyList(),
+        restApp.restClient.getReferencedBy(subject, -1, true));
+    // a numbered target is found even if deleted
+    assertEquals(Collections.emptyList(),
+        restApp.restClient.getReferencedBy(subject, 2));
+  }
+
+  @Test
   public void testDeleteSchemaVersionPermanent() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
