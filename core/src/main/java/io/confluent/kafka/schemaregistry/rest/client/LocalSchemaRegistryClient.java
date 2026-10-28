@@ -445,6 +445,32 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized SchemaMetadata getLatestSchemaMetadata(
+      String subject, boolean lookupDeletedSchema) throws IOException, RestClientException {
+    if (!lookupDeletedSchema) {
+      return getLatestSchemaMetadata(subject);
+    }
+    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
+      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
+    }
+    String errorMessage = "Error while retrieving schema for subject "
+        + subject
+        + " with version latest from the schema registry";
+    try {
+      Schema s = schemaRegistry.getLatestVersion(subject, true);
+      if (s == null) {
+        throw Errors.subjectNotFoundException(subject);
+      }
+      return new SchemaMetadata(s);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Override
   public synchronized int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return getVersion(subject, schema, false);
