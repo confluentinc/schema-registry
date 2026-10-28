@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 
 import java.util.Set;
@@ -105,6 +106,16 @@ public final class LogicalTypeChecker {
   }
 
   /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, Set)}, given the format both schemas were
+   * read from. Only with it does {@link Incompatibility.Rule#FIELD_RENAMED} find a rename: an
+   * Avro alias, or a Protobuf field number, recorded or implied by position.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      Set<Rule> enabledRules, SchemaType schemaType) {
+    return CompatibilityChecker.compare(mode, original, update, enabledRules, schemaType);
+  }
+
+  /**
    * As {@link #compare(Mode, LogicalType, LogicalType)}, with the writer's and the reader's
    * members paired by {@code pairing} rather than by name.
    *
@@ -126,6 +137,18 @@ public final class LogicalTypeChecker {
   public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
       FieldPairing pairing, Set<Rule> enabledRules) {
     return CompatibilityChecker.compare(mode, original, update, pairing, enabledRules);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, FieldPairing, Set)}, given the format both
+   * schemas were read from. Only with it, and by name, does
+   * {@link Incompatibility.Rule#FIELD_RENAMED} find a rename: an Avro alias, or a Protobuf field
+   * number, recorded or implied by position. By ids, a rename is one continuing member.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
+    return CompatibilityChecker.compare(mode, original, update, pairing, enabledRules,
+        schemaType);
   }
 
   /**

@@ -46,11 +46,13 @@ public class Incompatibility {
     FIELD_DELETED,
     /** An enum symbol present in the original schema is missing from the update. */
     ENUM_DELETED,
+    /** Fields common to both schemas no longer appear in the same relative order. */
+    FIELD_REORDERED,
     /**
-     * Fields common to both schemas no longer appear in the same relative order. Off by default:
-     * Iceberg pairs fields by name here, so a reorder is invisible to that comparison.
+     * One field has a different name in each schema: an Avro alias names it, or it keeps its
+     * Protobuf field number. Disabled, the two names stand for the same field.
      */
-    FIELD_REORDERED(false),
+    FIELD_RENAMED,
     /** A nullable field was tightened to non-nullable. */
     NULLABLE_TO_NON_NULLABLE,
     /** A non-nullable field lost the default that made its absence readable. */

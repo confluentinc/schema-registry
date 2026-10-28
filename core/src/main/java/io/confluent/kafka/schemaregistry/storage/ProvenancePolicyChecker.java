@@ -169,13 +169,17 @@ public final class ProvenancePolicyChecker {
     }
     for (int version : toCompare) {
       LogicalType previousLogical = provenance.logical(version);
+      // By ids, the ids decide; by name, the format does, as LogicalPolicyChecker pairs them.
+      SchemaType schemaType = pairBy == PairBy.NAME
+          ? LogicalPolicyChecker.sharedSchemaType(newSchema, versions.get(version).schema())
+          : null;
       if (LogicalPolicyChecker.checksBackward(level)) {
         LogicalPolicyChecker.addCompareErrors(errors, previousLogical, newLogical,
-            provenance.pairing(pairBy, version, candidate), enabledRules);
+            provenance.pairing(pairBy, version, candidate), enabledRules, schemaType);
       }
       if (LogicalPolicyChecker.checksForward(level)) {
         LogicalPolicyChecker.addCompareErrors(errors, newLogical, previousLogical,
-            provenance.pairing(pairBy, candidate, version), enabledRules);
+            provenance.pairing(pairBy, candidate, version), enabledRules, schemaType);
       }
     }
     return errors;
