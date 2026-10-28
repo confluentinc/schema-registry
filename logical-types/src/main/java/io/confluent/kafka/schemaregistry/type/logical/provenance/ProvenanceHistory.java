@@ -259,10 +259,6 @@ public final class ProvenanceHistory {
   }
 
   /**
-   * The versions a request asked for, from the whole history: both ends, or everything between
-   * them. Everything is shared with {@code whole}, which is never modified.
-   */
-  /**
    * The numbers between the first and the last of {@code versions}, ascending, that none of them
    * is: at most {@link #MAX_MISSING_VERSIONS}, the last 0 when more are missing than that.
    */
@@ -281,6 +277,10 @@ public final class ProvenanceHistory {
     return missing;
   }
 
+  /**
+   * The versions a request asked for, from the whole history: both ends, or everything between
+   * them. Everything is shared with {@code whole}, which is never modified.
+   */
   public static SchemaProvenance slice(SchemaProvenance whole, int from, int to,
       boolean includeInterior) {
     int low = Math.min(from, to);
