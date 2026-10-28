@@ -348,7 +348,9 @@ public class SubjectsResource {
           + "subject as the registry normalizes it. With compatibilityPolicy=LOGICAL, each version "
           + "also says whether it is a valid backward step from the version just before it under "
           + "LOGICAL, columns paired by provenance, whatever the subject's config, with the errors "
-          + "found. A version with an earlier version's schema id never is.",
+          + "found. A version with an earlier version's schema id never is. The version numbers "
+          + "between the ends that no version has are listed as missingVersions, whatever is "
+          + "returned: provenance across them differs from what it was before they were removed.",
       responses = {
           @ApiResponse(responseCode = "200", description = "The provenance.",
               content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
@@ -425,8 +427,14 @@ public class SubjectsResource {
           rangeOf(subject, Math.min(from, to), Math.max(from, to), includeInterior);
       SchemaProvenance provenance =
           provenanceOf(subject, range, from, to, includeInterior, includeMultipleMessages);
-      return compatibilityPolicy == null ? provenance
-          : withCompatibility(subject, range, provenance);
+      if (compatibilityPolicy != null) {
+        provenance = withCompatibility(subject, range, provenance);
+      }
+      // Never a cached response: both of the above return a new one.
+      List<Integer> missing = ProvenanceHistory.missingVersions(
+          range.stream().map(Schema::getVersion).collect(Collectors.toList()));
+      provenance.setMissingVersions(missing.isEmpty() ? null : missing);
+      return provenance;
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
