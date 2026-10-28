@@ -1510,7 +1510,17 @@ public class RestService implements Closeable, Configurable {
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject, String format, Set<String> findTags)
       throws IOException, RestClientException {
+    return getLatestVersion(requestProperties, subject, format, false, findTags);
+  }
+
+  public Schema getLatestVersion(Map<String, String> requestProperties,
+                                 String subject, String format, boolean lookupDeletedSchema,
+                                 Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest");
+    if (lookupDeletedSchema) {
+      builder.queryParam("deleted", true);
+    }
     if (findTags != null && !findTags.isEmpty()) {
       builder.queryParam("findTags", String.join(",", findTags));
     }
