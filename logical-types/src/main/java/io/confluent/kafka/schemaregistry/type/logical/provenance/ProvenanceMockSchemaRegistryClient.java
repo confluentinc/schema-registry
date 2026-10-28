@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * A {@link MockSchemaRegistryClient} that also answers the provenance endpoint, as the registry
@@ -340,7 +341,11 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
       // As the registry does: any other computation failure is a server error.
       throw new RestClientException(String.valueOf(e.getMessage()), 500, SERVER_ERROR);
     }
-    return onTheWire(ProvenanceHistory.slice(whole, from, to, includeInterior));
+    SchemaProvenance sliced = ProvenanceHistory.slice(whole, from, to, includeInterior);
+    List<Integer> missing = ProvenanceHistory.missingVersions(
+        range.stream().map(SchemaMetadata::getVersion).collect(Collectors.toList()));
+    sliced.setMissingVersions(missing.isEmpty() ? null : missing);
+    return onTheWire(sliced);
   }
 
   // As a client receives it: through the JSON the registry serves, so a test sees what the wire
