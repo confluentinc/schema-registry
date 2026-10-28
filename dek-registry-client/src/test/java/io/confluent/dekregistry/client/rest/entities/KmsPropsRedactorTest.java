@@ -31,11 +31,15 @@ public class KmsPropsRedactorTest {
   public void testRedactOmitsSensitiveKeys() {
     Map<String, String> kmsProps = new HashMap<>();
     kmsProps.put("token.id", "s.supersecrettoken");
+    kmsProps.put("alicloud.kms.accessKeySecret", "alisecret");
+    kmsProps.put("alicloud.kms.securityToken", "alitoken");
     kmsProps.put("namespace", "my-namespace");
 
     SortedMap<String, String> redacted = KmsPropsRedactor.redact(kmsProps);
 
     assertFalse(redacted.containsKey("token.id"));
+    assertFalse(redacted.containsKey("alicloud.kms.accessKeySecret"));
+    assertFalse(redacted.containsKey("alicloud.kms.securityToken"));
     assertEquals("my-namespace", redacted.get("namespace"));
   }
 

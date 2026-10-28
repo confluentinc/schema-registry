@@ -47,7 +47,9 @@ public final class KmsPropsRedactor {
       "secret.access.key",     // aws: IAM secret access key
       "client.secret",         // azure: service principal secret
       "private.key",           // gcp: service account private key
-      "secret"                 // local: local KMS secret
+      "secret",                // local: local KMS secret
+      "alicloud.kms.accessKeySecret", // alicloud: access key secret
+      "alicloud.kms.securityToken"    // alicloud: STS security token
   );
 
   private KmsPropsRedactor() {
