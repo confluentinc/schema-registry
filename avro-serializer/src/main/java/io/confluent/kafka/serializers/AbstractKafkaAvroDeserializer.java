@@ -60,6 +60,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  private ReflectionClassTrust reflectionClassTrust = new ReflectionClassTrust();
   private final Cache<SubjectSchemaId, Schema> readerSchemaCache;
   private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
 
@@ -107,6 +108,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    reflectionClassTrust = new ReflectionClassTrust(
+        config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG),
+        config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG));
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -389,6 +393,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private Schema getReflectionReaderSchema(Schema writerSchema) {
     ReflectData reflectData =
         AvroSchemaUtils.getReflectData(avroUseLogicalTypeConverters, avroReflectionAllowNull);
+    // The writer schema names the class, so check it before Avro loads it
+    reflectionClassTrust.checkClassResolvedBy(writerSchema);
     Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
@@ -508,6 +514,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                 (AvroSchema) lookupLatestVersion(getSubject(), writerAvroSchema, false).getSchema();
           }
           if (readerAvroSchema != null) {
+            if (useSchemaReflection) {
+              // A reader schema from the registry names the classes that a reflect reader builds
+              reflectionClassTrust.checkClassesNamedBy(readerAvroSchema.rawSchema());
+            }
             // set version on the writer schema
             writerAvroSchema = schemaForDeserialize();
             Integer version = schemaVersion(
