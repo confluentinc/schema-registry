@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 
 import java.util.Set;
@@ -102,6 +103,16 @@ public final class LogicalTypeChecker {
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
     return CompatibilityChecker.compare(mode, original, update, enabledRules);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, Set)}, given the format both schemas were
+   * read from. Only with it does {@link Incompatibility.Rule#FIELD_RENAMED} find a rename: an
+   * Avro alias, or a Protobuf field number, recorded or implied by position.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      Set<Rule> enabledRules, SchemaType schemaType) {
+    return CompatibilityChecker.compare(mode, original, update, enabledRules, schemaType);
   }
 
   /**
