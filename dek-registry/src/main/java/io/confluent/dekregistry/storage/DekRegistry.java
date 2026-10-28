@@ -16,6 +16,7 @@
 package io.confluent.dekregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper.ENCRYPT_ALTERNATE_KMS_KEY_IDS;
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.RESTRICT_AMBIENT_CREDENTIALS;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 
@@ -80,6 +81,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -715,7 +717,9 @@ public class DekRegistry implements Closeable {
     } catch (InvalidKeyException e) {
       throw new GeneralSecurityException(e.getMessage());
     }
-    return toKekEntity(kek).toAead(config.originals());
+    Map<String, Object> configs = new HashMap<>(config.originals());
+    configs.put(RESTRICT_AMBIENT_CREDENTIALS, "true");
+    return toKekEntity(kek).toAead(configs);
   }
 
   public void validateKmsKeyInfo(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
@@ -836,7 +840,9 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : key.getKmsProps();
-    validateKmsKeyInfo(key.getKmsType(), key.getKmsKeyId(), kmsProps);
+    if (request.getKmsProps() != null) {
+      validateKmsKeyInfo(key.getKmsType(), key.getKmsKeyId(), kmsProps);
+    }
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),

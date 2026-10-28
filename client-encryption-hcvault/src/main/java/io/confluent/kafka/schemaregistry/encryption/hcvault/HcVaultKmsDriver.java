@@ -55,6 +55,8 @@ public class HcVaultKmsDriver implements KmsDriver {
   public static final String VAULT_ADDR = "VAULT_ADDR";
   // Comma-separated Vault addresses, besides VAULT_ADDR, that may receive ambient credentials.
   public static final String VAULT_TRUSTED_ADDRESSES = "VAULT_TRUSTED_ADDRESSES";
+  public static final String VAULT_RESTRICT_AMBIENT_CREDENTIALS =
+      "VAULT_RESTRICT_AMBIENT_CREDENTIALS";
 
   private final EnvironmentLoader envLoader;
 
@@ -132,7 +134,7 @@ public class HcVaultKmsDriver implements KmsDriver {
       Optional<String> creds = testClient != null
           ? Optional.empty()
           : Optional.ofNullable(getToken(configs));
-      if (testClient == null && !creds.isPresent()) {
+      if (testClient == null && !creds.isPresent() && restrictAmbientCredentials(configs)) {
         checkAmbientCredentialsAllowed(configs, kekUrl);
       }
       SslConfig sslConfig = getSslConfig(configs);
@@ -150,6 +152,12 @@ public class HcVaultKmsDriver implements KmsDriver {
     } catch (VaultException e) {
       throw new GeneralSecurityException("unable to create vault client", e);
     }
+  }
+
+  // A config value can only turn the restriction on, since configs may carry tenant input.
+  private boolean restrictAmbientCredentials(Map<String, ?> configs) {
+    return Boolean.parseBoolean(String.valueOf(configs.get(RESTRICT_AMBIENT_CREDENTIALS)))
+        || Boolean.parseBoolean(envLoader.loadVariable(VAULT_RESTRICT_AMBIENT_CREDENTIALS));
   }
 
   // Without an explicit token, the Vault client falls back to VAULT_TOKEN or VAULT_APPROLE_*,

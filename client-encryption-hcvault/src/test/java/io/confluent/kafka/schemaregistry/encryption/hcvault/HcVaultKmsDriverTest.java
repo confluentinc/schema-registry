@@ -16,10 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
+import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.RESTRICT_AMBIENT_CREDENTIALS;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.TOKEN_ID;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_ADDR;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_APPROLE_ROLE_ID;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_APPROLE_SECRET_ID;
+import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_RESTRICT_AMBIENT_CREDENTIALS;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_TOKEN;
 import static io.confluent.kafka.schemaregistry.encryption.hcvault.HcVaultKmsDriver.VAULT_TRUSTED_ADDRESSES;
 import static org.junit.Assert.assertEquals;
@@ -50,6 +52,15 @@ public class HcVaultKmsDriverTest {
     });
   }
 
+  private static Map<String, Object> restricted(String... keyValues) {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(RESTRICT_AMBIENT_CREDENTIALS, "true");
+    for (int i = 0; i < keyValues.length; i += 2) {
+      configs.put(keyValues[i], keyValues[i + 1]);
+    }
+    return configs;
+  }
+
   private static Map<String, String> envWithToken() {
     Map<String, String> env = new HashMap<>();
     env.put(VAULT_TOKEN, "server-token");
@@ -60,7 +71,7 @@ public class HcVaultKmsDriverTest {
   @Test
   public void testAmbientTokenRejectedForUntrustedAddress() {
     GeneralSecurityException e = assertThrows(GeneralSecurityException.class,
-        () -> driver(envWithToken()).newKmsClient(Collections.emptyMap(),
+        () -> driver(envWithToken()).newKmsClient(restricted(),
             Optional.of(ATTACKER_KEY)));
     assertTrue(e.getMessage().contains("https://attacker.example.com:443"));
   }
@@ -71,7 +82,7 @@ public class HcVaultKmsDriverTest {
     env.put(VAULT_APPROLE_ROLE_ID, "role");
     env.put(VAULT_APPROLE_SECRET_ID, "secret");
     assertThrows(GeneralSecurityException.class,
-        () -> driver(env).newKmsClient(Collections.emptyMap(), Optional.of(ATTACKER_KEY)));
+        () -> driver(env).newKmsClient(restricted(), Optional.of(ATTACKER_KEY)));
   }
 
   @Test
@@ -80,13 +91,13 @@ public class HcVaultKmsDriverTest {
     env.put(VAULT_APPROLE_ROLE_ID, "");
     env.put(VAULT_APPROLE_SECRET_ID, "secret");
     assertThrows(GeneralSecurityException.class,
-        () -> driver(env).newKmsClient(Collections.emptyMap(), Optional.of(ATTACKER_KEY)));
+        () -> driver(env).newKmsClient(restricted(), Optional.of(ATTACKER_KEY)));
   }
 
   @Test
   public void testMalformedAddressRejected() {
     assertThrows(GeneralSecurityException.class,
-        () -> driver(envWithToken()).newKmsClient(Collections.emptyMap(),
+        () -> driver(envWithToken()).newKmsClient(restricted(),
             Optional.of("hcvault://http://bad_host:8200/transit/keys/x")));
   }
 
@@ -97,12 +108,12 @@ public class HcVaultKmsDriverTest {
     env.put(VAULT_APPROLE_SECRET_ID, "secret");
     // An AppRole login would fail here, since the host does not exist.
     assertNotNull(driver(env).newKmsClient(
-        Collections.singletonMap(TOKEN_ID, "tenant-token"), Optional.of(ATTACKER_KEY)));
+        restricted(TOKEN_ID, "tenant-token"), Optional.of(ATTACKER_KEY)));
   }
 
   @Test
   public void testAmbientTokenAllowedForVaultAddr() throws Exception {
-    assertNotNull(driver(envWithToken()).newKmsClient(Collections.emptyMap(),
+    assertNotNull(driver(envWithToken()).newKmsClient(restricted(),
         Optional.of(TRUSTED_KEY)));
   }
 
@@ -110,19 +121,36 @@ public class HcVaultKmsDriverTest {
   public void testAmbientTokenAllowedForTrustedAddresses() throws Exception {
     Map<String, String> env = envWithToken();
     env.put(VAULT_TRUSTED_ADDRESSES, "https://other.internal, https://ATTACKER.example.com:443");
-    assertNotNull(driver(env).newKmsClient(Collections.emptyMap(), Optional.of(ATTACKER_KEY)));
+    assertNotNull(driver(env).newKmsClient(restricted(), Optional.of(ATTACKER_KEY)));
   }
 
   @Test
   public void testExplicitTokenAllowedForAnyAddress() throws Exception {
     assertNotNull(driver(envWithToken()).newKmsClient(
-        Collections.singletonMap(TOKEN_ID, "tenant-token"), Optional.of(ATTACKER_KEY)));
+        restricted(TOKEN_ID, "tenant-token"), Optional.of(ATTACKER_KEY)));
   }
 
   @Test
   public void testNoAmbientCredentialsAllowedForAnyAddress() throws Exception {
-    assertNotNull(driver(new HashMap<>()).newKmsClient(Collections.emptyMap(),
+    assertNotNull(driver(new HashMap<>()).newKmsClient(restricted(),
         Optional.of(ATTACKER_KEY)));
+  }
+
+  @Test
+  public void testUnrestrictedByDefault() throws Exception {
+    assertNotNull(driver(envWithToken()).newKmsClient(Collections.emptyMap(),
+        Optional.of(ATTACKER_KEY)));
+  }
+
+  @Test
+  public void testRestrictedByEnv() {
+    Map<String, String> env = envWithToken();
+    env.put(VAULT_RESTRICT_AMBIENT_CREDENTIALS, "true");
+    // A config value cannot turn off the env restriction.
+    Map<String, Object> configs =
+        Collections.singletonMap(RESTRICT_AMBIENT_CREDENTIALS, "false");
+    assertThrows(GeneralSecurityException.class,
+        () -> driver(env).newKmsClient(configs, Optional.of(ATTACKER_KEY)));
   }
 
   @Test
