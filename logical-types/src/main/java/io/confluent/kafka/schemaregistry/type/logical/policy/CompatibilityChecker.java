@@ -18,11 +18,13 @@ package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +99,16 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
-    return compare(mode, original, update, FieldPairing.byName(), enabledRules);
+    return compare(mode, original, update, FieldPairing.byName(), enabledRules, null);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, Set)}, given the format both schemas were
+   * read from, which decides how a renamed field is recognised. {@code null} recognises none.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      Set<Rule> enabledRules, SchemaType schemaType) {
+    return compare(mode, original, update, FieldPairing.byName(), enabledRules, schemaType);
   }
 
   /**
@@ -106,6 +117,16 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
       FieldPairing pairing, Set<Rule> enabledRules) {
+    return compare(mode, original, update, pairing, enabledRules, null);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, FieldPairing, Set)}, given the format both
+   * schemas were read from. By name, it decides how a renamed field is recognised, and
+   * {@code null} recognises none; by ids, the ids decide.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     Objects.requireNonNull(mode, "mode");
     Objects.requireNonNull(original, "original");
     Objects.requireNonNull(update, "update");
@@ -116,9 +137,11 @@ final class CompatibilityChecker {
       case FLINK:
         return new FlinkComparison(original, update, pairing, enabledRules).run();
       case ICEBERG_V2:
-        return new IcebergComparison(original, update, 2, pairing, enabledRules).run();
+        return new IcebergComparison(original, update, 2, pairing, enabledRules, schemaType)
+            .run();
       case ICEBERG_V3:
-        return new IcebergComparison(original, update, 3, pairing, enabledRules).run();
+        return new IcebergComparison(original, update, 3, pairing, enabledRules, schemaType)
+            .run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
@@ -160,13 +183,27 @@ final class CompatibilityChecker {
     /** Union branches are always optional: at most one branch is populated per record. */
     final boolean forcedNullable;
 
+    /** The field or branch viewed, by identity: an implied Protobuf number is keyed by it. */
+    final Object member;
+
+    /**
+     * The recorded Protobuf field number, or {@code null}.
+     */
+    final Integer fieldNumber;
+
+    /** The Avro aliases (previous names); empty for a branch. */
+    final List<String> aliases;
+
     private FieldView(String name, Schema schema, boolean hasDefault, Object defaultValue,
-        boolean forcedNullable) {
+        boolean forcedNullable, Object member, Integer fieldNumber, List<String> aliases) {
       this.name = name;
       this.schema = schema;
       this.hasDefault = hasDefault;
       this.defaultValue = defaultValue;
       this.forcedNullable = forcedNullable;
+      this.member = member;
+      this.fieldNumber = fieldNumber;
+      this.aliases = aliases;
     }
   }
 
@@ -183,13 +220,15 @@ final class CompatibilityChecker {
     List<FieldView> views = new ArrayList<>();
     if (schema.getType() == Schema.Type.UNION) {
       for (Schema.UnionBranch branch : schema.getBranches()) {
-        views.add(new FieldView(branch.getName(), branch.getSchema(), false, null, true));
+        views.add(new FieldView(branch.getName(), branch.getSchema(), false, null, true,
+            branch, branch.getFieldNumber(), Collections.emptyList()));
       }
       return views;
     }
     for (Schema.Field field : schema.getFields()) {
       views.add(new FieldView(field.getName(), field.getSchema(),
-          field.hasDefaultValue(), field.getDefaultValue(), false));
+          field.hasDefaultValue(), field.getDefaultValue(), false,
+          field, field.getFieldNumber(), field.getAliases()));
     }
     return views;
   }
