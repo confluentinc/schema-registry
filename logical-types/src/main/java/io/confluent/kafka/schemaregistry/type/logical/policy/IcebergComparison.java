@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.FieldView;
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.Kind;
@@ -39,6 +41,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.policy.Compatibilit
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -145,11 +148,24 @@ final class IcebergComparison {
 
   private final Set<Rule> enabledRules;
 
+  /**
+   * The format both schemas were read from, or {@code null}: it decides what a rename is.
+   */
+  private final SchemaType schemaType;
+
+  /**
+   * Protobuf field numbers implied by position, keyed by field and branch by identity. Filled
+   * from each struct before its members are walked, since a oneof's members take their numbers
+   * from the enclosing message.
+   */
+  private final Map<Object, Integer> impliedNumbers = new IdentityHashMap<>();
+
   IcebergComparison(LogicalType original, LogicalType update, int formatVersion,
-      FieldPairing pairing, Set<Rule> enabledRules) {
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     this.formatVersion = formatVersion;
     this.pairing = pairing;
     this.enabledRules = enabledRules;
+    this.schemaType = schemaType;
     this.originalRoot = original.getRootSchema();
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
@@ -228,6 +244,8 @@ final class IcebergComparison {
     switch (originalKind) {
       case STRUCT:
         if (claimStructPair(original, update)) {
+          noteImpliedNumbers(original);
+          noteImpliedNumbers(update);
           validateStructs(fieldViews(original), fieldViews(update), path, originalPath,
               updatePath);
         }
@@ -249,26 +267,40 @@ final class IcebergComparison {
   // -- structs ---------------------------------------------------------------------------------
 
   /**
-   * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with two intentional
-   * departures: findings accumulate instead of throwing, and the nullability relaxation is folded
-   * in via {@link #isEffectivelyOptional} rather than applied as a pre-pass.
+   * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with three intentional
+   * departures: findings accumulate instead of throwing, the nullability relaxation is folded in
+   * via {@link #isEffectivelyOptional} rather than applied as a pre-pass, and fields are paired by
+   * {@link #pairing}, which by name pairs them as their format decodes them (see {@link #pair}).
    */
   private void validateStructs(List<FieldView> originalFields, List<FieldView> updateFields,
       String path, IndexPath originalPath, IndexPath updatePath) {
 
-    final int[] partners =
-        pairing.partners(originalPath, originalFields, updatePath, updateFields);
+    // By name, the format decides: an Avro alias or a Protobuf number pairs a rename.
+    final boolean pairsByFormat = pairing.pairsByName() && schemaType != null;
+    final int[] partners = pairsByFormat
+        ? partnersOf(pair(originalFields, updateFields), originalFields, updateFields)
+        : pairing.partners(originalPath, originalFields, updatePath, updateFields);
     final boolean[] paired = new boolean[originalFields.size()];
 
     final boolean checkFieldOrder = enabledRules.contains(Rule.FIELD_REORDERED);
     int lastSeenOriginalIndex = -1;
     String lastSeenFieldName = null;
 
+    final Set<String> originalNames = new HashSet<>();
+    originalFields.forEach(field -> originalNames.add(field.name));
+    final Set<String> updateNames = new HashSet<>();
+    updateFields.forEach(field -> updateNames.add(field.name));
     for (int updateIndex = 0; updateIndex < updateFields.size(); updateIndex++) {
       final FieldView updateField = updateFields.get(updateIndex);
       final String fieldPath = childPath(path, updateField.name);
       final int originalIndex = partners[updateIndex];
       final FieldView originalField = originalIndex < 0 ? null : originalFields.get(originalIndex);
+      // By ids, a rename is one continuing column.
+      if (pairsByFormat && originalField != null
+          && !originalField.name.equals(updateField.name)) {
+        add(Rule.FIELD_RENAMED, fieldPath,
+            renameMessage(originalField, updateField, originalNames, updateNames));
+      }
 
       if (originalField == null) {
         if (!isEffectivelyOptional(updateField, null)) {
@@ -319,6 +351,175 @@ final class IcebergComparison {
     }
   }
 
+  // -- renames ---------------------------------------------------------------------------------
+
+  private void noteImpliedNumbers(Schema struct) {
+    if (schemaType == SchemaType.PROTOBUF && struct.getType() == Schema.Type.STRUCT) {
+      impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedFieldNumbers(struct));
+    }
+  }
+
+  /**
+   * Pairs each update field with the original field it reads, as the format decodes it; each
+   * original field pairs at most once.
+   *
+   * <ul>
+   *   <li>Protobuf: by field number, recorded or implied, whatever the names. A field without a
+   *       known number on both sides pairs otherwise: a oneof by a member it keeps, then by name.
+   *   <li>Avro: a reader field the writer lacks by name takes the writer field its alias names,
+   *       even over a reader field keeping that name, as Avro's decoder applies aliases. The
+   *       rest pair by name.
+   *   <li>Otherwise, by name.
+   * </ul>
+   */
+  private Map<FieldView, FieldView> pair(
+      List<FieldView> originalFields, List<FieldView> updateFields) {
+    final Map<FieldView, FieldView> pairs = new IdentityHashMap<>();
+    final Set<FieldView> claimed = Collections.newSetFromMap(new IdentityHashMap<>());
+    final Map<String, FieldView> originalsByName = new HashMap<>();
+    for (FieldView field : originalFields) {
+      originalsByName.put(field.name, field);
+    }
+    if (schemaType == SchemaType.PROTOBUF) {
+      final Map<Integer, FieldView> originalsByNumber = new HashMap<>();
+      for (FieldView field : originalFields) {
+        final Integer number = numberOf(field);
+        if (number != null) {
+          originalsByNumber.putIfAbsent(number, field);
+        }
+      }
+      for (FieldView update : updateFields) {
+        final Integer number = numberOf(update);
+        if (number != null) {
+          claim(pairs, claimed, update, originalsByNumber.get(number));
+        }
+      }
+      // A oneof's name is not on the wire, so its members' numbers pair it before its name does.
+      for (FieldView update : updateFields) {
+        if (isOneof(update)) {
+          for (FieldView original : originalFields) {
+            if (!claimed.contains(original) && isOneof(original) && !Collections.disjoint(
+                memberNumbers(original.schema), memberNumbers(update.schema))) {
+              claim(pairs, claimed, update, original);
+              break;
+            }
+          }
+        }
+      }
+      // Only a number known on both sides decides; a field missing one pairs by name.
+      for (FieldView update : updateFields) {
+        final FieldView original = originalsByName.get(update.name);
+        if (original != null && (numberOf(update) == null || numberOf(original) == null)) {
+          claim(pairs, claimed, update, original);
+        }
+      }
+      return pairs;
+    }
+    if (schemaType == SchemaType.AVRO) {
+      for (FieldView update : updateFields) {
+        if (originalsByName.containsKey(update.name)) {
+          continue;
+        }
+        for (String alias : update.aliases) {
+          if (claim(pairs, claimed, update, originalsByName.get(alias))) {
+            break;
+          }
+        }
+      }
+    }
+    for (FieldView update : updateFields) {
+      if (!pairs.containsKey(update)) {
+        claim(pairs, claimed, update, originalsByName.get(update.name));
+      }
+    }
+    return pairs;
+  }
+
+  private static int[] partnersOf(Map<FieldView, FieldView> pairs,
+      List<FieldView> originalFields, List<FieldView> updateFields) {
+    final Map<FieldView, Integer> originalIndexes = new IdentityHashMap<>();
+    for (int i = 0; i < originalFields.size(); i++) {
+      originalIndexes.put(originalFields.get(i), i);
+    }
+    final int[] partners = new int[updateFields.size()];
+    for (int i = 0; i < partners.length; i++) {
+      final FieldView original = pairs.get(updateFields.get(i));
+      partners[i] = original == null ? -1 : originalIndexes.get(original);
+    }
+    return partners;
+  }
+
+  private static boolean claim(Map<FieldView, FieldView> pairs, Set<FieldView> claimed,
+      FieldView update, FieldView original) {
+    if (original == null || pairs.containsKey(update) || !claimed.add(original)) {
+      return false;
+    }
+    pairs.put(update, original);
+    return true;
+  }
+
+  /**
+   * A plain rename is undone by keeping the old field and adding the new one; otherwise both
+   * names are in use, so the fix is to undo what pairs them: the alias or the moved number.
+   */
+  private String renameMessage(FieldView original, FieldView update,
+      Set<String> originalNames, Set<String> updateNames) {
+    final String renamed = "Field '" + original.name + "' was renamed to '" + update.name
+        + "'. Renaming a field isn't supported. ";
+    final boolean newNameIsNew = !originalNames.contains(update.name);
+    if (newNameIsNew && !updateNames.contains(original.name)) {
+      return renamed + "Keep '" + original.name + "', and add '" + update.name
+          + "' as a new optional field.";
+    }
+    if (schemaType == SchemaType.AVRO) {
+      return renamed + "Remove the alias '" + original.name + "' from '" + update.name + "'.";
+    }
+    final Integer number = numberOf(original);
+    if (number == null) {
+      return renamed + "Name the oneof holding '" + sharedMember(original, update) + "' '"
+          + original.name + "' again.";
+    }
+    return renamed + "Give field number " + number + " back to '" + original.name + "'"
+        + (newNameIsNew ? ", and give '" + update.name + "' a new field number." : ".");
+  }
+
+  /**
+   * The name of a member {@code update} holds under a number {@code original}'s members had.
+   */
+  private String sharedMember(FieldView original, FieldView update) {
+    final Set<Integer> originalNumbers = memberNumbers(original.schema);
+    for (Schema.UnionBranch branch : update.schema.getBranches()) {
+      if (originalNumbers.contains(numberOf(branch))) {
+        return branch.getName();
+      }
+    }
+    throw new IllegalStateException("Oneofs paired without a shared member: " + update.name);
+  }
+
+  private Integer numberOf(FieldView field) {
+    return field.fieldNumber != null ? field.fieldNumber : impliedNumbers.get(field.member);
+  }
+
+  private Integer numberOf(Schema.UnionBranch branch) {
+    return branch.getFieldNumber() != null
+        ? branch.getFieldNumber() : impliedNumbers.get(branch);
+  }
+
+  private boolean isOneof(FieldView field) {
+    return field.schema.getType() == Schema.Type.UNION && numberOf(field) == null;
+  }
+
+  private Set<Integer> memberNumbers(Schema oneof) {
+    final Set<Integer> numbers = new HashSet<>();
+    for (Schema.UnionBranch branch : oneof.getBranches()) {
+      final Integer number = numberOf(branch);
+      if (number != null) {
+        numbers.add(number);
+      }
+    }
+    return numbers;
+  }
+
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateLists}.
    */
@@ -338,6 +539,11 @@ final class IcebergComparison {
           "The key type of map '" + fieldNameOf(path) + "' changed from '"
               + render(keyOf(original)) + "' to '" + render(keyOf(update))
               + "'. Keep '" + render(keyOf(original)) + "'.");
+    }
+    // A Protobuf map's entry message is gone, so its oneof members' implied numbers come from it.
+    if (schemaType == SchemaType.PROTOBUF) {
+      impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(original));
+      impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(update));
     }
     compareTypes(valueOf(original), valueOf(update), path + "{}", originalPath.child(1),
         updatePath.child(1));
