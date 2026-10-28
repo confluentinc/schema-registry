@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -215,18 +216,28 @@ public final class LogicalPolicyChecker {
             + "converted to a logical type: {}", e.getMessage());
         continue;
       }
+      SchemaType schemaType = sharedSchemaType(newSchema, holder.schema());
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
         addCompareErrors(errors, previousLogical, newLogical, FieldPairing.byName(),
-            enabledRules);
+            enabledRules, schemaType);
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
         addCompareErrors(errors, newLogical, previousLogical, FieldPairing.byName(),
-            enabledRules);
+            enabledRules, schemaType);
       }
     }
     return errors;
+  }
+
+  /**
+   * The format both schemas are in, or {@code null}: renames are recognised by format, so only
+   * between two versions of the same one.
+   */
+  static SchemaType sharedSchemaType(ParsedSchema schema, ParsedSchema other) {
+    return schema.schemaType().equals(other.schemaType())
+        ? SchemaType.of(schema.schemaType()) : null;
   }
 
   static List<String> describeValidity(LogicalType newLogical) {
@@ -249,11 +260,11 @@ public final class LogicalPolicyChecker {
   }
 
   static void addCompareErrors(List<String> errors, LogicalType original, LogicalType update,
-      FieldPairing pairing, Set<Rule> enabledRules) {
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Incompatibility incompatibility
-          : LogicalTypeChecker.compare(mode, original, update, pairing, enabledRules)
+          : LogicalTypeChecker.compare(mode, original, update, pairing, enabledRules, schemaType)
               .getIncompatibilities()) {
         byFinding
             .computeIfAbsent(

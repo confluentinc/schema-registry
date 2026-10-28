@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import java.time.Duration;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -284,10 +285,32 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void aProtobufFilesMessagesReorderedAreCompatible() {
+  void aProtobufFilesMessagesReorderedAreAFieldReordered() {
+    // Each message is a column of the table, in file order; one finding per direction.
     List<String> errors = LogicalPolicyChecker.check(proto(SHIP, ORDER),
         List.of(new SimpleParsedSchemaHolder(proto(ORDER, SHIP))), CompatibilityLevel.FULL);
-    assertTrue(errors.isEmpty(), errors.toString());
+    assertEquals(2, errors.size(), errors.toString());
+    assertTrue(errors.stream().allMatch(e -> e.contains("FIELD_REORDERED")
+        && e.contains("category:[\"ICEBERG_V2\"]")), errors.toString());
+  }
+
+  @Test
+  void aProtobufFieldRenamedUnderItsNumberIsFieldRenamedUnlessDisabled() {
+    // Sequential numbers are not recorded, so the policy has to say the format for them to count.
+    ProtobufSchema before = proto("message Order { int32 id = 1; string note = 2; }\n");
+    ProtobufSchema after = proto("message Order { int32 id = 1; string memo = 2; }\n");
+    List<ParsedSchemaHolder> previous = List.of(new SimpleParsedSchemaHolder(before));
+
+    List<String> errors = LogicalPolicyChecker.check(after, previous, CompatibilityLevel.FULL);
+    assertTrue(errors.stream().anyMatch(e -> e.contains("FIELD_RENAMED")), errors.toString());
+    assertFalse(errors.stream().anyMatch(e -> e.contains("FIELD_DELETED")), errors.toString());
+
+    // Only Iceberg pairs renames: Flink pairs by name, so it still sees a required field added.
+    Set<Rule> withoutRenamed = LogicalPolicyChecker.parseChecks(List.of("-FIELD_RENAMED"));
+    errors = LogicalPolicyChecker.check(after, previous, CompatibilityLevel.FULL, withoutRenamed);
+    assertFalse(errors.isEmpty());
+    assertTrue(errors.stream().allMatch(e -> e.contains("REQUIRED_FIELD_ADDED")
+        && e.contains("category:[\"FLINK\"]")), errors.toString());
   }
 
   @Test
@@ -523,11 +546,10 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void parseChecksWithNoEntriesIsEveryRuleButFieldReordered() {
+  void parseChecksWithNoEntriesIsEveryRule() {
     Set<Rule> checks = LogicalPolicyChecker.parseChecks(List.of());
     assertEquals(Rule.defaults(), checks);
-    assertFalse(checks.contains(Rule.FIELD_REORDERED));
-    assertTrue(checks.contains(Rule.FIELD_DELETED));
+    assertEquals(EnumSet.allOf(Rule.class), checks);
   }
 
   @Test
@@ -535,10 +557,10 @@ class LogicalPolicyCheckerTest {
     // Disabling one rule leaves the other at its default rather than resetting it.
     Set<Rule> checks = LogicalPolicyChecker.parseChecks(List.of("-FIELD_DELETED"));
     assertFalse(checks.contains(Rule.FIELD_DELETED));
-    assertFalse(checks.contains(Rule.FIELD_REORDERED));
-
-    checks = LogicalPolicyChecker.parseChecks(List.of(" +field_reordered ", "-FIELD_DELETED"));
     assertTrue(checks.contains(Rule.FIELD_REORDERED));
+
+    checks = LogicalPolicyChecker.parseChecks(List.of(" -field_reordered ", "-FIELD_DELETED"));
+    assertFalse(checks.contains(Rule.FIELD_REORDERED));
     assertFalse(checks.contains(Rule.FIELD_DELETED));
     assertTrue(checks.contains(Rule.ENUM_DELETED));
   }

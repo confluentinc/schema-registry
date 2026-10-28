@@ -374,16 +374,17 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void reorderingUnionBranchesIsCompatible() {
+  void reorderingUnionBranchesIsIncompatible() {
     Schema before = Schema.createUnion(Arrays.asList(
         new UnionBranch("s", Schema.createString()),
         new UnionBranch("i", Schema.create(Schema.Type.INT))));
     Schema after = Schema.createUnion(Arrays.asList(
         new UnionBranch("i", Schema.create(Schema.Type.INT)),
         new UnionBranch("s", Schema.createString())));
-    assertCompatible(
+    assertSingle(
         struct(new Field("u", before, 0)),
-        struct(new Field("u", after, 0)));
+        struct(new Field("u", after, 0)),
+        Rule.FIELD_REORDERED);
   }
 
   // ---------------------------------------------------------------------------------------------
