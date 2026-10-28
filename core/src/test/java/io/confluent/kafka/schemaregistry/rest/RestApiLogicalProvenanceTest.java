@@ -69,7 +69,7 @@ public abstract class RestApiLogicalProvenanceTest {
     String renamed = avro(field("b", "\"string\"", "\"aliases\":[\"a\"]"));
     history(subject, AvroSchema.TYPE, avro(field("a", "\"string\"")));
     assertNameVerdict(subject, AvroSchema.TYPE, renamed, CompatibilityLevel.BACKWARD,
-        "FIELD_DELETED");
+        "FIELD_RENAMED");
     register(subject, AvroSchema.TYPE, renamed);
     logical(subject, CompatibilityLevel.BACKWARD);
     assertFlag(subject, 2, null);
@@ -82,7 +82,7 @@ public abstract class RestApiLogicalProvenanceTest {
     String renamed = proto("p", "string b = 2;");
     history(subject, ProtobufSchema.TYPE, proto("p", "string a = 2;"));
     assertNameVerdict(subject, ProtobufSchema.TYPE, renamed, CompatibilityLevel.BACKWARD,
-        "FIELD_DELETED");
+        "FIELD_RENAMED");
     register(subject, ProtobufSchema.TYPE, renamed);
     logical(subject, CompatibilityLevel.BACKWARD);
     assertFlag(subject, 2, null);
@@ -98,7 +98,7 @@ public abstract class RestApiLogicalProvenanceTest {
         avro(field("b", "\"string\"", "\"aliases\":[\"a\"]")));
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
     assertNameVerdict(subject, AvroSchema.TYPE, renamed, CompatibilityLevel.BACKWARD,
-        "FIELD_DELETED");
+        "FIELD_RENAMED");
     register(subject, AvroSchema.TYPE, renamed);
     logical(subject, CompatibilityLevel.BACKWARD);
     assertFlag(subject, 2, null);
@@ -113,7 +113,7 @@ public abstract class RestApiLogicalProvenanceTest {
     String renumbered = proto("p", "optional string a = 3;");
     history(subject, ProtobufSchema.TYPE, proto("p", "optional string a = 2;"));
     assertNameVerdict(subject, ProtobufSchema.TYPE, renumbered, CompatibilityLevel.BACKWARD,
-        null);
+        "FIELD_DELETED");
     register(subject, ProtobufSchema.TYPE, renumbered);
     logical(subject, CompatibilityLevel.BACKWARD);
     assertFlag(subject, 2, "FIELD_DELETED");
