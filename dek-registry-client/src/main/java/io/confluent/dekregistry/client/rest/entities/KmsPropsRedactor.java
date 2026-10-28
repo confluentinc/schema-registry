@@ -76,13 +76,17 @@ public final class KmsPropsRedactor {
   /**
    * Resolves a requested {@code kmsProps} update against the stored value: an omitted (or
    * legacy {@link #REDACTED_VALUE}) secret key means "unchanged" and is restored from
-   * {@code existingKmsProps} (or dropped if nothing is stored). Any other value is a
-   * genuine update.
+   * {@code existingKmsProps} (or dropped if nothing is stored). An explicit {@code null}
+   * clears the secret. Any other value is a genuine update.
    */
   public static SortedMap<String, String> merge(
       Map<String, String> requestedKmsProps, Map<String, String> existingKmsProps) {
     SortedMap<String, String> merged = new TreeMap<>(requestedKmsProps);
     for (String key : SENSITIVE_KEYS) {
+      if (merged.containsKey(key) && merged.get(key) == null) {
+        merged.remove(key);
+        continue;
+      }
       if (merged.containsKey(key) && !REDACTED_VALUE.equals(merged.get(key))) {
         continue;
       }

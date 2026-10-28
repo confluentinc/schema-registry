@@ -208,6 +208,28 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRecreateSoftDeletedSharedKekWithoutResendingSecret() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-undelete";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.storedtoken");
+    kmsProps.put("namespace", "my-namespace");
+    client.createKek(headers, kekName, "test-kms", "myid", kmsProps, null, true, false);
+    client.deleteKek(headers, kekName, false);
+
+    // A redacted read omits token.id; recreating from it must restore the stored secret,
+    // otherwise the equivalence check rejects the undelete as a conflicting kek.
+    Map<String, String> redactedProps = new HashMap<>();
+    redactedProps.put("namespace", "my-namespace");
+    Kek recreated = client.createKek(
+        headers, kekName, "test-kms", "myid", redactedProps, null, true, false);
+
+    assertFalse(recreated.isDeleted());
+    assertFalse(recreated.getKmsProps().containsKey("token.id"));
+  }
+
+  @Test
   public void testNonSharedKekKeepsKmsSecrets() throws Exception {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);

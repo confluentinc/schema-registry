@@ -100,6 +100,19 @@ public class KmsPropsRedactorTest {
   }
 
   @Test
+  public void testMergeRemovesSecretOnExplicitNull() {
+    Map<String, String> existing = new HashMap<>();
+    existing.put("token.id", "s.oldtoken");
+
+    Map<String, String> requested = new HashMap<>();
+    requested.put("token.id", null);
+
+    SortedMap<String, String> merged = KmsPropsRedactor.merge(requested, existing);
+
+    assertFalse(merged.containsKey("token.id"));
+  }
+
+  @Test
   public void testMergeWithNoExistingValueLeavesRequestedMapUntouched() {
     Map<String, String> requested = new HashMap<>();
     requested.put("namespace", "my-namespace");
