@@ -124,11 +124,6 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * The numbers an enum implies by recording none: this converter omits them all-or-nothing,
-   * precisely when the values take 0..n-1 in declaration order. Keyed by value, by identity;
-   * empty when any number is recorded.
-   */
-  /**
    * As {@link #impliedFieldNumbers}, for the entry message a map was read from, which reading it as
    * a map discards: rebuilt from the map's key and value, the entry's own schemas, so its oneof
    * members are keyed as the map holds them. Empty when the key and value are both oneofs: which
@@ -144,6 +139,11 @@ public class ProtoToLogicalTypeConverter {
         new Field(CommonConstants.VALUE_FIELD, map.getValueType(), 1))));
   }
 
+  /**
+   * The numbers an enum implies by recording none: this converter omits them all-or-nothing,
+   * precisely when the values take 0..n-1 in declaration order. Keyed by value, by identity;
+   * empty when any number is recorded.
+   */
   public static Map<EnumValue, Integer> impliedEnumNumbers(Schema enumSchema) {
     List<EnumValue> values = enumSchema.getEnumValues();
     if (values.stream().anyMatch(v -> v.getEnumNumber() != null)) {

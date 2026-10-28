@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -708,7 +709,7 @@ class CompatibilityCheckerEndToEndTest {
     LogicalType after = jsonField("{\"type\":\"integer\"}");
 
     for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2}) {
-      assertTrue(!rulesOf(mode, before, after).isEmpty(), mode + " expected a finding");
+      assertFalse(rulesOf(mode, before, after).isEmpty(), mode + " expected a finding");
     }
   }
 
@@ -816,7 +817,7 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void aRenameIsADropPlusAnAddWithoutAnAliasTheFormatOrInFlinkMode() {
+  void aRenameIsADropPlusAnAddWithoutAnAliasOrTheFormatAndOnlyAnAddInFlink() {
     EnumSet<Rule> dropPlusAdd = EnumSet.of(Rule.FIELD_DELETED, Rule.REQUIRED_FIELD_ADDED);
     assertEquals(dropPlusAdd, rulesOf(compare(Mode.ICEBERG_V2,
         fromAvro(AVRO_A_B_REQUIRED), fromAvro(AVRO_C_B), SchemaType.AVRO)));
@@ -854,7 +855,7 @@ class CompatibilityCheckerEndToEndTest {
     CompatibilityResult forward = compare(Mode.ICEBERG_V2, v2, v1, SchemaType.AVRO);
     assertTrue(forward.getIncompatibilities().stream().anyMatch(found ->
         found.getRule() == Rule.FIELD_DELETED && found.getPath().equals("b")), forward.describe());
-    assertTrue(!rulesOf(forward).contains(Rule.FIELD_RENAMED), forward.describe());
+    assertFalse(rulesOf(forward).contains(Rule.FIELD_RENAMED), forward.describe());
     // Allowed, the pairing stands: v2's 'a' is an added field, here an optional one.
     Set<Rule> enabled = Rule.defaults();
     enabled.remove(Rule.FIELD_RENAMED);
@@ -884,7 +885,7 @@ class CompatibilityCheckerEndToEndTest {
         .filter(found -> found.getRule() == Rule.FIELD_RENAMED).collect(Collectors.toList());
     assertEquals(1, renamed.size(), result.describe());
     assertEquals("b", renamed.get(0).getPath(), result.describe());
-    assertTrue(!rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
+    assertFalse(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
   }
 
   @Test
@@ -903,7 +904,7 @@ class CompatibilityCheckerEndToEndTest {
         fromProto(proto("message M { string a = 1; string b = 2; }")),
         fromProto(proto("message M { string a = 3; string b = 2; }")), SchemaType.PROTOBUF);
     assertTrue(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
-    assertTrue(!rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
+    assertFalse(rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
   }
 
   @Test
@@ -936,7 +937,7 @@ class CompatibilityCheckerEndToEndTest {
         fromProto(proto("message M { string a = 1; string b = 2; }")),
         fromProto(proto("message M { string c = 3; string b = 2; }")), SchemaType.PROTOBUF);
     assertTrue(rulesOf(result).contains(Rule.FIELD_DELETED), result.describe());
-    assertTrue(!rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
+    assertFalse(rulesOf(result).contains(Rule.FIELD_RENAMED), result.describe());
   }
 
   @Test
@@ -954,7 +955,7 @@ class CompatibilityCheckerEndToEndTest {
 
   @Test
   void swappingTwoProtobufOneofNamesIsTwoRenames() {
-    // A oneof's name is not on the wire: its members keep their numbers, so nothing moved.
+    // Each oneof's members keep their numbers, so its column is renamed, not emptied.
     LogicalType before = fromProto(
         proto("message M { oneof a { int32 n = 1; } oneof b { string s = 2; } }"));
     LogicalType after = fromProto(
@@ -1037,7 +1038,7 @@ class CompatibilityCheckerEndToEndTest {
         + "\"b\":{\"type\":\"string\"}},\"required\":[\"a\",\"b\"]}";
     String jsonCB = "{\"type\":\"object\",\"properties\":{\"c\":{\"type\":\"string\"},"
         + "\"b\":{\"type\":\"string\"}},\"required\":[\"c\",\"b\"]}";
-    assertTrue(!rulesOf(compare(Mode.ICEBERG_V2, fromJson(jsonAB), fromJson(jsonCB),
+    assertFalse(rulesOf(compare(Mode.ICEBERG_V2, fromJson(jsonAB), fromJson(jsonCB),
         SchemaType.JSON)).contains(Rule.FIELD_RENAMED));
   }
 
