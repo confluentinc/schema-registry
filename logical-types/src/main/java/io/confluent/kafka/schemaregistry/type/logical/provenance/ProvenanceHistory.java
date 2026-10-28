@@ -57,6 +57,9 @@ import java.util.stream.Collectors;
  */
 public final class ProvenanceHistory {
 
+  /** The most missing versions a response lists; the last is 0 when more are missing. */
+  public static final int MAX_MISSING_VERSIONS = 100;
+
   private ProvenanceHistory() {
   }
 
@@ -253,6 +256,25 @@ public final class ProvenanceHistory {
     return history.stream()
         .filter(e -> e.getVersion() >= low && e.getVersion() <= high)
         .collect(Collectors.toList());
+  }
+
+  /**
+   * The numbers between the first and the last of {@code versions}, ascending, that none of them
+   * is: at most {@link #MAX_MISSING_VERSIONS}, the last 0 when more are missing than that.
+   */
+  public static List<Integer> missingVersions(List<Integer> versions) {
+    List<Integer> missing = new ArrayList<>();
+    for (int i = 1; i < versions.size() && missing.size() <= MAX_MISSING_VERSIONS; i++) {
+      for (int version = versions.get(i - 1) + 1;
+          version < versions.get(i) && missing.size() <= MAX_MISSING_VERSIONS; version++) {
+        missing.add(version);
+      }
+    }
+    if (missing.size() > MAX_MISSING_VERSIONS) {
+      missing = new ArrayList<>(missing.subList(0, MAX_MISSING_VERSIONS - 1));
+      missing.add(0);
+    }
+    return missing;
   }
 
   /**

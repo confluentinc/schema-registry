@@ -41,6 +41,34 @@ import org.junit.jupiter.api.Test;
 class ProvenanceHistoryTest {
 
   @Test
+  void missingVersionsAreTheNumbersBetweenTheFirstAndTheLast() {
+    assertThat(ProvenanceHistory.missingVersions(List.of(2, 3, 6, 8))).containsExactly(4, 5, 7);
+    assertThat(ProvenanceHistory.missingVersions(List.of(2, 3, 4))).isEmpty();
+    assertThat(ProvenanceHistory.missingVersions(List.of(5))).isEmpty();
+  }
+
+  @Test
+  void missingVersionsAreCappedWithATrailingZero() {
+    int max = ProvenanceHistory.MAX_MISSING_VERSIONS;
+    // Exactly the cap fits with no marker; one more is marked.
+    assertThat(ProvenanceHistory.missingVersions(List.of(1, max + 2)))
+        .containsExactlyElementsOf(range(2, max + 1));
+
+    List<Integer> expected = new ArrayList<>(range(2, max));
+    expected.add(0);
+    assertThat(ProvenanceHistory.missingVersions(List.of(1, max + 3)))
+        .containsExactlyElementsOf(expected);
+  }
+
+  private static List<Integer> range(int first, int last) {
+    List<Integer> numbers = new ArrayList<>();
+    for (int n = first; n <= last; n++) {
+      numbers.add(n);
+    }
+    return numbers;
+  }
+
+  @Test
   void eachVersionIsParsedOnceAndOnlyWhenReached() {
     List<Integer> asked = new ArrayList<>();
     List<ParsedSchemaHolder> schemas = new ArrayList<>();

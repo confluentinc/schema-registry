@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -123,6 +124,59 @@ class SubjectsResourceProvenanceLoadTest {
 
     assertEquals(Arrays.asList(1, 10), versionsOf(byVersion("1", "10", false)));
     verify(registry, times(2)).get(eq(SUBJECT), anyInt(), anyBoolean());
+  }
+
+  @Test
+  void aNumberNoVersionHasInsideTheRangeIsMissingEvenWithoutTheInterior() throws Exception {
+    stub(1, 2, 4);
+    doReturn(null).when(registry).get(SUBJECT, 3, true);
+
+    SchemaProvenance provenance = byVersion("1", "4", false);
+
+    assertEquals(Arrays.asList(1, 4), versionsOf(provenance));
+    assertEquals(Collections.singletonList(3), provenance.getMissingVersions());
+  }
+
+  @Test
+  void aContiguousRangeHasNoMissingVersions() throws Exception {
+    stub(2, 3, 4);
+
+    assertNull(byVersion("2", "4", true).getMissingVersions());
+  }
+
+  @Test
+  void aNumberNoVersionHasOutsideTheRangeIsNotMissing() throws Exception {
+    versions(1, 3, 4);
+    stub(3, 4);
+
+    assertNull(byVersion("3", "4", true).getMissingVersions());
+  }
+
+  @Test
+  void aSpanLongerThanAnInteriorRangeListsTheNumbersNotListed() throws Exception {
+    SchemaRegistryConfig config = registry.config();
+    when(config.getInt(SchemaRegistryConfig.PROVENANCE_INTERIOR_MAX_VERSIONS_CONFIG))
+        .thenReturn(3);
+    versions(1, 5, 10);
+    stub(1, 5, 10);
+
+    assertEquals(Arrays.asList(2, 3, 4, 6, 7, 8, 9),
+        byVersion("1", "10", false).getMissingVersions());
+  }
+
+  @Test
+  void theFlagKeepsTheMissingVersions() throws Exception {
+    stub(2, 4);
+    doReturn(null).when(registry).get(SUBJECT, 3, true);
+    when(registry.getSchemaValue(new SchemaKey(SUBJECT, 1))).thenReturn(value(1));
+    when(registry.isLogicallyCompatibleByProvenance(eq(SUBJECT), anyInt(), anyInt()))
+        .thenReturn(Collections.emptyList());
+
+    SchemaProvenance provenance =
+        resource.getProvenance(SUBJECT, "2", "4", null, null, true, false, "LOGICAL");
+
+    assertEquals(Collections.singletonList(3), provenance.getMissingVersions());
+    assertTrue(provenance.getVersions().get(1).getCompatible());
   }
 
   @Test

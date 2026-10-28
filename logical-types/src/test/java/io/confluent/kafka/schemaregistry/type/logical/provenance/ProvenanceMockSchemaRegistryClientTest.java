@@ -260,6 +260,25 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void aHardDeletedInteriorVersionIsMissingWhateverIsReturned() throws Exception {
+    // As in the registry: listed with or without the interior; a soft-deleted one is not.
+    register(record(field("a", "int")));
+    register(record(field("a", "int"), field("b", "int")));
+    register(record(field("a", "int"), field("b", "int"), field("c", "int")));
+    register(record(field("a", "int"), field("c", "int")));
+    client.deleteSchemaVersion(SUBJECT, "2", false);
+    client.deleteSchemaVersion(SUBJECT, "2", true);
+    client.deleteSchemaVersion(SUBJECT, "3", false);
+
+    for (boolean includeInterior : new boolean[] {false, true}) {
+      assertThat(client.getProvenanceByVersion(SUBJECT, "1", "4", includeInterior, false)
+          .getMissingVersions()).containsExactly(2);
+    }
+    assertThat(client.getProvenanceByVersion(SUBJECT, "3", "4", true, false)
+        .getMissingVersions()).isNull();
+  }
+
+  @Test
   void aVersionAfterASoftDeletedLatestTakesTheNextNumber() throws Exception {
     // As in the registry: v2, soft-deleted, dropped b, so b is new at v3.
     register(record(field("a", "int"), field("b", "int")));
