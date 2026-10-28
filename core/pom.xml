@@ -344,6 +344,7 @@
             <plugin>
                 <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-maven-plugin</artifactId>
+                <version>${swagger.version}</version>
                 <configuration>
                     <resourcePackages>
                         <package>io.confluent.kafka.schemaregistry.rest.resources</package>
