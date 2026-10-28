@@ -212,7 +212,7 @@ public class HcVaultKmsClient implements KmsClient {
     return new HcVaultKmsAead(this.vault, toHcVaultUri(uri));
   }
 
-  private static String toHcVaultUri(String uri) {
+  static String toHcVaultUri(String uri) {
     String uriStr = Validators.validateKmsKeyUriAndRemovePrefix(PREFIX, uri);
     if (!uriStr.startsWith("http")) {
       uriStr = "https://" + uriStr;
