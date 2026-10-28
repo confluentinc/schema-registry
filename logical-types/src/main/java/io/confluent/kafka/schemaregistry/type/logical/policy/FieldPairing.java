@@ -77,6 +77,11 @@ public final class FieldPairing {
         Objects.requireNonNull(updateIds, "updateIds"));
   }
 
+  /** Whether members pair by name, so a comparison may pair them as their format decodes them. */
+  boolean pairsByName() {
+    return originalIds == null;
+  }
+
   /** Whether a named type met twice as the same pair is compared once. */
   boolean comparesSharedTypesOnce() {
     return originalIds == null;

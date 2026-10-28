@@ -328,30 +328,33 @@ class CompatibilityCheckerIcebergSchemaTest {
   }
 
   @Test
-  void testCompatibleReordering() {
-    assertCompatible(
+  void testIncompatibleReordering() {
+    assertIncompatible(
         schema(
             optional("id", intType()),
             required("name", stringType())),
         schema(
             optional("name", stringType()),
-            optional("id", longType())));
+            optional("id", longType())),
+        Rule.FIELD_REORDERED, "id");
   }
 
   @Test
-  void testCompatibleReorderingSameType() {
-    assertCompatible(
+  void testIncompatibleReorderingSameType() {
+    // Both fields share a type, so only name-keyed matching can detect the swap.
+    assertIncompatible(
         schema(
             optional("email", stringType()),
             required("name", stringType())),
         schema(
             optional("name", stringType()),
-            optional("email", stringType())));
+            optional("email", stringType())),
+        Rule.FIELD_REORDERED, "email");
   }
 
   @Test
-  void testCompatibleReorderingNested() {
-    assertCompatible(
+  void testIncompatibleReorderingNested() {
+    assertIncompatible(
         schema(
             optional("id", intType()),
             required("person", structOf(
@@ -361,12 +364,13 @@ class CompatibilityCheckerIcebergSchemaTest {
             optional("id", intType()),
             required("person", structOf(
                 optional("email", stringType()),
-                optional("name", stringType())))));
+                optional("name", stringType())))),
+        Rule.FIELD_REORDERED, "person.name");
   }
 
   @Test
-  void testCompatibleReorderingNestedArray() {
-    assertCompatible(
+  void testIncompatibleReorderingNestedArray() {
+    assertIncompatible(
         schema(
             optional("id", intType()),
             required("person", structOf(
@@ -380,7 +384,8 @@ class CompatibilityCheckerIcebergSchemaTest {
                 optional("age", stringType()),
                 optional("inner_array", listOfOptional(structOf(
                     optional("email", stringType()),
-                    optional("name", stringType()))))))));
+                    optional("name", stringType()))))))),
+        Rule.FIELD_REORDERED, "person.inner_array[].name");
   }
 
   @Test

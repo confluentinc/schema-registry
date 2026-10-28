@@ -468,7 +468,7 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LOGICAL_CHECKS_DOC = "Which compatibility checks "
       + "compatibilityPolicy=LOGICAL runs, as a comma-separated list of +CHECK to enable a check "
       + "and -CHECK to disable it, e.g. -FIELD_DELETED. A check not listed keeps its default: "
-      + "every check is enabled except FIELD_REORDERED.";
+      + "every check is enabled.";
   protected static final String PROVENANCE_FIELD_PAIRING_DOC = "How the provenance check of "
       + "compatibilityPolicy=LOGICAL pairs the fields of a version with those of the versions it "
       + "is checked against: NAME pairs them by name, as without provenance, and CHECK_ID by "
