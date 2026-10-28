@@ -431,6 +431,16 @@ public class MockSchemaRegistryClientTest {
     }
   }
 
+    // This mock keeps no soft-deleted versions, so the flag changes nothing.
+    @Test
+    public void testGetLatestSchemaMetadata() throws Exception {
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject).getId());
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject, false).getId());
+      assertEquals(id, client.getLatestSchemaMetadata(defaultValueSubject, true).getId());
+    }
+
     // As in the registry, a schema without metadata finds the version registered with some.
     @Test
     public void testGetIdWithoutMetadataFindsSchemaWithMetadata() throws Exception {

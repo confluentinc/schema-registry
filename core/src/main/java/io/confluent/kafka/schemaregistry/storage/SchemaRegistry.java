@@ -151,7 +151,16 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       boolean latestOnly, Predicate<Schema> postFilter)
       throws SchemaRegistryException;
 
-  Schema getLatestVersion(String subject) throws SchemaRegistryException;
+  default Schema getLatestVersion(String subject) throws SchemaRegistryException {
+    return getLatestVersion(subject, false);
+  }
+
+  /**
+   * The latest version of {@code subject}: the highest version number, counting soft-deleted
+   * versions if {@code returnDeletedSchema}; null if there is none.
+   */
+  Schema getLatestVersion(String subject, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
