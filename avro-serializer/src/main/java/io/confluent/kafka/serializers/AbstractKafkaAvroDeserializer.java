@@ -278,6 +278,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           AvroSchemaUtils.getReflectData(
               avroUseLogicalTypeConverters, avroReflectionAllowNull));
     } else if (useSpecificAvroReader) {
+      // The reader schema may come from the registry, and Avro instantiates the classes it names
+      AvroSchemaUtils.checkSpecificClasses(finalReaderSchema);
       return new SpecificDatumReader<>(finalWriterSchema, finalReaderSchema,
           AvroSchemaUtils.getSpecificDataForSchema(
               finalReaderSchema, avroUseLogicalTypeConverters));
@@ -328,7 +330,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return getSpecificReaderSchema(writerSchema, false);
   }
 
-  @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema, boolean allowFallback) {
     switch (writerSchema.getType()) {
       case ARRAY:
@@ -347,7 +348,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       default:
         break;
     }
-    Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+    // Checked without initializing, since the writer schema names the class. Avro then loads it
+    // with its own lookup, which applies Avro's class validator where it has one (1.12.2).
+    Class<?> readerClass = AvroSchemaUtils.findSpecificClass(writerSchema);
+    if (readerClass != null && SpecificRecord.class.isAssignableFrom(readerClass)) {
+      readerClass = SpecificData.get().getClass(writerSchema);
+    }
     if (readerClass == null) {
       if (allowFallback) {
         // For union/map/array, if the reader schema can't be found,
@@ -359,8 +365,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           + " specified in writer's schema whilst finding reader's "
           + "schema for a SpecificRecord.");
     }
+    if (!SpecificRecord.class.isAssignableFrom(readerClass)) {
+      throw new SerializationException(writerSchema.getFullName()
+                                       + " specified by the writers schema is not a "
+                                       + "SpecificRecord, so it cannot provide the readers "
+                                       + "schema.");
+    }
     try {
-      return readerClass.newInstance().getSchema();
+      return ((SpecificRecord) readerClass.newInstance()).getSchema();
     } catch (InstantiationException e) {
       throw new SerializationException(writerSchema.getFullName()
                                        + " specified by the "

@@ -31,9 +31,12 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -49,6 +52,7 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DatumReader;
@@ -145,19 +149,25 @@ public class AvroSchemaUtils {
     return REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL;
   }
 
+  // SpecificData.getForSchema's choice. The class the schema names is checked without
+  // initializing it, and only a SpecificRecordBase is then loaded with Avro's own lookup.
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
-    return useLogicalTypes ? getSpecificDataForSchema(reader) : SpecificData.getForSchema(reader);
+    SpecificData defaultData = useLogicalTypes ? getSpecificData() : SpecificData.get();
+    if (reader != null && (reader.getType() == Schema.Type.RECORD
+            || reader.getType() == Schema.Type.UNION)) {
+      Class<?> clazz = findSpecificClass(reader);
+      if (clazz != null && SpecificRecordBase.class.isAssignableFrom(clazz)) {
+        clazz = defaultData.getClass(reader);
+        if (clazz != null && SpecificRecordBase.class.isAssignableFrom(clazz)) {
+          return SpecificData.getForClass(clazz);
+        }
+      }
+    }
+    return defaultData;
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader) {
-    if (reader != null && (reader.getType() == org.apache.avro.Schema.Type.RECORD
-            || reader.getType() == org.apache.avro.Schema.Type.UNION)) {
-      Class<?> clazz = getSpecificData().getClass(reader);
-      if (clazz != null) {
-        return getSpecificDataForClass(clazz);
-      }
-    }
-    return getSpecificData();
+    return getSpecificDataForSchema(reader, true);
   }
 
   public static <T> SpecificData getSpecificDataForClass(Class<T> c) {
@@ -167,6 +177,115 @@ public class AvroSchemaUtils {
 
   public static SpecificData getSpecificData() {
     return SPECIFIC_DATA_INSTANCE_WITH_LOGICAL;
+  }
+
+  /**
+   * Returns what SpecificData.get().getClass(schema) returns, but without initializing a class
+   * that the schema names, so that its static initializer does not run before its type is checked.
+   */
+  public static Class<?> findSpecificClass(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+      case ENUM:
+      case FIXED:
+        return specificClasses.computeIfAbsent(schema.getFullName(),
+            name -> Optional.ofNullable(loadSpecificClass(schema))).orElse(null);
+      case UNION:
+        // Avro resolves a union with null to its other type
+        List<Schema> types = schema.getTypes();
+        if (types.size() == 2 && types.contains(NULL_SCHEMA)) {
+          Schema type = types.get(types.get(0).equals(NULL_SCHEMA) ? 1 : 0);
+          if (isNamedType(type)) {
+            return findSpecificClass(type);
+          }
+        }
+        return SpecificData.get().getClass(schema);
+      default:
+        return SpecificData.get().getClass(schema);
+    }
+  }
+
+  /**
+   * Throws if a record, enum or fixed type in the schema names a class that is not an Avro record,
+   * enum or fixed, since a SpecificDatumReader would initialize and instantiate it.
+   */
+  public static void checkSpecificClasses(Schema schema) {
+    checkSpecificClasses(schema, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  private static void checkSpecificClasses(Schema schema, Set<Schema> seen) {
+    if (!seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        checkSpecificClass(schema, IndexedRecord.class);
+        for (Schema.Field field : schema.getFields()) {
+          checkSpecificClasses(field.schema(), seen);
+        }
+        break;
+      case ENUM:
+        checkSpecificClass(schema, Enum.class);
+        break;
+      case FIXED:
+        checkSpecificClass(schema, GenericFixed.class);
+        break;
+      case ARRAY:
+        checkSpecificClasses(schema.getElementType(), seen);
+        break;
+      case MAP:
+        checkSpecificClasses(schema.getValueType(), seen);
+        break;
+      case UNION:
+        for (Schema type : schema.getTypes()) {
+          checkSpecificClasses(type, seen);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void checkSpecificClass(Schema schema, Class<?> expected) {
+    Class<?> clazz = findSpecificClass(schema);
+    if (clazz != null && !expected.isAssignableFrom(clazz)) {
+      throw new SerializationException(clazz.getName() + " named by the schema is not an Avro "
+          + schema.getType().getName() + " class");
+    }
+  }
+
+  private static boolean isNamedType(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD || schema.getType() == Schema.Type.ENUM
+        || schema.getType() == Schema.Type.FIXED;
+  }
+
+  // SpecificData.getClass's lookup: the class name, then nested classes, replacing dots
+  // with '$' from the right
+  private static Class<?> loadSpecificClass(Schema schema) {
+    Class<?> clazz = loadClass(SpecificData.getClassName(schema));
+    String fullName = schema.getFullName();
+    StringBuilder nestedName = new StringBuilder(fullName);
+    for (int dot = fullName.lastIndexOf('.'); clazz == null && dot != -1;
+        dot = fullName.lastIndexOf('.', dot - 1)) {
+      nestedName.setCharAt(dot, '$');
+      clazz = loadClass(nestedName.toString());
+    }
+    return clazz;
+  }
+
+  // Avro's loaders: its own, then the context class loader
+  private static Class<?> loadClass(String name) {
+    for (ClassLoader loader : new ClassLoader[] {
+        SpecificData.get().getClassLoader(), Thread.currentThread().getContextClassLoader()}) {
+      if (loader != null) {
+        try {
+          return Class.forName(name, false, loader);
+        } catch (ClassNotFoundException e) {
+          // try the next loader
+        }
+      }
+    }
+    return null;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -208,6 +327,10 @@ public class AvroSchemaUtils {
   private static final Map<String, Schema> primitiveSchemas;
   private static final Map<Schema, Schema> transformedSchemas =
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  // Like Avro's class cache, keyed by full name, and remembering a missing class
+  private static final Map<String, Optional<Class<?>>> specificClasses =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
 
   static {
     primitiveSchemas = new HashMap<>();
