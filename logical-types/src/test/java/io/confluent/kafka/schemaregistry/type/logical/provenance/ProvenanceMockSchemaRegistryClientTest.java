@@ -247,6 +247,19 @@ class ProvenanceMockSchemaRegistryClientTest {
   }
 
   @Test
+  void theLatestVersionCountsASoftDeletedOneWhereDeletedVersionsAreLookedUp() throws Exception {
+    int v1 = register(record(field("a", "int"), field("b", "int")));
+    int v2 = register(record(field("a", "int")));
+    client.deleteSchemaVersion(SUBJECT, "2");
+
+    assertThat(client.getLatestSchemaMetadata(SUBJECT).getVersion()).isEqualTo(1);
+    assertThat(client.getLatestSchemaMetadata(SUBJECT, false).getId()).isEqualTo(v1);
+    SchemaMetadata latest = client.getLatestSchemaMetadata(SUBJECT, true);
+    assertThat(latest.getVersion()).isEqualTo(2);
+    assertThat(latest.getId()).isEqualTo(v2);
+  }
+
+  @Test
   void aVersionAfterASoftDeletedLatestTakesTheNextNumber() throws Exception {
     // As in the registry: v2, soft-deleted, dropped b, so b is new at v3.
     register(record(field("a", "int"), field("b", "int")));
