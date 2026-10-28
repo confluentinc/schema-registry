@@ -74,7 +74,7 @@ class ProvenancePolicyCheckerTest {
         Arrays.asList(proto("int32 a = 1;"), proto("int32 b = 1;")));
     for (List<ParsedSchema> history : histories) {
       assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.NAME),
-          "FIELD_DELETED"));
+          "FIELD_RENAMED"));
       assertEquals(List.of(), check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID));
     }
   }
@@ -101,7 +101,7 @@ class ProvenancePolicyCheckerTest {
         + "message B {\n  int32 %s = 1;\n}\n";
     List<ParsedSchema> history = Arrays.asList(new ProtobufSchema(String.format(file, "y")),
         new ProtobufSchema(String.format(file, "z")));
-    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.NAME), "FIELD_DELETED"));
+    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.NAME), "FIELD_RENAMED"));
     assertEquals(List.of(), check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID));
   }
 

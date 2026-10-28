@@ -51,8 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       on the grounds that the target table's version was unknown.
  * </ul>
  *
- * <p>Everything else is version-independent: drops, enum symbol deletion, nullability tightening
- * and the rest of the promotion table are unchanged in v3.
+ * <p>Everything else is version-independent: drops, reordering, enum symbol deletion,
+ * nullability tightening and the rest of the promotion table are unchanged in v3.
  */
 class CompatibilityCheckerIcebergV3Test {
 
@@ -296,12 +296,13 @@ class CompatibilityCheckerIcebergV3Test {
   }
 
   @Test
-  void reorderingIsAcceptedAtBothVersions() {
+  void reorderingIsRejectedAtBothVersions() {
     LogicalType two = schema(
         required("a", type(Schema.Type.INT)), required("b", type(Schema.Type.INT)));
 
-    assertBothAccept(two,
-        schema(required("b", type(Schema.Type.INT)), required("a", type(Schema.Type.INT))));
+    assertBothReject(two,
+        schema(required("b", type(Schema.Type.INT)), required("a", type(Schema.Type.INT))),
+        Rule.FIELD_REORDERED);
   }
 
   @Test
