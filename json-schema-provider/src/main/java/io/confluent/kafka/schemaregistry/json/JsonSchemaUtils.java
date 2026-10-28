@@ -302,17 +302,23 @@ public class JsonSchemaUtils {
   }
 
   public static JsonNode findMatchingEntity(JsonNode node, SchemaEntity entity) {
-    return findMatchingEntity(node, entity, null);
+    return findMatchingEntity(node, entity, new JsonNodeComparator());
   }
 
   public static JsonNode findMatchingEntity(
       JsonNode node, SchemaEntity entity,
       Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+    return findMatchingEntity(
+        node, entity, new JsonNodeComparator(loaderConfig, Collections::emptyMap));
+  }
+
+  static JsonNode findMatchingEntity(
+      JsonNode node, SchemaEntity entity, JsonNodeComparator comparator) {
     String[] identifiers = entity.getEntityPath().split("\\.");
     LinkedList<String> identifiersList = new LinkedList<>();
     Collections.addAll(identifiersList, identifiers);
     JsonNode entityNode =
-        findNodeHelper(node, entity.getEntityType(), identifiersList, loaderConfig);
+        findNodeHelper(node, entity.getEntityType(), identifiersList, comparator);
     if (entityNode == null) {
       throw new IllegalArgumentException(String.format(
         "No matching path '%s' found in the schema", entity.getEntityPath()));
@@ -341,9 +347,9 @@ public class JsonSchemaUtils {
   private static JsonNode findNodeHelper(JsonNode node,
                                          SchemaEntity.EntityType entityType,
                                          LinkedList<String> identifiersList,
-                                         Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+                                         JsonNodeComparator comparator) {
     String type = identifiersList.poll();
-    if (type == null) {
+    if (type == null || node == null) {
       return null;
     }
     switch (type) {
@@ -369,23 +375,23 @@ public class JsonSchemaUtils {
         if (result == null || identifiersList.isEmpty()) {
           return result;
         } else {
-          return findNodeHelper(result, entityType, identifiersList, loaderConfig);
+          return findNodeHelper(result, entityType, identifiersList, comparator);
         }
       case "array":
-        return findNodeHelper(node.get("items"), entityType, identifiersList, loaderConfig);
+        return findNodeHelper(node.get("items"), entityType, identifiersList, comparator);
       case "anyof":
         if (node.has("anyOf")) {
           return findSubSchemasFromIndex(
-              node, entityType, "anyOf", identifiersList, loaderConfig);
+              node, entityType, "anyOf", identifiersList, comparator);
         }
 
         // handle "type": ["null", "object"] etc
         identifiersList.poll();
-        return findNodeHelper(node, entityType, identifiersList, loaderConfig);
+        return findNodeHelper(node, entityType, identifiersList, comparator);
       case "allof":
         if (node.has("allOf")) {
           return findSubSchemasFromIndex(
-              node, entityType, "allOf", identifiersList, loaderConfig);
+              node, entityType, "allOf", identifiersList, comparator);
         }
 
         // handle if-then-else
@@ -393,15 +399,15 @@ public class JsonSchemaUtils {
         if ("conditional".equals(identifiersList.peek())) {
           identifiersList.poll();
           return findNodeHelper(
-              node.get(identifiersList.poll()), entityType, identifiersList, loaderConfig);
+              node.get(identifiersList.poll()), entityType, identifiersList, comparator);
         } else {
-          return findNodeHelper(node, entityType, identifiersList, loaderConfig);
+          return findNodeHelper(node, entityType, identifiersList, comparator);
         }
       case "oneof":
         return findSubSchemasFromIndex(
-            node, entityType, "oneOf", identifiersList, loaderConfig);
+            node, entityType, "oneOf", identifiersList, comparator);
       case "not":
-        return findNodeHelper(node.get(type), entityType, identifiersList, loaderConfig);
+        return findNodeHelper(node.get(type), entityType, identifiersList, comparator);
       default:
         return null;
     }
@@ -410,14 +416,26 @@ public class JsonSchemaUtils {
   private static JsonNode findSubSchemasFromIndex(
       JsonNode node, SchemaEntity.EntityType entityType, String compositionType,
       LinkedList<String> identifiersList,
-      Consumer<SchemaLoader.SchemaLoaderBuilder> loaderConfig) {
+      JsonNodeComparator comparator) {
     String index = identifiersList.poll();
     if (index == null) {
       return null;
     }
-    List<JsonNode> jsonNodeList = Lists.newArrayList(node.get(compositionType).elements());
-    jsonNodeList.sort(new JsonNodeComparator(loaderConfig));
-    return findNodeHelper(jsonNodeList.get(Integer.parseInt(index)),
-        entityType, identifiersList, loaderConfig);
+    JsonNode union = node.get(compositionType);
+    if (union == null) {
+      return null;
+    }
+    int i;
+    try {
+      i = Integer.parseInt(index);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+    if (i < 0 || i >= union.size()) {
+      return null;
+    }
+    List<JsonNode> jsonNodeList = Lists.newArrayList(union.elements());
+    jsonNodeList.sort(comparator);
+    return findNodeHelper(jsonNodeList.get(i), entityType, identifiersList, comparator);
   }
 }
