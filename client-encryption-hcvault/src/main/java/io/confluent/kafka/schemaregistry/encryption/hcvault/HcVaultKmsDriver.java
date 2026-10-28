@@ -109,6 +109,9 @@ public class HcVaultKmsDriver implements KmsDriver {
     if (roleId != null && secretId != null) {
       return new SimpleEntry<>(roleId, secretId);
     }
+    if (getToken(configs) != null) {
+      return null;
+    }
     roleId = envLoader.loadVariable(VAULT_APPROLE_ROLE_ID);
     secretId = envLoader.loadVariable(VAULT_APPROLE_SECRET_ID);
     if (roleId != null && secretId != null) {
@@ -155,9 +158,10 @@ public class HcVaultKmsDriver implements KmsDriver {
       throws GeneralSecurityException {
     boolean explicitRoleId = configs.get(APPROLE_ROLE_ID) != null
         && configs.get(APPROLE_SECRET_ID) != null;
-    boolean hasAmbientToken = isSet(envLoader.loadVariable(VAULT_TOKEN));
-    boolean hasAmbientRoleId = isSet(envLoader.loadVariable(VAULT_APPROLE_ROLE_ID))
-        && isSet(envLoader.loadVariable(VAULT_APPROLE_SECRET_ID));
+    // Same presence tests as VaultConfig.build() and getRoleId().
+    boolean hasAmbientToken = envLoader.loadVariable(VAULT_TOKEN) != null;
+    boolean hasAmbientRoleId = envLoader.loadVariable(VAULT_APPROLE_ROLE_ID) != null
+        && envLoader.loadVariable(VAULT_APPROLE_SECRET_ID) != null;
     if (explicitRoleId || (!hasAmbientToken && !hasAmbientRoleId)) {
       return;
     }
@@ -166,6 +170,9 @@ public class HcVaultKmsDriver implements KmsDriver {
           "a key URI is required when using ambient Vault credentials");
     }
     String address = toAddress(HcVaultKmsClient.toHcVaultUri(kekUrl.get()));
+    if (address == null) {
+      throw new GeneralSecurityException("invalid Vault address in key URI " + kekUrl.get());
+    }
     boolean trusted = Objects.equals(address, toAddress(envLoader.loadVariable(VAULT_ADDR)));
     String trustedAddresses = envLoader.loadVariable(VAULT_TRUSTED_ADDRESSES);
     if (!trusted && isSet(trustedAddresses)) {

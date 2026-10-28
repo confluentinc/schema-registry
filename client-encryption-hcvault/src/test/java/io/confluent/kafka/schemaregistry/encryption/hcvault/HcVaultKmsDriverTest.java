@@ -75,6 +75,32 @@ public class HcVaultKmsDriverTest {
   }
 
   @Test
+  public void testEmptyAmbientAppRoleRejectedForUntrustedAddress() {
+    Map<String, String> env = new HashMap<>();
+    env.put(VAULT_APPROLE_ROLE_ID, "");
+    env.put(VAULT_APPROLE_SECRET_ID, "secret");
+    assertThrows(GeneralSecurityException.class,
+        () -> driver(env).newKmsClient(Collections.emptyMap(), Optional.of(ATTACKER_KEY)));
+  }
+
+  @Test
+  public void testMalformedAddressRejected() {
+    assertThrows(GeneralSecurityException.class,
+        () -> driver(envWithToken()).newKmsClient(Collections.emptyMap(),
+            Optional.of("hcvault://http://bad_host:8200/transit/keys/x")));
+  }
+
+  @Test
+  public void testExplicitTokenDoesNotUseAmbientAppRole() throws Exception {
+    Map<String, String> env = new HashMap<>();
+    env.put(VAULT_APPROLE_ROLE_ID, "role");
+    env.put(VAULT_APPROLE_SECRET_ID, "secret");
+    // An AppRole login would fail here, since the host does not exist.
+    assertNotNull(driver(env).newKmsClient(
+        Collections.singletonMap(TOKEN_ID, "tenant-token"), Optional.of(ATTACKER_KEY)));
+  }
+
+  @Test
   public void testAmbientTokenAllowedForVaultAddr() throws Exception {
     assertNotNull(driver(envWithToken()).newKmsClient(Collections.emptyMap(),
         Optional.of(TRUSTED_KEY)));

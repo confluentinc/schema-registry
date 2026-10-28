@@ -539,6 +539,8 @@ public class DekRegistry implements Closeable {
       return AZURE_KMS;
     } else if (type.startsWith("gcp")) {
       return GCP_KMS;
+    } else if (type.equals(HCVAULT)) {
+      return HCVAULT;
     } else {
       return kmsType;
     }
@@ -748,7 +750,9 @@ public class DekRegistry implements Closeable {
       }
     }
     for (String keyId : keyIds) {
-      String host = getHost(keyId);
+      // The hcvault driver defaults scheme-less key IDs to https.
+      String host = getHost(HCVAULT.equals(kmsType) && !keyId.startsWith("http")
+          ? "https://" + keyId : keyId);
       if (host == null || !isAllowedHost(host, allowedHosts)) {
         throw new InvalidKeyException("KMS host not allowed: " + (host != null ? host : keyId));
       }
@@ -832,9 +836,7 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : key.getKmsProps();
-    if (request.getKmsProps() != null) {
-      validateKmsKeyInfo(key.getKmsType(), key.getKmsKeyId(), kmsProps);
-    }
+    validateKmsKeyInfo(key.getKmsType(), key.getKmsKeyId(), kmsProps);
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
