@@ -457,7 +457,7 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LOGICAL_CHECKS_DOC = "Which compatibility checks "
       + "compatibilityPolicy=LOGICAL runs, as a comma-separated list of +CHECK to enable a check "
       + "and -CHECK to disable it, e.g. -FIELD_DELETED. A check not listed keeps its default: "
-      + "every check is enabled except FIELD_REORDERED.";
+      + "every check is enabled.";
   protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
       + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String REJECT_EMPTY_SUBJECT_DOC =
