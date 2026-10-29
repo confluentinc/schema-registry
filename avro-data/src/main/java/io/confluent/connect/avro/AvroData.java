@@ -616,7 +616,7 @@ public class AvroData {
               if (object != null) {
                 return fromConnectData(
                     field.schema(),
-                    avroSchema,
+                    avroSchemaForUnionMember(avroSchema, field.index()),
                     object,
                     false,
                     true
@@ -666,6 +666,7 @@ public class AvroData {
   /**
    * MapEntry types in connect Schemas are represented as Arrays of record.
    * Return the array type from the union instead of the union itself.
+   * A union member arrives already resolved, so a non-union is returned as is.
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingMapEntryType(
       Schema schema,
@@ -679,10 +680,6 @@ public class AvroData {
             return typeSchema;
           }
         }
-      } else {
-        throw new DataException(
-            "An optional schema should have an Avro Union type, not "
-            + schema.type());
       }
     }
     return avroSchema;
@@ -698,8 +695,28 @@ public class AvroData {
   }
 
   /**
+   * The Connect fields of a union are in the order of its non-null Avro members. Return the
+   * member at that position, as matching by name can't tell apart members that share a
+   * default name or type, such as unnamed structs.
+   */
+  private static org.apache.avro.Schema avroSchemaForUnionMember(
+      org.apache.avro.Schema avroSchema, int fieldIndex) {
+    if (avroSchema.getType() != org.apache.avro.Schema.Type.UNION) {
+      return avroSchema;
+    }
+    int index = 0;
+    for (org.apache.avro.Schema memberSchema : avroSchema.getTypes()) {
+      if (memberSchema.getType() != org.apache.avro.Schema.Type.NULL && index++ == fieldIndex) {
+        return memberSchema;
+      }
+    }
+    return avroSchema;
+  }
+
+  /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
+   * A union member arrives already resolved, so a non-union is returned as is.
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingTypeIfOptional(
       Schema schema, org.apache.avro.Schema avroSchema, boolean scrubInvalidNames) {
@@ -713,10 +730,6 @@ public class AvroData {
             return typeSchema;
           }
         }
-      } else {
-        throw new DataException(
-            "An optional schema should have an Avro Union type, not "
-                + schema.type());
       }
     }
     return avroSchema;
