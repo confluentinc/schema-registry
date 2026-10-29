@@ -467,6 +467,8 @@ public class RestApiTest extends ClusterTestHarness {
 
     assertInvalidKek(() -> client.createKek("blocked", "hcvault://https",
         "attacker.example.com/transit/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "azure-kms://https",
+        "attacker.example.com/keys/x", null, null, false));
     assertInvalidKek(() -> client.createKek("blocked", "HCVAULT",
         "https://attacker.example.com/transit/keys/x", null, null, false));
     assertInvalidKek(() -> client.createKek("blocked", "azure-kms",

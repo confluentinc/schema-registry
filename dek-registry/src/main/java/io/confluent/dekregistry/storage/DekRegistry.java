@@ -724,6 +724,7 @@ public class DekRegistry implements Closeable {
 
   public void validateKmsKeyInfo(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
       throws InvalidKeyException {
+    validateKmsType(kmsType);
     kmsType = normalizeKmsType(kmsType);
     if (HCVAULT.equals(kmsType) && kmsProps != null) {
       for (String prop : kmsProps.keySet()) {
@@ -735,13 +736,17 @@ public class DekRegistry implements Closeable {
     validateKmsHosts(kmsType, kmsKeyId, kmsProps);
   }
 
-  // Applies to KMS types whose key ID is a URL the server connects to directly.
-  private void validateKmsHosts(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
-      throws InvalidKeyException {
-    // The KMS URL is kmsType + "://" + kmsKeyId, so a scheme in kmsType would move the host.
+  // The KMS URL is kmsType + "://" + kmsKeyId, so a scheme in kmsType would move the host.
+  private static void validateKmsType(String kmsType) throws InvalidKeyException {
     if (kmsType.contains(":") || kmsType.contains("/")) {
       throw new InvalidKeyException("Invalid kmsType: " + kmsType);
     }
+  }
+
+  // Applies to KMS types whose key ID is a URL the server connects to directly.
+  private void validateKmsHosts(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
+      throws InvalidKeyException {
+    validateKmsType(kmsType);
     List<String> allowedHosts = config.kmsAllowedHosts();
     kmsType = normalizeKmsType(kmsType);
     if (allowedHosts.isEmpty() || !(HCVAULT.equals(kmsType) || AZURE_KMS.equals(kmsType))) {
