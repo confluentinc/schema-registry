@@ -22,12 +22,18 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeNotNull;
 
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import java.io.File;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,7 +45,11 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.common.errors.SerializationException;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.function.ThrowingRunnable;
 
 // DGS-25191: a class named by a schema is neither initialized nor instantiated unless it is an
@@ -49,6 +59,10 @@ public class SchemaNamedClassTest {
   // Resolved as nested classes of SchemaNamedClasses
   private static final String NAMESPACE = SchemaNamedClasses.class.getName();
   private static final String NO_CLASS_NAMESPACE = "io.confluent.kafka.serializers.noclass";
+  private static final String CONTEXT_ONLY_INITIALIZED = "dgs25191.contextonly.initialized";
+
+  @Rule
+  public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private final SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
   private final KafkaAvroSerializer serializer;
@@ -166,6 +180,35 @@ public class SchemaNamedClassTest {
     assertNull(AvroSchemaUtils.findSpecificClass(
         record(NO_CLASS_NAMESPACE, "Missing", stringField())));
     assertSame(User.class, AvroSchemaUtils.findSpecificClass(User.getClassSchema()));
+  }
+
+  // Avro also tries the context class loader, so a cached lookup holds only for the one it used
+  @Test
+  public void testFindSpecificClassPerContextClassLoader() throws Exception {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assumeNotNull(compiler);
+    File dir = temporaryFolder.newFolder();
+    File source = new File(dir, "ContextOnly.java");
+    Files.write(source.toPath(), ("public class ContextOnly { static { System.setProperty("
+        + "\"" + CONTEXT_ONLY_INITIALIZED + "\", \"true\"); } }")
+        .getBytes(StandardCharsets.UTF_8));
+    assertEquals(0, compiler.run(null, null, null, source.getPath()));
+
+    Schema schema = record(null, "ContextOnly", stringField());
+    assertNull(AvroSchemaUtils.findSpecificClass(schema));
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toURI().toURL()}, null)) {
+      thread.setContextClassLoader(loader);
+      Class<?> found = AvroSchemaUtils.findSpecificClass(schema);
+      assertSame(loader, found.getClassLoader());
+      assertThrows(SerializationException.class,
+          () -> AvroSchemaUtils.checkSpecificClasses(schema));
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    assertNull(AvroSchemaUtils.findSpecificClass(schema));
+    assertNull(System.getProperty(CONTEXT_ONLY_INITIALIZED));
   }
 
   @Test

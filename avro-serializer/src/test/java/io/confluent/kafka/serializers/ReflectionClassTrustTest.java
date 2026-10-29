@@ -25,12 +25,18 @@ import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.reflecttrust.ElementClassTarget;
+import io.confluent.kafka.serializers.reflecttrust.JavaClassArrayTarget;
+import io.confluent.kafka.serializers.reflecttrust.JavaClassTarget;
 import io.confluent.kafka.serializers.reflecttrust.LatestNested;
 import io.confluent.kafka.serializers.reflecttrust.LatestRoot;
 import io.confluent.kafka.serializers.reflecttrust.ReflectTrustFixtures;
 import io.confluent.kafka.serializers.reflecttrust.RejectedElement;
 import io.confluent.kafka.serializers.reflecttrust.RejectedRoot;
 import io.confluent.kafka.serializers.reflecttrust.sub.TrustedPojo;
+import java.math.BigDecimal;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,6 +46,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.junit.Test;
@@ -91,6 +98,48 @@ public class ReflectionClassTrustTest {
   public void testTrustedParentPackage() {
     byte[] bytes = serializer.serialize("trusted-package", pojoValue(namedAs(TrustedPojo.class)));
     assertPojo(deserializer(null, FIXTURES).deserialize("trusted-package", bytes));
+  }
+
+  // ReflectData.getClass loads the class that a java-class property names
+  @Test
+  public void testUntrustedJavaClassOnString() {
+    Schema schema = Schema.create(Schema.Type.STRING);
+    schema.addProp(SpecificData.CLASS_PROP, JavaClassTarget.class.getName());
+    byte[] bytes = serializer.serialize("java-class", new NonRecordContainer(schema, "value"));
+    KafkaAvroDeserializer deserializer = deserializer(null, OTHER_PACKAGE);
+    assertRejected(() -> deserializer.deserialize("java-class", bytes), JavaClassTarget.class);
+  }
+
+  @Test
+  public void testUntrustedJavaClassOnArray() {
+    Schema schema = Schema.createArray(Schema.create(Schema.Type.INT));
+    schema.addProp(SpecificData.CLASS_PROP, JavaClassArrayTarget.class.getName());
+    byte[] bytes = serializer.serialize("java-class-array",
+        new NonRecordContainer(schema, Collections.singletonList(1)));
+    KafkaAvroDeserializer deserializer = deserializer(null, OTHER_PACKAGE);
+    assertRejected(() -> deserializer.deserialize("java-class-array", bytes),
+        JavaClassArrayTarget.class);
+  }
+
+  // A reflect reader loads the class that a java-element-class property names
+  @Test
+  public void testUntrustedJavaElementClassInLatestVersion() throws Exception {
+    String topic = "latest-element-class";
+    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", Schema.createArray(Schema.create(Schema.Type.INT))));
+    GenericRecord value = pojoValue(writer);
+    value.put("items", Collections.singletonList(1));
+    byte[] bytes = serializer.serialize(topic, value);
+    Schema items = Schema.createArray(Schema.create(Schema.Type.INT));
+    items.addProp(SpecificData.ELEMENT_PROP, ElementClassTarget.class.getName());
+    Schema latest = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", items));
+    schemaRegistry.register(topic + "-value", new AvroSchema(latest));
+
+    Map<String, Object> props = props(null, OTHER_PACKAGE);
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, props);
+    assertRejected(() -> deserializer.deserialize(topic, bytes), ElementClassTarget.class);
   }
 
   // The registry's reader schema names the nested class, which the writer's class does not
@@ -148,8 +197,16 @@ public class ReflectionClassTrustTest {
         .isTrusted(TrustedPojo.class));
     assertFalse(trust(null, FIXTURES + ".sub.more").isTrusted(TrustedPojo.class));
     assertFalse(trust(TrustedPojo.class.getSimpleName(), null).isTrusted(TrustedPojo.class));
-    // Avro-generated classes are always trusted
-    assertTrue(trust(null, OTHER_PACKAGE).isTrusted(User.class));
+    // Avro-generated classes, Avro 1.12.2's defaults and collections are always trusted
+    ReflectionClassTrust other = trust(null, OTHER_PACKAGE);
+    assertTrue(other.isTrusted(User.class));
+    assertTrue(other.isTrusted(BigDecimal.class));
+    assertTrue(other.isTrusted(ArrayList.class));
+    // An array class by its component type, as Avro checks it
+    assertTrue(other.isTrusted(int[].class));
+    assertTrue(other.isTrusted(String[][].class));
+    assertFalse(other.isTrusted(URI.class));
+    assertFalse(other.isTrusted(TrustedPojo[].class));
   }
 
   private KafkaAvroDeserializer deserializer(String classes, String packages) {
