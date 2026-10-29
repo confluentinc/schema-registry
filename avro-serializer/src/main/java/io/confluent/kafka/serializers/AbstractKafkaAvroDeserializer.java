@@ -60,6 +60,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  private ReflectionClassTrust reflectionClassTrust = new ReflectionClassTrust();
   private final Cache<SubjectSchemaId, Schema> readerSchemaCache;
   private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
 
@@ -107,6 +108,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    reflectionClassTrust = new ReflectionClassTrust(
+        config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG),
+        config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG));
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -258,8 +262,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected DatumReader<?> getDatumReader(
       String subject, Integer writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
-    return datumReaderCache.get(new DatumReaderKey(subject, writerSchemaId, readerSchema),
+    DatumReader<?> reader = datumReaderCache.get(
+        new DatumReaderKey(subject, writerSchemaId, readerSchema),
         () -> createDatumReader(subject, writerSchemaId, writerSchema, readerSchema));
+    if (reader instanceof SpecificDatumReader && !(reader instanceof ReflectDatumReader)) {
+      // A cached reader may be used under another context class loader, which may resolve the
+      // classes its schema names differently; the check remembers the loaders already checked
+      AvroSchemaUtils.checkSpecificClasses(((SpecificDatumReader<?>) reader).getExpected());
+    }
+    return reader;
   }
 
   private DatumReader<?> createDatumReader(
@@ -278,6 +289,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           AvroSchemaUtils.getReflectData(
               avroUseLogicalTypeConverters, avroReflectionAllowNull));
     } else if (useSpecificAvroReader) {
+      // The reader schema may come from the registry, and Avro instantiates the classes it names
+      AvroSchemaUtils.checkSpecificClasses(finalReaderSchema);
       return new SpecificDatumReader<>(finalWriterSchema, finalReaderSchema,
           AvroSchemaUtils.getSpecificDataForSchema(
               finalReaderSchema, avroUseLogicalTypeConverters));
@@ -328,7 +341,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return getSpecificReaderSchema(writerSchema, false);
   }
 
-  @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema, boolean allowFallback) {
     switch (writerSchema.getType()) {
       case ARRAY:
@@ -347,7 +359,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       default:
         break;
     }
-    Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+    // Checked without initializing, since the writer schema names the class. Avro then loads it
+    // with its own lookup, which applies Avro's class validator where it has one (1.12.2).
+    Class<?> readerClass = AvroSchemaUtils.findSpecificClass(writerSchema);
+    if (readerClass != null && SpecificRecord.class.isAssignableFrom(readerClass)) {
+      readerClass = SpecificData.get().getClass(writerSchema);
+    }
     if (readerClass == null) {
       if (allowFallback) {
         // For union/map/array, if the reader schema can't be found,
@@ -359,8 +376,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           + " specified in writer's schema whilst finding reader's "
           + "schema for a SpecificRecord.");
     }
+    if (!SpecificRecord.class.isAssignableFrom(readerClass)) {
+      throw new SerializationException(writerSchema.getFullName()
+                                       + " specified by the writers schema is not a "
+                                       + "SpecificRecord, so it cannot provide the readers "
+                                       + "schema.");
+    }
     try {
-      return readerClass.newInstance().getSchema();
+      return ((SpecificRecord) readerClass.newInstance()).getSchema();
     } catch (InstantiationException e) {
       throw new SerializationException(writerSchema.getFullName()
                                        + " specified by the "
@@ -377,6 +400,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private Schema getReflectionReaderSchema(Schema writerSchema) {
     ReflectData reflectData =
         AvroSchemaUtils.getReflectData(avroUseLogicalTypeConverters, avroReflectionAllowNull);
+    // The writer schema names the class, so check it before Avro loads it
+    reflectionClassTrust.checkClassResolvedBy(writerSchema);
     Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
@@ -496,6 +521,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                 (AvroSchema) lookupLatestVersion(getSubject(), writerAvroSchema, false).getSchema();
           }
           if (readerAvroSchema != null) {
+            if (useSchemaReflection) {
+              // A reader schema from the registry names the classes that a reflect reader builds
+              reflectionClassTrust.checkClassesNamedBy(readerAvroSchema.rawSchema());
+            }
             // set version on the writer schema
             writerAvroSchema = schemaForDeserialize();
             Integer version = schemaVersion(
