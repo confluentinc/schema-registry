@@ -359,6 +359,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       default:
         break;
     }
+    if (allowFallback && writerSchema.getType() != Schema.Type.RECORD) {
+      // Only a record has a SpecificRecord class to provide the reader's schema
+      return writerSchema;
+    }
     // Checked without initializing, since the writer schema names the class. Avro then loads it
     // with its own lookup, which applies Avro's class validator where it has one (1.12.2).
     Class<?> readerClass = AvroSchemaUtils.findSpecificClass(writerSchema);
