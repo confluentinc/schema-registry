@@ -182,12 +182,13 @@ final class ReflectionClassTrust {
     }
     if (clazz == null) {
       // Avro shares the classes it loads across the JVM, so it may still find one that another
-      // context class loader exposed; with trust configured, a class that can't be checked is
-      // rejected
-      if (configured) {
+      // context class loader exposed. A trusted name covers any class Avro finds by that name.
+      if (configured && !isTrustedName(name)) {
         throw new SerializationException(name + " named by the schema cannot be found under the "
             + "current context class loader, so its trust for reflection deserialization cannot "
-            + "be checked");
+            + "be checked; add it to " + KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG
+            + " or its package to " + KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG
+            + " to let Avro read it without a class, or trust every package with *");
       }
       return;
     }
@@ -224,10 +225,19 @@ final class ReflectionClassTrust {
     }
     // A nested class reports its enclosing package
     Package classPackage = clazz.getPackage();
-    if (classPackage == null) {
-      return false;
+    return classPackage != null && isTrustedPackage(classPackage.getName());
+  }
+
+  // A class or schema name, such as com.example.Outer$Inner or com.example.Outer.Inner
+  private boolean isTrustedName(String name) {
+    if (classes.contains(name) || DEFAULT_CLASSES.contains(name)) {
+      return true;
     }
-    String packageName = classPackage.getName();
+    int dot = name.lastIndexOf('.');
+    return dot > 0 && isTrustedPackage(name.substring(0, dot));
+  }
+
+  private boolean isTrustedPackage(String packageName) {
     for (String trusted : packages) {
       // "com.example" also trusts its subpackages, but not "com.examplex"
       if (packageName.startsWith(trusted) && (packageName.length() == trusted.length()

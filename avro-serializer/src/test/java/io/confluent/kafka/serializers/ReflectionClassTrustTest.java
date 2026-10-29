@@ -213,20 +213,29 @@ public class ReflectionClassTrustTest {
   // Trusting every package checks nothing, so a record without a class still reads generically
   @Test
   public void testAllPackagesTrustedWithRecordWithoutClass() throws Exception {
-    String topic = "all-packages";
-    Schema nested = record(NO_CLASS_NAMESPACE, "Nested", stringField());
-    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
-        new Schema.Field("nested", nested));
-    GenericRecord value = pojoValue(writer);
-    value.put("nested", pojoValue(nested));
-    byte[] bytes = serializer.serialize(topic, value);
-    schemaRegistry.register(topic + "-value", new AvroSchema(writer));
+    assertReadWithoutClass(readWithoutClass("all-packages", null, "*"));
+  }
 
-    Map<String, Object> props = props(null, "*");
-    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
-    GenericRecord result = (GenericRecord)
-        new KafkaAvroDeserializer(schemaRegistry, props).deserialize(topic, bytes);
-    assertEquals("value", ((GenericRecord) result.get("nested")).get("f").toString());
+  // A trusted name covers a record without a class, which then reads generically
+  @Test
+  public void testTrustedPackageWithRecordWithoutClass() throws Exception {
+    assertReadWithoutClass(
+        readWithoutClass("package-without-class", null, "io.confluent.kafka.serializers"));
+  }
+
+  @Test
+  public void testTrustedClassNamesWithRecordWithoutClass() throws Exception {
+    assertReadWithoutClass(readWithoutClass("classes-without-class",
+        NO_CLASS_NAMESPACE + ".Record," + NO_CLASS_NAMESPACE + ".Nested", null));
+  }
+
+  @Test
+  public void testUntrustedRecordWithoutClass() {
+    String message = rejection(() -> readWithoutClass("untrusted-without-class", null,
+        OTHER_PACKAGE));
+    assertTrue(message, message.contains(NO_CLASS_NAMESPACE + ".Record named by the schema "
+        + "cannot be found"));
+    assertTrue(message, message.contains("or trust every package with *"));
   }
 
   // Readers cached under an earlier configuration are not reused once trust is tightened
@@ -351,6 +360,26 @@ public class ReflectionClassTrustTest {
       cause = cause.getCause();
     }
     return cause.getMessage();
+  }
+
+  // Reads, with a registry reader schema, a record and a nested record that have no class
+  private Object readWithoutClass(String topic, String classes, String packages)
+      throws Exception {
+    Schema nested = record(NO_CLASS_NAMESPACE, "Nested", stringField());
+    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("nested", nested));
+    GenericRecord value = pojoValue(writer);
+    value.put("nested", pojoValue(nested));
+    byte[] bytes = serializer.serialize(topic, value);
+    schemaRegistry.register(topic + "-value", new AvroSchema(writer));
+    Map<String, Object> props = props(classes, packages);
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
+    return new KafkaAvroDeserializer(schemaRegistry, props).deserialize(topic, bytes);
+  }
+
+  private static void assertReadWithoutClass(Object result) {
+    GenericRecord nested = (GenericRecord) ((GenericRecord) result).get("nested");
+    assertEquals("value", nested.get("f").toString());
   }
 
   // A registry schema for TrustedPojo, which reads the writer's record, with the given items
