@@ -24,6 +24,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
@@ -224,6 +226,12 @@ public class AvroSchemaUtils {
    * enum or fixed, since a SpecificDatumReader would initialize and instantiate it.
    */
   public static void checkSpecificClasses(Schema schema) {
+    // Checked again under another context class loader, which may resolve the classes differently
+    ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+    ContextLoaderRef checked = checkedSpecificSchemas.getIfPresent(schema);
+    if (checked != null && checked.isFor(contextLoader)) {
+      return;
+    }
     forEachSchema(schema, type -> {
       switch (type.getType()) {
         case RECORD:
@@ -239,6 +247,7 @@ public class AvroSchemaUtils {
           break;
       }
     });
+    checkedSpecificSchemas.put(schema, new ContextLoaderRef(contextLoader));
   }
 
   /**
@@ -318,24 +327,37 @@ public class AvroSchemaUtils {
     return null;
   }
 
-  // A cached lookup, which holds only for the context class loader it was made with. Both are
-  // held weakly, so that the cache does not keep a class loader alive.
-  private static final class SpecificClassLookup {
+  // A context class loader, held weakly so that a cache does not keep it alive
+  private static final class ContextLoaderRef {
     private final boolean hadContextLoader;
     private final WeakReference<ClassLoader> contextLoader;
-    // Null when no class was found
-    private final WeakReference<Class<?>> clazz;
 
-    SpecificClassLookup(ClassLoader contextLoader, Class<?> clazz) {
+    ContextLoaderRef(ClassLoader contextLoader) {
       this.hadContextLoader = contextLoader != null;
       this.contextLoader = new WeakReference<>(contextLoader);
-      this.clazz = clazz != null ? new WeakReference<>(clazz) : null;
     }
 
     boolean isFor(ClassLoader currentLoader) {
       return hadContextLoader
           ? currentLoader != null && contextLoader.get() == currentLoader
           : currentLoader == null;
+    }
+  }
+
+  // A cached lookup, which holds only for the context class loader it was made with. The class
+  // is held weakly too.
+  private static final class SpecificClassLookup {
+    private final ContextLoaderRef contextLoader;
+    // Null when no class was found
+    private final WeakReference<Class<?>> clazz;
+
+    SpecificClassLookup(ClassLoader contextLoader, Class<?> clazz) {
+      this.contextLoader = new ContextLoaderRef(contextLoader);
+      this.clazz = clazz != null ? new WeakReference<>(clazz) : null;
+    }
+
+    boolean isFor(ClassLoader currentLoader) {
+      return contextLoader.isFor(currentLoader);
     }
 
     boolean found() {
@@ -390,6 +412,13 @@ public class AvroSchemaUtils {
   // Like Avro's class cache, keyed by full name, and remembering a missing class
   private static final Map<String, SpecificClassLookup> specificClasses =
       new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  // Schemas that passed checkSpecificClasses, by identity, with the context class loader they
+  // were checked under
+  private static final Cache<Schema, ContextLoaderRef> checkedSpecificSchemas =
+      CacheBuilder.newBuilder()
+          .weakKeys()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
   private static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
 
   static {

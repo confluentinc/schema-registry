@@ -60,6 +60,8 @@ public class SchemaNamedClassTest {
   private static final String NAMESPACE = SchemaNamedClasses.class.getName();
   private static final String NO_CLASS_NAMESPACE = "io.confluent.kafka.serializers.noclass";
   private static final String CONTEXT_ONLY_INITIALIZED = "dgs25191.contextonly.initialized";
+  private static final String READER_CONTEXT_ONLY_INITIALIZED =
+      "dgs25191.readercontextonly.initialized";
 
   @Rule
   public final TemporaryFolder temporaryFolder = new TemporaryFolder();
@@ -185,15 +187,7 @@ public class SchemaNamedClassTest {
   // Avro also tries the context class loader, so a cached lookup holds only for the one it used
   @Test
   public void testFindSpecificClassPerContextClassLoader() throws Exception {
-    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-    assumeNotNull(compiler);
-    File dir = temporaryFolder.newFolder();
-    File source = new File(dir, "ContextOnly.java");
-    Files.write(source.toPath(), ("public class ContextOnly { static { System.setProperty("
-        + "\"" + CONTEXT_ONLY_INITIALIZED + "\", \"true\"); } }")
-        .getBytes(StandardCharsets.UTF_8));
-    assertEquals(0, compiler.run(null, null, null, source.getPath()));
-
+    File dir = compileContextOnlyClass("ContextOnly", CONTEXT_ONLY_INITIALIZED);
     Schema schema = record(null, "ContextOnly", stringField());
     assertNull(AvroSchemaUtils.findSpecificClass(schema));
     Thread thread = Thread.currentThread();
@@ -209,6 +203,40 @@ public class SchemaNamedClassTest {
     }
     assertNull(AvroSchemaUtils.findSpecificClass(schema));
     assertNull(System.getProperty(CONTEXT_ONLY_INITIALIZED));
+  }
+
+  // A cached reader is checked again when it is used under another context class loader. An empty
+  // array makes Avro build the reader without looking up its element class.
+  @Test
+  public void testCachedReaderCheckedPerContextClassLoader() throws Exception {
+    File dir = compileContextOnlyClass("ReaderContextOnly", READER_CONTEXT_ONLY_INITIALIZED);
+    String topic = "cached-reader";
+    Schema writerItem = record(NO_CLASS_NAMESPACE, "Item", stringField());
+    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", Schema.createArray(writerItem)));
+    GenericRecord empty = value(writer);
+    empty.put("items", Collections.emptyList());
+    byte[] emptyBytes = serializer.serialize(topic, empty);
+    GenericRecord nonEmpty = value(writer);
+    nonEmpty.put("items", Collections.singletonList(value(writerItem)));
+    byte[] nonEmptyBytes = serializer.serialize(topic, nonEmpty);
+    Schema latestItem = record(null, "ReaderContextOnly", stringField());
+    latestItem.addAlias(writerItem.getFullName());
+    Schema latest = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", Schema.createArray(latestItem)));
+    schemaRegistry.register(topic + "-value", new AvroSchema(latest));
+
+    latestSpecificDeserializer.deserialize(topic, emptyBytes);
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toURI().toURL()}, null)) {
+      thread.setContextClassLoader(loader);
+      assertRejected(() -> latestSpecificDeserializer.deserialize(topic, nonEmptyBytes),
+          "ReaderContextOnly");
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    assertNull(System.getProperty(READER_CONTEXT_ONLY_INITIALIZED));
   }
 
   @Test
@@ -252,6 +280,20 @@ public class SchemaNamedClassTest {
     }
     assertTrue(cause.getMessage(), cause.getMessage().contains(className));
     assertFalse(SchemaNamedClasses.initialized.contains(className));
+  }
+
+  // Compiles a class in the default package that only a loader of the returned directory can
+  // see; its static initializer sets the given system property
+  private File compileContextOnlyClass(String className, String initializedProperty)
+      throws Exception {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assumeNotNull(compiler);
+    File dir = temporaryFolder.newFolder();
+    File source = new File(dir, className + ".java");
+    Files.write(source.toPath(), ("public class " + className + " { static { System.setProperty("
+        + "\"" + initializedProperty + "\", \"true\"); } }").getBytes(StandardCharsets.UTF_8));
+    assertEquals(0, compiler.run(null, null, null, source.getPath()));
+    return dir;
   }
 
   private static Schema record(String namespace, String name, Schema.Field... fields) {

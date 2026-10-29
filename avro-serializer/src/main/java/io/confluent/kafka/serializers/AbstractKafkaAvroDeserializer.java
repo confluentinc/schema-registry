@@ -262,8 +262,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected DatumReader<?> getDatumReader(
       String subject, Integer writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
-    return datumReaderCache.get(new DatumReaderKey(subject, writerSchemaId, readerSchema),
+    DatumReader<?> reader = datumReaderCache.get(
+        new DatumReaderKey(subject, writerSchemaId, readerSchema),
         () -> createDatumReader(subject, writerSchemaId, writerSchema, readerSchema));
+    if (reader instanceof SpecificDatumReader && !(reader instanceof ReflectDatumReader)) {
+      // A cached reader may be used under another context class loader, which may resolve the
+      // classes its schema names differently; the check remembers the loaders already checked
+      AvroSchemaUtils.checkSpecificClasses(((SpecificDatumReader<?>) reader).getExpected());
+    }
+    return reader;
   }
 
   private DatumReader<?> createDatumReader(
