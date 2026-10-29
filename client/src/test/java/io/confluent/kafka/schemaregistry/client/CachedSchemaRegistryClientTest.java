@@ -57,6 +57,7 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
@@ -69,6 +70,8 @@ public class CachedSchemaRegistryClientTest {
   private static final int CACHE_CAPACITY = 5;
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final AvroSchema AVRO_SCHEMA_0 = avroSchema(0);
+  private static final AvroSchema AVRO_SCHEMA_0_WITH_METADATA =
+      AVRO_SCHEMA_0.copy(new Metadata(null, ImmutableMap.of("confluent:version", "1"), null), null);
   private static final AvroSchema SCHEMA_WITH_DECIMAL = new AvroSchema(
           "{\n"
               + "    \"type\": \"record\",\n"
@@ -240,6 +243,40 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterFollowedByLookupWillSkipCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25))
+        .once();
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, ID_25))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.getIdWithResponse(SUBJECT_0, SCHEMA_WITH_DECIMAL, false).getId());
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterFollowedByIdLookupWillReturnRegisteredSchema() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(new Schema(SUBJECT_0, 1, ID_25, AVRO_SCHEMA_0_WITH_METADATA)))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(AVRO_SCHEMA_0_WITH_METADATA, client.getSchemaById(ID_25));
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))
@@ -284,6 +321,40 @@ public class CachedSchemaRegistryClientTest {
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
     ); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGuidCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+
+    // Expect only one call to getId (the rest should hit the cache)
+
+    SchemaString result = new SchemaString(SCHEMA_STR_0);
+    String guid = new Schema(SUBJECT_0, 1, ID_25, result).getGuid();
+    expect(restService.getByGuid(guid, null)).andReturn(result);
+
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, 1, ID_25, result))
+        .once();
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    ); // hit the cache
+
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0)); // Hit cache
 
     verify(restService);
   }
@@ -836,6 +907,21 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+  }
+
+  @Test
+  public void testGetSchemaMetadataInAFormatFindsADeletedVersion() throws Exception {
+    expect(restService.getVersion(anyObject(), eq(SUBJECT_0), eq(VERSION_1), eq("logical"),
+        eq(true), isNull()))
+        .andReturn(SCHEMA_DETAILS);
+
+    replay(restService);
+
+    SchemaMetadata metadata = client.getSchemaMetadata(SUBJECT_0, VERSION_1, "logical", true);
+    assertEquals(ID_25, metadata.getId());
+    assertEquals(SCHEMA_STR_0, metadata.getSchema());
+
+    verify(restService);
   }
 
   @Test

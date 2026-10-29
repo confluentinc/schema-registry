@@ -21,7 +21,6 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.reflect.ReflectData;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -35,7 +34,6 @@ import org.apache.kafka.common.serialization.Deserializer;
  *
  * <p>See {@link ReflectionAvroSerializer} for its serializer counterpart.</p>
  */
-@InterfaceStability.Unstable
 public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
 
   private final KafkaAvroDeserializer inner;

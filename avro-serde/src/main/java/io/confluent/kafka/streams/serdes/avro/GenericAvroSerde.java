@@ -17,7 +17,6 @@
 package io.confluent.kafka.streams.serdes.avro;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -48,7 +47,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, GenericAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, GenericAvroSerde.class);
  * streamsConfiguration.put(
- *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *     AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
  *
@@ -60,14 +59,13 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * boolean isKeySerde = false;
  * genericAvroSerde.configure(
  *     Collections.singletonMap(
- *         AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *         "http://confluent-schema-registry-server:8081/"),
  *     isKeySerde);
  * KStream<String, GenericRecord> stream = ...;
  * stream.to(Serdes.String(), genericAvroSerde, "my-output-topic");
  * }</pre>
  */
-@InterfaceStability.Unstable
 public class GenericAvroSerde implements Serde<GenericRecord> {
 
   private final Serde<GenericRecord> inner;

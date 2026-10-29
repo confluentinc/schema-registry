@@ -73,7 +73,7 @@ public class DlqAction implements RuleAction {
 
   private Map<String, ?> configs;
   private String topic;
-  private boolean autoFlush;
+  private volatile boolean autoFlush;
   private List<String> redactRuleTypes;
   private volatile KafkaProducer<byte[], byte[]> producer;
 
@@ -205,7 +205,8 @@ public class DlqAction implements RuleAction {
       Set<String> tags = getTagsToRedact(redactRules);
       Rule newRule = new Rule("redact", null, RuleKind.TRANSFORM, ctx.ruleMode(), TYPE,
           tags, null, null, null, null, false);
-      RuleContext newCtx = new RuleContext(ctx.configs(), ctx.source(), ctx.target(),
+      RuleContext newCtx = new RuleContext(ctx.configs(), ctx.enabledEnv(),
+          ctx.source(), ctx.target(),
           ctx.subject(), ctx.topic(), ctx.headers(),
           ctx.originalKey(), ctx.originalValue(), ctx.isKey(),
           ctx.ruleMode(), newRule, 0, Collections.singletonList(newRule));

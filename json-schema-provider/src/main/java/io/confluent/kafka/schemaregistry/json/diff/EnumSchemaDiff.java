@@ -15,7 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import java.util.Collections;
+import java.util.Set;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.Schema;
 
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ENUM_ARRAY_CHANGED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ENUM_ARRAY_EXTENDED;
@@ -25,10 +29,31 @@ class EnumSchemaDiff {
   static void compare(
       final Context ctx, final EnumSchema original, final EnumSchema update
   ) {
-    if (!original.getPossibleValues().equals(update.getPossibleValues())) {
-      if (update.getPossibleValues().containsAll(original.getPossibleValues())) {
+    compareValues(ctx, original.getPossibleValues(), update.getPossibleValues());
+  }
+
+  // A const is an enum of its one value, so a const and an enum compare by their values.
+  static void compareConstAndEnum(final Context ctx, final Schema original, final Schema update) {
+    compareValues(ctx, values(original), values(update));
+  }
+
+  static boolean isConstOrEnum(final Schema schema) {
+    return schema instanceof ConstSchema || schema instanceof EnumSchema;
+  }
+
+  private static Set<Object> values(final Schema schema) {
+    return schema instanceof ConstSchema
+        ? Collections.singleton(((ConstSchema) schema).getPermittedValue())
+        : ((EnumSchema) schema).getPossibleValues();
+  }
+
+  private static void compareValues(
+      final Context ctx, final Set<Object> original, final Set<Object> update
+  ) {
+    if (!original.equals(update)) {
+      if (update.containsAll(original)) {
         ctx.addDifference("enum", ENUM_ARRAY_EXTENDED);
-      } else if (original.getPossibleValues().containsAll(update.getPossibleValues())) {
+      } else if (original.containsAll(update)) {
         ctx.addDifference("enum", ENUM_ARRAY_NARROWED);
       } else {
         ctx.addDifference("enum", ENUM_ARRAY_CHANGED);

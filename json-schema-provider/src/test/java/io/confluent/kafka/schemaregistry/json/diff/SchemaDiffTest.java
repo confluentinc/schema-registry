@@ -20,14 +20,19 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import static org.junit.Assert.assertFalse;
+
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
+import java.util.concurrent.CancellationException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -84,6 +89,31 @@ public class SchemaDiffTest {
     assertEquals(0, differences.size());
   }
 
+  public void interruptedThreadAbortsComparison() {
+    final JsonSchema original = new JsonSchema("{\"type\":\"object\"}");
+    final JsonSchema update =
+        new JsonSchema("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+    // Parse up front so the interrupt below is exercised by the diff hub, not the parse guard
+    // in rawSchema().
+    final Schema originalRaw = original.rawSchema();
+    final Schema updateRaw = update.rawSchema();
+
+    // Simulate the request-timeout interrupt arriving mid-comparison: an interrupted thread must
+    // abort the (potentially exponential) diff so it can be reclaimed.
+    Thread.currentThread().interrupt();
+    try {
+      SchemaDiff.compare(originalRaw, updateRaw);
+      Assert.fail("expected CancellationException when the worker thread is interrupted");
+    } catch (CancellationException expected) {
+      // expected
+    } finally {
+      Thread.interrupted(); // ensure no interrupt status leaks to other tests
+    }
+
+    // The diff clears the interrupt status as it aborts, so the (pooled) thread returns clean.
+    assertFalse(Thread.currentThread().isInterrupted());
+  }
+
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
@@ -99,7 +129,7 @@ public class SchemaDiffTest {
 
       List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
-          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(diff.getType()))
           .collect(Collectors.toList());
       assertThat(description,
           differences.stream()
@@ -108,6 +138,17 @@ public class SchemaDiffTest {
           is(errorMessages)
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
+
+      boolean isCompatibleLenient = isCompatible;
+      if (testCase.has("compatible_lenient")) {
+        isCompatibleLenient = testCase.getBoolean("compatible_lenient");
+      }
+      List<Difference> differencesLenient = SchemaDiff.compare(SchemaDiff.COMPATIBLE_CHANGES_LENIENT,
+          original.rawSchema(), update.rawSchema());
+      final List<Difference> incompatibleDiffsLenient = differences.stream()
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_LENIENT.contains(diff.getType()))
+          .collect(Collectors.toList());
+      assertEquals(description, isCompatibleLenient, incompatibleDiffsLenient.isEmpty());
     }
   }
 
@@ -148,7 +189,7 @@ public class SchemaDiffTest {
     final Schema original = SchemaLoader.load(memoMaskingSchema("integer", "boolean"));
     final Schema update = SchemaLoader.load(memoMaskingSchema("boolean", "number"));
     final boolean incompatible = SchemaDiff.compare(original, update).stream()
-        .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES.contains(d.getType()));
+        .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(d.getType()));
     Assert.assertTrue(
         "a recursive oneOf incompatibility must not be masked by cross-branch memoization",
         incompatible);
@@ -212,6 +253,165 @@ public class SchemaDiffTest {
       oneOf.put(new JSONObject().put("$ref", "#/definitions/" + type));
     }
     return new JSONObject().put("oneOf", oneOf);
+  }
+
+  private static final String DRAFT_07 = "http://json-schema.org/draft-07/schema#";
+  private static final String DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
+
+  @Test
+  public void testReferenceChainsAreFollowedToTheirTarget() {
+    for (String draft : new String[] {DRAFT_07, DRAFT_2020_12}) {
+      for (boolean nullable : new boolean[] {false, true}) {
+        for (int originalHops : new int[] {1, 2, 3}) {
+          for (int updateHops : new int[] {1, 2, 3}) {
+            final String label = draft + " nullable=" + nullable
+                + " hops " + originalHops + "->" + updateHops;
+            assertEquals(label, Collections.emptyList(), diff(
+                refHopsSchema(draft, nullable, originalHops, "integer"),
+                refHopsSchema(draft, nullable, updateHops, "integer")));
+            Assert.assertTrue(label, diff(
+                refHopsSchema(draft, nullable, originalHops, "integer"),
+                refHopsSchema(draft, nullable, updateHops, "string")).stream()
+                .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(d.getType())));
+          }
+        }
+      }
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void testReferenceOnlyCycleFailsCleanly() {
+    final Schema schema = new JsonSchema(referenceOnlyCycleSchema("B")).rawSchema();
+    InvalidReferenceException e = Assert.assertThrows(InvalidReferenceException.class,
+        () -> SchemaDiff.compare(schema, schema));
+    Assert.assertTrue(e.getMessage(), e.getMessage().startsWith("Cyclic $ref"));
+  }
+
+  @Test(timeout = 10000)
+  public void testReferenceOnlyCycleIsReportedAsIncompatible() {
+    // A → B → A and the self-reference A → A
+    for (String target : new String[] {"B", "A"}) {
+      final JsonSchema schema = new JsonSchema(referenceOnlyCycleSchema(target));
+      final List<String> errors = schema.isBackwardCompatible(schema);
+      assertEquals(target, 1, errors.size());
+      Assert.assertTrue(errors.get(0), errors.get(0).startsWith(
+          "{errorType:\"INVALID_REFERENCE\", description:\"Cyclic $ref '#/definitions/"));
+    }
+  }
+
+  // Property "addr" refers to definition A, which is only a $ref to aTarget; B refers back to A.
+  private static String referenceOnlyCycleSchema(final String aTarget) {
+    final JSONObject definitions = new JSONObject()
+        .put("A", new JSONObject().put("$ref", "#/definitions/" + aTarget))
+        .put("B", new JSONObject().put("$ref", "#/definitions/A"));
+    return new JSONObject()
+        .put("$schema", DRAFT_07)
+        .put("type", "object")
+        .put("definitions", definitions)
+        .put("properties", new JSONObject()
+            .put("addr", new JSONObject().put("$ref", "#/definitions/A")))
+        .toString();
+  }
+
+  @Test
+  public void testExclusiveMaximumDecreaseIsDetected() {
+    // Without a maximum, and with an unchanged maximum above both limits
+    for (String maximum : new String[] {"", ",\"maximum\":20"}) {
+      assertEquals(maximum, Collections.singletonList(Difference.Type.EXCLUSIVE_MAXIMUM_DECREASED),
+          types(diff(
+              "{\"$schema\":\"" + DRAFT_07 + "\",\"type\":\"number\",\"exclusiveMaximum\":10"
+                  + maximum + "}",
+              "{\"$schema\":\"" + DRAFT_07 + "\",\"type\":\"number\",\"exclusiveMaximum\":5"
+                  + maximum + "}")));
+    }
+  }
+
+  @Test
+  public void testNonStringConnectTypeIsATypeChange() {
+    for (String connectType : new String[] {"1", "{}"}) {
+      assertEquals(connectType, Collections.singletonList(Difference.Type.TYPE_CHANGED),
+          types(diff(
+              "{\"type\":\"string\",\"connect.type\":" + connectType + "}",
+              "{\"type\":\"number\",\"connect.type\":" + connectType + "}")));
+    }
+  }
+
+  @Test
+  public void testNullConstIsCompared() {
+    final String nullConst = "{\"$schema\":\"" + DRAFT_07 + "\",\"const\":null}";
+    final String oneConst = "{\"$schema\":\"" + DRAFT_07 + "\",\"const\":1}";
+    assertEquals(Collections.emptyList(), diff(nullConst, nullConst));
+    assertEquals(Collections.singletonList(Difference.Type.ENUM_ARRAY_CHANGED),
+        types(diff(nullConst, oneConst)));
+  }
+
+  @Test
+  public void testPercentInPropertyNameSurvivesMessageFormatting() {
+    // A type change, and a required property added to an open content model
+    List<String> errors = backwardErrors(
+        "{\"properties\":{\"a%d\":{\"type\":\"string\"}}}",
+        "{\"properties\":{\"a%d\":{\"type\":\"number\"}}}");
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("'#/properties/a%d'"));
+    errors = backwardErrors(
+        "{\"type\":\"object\"}",
+        "{\"type\":\"object\",\"properties\":{\"a%d\":{\"type\":\"string\"}},"
+            + "\"required\":[\"a%d\"]}");
+    Assert.assertTrue(errors.get(0), errors.get(0).startsWith(
+        "{errorType:\"REQUIRED_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL\""));
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("'#/properties/a%d'"));
+  }
+
+  @Test(timeout = 10000)
+  public void testPercentInInvalidReferenceSurvivesMessageFormatting() {
+    // "A%20" is the URI-escaped form of the definition name "A "
+    final String schema = "{\"$schema\":\"" + DRAFT_07 + "\","
+        + "\"properties\":{\"a\":{\"$ref\":\"#/definitions/A%20\"}},"
+        + "\"definitions\":{\"A \":{\"$ref\":\"#/definitions/A%20\"}}}";
+    final List<String> errors = backwardErrors(schema, schema);
+    Assert.assertTrue(errors.get(0), errors.get(0).contains("Cyclic $ref '#/definitions/A%20'"));
+  }
+
+  // Goes through isCompatible, which passes each message to String.format
+  private static List<String> backwardErrors(final String original, final String update) {
+    return new JsonSchema(update).isCompatible(CompatibilityLevel.BACKWARD,
+        Collections.singletonList(new SimpleParsedSchemaHolder(new JsonSchema(original))));
+  }
+
+  private static List<Difference.Type> types(final List<Difference> differences) {
+    return differences.stream().map(Difference::getType).collect(toList());
+  }
+
+  private static List<Difference> diff(final String original, final String update) {
+    return SchemaDiff.compare(
+        new JsonSchema(original).rawSchema(), new JsonSchema(update).rawSchema());
+  }
+
+  // Property "addr" reaches object A (with property "n" of type nType) through hops references:
+  // 1 is a direct $ref to A; each extra hop is a definition that is only a $ref to the next.
+  private static String refHopsSchema(
+      final String draft, final boolean nullable, final int hops, final String nType) {
+    final String defsKeyword = DRAFT_07.equals(draft) ? "definitions" : "$defs";
+    final String prefix = "#/" + defsKeyword + "/";
+    final JSONObject defs = new JSONObject().put("A", new JSONObject()
+        .put("type", "object")
+        .put("properties", new JSONObject().put("n", new JSONObject().put("type", nType))));
+    String target = "A";
+    for (int i = 1; i < hops; i++) {
+      defs.put("R" + i, new JSONObject().put("$ref", prefix + target));
+      target = "R" + i;
+    }
+    JSONObject addr = new JSONObject().put("$ref", prefix + target);
+    if (nullable) {
+      addr = new JSONObject().put("oneOf", new JSONArray()
+          .put(new JSONObject().put("type", "null"))
+          .put(addr));
+    }
+    return new JSONObject()
+        .put("$schema", draft)
+        .put("type", "object")
+        .put(defsKeyword, defs)
+        .put("properties", new JSONObject().put("addr", addr))
+        .toString();
   }
 
   @Test
