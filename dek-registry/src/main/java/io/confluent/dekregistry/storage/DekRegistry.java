@@ -738,6 +738,10 @@ public class DekRegistry implements Closeable {
   // Applies to KMS types whose key ID is a URL the server connects to directly.
   private void validateKmsHosts(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
       throws InvalidKeyException {
+    // The KMS URL is kmsType + "://" + kmsKeyId, so a scheme in kmsType would move the host.
+    if (kmsType.contains(":") || kmsType.contains("/")) {
+      throw new InvalidKeyException("Invalid kmsType: " + kmsType);
+    }
     List<String> allowedHosts = config.kmsAllowedHosts();
     kmsType = normalizeKmsType(kmsType);
     if (allowedHosts.isEmpty() || !(HCVAULT.equals(kmsType) || AZURE_KMS.equals(kmsType))) {
