@@ -26,8 +26,10 @@ import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -1479,7 +1481,7 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDatumWriterCacheKeyedBySchemaId() throws Exception {
+  public void testDatumWriterCacheKeyedBySubjectAndSchemaId() throws Exception {
     // auto.register=false keeps the caller-provided schema instance, so fresh-but-equal
     // instances reach the cache; identity keys produced one entry per instance.
     HashMap<String, Object> props = new HashMap<>();
@@ -1504,9 +1506,9 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDatumWriterCacheAutoRegisterKeyedBySchemaId() throws Exception {
+  public void testDatumWriterCacheAutoRegisterKeyedBySubjectAndSchemaId() throws Exception {
     // The INC-11758 path: auto.register=true with a fresh, content-identical schema instance
-    // per call. Identity keys produced one entry per call; id keys collapse to 1.
+    // per call. Identity keys produced one entry per call; subject and id keys collapse to 1.
     byte[] bytes = null;
     for (int i = 0; i < 5; i++) {
       Schema schema = createUserSchema();
@@ -1523,7 +1525,7 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDatumReaderCacheKeyedBySchemaId() throws Exception {
+  public void testDatumReaderCacheKeyedBySubjectAndSchemaId() throws Exception {
     byte[] bytes = avroSerializer.serialize(topic, createUserRecord());
     for (int i = 0; i < 5; i++) {
       assertEquals("testUser",
@@ -1540,29 +1542,140 @@ public class KafkaAvroSerializerTest {
     Schema readerB = createUserSchema();
     assertTrue(readerA != readerB);
 
+    String subject = topic + "-value";
+
     AbstractKafkaAvroDeserializer.DatumReaderKey key1 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerA);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerA);
     AbstractKafkaAvroDeserializer.DatumReaderKey key2 =
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerB);
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerB);
     // Same writer id + content-equal reader schema => equal key (unequal under identity keys).
     assertEquals(key1, key2);
     assertEquals(key1.hashCode(), key2.hashCode());
 
     assertEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(7, null),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(7, null));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 7, null),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 7, null));
 
-    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(2, readerA));
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 2, readerA));
+    // Same writer id under a different subject (e.g. another context) => different key.
     assertNotEquals(key1,
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, createExtendUserSchema()));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(":.replica:" + subject, 1, readerA));
+    assertNotEquals(key1,
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, createExtendUserSchema()));
 
     // A null writer id (JSON migration path) must not collide with a real id for the same reader.
     assertNotEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerA));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(subject, 1, readerA));
     assertEquals(
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
-        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerB));
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, null, readerB));
+  }
+
+  // --- Regression tests: schema ids are only unique within a context, so the same id in two
+  // contexts must not share a cached datum reader, reader schema or datum writer.
+
+  public static class ReplicaContextNameStrategy implements ContextNameStrategy {
+    @Override
+    public String contextName(String topic) {
+      return topic.startsWith("replica-") ? ".replica" : null;
+    }
+  }
+
+  private static HashMap<String, Object> createReplicaContextConfig() {
+    HashMap<String, Object> props = new HashMap<>();
+    props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
+        ReplicaContextNameStrategy.class.getName());
+    return props;
+  }
+
+  private static IndexedRecord createEventRecord() {
+    Schema schema = new Schema.Parser().parse(
+        "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"Event\","
+            + "\"fields\": [{\"name\": \"count\", \"type\": \"int\"},"
+            + "{\"name\": \"label\", \"type\": \"string\"}]}");
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("count", 42);
+    record.put("label", "testEvent");
+    return record;
+  }
+
+  private static int schemaIdOf(byte[] bytes) {
+    return ByteBuffer.wrap(bytes, 1, 4).getInt();
+  }
+
+  @Test
+  public void testDatumReaderCacheSeparatesContexts() throws Exception {
+    SchemaRegistryClient registry = new MockSchemaRegistryClient();
+    HashMap<String, Object> props = createReplicaContextConfig();
+    String replicaTopic = "replica-" + topic;
+    IndexedRecord user = createUserRecord();
+    IndexedRecord event = createEventRecord();
+    // A serializer per record keeps the datum writer cache out of this test.
+    byte[] userBytes = new KafkaAvroSerializer(registry, props).serialize(topic, user);
+    byte[] eventBytes = new KafkaAvroSerializer(registry, props).serialize(replicaTopic, event);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(eventBytes));
+
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, props);
+    assertEquals(user, deserializer.deserialize(topic, userBytes));
+    assertEquals(event, deserializer.deserialize(replicaTopic, eventBytes));
+
+    deserializer = new KafkaAvroDeserializer(registry, props);
+    assertEquals(event, deserializer.deserialize(replicaTopic, eventBytes));
+    assertEquals(user, deserializer.deserialize(topic, userBytes));
+  }
+
+  @Test
+  public void testReaderSchemaCacheSeparatesContexts() throws Exception {
+    SchemaRegistryClient registry = new MockSchemaRegistryClient();
+    HashMap<String, Object> props = createReplicaContextConfig();
+    String replicaTopic = "replica-" + topic;
+    User user = User.newBuilder().setName("testUser").build();
+    Grant grant = Grant.newBuilder().setGrant("testGrant").build();
+    // A serializer per record keeps the datum writer cache out of this test.
+    byte[] userBytes = new KafkaAvroSerializer(registry, props).serialize(topic, user);
+    byte[] grantBytes = new KafkaAvroSerializer(registry, props).serialize(replicaTopic, grant);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(grantBytes));
+
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(registry, props);
+    assertEquals(user, deserializer.deserialize(topic, userBytes));
+    assertEquals(grant, deserializer.deserialize(replicaTopic, grantBytes));
+
+    deserializer = new KafkaAvroDeserializer(registry, props);
+    assertEquals(grant, deserializer.deserialize(replicaTopic, grantBytes));
+    assertEquals(user, deserializer.deserialize(topic, userBytes));
+  }
+
+  @Test
+  public void testDatumWriterCacheSeparatesContexts() throws Exception {
+    SchemaRegistryClient registry = new MockSchemaRegistryClient();
+    HashMap<String, Object> props = createReplicaContextConfig();
+    String replicaTopic = "replica-" + topic;
+    IndexedRecord user = createUserRecord();
+    IndexedRecord event = createEventRecord();
+
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(registry, props);
+    byte[] userBytes = serializer.serialize(topic, user);
+    byte[] eventBytes = serializer.serialize(replicaTopic, event);
+    assertEquals(1, schemaIdOf(userBytes));
+    assertEquals(1, schemaIdOf(eventBytes));
+    // A fresh deserializer per read keeps the deserializer caches out of this test.
+    assertEquals(user,
+        new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
+    assertEquals(event,
+        new KafkaAvroDeserializer(registry, props).deserialize(replicaTopic, eventBytes));
+
+    serializer = new KafkaAvroSerializer(registry, props);
+    eventBytes = serializer.serialize(replicaTopic, event);
+    userBytes = serializer.serialize(topic, user);
+    assertEquals(event,
+        new KafkaAvroDeserializer(registry, props).deserialize(replicaTopic, eventBytes));
+    assertEquals(user,
+        new KafkaAvroDeserializer(registry, props).deserialize(topic, userBytes));
   }
 
   static class RecordWithUUID {

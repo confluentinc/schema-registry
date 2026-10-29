@@ -143,7 +143,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       schema = schemaWithName(schema, name);
       if (isKey != null && strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(id, schema, subject, isKey);
+        // Fetched again by id it comes back unnamed, as its file's first message: name it again.
+        schema = schemaWithName(schemaForDeserialize(id, schema, subject, isKey), name);
       }
 
       ProtobufSchema readerSchema = null;
@@ -256,7 +257,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           + "in the Protobuf schema");
     }
     try {
-      Class<?> cls = Class.forName(clsName);
+      // resolve without initializing so no static initializer runs before the type check
+      Class<?> cls = Class.forName(
+          clsName, false, AbstractKafkaProtobufDeserializer.class.getClassLoader());
+      if (!Message.class.isAssignableFrom(cls)) {
+        throw new SerializationException("Class " + clsName
+            + " is not a valid protobuf message class");
+      }
       Method parseMethod = cls.getDeclaredMethod(
           "parseFrom", ByteBuffer.class, ExtensionRegistryLite.class);
       return parseMethod.invoke(null, buffer, ProtobufSchema.EXTENSION_REGISTRY);

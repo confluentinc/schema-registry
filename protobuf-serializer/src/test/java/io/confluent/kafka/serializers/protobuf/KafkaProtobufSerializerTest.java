@@ -34,7 +34,9 @@ import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.De
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos;
@@ -56,6 +58,9 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class KafkaProtobufSerializerTest {
 
@@ -308,6 +313,39 @@ public class KafkaProtobufSerializerTest {
     KafkaProtobufDeserializer unconfiguredSerializer = new KafkaProtobufDeserializer();
     byte[] randomBytes = "foo".getBytes();
     unconfiguredSerializer.deserialize("foo", randomBytes);
+  }
+
+  // Must match StaticInitClass.PROPERTY; not referenced directly to avoid
+  // loading the class
+  private static final String STATIC_INITIALIZER_RAN_PROPERTY =
+      "io.confluent.test.protobuf.static.initializer.ran";
+  private static final String NON_PROTOBUF_CLASS_SCHEMA = "syntax = \"proto3\";\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.staticinit\";\n"
+      + "option java_multiple_files = true;\n"
+      + "message StaticInitClass { string f = 1; }\n";
+
+  @Test
+  public void testDeriveTypeDoesNotInitializeNonProtobufClass() {
+    ProtobufSchema schema = new ProtobufSchema(NON_PROTOBUF_CLASS_SCHEMA);
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor())
+        .setField(schema.toDescriptor().findFieldByName("f"), "hi")
+        .build();
+    byte[] bytes = protobufSerializer.serialize("canary", message);
+
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> deriveTypeDeserializer.deserialize("canary", bytes));
+    assertTrue(e.getCause().getMessage().contains("not a valid protobuf message class"));
+    assertNull(System.getProperty(STATIC_INITIALIZER_RAN_PROPERTY));
+  }
+
+  @Test
+  public void testToSpecificDescriptorDoesNotInitializeNonProtobufClass() {
+    ProtobufSchema schema = new ProtobufSchema(NON_PROTOBUF_CLASS_SCHEMA);
+
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> schema.toSpecificDescriptor(null));
+    assertTrue(e.getMessage().contains("not a valid protobuf message class"));
+    assertNull(System.getProperty(STATIC_INITIALIZER_RAN_PROPERTY));
   }
 
   @Test
@@ -814,6 +852,32 @@ public class KafkaProtobufSerializerTest {
     // restore configs
     protobufSerializer.configure(new HashMap(serializerConfig), false);
     testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
+  public void testRecordNameStrategyReadsTheRecordsOwnMessage() throws Exception {
+    // A record of a file's second message, read with no reader schema, stays that message.
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 id = 1;\n  string note = 2;\n}\n");
+    int id = schemaRegistry.register("p.B", schema);
+    Descriptors.Descriptor b = schema.toDescriptor("p.B");
+    byte[] body = DynamicMessage.newBuilder(b).setField(b.findFieldByName("id"), 7)
+        .setField(b.findFieldByName("note"), "old").build().toByteArray();
+    byte[] indexes = schema.toMessageIndexes("p.B").toByteArray();
+    byte[] bytes = ByteBuffer.allocate(5 + indexes.length + body.length).put((byte) 0)
+        .putInt(id).put(indexes).put(body).array();
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName());
+
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(schemaRegistry, configs);
+    DynamicMessage read = deserializer.deserialize(topic, bytes);
+    assertEquals("p.B", read.getDescriptorForType().getFullName());
+    assertEquals(7, read.getField(read.getDescriptorForType().findFieldByName("id")));
+    assertEquals("old", read.getField(read.getDescriptorForType().findFieldByName("note")));
   }
 
   @Test
