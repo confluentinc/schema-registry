@@ -56,6 +56,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -612,7 +613,7 @@ public class AvroData {
               if (object != null) {
                 return fromConnectData(
                     field.schema(),
-                    avroSchema,
+                    avroSchemaForUnionMember(avroSchema, field.index()),
                     object,
                     false,
                     true
@@ -691,6 +692,25 @@ public class AvroData {
     return Objects.equals(avroSchema.getFullName(), fullName)
         || Objects.equals(avroSchema.getType().getName(), schema.type().getName())
         || (schema.name() == null && avroSchema.getFullName().startsWith(DEFAULT_SCHEMA_FULL_NAME));
+  }
+
+  /**
+   * The Connect fields of a union are in the order of its non-null Avro members. Return a
+   * union of just the member at that position, as matching by name can't tell apart members
+   * that share a default name or type, such as unnamed structs.
+   */
+  private static org.apache.avro.Schema avroSchemaForUnionMember(
+      org.apache.avro.Schema avroSchema, int fieldIndex) {
+    if (avroSchema.getType() != org.apache.avro.Schema.Type.UNION) {
+      return avroSchema;
+    }
+    int index = 0;
+    for (org.apache.avro.Schema memberSchema : avroSchema.getTypes()) {
+      if (memberSchema.getType() != org.apache.avro.Schema.Type.NULL && index++ == fieldIndex) {
+        return org.apache.avro.Schema.createUnion(Collections.singletonList(memberSchema));
+      }
+    }
+    return avroSchema;
   }
 
   /**
