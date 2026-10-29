@@ -1,0 +1,284 @@
+/*
+ * Copyright 2025 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.serializers.subject;
+
+import com.google.common.base.Ticker;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * A {@link SubjectNameStrategy} that will query schema registry for
+ * the associated subject name for the topic. If there is a configuration property named
+ * "subject.name.strategy.kafka.cluster.id", then its value will be passed as the resource
+ * namespace; otherwise the value "-" will be passed as the resource namespace.
+ * If more than one subject is returned from the query, an exception will be thrown.
+ * If no subjects are returned from the query, then the behavior will fall back
+ * to {@link TopicNameStrategy}, unless the configuration property
+ * "subject.name.strategy.fallback.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
+ */
+public class AssociatedNameStrategy implements SubjectNameStrategy {
+
+  private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
+
+  public static final String CACHE_EXPIRY_SECS = "subject.name.strategy.cache.expiry.secs";
+  public static final String CACHE_SIZE = "subject.name.strategy.cache.size";
+  public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
+  public static final String NAMESPACE_WILDCARD = "-";
+  public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
+
+  private SchemaRegistryClient client;
+  private Map<String, ?> configs;
+  private int cacheExpirySecs = -1;
+  private int cacheSize = 1000;
+  private volatile String kafkaClusterId;
+  private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
+  private volatile boolean warnedNoClient;
+  private volatile boolean warnedEndpointNotFound;
+  private volatile boolean warnedEndpointNotImplemented;
+  private volatile LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private final Ticker ticker;
+
+  public AssociatedNameStrategy() {
+    this(Ticker.systemTicker());
+  }
+
+
+  public AssociatedNameStrategy(Ticker ticker) {
+    this.ticker = ticker;
+  }
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    this.configs = configs;
+    this.kafkaClusterId = configureKafkaClusterId();
+    this.fallbackSubjectNameStrategy = configureFallbackNameStrategy();
+    Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
+    if (cacheExpirySecsConfig != null) {
+      try {
+        this.cacheExpirySecs = Integer.parseInt(cacheExpirySecsConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_EXPIRY_SECS);
+      }
+    }
+    Object cacheSizeConfig = configs.get(CACHE_SIZE);
+    if (cacheSizeConfig != null) {
+      try {
+        this.cacheSize = Integer.parseInt(cacheSizeConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_SIZE);
+      }
+    }
+    CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
+        .maximumSize(cacheSize)
+        .ticker(ticker);
+    if (cacheExpirySecs >= 0) {
+      cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
+    }
+    this.subjectNameCache = cacheBuilder.build(new CacheLoader<>() {
+      @Override
+      public Optional<String> load(CacheKey key) throws Exception {
+        return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
+      }
+    });
+  }
+
+  private String configureKafkaClusterId() {
+    Object kafkaClusterIdConfig = configs != null ? configs.get(KAFKA_CLUSTER_ID) : null;
+    return kafkaClusterIdConfig != null ? kafkaClusterIdConfig.toString() : null;
+  }
+
+  private SubjectNameStrategy configureFallbackNameStrategy() {
+    Object fallbackConfig = configs != null ? configs.get(FALLBACK_TYPE) : null;
+    if (fallbackConfig != null) {
+      switch (fallbackConfig.toString().toUpperCase()) {
+        case "TOPIC":
+          return new TopicNameStrategy();
+        case "RECORD":
+          return new RecordNameStrategy();
+        case "TOPIC_RECORD":
+          return new TopicRecordNameStrategy();
+        case "NONE":
+          return null;
+        default:
+          throw new IllegalArgumentException("Invalid value for "
+              + FALLBACK_TYPE + ": " + fallbackConfig);
+      }
+    } else {
+      // default is TopicNameStrategy
+      return new TopicNameStrategy();
+    }
+  }
+
+  @Override
+  public void setSchemaRegistryClient(SchemaRegistryClient client) {
+    this.client = client;
+  }
+
+  @Override
+  public boolean usesSchema() {
+    SubjectNameStrategy fallback = getFallbackSubjectNameStrategy();
+    return fallback != null && fallback.usesSchema();
+  }
+
+  @Override
+  public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
+    if (topic == null) {
+      return null;
+    }
+
+    if (client == null) {
+      SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
+      if (fallbackSubjectNameStrategy != null) {
+        if (!warnedNoClient) {
+          warnedNoClient = true;
+          log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
+              + " was not called, using fallback strategy");
+        }
+        return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
+      } else {
+        throw new SerializationException("Client is not set in AssociatedNameStrategy, "
+            + " perhaps configure() on serde was not called");
+      }
+    }
+
+    try {
+      return subjectNameCache.get(new CacheKey(topic, isKey, schema)).orElse(null);
+    } catch (Exception e) {
+      if (e.getCause() instanceof SerializationException) {
+        throw (SerializationException) e.getCause();
+      }
+      throw new SerializationException(e.getCause());
+    }
+  }
+
+  @Override
+  public void setKafkaClusterId(String clusterId) {
+    if (!Objects.equals(this.kafkaClusterId, clusterId)) {
+      if (this.kafkaClusterId != null && clusterId != null) {
+        log.warn("Kafka cluster ID changed from {} to {}", this.kafkaClusterId, clusterId);
+      }
+      this.kafkaClusterId = clusterId;
+      if (subjectNameCache != null) {
+        subjectNameCache.invalidateAll();
+      }
+    }
+  }
+
+  protected String getKafkaClusterId() {
+    return kafkaClusterId;
+  }
+
+  protected SubjectNameStrategy getFallbackSubjectNameStrategy() {
+    return fallbackSubjectNameStrategy;
+  }
+
+  private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
+      throws IOException, RestClientException {
+    List<Association> associations;
+    try {
+      String kafkaClusterId = getKafkaClusterId();
+      associations = client.getAssociationsByResourceName(
+          topic,
+          kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
+          "topic",
+          Collections.singletonList(isKey ? "key" : "value"),
+          null,
+          0,
+          -1
+      );
+    } catch (RestClientException e) {
+      if (e.getStatus() == 404) {
+        if (!warnedEndpointNotFound) {
+          warnedEndpointNotFound = true;
+          log.warn("Associations endpoint not found (404), using fallback strategy");
+        }
+        // empty list will invoke fallback strategy
+        associations = Collections.emptyList();
+      } else {
+        throw e;
+      }
+    } catch (UnsupportedOperationException e) {
+      if (!warnedEndpointNotImplemented) {
+        warnedEndpointNotImplemented = true;
+        log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      }
+      // empty list will invoke fallback strategy
+      associations = Collections.emptyList();
+    }
+    SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
+    if (associations.size() > 1) {
+      throw new SerializationException("Multiple associated subjects found for topic " + topic);
+    } else if (associations.size() == 1) {
+      return associations.get(0).getSubject();
+    } else if (fallbackSubjectNameStrategy != null) {
+      return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
+    } else {
+      throw new SerializationException("No associated subject found for topic " + topic);
+    }
+  }
+
+  /**
+   * Cache key that combines topic and isKey values.
+   */
+  private static class CacheKey {
+    private final String topic;
+    private final boolean isKey;
+    private final ParsedSchema schema;
+
+    CacheKey(String topic, boolean isKey, ParsedSchema schema) {
+      this.topic = topic;
+      this.isKey = isKey;
+      this.schema = schema;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      CacheKey cacheKey = (CacheKey) o;
+      return isKey == cacheKey.isKey
+          && Objects.equals(topic, cacheKey.topic)
+          && Objects.equals(schema, cacheKey.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(topic, isKey, schema);
+    }
+  }
+}

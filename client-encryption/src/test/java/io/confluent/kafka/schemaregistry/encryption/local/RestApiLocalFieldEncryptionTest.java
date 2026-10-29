@@ -16,7 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.encryption.local;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
 import java.util.List;
 
@@ -27,8 +28,8 @@ public class RestApiLocalFieldEncryptionTest extends RestApiFieldEncryptionTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new LocalFieldEncryptionProperties(ruleNames);
+  protected EncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
+    return new LocalEncryptionProperties(ruleNames, FieldEncryptionExecutor.class);
   }
 }
 

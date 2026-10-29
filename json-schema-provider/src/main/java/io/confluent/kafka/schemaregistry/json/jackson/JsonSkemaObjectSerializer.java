@@ -23,13 +23,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsontype.TypeSerializer;
+import com.github.erosb.jsonsKema.IJsonString;
+import com.github.erosb.jsonsKema.IJsonValue;
 import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
 import com.github.erosb.jsonsKema.JsonNumber;
 import com.github.erosb.jsonsKema.JsonObject;
 import com.github.erosb.jsonsKema.JsonString;
-import com.github.erosb.jsonsKema.JsonValue;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
@@ -85,9 +86,9 @@ public class JsonSkemaObjectSerializer extends JSONBaseSerializer<JsonObject> {
       JsonGenerator g,
       SerializerProvider provider
   ) throws IOException {
-    for (Map.Entry<JsonString, JsonValue> entry : value.getProperties().entrySet()) {
+    for (Map.Entry<IJsonString, IJsonValue> entry : value.getProperties().entrySet()) {
       String key = entry.getKey().getValue();
-      JsonValue ob = entry.getValue();
+      IJsonValue ob = entry.getValue();
       if (ob == null || ob instanceof JsonNull) {
         if (provider.isEnabled(SerializationFeature.WRITE_NULL_MAP_VALUES)) {
           g.writeNullField(key);

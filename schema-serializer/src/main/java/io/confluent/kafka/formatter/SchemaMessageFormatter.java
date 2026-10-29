@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -30,7 +32,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -251,7 +252,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
         if (printKeyId) {
           output.write(idSeparator);
           if (consumerRecord.key() != null) {
-            int schemaId = schemaIdFor(consumerRecord.key());
+            String schemaId = schemaIdFor(
+                consumerRecord.topic(), true, consumerRecord.headers(), consumerRecord.key());
             output.print(schemaId);
           } else {
             output.write(nullLiteral);
@@ -272,7 +274,8 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       if (printValueId) {
         output.write(idSeparator);
         if (consumerRecord.value() != null) {
-          int schemaId = schemaIdFor(consumerRecord.value());
+          String schemaId = schemaIdFor(
+              consumerRecord.topic(), false, consumerRecord.headers(), consumerRecord.value());
           output.print(schemaId);
         } else {
           output.write(NULL_BYTES);
@@ -298,8 +301,6 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  private static final int MAGIC_BYTE = 0x0;
-
   private byte[] deserialize(Deserializer<?> deserializer,
       ConsumerRecord<byte[], byte[]> consumerRecord, byte[] sourceBytes) {
     if (deserializer == null || sourceBytes == null) {
@@ -312,12 +313,19 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
         : nullLiteral;
   }
 
-  private int schemaIdFor(byte[] payload) {
-    ByteBuffer buffer = ByteBuffer.wrap(payload);
-    if (buffer.get() != MAGIC_BYTE) {
+  private String schemaIdFor(String topic, boolean isKey, Headers headers, byte[] payload) {
+    try (DualSchemaIdDeserializer schemaIdDeserializer = new DualSchemaIdDeserializer()) {
+      SchemaId schemaId = new SchemaId(getProvider().schemaType());
+      schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
+      if (schemaId.getId() != null) {
+        return String.valueOf(schemaId.getId());
+      } else if (schemaId.getGuid() != null) {
+        return schemaId.getGuid().toString();
+      }
       throw new SerializationException("Unknown magic byte!");
+    } catch (Exception e) {
+      throw new SerializationException("Error deserializing schema id", e);
     }
-    return buffer.getInt();
   }
 
   protected abstract SchemaProvider getProvider();

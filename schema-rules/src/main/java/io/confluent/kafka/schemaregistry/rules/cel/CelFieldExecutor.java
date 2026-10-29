@@ -21,21 +21,36 @@ import static com.google.protobuf.NullValue.NULL_VALUE;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
+import dev.cel.common.values.CelByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.avro.Schema;
 
 public class CelFieldExecutor extends FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
 
-  private static final ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
+      .registerModule(new JavaTimeModule())
+      .registerModule(new ProtobufModule());
 
   private CelExecutor celExecutor = new CelExecutor();
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    super.configure(configs);
+    celExecutor.configure(configs);
+  }
 
   public String type() {
     return TYPE;
@@ -51,13 +66,48 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       Object message = fieldCtx.getContainingMessage();
       Object inputMessage;
       if (message instanceof JsonNode) {
-        inputMessage = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+        // Defensive: containingMessage is normally an ObjectNode for JSON
+        // Schema records, but wrap the conversion to surface a typed
+        // RuleException rather than a raw Jackson IllegalArgumentException
+        // if it ever isn't.
+        try {
+          inputMessage = JSON_MAPPER.convertValue(
+              message, new TypeReference<Map<String, Object>>(){});
+        } catch (IllegalArgumentException e) {
+          throw new RuleException(ctx.rule(), e);
+        }
       } else {
         inputMessage = message;
       }
+      // Present the value the way the field's declared type implies, through the same
+      // mapping the validator uses. Java has no unsigned primitive, so a uint64 arrives as
+      // a Long exactly as an int64 does: read as a signed int, a rule written against the
+      // field's own type (`value % 10u == 5u`) has no matching overload, and `value > 0`
+      // answers wrongly above Long.MAX_VALUE. The field's own value stays untouched — only
+      // what CEL is handed changes, so a transform that writes the result back, or an
+      // executor that encrypts it, still sees the type protobuf uses.
+      //
+      // Presenting a uint as CEL's uint is what protobuf's own type says, but it is not what
+      // this executor has always done, and an existing rule comparing such a field to a plain
+      // integer literal only compiles under the signed reading. Which one applies is therefore
+      // declared per rule, defaulting to the historical signed one.
+      // For Avro the same idea applies to a logical type: a timestamp field's unit lives in
+      // the schema, so a bare epoch long has to be presented against the field's schema or a
+      // rule reading `timestamp(value)` would take it for epoch seconds.
+      Object celFieldValue;
+      if (celExecutor.resolveUnsignedFieldType(ctx) == CelExecutor.UnsignedFieldType.UINT
+          && fieldCtx.getFieldDescriptor() instanceof FieldDescriptor) {
+        celFieldValue = CelUtils.toCelValueForProtobufField(
+            (FieldDescriptor) fieldCtx.getFieldDescriptor(), fieldValue);
+      } else if (fieldCtx.getFieldDescriptor() instanceof Schema.Field) {
+        celFieldValue = CelUtils.toCelValue(
+            fieldValue, ((Schema.Field) fieldCtx.getFieldDescriptor()).schema());
+      } else {
+        celFieldValue = fieldValue;
+      }
       Object result = celExecutor.execute(ctx, fieldValue, new HashMap<String, Object>() {
             {
-              put("value", fieldValue != null ? fieldValue : NULL_VALUE);
+              put("value", celFieldValue != null ? celFieldValue : NULL_VALUE);
               put("fullName", fieldCtx.getFullName());
               put("name", fieldCtx.getName());
               put("typeName", fieldCtx.getType().name());
@@ -66,8 +116,26 @@ public class CelFieldExecutor extends FieldRuleExecutor {
             }
           }
       );
-      if (result instanceof ByteString) {
+      // Unwrap before the narrowing chain below: a CelDecimal is not a Number, so it would
+      // silently skip it.
+      result = CelUtils.unwrapCelDecimals(result);
+      if (result instanceof com.google.protobuf.NullValue
+          || result instanceof dev.cel.common.values.NullValue) {
+        // CEL `null` literal evaluates to dev.cel.common.values.NullValue;
+        // the `value` binding uses proto NULL_VALUE for null field inputs
+        // (and so for the result of a rule that echoes a null value). Field
+        // setters expect Java null — normalize both flavors here so a
+        // nullable target sees null and a non-nullable target surfaces the
+        // contract violation directly instead of choking on a sentinel.
+        result = null;
+      } else if (result instanceof ByteString) {
         result = ((ByteString) result).toByteArray();
+      } else if (result instanceof CelByteString) {
+        // CelByteString is what CEL bytes literals (b"...") evaluate to.
+        // Hand back a raw byte[] so the per-format field setters
+        // (ProtobufSchema, AvroSchema, JsonSchema) can take their normal byte[]
+        // → ByteString / ByteBuffer path.
+        result = ((CelByteString) result).toByteArray();
       } else if (result instanceof Number) {
         Number num = (Number) result;
         switch (fieldCtx.getType()) {

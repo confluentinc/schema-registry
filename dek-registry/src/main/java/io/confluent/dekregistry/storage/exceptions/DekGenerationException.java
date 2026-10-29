@@ -19,19 +19,35 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 
 public class DekGenerationException extends SchemaRegistryException {
 
-  public DekGenerationException(String message, Throwable cause) {
+  // True if the failure was an authentication/authorization error from the KMS (a 401/403), which
+  // is a caller/configuration problem and should be surfaced as a 4xx rather than a 5xx.
+  private final boolean accessDenied;
+
+  public DekGenerationException(String message, Throwable cause, boolean accessDenied) {
     super(message, cause);
+    this.accessDenied = accessDenied;
+  }
+
+  public DekGenerationException(String message, Throwable cause) {
+    this(message, cause, false);
   }
 
   public DekGenerationException(String message) {
     super(message);
+    this.accessDenied = false;
   }
 
   public DekGenerationException(Throwable cause) {
     super(cause);
+    this.accessDenied = false;
   }
 
   public DekGenerationException() {
     super();
+    this.accessDenied = false;
+  }
+
+  public boolean isAccessDenied() {
+    return accessDenied;
   }
 }
