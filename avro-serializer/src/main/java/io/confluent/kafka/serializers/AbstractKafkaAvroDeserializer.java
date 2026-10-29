@@ -111,6 +111,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     reflectionClassTrust = new ReflectionClassTrust(
         config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_CLASSES_CONFIG),
         config.getList(KafkaAvroDeserializerConfig.AVRO_TRUSTED_PACKAGES_CONFIG));
+    // Readers cached under an earlier configuration were checked against its settings
+    readerSchemaCache.invalidateAll();
+    datumReaderCache.invalidateAll();
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {

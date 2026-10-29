@@ -147,29 +147,20 @@ public class ReflectionClassTrustTest {
     byte[] bytes = serializer.serialize(topic, value);
     Schema items = Schema.createArray(Schema.create(Schema.Type.INT));
     items.addProp(SpecificData.ELEMENT_PROP, ElementClassTarget.class.getName());
-    Schema latest = record(NO_CLASS_NAMESPACE, "Record", stringField(),
-        new Schema.Field("items", items));
-    schemaRegistry.register(topic + "-value", new AvroSchema(latest));
+    schemaRegistry.register(topic + "-value", new AvroSchema(trustedLatest(writer, items)));
 
-    Map<String, Object> props = props(null, OTHER_PACKAGE);
+    Map<String, Object> props = props(TrustedPojo.class.getName(), null);
     props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, props);
     assertRejected(() -> deserializer.deserialize(topic, bytes), ElementClassTarget.class);
   }
 
-  // A registry schema checked under one context class loader is checked again under another,
-  // which may resolve the classes it names
+  // A registry schema is checked under each context class loader: under the default one the class
+  // can't be found, and under the other it is found and rejected, without being initialized
   @Test
   public void testLatestVersionCheckedPerContextClassLoader() throws Exception {
-    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-    assumeNotNull(compiler);
-    File dir = temporaryFolder.newFolder();
-    File source = new File(dir, "ReflectContextOnly.java");
-    Files.write(source.toPath(), ("public class ReflectContextOnly { static { System.setProperty("
-        + "\"" + CONTEXT_ONLY_INITIALIZED + "\", \"true\"); } }")
-        .getBytes(StandardCharsets.UTF_8));
-    assertEquals(0, compiler.run(null, null, null, source.getPath()));
-
+    File dir = compileClass("ReflectContextOnly", "static { System.setProperty(\""
+        + CONTEXT_ONLY_INITIALIZED + "\", \"true\"); }");
     String topic = "latest-context-loader";
     Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
         new Schema.Field("items", Schema.createArray(Schema.create(Schema.Type.INT))));
@@ -178,29 +169,55 @@ public class ReflectionClassTrustTest {
     byte[] bytes = serializer.serialize(topic, value);
     Schema items = Schema.createArray(Schema.create(Schema.Type.INT));
     items.addProp(SpecificData.ELEMENT_PROP, "ReflectContextOnly");
-    Schema latest = record(NO_CLASS_NAMESPACE, "Record", stringField(),
-        new Schema.Field("items", items));
-    schemaRegistry.register(topic + "-value", new AvroSchema(latest));
-    Map<String, Object> props = props(null, OTHER_PACKAGE);
+    schemaRegistry.register(topic + "-value", new AvroSchema(trustedLatest(writer, items)));
+    Map<String, Object> props = props(TrustedPojo.class.getName(), null);
     props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, props);
 
-    // Under the default loader the class is missing, so the check passes and Avro fails
-    assertThrows(SerializationException.class, () -> deserializer.deserialize(topic, bytes));
+    assertTrue(rejection(() -> deserializer.deserialize(topic, bytes))
+        .contains("ReflectContextOnly named by the schema cannot be found"));
     Thread thread = Thread.currentThread();
     ClassLoader original = thread.getContextClassLoader();
     try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toURI().toURL()}, null)) {
       thread.setContextClassLoader(loader);
-      Throwable cause = assertThrows(SerializationException.class,
-          () -> deserializer.deserialize(topic, bytes));
-      while (cause.getCause() != null) {
-        cause = cause.getCause();
-      }
-      assertTrue(cause.getMessage(), cause.getMessage().contains("ReflectContextOnly named by"));
+      assertTrue(rejection(() -> deserializer.deserialize(topic, bytes))
+          .contains("ReflectContextOnly named by the schema is not trusted"));
     } finally {
       thread.setContextClassLoader(original);
     }
     assertNull(System.getProperty(CONTEXT_ONLY_INITIALIZED));
+  }
+
+  // Avro shares the classes it loads across the JVM, so with trust configured, a class that
+  // another context class loader exposed is rejected rather than passed as missing
+  @Test
+  public void testClassAvroLoadedUnderAnotherContextClassLoader() throws Exception {
+    File dir = compileClass("SharedCacheOnly", "public String f;");
+    byte[] bytes = serializer.serialize("shared-cache",
+        pojoValue(record(null, "SharedCacheOnly", stringField())));
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toURI().toURL()}, null)) {
+      thread.setContextClassLoader(loader);
+      // Unconfigured trust only warns, so Avro loads the class and keeps it
+      Object value = deserializer(null, null).deserialize("shared-cache", bytes);
+      assertEquals("SharedCacheOnly", value.getClass().getName());
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    KafkaAvroDeserializer deserializer = deserializer(null, OTHER_PACKAGE);
+    assertTrue(rejection(() -> deserializer.deserialize("shared-cache", bytes))
+        .contains("SharedCacheOnly named by the schema cannot be found"));
+  }
+
+  // Readers cached under an earlier configuration are not reused once trust is tightened
+  @Test
+  public void testReconfiguredTrust() {
+    byte[] bytes = serializer.serialize("reconfigured", pojoValue(namedAs(TrustedPojo.class)));
+    KafkaAvroDeserializer deserializer = deserializer(null, null);
+    assertPojo(deserializer.deserialize("reconfigured", bytes));
+    deserializer.configure(props(null, OTHER_PACKAGE), false);
+    assertRejected(() -> deserializer.deserialize("reconfigured", bytes), TrustedPojo.class);
   }
 
   // The registry's reader schema names the nested class, which the writer's class does not
@@ -303,12 +320,39 @@ public class ReflectionClassTrustTest {
 
   // Rejected by the trust check, and the class was never initialized
   private static void assertRejected(ThrowingRunnable deserialize, Class<?> clazz) {
+    String message = rejection(deserialize);
+    assertTrue(message, message.contains(clazz.getName() + " named by"));
+    assertFalse(ReflectTrustFixtures.initialized.contains(clazz.getSimpleName()));
+  }
+
+  // The message of the exception that caused the rejection
+  private static String rejection(ThrowingRunnable deserialize) {
     Throwable cause = assertThrows(SerializationException.class, deserialize);
     while (cause.getCause() != null) {
       cause = cause.getCause();
     }
-    assertTrue(cause.getMessage(), cause.getMessage().contains(clazz.getName() + " named by"));
-    assertFalse(ReflectTrustFixtures.initialized.contains(clazz.getSimpleName()));
+    return cause.getMessage();
+  }
+
+  // A registry schema for TrustedPojo, which reads the writer's record, with the given items
+  private static Schema trustedLatest(Schema writer, Schema items) {
+    Schema latest = record(TrustedPojo.class.getPackage().getName(),
+        TrustedPojo.class.getSimpleName(), stringField(), new Schema.Field("items", items));
+    latest.addAlias(writer.getFullName());
+    return latest;
+  }
+
+  // Compiles a public class in the default package that only a loader of the returned directory
+  // can see
+  private File compileClass(String className, String body) throws Exception {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assumeNotNull(compiler);
+    File dir = temporaryFolder.newFolder();
+    File source = new File(dir, className + ".java");
+    Files.write(source.toPath(), ("public class " + className + " { " + body + " }")
+        .getBytes(StandardCharsets.UTF_8));
+    assertEquals(0, compiler.run(null, null, null, source.getPath()));
+    return dir;
   }
 
   private static void assertPojo(Object value) {

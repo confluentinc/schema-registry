@@ -165,18 +165,29 @@ final class ReflectionClassTrust {
 
   private void check(Schema schema) {
     // Found without initializing it
-    checkTrusted(AvroSchemaUtils.findSpecificClass(schema));
+    checkTrusted(AvroSchemaUtils.findSpecificClass(schema), schema.getFullName());
   }
 
   private void checkClassProp(Schema schema, String prop) {
     String className = schema.getProp(prop);
     if (className != null) {
-      checkTrusted(loadClass(className));
+      checkTrusted(loadClass(className), className);
     }
   }
 
-  private void checkTrusted(Class<?> clazz) {
-    if (clazz == null || isTrusted(clazz)) {
+  private void checkTrusted(Class<?> clazz, String name) {
+    if (clazz == null) {
+      // Avro shares the classes it loads across the JVM, so it may still find one that another
+      // context class loader exposed; with trust configured, a class that can't be checked is
+      // rejected
+      if (configured) {
+        throw new SerializationException(name + " named by the schema cannot be found under the "
+            + "current context class loader, so its trust for reflection deserialization cannot "
+            + "be checked");
+      }
+      return;
+    }
+    if (isTrusted(clazz)) {
       return;
     }
     if (configured) {
