@@ -289,6 +289,16 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testASoftDeletedVersionRegisteredAgainCarryingAVersionKeepsItsId()
+        throws Exception {
+      // A deleted version is found again by its content, whatever version the schema carries.
+      AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+      int id = client.register(defaultValueSubject, schema);
+      client.deleteSchemaVersion(defaultValueSubject, "1");
+      assertEquals(id, client.register(defaultValueSubject, schema.copy(1)));
+    }
+
+    @Test
     public void testASoftDeletedVersionLookedUpInAnotherFormIsANewVersionRegisteredAgain()
         throws Exception {
       // A lookup by a copy carrying its version caches that form beside the registered one.
