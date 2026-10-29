@@ -413,6 +413,71 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectUnionOfUnnamedStructsWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // Unnamed branches become ConnectDefault and ConnectDefault2, so they can't be told
+    // apart by name.
+    Schema recordSchema1 = SchemaBuilder.struct()
+        .field("one", Schema.STRING_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct()
+        .field("two", Schema.STRING_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+        .name("connect_union_0")
+        .parameter("org.apache.kafka.connect.data.Union", "connect_union_0")
+        .field("connect_union_field_0", recordSchema1)
+        .field("connect_union_field_1", recordSchema2)
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema avroRecordSchema1 = avroSchema.getTypes().get(0);
+    org.apache.avro.Schema avroRecordSchema2 = avroSchema.getTypes().get(1);
+
+    assertEquals(
+        new GenericRecordBuilder(avroRecordSchema1).set("one", "hello").build(),
+        avroData.fromConnectData(schema, new Struct(schema)
+            .put("connect_union_field_0", new Struct(recordSchema1).put("one", "hello"))));
+    assertEquals(
+        new GenericRecordBuilder(avroRecordSchema2).set("two", "hello").build(),
+        avroData.fromConnectData(schema, new Struct(schema)
+            .put("connect_union_field_1", new Struct(recordSchema2).put("two", "hello"))));
+  }
+
+  @Test
+  public void testFromConnectOptionalUnionOfUnnamedStructsWithGeneralizedSumTypeSupport() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+        .with(AvroDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, true)
+        .build());
+    // The null member comes first in the Avro union, so it must be skipped when counting.
+    Schema recordSchema1 = SchemaBuilder.struct()
+        .field("one", Schema.STRING_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct()
+        .field("two", Schema.STRING_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+        .name("connect_union_0")
+        .parameter("org.apache.kafka.connect.data.Union", "connect_union_0")
+        .field("connect_union_field_0", recordSchema1)
+        .field("connect_union_field_1", recordSchema2)
+        .optional()
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    assertEquals(org.apache.avro.Schema.Type.NULL, avroSchema.getTypes().get(0).getType());
+    org.apache.avro.Schema avroRecordSchema1 = avroSchema.getTypes().get(1);
+    org.apache.avro.Schema avroRecordSchema2 = avroSchema.getTypes().get(2);
+
+    assertEquals(
+        new GenericRecordBuilder(avroRecordSchema1).set("one", "hello").build(),
+        avroData.fromConnectData(schema, new Struct(schema)
+            .put("connect_union_field_0", new Struct(recordSchema1).put("one", "hello"))));
+    assertEquals(
+        new GenericRecordBuilder(avroRecordSchema2).set("two", "hello").build(),
+        avroData.fromConnectData(schema, new Struct(schema)
+            .put("connect_union_field_1", new Struct(recordSchema2).put("two", "hello"))));
+  }
+
+  @Test
   public void testFromConnectWithInvalidName() {
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
