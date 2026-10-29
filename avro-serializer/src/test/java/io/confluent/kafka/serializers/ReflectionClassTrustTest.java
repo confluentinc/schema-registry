@@ -210,6 +210,25 @@ public class ReflectionClassTrustTest {
         .contains("SharedCacheOnly named by the schema cannot be found"));
   }
 
+  // Trusting every package checks nothing, so a record without a class still reads generically
+  @Test
+  public void testAllPackagesTrustedWithRecordWithoutClass() throws Exception {
+    String topic = "all-packages";
+    Schema nested = record(NO_CLASS_NAMESPACE, "Nested", stringField());
+    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("nested", nested));
+    GenericRecord value = pojoValue(writer);
+    value.put("nested", pojoValue(nested));
+    byte[] bytes = serializer.serialize(topic, value);
+    schemaRegistry.register(topic + "-value", new AvroSchema(writer));
+
+    Map<String, Object> props = props(null, "*");
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
+    GenericRecord result = (GenericRecord)
+        new KafkaAvroDeserializer(schemaRegistry, props).deserialize(topic, bytes);
+    assertEquals("value", ((GenericRecord) result.get("nested")).get("f").toString());
+  }
+
   // Readers cached under an earlier configuration are not reused once trust is tightened
   @Test
   public void testReconfiguredTrust() {

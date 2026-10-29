@@ -176,6 +176,10 @@ final class ReflectionClassTrust {
   }
 
   private void checkTrusted(Class<?> clazz, String name) {
+    if (allPackages) {
+      // Every class is trusted, so there is nothing to check
+      return;
+    }
     if (clazz == null) {
       // Avro shares the classes it loads across the JVM, so it may still find one that another
       // context class loader exposed; with trust configured, a class that can't be checked is
