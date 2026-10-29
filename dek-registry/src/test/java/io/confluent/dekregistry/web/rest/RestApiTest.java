@@ -299,6 +299,11 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    // Latest dek also has decrypted key material since kek is shared
+    newDek = client.getDekLatestVersion(kekName, subject2, algorithm, false);
+    assertEquals(2, newDek.getVersion());
+    assertNotNull(newDek.getKeyMaterial());
+
     List<String> kekNames = client.listKeks(Collections.singletonList(subject), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
 

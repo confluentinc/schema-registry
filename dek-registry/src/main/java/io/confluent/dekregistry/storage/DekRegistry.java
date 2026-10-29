@@ -420,7 +420,7 @@ public class DekRegistry implements Closeable {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
         getDeks(tenant, kekName, subject, algorithm, lookupDeleted);
     Collections.reverse(deks);
-    return deks.isEmpty() ? null : (DataEncryptionKey) deks.get(0).value;
+    return deks.isEmpty() ? null : maybeGenerateRawDek((DataEncryptionKey) deks.get(0).value);
   }
 
   public DataEncryptionKey getDek(String kekName, String subject, int version,
@@ -436,14 +436,19 @@ public class DekRegistry implements Closeable {
         tenant, kekName, subject, algorithm, version);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
-      KeyEncryptionKey kek = getKek(key.getKekName(), true);
-      if (kek.isShared()) {
-        key = generateRawDek(kek, key);
-      }
-      return key;
+      return maybeGenerateRawDek(key);
     } else {
       return null;
     }
+  }
+
+  private DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+      throws SchemaRegistryException {
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (kek.isShared()) {
+      key = generateRawDek(kek, key);
+    }
+    return key;
   }
 
   public Kek createKekOrForward(CreateKekRequest request,
