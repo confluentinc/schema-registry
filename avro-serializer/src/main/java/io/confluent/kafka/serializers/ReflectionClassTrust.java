@@ -20,6 +20,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -60,8 +61,9 @@ final class ReflectionClassTrust {
   private final boolean configured;
   private final Set<String> warned =
       Collections.newSetFromMap(new BoundedConcurrentHashMap<>(MAX_REMEMBERED));
-  // Registry schemas already checked, by identity
-  private final Cache<Schema, Boolean> checkedSchemas = CacheBuilder.newBuilder()
+  // Registry schemas already checked, by identity, with the context class loader they were
+  // checked under
+  private final Cache<Schema, CheckedFor> checkedSchemas = CacheBuilder.newBuilder()
       .weakKeys()
       .maximumSize(MAX_REMEMBERED)
       .build();
@@ -131,7 +133,10 @@ final class ReflectionClassTrust {
   // Every class a reader schema from the registry names, by a named type or a java-class,
   // java-element-class or java-key-class property, since a reflect reader may load them all
   void checkClassesNamedBy(Schema readerSchema) {
-    if (checkedSchemas.getIfPresent(readerSchema) == null) {
+    // The classes it names may resolve differently under another context class loader
+    ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+    CheckedFor checked = checkedSchemas.getIfPresent(readerSchema);
+    if (checked == null || !checked.isFor(contextLoader)) {
       AvroSchemaUtils.forEachSchema(readerSchema, schema -> {
         switch (schema.getType()) {
           case RECORD:
@@ -154,7 +159,7 @@ final class ReflectionClassTrust {
             break;
         }
       });
-      checkedSchemas.put(readerSchema, Boolean.TRUE);
+      checkedSchemas.put(readerSchema, new CheckedFor(contextLoader));
     }
   }
 
@@ -232,5 +237,22 @@ final class ReflectionClassTrust {
       }
     }
     return null;
+  }
+
+  // The context class loader a schema was checked under, held weakly
+  private static final class CheckedFor {
+    private final boolean hadContextLoader;
+    private final WeakReference<ClassLoader> contextLoader;
+
+    CheckedFor(ClassLoader contextLoader) {
+      this.hadContextLoader = contextLoader != null;
+      this.contextLoader = new WeakReference<>(contextLoader);
+    }
+
+    boolean isFor(ClassLoader currentLoader) {
+      return hadContextLoader
+          ? currentLoader != null && contextLoader.get() == currentLoader
+          : currentLoader == null;
+    }
   }
 }

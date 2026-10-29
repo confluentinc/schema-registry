@@ -19,7 +19,9 @@ package io.confluent.kafka.serializers;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeNotNull;
 
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -34,8 +36,13 @@ import io.confluent.kafka.serializers.reflecttrust.ReflectTrustFixtures;
 import io.confluent.kafka.serializers.reflecttrust.RejectedElement;
 import io.confluent.kafka.serializers.reflecttrust.RejectedRoot;
 import io.confluent.kafka.serializers.reflecttrust.sub.TrustedPojo;
+import java.io.File;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,8 +56,12 @@ import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.function.ThrowingRunnable;
+import org.junit.rules.TemporaryFolder;
 
 // DGS-25191: the classes a reflection deserializer loads because a schema names them
 public class ReflectionClassTrustTest {
@@ -58,6 +69,10 @@ public class ReflectionClassTrustTest {
   private static final String FIXTURES = "io.confluent.kafka.serializers.reflecttrust";
   private static final String NO_CLASS_NAMESPACE = "io.confluent.kafka.serializers.noclass";
   private static final String OTHER_PACKAGE = "com.example.other";
+  private static final String CONTEXT_ONLY_INITIALIZED = "dgs25191.reflectcontextonly.initialized";
+
+  @Rule
+  public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private final SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
   private final KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry,
@@ -140,6 +155,52 @@ public class ReflectionClassTrustTest {
     props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
     KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, props);
     assertRejected(() -> deserializer.deserialize(topic, bytes), ElementClassTarget.class);
+  }
+
+  // A registry schema checked under one context class loader is checked again under another,
+  // which may resolve the classes it names
+  @Test
+  public void testLatestVersionCheckedPerContextClassLoader() throws Exception {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assumeNotNull(compiler);
+    File dir = temporaryFolder.newFolder();
+    File source = new File(dir, "ReflectContextOnly.java");
+    Files.write(source.toPath(), ("public class ReflectContextOnly { static { System.setProperty("
+        + "\"" + CONTEXT_ONLY_INITIALIZED + "\", \"true\"); } }")
+        .getBytes(StandardCharsets.UTF_8));
+    assertEquals(0, compiler.run(null, null, null, source.getPath()));
+
+    String topic = "latest-context-loader";
+    Schema writer = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", Schema.createArray(Schema.create(Schema.Type.INT))));
+    GenericRecord value = pojoValue(writer);
+    value.put("items", Collections.singletonList(1));
+    byte[] bytes = serializer.serialize(topic, value);
+    Schema items = Schema.createArray(Schema.create(Schema.Type.INT));
+    items.addProp(SpecificData.ELEMENT_PROP, "ReflectContextOnly");
+    Schema latest = record(NO_CLASS_NAMESPACE, "Record", stringField(),
+        new Schema.Field("items", items));
+    schemaRegistry.register(topic + "-value", new AvroSchema(latest));
+    Map<String, Object> props = props(null, OTHER_PACKAGE);
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, props);
+
+    // Under the default loader the class is missing, so the check passes and Avro fails
+    assertThrows(SerializationException.class, () -> deserializer.deserialize(topic, bytes));
+    Thread thread = Thread.currentThread();
+    ClassLoader original = thread.getContextClassLoader();
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toURI().toURL()}, null)) {
+      thread.setContextClassLoader(loader);
+      Throwable cause = assertThrows(SerializationException.class,
+          () -> deserializer.deserialize(topic, bytes));
+      while (cause.getCause() != null) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause.getMessage(), cause.getMessage().contains("ReflectContextOnly named by"));
+    } finally {
+      thread.setContextClassLoader(original);
+    }
+    assertNull(System.getProperty(CONTEXT_ONLY_INITIALIZED));
   }
 
   // The registry's reader schema names the nested class, which the writer's class does not
