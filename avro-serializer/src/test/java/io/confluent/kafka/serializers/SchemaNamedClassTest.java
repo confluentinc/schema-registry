@@ -24,6 +24,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
+import io.confluent.kafka.example.KindTest;
+import io.confluent.kafka.example.KindTestEnum;
+import io.confluent.kafka.example.KindTestHash;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -163,6 +166,33 @@ public class SchemaNamedClassTest {
     byte[] bytes = serializer.serialize("generated-array", users);
     assertEquals(Collections.singletonList(new User("name")),
         new ArrayList<>((List<?>) specificDeserializer.deserialize("generated-array", bytes)));
+  }
+
+  // Generated enum and fixed classes pass the check, and are still read into
+  @Test
+  public void testGeneratedEnumAndFixed() {
+    KindTest value = new KindTest(KindTestEnum.B, new KindTestHash(new byte[] {1, 2}));
+    byte[] bytes = serializer.serialize("generated-kinds", value);
+    assertEquals(value, specificDeserializer.deserialize("generated-kinds", bytes));
+    AvroSchemaUtils.checkSpecificClasses(KindTest.getClassSchema());
+  }
+
+  // The reader schema is the registry's, not the class's own
+  @Test
+  public void testGeneratedEnumAndFixedInLatestVersion() {
+    KindTest value = new KindTest(KindTestEnum.A, new KindTestHash(new byte[] {3, 4}));
+    byte[] bytes = serializer.serialize("generated-kinds-latest", value);
+    assertEquals(value, latestSpecificDeserializer.deserialize("generated-kinds-latest", bytes));
+  }
+
+  // An array of enums is read from the writer's schema, into the generated enum
+  @Test
+  public void testGeneratedEnumArrayElement() {
+    Schema array = Schema.createArray(KindTestEnum.getClassSchema());
+    byte[] bytes = serializer.serialize("generated-enum-array",
+        new NonRecordContainer(array, Arrays.asList(KindTestEnum.A, KindTestEnum.B)));
+    assertEquals(Arrays.asList(KindTestEnum.A, KindTestEnum.B), new ArrayList<>(
+        (List<?>) specificDeserializer.deserialize("generated-enum-array", bytes)));
   }
 
   @Test
