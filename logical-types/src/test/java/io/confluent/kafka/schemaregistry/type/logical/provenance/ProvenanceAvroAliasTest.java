@@ -442,7 +442,7 @@ class ProvenanceAvroAliasTest {
     }
     List<Map<String, Integer>> pids = new ArrayList<>();
     for (ProvenanceVersion version : ProvenanceHistory.compute("s", entries,
-        ProvenanceHistory.held(Arrays.asList(versions)), false).getVersions()) {
+        ProvenanceHistory.held(Arrays.asList(versions))).getVersions()) {
       Map<String, Integer> byNames = new HashMap<>();
       for (ProvenanceField field : version.getFields()) {
         byNames.put(String.join(".", field.getNames()), field.getPid());
@@ -458,7 +458,8 @@ class ProvenanceAvroAliasTest {
   }
 
   private static ProtobufSchema proto(String uType) {
-    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage R {\n  A w = 1;\n  "
+    // Rooted at R, the others its fields' types, as a file of several naming no root is not.
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.R\" } ] };\n" + "message R {\n  A w = 1;\n  "
         + uType + " u = 2;\n}\nmessage A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n");
   }
 

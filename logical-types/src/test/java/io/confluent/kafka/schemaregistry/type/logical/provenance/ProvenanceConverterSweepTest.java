@@ -135,7 +135,7 @@ class ProvenanceConverterSweepTest {
       fields = ProvenanceHistory.compute("s",
           Collections.singletonList(new SchemaMetadata(1, 1, schema.schemaType(),
               Collections.emptyList(), "")),
-          ProvenanceHistory.held(Collections.singletonList(schema)), false)
+          ProvenanceHistory.held(Collections.singletonList(schema)))
           .getVersions().get(0).getFields();
     } catch (ValidationException | RecursiveTypeException e) {
       return;
