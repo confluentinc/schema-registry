@@ -518,7 +518,7 @@ public class LogicalTypeToProtoConverter {
    * The messages a multi-message root lists, in order: every top-level struct the schema declares
    * and nothing else, as the file it writes is read back.
    */
-  private static List<String> multiMessageOrder(Schema root, LogicalType logicalType) {
+  public static List<String> multiMessageOrder(Schema root, LogicalType logicalType) {
     Map<String, Schema> local = logicalType.getLocalNamedTypes();
     Set<String> topLevel = new LinkedHashSet<>();
     local.forEach((name, body) -> {

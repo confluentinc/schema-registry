@@ -182,14 +182,30 @@ class ProtoMessageRootTest {
     assertTrue(e.getMessage().contains("must be STRUCT"), e.getMessage());
   }
 
+  private static LogicalType rootedAt(LogicalType read, List<String> messages) {
+    return new LogicalType(null, read.getNamespace(),
+        ProtoToLogicalTypeConverter.multiMessageRoot(messages), read.getNamedTypes(),
+        read.getExternalTypes(), Map.of(), read.getReferences(), read.getResolvedReferences(),
+        read.getDefaultValues());
+  }
+
   @Test
   void aRootOverSeveralMessagesMustListEveryOneOnce() {
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(fromDdl(STRUCTS));
-    LogicalType partial = new LogicalType(null, read.getNamespace(),
-        ProtoToLogicalTypeConverter.multiMessageRoot(List.of("p.Person")), read.getNamedTypes(),
-        read.getExternalTypes(), Map.of(), read.getReferences(), read.getResolvedReferences(),
-        read.getDefaultValues());
+    LogicalType partial = rootedAt(read, List.of("p.Person"));
     assertThrows(ValidationException.class,
         () -> LogicalTypeToProtoConverter.fromLogicalType(partial, "ignored"));
+    assertThrows(ValidationException.class, () -> LogicalTypeToDdlConverter.toDdl(partial));
+  }
+
+  @Test
+  void aRootOverSeveralMessagesIsWrittenAsDdlInItsOwnOrder() {
+    // Declared as the root lists them, so the file the DDL writes keeps their indexes
+    LogicalType reversed = rootedAt(ProtoToLogicalTypeConverter.toLogicalType(fromDdl(STRUCTS)),
+        List.of("p.Person", "p.Address"));
+    assertEquals(List.of("Person", "Address"),
+        messages(fromDdl(LogicalTypeToDdlConverter.toDdl(reversed))));
+    assertEquals(List.of("Person", "Address"),
+        messages(LogicalTypeToProtoConverter.fromLogicalType(reversed, "ignored")));
   }
 }
