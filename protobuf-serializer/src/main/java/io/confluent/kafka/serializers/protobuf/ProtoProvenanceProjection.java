@@ -309,7 +309,11 @@ final class ProtoProvenanceProjection {
    * @throws SerializationException if a location's names are missing or not in the reader
    */
   static ProtoProvenanceProjection of(ProtobufSchema reader, ProtobufSchema writer,
-      ProvenanceMapping mapping, boolean includeMultipleMessages) {
+      ProvenanceMapping mapping) {
+    // Each side's locations are its own version's, as its schema is read: from its one message,
+    // or from its file's top-level messages, each a first step.
+    boolean readerMulti = reader.readsAsSeveralMessages();
+    boolean writerMulti = writer != null && writer.readsAsSeveralMessages();
     // A location the walk cannot find, or a response without kinds, would escape provenance
     // without a trace.
     mapping.requireNames();
@@ -318,21 +322,21 @@ final class ProtoProvenanceProjection {
     Walk walk = new Walk(root.getFile(), mapping.readerId());
     Set<List<Integer>> moving = new HashSet<>();
     boolean reached = false;
-    boolean nested = includeMultipleMessages && root.getContainingType() != null;
+    boolean nested = readerMulti && root.getContainingType() != null;
     // Whether the record's message is reached only under restarted uses, and which of its fields
     // continue a field of the writer's own message.
     boolean reachedMoving = false;
     Set<Integer> ofWriterRecord = new HashSet<>();
     for (List<Integer> path : mapping.readerPaths()) {
       List<String> names = mapping.readerNamesOf(path);
-      if (includeMultipleMessages && !nested && !names.get(0).equals(root.getFullName())) {
+      if (readerMulti && !nested && !names.get(0).equals(root.getFullName())) {
         // Another top-level message: the record never parses it, so its locations decide nothing.
         continue;
       }
-      if (walk.underMovingField(root, path, moving, mapping, includeMultipleMessages)) {
+      if (walk.underMovingField(root, path, moving, mapping, readerMulti)) {
         // Nothing under a field that moves is ever read, so nothing under it needs a number.
         if (nested && !reachedMoving) {
-          FieldDescriptor at = walk.fieldAt(root, names, includeMultipleMessages);
+          FieldDescriptor at = walk.fieldAt(root, names, readerMulti);
           reachedMoving = at != null && isOf(at, root);
         }
         continue;
@@ -341,13 +345,13 @@ final class ProtoProvenanceProjection {
       if (move) {
         moving.add(path);
       }
-      FieldDescriptor field = walk.fieldAt(root, names, includeMultipleMessages);
+      FieldDescriptor field = walk.fieldAt(root, names, readerMulti);
       if (field != null && isOf(field, root)) {
         reached = true;
         if (nested && !move && writer != null) {
           FieldDescriptor was =
               writerFieldAt(writer, mapping.writerNamesOf(mapping.writerPathOf(path)),
-                  includeMultipleMessages);
+                  writerMulti);
           if (was != null && isOf(was, root)) {
             ofWriterRecord.add(field.getNumber());
           }

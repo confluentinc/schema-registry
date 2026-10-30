@@ -24,6 +24,9 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.rules.RuleResult;
@@ -438,33 +441,52 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (!provenanceEnabled || reader == null || !migrations.isEmpty()) {
       return null;
     }
-    // As Flink chooses its row: every top-level message when the reader's file has several, else
-    // its one message.
-    boolean multi = reader.toDescriptor().getFile().getMessageTypes().size() > 1;
-    if (multi && reader.toDescriptor(name) == null) {
+    // Each version is read as its schema names: its one message, or every top-level message when
+    // it names no root and declares several. The reader's and the writer's need not agree.
+    boolean readerMulti = reader.readsAsSeveralMessages();
+    if (readerMulti && reader.toDescriptor(name) == null) {
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
     // The writer named at the record's message: it may come back unnamed, as its file's first,
     // and its name tells each record's message apart, here and in the projector's cache.
     ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
-    // Single-message provenance roots each version at its file's first message: a record written
-    // as another has no locations there, so it is read without provenance.
-    Descriptor written = named.toDescriptor();
-    boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
+    // A version read as one message has locations for that message only: a record written as
+    // another, or read by a reader rooted at another, is read without provenance.
+    boolean placed = (writer.readsAsSeveralMessages() || name.equals(rootOf(writer)))
+        && (readerMulti || name.equals(rootOf(reader)));
     if (!placed && reader.toDescriptor(name) == null) {
       // Read without provenance, the record would be parsed as the reader's first message.
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
-    return provenanceProjector().project(subject, writerId, named, reader, multi,
+    return provenanceProjector().project(subject, writerId, named, reader,
         mapping -> {
           if (!placed) {
             throw new ProvenanceUnavailableException("The record was written as message " + name
-                + ", not its file's first, which single-message provenance has no locations for");
+                + ", not the root of a schema read as one message, which provenance has no "
+                + "locations for");
           }
-          return ProtoProvenanceProjection.of(reader, named, mapping, multi);
+          return ProtoProvenanceProjection.of(reader, named, mapping);
         }).orElse(null);
+  }
+
+  // The message a schema read as one message is rooted at: the one its root param names, or its
+  // file's first; a name the schema was given is not one.
+  private static String rootOf(ProtobufSchema schema) {
+    String root = schema.rootParam();
+    if (root != null) {
+      return root;
+    }
+    ProtoFileElement file = schema.effectiveFile();
+    for (TypeElement type : file.getTypes()) {
+      if (type instanceof MessageElement) {
+        String packageName = file.getPackageName();
+        return packageName == null || packageName.isEmpty()
+            ? type.getName() : packageName + "." + type.getName();
+      }
+    }
+    return null;
   }
 
   private volatile ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector;

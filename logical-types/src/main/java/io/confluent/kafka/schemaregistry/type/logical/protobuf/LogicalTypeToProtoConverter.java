@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import com.google.common.base.CaseFormat;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -191,18 +194,12 @@ public class LogicalTypeToProtoConverter {
       rowName = logicalType.getName();
     }
 
-    // Multi-root sugar: when the root is a UNION whose members are all
-    // NAMED_TYPE_REFs to local types, the visitor's sugar inferred it from
-    // multiple unreferenced top-level named-type declarations. Proto's wire
-    // model has no native equivalent of a discriminated union at the file
-    // root, so we treat it as a multi-message file: the first union member
-    // becomes the primary root, the rest fall through to the existing
-    // namedTypes peer-emission path. (Avro/JSON writers emit the union
-    // structurally; only proto repurposes it.)
-    if (isMultiRootUnion(schema, logicalType.getNamedTypes())) {
-      schema = Schema.createNamedTypeRef(
-          schema.getBranches().get(0).getSchema().getQualifiedName())
-          .setNullable(false);
+    // A root over several messages is written as each of them, in order, with no root param: a
+    // file of several messages naming no root is read as all of them.
+    List<String> messageOrder = null;
+    if (ProtoToLogicalTypeConverter.isMultiMessageRoot(schema)) {
+      messageOrder = multiMessageOrder(schema, logicalType);
+      schema = Schema.createNamedTypeRef(messageOrder.get(0)).setNullable(false);
     }
 
     // External-only public import: the registered root is a NAMED_TYPE_REF to
@@ -210,11 +207,27 @@ public class LogicalTypeToProtoConverter {
     // Proto's `import public` is the natural representation — produces an
     // otherwise-empty proto file that publicly imports the referenced type,
     // allowing downstream consumers to reach it via this schema's name.
+    // A reader keeps an external root's body in namedTypes too, so external counts as absent.
     if (schema.getType() == Schema.Type.NAMED_TYPE_REF) {
       String fullName = schema.getQualifiedName();
-      if (!logicalType.getNamedTypes().containsKey(fullName)
-          && logicalType.getResolvedReferences().containsKey(fullName)) {
-        return buildPublicImportFile(logicalType, fullName, version);
+      String importName =
+          !logicalType.getNamedTypes().containsKey(fullName) || logicalType.isExternal(fullName)
+              ? declaringImport(logicalType, fullName) : null;
+      if (importName != null) {
+        // The file only imports, so it has nowhere to declare a local type.
+        if (!logicalType.getLocalNamedTypes().isEmpty()) {
+          throw new ValidationException("Root " + fullName + " is a referenced type, imported "
+              + "publicly, so the schema cannot declare its own types too: "
+              + logicalType.getLocalNamedTypes().keySet());
+        }
+        // A schema's root is found through one public import, so not through a re-export.
+        if (declaration(logicalType.getResolvedReferences().get(importName), logicalType,
+            fullName) != Declaration.OWN) {
+          throw new ValidationException("Root " + fullName + " would be imported from "
+              + importName + ", which only re-exports it, so the schema could not resolve it; "
+              + "reference the file that declares it");
+        }
+        return buildPublicImportFile(logicalType, fullName, importName, version);
       }
     }
 
@@ -250,6 +263,14 @@ public class LogicalTypeToProtoConverter {
     // emitted as `import` statements via the resolvedReferences pre-walk
     // below.) Validate against locals only.
     Map<String, Schema> localNamedTypes = logicalType.getLocalNamedTypes();
+    if (messageOrder != null) {
+      Map<String, Schema> ordered = new LinkedHashMap<>();
+      for (String message : messageOrder) {
+        ordered.put(message, localNamedTypes.get(message));
+      }
+      ordered.putAll(localNamedTypes);
+      localNamedTypes = ordered;
+    }
     validateNamespacesMatchFilePackage(
         localNamedTypes, logicalType.getNamespace());
 
@@ -269,18 +290,32 @@ public class LogicalTypeToProtoConverter {
     // two types from the same source file would produce duplicate-symbol
     // errors if each got its own renamed clone, so subsequent FQNs from a
     // single source share the first FQN's rename.
+    // A file reached both as itself and through files re-exporting it is registered once, so its
+    // types are declared by one import: a direct reference first, then a file over a re-export.
+    Set<String> direct = new HashSet<>();
+    logicalType.getReferences().forEach(reference -> direct.add(reference.getName()));
+    Map<String, String> sourceByFile = new LinkedHashMap<>();
+    Map<String, FileDescriptor> fileBySource = new HashMap<>();
     for (Map.Entry<String, String> entry :
             logicalType.getResolvedReferences().entrySet()) {
       ProtobufSchema parsed = new ProtobufSchema(entry.getValue(),
           logicalType.getReferences(), logicalType.getResolvedReferences(),
           null, null, null, null);
-      FileDescriptor file = parsed.toDescriptor().getFile();
-      registerExternalFile(file, entry.getKey(), ctx);
+      FileDescriptor file = fileOf(parsed);
+      fileBySource.put(entry.getKey(), file);
+      // A re-export's types are declared by the imported file, named by its reference
+      String declaring = isReExport(parsed) ? file.getName() : entry.getKey();
+      sourceByFile.merge(declaring, entry.getKey(), (chosen, candidate) ->
+          sourceRank(candidate, direct, logicalType) < sourceRank(chosen, direct, logicalType)
+              ? candidate : chosen);
+    }
+    for (String source : sourceByFile.values()) {
+      registerExternalFile(fileBySource.get(source), source, ctx);
     }
 
     ProtobufSchema result = new ProtobufSchema(
         buildFile(schema, rowName, logicalType.getNamespace(),
-            localNamedTypes, rootResolvedFromFqn, logicalType, ctx),
+            localNamedTypes, rootResolvedFromFqn, messageOrder == null, logicalType, ctx),
         logicalType.getReferences());
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
@@ -300,6 +335,111 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
+   * The file a referenced schema's first type is declared in, found by that type's exact name:
+   * a lookup by name also finds an imported message by its short name, such as one sharing the
+   * name of an enum, which is all a file of only enums declares.
+   */
+  private static FileDescriptor fileOf(ProtobufSchema parsed) {
+    String name = parsed.name();
+    Descriptor message = parsed.toDescriptor();
+    if (message != null && message.getFullName().equals(name)) {
+      return message.getFile();
+    }
+    EnumDescriptor enumType = parsed.toDynamicSchema().getEnumDescriptor(name);
+    if (enumType != null && enumType.getFullName().equals(name)) {
+      return enumType.getFile();
+    }
+    throw new ValidationException("Referenced Protobuf schema declares no type " + name);
+  }
+
+  private static boolean isReExport(ProtobufSchema parsed) {
+    return parsed.rawSchema().getTypes().isEmpty();
+  }
+
+  /** A direct reference before a resolved one, and a file declaring types before a re-export. */
+  private static int sourceRank(String source, Set<String> direct, LogicalType logicalType) {
+    boolean reExport = isReExport(new ProtobufSchema(
+        logicalType.getResolvedReferences().get(source)));
+    return (direct.contains(source) ? 0 : 2) + (reExport ? 1 : 0);
+  }
+
+  /**
+   * The reference a root is imported from: the one direct reference that declares it, or failing
+   * any, the one resolved file that does. A file declaring it itself is taken over one that only
+   * re-exports it; several of either are ambiguous, since each could be what was imported.
+   */
+  private static String declaringImport(LogicalType logicalType, String fullName) {
+    Set<String> direct = new LinkedHashSet<>();
+    logicalType.getReferences().forEach(reference -> direct.add(reference.getName()));
+    String found = onlyDeclaring(direct, logicalType, fullName);
+    if (found == null) {
+      Set<String> others = new LinkedHashSet<>(logicalType.getResolvedReferences().keySet());
+      others.removeAll(direct);
+      found = onlyDeclaring(others, logicalType, fullName);
+    }
+    return found;
+  }
+
+  private static String onlyDeclaring(Set<String> names, LogicalType logicalType,
+      String fullName) {
+    Map<Declaration, List<String>> byKind = new EnumMap<>(Declaration.class);
+    for (String name : names) {
+      String text = logicalType.getResolvedReferences().get(name);
+      if (text != null) {
+        byKind.computeIfAbsent(declaration(text, logicalType, fullName),
+            kind -> new ArrayList<>()).add(name);
+      }
+    }
+    List<String> declaring = byKind.containsKey(Declaration.OWN)
+        ? byKind.get(Declaration.OWN)
+        : byKind.getOrDefault(Declaration.RE_EXPORT, Collections.emptyList());
+    if (declaring.size() > 1) {
+      throw new ValidationException("Root " + fullName + " is declared by more than one "
+          + "referenced file, " + declaring + ", so which one it is imported from is ambiguous");
+    }
+    return declaring.isEmpty() ? null : declaring.get(0);
+  }
+
+  /** How a referenced file declares a message, if it does. */
+  private enum Declaration {
+    // Not merely by importing a file that declares it
+    NONE,
+    OWN,
+    // As the root of a file of only public imports
+    RE_EXPORT
+  }
+
+  private static Declaration declaration(String text, LogicalType logicalType, String fullName) {
+    try {
+      // A file's own text tells its own messages; only a re-export needs its dependencies.
+      ProtoFileElement file = new ProtobufSchema(text).rawSchema();
+      String packageName = file.getPackageName();
+      String prefix = packageName == null || packageName.isEmpty() ? "" : packageName + ".";
+      for (TypeElement type : file.getTypes()) {
+        if (declaresMessage(type, prefix, fullName)) {
+          return Declaration.OWN;
+        }
+      }
+      if (!file.getTypes().isEmpty() || file.getPublicImports().isEmpty()) {
+        return Declaration.NONE;
+      }
+      ProtobufSchema schema = new ProtobufSchema(text, logicalType.getReferences(),
+          logicalType.getResolvedReferences(), null, null, null, null);
+      return fullName.equals(schema.name()) ? Declaration.RE_EXPORT : Declaration.NONE;
+    } catch (RuntimeException e) {
+      // a file that does not parse declares nothing to import
+      return Declaration.NONE;
+    }
+  }
+
+  private static boolean declaresMessage(TypeElement type, String prefix, String fullName) {
+    String name = prefix + type.getName();
+    return type instanceof MessageElement && name.equals(fullName)
+        || type.getNestedTypes().stream()
+            .anyMatch(nested -> declaresMessage(nested, name + ".", fullName));
+  }
+
+  /**
    * Build a proto file that publicly imports a single externally-referenced
    * type via {@code import public}. Result has zero local messages/enums;
    * consumers resolve the root through {@code schema.toDescriptor()} which
@@ -310,10 +450,9 @@ public class LogicalTypeToProtoConverter {
    * locally declared), with no local body to define.
    */
   private static ProtobufSchema buildPublicImportFile(
-      LogicalType logicalType, String externalTypeFullName,
+      LogicalType logicalType, String externalTypeFullName, String importName,
       LogicalTypeVersion version) {
-    String externalProtoText =
-        logicalType.getResolvedReferences().get(externalTypeFullName);
+    String externalProtoText = logicalType.getResolvedReferences().get(importName);
     ProtobufSchema externalSchema = new ProtobufSchema(
         externalProtoText,
         logicalType.getReferences(),
@@ -321,7 +460,7 @@ public class LogicalTypeToProtoConverter {
         null, null, null, null);
     FileDescriptor externalFile = externalSchema.toDescriptor().getFile();
 
-    String externalFileName = externalTypeFullName;
+    String externalFileName = importName;
     try {
       FileDescriptor renamedExternal = FileDescriptor.buildFrom(
           externalFile.toProto().toBuilder().setName(externalFileName).build(),
@@ -337,7 +476,9 @@ public class LogicalTypeToProtoConverter {
 
   /**
    * An otherwise-empty file publicly importing the root's file. The root is recorded in the
-   * file_meta params only when {@link ProtobufSchema#name()} would not pick it anyway.
+   * file_meta params unless that file declares at most one message and
+   * {@link ProtobufSchema#name()} picks it anyway: a wrapper of several messages naming no root is
+   * read as all of them.
    */
   private static ProtobufSchema publicImportFile(FileDescriptor imported, String rootFullName,
       String packageName, List<SchemaReference> references) {
@@ -351,7 +492,7 @@ public class LogicalTypeToProtoConverter {
     try {
       ProtobufSchema schema = new ProtobufSchema(FileDescriptor.buildFrom(
           fileBuilder.build(), new FileDescriptor[] {imported}), references);
-      if (schema.name().equals(rootFullName)) {
+      if (schema.name().equals(rootFullName) && imported.getMessageTypes().size() < 2) {
         return schema;
       }
       fileBuilder.addDependency(MetaProto.getDescriptor().getName())
@@ -374,30 +515,34 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
-   * Detect the visitor's multi-root sugar shape: a non-nullable
-   * {@code UNION} whose every branch is a {@code NAMED_TYPE_REF} resolving to
-   * a locally-defined type. Proto repurposes this as "the first member is the
-   * root and the rest are file-level peer messages" — see callsite for
-   * rationale.
+   * The messages a multi-message root lists, in order: every top-level struct the schema declares
+   * and nothing else, as the file it writes is read back.
    */
-  private static boolean isMultiRootUnion(
-      Schema schema, Map<String, Schema> namedTypes) {
-    if (schema.getType() != Schema.Type.UNION || schema.isNullable()) {
-      return false;
-    }
-    if (schema.getBranches().isEmpty()) {
-      return false;
-    }
-    for (UnionBranch branch : schema.getBranches()) {
-      Schema member = branch.getSchema();
-      if (member.getType() != Schema.Type.NAMED_TYPE_REF) {
-        return false;
+  private static List<String> multiMessageOrder(Schema root, LogicalType logicalType) {
+    Map<String, Schema> local = logicalType.getLocalNamedTypes();
+    Set<String> topLevel = new LinkedHashSet<>();
+    local.forEach((name, body) -> {
+      if (body.getType() == Schema.Type.STRUCT
+          && LogicalType.parentOf(name, local.keySet()) == null) {
+        topLevel.add(name);
       }
-      if (!namedTypes.containsKey(member.getQualifiedName())) {
-        return false;
+    });
+    List<String> order = new ArrayList<>();
+    for (Field field : root.getFields()) {
+      Schema member = field.getSchema();
+      if (member.getType() != Schema.Type.NAMED_TYPE_REF
+          || !topLevel.contains(member.getQualifiedName())
+          || order.contains(member.getQualifiedName())) {
+        throw new ValidationException("A root over several messages may list only the schema's "
+            + "own top-level messages, each once, not field '" + field.getName() + "'");
       }
+      order.add(member.getQualifiedName());
     }
-    return true;
+    if (!order.containsAll(topLevel) || order.isEmpty()) {
+      throw new ValidationException("A root over several messages must list every top-level "
+          + "message the schema declares: " + topLevel);
+    }
+    return order;
   }
 
   /**
@@ -547,7 +692,7 @@ public class LogicalTypeToProtoConverter {
 
   private static FileDescriptor buildFile(
       Schema schema, String rowName, String packageName,
-      Map<String, Schema> namedTypes, String rootResolvedFromFqn,
+      Map<String, Schema> namedTypes, String rootResolvedFromFqn, boolean writeRoot,
       LogicalType logicalType,
       FromLogicalContext<GenericDescriptor> ctx) {
     if (schema.getType() != Schema.Type.STRUCT) {
@@ -598,6 +743,15 @@ public class LogicalTypeToProtoConverter {
               "Unsupported named type kind for proto: " + typeDef.getType()
                   + " (" + fqn + ")");
         }
+      }
+      // A root sharing its file with other messages is named, as a file of several messages
+      // naming no root is read as all of them.
+      if (writeRoot && fileBuilder.getMessageTypeCount() > 1) {
+        String root = packageName == null || packageName.isEmpty()
+            ? rowName : packageName + "." + rowName;
+        dependencies.add(MetaProto.getDescriptor().getName());
+        fileBuilder.setOptions(FileOptions.newBuilder().setExtension(MetaProto.fileMeta,
+            Meta.newBuilder().putParams(ProtobufSchema.ROOT_KEY, root).build()));
       }
 
       fileBuilder.addAllDependency(dependencies);
@@ -921,7 +1075,8 @@ public class LogicalTypeToProtoConverter {
                 ctx);
         if (!ctx.isV1()) {
           addFieldTagsAndParams(fieldProtoBuilder, field);
-          applyDefaultIfPresent(fieldProtoBuilder, field);
+          applyDefaultIfPresent(fieldProtoBuilder, field,
+              ctx.getLogicalType().getNamedTypes());
         }
         builder.addField(fieldProtoBuilder.build());
       }
@@ -1325,14 +1480,14 @@ public class LogicalTypeToProtoConverter {
    * with key "connect.default".
    */
   private static void applyDefaultIfPresent(
-      FieldDescriptorProto.Builder fieldBuilder, Field field) {
+      FieldDescriptorProto.Builder fieldBuilder, Field field, Map<String, Schema> namedTypes) {
     // Skip when value is null — Meta.params is Map<String,String> with no
     // unambiguous null sentinel; emitting "" would conflict with valid empty
     // string defaults. Round-trip silently loses the explicit-null distinction.
     if (field.hasDefaultValue() && field.getDefaultValue() != null
         && !field.hasDerivedDefault()) {
       String encoded = ProtoDefaultValueConverter.toProtoValue(
-          field.getSchema(), field.getDefaultValue());
+          field.getSchema(), field.getDefaultValue(), namedTypes);
       addMetaParam(fieldBuilder, CommonConstants.LOGICAL_DEFAULT_PROP, encoded);
     }
   }

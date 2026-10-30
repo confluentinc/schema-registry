@@ -77,7 +77,7 @@ class ProvenanceHistoryTest {
         "{\"name\":\"b\",\"type\":\"int\"}")));
     schemas.add(counted(asked, 2, record("{\"name\":\"b\",\"type\":\"int\"}")));
 
-    ProvenanceHistory.compute("s", history(3), schemas, false);
+    ProvenanceHistory.compute("s", history(3), schemas);
     assertThat(asked).containsExactly(0, 1, 2);
   }
 
@@ -102,7 +102,7 @@ class ProvenanceHistoryTest {
       }
     });
 
-    assertThatThrownBy(() -> ProvenanceHistory.compute("s", history(3), schemas, false))
+    assertThatThrownBy(() -> ProvenanceHistory.compute("s", history(3), schemas))
         .isInstanceOf(AmbiguousProvenanceException.class);
     assertThat(asked).containsExactly(0, 1);
   }
@@ -116,10 +116,10 @@ class ProvenanceHistoryTest {
         + "message R { int32 id = 1; google.protobuf.Struct meta = 2; }\n";
     String recursive = "message R { int32 id = 1; N n = 2; }\nmessage N { N next = 1; }\n";
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(2),
-        ProvenanceHistory.held(List.of(proto(v1), proto(struct))), false))
+        ProvenanceHistory.held(List.of(proto(v1), proto(struct)))))
         .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 2: ");
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(2),
-        ProvenanceHistory.held(List.of(proto(v1), proto(recursive))), false))
+        ProvenanceHistory.held(List.of(proto(v1), proto(recursive)))))
         .isInstanceOf(RecursiveTypeException.class).hasMessageStartingWith("Version 2: ");
   }
 
@@ -136,9 +136,9 @@ class ProvenanceHistoryTest {
         "{\"name\":\"b\",\"type\":\"long\"}"));
 
     SchemaProvenance whole = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, true);
+        ProvenanceHistory.held(versions), true);
     SchemaProvenance ends = ProvenanceHistory.compute("s", history(4),
-        ProvenanceHistory.held(versions), false, false);
+        ProvenanceHistory.held(versions), false);
     assertThat(ends.getVersions()).containsExactly(
         whole.getVersions().get(0), whole.getVersions().get(3));
   }
@@ -155,7 +155,7 @@ class ProvenanceHistoryTest {
     String o = String.format(O, "");
     SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
         List.of(new ProtobufSchema(o), reExport(o), new ProtobufSchema(String.format(O,
-            "  int64 z = 3;\n")))), false);
+            "  int64 z = 3;\n")))));
     assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
     assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
   }
@@ -166,7 +166,7 @@ class ProvenanceHistoryTest {
     SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
         List.of(reExport(String.format(O, "")), reExport(String.format(O, "").replace(
             "  string y = 2;\n", "")), reExport(String.format(O, "").replace("string y",
-            "string w")))), false);
+            "string w")))));
     assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1), List.of(1, 3));
   }
 
@@ -174,7 +174,7 @@ class ProvenanceHistoryTest {
   void aReExportingVersionIsComputedInMultiMessageMode() {
     String o = String.format(O, "");
     SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(2), ProvenanceHistory.held(
-        List.of(new ProtobufSchema(o), reExport(o))), true);
+        List.of(new ProtobufSchema(o), reExport(o))));
     assertThat(pids(p).get(1)).isNotEmpty().isEqualTo(pids(p).get(0));
   }
 
@@ -188,7 +188,7 @@ class ProvenanceHistoryTest {
         List.of(new SchemaReference("w.proto", "w", 1), new SchemaReference("o.proto", "o", 1)),
         Map.of("w.proto", inner, "o.proto", o), null, null);
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
-        ProvenanceHistory.held(List.of(chain)), false))
+        ProvenanceHistory.held(List.of(chain))))
         .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
   }
 
@@ -201,7 +201,7 @@ class ProvenanceHistoryTest {
         + "  repeated google.protobuf.Any a = 2;\n  google.protobuf.Duration d = 3;\n}\n";
     for (boolean multi : new boolean[] {false, true}) {
       SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(3), ProvenanceHistory.held(
-          List.of(new ProtobufSchema(o), reExport(o), new ProtobufSchema(o))), multi);
+          List.of(new ProtobufSchema(o), reExport(o), new ProtobufSchema(o))));
       List<List<Integer>> pids = pids(p);
       assertThat(pids.get(1)).as("multi=" + multi).isEqualTo(pids.get(0));
       assertThat(pids.get(2)).as("multi=" + multi).isEqualTo(pids.get(0));
@@ -214,7 +214,7 @@ class ProvenanceHistoryTest {
     String e = "syntax = \"proto3\";\npackage q;\nenum E {\n  A = 0;\n}\n";
     for (ProtobufSchema version : List.of(new ProtobufSchema(e), reExport(e))) {
       assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
-          ProvenanceHistory.held(List.of(version)), false))
+          ProvenanceHistory.held(List.of(version))))
           .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
     }
   }
@@ -230,7 +230,7 @@ class ProvenanceHistoryTest {
           new ProtobufSchema(wrapper.toDescriptor()).canonicalString());
       for (boolean multi : new boolean[] {false, true}) {
         SchemaProvenance p = ProvenanceHistory.compute("s", protoHistory(2),
-            ProvenanceHistory.held(List.of(direct, wrapper)), multi);
+            ProvenanceHistory.held(List.of(direct, wrapper)));
         assertThat(p.getVersions().get(1).getFields()).as(file + " multi=" + multi)
             .isEqualTo(p.getVersions().get(0).getFields());
       }
@@ -240,7 +240,7 @@ class ProvenanceHistoryTest {
   @Test
   void aReExportOfABuiltInFileOfOnlyEnumsHasNoLogicalForm() {
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", protoHistory(1),
-        ProvenanceHistory.held(List.of(reExportBuiltIn("google/type/dayofweek.proto"))), false))
+        ProvenanceHistory.held(List.of(reExportBuiltIn("google/type/dayofweek.proto")))))
         .isInstanceOf(ValidationException.class).hasMessageStartingWith("Version 1: ");
   }
 
@@ -253,7 +253,7 @@ class ProvenanceHistoryTest {
         List.of(new SchemaReference("o.avsc", "o", 1)), Map.of("o.avsc", plain), null);
     SchemaProvenance p = ProvenanceHistory.compute("s", history(3), ProvenanceHistory.held(List.of(
         new AvroSchema(plain), bare, new AvroSchema(String.format(o,
-            ",{\"name\":\"z\",\"type\":\"long\",\"default\":0}")))), false);
+            ",{\"name\":\"z\",\"type\":\"long\",\"default\":0}")))));
     assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
     assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
   }
@@ -267,7 +267,7 @@ class ProvenanceHistoryTest {
         Map.of("o.json", String.format(o, "")), null);
     SchemaProvenance p = ProvenanceHistory.compute("s", jsonHistory(3), ProvenanceHistory.held(
         List.of(new JsonSchema(String.format(o, "")), bare, new JsonSchema(String.format(o,
-            ",\"z\":{\"type\":\"number\"}")))), false);
+            ",\"z\":{\"type\":\"number\"}")))));
     assertThat(kinds(p)).containsExactly("STRUCT", "STRUCT", "STRUCT");
     assertThat(pids(p)).containsExactly(List.of(1, 2), List.of(1, 2), List.of(1, 2, 3));
   }
