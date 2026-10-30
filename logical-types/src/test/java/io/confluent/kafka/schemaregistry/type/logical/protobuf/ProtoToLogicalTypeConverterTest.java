@@ -814,6 +814,29 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void aReferencedRootThatIsNotFirstResolvesToItsOwnMessage() {
+    // Foo is the second of its file's messages, so the re-exporting file records it as the root.
+    String foo = "syntax = \"proto3\";\npackage com;\nmessage Bar {\n  string b = 1;\n}\n"
+        + "message Foo {\n  int32 f = 1;\n  Bar bar = 2;\n}\n";
+    Map<String, String> resolved = Map.of("com.Foo", foo);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("com.Foo", "foo", 1));
+    ProtobufSchema root = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"com.Foo\";\n"
+        + "option (confluent.file_meta) = {\n  params: [\n    {\n      key: \"root\",\n"
+        + "      value: \"com.Foo\"\n    }\n  ]\n};\n", refs, resolved, 1, null);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(root);
+
+    assertEquals("com.Foo", lt.getRootSchema().getQualifiedName());
+    assertEquals(Arrays.asList("f", "bar"), fieldNames(lt));
+    assertTrue(lt.isExternal("com.Foo"));
+    assertTrue(lt.isExternal("com.Bar"));
+    assertEquals("b", lt.getNamedTypes().get("com.Bar").getFields().get(0).getName());
+    assertEquals(root.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored").canonicalString());
+  }
+
+  @Test
   void testFieldNumberPopulatedFromProto() throws Exception {
     DescriptorProto message = DescriptorProto.newBuilder()
         .setName("M")
