@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -25,6 +26,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -125,6 +127,7 @@ public final class LogicalTypeToDdlConverter {
       // A root over several messages is written as their declarations and no TYPE, which a
       // Protobuf script reads back as the same root.
       boolean severalMessages = ProtoToLogicalTypeConverter.isMultiMessageRoot(root);
+      List<String> messageOrder = null;
       if (severalMessages) {
         for (Schema.Field field : root.getFields()) {
           String message = field.getSchema().getQualifiedName();
@@ -134,6 +137,8 @@ public final class LogicalTypeToDdlConverter {
                 + "cannot be written as DDL: " + field.getName());
           }
         }
+        // Every top-level struct, each once, as the Protobuf writer requires.
+        messageOrder = LogicalTypeToProtoConverter.multiMessageOrder(root, lt);
       }
       boolean rootIsBareNamed =
           (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.ENUM)
@@ -147,11 +152,14 @@ public final class LogicalTypeToDdlConverter {
       // only. Externals' bodies are also in namedTypes (lazy-promoted by the reader from
       // resolvedReferences), but they're external by inference on read-back — must NOT be
       // re-emitted here.
+      Iterator<String> messages = messageOrder != null ? messageOrder.iterator() : null;
       for (String name : orderedLocalNames()) {
         if (lt.getExternalTypes().contains(name)) {
           continue;
         }
-        printCreateType(name, lt.getNamedTypes().get(name));
+        // A script naming no root is rooted at its structs in declaration order: the root's.
+        String declared = messages != null && messageOrder.contains(name) ? messages.next() : name;
+        printCreateType(declared, lt.getNamedTypes().get(declared));
       }
 
       // Root registration. A single root beside other structs is always named, since a Protobuf
