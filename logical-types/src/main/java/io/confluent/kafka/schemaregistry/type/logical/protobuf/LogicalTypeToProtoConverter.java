@@ -527,22 +527,22 @@ public class LogicalTypeToProtoConverter {
         topLevel.add(name);
       }
     });
-    List<String> order = new ArrayList<>();
+    Set<String> order = new LinkedHashSet<>();
     for (Field field : root.getFields()) {
       Schema member = field.getSchema();
       if (member.getType() != Schema.Type.NAMED_TYPE_REF
           || !topLevel.contains(member.getQualifiedName())
-          || order.contains(member.getQualifiedName())) {
+          || !order.add(member.getQualifiedName())) {
         throw new ValidationException("A root over several messages may list only the schema's "
             + "own top-level messages, each once, not field '" + field.getName() + "'");
       }
-      order.add(member.getQualifiedName());
     }
-    if (!order.containsAll(topLevel) || order.isEmpty()) {
+    // Each one listed is top-level, so listing as many lists them all.
+    if (order.size() != topLevel.size() || order.isEmpty()) {
       throw new ValidationException("A root over several messages must list every top-level "
           + "message the schema declares: " + topLevel);
     }
-    return order;
+    return new ArrayList<>(order);
   }
 
   /**
