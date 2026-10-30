@@ -241,8 +241,7 @@ public class ProtoToLogicalTypeConverter {
         new ToLogicalContext<>(schema);
     // Extend reference names with all nested message/enum full names from
     // each resolved external schema, so nested external types are recognized.
-    // Enum-only files (no top-level messages) are skipped — the top-level
-    // enum's name is already in the set from the constructor.
+    // An enum-only file's enums are too, since its reference may be named for the file.
     collectReferencedTypeNames(schema, file, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
@@ -353,13 +352,35 @@ public class ProtoToLogicalTypeConverter {
     // schema.name() already does the public-import fall-through (with
     // transitive resolution + cycle protection), so reader and
     // ProtobufSchema agree on which type counts as the root.
+    Descriptor root = isReference(schema, publicImport) ? schema.toDescriptor() : null;
+    if (root == null) {
+      return new LogicalType(
+          packageName,
+          Schema.createNamedTypeRef(schema.name()).setNullable(false),
+          Collections.emptyMap(),
+          schema.references(),
+          resolvedReferences,
+          Collections.emptyMap());
+    }
+    // A referenced root message is read as a field of its type is: its body a named type, and
+    // it and its file's types external, so the root resolves as it does in Avro and JSON.
+    String rootName = root.getFullName();
+    ToLogicalContext<String> ctx = new ToLogicalContext<>(schema);
+    collectFileTypeNames(root.getFile(), new HashSet<>(), ctx);
+    collectReferencedTypeNames(schema, root.getFile(), ctx);
+    ctx.putNamedType(rootName, Schema.createStruct(new ArrayList<>()));
+    ctx.putNamedType(rootName, namedMessageBody(root, ctx, Collections.emptyList()));
+    ctx.putTypeDefaults(rootName, Collections.emptyList());
     return new LogicalType(
+        null,
         packageName,
-        Schema.createNamedTypeRef(schema.name()).setNullable(false),
-        Collections.emptyMap(),
+        Schema.createNamedTypeRef(rootName).setNullable(false),
+        ctx.getNamedTypes(),
+        ctx.getExternalTypes(),
+        Map.of(),
         schema.references(),
         resolvedReferences,
-        Collections.emptyMap());
+        ctx.getDefaultValues());
   }
 
   // A schema built from a descriptor lists the built-in files it imports as dependencies; a
@@ -395,13 +416,13 @@ public class ProtoToLogicalTypeConverter {
     }
   }
 
-  // A file's types. One of only enums or only options adds none; one of only public imports adds
-  // those of the files it re-exports.
+  // A file's types, its enums too when it has only enums; one of only options adds none, and one
+  // of only public imports adds those of the files it re-exports.
   private static void collectFileTypeNames(FileDescriptor file, Set<String> seen,
       ToLogicalContext<String> ctx) {
-    if (!file.getMessageTypes().isEmpty()) {
+    if (!file.getMessageTypes().isEmpty() || !file.getEnumTypes().isEmpty()) {
       collectExternalTypeNames(file, ctx);
-    } else if (file.getEnumTypes().isEmpty()) {
+    } else {
       for (FileDescriptor exported : file.getPublicDependencies()) {
         if (seen.add(exported.getName())) {
           collectFileTypeNames(exported, seen, ctx);

@@ -210,11 +210,20 @@ public class LogicalTypeToProtoConverter {
     // Proto's `import public` is the natural representation — produces an
     // otherwise-empty proto file that publicly imports the referenced type,
     // allowing downstream consumers to reach it via this schema's name.
+    // A reader keeps an external root's body in namedTypes too, so external counts as absent.
     if (schema.getType() == Schema.Type.NAMED_TYPE_REF) {
       String fullName = schema.getQualifiedName();
-      if (!logicalType.getNamedTypes().containsKey(fullName)
-          && logicalType.getResolvedReferences().containsKey(fullName)) {
-        return buildPublicImportFile(logicalType, fullName, version);
+      String importName =
+          !logicalType.getNamedTypes().containsKey(fullName) || logicalType.isExternal(fullName)
+              ? declaringImport(logicalType, fullName) : null;
+      if (importName != null) {
+        // The file only imports, so it has nowhere to declare a local type.
+        if (!logicalType.getLocalNamedTypes().isEmpty()) {
+          throw new ValidationException("Root " + fullName + " is a referenced type, imported "
+              + "publicly, so the schema cannot declare its own types too: "
+              + logicalType.getLocalNamedTypes().keySet());
+        }
+        return buildPublicImportFile(logicalType, fullName, importName, version);
       }
     }
 
@@ -274,7 +283,10 @@ public class LogicalTypeToProtoConverter {
       ProtobufSchema parsed = new ProtobufSchema(entry.getValue(),
           logicalType.getReferences(), logicalType.getResolvedReferences(),
           null, null, null, null);
-      FileDescriptor file = parsed.toDescriptor().getFile();
+      // A file of only enums has no message to reach it by.
+      Descriptor first = parsed.toDescriptor();
+      FileDescriptor file = first != null ? first.getFile()
+          : parsed.toDynamicSchema().getEnumDescriptor(parsed.name()).getFile();
       registerExternalFile(file, entry.getKey(), ctx);
     }
 
@@ -300,6 +312,43 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
+   * The reference whose file declares a message: the one named after it, as a script names it,
+   * or else any whose own file declares it, as a re-export read from the registry may name it.
+   */
+  private static String declaringImport(LogicalType logicalType, String fullName) {
+    Map<String, String> resolved = logicalType.getResolvedReferences();
+    if (resolved.containsKey(fullName)) {
+      return fullName;
+    }
+    for (SchemaReference reference : logicalType.getReferences()) {
+      String text = resolved.get(reference.getName());
+      if (text == null) {
+        continue;
+      }
+      try {
+        // The file's own messages, not those of the files it imports publicly.
+        FileDescriptorProto file = new ProtobufSchema(text, logicalType.getReferences(), resolved,
+            null, null, null, null).toDynamicSchema().getFileDescriptorProto();
+        String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
+        for (DescriptorProto message : file.getMessageTypeList()) {
+          if (declaresMessage(message, prefix, fullName)) {
+            return reference.getName();
+          }
+        }
+      } catch (RuntimeException e) {
+        // a file that does not parse declares nothing to import
+      }
+    }
+    return null;
+  }
+
+  private static boolean declaresMessage(DescriptorProto message, String prefix, String fullName) {
+    String name = prefix + message.getName();
+    return name.equals(fullName) || message.getNestedTypeList().stream()
+        .anyMatch(nested -> declaresMessage(nested, name + ".", fullName));
+  }
+
+  /**
    * Build a proto file that publicly imports a single externally-referenced
    * type via {@code import public}. Result has zero local messages/enums;
    * consumers resolve the root through {@code schema.toDescriptor()} which
@@ -310,10 +359,9 @@ public class LogicalTypeToProtoConverter {
    * locally declared), with no local body to define.
    */
   private static ProtobufSchema buildPublicImportFile(
-      LogicalType logicalType, String externalTypeFullName,
+      LogicalType logicalType, String externalTypeFullName, String importName,
       LogicalTypeVersion version) {
-    String externalProtoText =
-        logicalType.getResolvedReferences().get(externalTypeFullName);
+    String externalProtoText = logicalType.getResolvedReferences().get(importName);
     ProtobufSchema externalSchema = new ProtobufSchema(
         externalProtoText,
         logicalType.getReferences(),
@@ -321,7 +369,7 @@ public class LogicalTypeToProtoConverter {
         null, null, null, null);
     FileDescriptor externalFile = externalSchema.toDescriptor().getFile();
 
-    String externalFileName = externalTypeFullName;
+    String externalFileName = importName;
     try {
       FileDescriptor renamedExternal = FileDescriptor.buildFrom(
           externalFile.toProto().toBuilder().setName(externalFileName).build(),

@@ -786,12 +786,85 @@ class ProtoToLogicalTypeConverterTest {
     assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
     assertEquals("com.Foo", root.getQualifiedName());
     assertFalse(root.isNullable(), "re-export root should be non-nullable");
-    // No local namedTypes — Foo lives in the imported file, not this one.
-    assertTrue(lt.getNamedTypes().isEmpty(),
-        "re-export file should produce no local namedTypes");
+    // Foo lives in the imported file: its body resolves the root, as an external type.
+    assertEquals(Arrays.asList("id"), fieldNames(lt));
+    assertTrue(lt.isExternal("com.Foo"));
     // References pass through unchanged.
     assertEquals(1, lt.getReferences().size());
     assertEquals("leaf.proto", lt.getReferences().get(0).getName());
+  }
+
+  @Test
+  void aReferencedRootResolvesAsAFieldOfItsTypeDoes() {
+    // As TYPE n registers it: a file that only re-exports n, referenced by n's own name.
+    String n = "syntax = \"proto3\";\nmessage n {\n  int32 x = 1;\n  K k = 2;\n  E e = 3;\n"
+        + "  message K {\n    int32 a = 1;\n  }\n  enum E {\n    A = 0;\n  }\n}\n";
+    Map<String, String> resolved = Map.of("n", n);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("n", "n", 1));
+    LogicalType root = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"n\";\n", refs, resolved, 1, null));
+    LogicalType field = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\nimport \"n\";\nmessage q {\n  n v = 1;\n}\n",
+        refs, resolved, 1, null));
+
+    assertEquals("n", root.getRootSchema().getQualifiedName());
+    assertEquals(Arrays.asList("x", "k", "e"), fieldNames(root));
+    assertEquals(field.getNamedTypes(), root.getNamedTypes());
+    assertEquals(field.getExternalTypes(), root.getExternalTypes());
+  }
+
+  @Test
+  void aReferencedRootThatIsNotFirstResolvesToItsOwnMessage() {
+    // Foo is the second of its file's messages, so the re-exporting file records it as the root.
+    String foo = "syntax = \"proto3\";\npackage com;\nmessage Bar {\n  string b = 1;\n}\n"
+        + "message Foo {\n  int32 f = 1;\n  Bar bar = 2;\n}\n";
+    Map<String, String> resolved = Map.of("com.Foo", foo);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("com.Foo", "foo", 1));
+    ProtobufSchema root = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"com.Foo\";\n"
+        + "option (confluent.file_meta) = {\n  params: [\n    {\n      key: \"root\",\n"
+        + "      value: \"com.Foo\"\n    }\n  ]\n};\n", refs, resolved, 1, null);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(root);
+
+    assertEquals("com.Foo", lt.getRootSchema().getQualifiedName());
+    assertEquals(Arrays.asList("f", "bar"), fieldNames(lt));
+    assertTrue(lt.isExternal("com.Foo"));
+    assertTrue(lt.isExternal("com.Bar"));
+    assertEquals("b", lt.getNamedTypes().get("com.Bar").getFields().get(0).getName());
+    assertEquals(root.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored").canonicalString());
+  }
+
+  @Test
+  void anEnumOfAnEnumOnlyFileIsExternalWhateverItsImportIsNamed() {
+    // color.proto declares only an enum, and is imported by its file name, not the enum's.
+    String color = "syntax = \"proto3\";\npackage com;\nenum Color {\n  RED = 0;\n  BLUE = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"color.proto\";\n"
+        + "message Foo {\n  Color c = 1;\n}\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("color.proto", color);
+    resolved.put("leaf.proto", leaf);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("color.proto", "color", 1),
+        new SchemaReference("leaf.proto", "leaf", 1));
+    ProtobufSchema field = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"color.proto\";\nmessage Row {\n  com.Color c = 1;\n}\n",
+        refs.subList(0, 1), Map.of("color.proto", color), 1, null);
+    ProtobufSchema reExport = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n", refs, resolved, 1,
+        null);
+
+    for (ProtobufSchema schema : Arrays.asList(field, reExport)) {
+      LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(schema);
+      Schema c = rowOf(lt).getField("c").getSchema();
+      assertEquals(Schema.Type.NAMED_TYPE_REF, c.getType());
+      assertEquals("com.Color", c.getQualifiedName());
+      assertTrue(lt.isExternal("com.Color"));
+      assertEquals(2, lt.getNamedTypes().get("com.Color").getEnumValues().size());
+      // The writer normalizes, which qualifies type names fully.
+      assertEquals(schema.normalize().canonicalString(),
+          LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored").canonicalString());
+    }
   }
 
   @Test

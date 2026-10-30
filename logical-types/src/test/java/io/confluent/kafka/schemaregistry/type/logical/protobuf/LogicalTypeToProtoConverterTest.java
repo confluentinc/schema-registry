@@ -3269,8 +3269,51 @@ class LogicalTypeToProtoConverterTest {
 
     assertEquals(Schema.Type.NAMED_TYPE_REF, rt.getRootSchema().getType());
     assertEquals("com.Foo", rt.getRootSchema().getQualifiedName());
-    assertTrue(rt.getNamedTypes().isEmpty(),
-        "public-import round-trip should produce no local namedTypes");
+    // The root's body is there to resolve it, as an external type, which writes back the same.
+    assertEquals(Schema.Type.STRUCT, rt.getNamedTypes().get("com.Foo").getType());
+    assertTrue(rt.isExternal("com.Foo"));
+    assertEquals(proto.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(rt, "ignored").canonicalString());
+  }
+
+  @Test
+  void testExternalRootWithLocalTypesIsRefused() {
+    // A public-import file has nowhere for the local type, which would otherwise be dropped.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
+    LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef("com.Foo").setNullable(false),
+        Collections.singletonMap("com.Local",
+            Schema.createStruct(Collections.singletonList(
+                new Schema.Field("x", Schema.create(Schema.Type.INT), 0)))),
+        Collections.singletonList(new SchemaReference("com.Foo", "foo-subject", 1)),
+        Collections.singletonMap("com.Foo", leaf));
+
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
+    assertTrue(e.getMessage().contains("com.Local"), e.getMessage());
+  }
+
+  @Test
+  void testExternalRootImportedByAnotherNameSurvivesItsText() {
+    // A re-export whose import is named for its file, not its message: read, then written back
+    // as the same re-export, rather than a local copy of the message.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Bar {\n  string b = 1;\n}\n"
+        + "message Foo {\n  int32 f = 1;\n}\n";
+    Map<String, String> resolved = Collections.singletonMap("leaf.proto", leaf);
+    List<SchemaReference> refs =
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1));
+    for (String root : Arrays.asList("com.Bar", "com.Foo")) {
+      LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef(root).setNullable(false),
+          Collections.emptyMap(), refs, resolved);
+      ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+      assertEquals(Collections.singletonList("leaf.proto"),
+          emitted.rawSchema().getPublicImports());
+      assertEquals(root, emitted.name());
+      LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(
+          new ProtobufSchema(emitted.canonicalString(), refs, resolved, null, null));
+      assertTrue(read.isExternal(root));
+      assertEquals(emitted.canonicalString(),
+          LogicalTypeToProtoConverter.fromLogicalType(read, "ignored").canonicalString());
+    }
   }
 
   @Test
