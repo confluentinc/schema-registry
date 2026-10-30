@@ -280,6 +280,11 @@ public abstract class RestApiTest {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    // Latest dek also has decrypted key material since kek is shared
+    newDek = client.getDekLatestVersion(kekName, subject2, algorithm, false);
+    assertEquals(2, newDek.getVersion());
+    assertNotNull(newDek.getKeyMaterial());
+
     Dek subject2Version1 = client.getDekVersion(kekName, subject2, 1, algorithm, false);
     assertEquals(1, subject2Version1.getVersion());
     Dek subject2Version2 = client.getDekVersion(kekName, subject2, 2, algorithm, false);
