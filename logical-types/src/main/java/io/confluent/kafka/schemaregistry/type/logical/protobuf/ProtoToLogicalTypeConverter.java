@@ -241,8 +241,7 @@ public class ProtoToLogicalTypeConverter {
         new ToLogicalContext<>(schema);
     // Extend reference names with all nested message/enum full names from
     // each resolved external schema, so nested external types are recognized.
-    // Enum-only files (no top-level messages) are skipped — the top-level
-    // enum's name is already in the set from the constructor.
+    // An enum-only file's enums are too, since its reference may be named for the file.
     collectReferencedTypeNames(schema, file, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
@@ -353,13 +352,38 @@ public class ProtoToLogicalTypeConverter {
     // schema.name() already does the public-import fall-through (with
     // transitive resolution + cycle protection), so reader and
     // ProtobufSchema agree on which type counts as the root.
+    // A referenced file, with or without registry coordinates, as built-ins are left out above.
+    Descriptor root = resolvedReferences.containsKey(publicImport) ? schema.toDescriptor() : null;
+    // toDescriptor() also finds an imported message by its short name, such as one sharing an
+    // enum root's name, so only a message of the root's own name is the root.
+    if (root == null || !root.getFullName().equals(schema.name())) {
+      return new LogicalType(
+          packageName,
+          Schema.createNamedTypeRef(schema.name()).setNullable(false),
+          Collections.emptyMap(),
+          schema.references(),
+          resolvedReferences,
+          Collections.emptyMap());
+    }
+    // A referenced root message is read as a field of its type is: its body a named type, and
+    // it and its file's types external, so the root resolves as it does in Avro and JSON.
+    String rootName = root.getFullName();
+    ToLogicalContext<String> ctx = new ToLogicalContext<>(schema);
+    collectFileTypeNames(root.getFile(), new HashSet<>(), ctx);
+    collectReferencedTypeNames(schema, root.getFile(), ctx);
+    ctx.putNamedType(rootName, Schema.createStruct(new ArrayList<>()));
+    ctx.putNamedType(rootName, namedMessageBody(root, ctx, Collections.emptyList()));
+    ctx.putTypeDefaults(rootName, Collections.emptyList());
     return new LogicalType(
+        null,
         packageName,
-        Schema.createNamedTypeRef(schema.name()).setNullable(false),
-        Collections.emptyMap(),
+        Schema.createNamedTypeRef(rootName).setNullable(false),
+        ctx.getNamedTypes(),
+        ctx.getExternalTypes(),
+        Map.of(),
         schema.references(),
         resolvedReferences,
-        Collections.emptyMap());
+        ctx.getDefaultValues());
   }
 
   // A schema built from a descriptor lists the built-in files it imports as dependencies; a
@@ -395,13 +419,13 @@ public class ProtoToLogicalTypeConverter {
     }
   }
 
-  // A file's types. One of only enums or only options adds none; one of only public imports adds
-  // those of the files it re-exports.
+  // A file's types, its enums too when it has only enums; one of only options adds none, and one
+  // of only public imports adds those of the files it re-exports.
   private static void collectFileTypeNames(FileDescriptor file, Set<String> seen,
       ToLogicalContext<String> ctx) {
-    if (!file.getMessageTypes().isEmpty()) {
+    if (!file.getMessageTypes().isEmpty() || !file.getEnumTypes().isEmpty()) {
       collectExternalTypeNames(file, ctx);
-    } else if (file.getEnumTypes().isEmpty()) {
+    } else {
       for (FileDescriptor exported : file.getPublicDependencies()) {
         if (seen.add(exported.getName())) {
           collectFileTypeNames(exported, seen, ctx);
@@ -870,7 +894,8 @@ public class ProtoToLogicalTypeConverter {
       String defaultStr = meta.getParamsMap().get(CommonConstants.LOGICAL_DEFAULT_PROP);
       if (defaultStr != null) {
         try {
-          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr,
+              ctx.getNamedTypes());
         } catch (IllegalArgumentException | DateTimeException e) {
           // NumberFormatException among them: a default its type cannot read is rejected by name.
           throw new ValidationException("Field " + field.getFullName() + " has an invalid "
@@ -1309,6 +1334,11 @@ public class ProtoToLogicalTypeConverter {
             Optional<Schema> wrapperUnwrap = toUnwrappedSchema(schema.getMessageType());
             if (wrapperUnwrap.isPresent()) {
               return wrapperUnwrap.get();
+            }
+            // A flink.wrapped wrapper is seen through wherever its message is declared: in a
+            // referenced file, where every nested message is an external type, too.
+            if (isFlinkWrapped(schema)) {
+              return toUnwrappedOrRecordSchema(isNullable, schema, ctx, indexPath);
             }
             // External MESSAGE: lazy-promote the body into namedTypes so the
             // LT is self-contained. The pre-walk already added fullName to
