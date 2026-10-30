@@ -107,11 +107,11 @@ public final class ProvenanceHistory {
   /**
    * The provenance of {@code history}, every version reported.
    *
-   * @see #compute(String, List, List, boolean, boolean)
+   * @see #compute(String, List, List, boolean)
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages) {
-    return compute(subject, history, schemas, includeMultipleMessages, true);
+      List<? extends ParsedSchemaHolder> schemas) {
+    return compute(subject, history, schemas, true);
   }
 
   /**
@@ -138,14 +138,12 @@ public final class ProvenanceHistory {
    *     logical form
    */
   public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
-      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-      boolean includeInterior) {
+      List<? extends ParsedSchemaHolder> schemas, boolean includeInterior) {
     if (schemas.size() != history.size()) {
       throw new IllegalArgumentException("Expected one schema per version, got " + schemas.size()
           + " schemas for " + history.size() + " versions");
     }
-    IntFunction<LogicalType> versionAt =
-        i -> logicalTypeOf(schemas.get(i).schema(), includeMultipleMessages);
+    IntFunction<LogicalType> versionAt = i -> logicalTypeOf(schemas.get(i).schema());
     int last = history.size() - 1;
     IntPredicate reported = includeInterior ? i -> true : i -> i == 0 || i == last;
     return computeV1(subject, history, versionAt, reported);
@@ -223,19 +221,21 @@ public final class ProvenanceHistory {
   /**
    * The logical type provenance is computed on: edition V1, the one the Metastore's columns follow.
    * Only the JSON reader differs by edition, keeping a bare one-branch union and naming union
-   * branches by position. With {@code includeMultipleMessages}, a Protobuf schema is rooted at a
-   * synthetic struct over all its top-level messages; other formats have one root regardless.
+   * branches by position. A Protobuf schema is read as its records are, as
+   * {@link ProtoPublicImportWrappers#asRead} reads it: over all its top-level messages when it
+   * names no root and declares several, and otherwise as its one message. So a file changing
+   * between one message and several reshapes, each field moving under its message or out of it:
+   * it starts over, as the LOGICAL policy and the Metastore have it.
    */
-  public static LogicalType logicalTypeOf(ParsedSchema schema, boolean includeMultipleMessages) {
+  public static LogicalType logicalTypeOf(ParsedSchema schema) {
     if (schema instanceof JsonSchema) {
       return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
     }
     try {
-      ParsedSchema converted = schema instanceof ProtobufSchema
-          ? ProtoPublicImportWrappers.resolve((ProtobufSchema) schema) : schema;
-      return includeMultipleMessages && converted instanceof ProtobufSchema
-          ? ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) converted, true)
-          : LogicalTypeConversion.toLogicalType(converted);
+      if (!(schema instanceof ProtobufSchema)) {
+        return LogicalTypeConversion.toLogicalType(schema);
+      }
+      return ProtoPublicImportWrappers.asRead((ProtobufSchema) schema);
     } catch (IllegalArgumentException e) {
       // A Protobuf file declaring no type has no root, as one declaring only enums has none:
       // ProtobufSchema says so with an IllegalArgumentException, which would answer a plain 500.
@@ -243,6 +243,23 @@ public final class ProvenanceHistory {
         throw new ValidationException(e.getMessage(), e);
       }
       throw e;
+    }
+  }
+
+  /**
+   * {@code schema}'s logical type as a whole, to tell whether two schemas are one structure: as
+   * {@link #logicalTypeOf}, but a Protobuf file's over all its top-level messages, whichever
+   * message a reader names or the file's root param picks.
+   */
+  public static LogicalType wholeLogicalTypeOf(ParsedSchema schema) {
+    if (!(schema instanceof ProtobufSchema)) {
+      return logicalTypeOf(schema);
+    }
+    try {
+      return ProtoToLogicalTypeConverter.toMultiMessageLogicalType(
+          ProtoPublicImportWrappers.resolve((ProtobufSchema) schema));
+    } catch (IllegalArgumentException e) {
+      throw new ValidationException(e.getMessage(), e);
     }
   }
 

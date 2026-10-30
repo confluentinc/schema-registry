@@ -98,7 +98,7 @@ class SubjectsResourceProvenanceLoadTest {
     when(registry.getLatestVersion(SUBJECT)).thenReturn(schema(4));
 
     SchemaProvenance provenance =
-        resource.getProvenance(SUBJECT, null, "latest", 103, null, false, false, null);
+        resource.getProvenance(SUBJECT, null, "latest", 103, null, false, null);
 
     // Other subjects sharing the ID are never read.
     assertEquals(Arrays.asList(3, 4), versionsOf(provenance));
@@ -173,7 +173,7 @@ class SubjectsResourceProvenanceLoadTest {
         .thenReturn(Collections.emptyList());
 
     SchemaProvenance provenance =
-        resource.getProvenance(SUBJECT, "2", "4", null, null, true, false, "LOGICAL");
+        resource.getProvenance(SUBJECT, "2", "4", null, null, true, "LOGICAL");
 
     assertEquals(Collections.singletonList(3), provenance.getMissingVersions());
     assertTrue(provenance.getVersions().get(1).getCompatible());
@@ -186,7 +186,7 @@ class SubjectsResourceProvenanceLoadTest {
     when(registry.isLogicallyCompatibleByProvenance(eq(SUBJECT), anyInt(), anyInt()))
         .thenReturn(Collections.emptyList());
 
-    resource.getProvenance(SUBJECT, "2", "4", null, null, true, false, "LOGICAL");
+    resource.getProvenance(SUBJECT, "2", "4", null, null, true, "LOGICAL");
 
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 2, 1);
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 3, 2);
@@ -201,7 +201,7 @@ class SubjectsResourceProvenanceLoadTest {
     when(registry.isLogicallyCompatibleByProvenance(eq(SUBJECT), anyInt(), anyInt()))
         .thenReturn(Collections.emptyList());
 
-    resource.getProvenance(SUBJECT, "3", "4", null, null, false, false, "LOGICAL");
+    resource.getProvenance(SUBJECT, "3", "4", null, null, false, "LOGICAL");
 
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 3, 1);
     verify(registry).isLogicallyCompatibleByProvenance(SUBJECT, 4, 3);
@@ -218,7 +218,7 @@ class SubjectsResourceProvenanceLoadTest {
         .thenReturn(Collections.emptyList());
 
     List<ProvenanceVersion> flagged = resource
-        .getProvenance(SUBJECT, "2", "3", null, null, true, false, "LOGICAL").getVersions();
+        .getProvenance(SUBJECT, "2", "3", null, null, true, "LOGICAL").getVersions();
 
     assertTrue(flagged.get(0).getCompatible());
     assertFalse(flagged.get(1).getCompatible());
@@ -237,7 +237,7 @@ class SubjectsResourceProvenanceLoadTest {
   }
 
   private SchemaProvenance byVersion(String from, String to, boolean includeInterior) {
-    return resource.getProvenance(SUBJECT, from, to, null, null, includeInterior, false, null);
+    return resource.getProvenance(SUBJECT, from, to, null, null, includeInterior, null);
   }
 
   private void versions(int... numbers) throws Exception {
