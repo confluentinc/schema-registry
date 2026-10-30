@@ -424,7 +424,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       return node;
     }
     JsonProvenanceProjection projection = provenanceProjector()
-        .project(subject, writerId, writer, reader, false,
+        .project(subject, writerId, writer, reader,
             mapping -> JsonProvenanceProjection.of(mapping, (JsonSchema) reader, writer))
         .orElse(null);
     if (projection == null || projection.isEmpty()) {

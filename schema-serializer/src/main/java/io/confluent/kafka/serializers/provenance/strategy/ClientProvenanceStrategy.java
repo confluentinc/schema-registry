@@ -40,11 +40,10 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-      int toId, boolean includeMultipleMessages) {
+      int toId) {
     try {
       // A deserializer pairs the two ends only.
-      return client.getProvenanceById(
-          subject, fromId, toId, false, includeMultipleMessages);
+      return client.getProvenanceById(subject, fromId, toId, false);
     } catch (IOException e) {
       throw new ProvenanceRetriableException("Could not reach Schema Registry", e);
     } catch (RestClientException e) {
@@ -57,10 +56,9 @@ public class ClientProvenanceStrategy implements ProvenanceStrategy {
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeMultipleMessages) {
+      int fromId, int toVersion) {
     try {
-      return client.getProvenanceToVersion(
-          subject, fromId, toVersion, false, includeMultipleMessages);
+      return client.getProvenanceToVersion(subject, fromId, toVersion, false);
     } catch (IOException e) {
       throw new ProvenanceRetriableException("Could not reach Schema Registry", e);
     } catch (RestClientException e) {

@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -24,6 +26,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -121,6 +125,22 @@ public final class LogicalTypeToDdlConverter {
       // local type, emitting the declaration would duplicate it on parse, so fall back to the
       // anonymous `TYPE STRUCT(...)` form instead. (Display only — exact-shape round-trip later.)
       Schema root = lt.getRootSchema();
+      // A root over several messages is written as their declarations and no TYPE, which a
+      // Protobuf script reads back as the same root.
+      boolean severalMessages = ProtoToLogicalTypeConverter.isMultiMessageRoot(root);
+      List<String> messageOrder = null;
+      if (severalMessages) {
+        for (Schema.Field field : root.getFields()) {
+          String message = field.getSchema().getQualifiedName();
+          if (message == null || !localNames.contains(message)
+              || lt.getExternalTypes().contains(message)) {
+            throw new ValidationException("A root over several messages of a referenced file "
+                + "cannot be written as DDL: " + field.getName());
+          }
+        }
+        // Every top-level struct, each once, as the Protobuf writer requires.
+        messageOrder = LogicalTypeToProtoConverter.multiMessageOrder(root, lt);
+      }
       boolean rootIsBareNamed =
           (root.getType() == Schema.Type.STRUCT || root.getType() == Schema.Type.ENUM)
               && lt.getName() != null;
@@ -133,14 +153,24 @@ public final class LogicalTypeToDdlConverter {
       // only. Externals' bodies are also in namedTypes (lazy-promoted by the reader from
       // resolvedReferences), but they're external by inference on read-back — must NOT be
       // re-emitted here.
+      Iterator<String> messages = messageOrder != null ? messageOrder.iterator() : null;
+      Set<String> listed = messageOrder != null ? new HashSet<>(messageOrder) : new HashSet<>();
       for (String name : orderedLocalNames()) {
         if (lt.getExternalTypes().contains(name)) {
           continue;
         }
-        printCreateType(name, lt.getNamedTypes().get(name));
+        // A script naming no root is rooted at its structs in declaration order: the root's.
+        String declared = listed.contains(name) ? messages.next() : name;
+        printCreateType(declared, lt.getNamedTypes().get(declared));
       }
 
-      // Root registration.
+      // Root registration. A single root beside other structs is always named, since a Protobuf
+      // script of several structs naming none is rooted at all of them.
+      boolean severalStructs = topLevelLocalStructs()
+          + (rootIsNamedInline && root.getType() == Schema.Type.STRUCT ? 1 : 0) > 1;
+      if (severalMessages) {
+        return sb.toString();
+      }
       if (rootIsNamedInline) {
         // Force the root with an explicit trailing TYPE in two cases:
         //   - a peer references it: inference drops referenced types from the unreferenced set, so
@@ -148,14 +178,14 @@ public final class LogicalTypeToDdlConverter {
         //   - the root is nullable: a bare named declaration re-parses under sugar as NOT NULL
         //     (ambient), so without the explicit TYPE the root's nullability would be lost.
         // The trailing TYPE carries the nullability marker the bare declaration cannot.
-        if (inlineRootReferencedByPeer() || root.isNullable()) {
+        if (inlineRootReferencedByPeer() || root.isNullable() || severalStructs) {
           sb.append("TYPE ").append(qualifiedName(lt.getName()));
           if (!root.isNullable()) {
             sb.append(" NOT NULL");
           }
           sb.append(";\n");
         }
-      } else if (!sugarWouldInferRoot()) {
+      } else if (!sugarWouldInferRoot() || severalStructs) {
         // Trailing `TYPE <typeExpr>` for a root not emitted as a named declaration, omitted when
         // the visitor's auto-detect would produce the same root from the declarations alone.
         sb.append("TYPE ").append(typeExpr(root)).append(";\n");
@@ -556,6 +586,18 @@ public final class LogicalTypeToDdlConverter {
       // explicit trailing TYPE is required. (A UNION-of-named-types root is no longer sugared; it
       // must be written as an explicit `TYPE UNION(...)`.)
       return false;
+    }
+
+    private int topLevelLocalStructs() {
+      int count = 0;
+      for (Map.Entry<String, Schema> e : lt.getNamedTypes().entrySet()) {
+        if (!lt.getExternalTypes().contains(e.getKey())
+            && e.getValue().getType() == Schema.Type.STRUCT
+            && LogicalType.parentOf(e.getKey(), localNames) == null) {
+          count++;
+        }
+      }
+      return count;
     }
 
     private static String simpleNameOf(String qualifiedName) {

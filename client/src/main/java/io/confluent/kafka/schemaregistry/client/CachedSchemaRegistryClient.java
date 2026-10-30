@@ -944,50 +944,50 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
    */
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages)
+      boolean includeInterior)
       throws IOException, RestClientException {
     return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, fromId, toId, includeInterior, includeMultipleMessages);
+        subject, fromId, toId, includeInterior);
   }
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      boolean includeInterior, String compatibilityPolicy)
       throws IOException, RestClientException {
     return restService.getProvenanceById(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, fromId, toId, includeInterior, includeMultipleMessages, compatibilityPolicy);
+        subject, fromId, toId, includeInterior, compatibilityPolicy);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean includeMultipleMessages)
+      String toVersion, boolean includeInterior)
       throws IOException, RestClientException {
     return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
-        fromVersion, toVersion, includeInterior, includeMultipleMessages);
+        fromVersion, toVersion, includeInterior);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
+      String toVersion, boolean includeInterior,
       String compatibilityPolicy) throws IOException, RestClientException {
     return restService.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
-        fromVersion, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
+        fromVersion, toVersion, includeInterior, compatibilityPolicy);
   }
 
   @Override
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages)
+      boolean includeInterior)
       throws IOException, RestClientException {
     return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
-        fromId, toVersion, includeInterior, includeMultipleMessages);
+        fromId, toVersion, includeInterior);
   }
 
   @Override
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      boolean includeInterior, String compatibilityPolicy)
       throws IOException, RestClientException {
     return restService.getProvenanceToVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject,
-        fromId, toVersion, includeInterior, includeMultipleMessages, compatibilityPolicy);
+        fromId, toVersion, includeInterior, compatibilityPolicy);
   }
 
   @Override

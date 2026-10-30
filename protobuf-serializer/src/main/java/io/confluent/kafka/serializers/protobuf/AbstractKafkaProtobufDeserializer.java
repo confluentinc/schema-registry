@@ -24,6 +24,9 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.rules.RuleResult;
@@ -438,33 +441,68 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (!provenanceEnabled || reader == null || !migrations.isEmpty()) {
       return null;
     }
-    // As Flink chooses its row: every top-level message when the reader's file has several, else
-    // its one message.
-    boolean multi = reader.toDescriptor().getFile().getMessageTypes().size() > 1;
-    if (multi && reader.toDescriptor(name) == null) {
+    if (!name.equals(rootOf(reader)) && reader.toDescriptor(name) == null) {
+      // Read without provenance, the record would be parsed as the reader's first message.
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
     // The writer named at the record's message: it may come back unnamed, as its file's first,
     // and its name tells each record's message apart, here and in the projector's cache.
     ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
-    // Single-message provenance roots each version at its file's first message: a record written
-    // as another has no locations there, so it is read without provenance.
-    Descriptor written = named.toDescriptor();
-    boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
-    if (!placed && reader.toDescriptor(name) == null) {
-      // Read without provenance, the record would be parsed as the reader's first message.
-      throw new SerializationException("The record was written as message " + name
-          + ", which the reader schema does not declare");
-    }
-    return provenanceProjector().project(subject, writerId, named, reader, multi,
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector();
+    return projector.project(subject, writerId, named, reader,
         mapping -> {
-          if (!placed) {
+          // Each side's locations are its version's, read as that version's schema names: its
+          // one message, or every top-level message when it names no root and declares several.
+          // A reader or writer matched to the version by structure need not be read so.
+          ProtobufSchema writerVersion = version(projector, subject, mapping.writerId());
+          ProtobufSchema readerVersion = version(projector, subject, mapping.readerId());
+          boolean writerMulti = writerVersion.readsAsSeveralMessages();
+          boolean readerMulti = readerVersion.readsAsSeveralMessages();
+          String readAs = reader.toDescriptor().getFullName();
+          if (!name.equals(readAs)) {
+            // A reader class of another message: the record's locations are not its own.
             throw new ProvenanceUnavailableException("The record was written as message " + name
-                + ", not its file's first, which single-message provenance has no locations for");
+                + ", which the reader reads as " + readAs);
           }
-          return ProtoProvenanceProjection.of(reader, named, mapping, multi);
+          // A version read as one message has locations for that message only: a record written
+          // as another, or read by a reader whose version is rooted at another, has none.
+          if (!(writerMulti || name.equals(rootOf(writerVersion)))
+              || !(readerMulti || name.equals(rootOf(readerVersion)))) {
+            throw new ProvenanceUnavailableException("The record was written as message " + name
+                + ", not the root of a schema read as one message, which provenance has no "
+                + "locations for");
+          }
+          return ProtoProvenanceProjection.of(reader, readerMulti, named, writerMulti, mapping);
         }).orElse(null);
+  }
+
+  private static ProtobufSchema version(ProvenanceProjector<ProtoProvenanceProjection> projector,
+      String subject, int id) {
+    ParsedSchema schema = projector.registered(subject, id);
+    if (!(schema instanceof ProtobufSchema)) {
+      throw new ProvenanceUnavailableException("Schema id " + id + " of subject " + subject
+          + " is not a Protobuf schema");
+    }
+    return (ProtobufSchema) schema;
+  }
+
+  // The message a schema read as one message is rooted at: the one its root param names, or its
+  // file's first; a name the schema was given is not one.
+  private static String rootOf(ProtobufSchema schema) {
+    String root = schema.rootParam();
+    if (root != null) {
+      return root;
+    }
+    ProtoFileElement file = schema.effectiveFile();
+    for (TypeElement type : file.getTypes()) {
+      if (type instanceof MessageElement) {
+        String packageName = file.getPackageName();
+        return packageName == null || packageName.isEmpty()
+            ? type.getName() : packageName + "." + type.getName();
+      }
+    }
+    return null;
   }
 
   private volatile ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector;

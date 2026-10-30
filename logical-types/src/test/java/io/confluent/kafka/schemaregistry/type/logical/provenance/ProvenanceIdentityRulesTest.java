@@ -317,7 +317,7 @@ class ProvenanceIdentityRulesTest {
     String text = chain.append("message M2000 { int32 x = 1; }\n").toString();
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), text)),
-        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(text))), false))
+        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(text)))))
         .isInstanceOf(TypeTooDeepException.class)
         .hasMessageContaining("Version 7: Schema nests types more than 100 deep");
   }
@@ -332,8 +332,7 @@ class ProvenanceIdentityRulesTest {
     }
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "AVRO", Collections.emptyList(), text.toString())),
-        ProvenanceHistory.held(Collections.singletonList(new AvroSchema(text.toString()))),
-        false))
+        ProvenanceHistory.held(Collections.singletonList(new AvroSchema(text.toString())))))
         .isInstanceOf(TypeTooDeepException.class)
         .hasMessageStartingWith("Version 7: ");
   }
@@ -359,7 +358,7 @@ class ProvenanceIdentityRulesTest {
     String doubling = doublingMessages(16);
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(17, 7, "PROTOBUF", Collections.emptyList(), doubling)),
-        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(doubling))), false))
+        ProvenanceHistory.held(Collections.singletonList(new ProtobufSchema(doubling)))))
         .isInstanceOf(TooManyLocationsException.class)
         .hasMessageContaining("Version 7 has more than " + ProvenanceComputer.MAX_LOCATIONS);
   }
@@ -383,7 +382,7 @@ class ProvenanceIdentityRulesTest {
         + "{\"name\":\"a\",\"type\":\"int\"}]}");
     assertThat(ProvenanceHistory.compute("s", Collections.singletonList(
         new SchemaMetadata(1, 1, null, Collections.emptyList(), avro.canonicalString())),
-        ProvenanceHistory.held(Collections.singletonList(avro)), false)
+        ProvenanceHistory.held(Collections.singletonList(avro)))
         .getVersions().get(0).getFields()).hasSize(1);
   }
 
@@ -399,14 +398,15 @@ class ProvenanceIdentityRulesTest {
         new SchemaMetadata(15, 5, "AVRO", Collections.emptyList(), ""),
         new SchemaMetadata(16, 6, "AVRO", Collections.emptyList(), ""));
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.held(versions), false))
+        ProvenanceHistory.held(versions)))
         .isInstanceOf(AmbiguousProvenanceException.class)
         .hasMessageContaining("version 6");
   }
 
   // Messages M_0 to M_n, each but the last holding two fields of the next.
+  // Rooted at M0, as a file of several naming no root is read as all of them.
   private static String doublingMessages(int n) {
-    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n");
+    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.M0\" } ] };\n");
     for (int i = 0; i < n; i++) {
       file.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
           .append(i + 1).append(" b = 2;\n}\n");
@@ -1192,7 +1192,8 @@ class ProvenanceIdentityRulesTest {
   @Test
   void aProtobufFieldWhoseMessageChangesAndChangesBackStartsOver() {
     // u's message is a named type: B's x is not A's, and A's x on return is new again.
-    String file = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  %s u = 1;\n}\n"
+    String file = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"
+        + "message Row {\n  %s u = 1;\n}\n"
         + "message A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n";
     List<ProvenanceVersion> v = compute(new ProtobufSchema(String.format(file, "A")),
         new ProtobufSchema(String.format(file, "B")), new ProtobufSchema(String.format(file, "A")));
@@ -1212,7 +1213,8 @@ class ProvenanceIdentityRulesTest {
   @Test
   void aProtobufMapAndARepeatedEntryMessageAreOneColumnOnlyByTheEntryShape() {
     // A repeated ...Entry of key and value only is a MAP, as Flink reads it; else ARRAY<STRUCT>.
-    String entry = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  repeated %1$s m = 1;\n}\n"
+    String entry = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"
+        + "message Row {\n  repeated %1$s m = 1;\n}\n"
         + "message %1$s {\n  string key = 1;\n  int32 value = 2;\n}\n";
     for (String name : new String[] {"Entry", "Pair"}) {
       List<ProvenanceVersion> v = compute(proto("map<string, int32> m = 1;"),
@@ -1223,20 +1225,24 @@ class ProvenanceIdentityRulesTest {
   }
 
   @Test
-  void aSingleMessagePathIsTheMultiMessagePathUnderTheFirstMessage() {
-    ProtobufSchema file = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "message Order {\n  int32 id = 1;\n  oneof o { string a = 4; }\n  Line line = 3;\n"
-        + "  map<string, Line> m = 6;\n  repeated Line r = 7;\n}\n"
-        + "message Refund {\n  int32 amount = 1;\n}\nmessage Line {\n  string sku = 1;\n}\n");
-    List<SchemaMetadata> history = Collections.singletonList(
-        new SchemaMetadata(1, 1, file.schemaType(), Collections.emptyList(), ""));
+  void aRootedFilesPathIsItsPathAmongAllTheFilesMessagesUnderTheRoot() {
+    // The same file, naming its root and not: each path of the one is the other's under Order.
+    String messages = "message Order {\n  int32 id = 1;\n  oneof o { string a = 4; }\n"
+        + "  Line line = 3;\n  map<string, Line> m = 6;\n  repeated Line r = 7;\n}\n"
+        + "message Refund {\n  int32 amount = 1;\n}\nmessage Line {\n  string sku = 1;\n}\n";
+    ProtobufSchema all = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + messages);
+    ProtobufSchema rooted = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Order\" } ] };\n" + messages);
     Map<Boolean, List<List<Integer>>> paths = new HashMap<>();
-    for (boolean multi : new boolean[] {false, true}) {
+    for (ProtobufSchema file : Arrays.asList(rooted, all)) {
+      List<SchemaMetadata> history = Collections.singletonList(
+          new SchemaMetadata(1, 1, file.schemaType(), Collections.emptyList(), ""));
       List<List<Integer>> found = new ArrayList<>();
-      ProvenanceHistory.compute("s", history, ProvenanceHistory.held(Arrays.asList(file)), multi)
+      ProvenanceHistory.compute("s", history, ProvenanceHistory.held(Arrays.asList(file)))
           .getVersions().get(0).getFields().forEach(f -> found.add(f.getPath()));
-      paths.put(multi, found);
+      paths.put(file == all, found);
     }
+    assertThat(paths.get(false)).isNotEmpty();
     for (List<Integer> single : paths.get(false)) {
       List<Integer> prefixed = new ArrayList<>(single);
       prefixed.add(0, 0);
@@ -1278,7 +1284,7 @@ class ProvenanceIdentityRulesTest {
     for (boolean multi : new boolean[] {false, true}) {
       assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
           new SchemaMetadata(1, 1, empty.schemaType(), Collections.emptyList(), "")),
-          ProvenanceHistory.held(Arrays.asList(empty)), multi))
+          ProvenanceHistory.held(Arrays.asList(empty))))
           .isInstanceOf(ValidationException.class).hasMessageContaining("Version 1");
     }
   }
@@ -1395,7 +1401,7 @@ class ProvenanceIdentityRulesTest {
           Collections.emptyList(), ""));
     }
     return ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.held(Arrays.asList(versions)), false).getVersions();
+        ProvenanceHistory.held(Arrays.asList(versions))).getVersions();
   }
 
   private static Map<List<Integer>, Integer> pids(List<ProvenanceVersion> versions, int version) {
