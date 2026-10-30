@@ -188,9 +188,10 @@ class RecursiveSchemaRoundTripTest {
         + "message B {\n"
         + "  A a = 1;\n"
         + "}\n";
-    ProtobufSchema legacy = new ProtobufSchema(legacyProto);
+    // Read as A: a file of several naming no root is otherwise read as all of them.
+    ProtobufSchema legacy = new ProtobufSchema(legacyProto).copy("com.example.A");
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy);
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy, false);
     assertEquals(Schema.Type.NAMED_TYPE_REF, lt.getRootSchema().getType());
     assertEquals("com.example.A", lt.getRootSchema().getQualifiedName());
     Schema aBody = lt.getNamedTypes().get("com.example.A");
@@ -230,9 +231,9 @@ class RecursiveSchemaRoundTripTest {
         + "message Linked {\n"
         + "  Linked next = 1;\n"
         + "}\n";
-    ProtobufSchema legacy = new ProtobufSchema(legacyProto);
+    ProtobufSchema legacy = new ProtobufSchema(legacyProto).copy("com.example.Outer");
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy);
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy, false);
 
     // Outer is non-recursive (its body references Linked, not Outer) so the
     // root surfaces as STRUCT, not NAMED_TYPE_REF.
