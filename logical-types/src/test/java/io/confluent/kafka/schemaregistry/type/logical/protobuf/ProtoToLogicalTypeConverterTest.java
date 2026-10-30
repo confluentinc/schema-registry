@@ -837,6 +837,37 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void anEnumOfAnEnumOnlyFileIsExternalWhateverItsImportIsNamed() {
+    // color.proto declares only an enum, and is imported by its file name, not the enum's.
+    String color = "syntax = \"proto3\";\npackage com;\nenum Color {\n  RED = 0;\n  BLUE = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"color.proto\";\n"
+        + "message Foo {\n  Color c = 1;\n}\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("color.proto", color);
+    resolved.put("leaf.proto", leaf);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("color.proto", "color", 1),
+        new SchemaReference("leaf.proto", "leaf", 1));
+    ProtobufSchema field = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"color.proto\";\nmessage Row {\n  com.Color c = 1;\n}\n",
+        refs.subList(0, 1), Map.of("color.proto", color), 1, null);
+    ProtobufSchema reExport = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n", refs, resolved, 1,
+        null);
+
+    for (ProtobufSchema schema : Arrays.asList(field, reExport)) {
+      LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(schema);
+      Schema c = rowOf(lt).getField("c").getSchema();
+      assertEquals(Schema.Type.NAMED_TYPE_REF, c.getType());
+      assertEquals("com.Color", c.getQualifiedName());
+      assertTrue(lt.isExternal("com.Color"));
+      assertEquals(2, lt.getNamedTypes().get("com.Color").getEnumValues().size());
+      // The writer normalizes, which qualifies type names fully.
+      assertEquals(schema.normalize().canonicalString(),
+          LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored").canonicalString());
+    }
+  }
+
+  @Test
   void testFieldNumberPopulatedFromProto() throws Exception {
     DescriptorProto message = DescriptorProto.newBuilder()
         .setName("M")

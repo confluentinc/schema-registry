@@ -241,8 +241,7 @@ public class ProtoToLogicalTypeConverter {
         new ToLogicalContext<>(schema);
     // Extend reference names with all nested message/enum full names from
     // each resolved external schema, so nested external types are recognized.
-    // Enum-only files (no top-level messages) are skipped — the top-level
-    // enum's name is already in the set from the constructor.
+    // An enum-only file's enums are too, since its reference may be named for the file.
     collectReferencedTypeNames(schema, file, ctx);
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
@@ -417,13 +416,13 @@ public class ProtoToLogicalTypeConverter {
     }
   }
 
-  // A file's types. One of only enums or only options adds none; one of only public imports adds
-  // those of the files it re-exports.
+  // A file's types, its enums too when it has only enums; one of only options adds none, and one
+  // of only public imports adds those of the files it re-exports.
   private static void collectFileTypeNames(FileDescriptor file, Set<String> seen,
       ToLogicalContext<String> ctx) {
-    if (!file.getMessageTypes().isEmpty()) {
+    if (!file.getMessageTypes().isEmpty() || !file.getEnumTypes().isEmpty()) {
       collectExternalTypeNames(file, ctx);
-    } else if (file.getEnumTypes().isEmpty()) {
+    } else {
       for (FileDescriptor exported : file.getPublicDependencies()) {
         if (seen.add(exported.getName())) {
           collectFileTypeNames(exported, seen, ctx);
