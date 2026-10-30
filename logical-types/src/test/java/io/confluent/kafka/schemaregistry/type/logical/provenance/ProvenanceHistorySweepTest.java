@@ -128,7 +128,7 @@ class ProvenanceHistorySweepTest {
     }
     SchemaProvenance provenance;
     try {
-      provenance = ProvenanceHistory.compute("s", entries, ProvenanceHistory.held(versions), false);
+      provenance = ProvenanceHistory.compute("s", entries, ProvenanceHistory.held(versions));
     } catch (ValidationException | RecursiveTypeException | AmbiguousProvenanceException e) {
       // Rejected by name: the registry answers 422, and the reader falls back.
       return;

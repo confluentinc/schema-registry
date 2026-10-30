@@ -3791,7 +3791,7 @@ public class ProtobufSchemaTest {
         + "import \"confluent/meta.proto\";\n"
         + (otherImport != null ? "import \"" + otherImport + "\";\n" : "")
         + "import public \"" + publicImport + "\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n";
   }
 
@@ -4113,15 +4113,47 @@ public class ProtobufSchemaTest {
     }
   }
 
-  @Test
-  public void testRootParamIsIgnoredOutsideAPublicImportWrapper() {
-    // A file with its own messages
-    ProtobufSchema local = new ProtobufSchema("syntax = \"proto3\";\n"
+  private static String rootedFile(String root) {
+    return "syntax = \"proto3\";\npackage p;\n"
         + "import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"B\" } ] };\n"
-        + "message A { int32 a = 1; }\n"
-        + "message B { int32 b = 1; }\n");
-    assertEquals("A", local.name());
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
+        + "\" } ] };\n"
+        + "message A { int32 a = 1; message Inner { int32 i = 1; } }\n"
+        + "message B { int32 b = 1; }\n";
+  }
+
+  @Test
+  public void testRootParamPicksTheRootOfAFileOfSeveralMessages() {
+    ProtobufSchema local = new ProtobufSchema(rootedFile("p.B"));
+    local.validate(false);
+    assertEquals("p.B", local.name());
+    assertEquals("p.B", local.toDescriptor().getFullName());
+    assertEquals("p.B", local.rootParam());
+    assertFalse(local.readsAsSeveralMessages());
+    // Without the param, its records may carry either message, whatever name the schema is given
+    ProtobufSchema unrooted = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message A { int32 a = 1; }\nmessage B { int32 b = 1; }\n");
+    assertNull(unrooted.rootParam());
+    assertTrue(unrooted.readsAsSeveralMessages());
+    assertTrue(unrooted.copy("p.B").readsAsSeveralMessages());
+    assertEquals("p.B", unrooted.copy("p.B").name());
+    // A name still picks the message the schema denotes, over the param
+    assertEquals("p.A", local.copy("p.A").name());
+  }
+
+  @Test
+  public void testRootParamOfAFileMustNameOneOfItsTopLevelMessages() {
+    for (String root : Arrays.asList("p.A.Inner", "p.Missing", "B")) {
+      ProtobufSchema schema = new ProtobufSchema(rootedFile(root));
+      assertThrows(root, IllegalArgumentException.class, () -> schema.validate(false));
+      // A name given to the schema doesn't excuse its file's param
+      assertThrows(root, IllegalArgumentException.class,
+          () -> schema.copy("p.A").validate(false));
+    }
+  }
+
+  @Test
+  public void testRootParamOutsideAResolvableWrapperNamesNothing() {
     // A private import other than the meta import means no wrapper, so no types at all
     ProtobufSchema notWrapper = new ProtobufSchema(rootParamWrapper(
         "google/protobuf/wrappers.proto", "google/protobuf/timestamp.proto",
