@@ -25,8 +25,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Rule set, which includes migration rules (for migrating between versions) and domain rules
- * (for the current version).
+ * Rule set, which includes migration rules (for migrating between versions), domain rules
+ * (for business logic), and encoding rules (for encoding logic).
  */
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -35,11 +35,15 @@ public class RuleSet {
 
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
+  private final List<Rule> encodingRules;
+  private final ExecutionEnvironment enableAt;
 
   @JsonCreator
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
-      @JsonProperty("domainRules") List<Rule> domainRules
+      @JsonProperty("domainRules") List<Rule> domainRules,
+      @JsonProperty("encodingRules") List<Rule> encodingRules,
+      @JsonProperty("enableAt") ExecutionEnvironment enableAt
   ) {
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
@@ -47,6 +51,10 @@ public class RuleSet {
     this.domainRules = domainRules != null
         ? Collections.unmodifiableList(domainRules)
         : Collections.emptyList();
+    this.encodingRules = encodingRules != null
+        ? Collections.unmodifiableList(encodingRules)
+        : Collections.emptyList();
+    this.enableAt = enableAt;
   }
 
   public RuleSet(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {
@@ -56,6 +64,12 @@ public class RuleSet {
     this.domainRules = ruleSet.getDomainRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
+    this.encodingRules = ruleSet.getEncodingRules().stream()
+        .map(Rule::new)
+        .collect(Collectors.toList());
+    this.enableAt = ruleSet.getEnableAt() != null
+        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableAt())
+        : null;
   }
 
   public List<Rule> getMigrationRules() {
@@ -64,6 +78,14 @@ public class RuleSet {
 
   public List<Rule> getDomainRules() {
     return domainRules;
+  }
+
+  public List<Rule> getEncodingRules() {
+    return encodingRules;
+  }
+
+  public ExecutionEnvironment getEnableAt() {
+    return enableAt;
   }
 
   public boolean equals(Object o) {
@@ -75,12 +97,14 @@ public class RuleSet {
     }
     RuleSet ruleSet = (RuleSet) o;
     return Objects.equals(migrationRules, ruleSet.migrationRules)
-        && Objects.equals(domainRules, ruleSet.domainRules);
+        && Objects.equals(domainRules, ruleSet.domainRules)
+        && Objects.equals(encodingRules, ruleSet.encodingRules)
+        && enableAt == ruleSet.enableAt;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules);
+    return Objects.hash(migrationRules, domainRules, encodingRules, enableAt);
   }
 
   @Override
@@ -88,6 +112,8 @@ public class RuleSet {
     return "Rules{"
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
+        + ", encodingRules=" + encodingRules
+        + ", enableAt=" + enableAt
         + '}';
   }
 
@@ -98,7 +124,11 @@ public class RuleSet {
             .collect(Collectors.toList()),
         getDomainRules().stream()
             .map(Rule::toRuleEntity)
-            .collect(Collectors.toList())
+            .collect(Collectors.toList()),
+        getEncodingRules().stream()
+            .map(Rule::toRuleEntity)
+            .collect(Collectors.toList()),
+        getEnableAt() != null ? getEnableAt().toEntity() : null
     );
   }
 }

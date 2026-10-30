@@ -15,9 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchemaCancellation;
 import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +38,8 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 
 public class SchemaDiff {
-  public static final Set<Difference.Type> COMPATIBLE_CHANGES;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_LENIENT;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_STRICT;
 
   private static final String CONNECT_TYPE_PROP = "connect.type";
   private static final String BYTES_VAL = "bytes";
@@ -79,6 +82,8 @@ public class SchemaDiff {
     changes.add(Type.MIN_PROPERTIES_REMOVED);
     changes.add(Type.ADDITIONAL_PROPERTIES_ADDED);
     changes.add(Type.ADDITIONAL_PROPERTIES_EXTENDED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_ADDED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_EXTENDED);
     changes.add(Type.PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
     changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL);
     changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL);
@@ -91,9 +96,15 @@ public class SchemaDiff {
     changes.add(Type.MAX_ITEMS_REMOVED);
     changes.add(Type.MIN_ITEMS_DECREASED);
     changes.add(Type.MIN_ITEMS_REMOVED);
+    changes.add(Type.MAX_CONTAINS_INCREASED);
+    changes.add(Type.MAX_CONTAINS_REMOVED);
+    changes.add(Type.MIN_CONTAINS_DECREASED);
+    changes.add(Type.MIN_CONTAINS_REMOVED);
     changes.add(Type.UNIQUE_ITEMS_REMOVED);
     changes.add(Type.ADDITIONAL_ITEMS_ADDED);
     changes.add(Type.ADDITIONAL_ITEMS_EXTENDED);
+    changes.add(Type.UNEVALUATED_ITEMS_ADDED);
+    changes.add(Type.UNEVALUATED_ITEMS_EXTENDED);
     changes.add(Type.ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
     changes.add(Type.ITEM_ADDED_TO_CLOSED_CONTENT_MODEL);
     changes.add(Type.ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL);
@@ -108,10 +119,24 @@ public class SchemaDiff {
     changes.add(Type.SUM_TYPE_EXTENDED);
     changes.add(Type.NOT_TYPE_NARROWED);
 
-    COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(new HashSet<>(changes));
+
+    changes.add(Type.ADDITIONAL_PROPERTIES_NARROWED);
+    changes.add(Type.ADDITIONAL_PROPERTIES_REMOVED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_NARROWED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_REMOVED);
+    changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL);
+    changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+
+    COMPATIBLE_CHANGES_LENIENT = Collections.unmodifiableSet(new HashSet<>(changes));
   }
 
-  public static List<Difference> compare(final Schema original, final Schema update) {
+  public static List<Difference> compare(
+      Set<Difference.Type> compatibleChanges, final Schema original, final Schema update) {
     // Cross-branch memoization optimistically truncates recursive cycles as compatible. A pair can
     // therefore be cached compatible under an assumption about an in-progress ancestor that later
     // proves incompatible, and reusing that cached result in a sibling branch could mask a real
@@ -123,7 +148,7 @@ public class SchemaDiff {
     // non-recursive case costs a single pass).
     Map<Context.SchemaPair, List<Difference>> incompatibleSeed = Collections.emptyMap();
     while (true) {
-      final Context ctx = new Context(COMPATIBLE_CHANGES, incompatibleSeed);
+      final Context ctx = new Context(compatibleChanges, incompatibleSeed);
       compare(ctx, original, update);
       Map<Context.SchemaPair, List<Difference>> incompatible = ctx.collectIncompatiblePairs();
       if (!ctx.usedOptimisticTruncation()
@@ -134,8 +159,18 @@ public class SchemaDiff {
     }
   }
 
+  public static List<Difference> compare(final Schema original, final Schema update) {
+    return compare(COMPATIBLE_CHANGES_STRICT, original, update);
+  }
+
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
+    // Cooperative cancellation: this method is the recursion hub for the (potentially
+    // exponential) compatibility diff over oneOf/anyOf/$ref schemas — every per-type diff
+    // recurses back through here. If the worker thread has been interrupted (e.g. by the
+    // rest-utils request timeout with interrupt enabled), abort the whole computation so the
+    // thread can be reclaimed instead of burning CPU to completion.
+    JsonSchemaCancellation.throwIfInterrupted();
     if (original == null && update == null) {
       return;
     } else if (original == null) {
@@ -203,16 +238,17 @@ public class SchemaDiff {
       }
     }
 
-    if (!schemaTypesEqual(original, update)) {
+    // A const is an enum of one value, so the two are compared as one type.
+    boolean constAndEnum = EnumSchemaDiff.isConstOrEnum(original)
+        && EnumSchemaDiff.isConstOrEnum(update);
+    if (!schemaTypesEqual(original, update) && !constAndEnum) {
       // TrueSchema extends EmptySchema
       if (original instanceof FalseSchema || update instanceof EmptySchema) {
         return;
       }
 
-      String originalConnectType =
-          (String) original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
-      String updateConnectType =
-          (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      Object originalConnectType = original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      Object updateConnectType = update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
         // Allow two types with connect.type of bytes to be considered equivalent.
         // This is to allow a fix for decimal conversions in the JSON converter to
@@ -241,10 +277,12 @@ public class SchemaDiff {
       StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
     } else if (original instanceof NumberSchema) {
       NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
-    } else if (original instanceof ConstSchema) {
+    } else if (original instanceof ConstSchema && update instanceof ConstSchema) {
       ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
-    } else if (original instanceof EnumSchema) {
+    } else if (original instanceof EnumSchema && update instanceof EnumSchema) {
       EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
+    } else if (EnumSchemaDiff.isConstOrEnum(original)) {
+      EnumSchemaDiff.compareConstAndEnum(ctx, original, update);
     } else if (original instanceof CombinedSchema) {
       CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
     } else if (original instanceof NotSchema) {
@@ -256,18 +294,28 @@ public class SchemaDiff {
     }
   }
 
+  // Follows a chain of references (a definition that is itself only a $ref) to its end, so both
+  // sides are compared by what they refer to rather than by how many hops it takes to get there.
   private static Schema normalizeSchema(final Schema schema) {
-    if (schema instanceof ReferenceSchema) {
-      ReferenceSchema referenceSchema = (ReferenceSchema) schema;
+    Schema current = schema;
+    Set<Schema> seen = null;
+    while (current instanceof ReferenceSchema) {
+      ReferenceSchema referenceSchema = (ReferenceSchema) current;
+      if (seen == null) {
+        seen = Collections.newSetFromMap(new IdentityHashMap<>());
+      }
+      if (!seen.add(referenceSchema)) {
+        throw new InvalidReferenceException(
+            "Cyclic $ref '" + referenceSchema.getReferenceValue() + "'");
+      }
       Schema referredSchema = referenceSchema.getReferredSchema();
       if (referredSchema == null) {
-        throw new IllegalStateException(
+        throw new InvalidReferenceException(
             "Unresolved $ref '" + referenceSchema.getReferenceValue() + "'");
       }
-      return referredSchema;
-    } else {
-      return schema;
+      current = referredSchema;
     }
+    return current;
   }
 
   public static boolean schemaTypesEqual(final Schema schema1, final Schema schema2) {

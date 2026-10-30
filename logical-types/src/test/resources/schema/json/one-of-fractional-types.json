@@ -1,0 +1,21 @@
+{
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "f0": {
+          "format": "float",
+          "type": "number"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "f0": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

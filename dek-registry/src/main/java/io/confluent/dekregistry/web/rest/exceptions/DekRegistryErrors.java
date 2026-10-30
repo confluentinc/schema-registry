@@ -15,9 +15,9 @@
 
 package io.confluent.dekregistry.web.rest.exceptions;
 
+import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
-import io.confluent.rest.exceptions.RestServerErrorException;
 
 public class DekRegistryErrors {
 
@@ -41,6 +41,9 @@ public class DekRegistryErrors {
   public static final String TOO_MANY_KEYS_MESSAGE_FORMAT =
       "A maximum of %d keys already exist";
   public static final int TOO_MANY_KEYS_ERROR_CODE = 40972;
+
+  // HTTP 403
+  public static final int DEK_GENERATION_FORBIDDEN_ERROR_CODE = 40370;
 
   // HTTP 422
   public static final int INVALID_KEY_ERROR_CODE = 42271;
@@ -85,7 +88,10 @@ public class DekRegistryErrors {
     return new RestReferenceExistsException(name);
   }
 
-  public static RestServerErrorException dekGenerationException(String message) {
-    return new RestDekGenerationException(message);
+  public static RestException dekGenerationException(DekGenerationException e) {
+    if (e.isAccessDenied()) {
+      return new RestDekGenerationForbiddenException(e.getMessage());
+    }
+    return new RestDekGenerationException(e.getMessage());
   }
 }

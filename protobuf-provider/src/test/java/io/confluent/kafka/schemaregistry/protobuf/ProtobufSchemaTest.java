@@ -25,18 +25,24 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Int32Value;
+import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
@@ -46,9 +52,12 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -60,6 +69,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
@@ -69,6 +80,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1725,7 +1737,6 @@ public class ProtobufSchemaTest {
         + "option cc_generic_services = false;\n"
         + "option java_generic_services = true;\n"
         + "option py_generic_services = false;\n"
-        + "option php_generic_services = true;\n"
         + "option cc_enable_arenas = true;\n"
         + "option objc_class_prefix = \"objc\";\n"
         + "option csharp_namespace = \"csharp\";\n"
@@ -1828,7 +1839,6 @@ public class ProtobufSchemaTest {
         + "option objc_class_prefix = \"objc\";\n"
         + "option optimize_for = CODE_SIZE;\n"
         + "option php_class_prefix = \"php\";\n"
-        + "option php_generic_services = true;\n"
         + "option php_metadata_namespace = \"php_md_ns\";\n"
         + "option php_namespace = \"php_ns\";\n"
         + "option py_generic_services = false;\n"
@@ -2884,6 +2894,45 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testAddBeforeRemoveTags() {
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example.mynamespace;\n" +
+        "\n" +
+        "import \"confluent/meta.proto\";\n" +
+        "\n" +
+        "message SampleRecord {\n" +
+        "  string my_field1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"EXISTING\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "}\n";
+
+    SchemaEntity fieldEntity = new SchemaEntity(".SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+
+    // Use same tag "OVERLAP" in both add and remove, plus "EXISTING" in remove
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(fieldEntity, ImmutableSet.of("OVERLAP", "EXISTING"));
+
+    // addBeforeRemove=true: add then remove, so OVERLAP is removed (remove wins)
+    ParsedSchema resultAddFirst = new ProtobufSchema(schemaString)
+        .copy(tagsToAdd, tagsToRemove, true);
+    Map<SchemaEntity, Set<String>> addBeforeRemoveTags = resultAddFirst.inlineTaggedEntities();
+    SchemaEntity normalizedField = new SchemaEntity("SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+    assertEquals(ImmutableSet.of("NEW"), addBeforeRemoveTags.get(normalizedField));
+
+    // addBeforeRemove=false: remove then add, so OVERLAP is added (add wins)
+    ParsedSchema resultRemoveFirst = new ProtobufSchema(schemaString)
+        .copy(tagsToAdd, tagsToRemove, false);
+    Map<SchemaEntity, Set<String>> removeFirstTags = resultRemoveFirst.inlineTaggedEntities();
+    assertEquals(ImmutableSet.of("OVERLAP", "NEW"), removeFirstTags.get(normalizedField));
+  }
+
+  @Test
   public void testAddDuplicateTags() {
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example.mynamespace;\n" +
@@ -3239,7 +3288,8 @@ public class ProtobufSchemaTest {
   @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
-    for (int i = 19; i < 28; i++) {
+    // v36 uses EDITION_2026, which needs protobuf-java 4.35 or later
+    for (int i = 19; i < 36; i++) {
       ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
       ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
       Descriptor desc = schema.toDescriptor();
@@ -3247,8 +3297,7 @@ public class ProtobufSchemaTest {
       ProtobufSchema normalizedSchema = schema.normalize();
       ProtobufSchema normalizedSchema2 = schema2.normalize();
       // v24 has an incompatible change of edition string "2023" changing to edition enum EDITION_2023
-      // v27 introduced feature_support
-      if (i != 24 && i != 27) {
+      if (i != 24) {
         assertEquals(normalizedSchema.canonicalString(), normalizedSchema2.canonicalString());
       }
     }
@@ -3279,7 +3328,7 @@ public class ProtobufSchemaTest {
   private static RuleContext transformContext(ProtobufSchema schema) {
     Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
         null, null, null, null, null, false);
-    return new RuleContext(Collections.emptyMap(), null, schema,
+    return new RuleContext(Collections.emptyMap(), null, null, schema,
         "topic-value", "topic", null, null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
   }
@@ -3480,7 +3529,7 @@ public class ProtobufSchemaTest {
     // the registered field.
     Rule rule = new Rule("t", null, RuleKind.TRANSFORM, RuleMode.WRITE, "TEST",
         Collections.singleton("PII"), null, null, null, null, false);
-    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "topic-value", "topic", null, null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
     RecordingTransform recorder = new RecordingTransform();
@@ -3491,5 +3540,660 @@ public class ProtobufSchemaTest {
     assertEquals("hello-suffix", result.getField(resultDesc.findFieldByName("original")));
     // The name reported is the registered schema's, not the message's.
     assertEquals(Collections.singletonList("renamed|test.Outer.renamed"), recorder.visited);
+  }
+
+  /**
+   * The validation walk resolves the schema-side field the same way, so a rule declared on a
+   * renamed field still fires - and reports the violation under the registered schema's name.
+   */
+  @Test
+  public void testValidateMessageResolvesRenamedFieldsByNumber() {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  string renamed = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"true\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    List<ValidationRuleError> errors =
+        schema.validateMessage((rule, sch, value) -> Boolean.FALSE, msg);
+
+    assertEquals(1, errors.size());
+    assertEquals("r", errors.get(0).getRule().getName());
+    assertEquals("renamed", errors.get(0).getFieldPath());
+  }
+
+  /**
+   * A re-export-only schema (no local messages or enums, just an
+   * {@code import public}) should expose the publicly-imported type as its
+   * canonical name. Without the fall-through, {@link ProtobufSchema#name()}
+   * throws "Protobuf schema definition contains no type definitions".
+   */
+  @Test
+  public void testNameFallsThroughToPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String reExportProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema reExport = new ProtobufSchema(
+        reExportProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must resolve through the public import to com.Foo.
+    assertEquals("com.Foo", reExport.name());
+
+    // canonicalString() preserves the `import public` form (re-emitted by the
+    // existing publicDependency-aware rendering — verifying it isn't broken).
+    assertTrue("expected `import public` in canonical form, got: "
+            + reExport.canonicalString(),
+        reExport.canonicalString().contains("import public \"leaf.proto\""));
+
+    // toDescriptor() should resolve through the public dep and return the
+    // imported type's Descriptor.
+    Descriptor desc = reExport.toDescriptor();
+    assertNotNull("expected a Descriptor for the publicly-imported type", desc);
+    assertEquals("Foo", desc.getName());
+    assertEquals("com.Foo", desc.getFullName());
+  }
+
+  /**
+   * Index round-trip for an empty public-import file: encoding a leaf type's
+   * fully-qualified name to {@link MessageIndexes} and back must produce the
+   * same name. With two messages in the leaf, a non-zero index ({@code Bar}
+   * at position 1) verifies the wrapper delegates to the leaf's index space
+   * rather than collapsing everything to {@code [0]}.
+   */
+  @Test
+  public void testIndexesRoundTripThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Bar {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    MessageIndexes fooIdx = top.toMessageIndexes("com.Foo");
+    assertEquals(Collections.singletonList(0), fooIdx.indexes());
+    assertEquals("com.Foo", top.toMessageName(fooIdx));
+
+    MessageIndexes barIdx = top.toMessageIndexes("com.Bar");
+    assertEquals(Collections.singletonList(1), barIdx.indexes());
+    assertEquals("com.Bar", top.toMessageName(barIdx));
+  }
+
+  /**
+   * {@link ProtobufSchema#hasTopLevelField} for an empty public-import wrapper
+   * must report fields from the publicly-imported file, not from the wrapper's
+   * (empty) local types.
+   */
+  @Test
+  public void testHasTopLevelFieldThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    assertTrue(top.hasTopLevelField("id"));
+    assertFalse(top.hasTopLevelField("nonexistent"));
+  }
+
+  /**
+   * {@link ProtobufSchema#fullName} for an empty public-import wrapper returns
+   * the wrapper file's own generated class name (e.g.,
+   * {@code com.LeafWrapper}), not the imported type's class. This matches
+   * what {@code protoc} generates for an empty {@code import public} file —
+   * a real Java class with a {@code getDescriptor()} returning the
+   * {@link FileDescriptor}. {@code toSpecificDescriptor} can then load that
+   * class and return the file descriptor.
+   */
+  @Test
+  public void testFullNameOfEmptyPublicImportWrapper() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // Without a path, the class is the root's, and the imported file has no
+    // java_outer_classname or java_multiple_files to derive it from.
+    assertNull(top.fullName());
+    // With an originalPath, fullName derives the outer class name from the
+    // file name — for an empty wrapper that's the file-level class protoc
+    // generates (e.g. "Wrapper" → "com.Wrapper").
+    assertEquals("com.Wrapper", top.fullName("Wrapper.proto"));
+  }
+
+  /**
+   * Empty public-import wrapper around a well-known proto (e.g.,
+   * {@code google/protobuf/timestamp.proto}) must be detected as a wrapper.
+   * Well-known types live in {@code KNOWN_DEPENDENCIES}, not user-provided
+   * {@code dependencies}, so wrapper resolution must consult the same
+   * dep map that descriptor resolution uses.
+   */
+  @Test
+  public void testPublicImportOfWellKnownType() {
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"google/protobuf/timestamp.proto\";\n";
+
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        1,
+        null);
+
+    // name() should resolve through to the well-known Timestamp type.
+    assertEquals("google.protobuf.Timestamp", top.name());
+    // hasTopLevelField sees Timestamp's fields (seconds, nanos).
+    assertTrue(top.hasTopLevelField("seconds"));
+    assertTrue(top.hasTopLevelField("nanos"));
+  }
+
+  /**
+   * A schema with both its own local types AND an {@code import public} is
+   * NOT a public-import wrapper — its local types take precedence. The
+   * delegating methods ({@link ProtobufSchema#name},
+   * {@link ProtobufSchema#toMessageIndexes}, {@link ProtobufSchema#hasTopLevelField})
+   * must read the wrapper's local types, not the imported file's.
+   */
+  @Test
+  public void testLocalTypesWinOverPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Imported {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n"
+        + "message Local {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must return the LOCAL type, not the imported one.
+    assertEquals("com.Local", top.name());
+    // hasTopLevelField must see the local type's fields, not the imported one's.
+    assertTrue(top.hasTopLevelField("n"));
+    assertFalse(top.hasTopLevelField("id"));
+    // toMessageIndexes must encode the local type at index 0.
+    MessageIndexes localIdx = top.toMessageIndexes("com.Local");
+    assertEquals(Collections.singletonList(0), localIdx.indexes());
+    assertEquals("com.Local", top.toMessageName(localIdx));
+  }
+
+  private static String rootParamWrapper(String publicImport, String otherImport, String root) {
+    return "syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + (otherImport != null ? "import \"" + otherImport + "\";\n" : "")
+        + "import public \"" + publicImport + "\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n";
+  }
+
+  @Test
+  public void testRootParamPicksTheRootOfAPublicImportWrapper() {
+    ProtobufSchema schema = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    assertEquals("google.protobuf.Int64Value", schema.name());
+    assertEquals("google.protobuf.Int64Value", schema.toDescriptor().getFullName());
+    MessageIndexes indexes = schema.toMessageIndexes(schema.name());
+    assertEquals(Collections.singletonList(2), indexes.indexes());
+    assertEquals("google.protobuf.Int64Value", schema.toMessageName(indexes));
+    // Normalizing keeps the param and the meta import
+    ProtobufSchema normalized = new ProtobufSchema(schema.normalize().canonicalString());
+    assertEquals("google.protobuf.Int64Value", normalized.name());
+    schema.validate(false);
+  }
+
+  // A generated class's schema finds a primitive or external DDL root stored as a public-import
+  // wrapper of its file, comparing the files that file imports by their text.
+  @Test
+  public void testNativeFileLooksUpItsPublicImportWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int bigint = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(bigint, client.getId("bigint", generated));
+    // Normalized, the lookup still finds it
+    assertEquals(bigint, client.getId("bigint", generated, true));
+    // Registered, it is the wrapper's version, which is left as it was and answers for it
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(bigint, response.getId());
+    assertEquals(Collections.singletonList(1), client.getAllVersions("bigint"));
+    assertEquals(1, client.getVersion("bigint", generated));
+    ProtobufSchema stored = (ProtobufSchema) client.getSchemaBySubjectAndId("bigint", bigint);
+    assertEquals("google.protobuf.Int64Value", stored.name());
+    assertEquals(stored.canonicalString(), response.getSchema());
+    assertEquals(stored, client.getSchemaByGuid(response.getGuid(), null));
+
+    String other = "syntax = \"proto3\";\npackage com;\nmessage Other {\n  int32 n = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"other.proto\";\n"
+        + "message Foo {\n  string id = 1;\n}\nmessage Bar {\n  com.Other o = 1;\n}\n";
+    List<SchemaReference> otherRef =
+        Collections.singletonList(new SchemaReference("other.proto", "other", 1));
+    Map<String, String> resolved = Collections.singletonMap("other.proto", other);
+    client.register("other", new ProtobufSchema(other));
+    client.register("leaf", new ProtobufSchema(leaf, otherRef, resolved, null, null));
+    // Resolved as the registry resolves references, transitively
+    Map<String, String> wrapperResolved = new HashMap<>(resolved);
+    wrapperResolved.put("com.Bar", leaf);
+    int external = client.register("external", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        wrapperResolved, null, null));
+    assertEquals(external, client.getId("external",
+        new ProtobufSchema(leaf, otherRef, resolved, null, null)));
+
+    // Other text, or an import of other text, finds nothing
+    assertNotFound(client, "external", new ProtobufSchema(
+        leaf.replace("string id", "bytes id"), otherRef, resolved, null, null));
+    String other2 = other.replace("int32 n", "int64 n");
+    client.register("other2", new ProtobufSchema(other2));
+    assertNotFound(client, "external", new ProtobufSchema(leaf,
+        Collections.singletonList(new SchemaReference("other.proto", "other2", 1)),
+        Collections.singletonMap("other.proto", other2), null, null));
+    // The wrapper does not find a version holding the file
+    assertNotFound(client, "leaf", new ProtobufSchema(
+        rootParamWrapper("com.Bar", null, "com.Bar"),
+        Collections.singletonList(new SchemaReference("com.Bar", "leaf", 1)),
+        wrapperResolved, null, null));
+  }
+
+  // As in the registry, a native file finds the newest wrapper of its file, and a permanently
+  // deleted wrapper is not found again.
+  @Test
+  public void testNativeFileFindsTheNewestLiveWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String wrappers = "google/protobuf/wrappers.proto";
+    client.register("number",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    int newest = client.register("number", new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"" + wrappers + "\";\n"));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(newest, client.getId("number", generated));
+    assertEquals(newest, client.register("number", generated));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("number"));
+
+    client.register("bigint",
+        new ProtobufSchema(rootParamWrapper(wrappers, null, "google.protobuf.Int64Value")));
+    client.register("bigint", generated);
+    client.deleteSchemaVersion("bigint", "1", true);
+    int again = client.register("bigint", generated);
+    assertFalse(client.getAllVersions("bigint").isEmpty());
+    assertEquals(again, client.getId("bigint", generated));
+  }
+
+  // As in the registry, a deleted wrapper is not found by its native file, which registered is
+  // a version of its own.
+  @Test
+  public void testNativeFileDoesNotFindADeletedWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    client.deleteSchemaVersion("bigint", "1");
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertNotFound(client, "bigint", generated);
+    RegisterSchemaResponse response =
+        client.registerWithResponse("bigint", generated, false, false);
+    assertEquals(generated.canonicalString(), response.getSchema());
+    assertEquals(1, client.getAllVersions("bigint").size());
+  }
+
+  // As in the registry, a lookup by the schema in any form comes before one with the latest
+  // version's metadata, so the version found is the one whose id is found.
+  @Test
+  public void testVersionOfANativeFileIsTheOneItsIdIsFoundAt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int wrapper = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    client.register("bigint", generated.copy(
+        new Metadata(null, Collections.singletonMap("owner", "x"), null), null));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("bigint"));
+    assertEquals(wrapper, client.getId("bigint", generated));
+    assertEquals(1, client.getVersion("bigint", generated));
+  }
+
+  // A version given on registration is a version of its own, as in an import.
+  @Test
+  public void testRegisteringAGivenVersionAddsIt() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema schema = new ProtobufSchema(
+        "syntax = \"proto3\";\nmessage M {\n  int32 n = 1;\n}\n");
+    int id = client.register("explicit", schema);
+    assertEquals(id, client.register("explicit", schema.copy(2), 2, id));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("explicit"));
+
+    // Another form that looks up a version is a schema of its own, which leaves that one as it was
+    ProtobufSchema wrapper = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    int wrapperId = client.register("bigint", wrapper);
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertFalse(wrapperId == client.register("bigint", generated.copy(2), 2, -1));
+    assertEquals(Arrays.asList(1, 2), client.getAllVersions("bigint"));
+    assertEquals(wrapper.canonicalString(),
+        client.getSchemaBySubjectAndId("bigint", wrapperId).canonicalString());
+    assertEquals(wrapper.canonicalString(), client.getSchemaById(wrapperId).canonicalString());
+  }
+
+  // A normalized lookup drops a map entry message, which moves a later message's indexes; it does
+  // not find a wrapper of a raw file holding one, whose indexes a reader resolves.
+  @Test
+  public void testNormalizedLookupSkipsAWrapperOfAFileWithMapEntries() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String leaf = "syntax = \"proto3\";\npackage com;\n"
+        + "message Parent {\n  repeated ItemsEntry items = 1;\n"
+        + "  message ItemsEntry {\n    option map_entry = true;\n"
+        + "    string key = 1;\n    string value = 2;\n  }\n"
+        + "  message Child {\n    int32 n = 1;\n  }\n}\n";
+    ProtobufSchema generated = new ProtobufSchema(leaf);
+    assertFalse(generated.toMessageIndexes("com.Parent.Child", false)
+        .equals(generated.toMessageIndexes("com.Parent.Child", true)));
+    client.register("leaf", generated);
+    int id = client.register("child", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Parent.Child"),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", leaf), null, null));
+    assertEquals(id, client.getId("child", generated));
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId("child", generated, true));
+    assertEquals(404, e.getStatus());
+  }
+
+  // A wrapper registered in two subjects carrying different versions is live in each.
+  @Test
+  public void testNativeFileFindsAWrapperRegisteredInAnotherSubjectToo() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema wrapper = new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value"));
+    int a = client.register("a", wrapper.copy(1));
+    int b = client.register("b", wrapper.copy(2));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    assertEquals(a, client.getId("a", generated));
+    assertEquals(b, client.getId("b", generated));
+  }
+
+  // As a version holding a file is found by any of its messages, the wrapper is found by another
+  // message of its file than its root; the payload's message indexes pick the type read.
+  @Test
+  public void testAnotherMessageOfTheFileFindsTheWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    int bigint = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    assertEquals(bigint, client.getId("bigint", new ProtobufSchema(Int32Value.getDescriptor())));
+    int file = client.register("native", new ProtobufSchema(Int64Value.getDescriptor()));
+    assertEquals(file, client.getId("native", new ProtobufSchema(Int32Value.getDescriptor())));
+  }
+
+  // As in the registry, a version of the native file's own content comes before a newer wrapper
+  // of it, in lookups and in the ids the metadata reads give.
+  @Test
+  public void testNativeFileFindsItsOwnVersionBeforeAWrapper() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema generated = new ProtobufSchema(Int64Value.getDescriptor());
+    int own = client.register("bigint", generated.copy(1));
+    int wrapper = client.register("bigint", new ProtobufSchema(
+        rootParamWrapper("google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")));
+    assertFalse(own == wrapper);
+    assertEquals(own, client.getId("bigint", generated));
+    assertEquals(1, client.getVersion("bigint", generated));
+    assertEquals(own, (int) client.getSchemaMetadata("bigint", 1).getId());
+    assertEquals(own, (int) client.getByVersion("bigint", 1, false).getId());
+    assertEquals(wrapper, (int) client.getSchemaMetadata("bigint", 2).getId());
+  }
+
+  // An import of a built-in file compares by its text, a dependency of its name before the built-in.
+  @Test
+  public void testNativeFileComparesBuiltInImportsByText() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider()));
+    String leaf = "syntax = \"proto3\";\npackage com;\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "message Event {\n  google.protobuf.Timestamp at = 1;\n}\n";
+    // Made from a descriptor, as a generated class's schema is, with the built-in among its
+    // dependencies
+    ProtobufSchema generated = new ProtobufSchema(new ProtobufSchema(leaf).toDescriptor());
+    assertTrue(generated.dependencies().containsKey("google/protobuf/timestamp.proto"));
+    client.register("leaf", generated);
+    int id = client.register("event", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Event"),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", generated.canonicalString()), null, null));
+    assertEquals(id, client.getId("event", generated));
+
+    String custom = "syntax = \"proto3\";\npackage google.protobuf;\n"
+        + "message Timestamp {\n  string at = 1;\n}\n";
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leaf);
+    resolved.put("google/protobuf/timestamp.proto", custom);
+    client.register("custom", new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, "com.Event"),
+        Arrays.asList(new SchemaReference("leaf.proto", "leaf", 1),
+            new SchemaReference("google/protobuf/timestamp.proto", "ts", 1)),
+        resolved, null, null));
+    assertNotFound(client, "custom", new ProtobufSchema(leaf));
+  }
+
+  private static void assertNotFound(
+      MockSchemaRegistryClient client, String subject, ProtobufSchema schema) {
+    RestClientException e = assertThrows(RestClientException.class,
+        () -> client.getId(subject, schema));
+    assertEquals(404, e.getStatus());
+  }
+
+  @Test
+  public void testRootParamCanNameANestedMessage() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Outer {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "  Inner inner = 1;\n"
+        + "}\n"
+        + "enum Kind { KIND_UNSPECIFIED = 0; }\n";
+    ProtobufSchema schema = leafWrapper(leafProto, "com.Outer.Inner");
+    assertEquals("com.Outer.Inner", schema.name());
+    assertEquals("com.Outer.Inner", schema.toDescriptor().getFullName());
+    // An enum can't be a root
+    assertThrows(IllegalArgumentException.class,
+        () -> leafWrapper(leafProto, "com.Kind").validate(false));
+  }
+
+  // derive.type asks without a path, and gets the root's class from the imported file.
+  @Test
+  public void testFullNameOfAPublicImportWrapperIsItsRoot() {
+    assertEquals("com.google.protobuf.Int64Value", new ProtobufSchema(rootParamWrapper(
+        "google/protobuf/wrappers.proto", null, "google.protobuf.Int64Value")).fullName());
+    assertEquals("com.google.protobuf.DoubleValue", new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"google/protobuf/wrappers.proto\";\n").fullName());
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "option java_package = \"com.acme\";\n"
+        + "option java_outer_classname = \"Leaf\";\n"
+        + "message Outer {\n"
+        + "  message Inner {\n"
+        + "    string id = 1;\n"
+        + "  }\n"
+        + "}\n";
+    ProtobufSchema schema = leafWrapper(leafProto, "com.Outer.Inner");
+    assertEquals("com.acme.Leaf$Outer$Inner", schema.fullName());
+    // A path still names the wrapper file's own class
+    assertTrue(schema.fullName("Wrapper.proto").endsWith(".Wrapper"));
+  }
+
+  private static ProtobufSchema leafWrapper(String leafProto, String root) {
+    return new ProtobufSchema(
+        rootParamWrapper("leaf.proto", null, root),
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        Collections.singletonMap("leaf.proto", leafProto), null, null);
+  }
+
+  @Test
+  public void testRootParamNamingNoMessageIsRejected() {
+    for (String root : Arrays.asList("google.protobuf.Missing", "Int64Value")) {
+      ProtobufSchema schema = new ProtobufSchema(
+          rootParamWrapper("google/protobuf/wrappers.proto", null, root));
+      assertThrows(root, IllegalArgumentException.class, () -> schema.validate(false));
+    }
+  }
+
+  @Test
+  public void testRootParamIsIgnoredOutsideAPublicImportWrapper() {
+    // A file with its own messages
+    ProtobufSchema local = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"B\" } ] };\n"
+        + "message A { int32 a = 1; }\n"
+        + "message B { int32 b = 1; }\n");
+    assertEquals("A", local.name());
+    // A private import other than the meta import means no wrapper, so no types at all
+    ProtobufSchema notWrapper = new ProtobufSchema(rootParamWrapper(
+        "google/protobuf/wrappers.proto", "google/protobuf/timestamp.proto",
+        "google.protobuf.Int64Value"));
+    assertThrows(IllegalArgumentException.class, notWrapper::name);
+  }
+
+  /**
+   * A message-level rule binds {@code this} to the message and its CEL environment is built
+   * from the registered schema, so the message it evaluates has to be in the schema's terms
+   * too. Otherwise a rule written against a renamed field reads a missing field and rejects a
+   * valid message.
+   */
+  @Test
+  public void testValidateMessageEvaluatesMessageRulesInSchemaTerms() {
+    String registered = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"m\", expr: \"this.renamed == 'hello'\"}]\n"
+        + "  };\n"
+        + "  string renamed = 1;\n"
+        + "}\n";
+    String runtime = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "message Outer { string original = 1; }\n";
+    ProtobufSchema schema = new ProtobufSchema(registered);
+    Descriptor runtimeDesc = new ProtobufSchema(runtime).toDescriptor("test.Outer");
+    DynamicMessage msg = DynamicMessage.newBuilder(runtimeDesc)
+        .setField(runtimeDesc.findFieldByName("original"), "hello").build();
+
+    // Stands in for a CEL environment built from the registered schema: the rule can only
+    // read the value if the message it is handed is in the schema's terms.
+    ValidationRuleExecutor executor = (rule, sch, value) -> {
+      Message evaluated = (Message) value;
+      FieldDescriptor fd = evaluated.getDescriptorForType().findFieldByName("renamed");
+      return fd != null && "hello".equals(evaluated.getField(fd));
+    };
+
+    List<ValidationRuleError> errors = schema.validateMessage(executor, msg);
+
+    assertEquals("the rule was evaluated against the wrong names: " + errors,
+        Collections.emptyList(), errors);
+  }
+
+  @Test
+  public void testMessageIndexesRoundTrip() {
+    List<Integer> indexes = Arrays.asList(1, 0, 3);
+    byte[] bytes = new MessageIndexes(indexes).toByteArray();
+    assertEquals(indexes, MessageIndexes.readFrom(bytes).indexes());
+    assertEquals(MessageIndexes.DEFAULT_INDEX, MessageIndexes.readFrom(new byte[]{0}).indexes());
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesCountExceedsRemaining() {
+    MessageIndexes.readFrom(varints(100, 1, 2));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testMessageIndexesNegativeCount() {
+    MessageIndexes.readFrom(varints(-1, 1));
+  }
+
+  private static byte[] varints(int... values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * 5);
+    for (int value : values) {
+      ByteUtils.writeVarint(value, buffer);
+    }
+    return Arrays.copyOf(buffer.array(), buffer.position());
   }
 }

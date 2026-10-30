@@ -15,18 +15,30 @@
 
 package io.confluent.kafka.schemaregistry.utils;
 
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -178,4 +190,31 @@ public class TestUtils {
     return schemaString;
   }
 
+  /**
+   * Every record of {@code key} on the registry's schemas topic, in offset order.
+   */
+  public static List<ConsumerRecord<byte[], byte[]>> schemaRecords(RestApp restApp,
+      SchemaKey key) throws Exception {
+    Properties props = new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG));
+    String topic = restApp.prop.getProperty(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
+    SchemaRegistrySerializer serializer = new SchemaRegistrySerializer();
+    List<ConsumerRecord<byte[], byte[]>> matching = new ArrayList<>();
+    try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props,
+        new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+      TopicPartition partition = new TopicPartition(topic, 0);
+      consumer.assign(Collections.singletonList(partition));
+      consumer.seekToBeginning(Collections.singletonList(partition));
+      long end = consumer.endOffsets(Collections.singletonList(partition)).get(partition);
+      while (consumer.position(partition) < end) {
+        for (ConsumerRecord<byte[], byte[]> record : consumer.poll(Duration.ofMillis(500))) {
+          if (key.equals(serializer.deserializeKey(record.key()))) {
+            matching.add(record);
+          }
+        }
+      }
+    }
+    return matching;
+  }
 }
