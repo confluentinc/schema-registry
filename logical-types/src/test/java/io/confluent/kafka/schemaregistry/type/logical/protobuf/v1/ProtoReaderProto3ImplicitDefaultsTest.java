@@ -65,7 +65,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
             + "}\n"
             + "enum Color { RED = 0; GREEN = 1; BLUE = 2; }\n";
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+    LogicalType lt = read(
         new ProtobufSchema(protoText));
 
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
@@ -99,7 +99,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
             + "}\n"
             + "message Inner { int32 x = 1; }\n";
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+    LogicalType lt = read(
         new ProtobufSchema(protoText));
 
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
@@ -117,7 +117,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void anImportedMessagesDefaultsAreUnderTheFieldUsingIt() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+    LogicalType lt = read(withLeaf(
         "message Row {\n  int32 id = 1;\n  com.Foo foo = 2;\n}\n",
         "message Foo {\n  string id = 1;\n}\n"));
 
@@ -127,7 +127,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aMessageImportedTwiceHasItsDefaultsUnderEachUse() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+    LogicalType lt = read(withLeaf(
         "message Row {\n  int32 id = 1;\n  bool b = 2;\n  com.Foo f1 = 3;\n  com.Foo f2 = 4;\n}\n",
         "message Foo {\n  string s = 1;\n  int64 n = 2;\n}\n"));
 
@@ -139,7 +139,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aPeerMessagesDefaultsAreUnderTheFieldUsingItNotItsFileIndex() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = read(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message Row {\n  int32 id = 1;\n  bool b = 2;\n  Foo foo = 3;\n}\n"
             + "message Foo {\n  string id = 1;\n}\n"));
@@ -150,7 +150,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aSharedMessageAsARepeatedElementOrMapValueHasItsDefaultsWhereInliningPutsThem() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(withLeaf(
+    LogicalType lt = read(withLeaf(
         "message Row {\n  repeated com.Foo items = 1;\n  map<string, com.Foo> byKey = 2;\n}\n",
         "message Foo {\n  int32 x = 1;\n}\n"));
 
@@ -161,7 +161,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aRecursiveNestedMessagesDefaultsStopAtItsFirstRecurrence() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = read(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message Row {\n  Node n = 1;\n"
             + "  message Node {\n    int32 v = 1;\n    Node next = 2;\n  }\n}\n"));
@@ -183,7 +183,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aMessageShapedLikeAMapEntryRecordsItsFieldsWhereItIsAStruct() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = read(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message Row {\n  repeated MapEntry props = 1;\n  MapEntry one = 2;\n}\n"
             + "message MapEntry {\n  string key = 1;\n  string value = 2;\n}\n"));
@@ -201,7 +201,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     AtomicReference<Object> result = new AtomicReference<>();
     Thread small = new Thread(null, () -> {
       try {
-        result.set(ProtoToLogicalTypeConverter.toLogicalType(schema).getDefaultValues());
+        result.set(read(schema).getDefaultValues());
       } catch (RuntimeException e) {
         result.set(e);
       }
@@ -216,7 +216,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   void aChainWithADefaultAtEveryLinkHasEachOnceAtItsDepth() {
     // Placed straight into the result: memory follows its size, not every suffix of the chain.
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(30), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(
+        read(
             new ProtobufSchema(chain(3000, "int32 v = 2; "))));
 
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
@@ -230,7 +230,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
   @Test
   void mutuallyRecursiveMessagesUsedApartEachStopOnlyWhereTheyRecur() {
     // Each use of A or B enters their cycle anew: each is placed once there, never below itself.
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = read(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message Root {\n  A a = 1;\n  B b = 2;\n  int32 n = 3;\n}\n"
             + "message A {\n  int32 x = 1;\n  B b = 2;\n}\n"
@@ -243,7 +243,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aRecursiveMessageUsedTwiceAsSiblingsHasItsDefaultsAtBoth() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = read(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message A {\n  B first = 1;\n  B second = 2;\n}\n"
             + "message B {\n  int32 x = 1;\n  A back = 2;\n}\n"));
@@ -276,7 +276,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
       Map<List<Integer>, Object> expected = new HashMap<>();
       inline(fields, 0, new ArrayList<>(), new HashSet<>(Collections.singleton(0)), expected);
 
-      assertThat(ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString()))
+      assertThat(read(new ProtobufSchema(text.toString()))
           .getDefaultValues()).as(text.toString()).isEqualTo(expected);
     }
   }
@@ -307,7 +307,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     ring.append("message M19999 { M0 next = 1; int32 x = 2; }\n");
     ProtobufSchema schema = new ProtobufSchema(ring.toString());
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(schema));
+        read(schema));
 
     List<Integer> last = new ArrayList<>(Collections.nCopies(19999, 0));
     last.add(1);
@@ -330,7 +330,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     fan.append("message B20000 { A a = 1; }\n");
     ProtobufSchema schema = new ProtobufSchema(fan.toString());
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(schema));
+        read(schema));
 
     assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0), 0));
   }
@@ -340,12 +340,17 @@ class ProtoReaderProto3ImplicitDefaultsTest {
     // Each message holds the next twice: 2^30 paths to the last one's default. Converting costs
     // nothing for them; callers that never read defaults never pay for them.
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(diamond(30))));
+        read(new ProtobufSchema(diamond(30))));
     assertThat(lt.getRootSchema().getFields()).hasSize(2);
 
     Map<List<Integer>, Object> small =
-        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(diamond(3))).getDefaultValues();
+        read(new ProtobufSchema(diamond(3))).getDefaultValues();
     assertThat(small).hasSize(8).containsEntry(List.of(1, 0, 1, 0), 0);
+  }
+
+  // As one message, the file's first: these files declare several only to be referenced.
+  private static LogicalType read(ProtobufSchema schema) {
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, false);
   }
 
   // M0 .. M<n-1>, each holding the next as a and b; M<n> holds the only default.
@@ -370,7 +375,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
           .append(next).append(" r = 2; }\n");
     }
     LogicalType lt = assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
-        ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(text.toString())));
+        read(new ProtobufSchema(text.toString())));
 
     assertThat(lt.getDefaultValues()).containsOnly(Map.entry(List.of(0, 0), 0));
   }
@@ -406,7 +411,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
             + "  optional int32 b = 2 [default = 7];\n" // explicit default
             + "}\n";
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+    LogicalType lt = read(
         new ProtobufSchema(protoText));
 
     Map<List<Integer>, Object> defaults = lt.getDefaultValues();
