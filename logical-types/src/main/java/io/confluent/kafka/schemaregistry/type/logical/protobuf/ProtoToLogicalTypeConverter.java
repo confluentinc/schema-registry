@@ -353,13 +353,35 @@ public class ProtoToLogicalTypeConverter {
     // schema.name() already does the public-import fall-through (with
     // transitive resolution + cycle protection), so reader and
     // ProtobufSchema agree on which type counts as the root.
+    Descriptor root = isReference(schema, publicImport) ? schema.toDescriptor() : null;
+    if (root == null) {
+      return new LogicalType(
+          packageName,
+          Schema.createNamedTypeRef(schema.name()).setNullable(false),
+          Collections.emptyMap(),
+          schema.references(),
+          resolvedReferences,
+          Collections.emptyMap());
+    }
+    // A referenced root message is read as a field of its type is: its body a named type, and
+    // it and its file's types external, so the root resolves as it does in Avro and JSON.
+    String rootName = root.getFullName();
+    ToLogicalContext<String> ctx = new ToLogicalContext<>(schema);
+    collectFileTypeNames(root.getFile(), new HashSet<>(), ctx);
+    collectReferencedTypeNames(schema, root.getFile(), ctx);
+    ctx.putNamedType(rootName, Schema.createStruct(new ArrayList<>()));
+    ctx.putNamedType(rootName, namedMessageBody(root, ctx, Collections.emptyList()));
+    ctx.putTypeDefaults(rootName, Collections.emptyList());
     return new LogicalType(
+        null,
         packageName,
-        Schema.createNamedTypeRef(schema.name()).setNullable(false),
-        Collections.emptyMap(),
+        Schema.createNamedTypeRef(rootName).setNullable(false),
+        ctx.getNamedTypes(),
+        ctx.getExternalTypes(),
+        Map.of(),
         schema.references(),
         resolvedReferences,
-        Collections.emptyMap());
+        ctx.getDefaultValues());
   }
 
   // A schema built from a descriptor lists the built-in files it imports as dependencies; a

@@ -3269,8 +3269,11 @@ class LogicalTypeToProtoConverterTest {
 
     assertEquals(Schema.Type.NAMED_TYPE_REF, rt.getRootSchema().getType());
     assertEquals("com.Foo", rt.getRootSchema().getQualifiedName());
-    assertTrue(rt.getNamedTypes().isEmpty(),
-        "public-import round-trip should produce no local namedTypes");
+    // The root's body is there to resolve it, as an external type, which writes back the same.
+    assertEquals(Schema.Type.STRUCT, rt.getNamedTypes().get("com.Foo").getType());
+    assertTrue(rt.isExternal("com.Foo"));
+    assertEquals(proto.canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(rt, "ignored").canonicalString());
   }
 
   @Test
