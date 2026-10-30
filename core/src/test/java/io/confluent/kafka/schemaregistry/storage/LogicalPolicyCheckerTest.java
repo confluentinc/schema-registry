@@ -179,9 +179,24 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void formatLogicalShowsAMultiMessageProtobufFilesFirstMessage() {
-    // Only the policy wraps the messages; format=logical keeps its reading.
-    assertEquals(List.of("id"), names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
+  void formatLogicalShowsAMultiMessageProtobufFileAsAllItsMessages() {
+    // Naming no root, its records may carry either message, as the policy reads it.
+    assertEquals(List.of("p.Order", "p.Ship"),
+        names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
+  }
+
+  @Test
+  void aProtobufFileNamingItsRootIsReadAsThatMessage() {
+    ProtobufSchema rooted = rooted("p.Ship", ORDER, SHIP);
+    assertEquals(List.of("to"), names(LogicalPolicyChecker.toPolicyLogicalType(rooted)));
+    assertEquals(List.of("to"), names(LogicalPolicyChecker.toLogicalType(rooted)));
+  }
+
+  private static ProtobufSchema rooted(String root, String... messages) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n" + String.join("", messages));
   }
 
   private static List<String> names(LogicalType logical) {
@@ -274,6 +289,31 @@ class LogicalPolicyCheckerTest {
     assertFalse(LogicalPolicyChecker.check(narrow, List.of(new SimpleParsedSchemaHolder(wide)),
         CompatibilityLevel.BACKWARD).isEmpty());
     assertTrue(LogicalPolicyChecker.check(wide, List.of(new SimpleParsedSchemaHolder(narrow)),
+        CompatibilityLevel.BACKWARD).isEmpty());
+  }
+
+  @Test
+  void aProtobufFileThatOnlyReExportsAnotherIsReadAsTheFileItReExports() {
+    // Naming no root, its records may carry any message of the file it re-exports.
+    String dependency = "syntax = \"proto3\";\npackage d;\n" + ORDER + SHIP;
+    ProtobufSchema reExporting = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
+        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", dependency), null, null);
+    assertEquals(List.of("d.Order", "d.Ship"),
+        names(LogicalPolicyChecker.toPolicyLogicalType(reExporting)));
+  }
+
+  @Test
+  void aWrapperRootIsCheckedAsTheMessageItNames() {
+    // KTable's primitive roots: widening FLOAT to DOUBLE is safe, narrowing BIGINT to INT is not.
+    ProtobufSchema floatRoot = rootedWrapper("google.protobuf.FloatValue");
+    ProtobufSchema doubleRoot = rootedWrapper("google.protobuf.DoubleValue");
+    assertEquals(Type.DOUBLE,
+        LogicalPolicyChecker.toPolicyLogicalType(doubleRoot).getRootSchema().getType());
+    assertTrue(LogicalPolicyChecker.check(doubleRoot,
+        List.of(new SimpleParsedSchemaHolder(floatRoot)), CompatibilityLevel.BACKWARD).isEmpty());
+    assertFalse(LogicalPolicyChecker.check(rootedWrapper("google.protobuf.Int32Value"),
+        List.of(new SimpleParsedSchemaHolder(rootedWrapper("google.protobuf.Int64Value"))),
         CompatibilityLevel.BACKWARD).isEmpty());
   }
 

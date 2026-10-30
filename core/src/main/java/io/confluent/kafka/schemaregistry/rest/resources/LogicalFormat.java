@@ -18,11 +18,13 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 
 /**
@@ -46,13 +48,20 @@ final class LogicalFormat {
   static String convertToLogical(final SchemaRegistry schemaRegistry, final Schema schema)
       throws InvalidSchemaException {
     ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
-    LogicalType logicalType;
     try {
-      logicalType = LogicalPolicyChecker.toLogicalType(parsedSchema);
+      // Read as all the messages of the file it re-exports, a wrapper has no DDL: a script's
+      // messages are its own.
+      if (parsedSchema instanceof ProtobufSchema
+          && ProtoToLogicalTypeConverter.isPublicImportWrapper((ProtobufSchema) parsedSchema)
+          && ((ProtobufSchema) parsedSchema).readsAsSeveralMessages()) {
+        throw new ValidationException("it publicly imports a file of several messages and names "
+            + "no root among them");
+      }
+      LogicalType logicalType = LogicalPolicyChecker.toLogicalType(parsedSchema);
+      return LogicalTypeToDdlConverter.toDdl(logicalType);
     } catch (ValidationException | IllegalArgumentException e) {
       throw new InvalidSchemaException(
           "Stored schema cannot be represented as a logical type: " + e.getMessage(), e);
     }
-    return LogicalTypeToDdlConverter.toDdl(logicalType);
   }
 }

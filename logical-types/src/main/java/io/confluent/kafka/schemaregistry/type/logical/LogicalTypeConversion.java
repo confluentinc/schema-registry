@@ -86,8 +86,10 @@ public final class LogicalTypeConversion {
       LogicalTypesParser.ScriptContext script,
       Schema schema,
       Map<String, String> resolvedReferences) {
-    LogicalType logicalType =
-        attachReferences(toLogicalType(script), schema.getReferences(), resolvedReferences);
+    // A Protobuf script naming no root is the file of all its messages, as such a file is read.
+    boolean protobuf = ProtobufSchema.TYPE.equalsIgnoreCase(schema.getSchemaType());
+    LogicalType logicalType = attachReferences(
+        toLogicalType(script, protobuf), schema.getReferences(), resolvedReferences);
     return withRequested(convert(schema, logicalType), schema);
   }
 
@@ -127,9 +129,10 @@ public final class LogicalTypeConversion {
    * and then fails the visitor is a bad logical schema and must say so, rather than being left to
    * fall back to a confusing native error.
    */
-  private static LogicalType toLogicalType(LogicalTypesParser.ScriptContext script) {
+  private static LogicalType toLogicalType(
+      LogicalTypesParser.ScriptContext script, boolean rootsSeveralMessages) {
     try {
-      LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+      LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor(rootsSeveralMessages);
       visitor.visit(script);
       return visitor.toLogicalType();
     } catch (RuntimeException e) {

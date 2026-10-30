@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.google.protobuf.Descriptors.Descriptor;
-import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -124,38 +123,27 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * A Protobuf file as Flink reads it: a single top-level message is its own row, and a file with
-   * several wraps each message, in file order, as the converter's multi-message reading does. So
-   * every message is checked, and a file changing between one and several messages is seen as the
-   * reshaping it is.
+   * A Protobuf file as its records are read: one message when it names its root or declares just
+   * one, and otherwise each message wrapped, in file order, as the converter's multi-message
+   * reading does. So every message a record may carry is checked, and a file changing between one
+   * and several is seen as the reshaping it is.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
     // A file declaring nothing but a public import is written, and read by Flink, as the file it
-    // re-exports: checked as that, not as the bare reference format=logical keeps for it.
+    // re-exports: checked as that, its root param kept, not as the reference format=logical shows.
     return ProtoToLogicalTypeConverter.toLogicalType(ProtoPublicImportWrappers.resolve(schema),
-        checksSeveralMessages(schema));
-  }
-
-  /**
-   * Whether the policy checks a Protobuf file as several messages, each wrapped, rather than as its
-   * one message: a file, or the file a wrapper re-exports, of several, where no root param picks
-   * one.
-   */
-  static boolean checksSeveralMessages(ProtobufSchema schema) {
-    return ProtoPublicImportWrappers.rootParam(schema) == null
-        && ProtoPublicImportWrappers.resolve(schema).rawSchema().getTypes().stream()
-            .filter(type -> type instanceof MessageElement).count() > 1;
+        schema.readsAsSeveralMessages());
   }
 
   /**
    * The index, among its file's top-level messages, of the one message the policy checks a
-   * Protobuf file as, or -1 when {@link #checksSeveralMessages}.
+   * Protobuf file as, or -1 when it {@link ProtobufSchema#readsAsSeveralMessages reads as several}.
    *
    * @throws IllegalArgumentException for a root param naming a message nested in another, which
    *     is no row of the file's messages
    */
   static int checkedMessage(ProtobufSchema schema) {
-    if (checksSeveralMessages(schema)) {
+    if (schema.readsAsSeveralMessages()) {
       return -1;
     }
     Descriptor root = ProtoPublicImportWrappers.resolve(schema).toDescriptor();
