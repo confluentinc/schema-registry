@@ -57,7 +57,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v2 = register(record(field("id", "int"),
         "{\"name\":\"full_name\",\"type\":\"string\",\"aliases\":[\"name\"]}"));
 
-    SchemaProvenance provenance = client.getProvenanceById(SUBJECT, v2, v1, false, false);
+    SchemaProvenance provenance = client.getProvenanceById(SUBJECT, v2, v1, false);
 
     assertThat(provenance.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 2);
@@ -73,12 +73,12 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v1 = register(record(field("id", "int")));
     int v2 = register(record(field("id", "int"), field("name", "string")));
 
-    assertThat(client.getProvenanceById(SUBJECT, v1, v2, true, false, null))
-        .isEqualTo(client.getProvenanceById(SUBJECT, v1, v2, true, false));
-    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "2", true, false, null))
-        .isEqualTo(client.getProvenanceByVersion(SUBJECT, "1", "2", true, false));
-    assertThat(client.getProvenanceToVersion(SUBJECT, v1, 2, true, false, null))
-        .isEqualTo(client.getProvenanceToVersion(SUBJECT, v1, 2, true, false));
+    assertThat(client.getProvenanceById(SUBJECT, v1, v2, true, null))
+        .isEqualTo(client.getProvenanceById(SUBJECT, v1, v2, true));
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "2", true, null))
+        .isEqualTo(client.getProvenanceByVersion(SUBJECT, "1", "2", true));
+    assertThat(client.getProvenanceToVersion(SUBJECT, v1, 2, true, null))
+        .isEqualTo(client.getProvenanceToVersion(SUBJECT, v1, 2, true));
   }
 
   @Test
@@ -87,14 +87,14 @@ class ProvenanceMockSchemaRegistryClientTest {
     register(record(field("b", "int")));
     register(record(field("a", "int"), field("b", "int"), field("c", "int")));
 
-    SchemaProvenance ends = client.getProvenanceByVersion(SUBJECT, "1", "latest", false, false);
+    SchemaProvenance ends = client.getProvenanceByVersion(SUBJECT, "1", "latest", false);
     assertThat(ends.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 3);
     // a was dropped at v2, which is not returned but still decides v3's ids.
     assertThat(pids(ends.getVersions().get(1))).containsExactly(3, 2, 4);
     assertThat(ends.getVersions().get(0).getFields().get(0).getNames()).containsExactly("a");
 
-    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "3", true, false).getVersions())
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "3", true).getVersions())
         .hasSize(3);
   }
 
@@ -103,13 +103,13 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v1 = register(record(field("id", "int")));
     int other = client.register("other-value", new AvroSchema(record(field("x", "string"))));
 
-    assertCode(404, 40401, () -> client.getProvenanceById("nope-value", v1, v1, false, false));
-    assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false, false));
-    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false, false));
-    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "0", false, false));
-    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "-2", "1", false, false));
-    assertCode(422, 42202, () -> client.getProvenanceToVersion(SUBJECT, v1, 0, false, false));
-    assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false, false));
+    assertCode(404, 40401, () -> client.getProvenanceById("nope-value", v1, v1, false));
+    assertCode(404, 40402, () -> client.getProvenanceByVersion(SUBJECT, "1", "9", false));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "x", false));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "1", "0", false));
+    assertCode(422, 42202, () -> client.getProvenanceByVersion(SUBJECT, "-2", "1", false));
+    assertCode(422, 42202, () -> client.getProvenanceToVersion(SUBJECT, v1, 0, false));
+    assertCode(404, 40411, () -> client.getProvenanceById(SUBJECT, other, v1, false));
   }
 
   @Test
@@ -119,10 +119,10 @@ class ProvenanceMockSchemaRegistryClientTest {
       register(record(field("f" + i, "int")));
     }
     assertCode(422, 42219,
-        () -> client.getProvenanceByVersion(SUBJECT, "1", "101", true, false));
-    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "100", true, false)
+        () -> client.getProvenanceByVersion(SUBJECT, "1", "101", true));
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "100", true)
         .getVersions()).hasSize(100);
-    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "101", false, false)
+    assertThat(client.getProvenanceByVersion(SUBJECT, "1", "101", false)
         .getVersions()).hasSize(2);
   }
 
@@ -130,7 +130,7 @@ class ProvenanceMockSchemaRegistryClientTest {
   void theDefaultContextsPrefixNamesTheSameSubject() throws Exception {
     // As the registry: ":.:orders-value" is orders-value, and the answer names it so.
     int v1 = register(record(field("id", "int")));
-    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false, false)
+    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false)
         .getSubject()).isEqualTo(SUBJECT);
   }
 
@@ -138,7 +138,7 @@ class ProvenanceMockSchemaRegistryClientTest {
   void aSubjectRegisteredUnderTheDefaultContextsPrefixIsFoundByIt() throws Exception {
     // The base mock keeps the subject as spelled; the answer still names it as the registry does.
     int v1 = client.register(":.:" + SUBJECT, new AvroSchema(record(field("id", "int"))));
-    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false, false)
+    assertThat(client.getProvenanceById(":.:" + SUBJECT, v1, v1, false)
         .getSubject()).isEqualTo(SUBJECT);
   }
 
@@ -151,7 +151,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     client.register(SUBJECT, new ProtobufSchema(p));
     client.register(SUBJECT, new ProtobufSchema(p + "message M { int32 a = 1; string b = 2; }"));
     assertCode(422, 42201,
-        () -> client.getProvenanceByVersion(SUBJECT, "1", "3", false, false));
+        () -> client.getProvenanceByVersion(SUBJECT, "1", "3", false));
   }
 
   @Test
@@ -161,7 +161,7 @@ class ProvenanceMockSchemaRegistryClientTest {
       SchemaRegistryClient scoped = MockSchemaRegistry.getClientForScope("provenance-scope");
       assertThat(scoped).isInstanceOf(ProvenanceMockSchemaRegistryClient.class);
       int v1 = scoped.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
-      assertThat(scoped.getProvenanceById(SUBJECT, v1, v1, false, false).getVersions())
+      assertThat(scoped.getProvenanceById(SUBJECT, v1, v1, false).getVersions())
           .hasSize(1);
     } finally {
       MockSchemaRegistry.dropScope("provenance-scope");
@@ -172,7 +172,7 @@ class ProvenanceMockSchemaRegistryClientTest {
   void aMapWithNoValueSchemaHasNoLogicalForm() throws Exception {
     int v1 = client.register(SUBJECT, new JsonSchema("{\"type\":\"object\",\"properties\":"
         + "{\"m\":{\"type\":\"object\",\"connect.type\":\"map\"}}}"));
-    assertCode(422, 42201, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false));
+    assertCode(422, 42201, () -> client.getProvenanceById(SUBJECT, v1, v1, false));
   }
 
   @Test
@@ -180,13 +180,12 @@ class ProvenanceMockSchemaRegistryClientTest {
     ProvenanceMockSchemaRegistryClient failing = new ProvenanceMockSchemaRegistryClient() {
       @Override
       protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-          List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-          boolean includeInterior) {
+          List<? extends ParsedSchemaHolder> schemas, boolean includeInterior) {
         throw new NullPointerException("unexpected");
       }
     };
     int v1 = failing.register(SUBJECT, new AvroSchema(record(field("id", "int"))));
-    assertCode(500, 500, () -> failing.getProvenanceById(SUBJECT, v1, v1, false, false));
+    assertCode(500, 500, () -> failing.getProvenanceById(SUBJECT, v1, v1, false));
   }
 
   @Test
@@ -194,14 +193,14 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v1 = register(record(field("a", "int")));
     int v2 = register(record("{\"name\":\"b\",\"type\":\"int\",\"aliases\":[\"a\"]}",
         "{\"name\":\"c\",\"type\":\"int\",\"aliases\":[\"a\"]}"));
-    assertCode(422, 42217, () -> client.getProvenanceById(SUBJECT, v1, v2, false, false));
+    assertCode(422, 42217, () -> client.getProvenanceById(SUBJECT, v1, v2, false));
   }
 
   @Test
   void aRecursiveSchemaHasNoProvenance() throws Exception {
     int v1 = register("{\"type\":\"record\",\"name\":\"Node\",\"fields\":["
         + "{\"name\":\"next\",\"type\":[\"null\",\"Node\"],\"default\":null}]}");
-    assertCode(422, 42220, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false));
+    assertCode(422, 42220, () -> client.getProvenanceById(SUBJECT, v1, v1, false));
   }
 
   @Test
@@ -213,7 +212,7 @@ class ProvenanceMockSchemaRegistryClientTest {
           + "\",\"fields\":[{\"name\":\"f\",\"type\":").append("}]}");
     }
     int v1 = register(text.toString());
-    assertCode(422, 42218, () -> client.getProvenanceById(SUBJECT, v1, v1, false, false));
+    assertCode(422, 42218, () -> client.getProvenanceById(SUBJECT, v1, v1, false));
   }
 
   @Test
@@ -224,7 +223,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     register(record(field("a", "int"), field("b", "int")));
 
     // v1 has no provenance at all, and a range that leaves it out does not care.
-    SchemaProvenance later = client.getProvenanceByVersion(SUBJECT, "2", "3", false, false);
+    SchemaProvenance later = client.getProvenanceByVersion(SUBJECT, "2", "3", false);
     assertThat(pids(later.getVersions().get(1))).containsExactly(1, 2);
   }
 
@@ -236,7 +235,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     int v3 = register(record(field("a", "int"), field("b", "int"), field("c", "int")));
     client.deleteSchemaVersion(SUBJECT, "2", false);
 
-    SchemaProvenance ends = client.getProvenanceById(SUBJECT, v1, v3, true, false);
+    SchemaProvenance ends = client.getProvenanceById(SUBJECT, v1, v3, true);
     assertThat(ends.getVersions()).extracting(ProvenanceVersion::getVersion)
         .containsExactly(1, 2, 3);
     assertThat(pids(ends.getVersions().get(2))).containsExactly(3, 2, 4);
@@ -271,10 +270,10 @@ class ProvenanceMockSchemaRegistryClientTest {
     client.deleteSchemaVersion(SUBJECT, "3", false);
 
     for (boolean includeInterior : new boolean[] {false, true}) {
-      assertThat(client.getProvenanceByVersion(SUBJECT, "1", "4", includeInterior, false)
+      assertThat(client.getProvenanceByVersion(SUBJECT, "1", "4", includeInterior)
           .getMissingVersions()).containsExactly(2);
     }
-    assertThat(client.getProvenanceByVersion(SUBJECT, "3", "4", true, false)
+    assertThat(client.getProvenanceByVersion(SUBJECT, "3", "4", true)
         .getMissingVersions()).isNull();
   }
 
@@ -288,7 +287,7 @@ class ProvenanceMockSchemaRegistryClientTest {
 
     assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3);
     SchemaProvenance all =
-        client.getProvenanceByVersion(SUBJECT, "1", "latest", true, false);
+        client.getProvenanceByVersion(SUBJECT, "1", "latest", true);
     assertThat(pids(all.getVersions().get(2))).containsExactly(1, 3);
   }
 
@@ -352,13 +351,13 @@ class ProvenanceMockSchemaRegistryClientTest {
       register(schema);
     }
     assertCode(422, 42219,
-        () -> capped.getProvenanceByVersion(SUBJECT, "1", "5", true, false));
+        () -> capped.getProvenanceByVersion(SUBJECT, "1", "5", true));
 
     // The pages share version 3, whose fields carry the first page's pids into the second.
     List<ProvenanceVersion> first =
-        capped.getProvenanceByVersion(SUBJECT, "1", "3", true, false).getVersions();
+        capped.getProvenanceByVersion(SUBJECT, "1", "3", true).getVersions();
     List<ProvenanceVersion> second =
-        capped.getProvenanceByVersion(SUBJECT, "3", "5", true, false).getVersions();
+        capped.getProvenanceByVersion(SUBJECT, "3", "5", true).getVersions();
     Map<Integer, String> carried = new HashMap<>();
     for (int i = 0; i < second.get(0).getFields().size(); i++) {
       carried.put(second.get(0).getFields().get(i).getPid(),
@@ -370,7 +369,7 @@ class ProvenanceMockSchemaRegistryClientTest {
         stitched.add(labels(v, pid -> carried.getOrDefault(pid, "q" + pid))));
 
     List<List<String>> whole = new ArrayList<>();
-    client.getProvenanceByVersion(SUBJECT, "1", "5", true, false).getVersions()
+    client.getProvenanceByVersion(SUBJECT, "1", "5", true).getVersions()
         .forEach(v -> whole.add(labels(v, pid -> "p" + pid)));
     assertThat(canonical(stitched)).isEqualTo(canonical(whole));
   }
@@ -386,7 +385,7 @@ class ProvenanceMockSchemaRegistryClientTest {
     // #4658 differs: it tombstones v1 without LOGICAL, and gives the copy a new id under it.
     assertThat(register(record(field("a", "int"), field("b", "int")))).isEqualTo(v1);
     assertThat(client.getAllVersions(SUBJECT, true)).containsExactly(1, 2, 3, 4);
-    assertThat(client.getProvenanceById(SUBJECT, v1, v3, false, false).getVersions())
+    assertThat(client.getProvenanceById(SUBJECT, v1, v3, false).getVersions())
         .extracting(ProvenanceVersion::getVersion).containsExactly(3, 4);
   }
 
