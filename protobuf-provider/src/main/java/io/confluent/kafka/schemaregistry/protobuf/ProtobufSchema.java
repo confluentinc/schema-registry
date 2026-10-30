@@ -2442,20 +2442,11 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    ProtoFileElement leaf = resolvePublicImportWrapper();
     String root = rootParam();
     if (root != null) {
-      if (leaf != null && !definesMessage(leaf, root)) {
-        throw new IllegalArgumentException("Protobuf schema root '" + root
-            + "' is not a message in " + schemaObj.getPublicImports().get(0));
-      }
-      // A file's own root is one of its top-level messages, read by its records' first index.
-      if (leaf == null && !declaresTopLevelMessage(schemaObj, root)) {
-        throw new IllegalArgumentException("Protobuf schema root '" + root
-            + "' is not a top-level message of the schema");
-      }
-      return root;
+      return checkedRoot(root);
     }
+    ProtoFileElement leaf = resolvePublicImportWrapper();
     ProtoFileElement file = leaf != null ? leaf : schemaObj;
     TypeElement typeElement = firstMessage(file);
     if (typeElement == null) {
@@ -2469,6 +2460,21 @@ public class ProtobufSchema implements ParsedSchema {
           : typeName;
     }
     throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+  }
+
+  // root, unless it names no message the schema can be rooted at.
+  private String checkedRoot(String root) {
+    ProtoFileElement leaf = resolvePublicImportWrapper();
+    if (leaf != null && !definesMessage(leaf, root)) {
+      throw new IllegalArgumentException("Protobuf schema root '" + root
+          + "' is not a message in " + schemaObj.getPublicImports().get(0));
+    }
+    // A file's own root is one of its top-level messages, read by its records' first index.
+    if (leaf == null && !declaresTopLevelMessage(schemaObj, root)) {
+      throw new IllegalArgumentException("Protobuf schema root '" + root
+          + "' is not a top-level message of the schema");
+    }
+    return root;
   }
 
   /**
@@ -2773,9 +2779,10 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
-    if (rootParam() != null) {
-      // Rejects a root param naming no message the schema can be rooted at
-      name();
+    String root = rootParam();
+    if (root != null) {
+      // Rejects a root param naming no message the schema can be rooted at, whatever its name
+      checkedRoot(root);
     }
     if (strict) {
       toDynamicSchema();
