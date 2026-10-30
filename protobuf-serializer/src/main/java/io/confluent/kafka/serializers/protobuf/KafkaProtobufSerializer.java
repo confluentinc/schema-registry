@@ -102,9 +102,11 @@ public class KafkaProtobufSerializer<T extends Message>
         // Ensure dependencies are resolved before caching
         boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
         boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
-        schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-            useLatestForDeps, latestCompatStrict, latestVersionsCache(),
-            skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
+        if (resolvesDependencies()) {
+          schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
+              useLatestForDeps, latestCompatStrict, latestVersionsCache(),
+              skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
+        }
       } catch (InterruptedIOException e) {
         throw new TimeoutException("Error serializing Protobuf message", e);
       } catch (IOException | RestClientException e) {

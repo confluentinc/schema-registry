@@ -25,7 +25,9 @@ import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -1123,6 +1125,80 @@ public class KafkaProtobufSerializerTest {
 
     protobufSerializer.configure(new HashMap(serializerConfig), false);
     protobufDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
+  public void testRegisteredSchemaWithReferenceUnderAnotherSubject() throws Exception {
+    // A schema id, guid or metadata brings the registered references, so no subject named after
+    // an import is looked up.
+    String leaf = "syntax = \"proto3\";\npackage com.leaf;\nmessage Leaf {\n  int32 f = 1;\n}\n";
+    schemaRegistry.register("leaf-value", new ProtobufSchema(leaf));
+    SchemaReference ref = new SchemaReference("leaf.proto", "leaf-value", 1);
+    String subject = topic + "-value";
+    ProtobufSchema registered = new ProtobufSchema("syntax = \"proto3\";\npackage com.app;\n"
+        + "import \"leaf.proto\";\nmessage App {\n  com.leaf.Leaf leaf = 1;\n}\n",
+        ImmutableList.of(ref), ImmutableMap.of("leaf.proto", leaf), null, null)
+        .copy(new Metadata(null, ImmutableMap.of("app", "v1"), null), null);
+    RegisterSchemaResponse response =
+        schemaRegistry.registerWithResponse(subject, registered, false);
+    Descriptors.Descriptor app = registered.toDescriptor();
+    Descriptors.Descriptor leafType = app.findFieldByName("leaf").getMessageType();
+    DynamicMessage message = DynamicMessage.newBuilder(app)
+        .setField(app.findFieldByName("leaf"), DynamicMessage.newBuilder(leafType)
+            .setField(leafType.findFieldByName("f"), 7).build())
+        .build();
+
+    for (Map.Entry<String, Object> selector : ImmutableMap.<String, Object>of(
+        KafkaProtobufSerializerConfig.USE_SCHEMA_ID, response.getId(),
+        KafkaProtobufSerializerConfig.USE_SCHEMA_GUID, response.getGuid(),
+        KafkaProtobufSerializerConfig.USE_LATEST_WITH_METADATA, "app=v1").entrySet()) {
+      Map configs = ImmutableMap.of(
+          KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+          KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false,
+          selector.getKey(), selector.getValue()
+      );
+      KafkaProtobufSerializer<DynamicMessage> serializer =
+          new KafkaProtobufSerializer<>(schemaRegistry, configs);
+
+      RecordHeaders headers = new RecordHeaders();
+      byte[] bytes = serializer.serialize(topic, headers, message);
+      DynamicMessage result =
+          (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
+      assertEquals(selector.getKey(), 7,
+          getField((DynamicMessage) getField(result, "leaf"), "f"));
+    }
+  }
+
+  @Test(timeout = 30000)
+  public void testStrictIdCheckStopsAtTheRegisteredReferences() throws Exception {
+    // Each message holds the next twice: compared down every path, depth 24 would take minutes.
+    int depth = 24;
+    StringBuilder leaf = new StringBuilder("syntax = \"proto3\";\npackage com.leaf;\n");
+    for (int i = 0; i < depth; i++) {
+      leaf.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
+          .append(i + 1).append(" b = 2;\n}\n");
+    }
+    leaf.append("message M").append(depth).append(" {\n  int32 f = 1;\n}\n");
+    schemaRegistry.register("leaf-value", new ProtobufSchema(leaf.toString()));
+    SchemaReference ref = new SchemaReference("leaf.proto", "leaf-value", 1);
+    ProtobufSchema registered = new ProtobufSchema("syntax = \"proto3\";\npackage com.app;\n"
+        + "import \"leaf.proto\";\nmessage App {\n  com.leaf.M0 m = 1;\n}\n",
+        ImmutableList.of(ref), ImmutableMap.of("leaf.proto", leaf.toString()), null, null);
+    int id = schemaRegistry.register(topic + "-value", registered);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false,
+        KafkaProtobufSerializerConfig.USE_SCHEMA_ID, id,
+        KafkaProtobufSerializerConfig.ID_COMPATIBILITY_STRICT, true
+    );
+    KafkaProtobufSerializer<DynamicMessage> serializer =
+        new KafkaProtobufSerializer<>(schemaRegistry, configs);
+    DynamicMessage message = DynamicMessage.newBuilder(registered.toDescriptor()).build();
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, message);
+    assertEquals(message, protobufDeserializer.deserialize(topic, headers, bytes));
   }
 
   @Test
