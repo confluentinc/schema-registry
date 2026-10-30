@@ -459,6 +459,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           ProtobufSchema readerVersion = version(projector, subject, mapping.readerId());
           boolean writerMulti = writerVersion.readsAsSeveralMessages();
           boolean readerMulti = readerVersion.readsAsSeveralMessages();
+          String readAs = reader.toDescriptor().getFullName();
+          if (!name.equals(readAs)) {
+            // A reader class of another message: the record's locations are not its own.
+            throw new ProvenanceUnavailableException("The record was written as message " + name
+                + ", which the reader reads as " + readAs);
+          }
           // A version read as one message has locations for that message only: a record written
           // as another, or read by a reader whose version is rooted at another, has none.
           if (!(writerMulti || name.equals(rootOf(writerVersion)))

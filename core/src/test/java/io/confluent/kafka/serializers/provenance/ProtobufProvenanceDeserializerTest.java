@@ -54,6 +54,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedMapProto.ReaddedMap;
 import io.confluent.kafka.serializers.protobuf.test.ReaddedProto.Readded;
 import io.confluent.kafka.serializers.protobuf.test.Root.ReferrerMessage;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -1501,6 +1503,26 @@ class ProtobufProvenanceDeserializerTest {
         TOPIC, new RecordHeaders(), bytes, writer -> text).getValue()).getMemo());
     assertEquals("", ((ReaddedMap) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), bytes, writer -> null).getValue()).getMemo());
+  }
+
+  @Test
+  void aRecordReadThroughAClassOfAnotherMessageIsReadAsWritten() throws Exception {
+    // TestMessage2's test_string is new in v2, but the record is a TestMessage: its locations
+    // say nothing of the class's, so it is read without provenance, test_string included.
+    ProtobufSchema v2 = new ProtobufSchema(TestMessage2.getDescriptor());
+    String text = v2.canonicalString();
+    String head = "message TestMessage2 {\n  string test_string = 1;\n";
+    assertTrue(text.contains(head), text);
+    ProtobufSchema v1 = new ProtobufSchema(text.replace(head, "message TestMessage2 {\n"));
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, v2);
+    String message = TestMessage.getDescriptor().getFullName();
+    Descriptor m = v1.toDescriptor(message);
+    byte[] bytes = framed(id, v1, message,
+        DynamicMessage.newBuilder(m).setField(m.findFieldByName("test_string"), "ada").build());
+
+    assertEquals("ada", readClass(TestMessage2.class, bytes, null, false).getTestString());
+    assertEquals("ada", readClass(TestMessage2.class, bytes, "enabled", false).getTestString());
   }
 
   @Test
