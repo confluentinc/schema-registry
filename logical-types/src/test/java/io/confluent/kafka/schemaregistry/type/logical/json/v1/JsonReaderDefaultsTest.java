@@ -276,15 +276,33 @@ class JsonReaderDefaultsTest {
   }
 
   @Test
-  void aUnionLedByAReferenceKeepsNoFieldDefault() {
-    // The writer encodes a union's default by its first branch as written, not through a
-    // reference: the default is in the map only, and the schema still writes.
+  void aUnionLedByAReferenceKeepsItsFieldDefault() {
+    // The writer encodes a union's default by its first branch through the reference, so the
+    // default stays on the Field and the schema still writes.
     LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
         "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [{\"$ref\":"
             + " \"#/definitions/S\"}, {\"type\": \"integer\"}], \"default\": \"x\"}},"
             + " \"definitions\": {\"S\": {\"type\": \"string\"}}}"), LogicalTypeVersion.V1);
-    assertThat(lt.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+    assertThat(lt.getRootSchema().getFields().get(0).getDefaultValue()).isEqualTo("x");
     LogicalTypeToJsonConverter.fromLogicalType(lt, "R", LogicalTypeVersion.V2);
+  }
+
+  @Test
+  void aUnionLedByAReferenceChainWritesItsDefault() {
+    // The writer follows references and leading branches to the enum, as the reader does.
+    String color = "\"Color\": {\"type\": \"string\", \"enum\": [\"RED\", \"BLUE\"]}";
+    for (String alias : new String[] {"{\"$ref\": \"#/$defs/Color\"}",
+        "{\"oneOf\": [{\"$ref\": \"#/$defs/Color\"}, {\"type\": \"integer\"}]}"}) {
+      LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
+          "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [{\"$ref\":"
+              + " \"#/$defs/Alias\"}, {\"type\": \"boolean\"}], \"default\": \"BLUE\"}},"
+              + " \"$defs\": {\"Alias\": " + alias + ", " + color + "}}"));
+      assertThat(lt.getRootSchema().getFields().get(0).getDefaultValue()).isEqualTo("BLUE");
+      JsonSchema written = LogicalTypeToJsonConverter.fromLogicalType(lt, "R",
+          LogicalTypeVersion.V2);
+      assertThat(JsonToLogicalTypeConverter.toLogicalType(written).getRootSchema().getFields()
+          .get(0).getDefaultValue()).isEqualTo("BLUE");
+    }
   }
 
   // A schema whose only property, at path [0], is {@code property}.

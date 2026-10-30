@@ -1075,8 +1075,7 @@ public class LogicalTypeToProtoConverter {
                 ctx);
         if (!ctx.isV1()) {
           addFieldTagsAndParams(fieldProtoBuilder, field);
-          applyDefaultIfPresent(fieldProtoBuilder, field,
-              ctx.getLogicalType().getNamedTypes());
+          applyDefaultIfPresent(fieldProtoBuilder, field, ctx);
         }
         builder.addField(fieldProtoBuilder.build());
       }
@@ -1479,17 +1478,41 @@ public class LogicalTypeToProtoConverter {
    * If the field has a default value, encode it and store under Meta.params
    * with key "connect.default".
    */
-  private static void applyDefaultIfPresent(
-      FieldDescriptorProto.Builder fieldBuilder, Field field, Map<String, Schema> namedTypes) {
+  private static void applyDefaultIfPresent(FieldDescriptorProto.Builder fieldBuilder,
+      Field field, FromLogicalContext<GenericDescriptor> ctx) {
     // Skip when value is null — Meta.params is Map<String,String> with no
     // unambiguous null sentinel; emitting "" would conflict with valid empty
     // string defaults. Round-trip silently loses the explicit-null distinction.
     if (field.hasDefaultValue() && field.getDefaultValue() != null
         && !field.hasDerivedDefault()) {
-      String encoded = ProtoDefaultValueConverter.toProtoValue(
-          field.getSchema(), field.getDefaultValue(), namedTypes);
+      String encoded = referencedEnumDefault(field, ctx);
+      if (encoded == null) {
+        encoded = ProtoDefaultValueConverter.toProtoValue(
+            field.getSchema(), field.getDefaultValue(), ctx.getLogicalType().getNamedTypes());
+      }
       addMetaParam(fieldBuilder, CommonConstants.LOGICAL_DEFAULT_PROP, encoded);
     }
+  }
+
+  // The default of a field of a referenced enum, whose values only its descriptor lists: one of
+  // them. Null for a field of any other type.
+  private static String referencedEnumDefault(
+      Field field, FromLogicalContext<GenericDescriptor> ctx) {
+    Schema type = field.getSchema();
+    if (type.getType() != Schema.Type.NAMED_TYPE_REF) {
+      return null;
+    }
+    String name = type.getQualifiedName();
+    if (ctx.hasNamedType(name) || !ctx.isAlreadyConverted(name)
+        || !(ctx.getConverted(name) instanceof EnumDescriptor)) {
+      return null;
+    }
+    String symbol = String.valueOf(field.getDefaultValue());
+    if (((EnumDescriptor) ctx.getConverted(name)).findValueByName(symbol) == null) {
+      throw new ValidationException("Field '" + field.getName() + "' has a default '" + symbol
+          + "' that is not a value of enum " + name);
+    }
+    return symbol;
   }
 
   /**
