@@ -1032,7 +1032,8 @@ public class LogicalTypeToProtoConverter {
                 ctx);
         if (!ctx.isV1()) {
           addFieldTagsAndParams(fieldProtoBuilder, field);
-          applyDefaultIfPresent(fieldProtoBuilder, field);
+          applyDefaultIfPresent(fieldProtoBuilder, field,
+              ctx.getLogicalType().getNamedTypes());
         }
         builder.addField(fieldProtoBuilder.build());
       }
@@ -1436,14 +1437,14 @@ public class LogicalTypeToProtoConverter {
    * with key "connect.default".
    */
   private static void applyDefaultIfPresent(
-      FieldDescriptorProto.Builder fieldBuilder, Field field) {
+      FieldDescriptorProto.Builder fieldBuilder, Field field, Map<String, Schema> namedTypes) {
     // Skip when value is null — Meta.params is Map<String,String> with no
     // unambiguous null sentinel; emitting "" would conflict with valid empty
     // string defaults. Round-trip silently loses the explicit-null distinction.
     if (field.hasDefaultValue() && field.getDefaultValue() != null
         && !field.hasDerivedDefault()) {
       String encoded = ProtoDefaultValueConverter.toProtoValue(
-          field.getSchema(), field.getDefaultValue());
+          field.getSchema(), field.getDefaultValue(), namedTypes);
       addMetaParam(fieldBuilder, CommonConstants.LOGICAL_DEFAULT_PROP, encoded);
     }
   }

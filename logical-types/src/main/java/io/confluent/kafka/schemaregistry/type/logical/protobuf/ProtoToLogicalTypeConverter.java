@@ -894,7 +894,8 @@ public class ProtoToLogicalTypeConverter {
       String defaultStr = meta.getParamsMap().get(CommonConstants.LOGICAL_DEFAULT_PROP);
       if (defaultStr != null) {
         try {
-          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr);
+          defaultValue = ProtoDefaultValueConverter.toJavaData(fieldSchema, defaultStr,
+              ctx.getNamedTypes());
         } catch (IllegalArgumentException | DateTimeException e) {
           // NumberFormatException among them: a default its type cannot read is rejected by name.
           throw new ValidationException("Field " + field.getFullName() + " has an invalid "

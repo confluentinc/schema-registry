@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -884,6 +885,38 @@ class ProtoToLogicalTypeConverterTest {
       // The writer normalizes, which qualifies type names fully.
       assertEquals(schema.normalize().canonicalString(),
           LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored").canonicalString());
+    }
+  }
+
+  @Test
+  void aReferencedEnumFieldKeepsItsDefault() {
+    // An enum of a referenced file, of only enums or beside a message, as a field's type: its
+    // default, given as logical.default or natively in proto2, is read and written back.
+    String enums = "package com;\nenum Color {\n  RED = 0;\n  BLUE = 1;\n}\n";
+    String meta = "  com.Color c = 1 [(confluent.field_meta) = { params: [ { key: "
+        + "\"logical.default\", value: \"BLUE\" } ] }];\n";
+    String[][] rows = {
+        {"proto3", "syntax = \"proto3\";\npackage p;\nimport \"confluent/meta.proto\";\n"
+            + "import \"color.proto\";\nmessage Row {\n" + meta + "}\n"},
+        {"proto2", "syntax = \"proto2\";\npackage p;\nimport \"color.proto\";\n"
+            + "message Row {\n  optional com.Color c = 1 [default = BLUE];\n}\n"}};
+    for (String[] row : rows) {
+      for (String other : Arrays.asList("", "message Other {\n  optional int32 x = 1;\n}\n")) {
+        Map<String, String> resolved = Collections.singletonMap("color.proto",
+            "syntax = \"" + row[0] + "\";\n" + enums + other);
+        List<SchemaReference> refs =
+            Collections.singletonList(new SchemaReference("color.proto", "color", 1));
+        LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+            new ProtobufSchema(row[1], refs, resolved, 1, null));
+        // A proto2 native default is the descriptor's value, named by the symbol, as Flink's.
+        assertEquals("BLUE", String.valueOf(lt.getRootSchema().getField("c").getDefaultValue()));
+
+        ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+        LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(
+            new ProtobufSchema(written.canonicalString(), refs, resolved, 1, null));
+        assertEquals("BLUE",
+            String.valueOf(read.getRootSchema().getField("c").getDefaultValue()));
+      }
     }
   }
 
