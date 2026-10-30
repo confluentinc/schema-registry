@@ -179,10 +179,12 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     if (ctx.registerTypeStmt() != null) {
       visit(ctx.registerTypeStmt());
     } else {
-      inferAndRegisterRoot(ctx);
+      // Rooted at all its structs, a script needs no root inferred, so a cycle among them is fine.
       List<String> structs = topLevelStructs();
       if (rootsSeveralMessages && structs.size() > 1) {
         rootSchema = ProtoToLogicalTypeConverter.multiMessageRoot(structs);
+      } else {
+        inferAndRegisterRoot(ctx);
       }
     }
     maybeUnwrapNamedRoot();
@@ -314,9 +316,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * <p>Multiple unreferenced types (e.g. a script with several independent peer
    * messages and no explicit trailing registration): the FIRST-declared one is
    * the root; the rest remain as peer named types. A Protobuf target instead
-   * roots such a script at every top-level struct (see
-   * {@link #LogicalTypesSchemaVisitor(boolean)}); this inference still rejects
-   * a script with no type or only a cycle.
+   * roots a script of several top-level structs at all of them, cycles
+   * included, without inferring one (see
+   * {@link #LogicalTypesSchemaVisitor(boolean)}).
    *
    * <p>Errors:
    * <ul>

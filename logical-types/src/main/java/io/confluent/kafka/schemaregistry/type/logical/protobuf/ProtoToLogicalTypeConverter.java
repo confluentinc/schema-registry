@@ -281,6 +281,10 @@ public class ProtoToLogicalTypeConverter {
     // each resolved external schema, so nested external types are recognized.
     // An enum-only file's enums are too, since its reference may be named for the file.
     collectReferencedTypeNames(schema, file, ctx);
+    // Read as several messages, a wrapper's are the file it re-exports, not its own.
+    if (includeMultipleMessages && isPublicImportWrapper(schema)) {
+      collectFileTypeNames(file, new HashSet<>(), ctx);
+    }
     final List<Descriptor> messageTypes = file.getMessageTypes();
     if (messageTypes.isEmpty()) {
       throw new ValidationException(

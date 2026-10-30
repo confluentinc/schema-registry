@@ -124,6 +124,21 @@ class ProtoMessageRootTest {
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(wrappers);
     assertTrue(rootFields(read).contains("google.protobuf.Int64Value"), read.toString());
 
+    // The messages are the re-exported file's, so they are not written back as the schema's own
+    String two = "syntax = \"proto3\";\npackage q;\n"
+        + "message A { int32 a = 1; }\nmessage B { int32 b = 1; }\n";
+    ProtobufSchema several = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"two.proto\";\n",
+        List.of(new SchemaReference("two.proto", "two", 1)), Map.of("two.proto", two), null,
+        null);
+    LogicalType reExported = ProtoToLogicalTypeConverter.toLogicalType(several);
+    assertEquals(List.of("q.A", "q.B"), rootFields(reExported));
+    assertTrue(reExported.getExternalTypes().containsAll(List.of("q.A", "q.B")),
+        reExported.getExternalTypes().toString());
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(reExported, "ignored"));
+    assertThrows(ValidationException.class, () -> LogicalTypeToDdlConverter.toDdl(reExported));
+
     String one = "syntax = \"proto3\";\npackage q;\nmessage Only { int32 a = 1; }\n";
     ProtobufSchema single = new ProtobufSchema(
         "syntax = \"proto3\";\nimport public \"one.proto\";\n",
@@ -142,6 +157,22 @@ class ProtoMessageRootTest {
     // Read as one message on purpose, it is that message
     assertEquals(List.of("name", "home"),
         rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema, false)));
+  }
+
+  @Test
+  void aCycleAmongSeveralStructsIsAFileOfAllOfThem() {
+    // No root is inferred, so a cycle no inference could break is fine, and round-trips
+    String cycle = "NAMESPACE p;\nSTRUCT A (b B);\nSTRUCT B (a A);\n";
+    ProtobufSchema schema = fromDdl(cycle);
+    assertEquals(List.of("A", "B"), messages(schema));
+    assertTrue(schema.readsAsSeveralMessages());
+    assertEquals(schema.canonicalString(), roundTrip(schema));
+    // Other formats still infer one root, which a cycle leaves none of
+    Schema avro = new Schema("people-value", null, null, "AVRO", Collections.emptyList(), cycle);
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> LogicalTypeConversion.toNative(LogicalTypeConversion.tryParse(cycle).get(), avro,
+            Collections.emptyMap()));
+    assertTrue(e.getMessage().contains("cycle"), e.getMessage());
   }
 
   @Test
