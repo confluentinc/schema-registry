@@ -211,7 +211,7 @@ public class SchemaDiffTest {
     ProtobufSchema doubleWrapper = new ProtobufSchema("syntax = \"proto3\";\n" + wrappers);
     ProtobufSchema int64Wrapper = new ProtobufSchema("syntax = \"proto3\";\n"
         + "import \"confluent/meta.proto\";\n" + wrappers
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", "
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", "
         + "value: \"google.protobuf.Int64Value\" } ] };\n");
     ProtobufSchema variantWrapper = new ProtobufSchema(
         "syntax = \"proto3\";\nimport public \"confluent/type/variant.proto\";\n");

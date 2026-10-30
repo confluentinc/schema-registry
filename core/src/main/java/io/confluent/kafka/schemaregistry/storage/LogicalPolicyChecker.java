@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -121,17 +120,13 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * A Protobuf file as Flink reads it: a single top-level message is its own row, and a file with
-   * several wraps each message, in file order, as the converter's multi-message reading does. So
-   * every message is checked, and a file changing between one and several messages is seen as the
-   * reshaping it is.
+   * A Protobuf file as its records are read: one message when it names its root or declares just
+   * one, and otherwise each message wrapped, in file order, as the converter's multi-message
+   * reading does. So every message a record may carry is checked, and a file changing between one
+   * and several is seen as the reshaping it is.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    // Its own messages: toDescriptor() follows a public import, so a file that only re-exports
-    // another would count that file's.
-    long own = schema.rawSchema().getTypes().stream()
-        .filter(type -> type instanceof MessageElement).count();
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, own > 1);
+    return ProtoToLogicalTypeConverter.toLogicalType(schema);
   }
 
 
