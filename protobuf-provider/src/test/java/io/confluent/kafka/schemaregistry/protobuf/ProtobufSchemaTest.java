@@ -4149,6 +4149,9 @@ public class ProtobufSchemaTest {
     for (String root : Arrays.asList("p.A.Inner", "p.Missing", "B")) {
       ProtobufSchema schema = new ProtobufSchema(rootedFile(root));
       assertThrows(root, IllegalArgumentException.class, () -> schema.validate(false));
+      // A name given to the schema doesn't excuse its file's param
+      assertThrows(root, IllegalArgumentException.class,
+          () -> schema.copy("p.A").validate(false));
     }
   }
 
