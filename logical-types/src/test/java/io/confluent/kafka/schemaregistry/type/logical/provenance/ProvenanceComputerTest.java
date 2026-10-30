@@ -726,7 +726,7 @@ class ProvenanceComputerTest {
         new SchemaMetadata(1, 1, "AVRO", Collections.emptyList(), ""),
         new SchemaMetadata(2, 2, "AVRO", Collections.emptyList(), ""));
     assertThatThrownBy(() -> ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.held(Collections.singletonList(new AvroSchema("\"int\""))), false))
+        ProvenanceHistory.held(Collections.singletonList(new AvroSchema("\"int\"")))))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("one schema per version");
   }

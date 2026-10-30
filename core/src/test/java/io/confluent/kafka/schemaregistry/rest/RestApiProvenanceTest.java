@@ -114,7 +114,7 @@ public abstract class RestApiProvenanceTest {
 
     // Named newer-first, as a writer newer than its reader would be.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v2, v1, false);
 
     assertEquals(Arrays.asList(1, 2), versions(provenance));
     assertEquals(Arrays.asList(v1, v2), schemaIds(provenance));
@@ -198,7 +198,7 @@ public abstract class RestApiProvenanceTest {
 
     // Old records on a topic are exactly the ones written under since-deleted schemas.
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, v2, false);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
   }
 
@@ -212,7 +212,7 @@ public abstract class RestApiProvenanceTest {
     restApp.restClient.setMode("READWRITE", SUBJECT);
 
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
     assertEquals(Arrays.asList(100, 200), schemaIds(provenance));
   }
@@ -227,9 +227,9 @@ public abstract class RestApiProvenanceTest {
 
     assertError(404, Errors.SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 100, false, false));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 100, false));
     assertEquals(Collections.singletonList(1), versions(restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 200, 200, false, false)));
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 200, 200, false)));
   }
 
   @Test
@@ -243,7 +243,7 @@ public abstract class RestApiProvenanceTest {
     restApp.restClient.setMode("READWRITE", SUBJECT);
 
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, 100, 200, false);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
     assertEquals(Arrays.asList(100, 200), schemaIds(provenance));
   }
@@ -257,7 +257,7 @@ public abstract class RestApiProvenanceTest {
     int id = register(SUBJECT, record(field("id", "int"), field("name", "string")));
 
     SchemaProvenance provenance = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, shared, id, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, shared, id, false);
     assertEquals(Arrays.asList(1, 2), versions(provenance));
   }
 
@@ -343,7 +343,7 @@ public abstract class RestApiProvenanceTest {
     // Distinct from every other 404, so a reader knows to stop asking and read without it.
     assertError(404, Errors.SCHEMA_ID_NOT_IN_SUBJECT_ERROR_CODE,
         () -> restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false, false));
+            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, other, v1, false));
   }
 
   @Test
@@ -444,33 +444,28 @@ public abstract class RestApiProvenanceTest {
   }
 
   @Test
-  public void includeMultipleMessagesRootsAProtobufSubjectAtEveryMessage() throws Exception {
+  public void aProtobufSubjectOfSeveralMessagesIsRootedAtEach() throws Exception {
+    // Naming no root, each version is read as all its messages, whatever a caller still asks.
     String proto = "syntax = \"proto3\";\npackage io.confluent;\n"
         + "message Order { int32 id = 1; }\nmessage Refund { int32 amount = 1; }\n";
     int id = restApp.restClient.registerSchema(
         proto, ProtobufSchema.TYPE, Collections.emptyList(), SUBJECT).getId();
 
-    SchemaProvenance plain = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false);
-    SchemaProvenance multi = restApp.restClient.getProvenanceById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true);
-
-    assertEquals(Arrays.asList(Arrays.asList(0)), paths(plain.getVersions().get(0)));
+    SchemaProvenance provenance = restApp.restClient.getProvenanceById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false);
     assertEquals(Arrays.asList(Arrays.asList(0), Arrays.asList(0, 0), Arrays.asList(1),
-        Arrays.asList(1, 0)), paths(multi.getVersions().get(0)));
+        Arrays.asList(1, 0)), paths(provenance.getVersions().get(0)));
     assertEquals(Arrays.asList("io.confluent.Refund", "amount"),
-        multi.getVersions().get(0).getFields().get(3).getNames());
-  }
-
-  @Test
-  public void includeMultipleMessagesIsIgnoredForOtherFormats() throws Exception {
-    int id = register(SUBJECT, record(field("id", "int")));
-
-    assertEquals(
-        restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, false),
-        restApp.restClient.getProvenanceById(
-            RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, id, id, false, true));
+        provenance.getVersions().get(0).getFields().get(3).getNames());
+    for (String asked : Arrays.asList("false", "true")) {
+      assertEquals(provenance, restApp.restClient.httpRequest("/subjects/" + SUBJECT
+          + "/provenance?fromId=" + id + "&toId=" + id + "&includeMultipleMessages=" + asked,
+          "GET", null, RestService.DEFAULT_REQUEST_PROPERTIES, PROVENANCE), asked);
+    }
+    @SuppressWarnings("deprecation")
+    SchemaProvenance deprecated = restApp.restClient.getProvenanceByVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, "1", "1", false, false, null);
+    assertEquals(provenance, deprecated);
   }
 
   @Test
@@ -479,7 +474,7 @@ public abstract class RestApiProvenanceTest {
     int v2 = register(SUBJECT, record(field("id", "int"), field("name", "string")));
 
     SchemaProvenance toVersion = restApp.restClient.getProvenanceToVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, 2, false, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, SUBJECT, v1, 2, false);
     SchemaProvenance fromVersion = restApp.restClient.httpRequest("/subjects/" + SUBJECT
         + "/provenance?fromVersion=2&toId=" + v1, "GET", null,
         RestService.DEFAULT_REQUEST_PROPERTIES, PROVENANCE);
@@ -585,7 +580,7 @@ public abstract class RestApiProvenanceTest {
   private SchemaProvenance byVersion(String subject, String from, String to,
       boolean includeInterior) throws Exception {
     return restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, from, to, includeInterior);
   }
 
   private static void assertError(int status, int code, ThrowingRunnable call) {

@@ -213,19 +213,17 @@ public final class ProvenanceProjector<T> {
    * @throws AuthorizationException if it was not authorized
    */
   public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
-      ParsedSchema reader, boolean includeMultipleMessages,
-      Function<ProvenanceMapping, T> build) {
-    return project(subject, writerId, writer, reader, includeMultipleMessages, build, null);
+      ParsedSchema reader, Function<ProvenanceMapping, T> build) {
+    return project(subject, writerId, writer, reader, build, null);
   }
 
   /**
-   * As {@link #project(String, SchemaId, ParsedSchema, ParsedSchema, boolean, Function)}, with a
+   * As {@link #project(String, SchemaId, ParsedSchema, ParsedSchema, Function)}, with a
    * writer read by a reader of its own version read as {@code sameVersion} makes it, asking
    * nothing of the registry; with none, or when it makes none, read as written.
    */
   public Optional<T> project(String subject, SchemaId writerId, ParsedSchema writer,
-      ParsedSchema reader, boolean includeMultipleMessages,
-      Function<ProvenanceMapping, T> build, Supplier<T> sameVersion) {
+      ParsedSchema reader, Function<ProvenanceMapping, T> build, Supplier<T> sameVersion) {
     if (subject == null || reader == null || !names(writerId)) {
       return Optional.empty();
     }
@@ -240,17 +238,42 @@ public final class ProvenanceProjector<T> {
     Pin pin = derived ? null : pinOf(reader);
     List<Object> key = Arrays.asList(subject,
         writerId.getId() != null ? writerId.getId() : writerId.getGuid(),
-        writer != null ? writer.name() : null, reader, reader.name(),
-        includeMultipleMessages, pin, derived);
+        writer != null ? writer.name() : null, reader, reader.name(), pin, derived);
     Outcome<T> outcome;
     try {
       // Loaded atomically: the first records of a pair, however many at once, ask once.
-      outcome = outcomes.get(key, () -> compute(subject, writerId, writer, reader, pin,
-          includeMultipleMessages, build, sameVersion));
+      outcome = outcomes.get(key, () -> compute(subject, writerId, writer, reader, pin, build,
+          sameVersion));
     } catch (ExecutionException | UncheckedExecutionException | ExecutionError e) {
       throw fresh(e.getCause());
     }
     return outcome.get();
+  }
+
+  /**
+   * The schema registered under {@code id}, for a build to read a version as its own schema does.
+   * Called from a build, the client failing fails the projection as a provenance request would.
+   */
+  public ParsedSchema registered(String subject, int id) {
+    try {
+      return client.getSchemaBySubjectAndId(subject, id);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    } catch (RestClientException e) {
+      throw new RegistryFailure(e);
+    }
+  }
+
+  // A registry failure in a build, rethrown by compute as the checked exception it is.
+  private static final class RegistryFailure extends RuntimeException {
+    RegistryFailure(RestClientException cause) {
+      super(cause);
+    }
+
+    @Override
+    public synchronized RestClientException getCause() {
+      return (RestClientException) super.getCause();
+    }
   }
 
   /**
@@ -276,8 +299,8 @@ public final class ProvenanceProjector<T> {
   }
 
   private Outcome<T> compute(String subject, SchemaId writerSchemaId, ParsedSchema writer,
-      ParsedSchema reader, Pin pin, boolean includeMultipleMessages,
-      Function<ProvenanceMapping, T> build, Supplier<T> sameVersion) {
+      ParsedSchema reader, Pin pin, Function<ProvenanceMapping, T> build,
+      Supplier<T> sameVersion) {
     String written = writerSchemaId.getId() != null
         ? "schema id " + writerSchemaId.getId() : "schema GUID " + writerSchemaId.getGuid();
     Integer writerId = writerSchemaId.getId();
@@ -297,8 +320,7 @@ public final class ProvenanceProjector<T> {
       }
       SchemaProvenance provenance;
       try {
-        provenance = provenance(
-            subject, writerId, readerId, readerVersion, includeMultipleMessages);
+        provenance = provenance(subject, writerId, readerId, readerVersion);
       } catch (ProvenanceUnknownWriterException e) {
         // A reader pinned to an id no version of the subject carries is the caller's mistake, as
         // a missing pinned version is: every record of the writer fails.
@@ -312,8 +334,7 @@ public final class ProvenanceProjector<T> {
           throw e;
         }
         writerId = equal;
-        provenance = provenance(
-            subject, writerId, readerId, readerVersion, includeMultipleMessages);
+        provenance = provenance(subject, writerId, readerId, readerVersion);
       }
       if (pin != null) {
         requireStructureOf(subject, reader, pin);
@@ -326,7 +347,11 @@ public final class ProvenanceProjector<T> {
         return sameVersion != null ? Outcome.of(built(sameVersion)) : Outcome.unavailable();
       }
       ProvenanceMapping paired = mapping;
-      return Outcome.of(built(() -> build.apply(paired)));
+      try {
+        return Outcome.of(built(() -> build.apply(paired)));
+      } catch (RegistryFailure e) {
+        throw e.getCause();
+      }
     } catch (IOException e) {
       throw new SerializationException(
           "Could not reach Schema Registry for the provenance of " + written, e);
@@ -407,7 +432,7 @@ public final class ProvenanceProjector<T> {
    *     range — or the strategy breaks its contract: every record of the writer fails
    */
   private SchemaProvenance provenance(String subject, int writerId, Integer readerId,
-      Integer readerVersion, boolean includeMultipleMessages) {
+      Integer readerVersion) {
     if (readerVersion == null && writerId == readerId) {
       return null;
     }
@@ -416,10 +441,8 @@ public final class ProvenanceProjector<T> {
     SchemaProvenance provenance;
     try {
       provenance = readerVersion != null
-          ? strategy.provenanceToVersion(client, subject, writerId, readerVersion,
-              includeMultipleMessages)
-          : strategy.provenance(
-              client, subject, writerId, readerId, includeMultipleMessages);
+          ? strategy.provenanceToVersion(client, subject, writerId, readerVersion)
+          : strategy.provenance(client, subject, writerId, readerId);
     } catch (ProvenanceRejectedException e) {
       throw new SerializationException(
           "The provenance request for " + pair + " was rejected: " + e.getMessage(), e);
@@ -640,14 +663,15 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
-   * {@code schema}'s logical type as provenance computes it; a Protobuf file's over all its
-   * top-level messages, as a version stands for the whole file whichever message a reader names.
+   * {@code schema}'s logical type as a whole, to tell whether two schemas are one structure: a
+   * Protobuf file's over all its top-level messages, as a version stands for the whole file
+   * whichever message a reader names or the file's root param picks.
    */
   private Optional<LogicalType> logicalTypeOf(ParsedSchema schema) {
     Optional<LogicalType> known = logicalTypes.getIfPresent(schema);
     if (known == null) {
       try {
-        known = Optional.of(ProvenanceHistory.logicalTypeOf(schema, true));
+        known = Optional.of(ProvenanceHistory.wholeLogicalTypeOf(schema));
       } catch (RuntimeException e) {
         // No logical form, so no provenance either: it stands for no version.
         known = Optional.empty();

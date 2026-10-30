@@ -396,10 +396,6 @@ public class SubjectsResource {
       @Parameter(description = "Whether to return every version in the range, not only its "
           + "ends; such a range may cover at most provenance.interior.max.versions versions")
       @DefaultValue("false") @QueryParam("includeInterior") boolean includeInterior,
-      @Parameter(description = "Whether to root each Protobuf version at a struct over all its "
-          + "top-level messages; ignored for other formats")
-      @DefaultValue("false") @QueryParam("includeMultipleMessages")
-      boolean includeMultipleMessages,
       @Parameter(description = "LOGICAL to say, for each version returned, whether it is a "
           + "valid backward step from the version just before it under that policy, columns "
           + "paired by provenance, whatever the subject's compatibility config, and the errors "
@@ -426,7 +422,7 @@ public class SubjectsResource {
       List<Schema> range =
           rangeOf(subject, Math.min(from, to), Math.max(from, to), includeInterior);
       SchemaProvenance provenance =
-          provenanceOf(subject, range, from, to, includeInterior, includeMultipleMessages);
+          provenanceOf(subject, range, from, to, includeInterior);
       if (compatibilityPolicy != null) {
         provenance = withCompatibility(subject, range, provenance);
       }
@@ -574,9 +570,8 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance provenanceOf(String subject, List<Schema> range, int from, int to,
-      boolean includeInterior, boolean includeMultipleMessages) {
-    List<Object> key =
-        provenanceKey(subject, range, includeMultipleMessages, includeInterior);
+      boolean includeInterior) {
+    List<Object> key = provenanceKey(subject, range, includeInterior);
     CompletableFuture<Computed> mine = new CompletableFuture<>();
     CompletableFuture<Computed> pending = provenanceCache.asMap().putIfAbsent(key, mine);
     if (pending == null) {
@@ -584,8 +579,7 @@ public class SubjectsResource {
       // each request already waiting on it fails alike.
       Computed computed;
       try {
-        computed = new Computed(computeProvenance(subject, range, includeMultipleMessages,
-            includeInterior), null);
+        computed = new Computed(computeProvenance(subject, range, includeInterior), null);
       } catch (RuntimeException e) {
         computed = new Computed(null, e);
       } catch (Error e) {
@@ -745,12 +739,11 @@ public class SubjectsResource {
   }
 
   private static List<Object> provenanceKey(String subject, List<Schema> history,
-      boolean includeMultipleMessages, boolean includeInterior) {
-    // The mode is part of the key: each answers differently. So is whether the interior is
-    // kept, as a request for the ends computes no more than it returns.
-    List<Object> key = new ArrayList<>(3 + 2 * history.size());
+      boolean includeInterior) {
+    // Whether the interior is kept is part of the key, as a request for the ends computes no more
+    // than it returns.
+    List<Object> key = new ArrayList<>(2 + 2 * history.size());
     key.add(subject);
-    key.add(includeMultipleMessages);
     key.add(includeInterior);
     for (Schema schema : history) {
       key.add(schema.getVersion());
@@ -760,7 +753,7 @@ public class SubjectsResource {
   }
 
   private SchemaProvenance computeProvenance(String subject, List<Schema> history,
-      boolean includeMultipleMessages, boolean includeInterior) {
+      boolean includeInterior) {
     // Parsed and converted as the computation reaches each version, so a range holds no more
     // than its report; a failure is then the first in version order.
     List<ParsedSchemaHolder> schemas = new ArrayList<>(history.size());
@@ -769,7 +762,7 @@ public class SubjectsResource {
     }
     try {
       return ProvenanceHistory.compute(subject, provenanceEntries(history), schemas,
-          includeMultipleMessages, includeInterior);
+          includeInterior);
     } catch (Unparsable e) {
       throw Errors.unresolvableReferenceException(e.getMessage());
     } catch (RecursiveTypeException e) {

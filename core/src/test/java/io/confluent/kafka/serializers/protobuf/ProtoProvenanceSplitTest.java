@@ -53,9 +53,9 @@ class ProtoProvenanceSplitTest {
         new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), ""),
         new SchemaMetadata(2, 2, "PROTOBUF", Collections.emptyList(), ""),
         new SchemaMetadata(3, 3, "PROTOBUF", Collections.emptyList(), "")),
-        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(v1, v2, v3)), false);
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(v1, v2, v3)));
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(v3, v1,
-        ProvenanceMapping.join(provenance, 1, 3), false);
+        ProvenanceMapping.join(provenance, 1, 3));
     byte[] x = cat(bytes(2, varint(1, 1)), varint(4, 9), bytes(2, varint(2, 2)));
     byte[] record = bytes(2, x);
     Message read = AbstractKafkaProtobufDeserializer.parseProjected(projection, v3,
