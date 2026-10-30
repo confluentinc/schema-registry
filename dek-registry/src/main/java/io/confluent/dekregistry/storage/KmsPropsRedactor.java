@@ -1,22 +1,22 @@
 /*
  * Copyright 2026 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.dekregistry.client.rest.entities;
+package io.confluent.dekregistry.storage;
 
 import com.google.common.collect.ImmutableSet;
+import io.confluent.dekregistry.client.rest.entities.Kek;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -31,13 +31,8 @@ import java.util.TreeMap;
  * <p>Secrets are omitted rather than replaced with a placeholder: every KMS driver falls
  * back to an ambient credential when the config key is absent, and a non-null placeholder
  * would defeat that fallback.
- *
- * <p>Used by the server (to redact responses) and this client (to restore a just-written
- * secret into its own cache, since the wire response is always redacted).
  */
 public final class KmsPropsRedactor {
-
-  public static final String REDACTED_VALUE = "[hidden]";
 
   // Secret-bearing kmsProps keys across the supported KMS drivers.
   private static final Set<String> SENSITIVE_KEYS = ImmutableSet.of(
@@ -73,60 +68,38 @@ public final class KmsPropsRedactor {
         kek.getTimestamp(), kek.getDeleted());
   }
 
+  public static KeyEncryptionKey redact(KeyEncryptionKey kek) {
+    if (kek == null || !kek.isShared()) {
+      return kek;
+    }
+    KeyEncryptionKey redacted = new KeyEncryptionKey(kek.getName(), kek.getKmsType(),
+        kek.getKmsKeyId(), redact(kek.getKmsProps()),
+        kek.getDoc(), kek.isShared(), kek.isDeleted());
+    redacted.setOffset(kek.getOffset());
+    redacted.setTimestamp(kek.getTimestamp());
+    return redacted;
+  }
+
   /**
-   * Resolves a requested {@code kmsProps} update against the stored value: an omitted (or
-   * legacy {@link #REDACTED_VALUE}) secret key means "unchanged" and is restored from
-   * {@code existingKmsProps} (or dropped if nothing is stored). An explicit {@code null}
-   * clears the secret. Any other value is a genuine update.
+   * Resolves a requested {@code kmsProps} update against the stored value: an omitted
+   * secret key means "unchanged" and is restored from {@code existingKmsProps}. An explicit
+   * {@code null} clears the secret. Any other value is a genuine update.
    */
   public static SortedMap<String, String> merge(
       Map<String, String> requestedKmsProps, Map<String, String> existingKmsProps) {
     SortedMap<String, String> merged = new TreeMap<>(requestedKmsProps);
     for (String key : SENSITIVE_KEYS) {
-      if (merged.containsKey(key) && merged.get(key) == null) {
-        merged.remove(key);
-        continue;
-      }
-      if (merged.containsKey(key) && !REDACTED_VALUE.equals(merged.get(key))) {
+      if (merged.containsKey(key)) {
+        if (merged.get(key) == null) {
+          merged.remove(key);
+        }
         continue;
       }
       String existingValue = existingKmsProps != null ? existingKmsProps.get(key) : null;
       if (existingValue != null) {
         merged.put(key, existingValue);
-      } else {
-        merged.remove(key);
       }
     }
     return merged;
-  }
-
-  /**
-   * Backfills secrets the server redacted from {@code response} using the caller's own
-   * {@code request}, so this client's cache keeps a usable credential. Unlike
-   * {@link #merge}, a placeholder or omitted key in {@code request} is never copied in --
-   * the caller doesn't have the real value either in that case.
-   */
-  public static Kek restoreWriteTimeSecrets(Kek response, Map<String, String> request) {
-    if (response == null) {
-      return null;
-    }
-    SortedMap<String, String> restored = new TreeMap<>(response.getKmsProps());
-    if (request != null) {
-      for (String key : SENSITIVE_KEYS) {
-        // Omitted means unchanged; explicit null means clear.
-        if (!request.containsKey(key)) {
-          continue;
-        }
-        String value = request.get(key);
-        if (value == null) {
-          restored.remove(key);
-        } else if (!REDACTED_VALUE.equals(value)) {
-          restored.put(key, value);
-        }
-      }
-    }
-    return new Kek(response.getName(), response.getKmsType(), response.getKmsKeyId(),
-        restored, response.getDoc(), response.isShared(),
-        response.getTimestamp(), response.getDeleted());
   }
 }

@@ -149,9 +149,9 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
-    // Served from the client's cache, which createKek restored the real secret into.
+    // Served from the client's cache, which holds the redacted response.
     newKek = client.getKek(kekName, false);
-    assertEquals("s.supersecretvaulttoken", newKek.getKmsProps().get("token.id"));
+    assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("my-namespace", newKek.getKmsProps().get("namespace"));
 
     // Resetting the cache forces a fresh GET against the server, which always redacts.
@@ -167,7 +167,6 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
 
-    // An update that doesn't resupply the secret must not re-cache the older one.
     Kek docOnlyUpdate = client.updateKek(headers, kekName, null, "doc-only-change", null);
     assertFalse(docOnlyUpdate.getKmsProps().containsKey("token.id"));
     Kek cachedAfterDocOnlyUpdate = client.getKek(kekName, false);
@@ -180,31 +179,6 @@ public class RestApiTest extends ClusterTestHarness {
     assertFalse(newKek.getKmsProps().containsKey("token.id"));
     assertEquals("updated-namespace", newKek.getKmsProps().get("namespace"));
     assertEquals("updated-doc", newKek.getDoc());
-  }
-
-  @Test
-  public void testRecreatedKekDoesNotInheritStaleCachedSecret() throws Exception {
-    Map<String, String> headers = new HashMap<>();
-    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-    String kekName = "kek-recreate";
-    Map<String, String> oldProps = new HashMap<>();
-    oldProps.put("token.id", "s.oldtoken");
-    client.createKek(headers, kekName, "test-kms", "myid", oldProps, null, true, false);
-
-    // Another process hard-deletes the kek, so this client's cache isn't invalidated.
-    CachedDekRegistryClient otherClient = new CachedDekRegistryClient(
-        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls()),
-        1000, 60, null, null, fakeTicker);
-    otherClient.deleteKek(headers, kekName, false);
-    otherClient.deleteKek(headers, kekName, true);
-
-    Map<String, String> newProps = new HashMap<>();
-    newProps.put("namespace", "my-namespace");
-    client.createKek(headers, kekName, "test-kms", "myid", newProps, null, true, false);
-
-    Kek cached = client.getKek(kekName, false);
-    assertFalse(cached.getKmsProps().containsKey("token.id"));
-    assertEquals("my-namespace", cached.getKmsProps().get("namespace"));
   }
 
   @Test
