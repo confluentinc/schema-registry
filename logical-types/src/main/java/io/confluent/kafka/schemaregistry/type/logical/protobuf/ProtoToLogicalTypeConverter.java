@@ -353,7 +353,9 @@ public class ProtoToLogicalTypeConverter {
     // transitive resolution + cycle protection), so reader and
     // ProtobufSchema agree on which type counts as the root.
     Descriptor root = isReference(schema, publicImport) ? schema.toDescriptor() : null;
-    if (root == null) {
+    // toDescriptor() also finds an imported message by its short name, such as one sharing an
+    // enum root's name, so only a message of the root's own name is the root.
+    if (root == null || !root.getFullName().equals(schema.name())) {
       return new LogicalType(
           packageName,
           Schema.createNamedTypeRef(schema.name()).setNullable(false),

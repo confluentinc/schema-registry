@@ -283,11 +283,7 @@ public class LogicalTypeToProtoConverter {
       ProtobufSchema parsed = new ProtobufSchema(entry.getValue(),
           logicalType.getReferences(), logicalType.getResolvedReferences(),
           null, null, null, null);
-      // A file of only enums has no message to reach it by.
-      Descriptor first = parsed.toDescriptor();
-      FileDescriptor file = first != null ? first.getFile()
-          : parsed.toDynamicSchema().getEnumDescriptor(parsed.name()).getFile();
-      registerExternalFile(file, entry.getKey(), ctx);
+      registerExternalFile(fileOf(parsed), entry.getKey(), ctx);
     }
 
     ProtobufSchema result = new ProtobufSchema(
@@ -312,34 +308,62 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
-   * The reference whose file declares a message: the one named after it, as a script names it,
-   * or else any whose own file declares it, as a re-export read from the registry may name it.
+   * The file a referenced schema's first type is declared in, found by that type's exact name:
+   * a lookup by name also finds an imported message by its short name, such as one sharing the
+   * name of an enum, which is all a file of only enums declares.
+   */
+  private static FileDescriptor fileOf(ProtobufSchema parsed) {
+    String name = parsed.name();
+    Descriptor message = parsed.toDescriptor();
+    if (message != null && message.getFullName().equals(name)) {
+      return message.getFile();
+    }
+    EnumDescriptor enumType = parsed.toDynamicSchema().getEnumDescriptor(name);
+    if (enumType != null && enumType.getFullName().equals(name)) {
+      return enumType.getFile();
+    }
+    throw new ValidationException("Referenced Protobuf schema declares no type " + name);
+  }
+
+  /**
+   * The reference whose own file declares a message: one named after it, as a script names it,
+   * or else the only one; several are ambiguous, since each could be what was imported.
    */
   private static String declaringImport(LogicalType logicalType, String fullName) {
     Map<String, String> resolved = logicalType.getResolvedReferences();
-    if (resolved.containsKey(fullName)) {
-      return fullName;
-    }
+    List<String> declaring = new ArrayList<>();
     for (SchemaReference reference : logicalType.getReferences()) {
       String text = resolved.get(reference.getName());
-      if (text == null) {
-        continue;
-      }
-      try {
-        // The file's own messages, not those of the files it imports publicly.
-        FileDescriptorProto file = new ProtobufSchema(text, logicalType.getReferences(), resolved,
-            null, null, null, null).toDynamicSchema().getFileDescriptorProto();
-        String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
-        for (DescriptorProto message : file.getMessageTypeList()) {
-          if (declaresMessage(message, prefix, fullName)) {
-            return reference.getName();
-          }
-        }
-      } catch (RuntimeException e) {
-        // a file that does not parse declares nothing to import
+      if (text != null && declaresMessage(text, logicalType, fullName)) {
+        declaring.add(reference.getName());
       }
     }
-    return null;
+    if (declaring.contains(fullName)) {
+      return fullName;
+    }
+    if (declaring.size() > 1) {
+      throw new ValidationException("Root " + fullName + " is declared by more than one "
+          + "referenced file, " + declaring + ", so which one it is imported from is ambiguous");
+    }
+    return declaring.isEmpty() ? null : declaring.get(0);
+  }
+
+  // Whether a referenced file declares a message itself, not through the files it imports.
+  private static boolean declaresMessage(String text, LogicalType logicalType, String fullName) {
+    try {
+      FileDescriptorProto file = new ProtobufSchema(text, logicalType.getReferences(),
+          logicalType.getResolvedReferences(), null, null, null, null)
+          .toDynamicSchema().getFileDescriptorProto();
+      String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
+      for (DescriptorProto message : file.getMessageTypeList()) {
+        if (declaresMessage(message, prefix, fullName)) {
+          return true;
+        }
+      }
+    } catch (RuntimeException e) {
+      // a file that does not parse declares nothing to import
+    }
+    return false;
   }
 
   private static boolean declaresMessage(DescriptorProto message, String prefix, String fullName) {

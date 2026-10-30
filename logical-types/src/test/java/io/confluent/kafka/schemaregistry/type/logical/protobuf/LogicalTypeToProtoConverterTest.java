@@ -3293,6 +3293,64 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
+  void testExternalRootImportedFromTheFileDeclaringIt() {
+    // A file named like the root, imported by the one declaring it, is not where it is from.
+    String other = "syntax = \"proto3\";\npackage other;\nmessage Bar {\n  int32 b = 1;\n}\n";
+    String leaf = "syntax = \"proto3\";\npackage com;\nimport \"com.Foo\";\n"
+        + "message Foo {\n  other.Bar bar = 1;\n}\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("com.Foo", other);
+    resolved.put("leaf.proto", leaf);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("com.Foo", "other", 1),
+        new SchemaReference("leaf.proto", "leaf", 1));
+    LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef("com.Foo").setNullable(false),
+        Collections.emptyMap(), refs, resolved);
+
+    ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+
+    assertEquals(Collections.singletonList("leaf.proto"), emitted.rawSchema().getPublicImports());
+    assertEquals("com.Foo", emitted.name());
+  }
+
+  @Test
+  void testExternalRootDeclaredByTwoFilesIsRefused() {
+    // Either could be the one imported, so neither is chosen.
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("alternate.proto",
+        "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 a = 1;\n}\n");
+    resolved.put("leaf.proto",
+        "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string l = 1;\n}\n");
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("alternate.proto", "a", 1),
+        new SchemaReference("leaf.proto", "leaf", 1));
+    LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef("com.Foo").setNullable(false),
+        Collections.emptyMap(), refs, resolved);
+
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
+    assertTrue(e.getMessage().contains("ambiguous"), e.getMessage());
+  }
+
+  @Test
+  void testExternalEnumBesideAnImportedMessageOfItsShortName() {
+    // color.proto declares only the enum Color, and imports the message b.Color.
+    String b = "syntax = \"proto3\";\npackage b;\nmessage Color {\n  int32 x = 1;\n}\n";
+    String color = "syntax = \"proto3\";\nimport \"b.proto\";\nenum Color {\n  RED = 0;\n}\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("b.proto", b);
+    resolved.put("color.proto", color);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("b.proto", "b", 1),
+        new SchemaReference("color.proto", "color", 1));
+    ProtobufSchema row = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"color.proto\";\nmessage Row {\n  Color c = 1;\n}\n", refs, resolved, null, null);
+
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(row);
+
+    assertTrue(read.isExternal("Color"));
+    assertEquals(row.normalize().canonicalString(),
+        LogicalTypeToProtoConverter.fromLogicalType(read, "ignored").canonicalString());
+  }
+
+  @Test
   void testExternalRootImportedByAnotherNameSurvivesItsText() {
     // A re-export whose import is named for its file, not its message: read, then written back
     // as the same re-export, rather than a local copy of the message.

@@ -837,6 +837,26 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void aReExportedEnumIsNotAnImportedMessageOfItsShortName() {
+    // color.proto declares only the enum Color, without a package, and imports b.proto, whose
+    // message b.Color has the same short name.
+    String b = "syntax = \"proto3\";\npackage b;\nmessage Color {\n  int32 x = 1;\n}\n";
+    String color = "syntax = \"proto3\";\nimport \"b.proto\";\nenum Color {\n  RED = 0;\n}\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("b.proto", b);
+    resolved.put("color.proto", color);
+    List<SchemaReference> refs = Arrays.asList(new SchemaReference("b.proto", "b", 1),
+        new SchemaReference("color.proto", "color", 1));
+    ProtobufSchema reExport = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"color.proto\";\n", refs, resolved, 1, null);
+
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(reExport);
+
+    assertEquals("Color", lt.getRootSchema().getQualifiedName());
+    assertFalse(lt.getNamedTypes().containsKey("b.Color"));
+  }
+
+  @Test
   void anEnumOfAnEnumOnlyFileIsExternalWhateverItsImportIsNamed() {
     // color.proto declares only an enum, and is imported by its file name, not the enum's.
     String color = "syntax = \"proto3\";\npackage com;\nenum Color {\n  RED = 0;\n  BLUE = 1;\n}\n";
