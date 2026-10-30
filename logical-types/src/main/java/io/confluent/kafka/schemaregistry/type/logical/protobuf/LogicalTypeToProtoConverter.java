@@ -210,9 +210,10 @@ public class LogicalTypeToProtoConverter {
     // Proto's `import public` is the natural representation — produces an
     // otherwise-empty proto file that publicly imports the referenced type,
     // allowing downstream consumers to reach it via this schema's name.
+    // A reader keeps an external root's body in namedTypes too, so external counts as absent.
     if (schema.getType() == Schema.Type.NAMED_TYPE_REF) {
       String fullName = schema.getQualifiedName();
-      if (!logicalType.getNamedTypes().containsKey(fullName)
+      if ((!logicalType.getNamedTypes().containsKey(fullName) || logicalType.isExternal(fullName))
           && logicalType.getResolvedReferences().containsKey(fullName)) {
         return buildPublicImportFile(logicalType, fullName, version);
       }
