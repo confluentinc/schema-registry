@@ -19,10 +19,25 @@ package io.confluent.kafka.schemaregistry.client.rest.utils;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class UrlListTest {
+
+  @Test
+  public void verify_illegal_argument_exception() {
+    try {
+      new UrlList(Collections.emptyList());
+      fail("Expected IllegalArgumentException");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Expected at least one URL to be passed in constructor", e.getMessage());
+    }
+  }
 
   @Test
   public void verify_url_failure_rotates_urls() {
@@ -31,8 +46,6 @@ public class UrlListTest {
 
     UrlList urls = new UrlList(Arrays.asList(url1, url2));
     assertEquals(2, urls.size());
-
-    if (urls.current().equals(url2)) urls.fail(url2);
 
     assertEquals(url1, urls.current());
 
@@ -44,8 +57,9 @@ public class UrlListTest {
 
     urls.fail(url2);
     assertEquals(url1, urls.current());
+
+    urls.randomizeIndex();
+    assertTrue(urls.urls().contains(urls.current()));
   }
-
-
 
 }

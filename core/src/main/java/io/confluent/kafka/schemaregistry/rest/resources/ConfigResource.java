@@ -145,7 +145,8 @@ public class ConfigResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
-      schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -156,8 +157,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @Path("/{subject}")
@@ -258,7 +257,8 @@ public class ConfigResource {
       }
     }
     try {
-      schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -269,8 +269,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @GET

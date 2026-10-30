@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -103,10 +104,18 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(
-          String.format("Failed to serialize Avro data from topic %s :", topic),
-          e
-      );
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new NetworkException(
+            String.format("I/O error while serializing Avro data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Failed to serialize Avro data from topic %s:", topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
@@ -144,10 +153,18 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(
-          String.format("Failed to deserialize data for topic %s to Avro: ", topic),
-          e
-      );
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new NetworkException(
+            String.format("I/O error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Failed to deserialize data for topic %s to Avro:", topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
@@ -156,7 +173,7 @@ public class AvroConverter implements Converter {
   }
 
 
-  private static class Serializer extends AbstractKafkaAvroSerializer {
+  static class Serializer extends AbstractKafkaAvroSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -183,7 +200,7 @@ public class AvroConverter implements Converter {
     }
   }
 
-  private static class Deserializer extends AbstractKafkaAvroDeserializer {
+  static class Deserializer extends AbstractKafkaAvroDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

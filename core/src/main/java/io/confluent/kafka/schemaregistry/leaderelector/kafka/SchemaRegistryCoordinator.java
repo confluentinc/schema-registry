@@ -69,6 +69,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
           String metricGrpPrefix,
           Time time,
           long retryBackoffMs,
+          long retryBackoffMaxMs,
           SchemaRegistryIdentity identity,
           SchemaRegistryRebalanceListener listener,
           SchemaRegistryMetric nodeCountMetric,
@@ -81,6 +82,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
             groupId,
             Optional.empty(),
             retryBackoffMs,
+            retryBackoffMaxMs,
             true
         ),
         logContext,

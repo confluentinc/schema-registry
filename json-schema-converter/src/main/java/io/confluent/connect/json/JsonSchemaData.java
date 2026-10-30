@@ -394,6 +394,7 @@ public class JsonSchemaData {
   private final Map<Schema, JsonSchema> fromConnectSchemaCache;
   private final Map<JsonSchema, Schema> toConnectSchemaCache;
   private final boolean generalizedSumTypeSupport;
+  private final boolean flattenSingletonUnions;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -407,6 +408,7 @@ public class JsonSchemaData {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
     toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
     generalizedSumTypeSupport = jsonSchemaDataConfig.isGeneralizedSumTypeSupport();
+    flattenSingletonUnions = jsonSchemaDataConfig.isFlattenSingletonUnions();
   }
 
   /**
@@ -1025,6 +1027,9 @@ public class JsonSchemaData {
       builder = toConnectEnums(possibleValues);
     } else if (jsonSchema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
+      if (combinedSchema.getSubschemas().size() == 1 && flattenSingletonUnions) {
+        return toConnectSchema(ctx, combinedSchema.getSubschemas().iterator().next());
+      }
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       String name;
       if (criterion == CombinedSchema.ONE_CRITERION || criterion == CombinedSchema.ANY_CRITERION) {
