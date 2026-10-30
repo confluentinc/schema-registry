@@ -1335,6 +1335,11 @@ public class ProtoToLogicalTypeConverter {
             if (wrapperUnwrap.isPresent()) {
               return wrapperUnwrap.get();
             }
+            // A flink.wrapped wrapper is seen through wherever its message is declared: in a
+            // referenced file, where every nested message is an external type, too.
+            if (isFlinkWrapped(schema)) {
+              return toUnwrappedOrRecordSchema(isNullable, schema, ctx, indexPath);
+            }
             // External MESSAGE: lazy-promote the body into namedTypes so the
             // LT is self-contained. The pre-walk already added fullName to
             // externalTypes so the local-vs-external distinction is preserved.

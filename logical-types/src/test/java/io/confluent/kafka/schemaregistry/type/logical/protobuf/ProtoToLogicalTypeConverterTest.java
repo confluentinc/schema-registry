@@ -921,6 +921,29 @@ class ProtoToLogicalTypeConverterTest {
   }
 
   @Test
+  void aReferencedMessageReadsAsItsFileDoes() {
+    // The writer wraps a nullable array or map in a message of its own, which a reader sees
+    // through, also in a file read through a reference, where every message is external.
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Schema.Field("l", Schema.createArray(Schema.create(Schema.Type.INT)), 0),
+        new Schema.Field("m", Schema.createMap(Schema.create(Schema.Type.BIGINT),
+            Schema.create(Schema.Type.INT)), 1))).setNullable(false);
+    String w = LogicalTypeToProtoConverter.fromLogicalType(new LogicalType(struct), "w")
+        .canonicalString();
+    LogicalType local = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(w));
+    LogicalType row = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+        "syntax = \"proto3\";\nimport \"w.proto\";\nmessage Row {\n  w v = 1;\n}\n",
+        Collections.singletonList(new SchemaReference("w.proto", "w", 1)),
+        Collections.singletonMap("w.proto", w), 1, null));
+
+    Schema external = row.getNamedTypes().get("w");
+    for (String field : Arrays.asList("l", "m")) {
+      assertEquals(rowOf(local).getField(field).getSchema().getType(),
+          external.getField(field).getSchema().getType(), field);
+    }
+  }
+
+  @Test
   void testFieldNumberPopulatedFromProto() throws Exception {
     DescriptorProto message = DescriptorProto.newBuilder()
         .setName("M")
