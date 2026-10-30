@@ -112,9 +112,10 @@ class LogicalTypeEquivalenceTest {
     String b = "message B {\n  string y = 1;\n}\n";
     LogicalType ab = multi(file(a + b));
     assertThat(ab.equivalent(PROTOBUF, multi(file(b + a)))).isTrue();
-    // Read as the file names it, all its messages; rooted at one, that message
+    // Read as the file names it, all its messages; read as one, that message
     assertThat(ab.equivalent(PROTOBUF, lt(file(a + b)))).isTrue();
-    assertThat(ab.equivalent(PROTOBUF, lt(file(a + b).copy("p.A")))).isFalse();
+    assertThat(ab.equivalent(PROTOBUF,
+        ProtoToLogicalTypeConverter.toLogicalType(file(a + b), false))).isFalse();
   }
 
   @Test

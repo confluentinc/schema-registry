@@ -181,13 +181,13 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * The schema as its records are read: one message when it is rooted by choice (see
-   * {@link ProtobufSchema#declaredRoot()}) or its file declares just one, and otherwise every
-   * top-level message, as {@link #toLogicalType(ProtobufSchema, boolean)} reads them. A
+   * The schema as its records are read: every top-level message, as
+   * {@link #toLogicalType(ProtobufSchema, boolean)} reads them, when
+   * {@link ProtobufSchema#readsAsSeveralMessages()}, and otherwise its one message. A
    * public-import wrapper is read by the file it re-exports.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
-    return toLogicalType(schema, readsAsMultipleMessages(schema));
+    return toLogicalType(schema, schema.readsAsSeveralMessages());
   }
 
   /**
@@ -207,18 +207,6 @@ public class ProtoToLogicalTypeConverter {
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
     }
-  }
-
-  /**
-   * Whether {@code schema} is read as all its top-level messages: it has no declared root, and its
-   * file, or the one a public-import wrapper re-exports, declares several.
-   */
-  public static boolean readsAsMultipleMessages(final ProtobufSchema schema) {
-    if (schema.rawSchema() == null || schema.declaredRoot() != null) {
-      return false;
-    }
-    Descriptor root = schema.toDescriptor();
-    return root != null && root.getFile().getMessageTypes().size() > 1;
   }
 
   /**

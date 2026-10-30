@@ -4131,12 +4131,17 @@ public class ProtobufSchemaTest {
     local.validate(false);
     assertEquals("p.B", local.name());
     assertEquals("p.B", local.toDescriptor().getFullName());
-    assertEquals("p.B", local.declaredRoot());
-    // Without the param, the root is only the first message, which no one chose
-    assertNull(new ProtobufSchema("syntax = \"proto3\";\nmessage A { int32 a = 1; }\n")
-        .declaredRoot());
-    // A name given to the schema is chosen too, and wins
-    assertEquals("p.A", local.copy("p.A").declaredRoot());
+    assertEquals("p.B", local.rootParam());
+    assertFalse(local.readsAsSeveralMessages());
+    // Without the param, its records may carry either message, whatever name the schema is given
+    ProtobufSchema unrooted = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message A { int32 a = 1; }\nmessage B { int32 b = 1; }\n");
+    assertNull(unrooted.rootParam());
+    assertTrue(unrooted.readsAsSeveralMessages());
+    assertTrue(unrooted.copy("p.B").readsAsSeveralMessages());
+    assertEquals("p.B", unrooted.copy("p.B").name());
+    // A name still picks the message the schema denotes, over the param
+    assertEquals("p.A", local.copy("p.A").name());
   }
 
   @Test

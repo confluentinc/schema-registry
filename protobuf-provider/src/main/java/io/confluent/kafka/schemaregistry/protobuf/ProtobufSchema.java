@@ -2443,7 +2443,7 @@ public class ProtobufSchema implements ParsedSchema {
       return name;
     }
     ProtoFileElement leaf = resolvePublicImportWrapper();
-    String root = schemaObj != null ? rootParam() : null;
+    String root = rootParam();
     if (root != null) {
       if (leaf != null && !definesMessage(leaf, root)) {
         throw new IllegalArgumentException("Protobuf schema root '" + root
@@ -2517,16 +2517,29 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   /**
-   * The message this schema is rooted at by choice rather than by position: the name it was given,
-   * or its file's root param. Null when its root is just its file's first message.
+   * The message the file's root param names, the one its records carry, or null when it names
+   * none. A name this schema was given is not one: it picks the message the schema denotes, not
+   * how the file's records are read.
    */
-  public String declaredRoot() {
-    return name != null ? name : schemaObj != null ? rootParam() : null;
-  }
-
-  private String rootParam() {
+  public String rootParam() {
+    if (schemaObj == null) {
+      return null;
+    }
     ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, schemaObj.getOptions());
     return meta != null && meta.getParams() != null ? meta.getParams().get(ROOT_KEY) : null;
+  }
+
+  /**
+   * Whether this schema's records are read as any of its file's top-level messages rather than
+   * as one: no root param names one, and the file, or the one a public-import wrapper re-exports,
+   * declares several.
+   */
+  public boolean readsAsSeveralMessages() {
+    if (schemaObj == null || rootParam() != null) {
+      return false;
+    }
+    return effectiveFile().getTypes().stream()
+        .filter(type -> type instanceof MessageElement).count() > 1;
   }
 
   private static boolean declaresTopLevelMessage(ProtoFileElement file, String fullName) {
@@ -2760,7 +2773,7 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
-    if (schemaObj != null && rootParam() != null) {
+    if (rootParam() != null) {
       // Rejects a root param naming no message the schema can be rooted at
       name();
     }

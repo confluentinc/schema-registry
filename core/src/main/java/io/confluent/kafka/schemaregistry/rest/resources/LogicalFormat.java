@@ -53,7 +53,7 @@ final class LogicalFormat {
       // messages are its own.
       if (parsedSchema instanceof ProtobufSchema
           && ProtoToLogicalTypeConverter.isPublicImportWrapper((ProtobufSchema) parsedSchema)
-          && ProtoToLogicalTypeConverter.readsAsMultipleMessages((ProtobufSchema) parsedSchema)) {
+          && ((ProtobufSchema) parsedSchema).readsAsSeveralMessages()) {
         throw new ValidationException("it publicly imports a file of several messages and names "
             + "no root among them");
       }

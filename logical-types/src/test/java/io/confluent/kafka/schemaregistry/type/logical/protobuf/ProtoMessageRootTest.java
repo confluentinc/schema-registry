@@ -74,8 +74,8 @@ class ProtoMessageRootTest {
     ProtobufSchema schema = fromDdl(STRUCTS);
     // In declaration order, though Person, the one no other references, would be the root
     assertEquals(List.of("Address", "Person"), messages(schema));
-    assertNull(schema.declaredRoot());
-    assertTrue(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    assertNull(schema.rootParam());
+    assertTrue(schema.readsAsSeveralMessages());
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
     assertTrue(ProtoToLogicalTypeConverter.isMultiMessageRoot(read.getRootSchema()));
     assertEquals(List.of("p.Address", "p.Person"), rootFields(read));
@@ -86,8 +86,8 @@ class ProtoMessageRootTest {
   void aScriptNamingItsRootBesideOtherStructsRecordsIt() {
     ProtobufSchema schema = fromDdl(STRUCTS + "TYPE Person NOT NULL;\n");
     assertEquals(List.of("Person", "Address"), messages(schema));
-    assertEquals("p.Person", schema.declaredRoot());
-    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    assertEquals("p.Person", schema.rootParam());
+    assertFalse(schema.readsAsSeveralMessages());
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
     assertEquals(List.of("name", "home"), rootFields(read));
     String ddl = LogicalTypeToDdlConverter.toDdl(read);
@@ -99,9 +99,9 @@ class ProtoMessageRootTest {
   void aScriptOfOneStructRecordsNoRoot() {
     ProtobufSchema schema = fromDdl("NAMESPACE p;\nSTRUCT Person (name STRING NOT NULL);\n");
     assertEquals(List.of("Person"), messages(schema));
-    assertNull(schema.declaredRoot());
+    assertNull(schema.rootParam());
     assertFalse(schema.canonicalString().contains("file_meta"), schema.canonicalString());
-    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    assertFalse(schema.readsAsSeveralMessages());
   }
 
   @Test
@@ -109,8 +109,8 @@ class ProtoMessageRootTest {
     // DoubleValue is the first message of wrappers.proto, which declares several
     for (String type : List.of("DOUBLE", "FLOAT", "BIGINT")) {
       ProtobufSchema schema = fromDdl("TYPE " + type + " NOT NULL;\n");
-      assertTrue(schema.declaredRoot() != null, type);
-      assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema), type);
+      assertTrue(schema.rootParam() != null, type);
+      assertFalse(schema.readsAsSeveralMessages(), type);
       assertEquals(type, ProtoToLogicalTypeConverter.toLogicalType(schema).getRootSchema()
           .getType().name(), type);
     }
@@ -120,7 +120,7 @@ class ProtoMessageRootTest {
   void aWrapperNamingNoRootIsReadAsTheFileItReExports() {
     ProtobufSchema wrappers = new ProtobufSchema(
         "syntax = \"proto3\";\nimport public \"google/protobuf/wrappers.proto\";\n");
-    assertTrue(ProtoToLogicalTypeConverter.readsAsMultipleMessages(wrappers));
+    assertTrue(wrappers.readsAsSeveralMessages());
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(wrappers);
     assertTrue(rootFields(read).contains("google.protobuf.Int64Value"), read.toString());
 
@@ -129,15 +129,19 @@ class ProtoMessageRootTest {
         "syntax = \"proto3\";\nimport public \"one.proto\";\n",
         List.of(new SchemaReference("one.proto", "one", 1)), Map.of("one.proto", one), null,
         null);
-    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(single));
+    assertFalse(single.readsAsSeveralMessages());
   }
 
   @Test
-  void aSchemaGivenANameIsRootedAtIt() {
+  void aSchemaGivenANameIsStillReadAsAllItsMessages() {
+    // A name picks the message the schema denotes; the stored file, which has none, decides
     ProtobufSchema schema = fromDdl(STRUCTS).copy("p.Person");
-    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
-    assertEquals(List.of("name", "home"),
+    assertTrue(schema.readsAsSeveralMessages());
+    assertEquals(List.of("p.Address", "p.Person"),
         rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema)));
+    // Read as one message on purpose, it is that message
+    assertEquals(List.of("name", "home"),
+        rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema, false)));
   }
 
   @Test
