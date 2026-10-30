@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -153,12 +154,13 @@ public final class LogicalTypeToDdlConverter {
       // resolvedReferences), but they're external by inference on read-back — must NOT be
       // re-emitted here.
       Iterator<String> messages = messageOrder != null ? messageOrder.iterator() : null;
+      Set<String> listed = messageOrder != null ? new HashSet<>(messageOrder) : new HashSet<>();
       for (String name : orderedLocalNames()) {
         if (lt.getExternalTypes().contains(name)) {
           continue;
         }
         // A script naming no root is rooted at its structs in declaration order: the root's.
-        String declared = messages != null && messageOrder.contains(name) ? messages.next() : name;
+        String declared = listed.contains(name) ? messages.next() : name;
         printCreateType(declared, lt.getNamedTypes().get(declared));
       }
 
