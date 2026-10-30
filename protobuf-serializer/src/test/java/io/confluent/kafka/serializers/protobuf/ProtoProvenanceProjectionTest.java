@@ -51,16 +51,14 @@ public class ProtoProvenanceProjectionTest {
   public void aLocationWithoutNamesFailsEveryRecord() {
     assertThrows(SerializationException.class, () -> ProtoProvenanceProjection.of(READER, null,
         mapping(Arrays.asList(p(1, "a")),
-            Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, "SCALAR", 2))),
-        false));
+            Arrays.asList(p(1, "a"), new ProvenanceField(Arrays.asList(2), null, "SCALAR", 2)))));
   }
 
   @Test
   public void aLocationWithoutAKindFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
         () -> ProtoProvenanceProjection.of(READER, null, mapping(Arrays.asList(p(1, "a")),
-            Arrays.asList(new ProvenanceField(Arrays.asList(1), Arrays.asList("a"), null, 1))),
-            false));
+            Arrays.asList(new ProvenanceField(Arrays.asList(1), Arrays.asList("a"), null, 1)))));
     assertTrue(e.getMessage(), e.getMessage().contains("no kind for location"));
   }
 
@@ -68,7 +66,7 @@ public class ProtoProvenanceProjectionTest {
   public void aLocationNotInTheReaderFailsEveryRecord() {
     SerializationException e = assertThrows(SerializationException.class,
         () -> ProtoProvenanceProjection.of(READER, null, mapping(Arrays.asList(p(1, "a")),
-            Arrays.asList(p(1, "a"), p(2, "ghost"))), false));
+            Arrays.asList(p(1, "a"), p(2, "ghost")))));
     assertTrue(e.getMessage(), e.getMessage().contains("[ghost] of schema id 2"));
   }
 
@@ -78,7 +76,7 @@ public class ProtoProvenanceProjectionTest {
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"
         + "  optional int32 a = 1;\n  optional string c = 2;\n  extensions 100 to max;\n}\n");
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, null,
-        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))), false);
+        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"), p(2, "c"))));
     assertNull(projection.schema().toDescriptor().findFieldByName("c"));
     assertEquals(1, projection.schema().toDescriptor().findFieldByName("a").getNumber());
     assertTrue(projection.movedAny());
@@ -91,7 +89,7 @@ public class ProtoProvenanceProjectionTest {
         + "}\n");
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, null,
         mapping(Arrays.asList(p(1, "a"), p(4, "d")),
-            Arrays.asList(p(1, "a"), p(2, "c"), p(4, "d"), p(5, "e"))), false);
+            Arrays.asList(p(1, "a"), p(2, "c"), p(4, "d"), p(5, "e"))));
     Descriptor row = projection.schema().toDescriptor();
     assertEquals(1, row.getOneofs().size());
     assertEquals("w", row.findFieldByName("d").getContainingOneof().getName());
@@ -103,12 +101,12 @@ public class ProtoProvenanceProjectionTest {
     // Locations start at the file's top-level messages: A.Inner, used by no field, has none, so
     // a record of it is read without provenance rather than silently as written.
     String file = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 id = 1;\n%s"
-        + "  message Inner {\n    string memo = 1;\n  }\n}\n";
+        + "  message Inner {\n    string memo = 1;\n  }\n}\nmessage Other {\n  int32 o = 1;\n}\n";
     ProtobufSchema unused = new ProtobufSchema(String.format(file, ""));
     ProtobufSchema reader = new ProtobufSchema(unused.toDescriptor("p.A.Inner"));
     assertThrows(ProvenanceUnavailableException.class, () -> ProtoProvenanceProjection.of(
         reader, unused, mapping(Arrays.asList(p(1, "p.A", "id")),
-            Arrays.asList(p(1, "p.A", "id"))), true));
+            Arrays.asList(p(1, "p.A", "id")))));
 
     // Used by a field, it is reached through it.
     ProtobufSchema used = new ProtobufSchema(String.format(file, "  Inner inner = 2;\n"));
@@ -116,13 +114,13 @@ public class ProtoProvenanceProjectionTest {
     List<ProvenanceField> both = Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "inner"),
         p(3, "p.A", "inner", "memo"));
     assertEquals(usedReader, ProtoProvenanceProjection.of(usedReader, used,
-        mapping(both, both), true).schema());
+        mapping(both, both)).schema());
   }
 
   @Test
   public void aNestedRecordMessageReachedThroughAOneofOrAMapValueHasProvenance() {
     String file = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 id = 1;\n%s"
-        + "  message Inner {\n    string memo = 1;\n  }\n}\n";
+        + "  message Inner {\n    string memo = 1;\n  }\n}\nmessage Other {\n  int32 o = 1;\n}\n";
     String[][] uses = {
         {"  oneof k {\n    Inner i = 2;\n  }\n", "i"},
         {"  map<string, Inner> m = 2;\n", "m"}};
@@ -135,21 +133,20 @@ public class ProtoProvenanceProjectionTest {
           : Arrays.asList(p(1, "p.A", "id"), p(2, "p.A", "m"),
               p(3, "p.A", "m", "value", "memo"));
       assertEquals(use[1], reader, ProtoProvenanceProjection.of(reader, writer,
-          mapping(locations, locations), true).schema());
+          mapping(locations, locations)).schema());
     }
   }
 
   @Test
   public void theReadersOwnParseIsClearedOfWhatLiesUnderAMovedNumberAtAnyDepth() {
-    ProtobufSchema writer = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+    ProtobufSchema writer = rooted("syntax = \"proto3\";\npackage p;\n"
         + "message Row {\n  int32 a = 1;\n  In in = 3;\n}\nmessage In {\n  int32 x = 1;\n}\n");
-    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+    ProtobufSchema reader = rooted("syntax = \"proto3\";\npackage p;\n"
         + "message Row {\n  int32 a = 1;\n  int32 c = 2;\n  In in = 3;\n}\n"
         + "message In {\n  int32 x = 1;\n  int32 y = 2;\n}\n");
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
         mapping(Arrays.asList(p(1, "a"), p(3, "in"), p(4, "in", "x")),
-            Arrays.asList(p(1, "a"), p(2, "c"), p(3, "in"), p(4, "in", "x"), p(5, "in", "y"))),
-        false);
+            Arrays.asList(p(1, "a"), p(2, "c"), p(3, "in"), p(4, "in", "x"), p(5, "in", "y"))));
     Descriptor row = reader.toDescriptor();
     Descriptor in = row.findFieldByName("in").getMessageType();
     DynamicMessage plain = DynamicMessage.newBuilder(row).setField(row.findFieldByName("a"), 7)
@@ -180,7 +177,7 @@ public class ProtoProvenanceProjectionTest {
         + "  }\n}\n");
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
         mapping(Arrays.asList(p(1, "a"), p(2, "u"), p(4, "s")),
-            Arrays.asList(p(1, "a"), p(3, "u"), p(4, "s"))), false);
+            Arrays.asList(p(1, "a"), p(3, "u"), p(4, "s"))));
     Descriptor row = reader.toDescriptor();
     assertFalse(projection.clearMoved(DynamicMessage.newBuilder(row)
         .setField(row.findFieldByName("u"), 5)));
@@ -239,11 +236,11 @@ public class ProtoProvenanceProjectionTest {
     // writer's own between two halves of a, so a record holding a needs no projected parse.
     String file = "syntax = \"proto3\";\npackage p;\nmessage Row {\n  oneof o {\n    In a = 1;\n"
         + "    In b = 2;\n%s  }\n}\nmessage In {\n  int32 x = 1;\n}\n";
-    ProtobufSchema writer = new ProtobufSchema(String.format(file, ""));
-    ProtobufSchema reader = new ProtobufSchema(String.format(file, "    In c = 3;\n"));
+    ProtobufSchema writer = rooted(String.format(file, ""));
+    ProtobufSchema reader = rooted(String.format(file, "    In c = 3;\n"));
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
         mapping(Arrays.asList(p(1, "a"), p(2, "b")),
-            Arrays.asList(p(1, "a"), p(2, "b"), p(3, "c"))), false);
+            Arrays.asList(p(1, "a"), p(2, "b"), p(3, "c"))));
     byte[] record = bytes(1, varint(1, 7));
     for (int i = 0; i < 100; i++) {
       parse(projection, reader, record);
@@ -258,7 +255,7 @@ public class ProtoProvenanceProjectionTest {
         + "  }\n}\n");
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, null,
         mapping(Arrays.asList(p(1, "a"), p(4, "s")),
-            Arrays.asList(p(1, "a"), p(3, "u"), p(4, "s"))), false);
+            Arrays.asList(p(1, "a"), p(3, "u"), p(4, "s"))));
     assertFalse(projection.prunedBuilt());
     for (int i = 0; i < 100; i++) {
       parse(projection, reader, cat(varint(1, i), text(5, "s")));
@@ -268,7 +265,7 @@ public class ProtoProvenanceProjectionTest {
     assertTrue(projection.prunedBuilt());
 
     ProtoProvenanceProjection unmoved = ProtoProvenanceProjection.of(READER, null,
-        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"))), false);
+        mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a"))));
     assertTrue(unmoved.prunedBuilt());
     assertSame(READER, unmoved.schema());
   }
@@ -277,16 +274,23 @@ public class ProtoProvenanceProjectionTest {
   private static void assertSameParse(String row, String writerFields, String readerFields,
       List<ProvenanceField> writerLocations, List<ProvenanceField> readerLocations,
       byte[]... records) throws Exception {
-    ProtobufSchema writer = new ProtobufSchema(String.format(row, writerFields));
-    ProtobufSchema reader = new ProtobufSchema(String.format(row, readerFields));
+    ProtobufSchema writer = rooted(String.format(row, writerFields));
+    ProtobufSchema reader = rooted(String.format(row, readerFields));
     ProtoProvenanceProjection projection = ProtoProvenanceProjection.of(reader, writer,
-        mapping(writerLocations, readerLocations), false);
+        mapping(writerLocations, readerLocations));
     for (byte[] record : records) {
       Message pruned = DynamicMessage.parseFrom(projection.schema().toDescriptor(), record);
       Message expected = DynamicMessage.parseFrom(reader.toDescriptor(),
           projection.dropMoved(pruned).toByteString());
       assertEquals(readerFields, expected, parse(projection, reader, record));
     }
+  }
+
+  // Rooted at Row, which a file of several messages naming no root is not.
+  private static ProtobufSchema rooted(String file) {
+    return new ProtobufSchema(file.replace("package p;\n", "package p;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Row\" } ] };\n"));
   }
 
   private static Message parse(ProtoProvenanceProjection projection, ProtobufSchema reader,

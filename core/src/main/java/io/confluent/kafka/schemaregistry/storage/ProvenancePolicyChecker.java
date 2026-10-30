@@ -21,7 +21,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing;
@@ -59,9 +58,10 @@ import org.slf4j.LoggerFactory;
  * {@link PairBy#CHECK_ID by check id}, members continue as provenance continues them, through a
  * kind change too.
  *
- * <p>Protobuf provenance is computed with every file's messages wrapped, as a file of several is
- * checked; a file the policy checks as its one message takes that message's ids, so a file
- * changing between one message and several is still the reshaping it is.
+ * <p>Protobuf provenance is computed on each version as the policy checks it, as its records are
+ * read: its one message, or every top-level message wrapped when it names no root and declares
+ * several. So a file changing between one message and several is the reshaping it is, and a root
+ * that moves to another message and back starts new columns, as a reader sees it.
  *
  * <p>A compatibility group selects the versions compared; provenance ignores groups, as the
  * endpoint's ids do, so the range includes other groups' versions between them.
@@ -231,8 +231,6 @@ public final class ProvenancePolicyChecker {
   private static final class Provenance {
 
     private final List<LogicalType> logicals = new ArrayList<>();
-    // Per version, the index of the one message it is checked as, or -1 for several.
-    private final List<Integer> checkedMessage = new ArrayList<>();
     private final ProvenanceReport report;
     private final Map<Integer, ProvenanceReport.Version> reported = new HashMap<>();
 
@@ -245,17 +243,12 @@ public final class ProvenancePolicyChecker {
       for (int i = 0; i < versions.size(); i++) {
         ParsedSchema schema;
         LogicalType logical;
-        LogicalType forProvenance;
         reached[0] = i;
         try {
           schema = versions.get(i).schema();
+          // As provenance reads it, so its check ids are the logical type's own.
           logical = i == versions.size() - 1 ? lastLogical
               : LogicalPolicyChecker.toPolicyLogicalType(schema);
-          // Protobuf wrapped, as a file of several messages is checked.
-          forProvenance = schema instanceof ProtobufSchema
-              ? ProvenanceHistory.logicalTypeOf(schema, true) : logical;
-          checkedMessage.add(schema instanceof ProtobufSchema
-              ? LogicalPolicyChecker.checkedMessage((ProtobufSchema) schema) : -1);
         } catch (RuntimeException e) {
           if (isStoreFailure(e)) {
             throw e;
@@ -265,7 +258,7 @@ public final class ProvenancePolicyChecker {
               e);
         }
         logicals.add(logical);
-        computed.add(forProvenance);
+        computed.add(logical);
         schemaTypes.add(SchemaType.of(schema.schemaType()));
       }
       Set<Integer> kept = new HashSet<>(toCompare);
@@ -288,20 +281,8 @@ public final class ProvenancePolicyChecker {
           : FieldPairing.byIds(checkIds(writer), checkIds(reader));
     }
 
-    // A file checked as its one message keeps that message's ids, its member of the wrapper.
     private Map<List<Integer>, Integer> checkIds(int version) {
-      Map<List<Integer>, Integer> ids = reported.get(version).checkIds();
-      int message = checkedMessage.get(version);
-      if (message < 0) {
-        return ids;
-      }
-      Map<List<Integer>, Integer> unwrapped = new HashMap<>();
-      ids.forEach((path, id) -> {
-        if (path.size() > 1 && path.get(0) == message) {
-          unwrapped.put(path.subList(1, path.size()), id);
-        }
-      });
-      return unwrapped;
+      return reported.get(version).checkIds();
     }
   }
 }

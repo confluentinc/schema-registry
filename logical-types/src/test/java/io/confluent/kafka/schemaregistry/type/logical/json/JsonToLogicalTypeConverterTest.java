@@ -835,7 +835,7 @@ class JsonToLogicalTypeConverterTest {
       assertThat(lt.getNamedTypes()).isNotEmpty();
       assertThatThrownBy(() -> ProvenanceHistory.compute("s", Collections.singletonList(
           new SchemaMetadata(1, 1, "JSON", Collections.emptyList(), schema)),
-          ProvenanceHistory.held(Collections.singletonList(new JsonSchema(schema))), false))
+          ProvenanceHistory.held(Collections.singletonList(new JsonSchema(schema)))))
           .isInstanceOf(RecursiveTypeException.class);
     }
   }

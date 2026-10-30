@@ -22,7 +22,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -43,7 +43,7 @@ class ProvenanceMultiMessageTest {
 
   @Test
   void theRootIsAStructOfEveryTopLevelMessageInFileOrder() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto(ORDER, REFUND, LINE), true);
+    LogicalType lt = ProtoToLogicalTypeConverter.toMultiMessageLogicalType(proto(ORDER, REFUND, LINE));
 
     Schema root = lt.getRootSchema();
     assertThat(root.getFields()).extracting(Schema.Field::getName)
@@ -56,7 +56,7 @@ class ProvenanceMultiMessageTest {
 
   @Test
   void aSingleMessageFileIsWrappedAllTheSame() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(proto(REFUND), true);
+    LogicalType lt = ProtoToLogicalTypeConverter.toMultiMessageLogicalType(proto(REFUND));
 
     assertThat(lt.getRootSchema().getFields()).extracting(Schema.Field::getName)
         .containsExactly("io.confluent.Refund");
@@ -101,38 +101,68 @@ class ProvenanceMultiMessageTest {
   }
 
   @Test
-  void aSubjectGrowingFromOneMessageToTwoKeepsItsIds() {
+  void aSubjectGrowingFromOneMessageToSeveralStartsOver() {
+    // Read as its one message, then as all of them: each field moves under its message, a
+    // reshape, as the LOGICAL policy and the Metastore have it.
     List<ProvenanceVersion> versions = compute(proto(REFUND), proto(ORDER, REFUND, LINE));
     Map<List<Integer>, Integer> v1 = pids(versions.get(0));
     Map<List<Integer>, Integer> v2 = pids(versions.get(1));
 
-    assertThat(v2.get(path(1))).isEqualTo(v1.get(path(0)));
-    assertThat(v2.get(path(1, 1))).isEqualTo(v1.get(path(0, 1)));
+    assertThat(v1).containsOnlyKeys(path(0), path(1));
+    assertThat(v2.get(path(1, 1))).isNotIn(v1.values());
   }
 
   @Test
-  void withoutTheFlagOnlyTheFirstMessageIsRoot() {
-    List<ParsedSchema> schemas = Arrays.asList(proto(ORDER, REFUND, LINE));
-    SchemaProvenance provenance = ProvenanceHistory.compute("s",
-        Arrays.asList(new SchemaMetadata(1, 1, "PROTOBUF", Collections.emptyList(), "")),
-        ProvenanceHistory.held(schemas), false);
+  void aRootThatMovesToAnotherMessageAndBackStartsOver() {
+    // As a reader rooted at each version's root sees it: B is no column of v2, rooted at A.
+    String a = "message A { int32 a = 1; }";
+    String b = "message B { int32 %s = 1; }";
+    List<ProvenanceVersion> versions = compute(rooted("io.confluent.B", a, String.format(b, "x")),
+        rooted("io.confluent.A", a, String.format(b, "x")),
+        rooted("io.confluent.B", a, String.format(b, "y")));
 
-    assertThat(pids(provenance.getVersions().get(0)).keySet())
-        .contains(path(0), path(1), path(2), path(2, 0))
-        .doesNotContain(path(1, 1));
+    assertThat(pids(versions.get(0))).containsOnlyKeys(path(0));
+    assertThat(pids(versions.get(2)).get(path(0))).isNotIn(pids(versions.get(0)).values());
   }
 
   @Test
-  void withoutTheFlagAWrapperIsRootedAtTheMessageItsRootParamPicks() {
+  void aRecursiveMessageBesideTheRootIsNotWalked() {
+    List<ProvenanceVersion> versions = compute(
+        rooted("io.confluent.B", "message A { A next = 1; }", "message B { int32 x = 1; }"));
+
+    assertThat(pids(versions.get(0))).containsOnlyKeys(path(0));
+  }
+
+  @Test
+  void nestedRootsOfTwoMessagesAreTwoMessages() {
+    // Both named C, one inside P and one inside Q: each is its own message, not io.confluent.C.
+    String file = "syntax = \"proto3\";\npackage io.confluent;\n"
+        + "message P { message C { int32 c = 1; } }\nmessage Q { message C { int32 c = 1; } }\n";
+    List<ProvenanceVersion> versions = compute(wrapper(file, "io.confluent.P.C"),
+        wrapper(file, "io.confluent.Q.C"));
+
+    assertThat(pids(versions.get(1)).get(path(0))).isNotIn(pids(versions.get(0)).values());
+  }
+
+  @Test
+  void aFileNamingItsRootIsReadAsThatMessage() {
+    Map<List<Integer>, Integer> v1 =
+        pids(compute(rooted("io.confluent.Refund", ORDER, REFUND, LINE)).get(0));
+
+    assertThat(v1).containsOnlyKeys(path(0), path(1));
+  }
+
+  @Test
+  void aWrapperIsRootedAtTheMessageItsRootParamPicks() {
     // Int64Value, the third of wrappers.proto's messages, not the file's first, DoubleValue.
     ProtobufSchema wrapper = new ProtobufSchema("syntax = \"proto3\";\n"
         + "import \"confluent/meta.proto\";\nimport public \"google/protobuf/wrappers.proto\";\n"
         + "option (confluent.file_meta) = { params: [ { key: \"root\", value: "
         + "\"google.protobuf.Int64Value\" } ] };\n");
-    assertThat(ProvenanceHistory.logicalTypeOf(wrapper, false).getRootSchema().getType())
+    assertThat(ProvenanceHistory.logicalTypeOf(wrapper).getRootSchema().getType())
         .isEqualTo(Schema.Type.BIGINT);
     // With it, every message is a member, whatever the root param picks.
-    assertThat(ProvenanceHistory.logicalTypeOf(wrapper, true).getRootSchema().getFields())
+    assertThat(ProvenanceHistory.wholeLogicalTypeOf(wrapper).getRootSchema().getFields())
         .hasSize(9);
   }
 
@@ -144,7 +174,7 @@ class ProvenanceMultiMessageTest {
       history.add(new SchemaMetadata(i + 1, i + 1, "PROTOBUF", Collections.emptyList(), ""));
     }
     return ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(versions)), true)
+        ProvenanceHistory.held(Arrays.<ParsedSchema>asList(versions)))
         .getVersions();
   }
 
@@ -158,6 +188,22 @@ class ProvenanceMultiMessageTest {
 
   private static List<Integer> path(Integer... steps) {
     return Arrays.asList(steps);
+  }
+
+  private static ProtobufSchema rooted(String root, String... messages) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage io.confluent;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n" + String.join("\n", messages) + "\n");
+  }
+
+  // A file of nothing but a public import of file, rooted at root.
+  private static ProtobufSchema wrapper(String file, String root) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
+        + "import public \"leaf.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n", Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", file), null, null);
   }
 
   private static ProtobufSchema proto(String... messages) {

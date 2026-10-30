@@ -134,14 +134,14 @@ class ProvenancePolicyCheckerTest {
   }
 
   @Test
-  void aWrapperRootedInsideAnotherMessageHasNoProvenance() {
-    // A nested root is no member of the file's messages, which check ids are computed over.
+  void aWrapperRootedInsideAnotherMessageIsPairedByItsOwnCheckIds() {
+    // A nested root is that message, by its full name: renaming c under its number continues it.
     String file = "syntax = \"proto3\";\npackage q;\n"
-        + "message P {\n  message C {\n    int32 c = 1;\n  }\n  C c = 1;\n}\n";
-    List<ParsedSchema> history = Arrays.asList(rootedWrapper(file, "q.P"),
-        rootedWrapper(file, "q.P.C"));
-    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID),
-        "PROVENANCE_UNAVAILABLE"));
+        + "message P {\n  message C {\n    int32 %s = 1;\n  }\n  C c = 1;\n}\n";
+    List<ParsedSchema> history = Arrays.asList(rootedWrapper(String.format(file, "c"), "q.P.C"),
+        rootedWrapper(String.format(file, "d"), "q.P.C"));
+    assertEquals(List.of(), check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID));
+    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.NAME), "FIELD_RENAMED"));
   }
 
   // --- Provenance that cannot be computed -----------------------------------------------------

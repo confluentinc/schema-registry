@@ -270,17 +270,17 @@ public abstract class RestApiLogicalProvenanceTest {
     String subject = "flags_request";
     history(subject, AvroSchema.TYPE, avro(field("a", "\"string\"")));
     SchemaProvenance plain = restApp.restClient.getProvenanceByVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", "1", true, false);
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", "1", true);
     assertNull(plain.getVersions().get(0).getCompatible());
     assertNull(plain.getVersions().get(0).getMessages());
     for (String policy : new String[] {"STRICT", "", "lenient"}) {
       RestClientException e = assertThrows(RestClientException.class,
           () -> restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-              subject, "1", "1", true, false, policy), policy);
+              subject, "1", "1", true, policy), policy);
       assertEquals(Errors.INVALID_PROVENANCE_REQUEST_ERROR_CODE, e.getErrorCode(), policy);
     }
     assertTrue(restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, "1", "1", true, false, "logical").getVersions().get(0).getCompatible());
+        subject, "1", "1", true, "logical").getVersions().get(0).getCompatible());
   }
 
   // --- The subject's config ------------------------------------------------------------------
@@ -417,7 +417,7 @@ public abstract class RestApiLogicalProvenanceTest {
   private SchemaProvenance flags(String subject, String from, String to, boolean interior)
       throws Exception {
     return restApp.restClient.getProvenanceByVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
-        subject, from, to, interior, false, "LOGICAL");
+        subject, from, to, interior, "LOGICAL");
   }
 
   // A record R with id and the given fields.

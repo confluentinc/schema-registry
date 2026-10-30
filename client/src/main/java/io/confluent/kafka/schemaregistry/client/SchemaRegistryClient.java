@@ -292,13 +292,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * continues, renames included — in either order. The form a
    * deserializer uses, since a record carries a schema id and never a version.
    * {@code includeInterior} reports every version between the two as well, rather than the ends
-   * only; every version is computed either way, so the ends' ids are the same.
-   * {@code includeMultipleMessages} roots each Protobuf version at a synthetic struct over all its
-   * top-level messages, so paths gain one leading step; ids from the two modes are not comparable.
+   * only; every version is computed either way, so the ends' ids are the same. Each Protobuf
+   * version is read as its schema names: one message, or all its top-level messages, a path then
+   * leading with the message, when it names no root and declares several.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -307,13 +306,13 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * also says whether it is a valid backward step from the version just before it under that
    * policy, columns paired by provenance, whatever the subject's config, with the errors found.
    * A version with an earlier version's schema id never is. A {@code null} policy is the
-   * five-argument form.
+   * four-argument form.
    */
   default SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      boolean includeInterior, String compatibilityPolicy)
       throws IOException, RestClientException {
     if (compatibilityPolicy == null) {
-      return getProvenanceById(subject, fromId, toId, includeInterior, includeMultipleMessages);
+      return getProvenanceById(subject, fromId, toId, includeInterior);
     }
     throw new UnsupportedOperationException();
   }
@@ -323,21 +322,19 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * "latest"}.
    */
   default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      String toVersion, boolean includeInterior) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
   /**
    * As {@link #getProvenanceByVersion}, with {@code compatibilityPolicy} as for
-   * {@link #getProvenanceById(String, int, int, boolean, boolean, String)}.
+   * {@link #getProvenanceById(String, int, int, boolean, String)}.
    */
   default SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior, boolean includeMultipleMessages,
-      String compatibilityPolicy) throws IOException, RestClientException {
+      String toVersion, boolean includeInterior, String compatibilityPolicy)
+      throws IOException, RestClientException {
     if (compatibilityPolicy == null) {
-      return getProvenanceByVersion(subject, fromVersion, toVersion, includeInterior,
-          includeMultipleMessages);
+      return getProvenanceByVersion(subject, fromVersion, toVersion, includeInterior);
     }
     throw new UnsupportedOperationException();
   }
@@ -348,21 +345,19 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
    * schema id may sit under several versions.
    */
   default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior) throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
   /**
    * As {@link #getProvenanceToVersion}, with {@code compatibilityPolicy} as for
-   * {@link #getProvenanceById(String, int, int, boolean, boolean, String)}.
+   * {@link #getProvenanceById(String, int, int, boolean, String)}.
    */
   default SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages, String compatibilityPolicy)
+      boolean includeInterior, String compatibilityPolicy)
       throws IOException, RestClientException {
     if (compatibilityPolicy == null) {
-      return getProvenanceToVersion(subject, fromId, toVersion, includeInterior,
-          includeMultipleMessages);
+      return getProvenanceToVersion(subject, fromId, toVersion, includeInterior);
     }
     throw new UnsupportedOperationException();
   }

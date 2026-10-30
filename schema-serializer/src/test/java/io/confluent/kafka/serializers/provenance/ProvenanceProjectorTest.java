@@ -108,8 +108,7 @@ public class ProvenanceProjectorTest {
     RecordingStrategy strategy = new RecordingStrategy();
     ask(new ProvenanceProjector<>(client, 10, -1, strategy), client);
     assertEquals(0, client.asked);
-    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId, false),
-        strategy.lastRequest);
+    assertEquals(Arrays.asList(SUBJECT, client.writer, client.readerId), strategy.lastRequest);
     assertTrue(strategy.client == client);
   }
 
@@ -287,7 +286,7 @@ public class ProvenanceProjectorTest {
     ProvenanceProjector<String> projector =
         new ProvenanceProjector<>(client, 10, -1, strategy);
     projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, foreign, (String) null),
-        withMetadata, client.reader, false, m -> "built");
+        withMetadata, client.reader, m -> "built");
     assertEquals(2, strategy.asked);
     assertEquals(client.writer, strategy.lastRequest.get(1));
   }
@@ -303,7 +302,7 @@ public class ProvenanceProjectorTest {
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, 10, -1);
     assertEquals(Optional.empty(), projector.project(SUBJECT,
         new SchemaId(AvroSchema.TYPE, client.writer, (String) null), client.writerSchema,
-        respelled, false, m -> "built"));
+        respelled, m -> "built"));
     assertEquals(0, client.asked);
   }
 
@@ -336,7 +335,7 @@ public class ProvenanceProjectorTest {
         writer -> ReaderSchema.of(merged, client.readerId)).apply(client.writerSchema);
 
     projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, client.writer, (String) null),
-        client.writerSchema, handedOver, false, mapping -> "built");
+        client.writerSchema, handedOver, mapping -> "built");
     assertEquals(1, client.asked);
     assertEquals(client.readerId, client.lastReaderId);
   }
@@ -353,7 +352,7 @@ public class ProvenanceProjectorTest {
         new AvroSchema("\"double\""), client.otherWriter)).apply(client.writerSchema);
 
     projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, client.writer, (String) null),
-        client.writerSchema, first, false, mapping -> "built");
+        client.writerSchema, first, mapping -> "built");
     assertEquals(client.readerId, client.lastReaderId);
   }
 
@@ -371,7 +370,7 @@ public class ProvenanceProjectorTest {
     for (int record = 0; record < 2; record++) {
       Optional<String> built = projector.project(SUBJECT,
           new SchemaId(AvroSchema.TYPE, client.writer, (String) null), client.writerSchema,
-          handedOver, false, mapping -> "built");
+          handedOver, mapping -> "built");
       assertEquals(Optional.of("built"), built);
     }
     assertEquals(1, client.asked);
@@ -390,7 +389,7 @@ public class ProvenanceProjectorTest {
         writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.reader);
     Optional<String> built = projector.project(SUBJECT,
         new SchemaId(AvroSchema.TYPE, client.readerId, (String) null), client.reader,
-        handedOver, false, mapping -> "built", () -> "same");
+        handedOver, mapping -> "built", () -> "same");
     assertEquals(Optional.of("same"), built);
   }
 
@@ -403,7 +402,7 @@ public class ProvenanceProjectorTest {
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     for (int record = 0; record < 2; record++) {
       SerializationException e = assertThrows(SerializationException.class, () ->
-          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, m -> "built"));
       assertTrue(e.getMessage(), e.getMessage().contains("other-value"));
     }
     assertEquals(0, client.asked);
@@ -419,7 +418,7 @@ public class ProvenanceProjectorTest {
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     for (int record = 0; record < 2; record++) {
       assertThrows(SerializationException.class, () ->
-          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, m -> "built"));
     }
     assertEquals(1, client.asked);
   }
@@ -435,7 +434,7 @@ public class ProvenanceProjectorTest {
 
       @Override
       public SchemaProvenance provenance(SchemaRegistryClient c, String subject, int fromId,
-          int toId, boolean includeMultipleMessages) {
+          int toId) {
         throw new AssertionError("asked by schema id");
       }
     };
@@ -445,7 +444,7 @@ public class ProvenanceProjectorTest {
         writer -> ReaderSchema.of(client.reader, SUBJECT, 3)).apply(client.writerSchema);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     SerializationException e = assertThrows(SerializationException.class, () ->
-        projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+        projector.project(SUBJECT, id, client.writerSchema, handedOver, m -> "built"));
     assertTrue(e.getMessage(), e.getMessage().contains("cannot pin"));
   }
 
@@ -465,7 +464,7 @@ public class ProvenanceProjectorTest {
     // Every record fails, and for the fetch: the 40403 is in the cause chain each time.
     for (int i = 0; i < 2; i++) {
       SerializationException e = assertThrows(SerializationException.class, () ->
-          projector.project(SUBJECT, id, client.writerSchema, handedOver, false, m -> "built"));
+          projector.project(SUBJECT, id, client.writerSchema, handedOver, m -> "built"));
       boolean caused = false;
       for (Throwable t = e; t != null; t = t.getCause()) {
         caused |= t == client.schemaByIdFailure;
@@ -549,7 +548,7 @@ public class ProvenanceProjectorTest {
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     for (int record = 0; record < 2; record++) {
       assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
-          client.writerSchema, client.reader, false, mapping -> {
+          client.writerSchema, client.reader, mapping -> {
             throw new SerializationException("inconsistent");
           }));
     }
@@ -568,7 +567,7 @@ public class ProvenanceProjectorTest {
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     for (int record = 0; record < 2; record++) {
       assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
-          client.writerSchema, client.reader, false, mapping -> {
+          client.writerSchema, client.reader, mapping -> {
             throw new UnsupportedOperationException("immutable");
           }));
     }
@@ -585,12 +584,12 @@ public class ProvenanceProjectorTest {
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, 10, -1);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     assertThrows(SerializationException.class, () -> projector.project(SUBJECT, id,
-        client.writerSchema, client.reader, false, mapping -> {
+        client.writerSchema, client.reader, mapping -> {
           throw new StackOverflowError();
         }));
     AtomicReference<Optional<String>> built = new AtomicReference<>();
     Thread larger = new Thread(() -> built.set(projector.project(SUBJECT, id,
-        client.writerSchema, client.reader, false, mapping -> "built")));
+        client.writerSchema, client.reader, mapping -> "built")));
     larger.start();
     larger.join(10_000);
     assertFalse(larger.isAlive());
@@ -607,12 +606,12 @@ public class ProvenanceProjectorTest {
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, 10, -1);
     SchemaId id = new SchemaId(AvroSchema.TYPE, client.writer, (String) null);
     SerializationException e = assertThrows(SerializationException.class, () ->
-        projector.project(SUBJECT, id, client.writerSchema, client.reader, false, mapping -> {
+        projector.project(SUBJECT, id, client.writerSchema, client.reader, mapping -> {
           throw new StackOverflowError();
         }));
     assertTrue(e.getMessage(), e.getMessage().contains("StackOverflowError"));
     assertThrows(OutOfMemoryError.class, () ->
-        projector.project(SUBJECT, id, client.writerSchema, client.reader, true, mapping -> {
+        projector.project(SUBJECT, id, client.writerSchema, client.reader, mapping -> {
           throw new OutOfMemoryError();
         }));
   }
@@ -624,7 +623,7 @@ public class ProvenanceProjectorTest {
     SchemaId byGuid = new SchemaId(AvroSchema.TYPE, null,
         client.getGuid(SUBJECT, client.writerSchema));
     for (int record = 0; record < 2; record++) {
-      projector.project(SUBJECT, byGuid, client.writerSchema, client.reader, false, m -> "built");
+      projector.project(SUBJECT, byGuid, client.writerSchema, client.reader, m -> "built");
     }
     assertEquals(1, client.asked);
     assertEquals(client.writer, client.lastWriterId);
@@ -638,7 +637,7 @@ public class ProvenanceProjectorTest {
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, 10, -1);
     Optional<String> built = projector.project(SUBJECT,
         new SchemaId(AvroSchema.TYPE, null, client.getGuid("other-value", foreign)), foreign,
-        client.reader, false, m -> "built");
+        client.reader, m -> "built");
     assertFalse(built.isPresent());
     assertEquals(0, client.asked);
   }
@@ -653,7 +652,7 @@ public class ProvenanceProjectorTest {
     int foreign = client.register("other-value", withMetadata);
     ProvenanceProjector<String> projector = new ProvenanceProjector<>(client, 10, -1);
     projector.project(SUBJECT, new SchemaId(AvroSchema.TYPE, foreign, (String) null),
-        withMetadata, client.reader, false, m -> "built");
+        withMetadata, client.reader, m -> "built");
     assertEquals(2, client.asked);
     assertEquals(client.writer, client.lastWriterId);
   }
@@ -671,8 +670,7 @@ public class ProvenanceProjectorTest {
   private static void ask(ProvenanceProjector<String> projector, CountingClient client,
       int writerId) throws Exception {
     SchemaId id = new SchemaId(AvroSchema.TYPE, writerId, (String) null);
-    Optional<String> built = projector.project(SUBJECT, id, client.writerSchema, client.reader,
-        false, mapping -> "built");
+    Optional<String> built = projector.project(SUBJECT, id, client.writerSchema, client.reader, mapping -> "built");
     assertFalse(built.isPresent());
   }
 
@@ -694,10 +692,10 @@ public class ProvenanceProjectorTest {
 
     @Override
     public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-        int toId, boolean includeMultipleMessages) {
+        int toId) {
       asked++;
       this.client = client;
-      lastRequest = Arrays.asList(subject, fromId, toId, includeMultipleMessages);
+      lastRequest = Arrays.asList(subject, fromId, toId);
       try {
         if (knownIn != null && !knownIn.idsOf(subject).contains(fromId)) {
           throw new ProvenanceUnknownWriterException("not a version");
@@ -767,7 +765,7 @@ public class ProvenanceProjectorTest {
 
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-        boolean includeInterior, boolean includeMultipleMessages)
+        boolean includeInterior)
         throws IOException, RestClientException {
       asked++;
       askedAtOnce.incrementAndGet();
@@ -803,7 +801,7 @@ public class ProvenanceProjectorTest {
 
     @Override
     public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-        boolean includeInterior, boolean includeMultipleMessages)
+        boolean includeInterior)
         throws IOException, RestClientException {
       asked++;
       lastWriterId = fromId;
