@@ -661,7 +661,7 @@ class AvroProvenanceStrictnessTest {
     int writerId = client.getId(SUBJECT, new AvroSchema(writer));
     int readerId = client.getId(SUBJECT, new AvroSchema(reader));
     return AvroProvenanceProjection.of(writer, reader, ProvenanceMapping.join(
-        client.getProvenanceById(SUBJECT, writerId, readerId, false, false),
+        client.getProvenanceById(SUBJECT, writerId, readerId, false),
         writerId, readerId));
   }
 

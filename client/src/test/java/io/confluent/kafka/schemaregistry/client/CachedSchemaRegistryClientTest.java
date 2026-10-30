@@ -997,16 +997,16 @@ public class CachedSchemaRegistryClientTest {
   public void testProvenanceIsFetchedUncachedAndPassedThroughUnchanged() throws Exception {
     SchemaProvenance byId = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
     SchemaProvenance byVersion = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
-    expect(restService.getProvenanceById(anyObject(), eq(SUBJECT_0), eq(2), eq(1), eq(true),
-        eq(false))).andReturn(byId).times(2);
+    expect(restService.getProvenanceById(anyObject(), eq(SUBJECT_0), eq(2), eq(1), eq(true)))
+        .andReturn(byId).times(2);
     expect(restService.getProvenanceByVersion(anyObject(), eq(SUBJECT_0), eq("1"), eq("latest"),
-        eq(false), eq(true))).andReturn(byVersion);
+        eq(false))).andReturn(byVersion);
     replay(restService);
 
     // Asked twice, fetched twice: the registry caches per history, the caller per mapping.
-    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true, false));
-    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true, false));
-    assertSame(byVersion, client.getProvenanceByVersion(SUBJECT_0, "1", "latest", false, true));
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true));
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true));
+    assertSame(byVersion, client.getProvenanceByVersion(SUBJECT_0, "1", "latest", false));
     verify(restService);
   }
 }
