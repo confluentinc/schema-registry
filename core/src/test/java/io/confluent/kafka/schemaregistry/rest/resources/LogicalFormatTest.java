@@ -142,6 +142,33 @@ class LogicalFormatTest {
   }
 
   @Test
+  void convertToLogicalDdlShowsAFileOfSeveralMessagesAsTheirDeclarations() throws Exception {
+    String proto = "syntax = \"proto3\";\npackage p;\n"
+        + "message A { int32 a = 1; }\nmessage B { int32 b = 1; }\n";
+    Schema schema = schemaEntityFor("PROTOBUF", proto);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.parseSchema(schema, false, false)).thenReturn(new ProtobufSchema(proto));
+
+    String ddl = LogicalFormat.convertToLogical(schemaRegistry, schema);
+
+    assertTrue(ddl.contains("STRUCT A") && ddl.contains("STRUCT B"), ddl);
+    assertFalse(ddl.contains("TYPE "), ddl);
+  }
+
+  @Test
+  void convertToLogicalDdlRejectsAWrapperOfSeveralMessagesNamingNoRoot() throws Exception {
+    // Its records may carry any of the re-exported file's messages, which DDL cannot declare
+    String proto = "syntax = \"proto3\";\nimport public \"google/protobuf/wrappers.proto\";\n";
+    Schema schema = schemaEntityFor("PROTOBUF", proto);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.parseSchema(schema, false, false)).thenReturn(new ProtobufSchema(proto));
+
+    InvalidSchemaException e = assertThrows(InvalidSchemaException.class, () ->
+        LogicalFormat.convertToLogical(schemaRegistry, schema));
+    assertTrue(e.getMessage().contains("names no root"), e.getMessage());
+  }
+
+  @Test
   void convertToLogicalDdlRejectsUnsupportedSchemaType() throws Exception {
     Schema schema = schemaEntityFor("XML", "<not-a-real-schema/>");
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
