@@ -180,8 +180,14 @@ public class ProtoToLogicalTypeConverter {
     return toLogicalType(schema).getRootSchema();
   }
 
+  /**
+   * The schema as its records are read: one message when it is rooted by choice (see
+   * {@link ProtobufSchema#declaredRoot()}) or its file declares just one, and otherwise every
+   * top-level message, as {@link #toLogicalType(ProtobufSchema, boolean)} reads them. A
+   * public-import wrapper is read by the file it re-exports.
+   */
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
-    return toLogicalType(schema, false);
+    return toLogicalType(schema, readsAsMultipleMessages(schema));
   }
 
   /**
@@ -193,7 +199,7 @@ public class ProtoToLogicalTypeConverter {
   public static LogicalType toLogicalType(
       final ProtobufSchema schema, final boolean includeMultipleMessages) {
     if (includeMultipleMessages && schema.rawSchema() != null
-        && schema.rawSchema().getTypes().isEmpty()) {
+        && schema.rawSchema().getTypes().isEmpty() && !isPublicImportWrapper(schema)) {
       throw new ValidationException("Protobuf file has no top-level messages");
     }
     try {
@@ -201,6 +207,51 @@ public class ProtoToLogicalTypeConverter {
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
     }
+  }
+
+  /**
+   * Whether {@code schema} is read as all its top-level messages: it has no declared root, and its
+   * file, or the one a public-import wrapper re-exports, declares several.
+   */
+  public static boolean readsAsMultipleMessages(final ProtobufSchema schema) {
+    if (schema.rawSchema() == null || schema.declaredRoot() != null) {
+      return false;
+    }
+    Descriptor root = schema.toDescriptor();
+    return root != null && root.getFile().getMessageTypes().size() > 1;
+  }
+
+  /**
+   * Whether {@code schema} declares nothing but a public import of the file it re-exports.
+   */
+  public static boolean isPublicImportWrapper(final ProtobufSchema schema) {
+    return schema.rawSchema() != null
+        && schema.rawSchema().getTypes().isEmpty()
+        && !schema.rawSchema().getPublicImports().isEmpty();
+  }
+
+  /**
+   * The synthetic root over {@code messages}, in order: one field per message, named by its full
+   * name and referencing it, as a file of several top-level messages is read.
+   */
+  public static Schema multiMessageRoot(final List<String> messages) {
+    final List<Field> fields = new ArrayList<>(messages.size());
+    for (int i = 0; i < messages.size(); i++) {
+      String message = messages.get(i);
+      fields.add(new Field(message, Schema.createNamedTypeRef(message).setNullable(true), i)
+          .setNativeNames(Collections.singletonList(message)));
+    }
+    return Schema.createStruct(fields)
+        .setNullable(false)
+        .setParams(Collections.singletonMap(MULTI_MESSAGE_ROOT_PARAM, true));
+  }
+
+  /**
+   * Whether {@code root} is the synthetic root of {@link #multiMessageRoot}.
+   */
+  public static boolean isMultiMessageRoot(final Schema root) {
+    return root != null && root.getType() == Schema.Type.STRUCT
+        && Boolean.TRUE.equals(root.getParams().get(MULTI_MESSAGE_ROOT_PARAM));
   }
 
   private static LogicalType toLogicalTypeInternal(
@@ -211,9 +262,8 @@ public class ProtoToLogicalTypeConverter {
     // (which DOES have types) — making the no-local-types case invisible
     // downstream. The recovered LT root is a NAMED_TYPE_REF to the first
     // publicly-imported type; references / resolvedReferences pass through.
-    if (schema.rawSchema() != null
-        && schema.rawSchema().getTypes().isEmpty()
-        && !schema.rawSchema().getPublicImports().isEmpty()) {
+    // Read as several messages, a wrapper is the file it re-exports, which toDescriptor() reaches.
+    if (isPublicImportWrapper(schema) && !includeMultipleMessages) {
       return reExportLogicalType(schema);
     }
     final Descriptor rootDescriptor = schema.toDescriptor();
@@ -453,16 +503,11 @@ public class ProtoToLogicalTypeConverter {
     for (Descriptor topLevel : messageTypes) {
       buildNestedBodies(topLevel, ctx);
     }
-    final List<Field> fields = new ArrayList<>(messageTypes.size());
+    final List<String> messages = new ArrayList<>(messageTypes.size());
     for (Descriptor message : messageTypes) {
-      fields.add(new Field(message.getFullName(),
-          Schema.createNamedTypeRef(message.getFullName()).setNullable(true),
-          message.getIndex())
-          .setNativeNames(Collections.singletonList(message.getFullName())));
+      messages.add(message.getFullName());
     }
-    final Schema root = Schema.createStruct(fields)
-        .setNullable(false)
-        .setParams(Collections.singletonMap(MULTI_MESSAGE_ROOT_PARAM, true));
+    final Schema root = multiMessageRoot(messages);
     return new LogicalType(
         null,
         emptyToNull(file.getPackage()),

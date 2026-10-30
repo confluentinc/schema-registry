@@ -188,7 +188,8 @@ class RecursiveSchemaRoundTripTest {
         + "message B {\n"
         + "  A a = 1;\n"
         + "}\n";
-    ProtobufSchema legacy = new ProtobufSchema(legacyProto);
+    // Rooted at A: a file of several naming no root is read as all of them.
+    ProtobufSchema legacy = new ProtobufSchema(legacyProto).copy("com.example.A");
 
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy);
     assertEquals(Schema.Type.NAMED_TYPE_REF, lt.getRootSchema().getType());
@@ -230,7 +231,7 @@ class RecursiveSchemaRoundTripTest {
         + "message Linked {\n"
         + "  Linked next = 1;\n"
         + "}\n";
-    ProtobufSchema legacy = new ProtobufSchema(legacyProto);
+    ProtobufSchema legacy = new ProtobufSchema(legacyProto).copy("com.example.Outer");
 
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(legacy);
 

@@ -426,7 +426,9 @@ class ProtoToLogicalTypeConverterTest {
         .build();
     FileDescriptor fd = FileDescriptor.buildFrom(fileProto, new FileDescriptor[0]);
 
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(fd));
+    // Rooted at Order: a file of several naming no root is read as all of them.
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(fd).copy("Order"));
     // Root: bare STRUCT carrying its name.
     assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
     assertEquals("Order", lt.getName());
@@ -444,12 +446,12 @@ class ProtoToLogicalTypeConverterTest {
     assertNotNull(customerOut);
     assertNotNull(customerOut.findFieldByName("name"));
 
-    // The DDL projection declares BOTH as named STRUCTs. No explicit trailing TYPE is needed:
-    // first-wins inference makes the first-declared unreferenced type (Order) the root.
+    // The DDL projection declares BOTH as named STRUCTs, and names the root: a Protobuf script of
+    // two structs naming none is rooted at both.
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertThat(ddl).contains("STRUCT Order (");
     assertThat(ddl).contains("STRUCT Customer (");
-    assertThat(ddl).doesNotContain("TYPE Order");
+    assertThat(ddl).contains("TYPE Order NOT NULL;");
   }
 
   @Test
@@ -1065,7 +1067,8 @@ class ProtoToLogicalTypeConverterTest {
     String proto = "syntax = \"proto3\";\n"
         + "message Bar {\n  string f2 = 1;\n}\n"
         + "message Foo {\n  string f1 = 1;\n}\n";
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto).copy("Bar"));
 
     assertThat(lt.getName()).isEqualTo("Bar");
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
@@ -1074,8 +1077,10 @@ class ProtoToLogicalTypeConverterTest {
     assertThat(ddl).doesNotContain("TYPE STRUCT");
     assertThat(ddl).contains("STRUCT Bar (");
     assertThat(ddl).contains("STRUCT Foo (");
-    // The root (Bar) is declared before the peer (Foo) so first-wins picks it.
+    // The root (Bar) is declared before the peer (Foo), and named, as a Protobuf script of two
+    // structs naming none is rooted at both.
     assertThat(ddl.indexOf("STRUCT Bar (")).isLessThan(ddl.indexOf("STRUCT Foo ("));
+    assertThat(ddl).contains("TYPE Bar NOT NULL;");
   }
 
   @Test
@@ -1088,7 +1093,8 @@ class ProtoToLogicalTypeConverterTest {
     String proto = "syntax = \"proto3\";\n"
         + "message Order {\n  string id = 1;\n}\n"
         + "message Wrapper {\n  Order order = 1;\n}\n";
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(proto));
+    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
+        new ProtobufSchema(proto).copy("Order"));
 
     assertThat(lt.getName()).isNull();
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.NAMED_TYPE_REF);

@@ -1,0 +1,160 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.type.logical.protobuf;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Which message a Protobuf schema is rooted at: the one it names, the one it declares, or, for a
+ * file of several naming none, all of them; and the DDL that writes and reads back each.
+ */
+class ProtoMessageRootTest {
+
+  private static final String STRUCTS = "NAMESPACE p;\n"
+      + "STRUCT Address (city STRING NOT NULL);\n"
+      + "STRUCT Person (name STRING NOT NULL, home Address);\n";
+
+  private static ProtobufSchema fromDdl(String ddl) {
+    Schema submitted = new Schema("people-value", null, null, ProtobufSchema.TYPE,
+        Collections.emptyList(), ddl);
+    return (ProtobufSchema) LogicalTypeConversion.toNative(
+        LogicalTypeConversion.tryParse(ddl).get(), submitted, Collections.emptyMap());
+  }
+
+  private static List<String> messages(ProtobufSchema schema) {
+    return schema.rawSchema().getTypes().stream().map(TypeElement::getName)
+        .collect(Collectors.toList());
+  }
+
+  private static List<String> rootFields(LogicalType logicalType) {
+    return logicalType.getRootSchema().getFields().stream()
+        .map(io.confluent.kafka.schemaregistry.type.logical.Schema.Field::getName)
+        .collect(Collectors.toList());
+  }
+
+  private static String roundTrip(ProtobufSchema schema) {
+    return fromDdl(LogicalTypeToDdlConverter.toDdl(
+        ProtoToLogicalTypeConverter.toLogicalType(schema))).canonicalString();
+  }
+
+  @Test
+  void aScriptNamingNoRootOfSeveralStructsIsAFileOfAllOfThem() {
+    ProtobufSchema schema = fromDdl(STRUCTS);
+    // In declaration order, though Person, the one no other references, would be the root
+    assertEquals(List.of("Address", "Person"), messages(schema));
+    assertNull(schema.declaredRoot());
+    assertTrue(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
+    assertTrue(ProtoToLogicalTypeConverter.isMultiMessageRoot(read.getRootSchema()));
+    assertEquals(List.of("p.Address", "p.Person"), rootFields(read));
+    assertEquals(schema.canonicalString(), roundTrip(schema));
+  }
+
+  @Test
+  void aScriptNamingItsRootBesideOtherStructsRecordsIt() {
+    ProtobufSchema schema = fromDdl(STRUCTS + "TYPE Person NOT NULL;\n");
+    assertEquals(List.of("Person", "Address"), messages(schema));
+    assertEquals("p.Person", schema.declaredRoot());
+    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
+    assertEquals(List.of("name", "home"), rootFields(read));
+    String ddl = LogicalTypeToDdlConverter.toDdl(read);
+    assertTrue(ddl.contains("TYPE Person NOT NULL;"), ddl);
+    assertEquals(schema.canonicalString(), roundTrip(schema));
+  }
+
+  @Test
+  void aScriptOfOneStructRecordsNoRoot() {
+    ProtobufSchema schema = fromDdl("NAMESPACE p;\nSTRUCT Person (name STRING NOT NULL);\n");
+    assertEquals(List.of("Person"), messages(schema));
+    assertNull(schema.declaredRoot());
+    assertFalse(schema.canonicalString().contains("file_meta"), schema.canonicalString());
+    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+  }
+
+  @Test
+  void aPrimitiveRootRecordsItsWrapperEvenWhenItIsTheFirst() {
+    // DoubleValue is the first message of wrappers.proto, which declares several
+    for (String type : List.of("DOUBLE", "FLOAT", "BIGINT")) {
+      ProtobufSchema schema = fromDdl("TYPE " + type + " NOT NULL;\n");
+      assertTrue(schema.declaredRoot() != null, type);
+      assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema), type);
+      assertEquals(type, ProtoToLogicalTypeConverter.toLogicalType(schema).getRootSchema()
+          .getType().name(), type);
+    }
+  }
+
+  @Test
+  void aWrapperNamingNoRootIsReadAsTheFileItReExports() {
+    ProtobufSchema wrappers = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"google/protobuf/wrappers.proto\";\n");
+    assertTrue(ProtoToLogicalTypeConverter.readsAsMultipleMessages(wrappers));
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(wrappers);
+    assertTrue(rootFields(read).contains("google.protobuf.Int64Value"), read.toString());
+
+    String one = "syntax = \"proto3\";\npackage q;\nmessage Only { int32 a = 1; }\n";
+    ProtobufSchema single = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"one.proto\";\n",
+        List.of(new SchemaReference("one.proto", "one", 1)), Map.of("one.proto", one), null,
+        null);
+    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(single));
+  }
+
+  @Test
+  void aSchemaGivenANameIsRootedAtIt() {
+    ProtobufSchema schema = fromDdl(STRUCTS).copy("p.Person");
+    assertFalse(ProtoToLogicalTypeConverter.readsAsMultipleMessages(schema));
+    assertEquals(List.of("name", "home"),
+        rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema)));
+  }
+
+  @Test
+  void aUnionRootIsNoLongerAFileOfSeveralMessages() {
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> fromDdl(STRUCTS + "TYPE UNION(a Address, p Person) NOT NULL;\n"));
+    assertTrue(e.getMessage().contains("must be STRUCT"), e.getMessage());
+  }
+
+  @Test
+  void aRootOverSeveralMessagesMustListEveryOneOnce() {
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(fromDdl(STRUCTS));
+    LogicalType partial = new LogicalType(null, read.getNamespace(),
+        ProtoToLogicalTypeConverter.multiMessageRoot(List.of("p.Person")), read.getNamedTypes(),
+        read.getExternalTypes(), Map.of(), read.getReferences(), read.getResolvedReferences(),
+        read.getDefaultValues());
+    assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(partial, "ignored"));
+  }
+}

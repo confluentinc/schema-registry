@@ -2334,7 +2334,7 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
-  void testWrappedRootRecordsItsRootOnlyWhenNotFirst() {
+  void testWrappedRootRecordsItsRootUnlessItsFileDeclaresNoOther() {
     String bigint = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(Schema.create(Schema.Type.BIGINT).setNullable(false)), "Holder")
         .canonicalString();
@@ -2342,12 +2342,13 @@ class LogicalTypeToProtoConverterTest {
         .contains("import \"confluent/meta.proto\"")
         .contains("value: \"google.protobuf.Int64Value\"")
         .doesNotContain("message ");
-    // DoubleValue is first in wrappers.proto, and Variant is alone in its file
+    // DoubleValue is first in wrappers.proto, which names no root of its several on its own; Variant
+    // is alone in its file
     String dbl = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(Schema.create(Schema.Type.DOUBLE).setNullable(false)), "Holder")
         .canonicalString();
     assertThat(dbl).contains("import public \"google/protobuf/wrappers.proto\"")
-        .doesNotContain("confluent");
+        .contains("value: \"google.protobuf.DoubleValue\"");
     String variant = LogicalTypeToProtoConverter.fromLogicalType(
         new LogicalType(Schema.create(Schema.Type.VARIANT).setNullable(false)), "Holder")
         .canonicalString();
@@ -3138,11 +3139,9 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
-  void testMultiRootUnionEmittedAsPeerMessages() {
-    // The visitor's multi-root sugar produces UNION<NAMED_TYPE_REF(A),
-    // NAMED_TYPE_REF(B)> at the root. The proto writer detects this shape
-    // and emits A as the primary root + B as a file-level peer (instead of
-    // throwing "UNION at root not supported").
+  void testUnionOfNamedTypesAtRootIsRejected() {
+    // No longer read as a file of several messages: a file naming no root is that, so a UNION
+    // root has no Protobuf form.
     Schema a = Schema.createStruct(Arrays.asList(
         new Field("ax", Schema.create(Schema.Type.INT).setNullable(false), 0)))
         .setNullable(false);
@@ -3163,15 +3162,9 @@ class LogicalTypeToProtoConverterTest {
     LogicalType lt = new LogicalType("com.example", root, namedTypes,
         java.util.Collections.emptyList(), java.util.Collections.emptyMap());
 
-    ProtobufSchema proto = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
-
-    Descriptor file = proto.toDescriptor();
-    assertEquals("A", file.getName(), "first union member becomes primary root");
-    long peerCount = file.getFile().getMessageTypes().size();
-    assertEquals(2, peerCount, "both A and B emitted as file-level messages");
-    boolean hasB = file.getFile().getMessageTypes().stream()
-        .anyMatch(m -> "B".equals(m.getName()));
-    assertTrue(hasB, "B emitted as a peer message");
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
+    assertTrue(e.getMessage().contains("must be STRUCT"), e.getMessage());
   }
 
   @Test

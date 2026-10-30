@@ -194,18 +194,12 @@ public class LogicalTypeToProtoConverter {
       rowName = logicalType.getName();
     }
 
-    // Multi-root sugar: when the root is a UNION whose members are all
-    // NAMED_TYPE_REFs to local types, the visitor's sugar inferred it from
-    // multiple unreferenced top-level named-type declarations. Proto's wire
-    // model has no native equivalent of a discriminated union at the file
-    // root, so we treat it as a multi-message file: the first union member
-    // becomes the primary root, the rest fall through to the existing
-    // namedTypes peer-emission path. (Avro/JSON writers emit the union
-    // structurally; only proto repurposes it.)
-    if (isMultiRootUnion(schema, logicalType.getNamedTypes())) {
-      schema = Schema.createNamedTypeRef(
-          schema.getBranches().get(0).getSchema().getQualifiedName())
-          .setNullable(false);
+    // A root over several messages is written as each of them, in order, with no root param: a
+    // file of several messages naming no root is read as all of them.
+    List<String> messageOrder = null;
+    if (ProtoToLogicalTypeConverter.isMultiMessageRoot(schema)) {
+      messageOrder = multiMessageOrder(schema, logicalType);
+      schema = Schema.createNamedTypeRef(messageOrder.get(0)).setNullable(false);
     }
 
     // External-only public import: the registered root is a NAMED_TYPE_REF to
@@ -269,6 +263,14 @@ public class LogicalTypeToProtoConverter {
     // emitted as `import` statements via the resolvedReferences pre-walk
     // below.) Validate against locals only.
     Map<String, Schema> localNamedTypes = logicalType.getLocalNamedTypes();
+    if (messageOrder != null) {
+      Map<String, Schema> ordered = new LinkedHashMap<>();
+      for (String message : messageOrder) {
+        ordered.put(message, localNamedTypes.get(message));
+      }
+      ordered.putAll(localNamedTypes);
+      localNamedTypes = ordered;
+    }
     validateNamespacesMatchFilePackage(
         localNamedTypes, logicalType.getNamespace());
 
@@ -313,7 +315,7 @@ public class LogicalTypeToProtoConverter {
 
     ProtobufSchema result = new ProtobufSchema(
         buildFile(schema, rowName, logicalType.getNamespace(),
-            localNamedTypes, rootResolvedFromFqn, logicalType, ctx),
+            localNamedTypes, rootResolvedFromFqn, messageOrder == null, logicalType, ctx),
         logicalType.getReferences());
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
@@ -474,7 +476,9 @@ public class LogicalTypeToProtoConverter {
 
   /**
    * An otherwise-empty file publicly importing the root's file. The root is recorded in the
-   * file_meta params only when {@link ProtobufSchema#name()} would not pick it anyway.
+   * file_meta params unless that file declares at most one message and
+   * {@link ProtobufSchema#name()} picks it anyway: a wrapper of several messages naming no root is
+   * read as all of them.
    */
   private static ProtobufSchema publicImportFile(FileDescriptor imported, String rootFullName,
       String packageName, List<SchemaReference> references) {
@@ -488,7 +492,7 @@ public class LogicalTypeToProtoConverter {
     try {
       ProtobufSchema schema = new ProtobufSchema(FileDescriptor.buildFrom(
           fileBuilder.build(), new FileDescriptor[] {imported}), references);
-      if (schema.name().equals(rootFullName)) {
+      if (schema.name().equals(rootFullName) && imported.getMessageTypes().size() < 2) {
         return schema;
       }
       fileBuilder.addDependency(MetaProto.getDescriptor().getName())
@@ -511,30 +515,34 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
-   * Detect the visitor's multi-root sugar shape: a non-nullable
-   * {@code UNION} whose every branch is a {@code NAMED_TYPE_REF} resolving to
-   * a locally-defined type. Proto repurposes this as "the first member is the
-   * root and the rest are file-level peer messages" — see callsite for
-   * rationale.
+   * The messages a multi-message root lists, in order: every top-level struct the schema declares
+   * and nothing else, as the file it writes is read back.
    */
-  private static boolean isMultiRootUnion(
-      Schema schema, Map<String, Schema> namedTypes) {
-    if (schema.getType() != Schema.Type.UNION || schema.isNullable()) {
-      return false;
-    }
-    if (schema.getBranches().isEmpty()) {
-      return false;
-    }
-    for (UnionBranch branch : schema.getBranches()) {
-      Schema member = branch.getSchema();
-      if (member.getType() != Schema.Type.NAMED_TYPE_REF) {
-        return false;
+  private static List<String> multiMessageOrder(Schema root, LogicalType logicalType) {
+    Map<String, Schema> local = logicalType.getLocalNamedTypes();
+    Set<String> topLevel = new LinkedHashSet<>();
+    local.forEach((name, body) -> {
+      if (body.getType() == Schema.Type.STRUCT
+          && LogicalType.parentOf(name, local.keySet()) == null) {
+        topLevel.add(name);
       }
-      if (!namedTypes.containsKey(member.getQualifiedName())) {
-        return false;
+    });
+    List<String> order = new ArrayList<>();
+    for (Field field : root.getFields()) {
+      Schema member = field.getSchema();
+      if (member.getType() != Schema.Type.NAMED_TYPE_REF
+          || !topLevel.contains(member.getQualifiedName())
+          || order.contains(member.getQualifiedName())) {
+        throw new ValidationException("A root over several messages may list only the schema's "
+            + "own top-level messages, each once, not field '" + field.getName() + "'");
       }
+      order.add(member.getQualifiedName());
     }
-    return true;
+    if (!order.containsAll(topLevel) || order.isEmpty()) {
+      throw new ValidationException("A root over several messages must list every top-level "
+          + "message the schema declares: " + topLevel);
+    }
+    return order;
   }
 
   /**
@@ -684,7 +692,7 @@ public class LogicalTypeToProtoConverter {
 
   private static FileDescriptor buildFile(
       Schema schema, String rowName, String packageName,
-      Map<String, Schema> namedTypes, String rootResolvedFromFqn,
+      Map<String, Schema> namedTypes, String rootResolvedFromFqn, boolean writeRoot,
       LogicalType logicalType,
       FromLogicalContext<GenericDescriptor> ctx) {
     if (schema.getType() != Schema.Type.STRUCT) {
@@ -735,6 +743,15 @@ public class LogicalTypeToProtoConverter {
               "Unsupported named type kind for proto: " + typeDef.getType()
                   + " (" + fqn + ")");
         }
+      }
+      // A root sharing its file with other messages is named, as a file of several messages
+      // naming no root is read as all of them.
+      if (writeRoot && fileBuilder.getMessageTypeCount() > 1) {
+        String root = packageName == null || packageName.isEmpty()
+            ? rowName : packageName + "." + rowName;
+        dependencies.add(MetaProto.getDescriptor().getName());
+        fileBuilder.setOptions(FileOptions.newBuilder().setExtension(MetaProto.fileMeta,
+            Meta.newBuilder().putParams(ProtobufSchema.ROOT_KEY, root).build()));
       }
 
       fileBuilder.addAllDependency(dependencies);

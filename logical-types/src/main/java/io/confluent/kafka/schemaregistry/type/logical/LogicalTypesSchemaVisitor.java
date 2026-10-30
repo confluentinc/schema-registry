@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintValid
 import io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintToCelTranslator;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesBaseVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
@@ -74,6 +75,20 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private final Set<String> usedAliases = new LinkedHashSet<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   private Schema rootSchema;
+  private final boolean rootsSeveralMessages;
+
+  public LogicalTypesSchemaVisitor() {
+    this(false);
+  }
+
+  /**
+   * With {@code rootsSeveralMessages}, a script with no {@code TYPE} and several top-level structs
+   * is rooted at all of them, in declaration order, as a Protobuf file of several messages naming
+   * no root is read.
+   */
+  public LogicalTypesSchemaVisitor(boolean rootsSeveralMessages) {
+    this.rootsSeveralMessages = rootsSeveralMessages;
+  }
 
   public String getNamespace() {
     return namespace;
@@ -165,6 +180,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
       visit(ctx.registerTypeStmt());
     } else {
       inferAndRegisterRoot(ctx);
+      List<String> structs = topLevelStructs();
+      if (rootsSeveralMessages && structs.size() > 1) {
+        rootSchema = ProtoToLogicalTypeConverter.multiMessageRoot(structs);
+      }
     }
     maybeUnwrapNamedRoot();
     validateAliases();
@@ -294,10 +313,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    *
    * <p>Multiple unreferenced types (e.g. a script with several independent peer
    * messages and no explicit trailing registration): the FIRST-declared one is
-   * the root; the rest remain as peer named types. This matches Protobuf's
-   * "first message is the root" convention and the writer, which emits the root
-   * declaration first. A genuine multi-root {@code UNION} at the root is no
-   * longer inferred — write it explicitly as {@code TYPE UNION(a A, b B) NOT NULL}.
+   * the root; the rest remain as peer named types. A Protobuf target instead
+   * roots such a script at every top-level struct (see
+   * {@link #LogicalTypesSchemaVisitor(boolean)}); this inference still rejects
+   * a script with no type or only a cycle.
    *
    * <p>Errors:
    * <ul>
@@ -355,6 +374,14 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     Schema ref = Schema.createNamedTypeRef(name);
     ref.setNullable(false);
     rootSchema = ref;
+  }
+
+  private List<String> topLevelStructs() {
+    return namedTypes.entrySet().stream()
+        .filter(e -> e.getValue().getType() == Schema.Type.STRUCT
+            && LogicalType.parentOf(e.getKey(), namedTypes.keySet()) == null)
+        .map(Map.Entry::getKey)
+        .collect(Collectors.toList());
   }
 
   /**
