@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.FakeTicker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -63,6 +64,7 @@ import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -925,6 +927,25 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testGetLatestSchemaMetadataFindsADeletedVersion() throws Exception {
+    // a lookup of deleted versions is never served from the latest cache
+    expect(restService.getLatestVersion(anyObject(), eq(SUBJECT_0), isNull(), eq(true), isNull()))
+        .andReturn(SCHEMA_DETAILS)
+        .times(2);
+    expect(restService.getLatestVersion(anyObject(), eq(SUBJECT_0), eq("logical"), eq(true),
+        isNull()))
+        .andReturn(SCHEMA_DETAILS);
+
+    replay(restService);
+
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, true).getId());
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, true).getId());
+    assertEquals(ID_25, client.getLatestSchemaMetadata(SUBJECT_0, "logical", true).getId());
+
+    verify(restService);
+  }
+
+  @Test
   public void testGetSchemaRegistryDeployment() throws Exception {
     List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
     SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);
@@ -970,5 +991,22 @@ public class CachedSchemaRegistryClientTest {
   private static String avroSchemaString(final int i) {
     return "{\"type\": \"record\", \"name\": \"Blah" + i + "\", "
         + "\"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+  }
+
+  @Test
+  public void testProvenanceIsFetchedUncachedAndPassedThroughUnchanged() throws Exception {
+    SchemaProvenance byId = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
+    SchemaProvenance byVersion = new SchemaProvenance(SUBJECT_0, Collections.emptyList());
+    expect(restService.getProvenanceById(anyObject(), eq(SUBJECT_0), eq(2), eq(1), eq(true)))
+        .andReturn(byId).times(2);
+    expect(restService.getProvenanceByVersion(anyObject(), eq(SUBJECT_0), eq("1"), eq("latest"),
+        eq(false))).andReturn(byVersion);
+    replay(restService);
+
+    // Asked twice, fetched twice: the registry caches per history, the caller per mapping.
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true));
+    assertSame(byId, client.getProvenanceById(SUBJECT_0, 2, 1, true));
+    assertSame(byVersion, client.getProvenanceByVersion(SUBJECT_0, "1", "latest", false));
+    verify(restService);
   }
 }

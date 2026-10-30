@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFil
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
@@ -159,6 +160,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
+      };
+  private static final TypeReference<SchemaProvenance> GET_PROVENANCE_RESPONSE_TYPE =
+      new TypeReference<SchemaProvenance>() {
       };
   private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<SubjectVersion>>() {
@@ -1485,7 +1489,17 @@ public class RestService implements Closeable, Configurable {
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject, String format, Set<String> findTags)
       throws IOException, RestClientException {
+    return getLatestVersion(requestProperties, subject, format, false, findTags);
+  }
+
+  public Schema getLatestVersion(Map<String, String> requestProperties,
+                                 String subject, String format, boolean lookupDeletedSchema,
+                                 Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest");
+    if (lookupDeletedSchema) {
+      builder.queryParam("deleted", true);
+    }
     if (findTags != null && !findTags.isEmpty()) {
       builder.queryParam("findTags", String.join(",", findTags));
     }
@@ -1616,6 +1630,122 @@ public class RestService implements Closeable, Configurable {
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
         ALL_VERSIONS_RESPONSE_TYPE);
     return response;
+  }
+
+  /**
+   * The provenance of {@code subject}'s columns between two versions — every column's id, equal
+   * within the response wherever a column continues — addressed by version number.
+   * {@code "latest"} is accepted as a version. Each Protobuf version is read as its schema names:
+   * one message, or all its top-level messages when it names no root and declares several.
+   */
+  public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
+                                                 String subject,
+                                                 String fromVersion,
+                                                 String toVersion,
+                                                 boolean includeInterior)
+      throws IOException, RestClientException {
+    return getProvenanceByVersion(requestProperties, subject, fromVersion, toVersion,
+        includeInterior, null);
+  }
+
+  /**
+   * As {@link #getProvenanceByVersion(Map, String, String, String, boolean)}; with
+   * {@code compatibilityPolicy} {@code "LOGICAL"}, each version also says whether it is a valid
+   * backward step from the version just before it under that policy, columns paired by
+   * provenance, whatever the subject's config, with the errors found. A version with an earlier
+   * version's schema id never is.
+   */
+  public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
+      String subject, String fromVersion, String toVersion, boolean includeInterior,
+      String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return getProvenance(requestProperties, subject, "fromVersion", fromVersion, "toVersion",
+        toVersion, includeInterior, compatibilityPolicy);
+  }
+
+  /**
+   * As {@link #getProvenanceByVersion(Map, String, String, String, boolean, String)}.
+   *
+   * @deprecated {@code includeMultipleMessages} is ignored: each Protobuf version is read as its
+   *     schema names. Use {@link #getProvenanceByVersion(Map, String, String, String, boolean,
+   *     String)}.
+   */
+  @Deprecated
+  public SchemaProvenance getProvenanceByVersion(Map<String, String> requestProperties,
+      String subject, String fromVersion, String toVersion, boolean includeInterior,
+      boolean includeMultipleMessages, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return getProvenanceByVersion(requestProperties, subject, fromVersion, toVersion,
+        includeInterior, compatibilityPolicy);
+  }
+
+  /**
+   * As {@link #getProvenanceByVersion(Map, String, String, String, boolean)}, addressed by schema
+   * id — the form a deserializer uses, since a record carries its schema id and never a version.
+   * The two may be in either order.
+   */
+  public SchemaProvenance getProvenanceById(Map<String, String> requestProperties,
+                                            String subject,
+                                            int fromId,
+                                            int toId,
+                                            boolean includeInterior)
+      throws IOException, RestClientException {
+    return getProvenanceById(requestProperties, subject, fromId, toId, includeInterior, null);
+  }
+
+  /**
+   * As {@link #getProvenanceById(Map, String, int, int, boolean)}, with
+   * {@code compatibilityPolicy} as for
+   * {@link #getProvenanceByVersion(Map, String, String, String, boolean, String)}.
+   */
+  public SchemaProvenance getProvenanceById(Map<String, String> requestProperties,
+      String subject, int fromId, int toId, boolean includeInterior, String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return getProvenance(requestProperties, subject, "fromId", fromId, "toId", toId,
+        includeInterior, compatibilityPolicy);
+  }
+
+  /**
+   * As {@link #getProvenanceById}, from the version carrying schema id {@code fromId} to version
+   * {@code toVersion}: the form a deserializer uses when its reader is pinned to a version, as one
+   * schema id may sit under several versions.
+   */
+  public SchemaProvenance getProvenanceToVersion(Map<String, String> requestProperties,
+                                                 String subject,
+                                                 int fromId,
+                                                 int toVersion,
+                                                 boolean includeInterior)
+      throws IOException, RestClientException {
+    return getProvenanceToVersion(requestProperties, subject, fromId, toVersion,
+        includeInterior, null);
+  }
+
+  /**
+   * As {@link #getProvenanceToVersion(Map, String, int, int, boolean)}, with
+   * {@code compatibilityPolicy} as for
+   * {@link #getProvenanceByVersion(Map, String, String, String, boolean, String)}.
+   */
+  public SchemaProvenance getProvenanceToVersion(Map<String, String> requestProperties,
+      String subject, int fromId, int toVersion, boolean includeInterior,
+      String compatibilityPolicy)
+      throws IOException, RestClientException {
+    return getProvenance(requestProperties, subject, "fromId", fromId, "toVersion", toVersion,
+        includeInterior, compatibilityPolicy);
+  }
+
+  private SchemaProvenance getProvenance(Map<String, String> requestProperties, String subject,
+      String fromParam, Object from, String toParam, Object to, boolean includeInterior,
+      String compatibilityPolicy)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/provenance");
+    builder.queryParam(fromParam, String.valueOf(from));
+    builder.queryParam(toParam, String.valueOf(to));
+    builder.queryParam("includeInterior", includeInterior);
+    if (compatibilityPolicy != null) {
+      builder.queryParam("compatibilityPolicy", compatibilityPolicy);
+    }
+    String path = builder.build(subject).toString();
+    return httpRequest(path, "GET", null, requestProperties, GET_PROVENANCE_RESPONSE_TYPE);
   }
 
   public List<Integer> getAllVersionsWithPagination(Map<String, String> requestProperties,
