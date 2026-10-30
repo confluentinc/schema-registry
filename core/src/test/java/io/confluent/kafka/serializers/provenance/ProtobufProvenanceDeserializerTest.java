@@ -1162,6 +1162,83 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aReaderNamingNoRootIsReadAsTheRootedVersionItMatches() throws Exception {
+    // The reader, v3 less its root param, reads as both messages, but its locations are v3's,
+    // rooted at Refund: memo's reused number reads unset rather than inheriting note.
+    String root = "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };";
+    String order = "message Order {\n  int32 o = 1;\n}";
+    String refund = "message Refund {\n  int32 id = 1;\n  string memo = 2;\n}";
+    ProtobufSchema v1 = file(root, order,
+        "message Refund {\n  int32 id = 1;\n  string note = 2;\n}");
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, file(root, order, "message Refund {\n  int32 id = 1;\n}"));
+    client.register(SUBJECT, file(root, order, refund));
+    Descriptor r = v1.toDescriptor("p.Refund");
+    byte[] bytes = framed(id, v1, "p.Refund", DynamicMessage.newBuilder(r)
+        .setField(r.findFieldByName("id"), 7).setField(r.findFieldByName("note"), "ada").build());
+    ProtobufSchema reader = file(order, refund);
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "id"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aReaderOfTheFileAWrapperReExportsIsReadAsTheWrapper() throws Exception {
+    // The reader a generated class for q.B gives: the re-exported file, read as both messages,
+    // its locations those of the wrapper version it matches, rooted at q.B.
+    String a = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n";
+    List<String> files = Arrays.asList(a + "message B {\n  int32 x = 1;\n  string y = 2;\n}\n",
+        a + "message B {\n  int32 x = 1;\n}\n",
+        a + "message B {\n  int32 x = 1;\n  string memo = 2;\n}\n");
+    List<ProtobufSchema> wrappers = new ArrayList<>();
+    for (int i = 0; i < files.size(); i++) {
+      client.register("o", new ProtobufSchema(files.get(i)));
+      wrappers.add(new ProtobufSchema("syntax = \"proto3\";\n"
+          + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
+          + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+          Collections.singletonList(new SchemaReference("o.proto", "o", i + 1)),
+          Collections.singletonMap("o.proto", files.get(i)), null, null));
+    }
+    int id = client.register(SUBJECT, wrappers.get(0));
+    client.register(SUBJECT, wrappers.get(1));
+    client.register(SUBJECT, wrappers.get(2));
+    Descriptor b = wrappers.get(0).toDescriptor();
+    byte[] bytes = framed(id, wrappers.get(0), "q.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("x"), 7).setField(b.findFieldByName("y"), "ada").build());
+    ProtobufSchema reader = new ProtobufSchema(files.get(2));
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "x"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aRootedReaderIsReadAsTheVersionOfSeveralMessagesItMatches() throws Exception {
+    // The converse: the versions name no root, so their locations start at each message, and
+    // the reader rooted at Refund is walked so rather than failing every record.
+    String order = "message Order {\n  int32 o = 1;\n}";
+    String refund = "message Refund {\n  int32 id = 1;\n  string memo = 2;\n}";
+    ProtobufSchema v1 = file(order, "message Refund {\n  int32 id = 1;\n  string note = 2;\n}");
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, file(order, "message Refund {\n  int32 id = 1;\n}"));
+    client.register(SUBJECT, file(order, refund));
+    Descriptor r = v1.toDescriptor("p.Refund");
+    byte[] bytes = framed(id, v1, "p.Refund", DynamicMessage.newBuilder(r)
+        .setField(r.findFieldByName("id"), 7).setField(r.findFieldByName("note"), "ada").build());
+    ProtobufSchema reader = file("import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };",
+        order, refund);
+
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "id"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
   void aRecordOfTheSecondMessageFirstLeavesTheFirstMessagesProvenanceAlone() throws Exception {
     // One writer id, two messages: B's failure is its own, so A, read after it, still is A, its
     // fields new to a reader of one message, a reshape.

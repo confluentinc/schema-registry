@@ -310,10 +310,18 @@ final class ProtoProvenanceProjection {
    */
   static ProtoProvenanceProjection of(ProtobufSchema reader, ProtobufSchema writer,
       ProvenanceMapping mapping) {
-    // Each side's locations are its own version's, as its schema is read: from its one message,
-    // or from its file's top-level messages, each a first step.
-    boolean readerMulti = reader.readsAsSeveralMessages();
-    boolean writerMulti = writer != null && writer.readsAsSeveralMessages();
+    return of(reader, reader.readsAsSeveralMessages(), writer,
+        writer != null && writer.readsAsSeveralMessages(), mapping);
+  }
+
+  /**
+   * As {@link #of(ProtobufSchema, ProtobufSchema, ProvenanceMapping)}, each side's locations read
+   * as its version is: from its one message, or, when it is read as several, from its file's
+   * top-level messages, each a first step. A schema matched to a version by structure need not be
+   * read as that version is.
+   */
+  static ProtoProvenanceProjection of(ProtobufSchema reader, boolean readerMulti,
+      ProtobufSchema writer, boolean writerMulti, ProvenanceMapping mapping) {
     // A location the walk cannot find, or a response without kinds, would escape provenance
     // without a trace.
     mapping.requireNames();
@@ -331,6 +339,8 @@ final class ProtoProvenanceProjection {
       List<String> names = mapping.readerNamesOf(path);
       if (readerMulti && !nested && !names.get(0).equals(root.getFullName())) {
         // Another top-level message: the record never parses it, so its locations decide nothing.
+        // A first step naming none is a location of another shape, which fails.
+        walk.topLevel(names.get(0));
         continue;
       }
       if (walk.underMovingField(root, path, moving, mapping, readerMulti)) {

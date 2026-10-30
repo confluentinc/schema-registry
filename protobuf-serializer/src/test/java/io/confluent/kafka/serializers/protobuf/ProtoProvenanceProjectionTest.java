@@ -71,6 +71,17 @@ public class ProtoProvenanceProjectionTest {
   }
 
   @Test
+  public void aLocationOfOneMessageUnderAReaderOfSeveralFailsEveryRecord() {
+    // Read as several messages, each location starts at one: a bare field is of another shape.
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "message Row {\n  int32 a = 1;\n}\nmessage Other {\n  int32 b = 1;\n}\n");
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> ProtoProvenanceProjection.of(reader, true, null, true,
+            mapping(Arrays.asList(p(1, "a")), Arrays.asList(p(1, "a")))));
+    assertTrue(e.getMessage(), e.getMessage().contains("[a] of schema id 2"));
+  }
+
+  @Test
   public void aFieldWithNoWriterCounterpartIsLeftOutOfTheParse() {
     // No number is taken for it, so no data under any number can be parsed into it.
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto2\";\npackage p;\nmessage Row {\n"

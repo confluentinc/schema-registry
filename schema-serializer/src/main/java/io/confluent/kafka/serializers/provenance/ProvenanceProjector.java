@@ -251,6 +251,32 @@ public final class ProvenanceProjector<T> {
   }
 
   /**
+   * The schema registered under {@code id}, for a build to read a version as its own schema does.
+   * Called from a build, the client failing fails the projection as a provenance request would.
+   */
+  public ParsedSchema registered(String subject, int id) {
+    try {
+      return client.getSchemaBySubjectAndId(subject, id);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    } catch (RestClientException e) {
+      throw new RegistryFailure(e);
+    }
+  }
+
+  // A registry failure in a build, rethrown by compute as the checked exception it is.
+  private static final class RegistryFailure extends RuntimeException {
+    RegistryFailure(RestClientException cause) {
+      super(cause);
+    }
+
+    @Override
+    public synchronized RestClientException getCause() {
+      return (RestClientException) super.getCause();
+    }
+  }
+
+  /**
    * What a load that compute failed throws to the record: a fresh exception for each, as every
    * thread waiting on the load is handed the same cause. A stack overflow, as a deep schema may
    * cause, fails the record; any other error of the JVM is its own.
@@ -321,7 +347,11 @@ public final class ProvenanceProjector<T> {
         return sameVersion != null ? Outcome.of(built(sameVersion)) : Outcome.unavailable();
       }
       ProvenanceMapping paired = mapping;
-      return Outcome.of(built(() -> build.apply(paired)));
+      try {
+        return Outcome.of(built(() -> build.apply(paired)));
+      } catch (RegistryFailure e) {
+        throw e.getCause();
+      }
     } catch (IOException e) {
       throw new SerializationException(
           "Could not reach Schema Registry for the provenance of " + written, e);

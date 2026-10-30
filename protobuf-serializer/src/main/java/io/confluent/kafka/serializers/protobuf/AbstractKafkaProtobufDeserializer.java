@@ -441,34 +441,44 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     if (!provenanceEnabled || reader == null || !migrations.isEmpty()) {
       return null;
     }
-    // Each version is read as its schema names: its one message, or every top-level message when
-    // it names no root and declares several. The reader's and the writer's need not agree.
-    boolean readerMulti = reader.readsAsSeveralMessages();
-    if (readerMulti && reader.toDescriptor(name) == null) {
+    if (!name.equals(rootOf(reader)) && reader.toDescriptor(name) == null) {
+      // Read without provenance, the record would be parsed as the reader's first message.
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
     }
     // The writer named at the record's message: it may come back unnamed, as its file's first,
     // and its name tells each record's message apart, here and in the projector's cache.
     ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
-    // A version read as one message has locations for that message only: a record written as
-    // another, or read by a reader rooted at another, is read without provenance.
-    boolean placed = (writer.readsAsSeveralMessages() || name.equals(rootOf(writer)))
-        && (readerMulti || name.equals(rootOf(reader)));
-    if (!placed && reader.toDescriptor(name) == null) {
-      // Read without provenance, the record would be parsed as the reader's first message.
-      throw new SerializationException("The record was written as message " + name
-          + ", which the reader schema does not declare");
-    }
-    return provenanceProjector().project(subject, writerId, named, reader,
+    ProvenanceProjector<ProtoProvenanceProjection> projector = provenanceProjector();
+    return projector.project(subject, writerId, named, reader,
         mapping -> {
-          if (!placed) {
+          // Each side's locations are its version's, read as that version's schema names: its
+          // one message, or every top-level message when it names no root and declares several.
+          // A reader or writer matched to the version by structure need not be read so.
+          ProtobufSchema writerVersion = version(projector, subject, mapping.writerId());
+          ProtobufSchema readerVersion = version(projector, subject, mapping.readerId());
+          boolean writerMulti = writerVersion.readsAsSeveralMessages();
+          boolean readerMulti = readerVersion.readsAsSeveralMessages();
+          // A version read as one message has locations for that message only: a record written
+          // as another, or read by a reader whose version is rooted at another, has none.
+          if (!(writerMulti || name.equals(rootOf(writerVersion)))
+              || !(readerMulti || name.equals(rootOf(readerVersion)))) {
             throw new ProvenanceUnavailableException("The record was written as message " + name
                 + ", not the root of a schema read as one message, which provenance has no "
                 + "locations for");
           }
-          return ProtoProvenanceProjection.of(reader, named, mapping);
+          return ProtoProvenanceProjection.of(reader, readerMulti, named, writerMulti, mapping);
         }).orElse(null);
+  }
+
+  private static ProtobufSchema version(ProvenanceProjector<ProtoProvenanceProjection> projector,
+      String subject, int id) {
+    ParsedSchema schema = projector.registered(subject, id);
+    if (!(schema instanceof ProtobufSchema)) {
+      throw new ProvenanceUnavailableException("Schema id " + id + " of subject " + subject
+          + " is not a Protobuf schema");
+    }
+    return (ProtobufSchema) schema;
   }
 
   // The message a schema read as one message is rooted at: the one its root param names, or its
