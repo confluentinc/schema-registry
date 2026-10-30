@@ -3794,7 +3794,7 @@ public class ProtobufSchemaTest {
         + "import \"confluent/meta.proto\";\n"
         + (otherImport != null ? "import \"" + otherImport + "\";\n" : "")
         + "import public \"" + publicImport + "\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n";
   }
 
@@ -4119,7 +4119,7 @@ public class ProtobufSchemaTest {
   private static String rootedFile(String root) {
     return "syntax = \"proto3\";\npackage p;\n"
         + "import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n"
         + "message A { int32 a = 1; message Inner { int32 i = 1; } }\n"
         + "message B { int32 b = 1; }\n";
