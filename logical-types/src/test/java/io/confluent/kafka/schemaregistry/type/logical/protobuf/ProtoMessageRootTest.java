@@ -147,6 +147,45 @@ class ProtoMessageRootTest {
     assertFalse(single.readsAsSeveralMessages());
   }
 
+  private static final String META = "import \"confluent/meta.proto\";\n";
+
+  private static String rootOption(String root) {
+    return "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n";
+  }
+
+  private static ProtobufSchema wrapperOf(String file, String text, String root) {
+    return new ProtobufSchema("syntax = \"proto3\";\n" + (root != null ? META : "")
+        + "import public \"" + file + "\";\n" + (root != null ? rootOption(root) : ""),
+        List.of(new SchemaReference(file, file, 1)), Map.of(file, text), null, null);
+  }
+
+  // The messages a wrapper is read as: its one re-exported root, or each of several
+  private static List<String> readAs(ProtobufSchema wrapper) {
+    wrapper.validate(false);
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(wrapper);
+    io.confluent.kafka.schemaregistry.type.logical.Schema root = read.getRootSchema();
+    return ProtoToLogicalTypeConverter.isMultiMessageRoot(root)
+        ? rootFields(read) : List.of(root.getQualifiedName());
+  }
+
+  @Test
+  void aWrapperIsRootedByItsOwnRootParamAlone() {
+    // A root names its own subject's value, so the re-exported file's doesn't carry over: over
+    // either file a wrapper may name either message, or none, which is all of them
+    String rooted = "syntax = \"proto3\";\npackage p;\n" + META + rootOption("p.B")
+        + "message A { int32 a = 1; }\nmessage B { int32 b = 1; }\n";
+    String unrooted = "syntax = \"proto3\";\npackage p;\n"
+        + "message C { int32 c = 1; }\nmessage D { int32 d = 1; }\n";
+    assertEquals("p.B", new ProtobufSchema(rooted).name());
+    assertFalse(new ProtobufSchema(rooted).readsAsSeveralMessages());
+
+    assertEquals(List.of("p.A", "p.B"), readAs(wrapperOf("f1.proto", rooted, null)));
+    assertEquals(List.of("p.C", "p.D"), readAs(wrapperOf("f2.proto", unrooted, null)));
+    assertEquals(List.of("p.C"), readAs(wrapperOf("f2.proto", unrooted, "p.C")));
+    assertEquals(List.of("p.A"), readAs(wrapperOf("f1.proto", rooted, "p.A")));
+  }
+
   @Test
   void aSchemaGivenANameIsStillReadAsAllItsMessages() {
     // A name picks the message the schema denotes; the stored file, which has none, decides
