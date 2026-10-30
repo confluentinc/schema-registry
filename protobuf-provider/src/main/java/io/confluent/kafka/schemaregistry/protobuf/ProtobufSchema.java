@@ -200,7 +200,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String SQL_FIELD = "sql";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
-  // The file_meta param naming the root of an empty public-import wrapper.
+  // The file_meta param naming the root of a file of several messages or a public-import wrapper.
   public static final String ROOT_KEY = "root";
 
   public static final String DEFAULT_NAME = "default";
@@ -2443,11 +2443,16 @@ public class ProtobufSchema implements ParsedSchema {
       return name;
     }
     ProtoFileElement leaf = resolvePublicImportWrapper();
-    String root = leaf != null ? rootParam() : null;
+    String root = schemaObj != null ? rootParam() : null;
     if (root != null) {
-      if (!definesMessage(leaf, root)) {
+      if (leaf != null && !definesMessage(leaf, root)) {
         throw new IllegalArgumentException("Protobuf schema root '" + root
             + "' is not a message in " + schemaObj.getPublicImports().get(0));
+      }
+      // A file's own root is one of its top-level messages, read by its records' first index.
+      if (leaf == null && !declaresTopLevelMessage(schemaObj, root)) {
+        throw new IllegalArgumentException("Protobuf schema root '" + root
+            + "' is not a top-level message of the schema");
       }
       return root;
     }
@@ -2511,9 +2516,24 @@ public class ProtobufSchema implements ParsedSchema {
     return leaf;
   }
 
+  /**
+   * The message this schema is rooted at by choice rather than by position: the name it was given,
+   * or its file's root param. Null when its root is just its file's first message.
+   */
+  public String declaredRoot() {
+    return name != null ? name : schemaObj != null ? rootParam() : null;
+  }
+
   private String rootParam() {
     ProtobufMeta meta = findMeta(CONFLUENT_FILE_META, schemaObj.getOptions());
     return meta != null && meta.getParams() != null ? meta.getParams().get(ROOT_KEY) : null;
+  }
+
+  private static boolean declaresTopLevelMessage(ProtoFileElement file, String fullName) {
+    String packageName = file.getPackageName();
+    String prefix = packageName != null && !packageName.isEmpty() ? packageName + "." : "";
+    return file.getTypes().stream().anyMatch(type ->
+        type instanceof MessageElement && fullName.equals(prefix + type.getName()));
   }
 
   // Whether the file defines a message, top-level or nested, with this full name.
@@ -2740,8 +2760,8 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
-    if (resolvePublicImportWrapper() != null) {
-      // Rejects a root param naming no message
+    if (schemaObj != null && rootParam() != null) {
+      // Rejects a root param naming no message the schema can be rooted at
       name();
     }
     if (strict) {
