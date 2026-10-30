@@ -26,7 +26,6 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
-import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceHistory;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
 import java.util.ArrayList;
@@ -232,7 +231,8 @@ public final class ProvenancePolicyChecker {
   private static final class Provenance {
 
     private final List<LogicalType> logicals = new ArrayList<>();
-    private final List<Boolean> singleMessage = new ArrayList<>();
+    // Per version, the index of the one message it is checked as, or -1 for several.
+    private final List<Integer> checkedMessage = new ArrayList<>();
     private final ProvenanceReport report;
     private final Map<Integer, ProvenanceReport.Version> reported = new HashMap<>();
 
@@ -254,6 +254,8 @@ public final class ProvenancePolicyChecker {
           // Protobuf wrapped, as a file of several messages is checked.
           forProvenance = schema instanceof ProtobufSchema
               ? ProvenanceHistory.logicalTypeOf(schema, true) : logical;
+          checkedMessage.add(schema instanceof ProtobufSchema
+              ? LogicalPolicyChecker.checkedMessage((ProtobufSchema) schema) : -1);
         } catch (RuntimeException e) {
           if (isStoreFailure(e)) {
             throw e;
@@ -265,10 +267,6 @@ public final class ProvenancePolicyChecker {
         logicals.add(logical);
         computed.add(forProvenance);
         schemaTypes.add(SchemaType.of(schema.schemaType()));
-        // A file checked as its one message keeps that message's ids.
-        singleMessage.add(schema instanceof ProtobufSchema
-            && !LogicalPolicyChecker.declaresSeveralMessages(
-                ProtoPublicImportWrappers.resolve((ProtobufSchema) schema)));
       }
       Set<Integer> kept = new HashSet<>(toCompare);
       kept.add(versions.size() - 1);
@@ -290,15 +288,16 @@ public final class ProvenancePolicyChecker {
           : FieldPairing.byIds(checkIds(writer), checkIds(reader));
     }
 
-    // A file checked as its one message is that message, the wrapper's first member.
+    // A file checked as its one message keeps that message's ids, its member of the wrapper.
     private Map<List<Integer>, Integer> checkIds(int version) {
       Map<List<Integer>, Integer> ids = reported.get(version).checkIds();
-      if (!singleMessage.get(version)) {
+      int message = checkedMessage.get(version);
+      if (message < 0) {
         return ids;
       }
       Map<List<Integer>, Integer> unwrapped = new HashMap<>();
       ids.forEach((path, id) -> {
-        if (path.size() > 1 && path.get(0) == 0) {
+        if (path.size() > 1 && path.get(0) == message) {
           unwrapped.put(path.subList(1, path.size()), id);
         }
       });

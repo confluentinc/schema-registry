@@ -122,6 +122,20 @@ class ProvenanceMultiMessageTest {
         .doesNotContain(path(1, 1));
   }
 
+  @Test
+  void withoutTheFlagAWrapperIsRootedAtTheMessageItsRootParamPicks() {
+    // Int64Value, the third of wrappers.proto's messages, not the file's first, DoubleValue.
+    ProtobufSchema wrapper = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"google/protobuf/wrappers.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: "
+        + "\"google.protobuf.Int64Value\" } ] };\n");
+    assertThat(ProvenanceHistory.logicalTypeOf(wrapper, false).getRootSchema().getType())
+        .isEqualTo(Schema.Type.BIGINT);
+    // With it, every message is a member, whatever the root param picks.
+    assertThat(ProvenanceHistory.logicalTypeOf(wrapper, true).getRootSchema().getFields())
+        .hasSize(9);
+  }
+
   // -------------------------------------------------------------------------------------------
 
   private static List<ProvenanceVersion> compute(ProtobufSchema... versions) {

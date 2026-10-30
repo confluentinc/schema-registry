@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.rules.RuleResult;
@@ -59,6 +60,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -439,8 +441,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       return null;
     }
     // As Flink chooses its row: every top-level message when the reader's file has several, else
-    // its one message.
-    boolean multi = reader.toDescriptor().getFile().getMessageTypes().size() > 1;
+    // its one message, which a wrapper's root param may also pick.
+    boolean multi = rootParam(reader) == null
+        && reader.toDescriptor().getFile().getMessageTypes().size() > 1;
     if (multi && reader.toDescriptor(name) == null) {
       throw new SerializationException("The record was written as message " + name
           + ", which the reader schema does not declare");
@@ -448,10 +451,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     // The writer named at the record's message: it may come back unnamed, as its file's first,
     // and its name tells each record's message apart, here and in the projector's cache.
     ProtobufSchema named = name.equals(writer.name()) ? writer : schemaWithName(writer, name);
-    // Single-message provenance roots each version at its file's first message: a record written
-    // as another has no locations there, so it is read without provenance.
+    // Single-message provenance roots each version at its root, its file's first message unless a
+    // root param picks another: a record written as another has no locations there, so it is read
+    // without provenance.
     Descriptor written = named.toDescriptor();
-    boolean placed = multi || (written.getContainingType() == null && written.getIndex() == 0);
+    String root = rootParam(writer);
+    boolean placed = multi || (root != null ? written.getFullName().equals(root)
+        : written.getContainingType() == null && written.getIndex() == 0);
     if (!placed && reader.toDescriptor(name) == null) {
       // Read without provenance, the record would be parsed as the reader's first message.
       throw new SerializationException("The record was written as message " + name
@@ -461,10 +467,23 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         mapping -> {
           if (!placed) {
             throw new ProvenanceUnavailableException("The record was written as message " + name
-                + ", not its file's first, which single-message provenance has no locations for");
+                + ", not its schema's root, which single-message provenance has no locations for");
           }
           return ProtoProvenanceProjection.of(reader, named, mapping, multi);
         }).orElse(null);
+  }
+
+  // The message a public-import wrapper's root param picks, the one its records carry, as the
+  // LOGICAL policy reads it; null for any other schema.
+  private static String rootParam(ProtobufSchema schema) {
+    ProtoFileElement own = schema.rawSchema();
+    if (own == null || !own.getTypes().isEmpty() || own.getPublicImports().isEmpty()) {
+      return null;
+    }
+    ProtobufMeta meta = ProtobufSchema.findMeta(ProtobufSchema.CONFLUENT_FILE_META,
+        own.getOptions());
+    return meta != null && meta.getParams() != null
+        ? meta.getParams().get(ProtobufSchema.ROOT_KEY) : null;
   }
 
   private volatile ProvenanceProjector<ProtoProvenanceProjection> provenanceProjector;
