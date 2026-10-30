@@ -201,7 +201,7 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
   // The file_meta param naming the root of a file of several messages or a public-import wrapper.
-  public static final String ROOT_KEY = "root";
+  public static final String ROOT_KEY = "logical.root";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
