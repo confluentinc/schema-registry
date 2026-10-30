@@ -459,7 +459,7 @@ class ProvenanceAvroAliasTest {
 
   private static ProtobufSchema proto(String uType) {
     // Rooted at R, the others its fields' types, as a file of several naming no root is not.
-    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.R\" } ] };\n" + "message R {\n  A w = 1;\n  "
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.R\" } ] };\n" + "message R {\n  A w = 1;\n  "
         + uType + " u = 2;\n}\nmessage A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n");
   }
 

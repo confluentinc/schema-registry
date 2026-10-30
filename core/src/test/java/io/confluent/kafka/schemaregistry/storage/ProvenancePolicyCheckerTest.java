@@ -306,7 +306,7 @@ class ProvenancePolicyCheckerTest {
   private static ProtobufSchema rootedWrapper(String file, String root) {
     return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
         + "import public \"o.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n", Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
         Collections.singletonMap("o.proto", file), null, null);
   }

@@ -162,7 +162,7 @@ class FieldPairingTest {
     // name the pair (A, A) is compared once, at h; by ids w's use is compared on its own.
     String a = "{\"type\":\"record\",\"name\":\"A\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
     String b = "{\"type\":\"record\",\"name\":\"B\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
-    String file = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Row\" } ] };\n"
+    String file = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"
         + "message Row {\n  A h = 1;\n  %s w = 2;\n}\n"
         + "message A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n";
     String ref = "{\"$ref\":\"#/definitions/A\"}";

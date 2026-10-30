@@ -406,7 +406,7 @@ class ProvenanceIdentityRulesTest {
   // Messages M_0 to M_n, each but the last holding two fields of the next.
   // Rooted at M0, as a file of several naming no root is read as all of them.
   private static String doublingMessages(int n) {
-    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.M0\" } ] };\n");
+    StringBuilder file = new StringBuilder("syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.M0\" } ] };\n");
     for (int i = 0; i < n; i++) {
       file.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
           .append(i + 1).append(" b = 2;\n}\n");
@@ -1192,7 +1192,7 @@ class ProvenanceIdentityRulesTest {
   @Test
   void aProtobufFieldWhoseMessageChangesAndChangesBackStartsOver() {
     // u's message is a named type: B's x is not A's, and A's x on return is new again.
-    String file = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Row\" } ] };\n"
+    String file = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"
         + "message Row {\n  %s u = 1;\n}\n"
         + "message A {\n  int32 x = 1;\n}\nmessage B {\n  int32 x = 1;\n}\n";
     List<ProvenanceVersion> v = compute(new ProtobufSchema(String.format(file, "A")),
@@ -1213,7 +1213,7 @@ class ProvenanceIdentityRulesTest {
   @Test
   void aProtobufMapAndARepeatedEntryMessageAreOneColumnOnlyByTheEntryShape() {
     // A repeated ...Entry of key and value only is a MAP, as Flink reads it; else ARRAY<STRUCT>.
-    String entry = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Row\" } ] };\n"
+    String entry = "syntax = \"proto3\";\npackage p;\n" + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"
         + "message Row {\n  repeated %1$s m = 1;\n}\n"
         + "message %1$s {\n  string key = 1;\n  int32 value = 2;\n}\n";
     for (String name : new String[] {"Entry", "Pair"}) {
@@ -1232,7 +1232,7 @@ class ProvenanceIdentityRulesTest {
         + "message Refund {\n  int32 amount = 1;\n}\nmessage Line {\n  string sku = 1;\n}\n";
     ProtobufSchema all = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + messages);
     ProtobufSchema rooted = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
-        + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Order\" } ] };\n" + messages);
+        + "import \"confluent/meta.proto\";\noption (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Order\" } ] };\n" + messages);
     Map<Boolean, List<List<Integer>>> paths = new HashMap<>();
     for (ProtobufSchema file : Arrays.asList(rooted, all)) {
       List<SchemaMetadata> history = Collections.singletonList(

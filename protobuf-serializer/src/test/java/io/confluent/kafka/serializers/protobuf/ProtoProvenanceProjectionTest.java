@@ -301,7 +301,7 @@ public class ProtoProvenanceProjectionTest {
   private static ProtobufSchema rooted(String file) {
     return new ProtobufSchema(file.replace("package p;\n", "package p;\n"
         + "import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Row\" } ] };\n"));
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Row\" } ] };\n"));
   }
 
   private static Message parse(ProtoProvenanceProjection projection, ProtobufSchema reader,

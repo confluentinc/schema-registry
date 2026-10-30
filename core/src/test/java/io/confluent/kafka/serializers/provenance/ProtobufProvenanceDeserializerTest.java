@@ -1119,7 +1119,7 @@ class ProtobufProvenanceDeserializerTest {
     client.register("o", new ProtobufSchema(o));
     ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\n"
         + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"q.B\" } ] };\n",
         Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
         Collections.singletonMap("o.proto", o), null, null);
     int id = client.register(SUBJECT, v1);
@@ -1150,7 +1150,7 @@ class ProtobufProvenanceDeserializerTest {
     int id = client.register(SUBJECT, v1);
     ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\n"
         + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"q.B\" } ] };\n",
         Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
         Collections.singletonMap("o.proto", o), null, null);
     client.register(SUBJECT, reader);
@@ -1168,7 +1168,7 @@ class ProtobufProvenanceDeserializerTest {
     // The reader, v3 less its root param, reads as both messages, but its locations are v3's,
     // rooted at Refund: memo's reused number reads unset rather than inheriting note.
     String root = "import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };";
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Refund\" } ] };";
     String order = "message Order {\n  int32 o = 1;\n}";
     String refund = "message Refund {\n  int32 id = 1;\n  string memo = 2;\n}";
     ProtobufSchema v1 = file(root, order,
@@ -1200,7 +1200,7 @@ class ProtobufProvenanceDeserializerTest {
       client.register("o", new ProtobufSchema(files.get(i)));
       wrappers.add(new ProtobufSchema("syntax = \"proto3\";\n"
           + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
-          + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+          + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"q.B\" } ] };\n",
           Collections.singletonList(new SchemaReference("o.proto", "o", i + 1)),
           Collections.singletonMap("o.proto", files.get(i)), null, null));
     }
@@ -1232,7 +1232,7 @@ class ProtobufProvenanceDeserializerTest {
     byte[] bytes = framed(id, v1, "p.Refund", DynamicMessage.newBuilder(r)
         .setField(r.findFieldByName("id"), 7).setField(r.findFieldByName("note"), "ada").build());
     ProtobufSchema reader = file("import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };",
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"p.Refund\" } ] };",
         order, refund);
 
     DynamicMessage read = read(reader, bytes, "enabled");
@@ -2501,7 +2501,7 @@ class ProtobufProvenanceDeserializerTest {
   private static final String ROOT_PARAM_IMPORT = "import \"confluent/meta.proto\";\n";
 
   private static String rootParam(String root) {
-    return "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+    return "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n";
   }
 
