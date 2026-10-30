@@ -3364,6 +3364,31 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
+  void testFieldOfATypeReachedThroughAReExportIsImportedOnce() {
+    // The re-exported file's types are reached both through the reference and as themselves, and
+    // are imported once, from the reference listed.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
+    String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("wrap.proto", wrap);
+    resolved.put("leaf.proto", leaf);
+    List<SchemaReference> refs =
+        Collections.singletonList(new SchemaReference("wrap.proto", "wrap", 1));
+    Schema root = Schema.createStruct(Arrays.asList(
+        new Field("id", Schema.create(Schema.Type.INT).setNullable(false), 0),
+        new Field("v", Schema.createNamedTypeRef("com.Foo").setNullable(true), 1)))
+        .setNullable(false);
+
+    ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType("com", root, Collections.emptyMap(), refs, resolved), "Q");
+
+    assertEquals(Collections.singletonList("wrap.proto"), emitted.rawSchema().getImports());
+    Descriptor read = new ProtobufSchema(emitted.canonicalString(), refs, resolved, null, null)
+        .toDescriptor();
+    assertEquals("com.Foo", read.findFieldByName("v").getMessageType().getFullName());
+  }
+
+  @Test
   void testExternalRootDeclaredByTheFileNamedAfterItAndAnotherIsRefused() {
     // The name does not decide between two files declaring the root: either could be imported.
     Map<String, String> resolved = new LinkedHashMap<>();

@@ -288,12 +288,27 @@ public class LogicalTypeToProtoConverter {
     // two types from the same source file would produce duplicate-symbol
     // errors if each got its own renamed clone, so subsequent FQNs from a
     // single source share the first FQN's rename.
+    // A file reached both as itself and through files re-exporting it is registered once, so its
+    // types are declared by one import: a direct reference first, then a file over a re-export.
+    Set<String> direct = new HashSet<>();
+    logicalType.getReferences().forEach(reference -> direct.add(reference.getName()));
+    Map<String, String> sourceByFile = new LinkedHashMap<>();
+    Map<String, FileDescriptor> fileBySource = new HashMap<>();
     for (Map.Entry<String, String> entry :
             logicalType.getResolvedReferences().entrySet()) {
       ProtobufSchema parsed = new ProtobufSchema(entry.getValue(),
           logicalType.getReferences(), logicalType.getResolvedReferences(),
           null, null, null, null);
-      registerExternalFile(fileOf(parsed), entry.getKey(), ctx);
+      FileDescriptor file = fileOf(parsed);
+      fileBySource.put(entry.getKey(), file);
+      // A re-export's types are declared by the imported file, named by its reference
+      String declaring = isReExport(parsed) ? file.getName() : entry.getKey();
+      sourceByFile.merge(declaring, entry.getKey(), (chosen, candidate) ->
+          sourceRank(candidate, direct, logicalType) < sourceRank(chosen, direct, logicalType)
+              ? candidate : chosen);
+    }
+    for (String source : sourceByFile.values()) {
+      registerExternalFile(fileBySource.get(source), source, ctx);
     }
 
     ProtobufSchema result = new ProtobufSchema(
@@ -333,6 +348,17 @@ public class LogicalTypeToProtoConverter {
       return enumType.getFile();
     }
     throw new ValidationException("Referenced Protobuf schema declares no type " + name);
+  }
+
+  private static boolean isReExport(ProtobufSchema parsed) {
+    return parsed.rawSchema().getTypes().isEmpty();
+  }
+
+  /** A direct reference before a resolved one, and a file declaring types before a re-export. */
+  private static int sourceRank(String source, Set<String> direct, LogicalType logicalType) {
+    boolean reExport = isReExport(new ProtobufSchema(
+        logicalType.getResolvedReferences().get(source)));
+    return (direct.contains(source) ? 0 : 2) + (reExport ? 1 : 0);
   }
 
   /**
