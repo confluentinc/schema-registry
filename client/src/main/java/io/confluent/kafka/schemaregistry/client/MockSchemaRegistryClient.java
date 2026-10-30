@@ -96,6 +96,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, Schema>> idToSchemaCache;
   private final Map<String, ParsedSchema> guidToSchemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
+  // The last version given in each subject, which a soft delete does not take back.
+  private final Map<String, Integer> lastVersions = new ConcurrentHashMap<>();
   private final Map<String, Config> configCache;
   private final Map<String, List<Association>> subjectToAssocCache;
   private final Map<ResourceAndAssocType, Association> resourceAndAssocTypeCache;
@@ -209,6 +211,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
         SchemaProvider schemaProvider = providers.get(schemaType);
         if (schemaProvider == null) {
+          log.error("Invalid schema type {}", schemaType);
           throw new IllegalArgumentException("Invalid schema type " + schemaType);
         }
         return schemaProvider.parseSchema(schema, false, false).orElseThrow(
@@ -340,6 +343,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return schema1.equals(schema2) || schema2.canLookup(schema1, this);
   }
 
+  private boolean hasLiveVersion(String subject, ParsedSchema schema) {
+    Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
+    return versions != null && versions.keySet().stream().anyMatch(v -> schemasEqual(v, schema));
+  }
+
   private void generateVersion(String subject, ParsedSchema schema) {
     List<Integer> versions = allVersions(subject);
     int currentVersion;
@@ -348,6 +356,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       currentVersion = versions.get(versions.size() - 1) + 1;
     }
+    // As the registry numbers it: past every version given, a soft-deleted latest included.
+    currentVersion = Math.max(currentVersion, lastVersions.getOrDefault(subject, 0) + 1);
+    lastVersions.put(subject, currentVersion);
     Map<ParsedSchema, Integer> schemaVersionMap =
         schemaToVersionCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     schemaVersionMap.put(schema, currentVersion);
@@ -569,7 +580,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getLatestVersion(String subject)
       throws IOException, RestClientException {
-    List<Integer> versions = getAllVersions(subject);
+    return getLatestVersion(subject, false);
+  }
+
+  private int getLatestVersion(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    List<Integer> versions = getAllVersions(subject, lookupDeletedSchema);
     if (versions.isEmpty()) {
       throw new IOException("No schema registered under subject!");
     } else {
@@ -646,6 +662,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public SchemaMetadata getLatestSchemaMetadata(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    int version = getLatestVersion(subject, lookupDeletedSchema);
+    return getSchemaMetadata(subject, version, lookupDeletedSchema);
+  }
+
+  @Override
   public SchemaMetadata getLatestWithMetadata(String subject, Map<String, String> metadata,
       boolean lookupDeletedSchema) throws IOException, RestClientException {
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
@@ -713,21 +736,24 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         .orElse(null));
   }
 
-  // The id registered under subject with schema's content, whatever version it carries, or else
-  // one schema looks up; -1 if none.
+  // The id registered under subject as schema, else with its content whatever version it carries,
+  // else one schema merely looks up, as a bare root name does the record it names; -1 if none.
   private int idOf(String subject, ParsedSchema schema) throws IOException {
     ParsedSchema versionless = schema.copy((Integer) null);
+    int sameContent = -1;
     int id = -1;
     for (Map.Entry<Integer, Schema> entry : idToSchemaCache.get(subject).entrySet()) {
       ParsedSchema parsedSchema = parseSchemaOrElseThrow(entry.getValue());
-      if (parsedSchema.copy((Integer) null).equals(versionless)) {
+      if (parsedSchema.equals(schema)) {
         return entry.getKey();
       }
-      if (schemasEqual(parsedSchema, schema)) {
+      if (parsedSchema.copy((Integer) null).equals(versionless)) {
+        sameContent = entry.getKey();
+      } else if (schemasEqual(parsedSchema, schema)) {
         id = entry.getKey();
       }
     }
-    return id;
+    return sameContent >= 0 ? sameContent : id;
   }
 
   @Override
@@ -739,6 +765,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
+  }
+
+  // This mock keeps no soft-deleted versions, so asking for them adds none.
+  @Override
+  public List<Integer> getAllVersions(String subject, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getAllVersions(subject);
   }
 
   private List<Integer> allVersions(String subject) {
@@ -841,20 +874,26 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           .get(retrievedId);
       if (registered != null) {
         schemaResponse = new RegisterSchemaResponse(registered);
-        // Found by the latest version's metadata, the answer can change with a newer version.
-        if (schema.equals(parseSchemaOrElseThrow(registered))) {
+        // Found by the latest version's metadata, the answer can change with a newer version;
+        // a soft-deleted schema is found but not kept, as below.
+        if (schema.equals(parseSchemaOrElseThrow(registered)) && hasLiveVersion(subject, schema)) {
           schemaResponseMap.put(schema, schemaResponse);
         }
         return schemaResponse;
       }
       Schema schemaEntity = new Schema(subject, schema.version(), retrievedId, schema);
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
-      schemaResponseMap.put(schema, schemaResponse);
+      // A soft-deleted schema is found but not kept: registered again, it is a new version.
+      if (hasLiveVersion(subject, schema)) {
+        schemaResponseMap.put(schema, schemaResponse);
+      }
       String context = toQualifiedContext(subject);
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
+      // A lookup finds what was registered; it never replaces it with the schema it was asked
+      // about, which may carry a version or metadata of its own.
+      idSchemaMap.putIfAbsent(retrievedId, schemaEntity);
+      parsedSchemaCache.asMap().putIfAbsent(contentCacheKey(schemaEntity), schema);
       return schemaResponse;
     }
   }
@@ -886,6 +925,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           throws IOException, RestClientException {
     schemaToResponseCache.remove(subject);
     idToSchemaCache.remove(subject);
+    lastVersions.remove(subject);
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
     configCache.remove(subject);
     return versions != null
@@ -914,8 +954,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
           if (isPermanent) {
             idToSchemaCache.get(subject).remove(entry.getValue());
-            schemaToResponseCache.get(subject).remove(entry.getKey());
           }
+          // A deleted version's schema registered again is a new version, as in the registry: so
+          // is any form a lookup cached that resolves to it.
+          ParsedSchema deletedSchema = entry.getKey();
+          schemaToResponseCache.get(subject).keySet()
+              .removeIf(schema -> schemasEqual(deletedSchema, schema));
           return Integer.valueOf(version);
         }
       }
@@ -1049,6 +1093,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized void reset() {
     schemaToResponseCache.clear();
+    lastVersions.clear();
     registeredSchemaCache.clear();
     idToSchemaCache.clear();
     guidToSchemaCache.clear();

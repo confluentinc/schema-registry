@@ -195,7 +195,7 @@ class ProtoMessageRootTest {
         rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema)));
     // Read as one message on purpose, it is that message
     assertEquals(List.of("name", "home"),
-        rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema, false)));
+        rootFields(ProtoToLogicalTypeConverter.toLogicalType(schema, "p.Person")));
   }
 
   @Test

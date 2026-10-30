@@ -1,0 +1,312 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.type.logical.provenance;
+
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaProvenance;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.OptionalInt;
+import java.util.function.IntFunction;
+import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+
+/**
+ * What a provenance endpoint computes from a subject's history, independent of where the history
+ * is stored — so the registry and any client standing in for it answer identically.
+ *
+ * <p>Provenance is computed over the requested range only — its two ends and every version between
+ * them — and then sliced to what the request returns. Ids are allocated from the range's first
+ * version, so they are comparable within one response and not across responses for different
+ * ranges: what a consumer relies on is the pairing within a response. Resolving a request to
+ * versions is here too, so that "latest" and a schema id mean the same thing on both sides;
+ * turning a failure into an error is left to the caller, which knows its own error model.
+ *
+ * <p>Internal to Schema Registry: not a supported API, and it may change in any release.
+ */
+public final class ProvenanceHistory {
+
+  /** The most missing versions a response lists; the last is 0 when more are missing. */
+  public static final int MAX_MISSING_VERSIONS = 100;
+
+  private ProvenanceHistory() {
+  }
+
+  private static boolean isDeleted(SchemaMetadata version) {
+    return Boolean.TRUE.equals(version.getDeleted());
+  }
+
+  /**
+   * The latest version not soft-deleted, as {@code "latest"} means everywhere else.
+   */
+  public static OptionalInt latestVersion(List<SchemaMetadata> history) {
+    for (int i = history.size() - 1; i >= 0; i--) {
+      if (!isDeleted(history.get(i))) {
+        return OptionalInt.of(history.get(i).getVersion());
+      }
+    }
+    return OptionalInt.empty();
+  }
+
+  /**
+   * {@code version} if the history holds it.
+   */
+  public static OptionalInt version(List<SchemaMetadata> history, int version) {
+    for (SchemaMetadata entry : history) {
+      if (entry.getVersion() == version) {
+        return OptionalInt.of(version);
+      }
+    }
+    return OptionalInt.empty();
+  }
+
+  /**
+   * The version carrying schema id {@code schemaId}. A schema re-registered after a soft delete
+   * can sit under more than one version; the latest is taken.
+   */
+  public static OptionalInt versionCarrying(List<SchemaMetadata> history, int schemaId) {
+    for (int i = history.size() - 1; i >= 0; i--) {
+      if (history.get(i).getId() == schemaId) {
+        return OptionalInt.of(history.get(i).getVersion());
+      }
+    }
+    return OptionalInt.empty();
+  }
+
+  /**
+   * The provenance of {@code history}, every version reported.
+   *
+   * @see #compute(String, List, List, boolean)
+   */
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<? extends ParsedSchemaHolder> schemas) {
+    return compute(subject, history, schemas, true);
+  }
+
+  /**
+   * The provenance of {@code history}, each version matched by the algorithm it was registered
+   * under: v1 for every version until versions are stamped. A version of the algorithm changes the
+   * matching rules, never the logical type's edition, which is the Metastore's.
+   *
+   * <p>Each version is parsed and converted, as {@link #logicalTypeOf} converts it, only when the
+   * computation reaches it, and none is held past the next: a range costs the memory of its report,
+   * not of all its versions. So a failure is the first in version order.
+   *
+   * @param history the subject's versions, in version order; each one's schema type decides the
+   *     identity rules it is matched by
+   * @param schemas each version's schema, in the same order as {@code history}
+   * @param includeInterior whether every version is reported, or only the first and last; every
+   *     version is computed either way
+   * @throws RecursiveTypeException if a version's schema refers to itself
+   * @throws AmbiguousProvenanceException if the history's names and aliases do not determine one
+   *     identity per location
+   * @throws TooManyLocationsException if a version has more locations than provenance computes
+   * @throws TypeTooDeepException if a version nests its types too deep, as converted or walked
+   * @throws IllegalArgumentException if there is not one schema per version
+   * @throws io.confluent.kafka.schemaregistry.type.logical.ValidationException if a schema has no
+   *     logical form
+   */
+  public static SchemaProvenance compute(String subject, List<SchemaMetadata> history,
+      List<? extends ParsedSchemaHolder> schemas, boolean includeInterior) {
+    if (schemas.size() != history.size()) {
+      throw new IllegalArgumentException("Expected one schema per version, got " + schemas.size()
+          + " schemas for " + history.size() + " versions");
+    }
+    IntFunction<LogicalType> versionAt = i -> logicalTypeOf(schemas.get(i).schema());
+    int last = history.size() - 1;
+    IntPredicate reported = includeInterior ? i -> true : i -> i == 0 || i == last;
+    return computeV1(subject, history, versionAt, reported);
+  }
+
+  // The registry's number for the computer's version index, or -1 if there is none.
+  private static int versionNumber(List<Integer> versions, int index) {
+    return index >= 0 && index < versions.size() ? versions.get(index) : -1;
+  }
+
+  private static SchemaProvenance computeV1(String subject, List<SchemaMetadata> history,
+      IntFunction<LogicalType> versionAt, IntPredicate reported) {
+    List<SchemaType> schemaTypes = new ArrayList<>(history.size());
+    List<Integer> ids = new ArrayList<>(history.size());
+    List<Integer> versions = new ArrayList<>(history.size());
+    for (SchemaMetadata entry : history) {
+      // Schema Registry leaves an Avro schema's type unset.
+      schemaTypes.add(SchemaType.of(
+          entry.getSchemaType() != null ? entry.getSchemaType() : AvroSchema.TYPE));
+      ids.add(entry.getId());
+      versions.add(entry.getVersion());
+    }
+    ProvenanceReport report = report(schemaTypes, versions, versionAt, reported);
+    return SchemaProvenanceEncoder.encode(subject, report, ids, versions);
+  }
+
+  /**
+   * {@link ProvenanceComputer#report}, with a failure naming its version by the registry's number
+   * for it, as the endpoint's errors do, rather than by its index.
+   *
+   * <p>A recursive type, an ambiguous history, too many locations, too deep a nesting or a schema
+   * with no logical form fails as {@link ProvenanceComputer#report} or the conversion fails it,
+   * naming the version by number where it names one.
+   *
+   * @param versions each version's number, in the order of {@code schemaTypes}
+   */
+  public static ProvenanceReport report(List<SchemaType> schemaTypes, List<Integer> versions,
+      IntFunction<LogicalType> versionAt, IntPredicate reported) {
+    // The version last converted is the one being converted or walked when either fails.
+    int[] reached = {-1};
+    IntFunction<LogicalType> tracked = i -> {
+      reached[0] = i;
+      return versionAt.apply(i);
+    };
+    try {
+      return ProvenanceComputer.report(schemaTypes, tracked, reported);
+    } catch (RecursiveTypeException e) {
+      throw e.atVersion(versionNumber(versions, reached[0]));
+    } catch (TypeTooDeepException e) {
+      int number = versionNumber(versions, reached[0]);
+      throw number < 0 ? e
+          : new TypeTooDeepException("Version " + number + ": " + e.getMessage(), e);
+    } catch (ValidationException e) {
+      int number = versionNumber(versions, reached[0]);
+      throw number < 0 ? e
+          : new ValidationException("Version " + number + ": " + e.getMessage(), e);
+    } catch (AmbiguousProvenanceException e) {
+      // The computer counts versions from 0 within the history; a caller knows them by number.
+      int index = e.version();
+      throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
+    } catch (TooManyLocationsException e) {
+      int index = e.version();
+      throw index >= 0 && index < versions.size() ? e.withVersion(versions.get(index)) : e;
+    }
+  }
+
+  /**
+   * Schemas already parsed, as holders for {@link #compute}: each is still converted only when the
+   * computation reaches it.
+   */
+  public static List<ParsedSchemaHolder> held(List<? extends ParsedSchema> schemas) {
+    return schemas.stream().map(SimpleParsedSchemaHolder::new).collect(Collectors.toList());
+  }
+
+  /**
+   * The logical type provenance is computed on: edition V1, the one the Metastore's columns follow.
+   * Only the JSON reader differs by edition, keeping a bare one-branch union and naming union
+   * branches by position. A Protobuf schema is read as its records are, as
+   * {@link ProtoPublicImportWrappers#asRead} reads it: over all its top-level messages when it
+   * names no root and declares several, and otherwise as its one message. So a file changing
+   * between one message and several reshapes, each field moving under its message or out of it:
+   * it starts over, as the LOGICAL policy and the Metastore have it.
+   */
+  public static LogicalType logicalTypeOf(ParsedSchema schema) {
+    if (schema instanceof JsonSchema) {
+      return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) schema, LogicalTypeVersion.V1);
+    }
+    try {
+      if (!(schema instanceof ProtobufSchema)) {
+        return LogicalTypeConversion.toLogicalType(schema);
+      }
+      return ProtoPublicImportWrappers.asRead((ProtobufSchema) schema);
+    } catch (IllegalArgumentException e) {
+      // A Protobuf file declaring no type has no root, as one declaring only enums has none:
+      // ProtobufSchema says so with an IllegalArgumentException, which would answer a plain 500.
+      if (schema instanceof ProtobufSchema) {
+        throw new ValidationException(e.getMessage(), e);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * {@code schema}'s logical type as a whole, to tell whether two schemas are one structure: as
+   * {@link #logicalTypeOf}, but a Protobuf file's over all its top-level messages, whichever
+   * message a reader names or the file's root param picks.
+   */
+  public static LogicalType wholeLogicalTypeOf(ParsedSchema schema) {
+    if (!(schema instanceof ProtobufSchema)) {
+      return logicalTypeOf(schema);
+    }
+    try {
+      return ProtoToLogicalTypeConverter.toMultiMessageLogicalType(
+          ProtoPublicImportWrappers.resolve((ProtobufSchema) schema));
+    } catch (IllegalArgumentException e) {
+      throw new ValidationException(e.getMessage(), e);
+    }
+  }
+
+  /**
+   * The part of {@code history} a range covers: every version from the lower end to the higher,
+   * soft-deleted ones included, in version order. Provenance is computed over exactly this.
+   */
+  public static List<SchemaMetadata> range(List<SchemaMetadata> history, int from, int to) {
+    int low = Math.min(from, to);
+    int high = Math.max(from, to);
+    return history.stream()
+        .filter(e -> e.getVersion() >= low && e.getVersion() <= high)
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * The numbers between the first and the last of {@code versions}, ascending, that none of them
+   * is: at most {@link #MAX_MISSING_VERSIONS}, the last 0 when more are missing than that.
+   */
+  public static List<Integer> missingVersions(List<Integer> versions) {
+    List<Integer> missing = new ArrayList<>();
+    for (int i = 1; i < versions.size() && missing.size() <= MAX_MISSING_VERSIONS; i++) {
+      for (int version = versions.get(i - 1) + 1;
+          version < versions.get(i) && missing.size() <= MAX_MISSING_VERSIONS; version++) {
+        missing.add(version);
+      }
+    }
+    if (missing.size() > MAX_MISSING_VERSIONS) {
+      missing = new ArrayList<>(missing.subList(0, MAX_MISSING_VERSIONS - 1));
+      missing.add(0);
+    }
+    return missing;
+  }
+
+  /**
+   * The versions a request asked for, from the whole history: both ends, or everything between
+   * them. Everything is shared with {@code whole}, which is never modified.
+   */
+  public static SchemaProvenance slice(SchemaProvenance whole, int from, int to,
+      boolean includeInterior) {
+    int low = Math.min(from, to);
+    int high = Math.max(from, to);
+    List<ProvenanceVersion> versions = whole.getVersions().stream()
+        .filter(v -> includeInterior
+            ? v.getVersion() >= low && v.getVersion() <= high
+            : v.getVersion() == low || v.getVersion() == high)
+        .collect(Collectors.toList());
+    return new SchemaProvenance(whole.getSubject(), versions);
+  }
+}

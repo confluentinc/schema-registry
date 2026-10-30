@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,8 +55,16 @@ public class RuleContext {
   private final int index;
   private final List<Rule> rules;
   private final Map<Object, Object> customData = new ConcurrentHashMap<>();
+  private final Map<String, String> messageMetadata = new LinkedHashMap<>();
+  private final Map<String, Map<String, String>> fieldMetadata = new LinkedHashMap<>();
   private final Deque<FieldContext> fieldContexts;
+  private final boolean includeRuleResults;
 
+  /**
+   * Creates a context that does not collect rule results, for callers that execute rules
+   * only for their effect on the message. Equivalent to passing {@code false} for
+   * {@code includeRuleResults}.
+   */
   public RuleContext(
       Map<String, ?> configs,
       ExecutionEnvironment enabledEnv,
@@ -71,6 +80,26 @@ public class RuleContext {
       Rule rule,
       int index,
       List<Rule> rules) {
+    this(configs, enabledEnv, source, target, subject, topic, headers,
+        originalKey, originalValue, isKey, ruleMode, rule, index, rules, false);
+  }
+
+  public RuleContext(
+      Map<String, ?> configs,
+      ExecutionEnvironment enabledEnv,
+      ParsedSchema source,
+      ParsedSchema target,
+      String subject,
+      String topic,
+      Headers headers,
+      Object originalKey,
+      Object originalValue,
+      boolean isKey,
+      RuleMode ruleMode,
+      Rule rule,
+      int index,
+      List<Rule> rules,
+      boolean includeRuleResults) {
     this.configs = configs;
     this.enabledEnv = enabledEnv;
     this.source = source;
@@ -86,6 +115,7 @@ public class RuleContext {
     this.index = index;
     this.rules = rules;
     this.fieldContexts = new ArrayDeque<>();
+    this.includeRuleResults = includeRuleResults;
   }
 
   public Map<String, ?> configs() {
@@ -146,6 +176,51 @@ public class RuleContext {
 
   public Map<Object, Object> customData() {
     return customData;
+  }
+
+  /**
+   * Whether the enclosing call opted into rule-result collection. When false,
+   * {@link #putMessageMetadata} and {@link #putFieldMetadata} discard their input,
+   * so executors can skip work whose only purpose is to produce that metadata.
+   */
+  public boolean includeRuleResults() {
+    return includeRuleResults;
+  }
+
+  /**
+   * Record a message-level metadata key/value for this rule's execution.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
+   * Consumers can rely on key presence to mean "value known".
+   */
+  public void putMessageMetadata(String key, String value) {
+    if (!includeRuleResults || value == null) {
+      return;
+    }
+    messageMetadata.put(key, value);
+  }
+
+  /**
+   * Record a per-field metadata key/value for this rule's execution.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
+   */
+  public void putFieldMetadata(String fieldPath, String key, String value) {
+    if (!includeRuleResults || value == null) {
+      return;
+    }
+    fieldMetadata.computeIfAbsent(fieldPath, k -> new LinkedHashMap<>())
+        .put(key, value);
+  }
+
+  /** Live view of message-level metadata collected so far. */
+  public Map<String, String> messageMetadata() {
+    return messageMetadata;
+  }
+
+  /** Live view of per-field metadata collected so far, keyed by field path. */
+  public Map<String, Map<String, String>> fieldMetadata() {
+    return fieldMetadata;
   }
 
   public Set<String> getTags(String fullName) {

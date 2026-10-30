@@ -63,7 +63,8 @@ class CompatibilityCheckerEndToEndTest {
 
   // As its first message: the others are declared for it to use.
   private static LogicalType fromProto(String protoText) {
-    return ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(protoText), false);
+    ProtobufSchema schema = new ProtobufSchema(protoText);
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, schema.name());
   }
 
   private static LogicalType fromAvro(String avroText) {
