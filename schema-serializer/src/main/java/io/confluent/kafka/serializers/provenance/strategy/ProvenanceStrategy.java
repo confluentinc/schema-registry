@@ -84,11 +84,8 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * and {@code toId}, as {@code GET /subjects/{subject}/provenance} answers it.
    *
    * @param client the deserializer's Schema Registry client
-   * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
-   *     messages
    */
-  SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId, int toId,
-      boolean includeMultipleMessages);
+  SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId, int toId);
 
   /**
    * The provenance of {@code subject} from the version carrying schema id {@code fromId} to
@@ -97,11 +94,9 @@ public interface ProvenanceStrategy extends Configurable, Closeable {
    * fail, rather than be read against whichever version carries the reader's schema id.
    *
    * @param client the deserializer's Schema Registry client
-   * @param includeMultipleMessages whether each Protobuf version is rooted at all its top-level
-   *     messages
    */
   default SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeMultipleMessages) {
+      int fromId, int toVersion) {
     throw new ProvenanceRejectedException(
         "The provenance strategy cannot pin a reader to a version");
   }

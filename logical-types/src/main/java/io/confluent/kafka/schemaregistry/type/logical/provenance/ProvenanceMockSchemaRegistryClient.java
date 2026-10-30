@@ -250,36 +250,32 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
 
   @Override
   public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-      boolean includeInterior, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior) throws IOException, RestClientException {
     // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history,
-        carrying(history, fromId, subject), carrying(history, toId, subject),
-        includeInterior, includeMultipleMessages);
+        carrying(history, fromId, subject), carrying(history, toId, subject), includeInterior);
   }
 
   @Override
   public SchemaProvenance getProvenanceByVersion(String subject, String fromVersion,
-      String toVersion, boolean includeInterior,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      String toVersion, boolean includeInterior) throws IOException, RestClientException {
     // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history, named(history, fromVersion), named(history, toVersion),
-        includeInterior, includeMultipleMessages);
+        includeInterior);
   }
 
   @Override
   public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-      boolean includeInterior, boolean includeMultipleMessages)
-      throws IOException, RestClientException {
+      boolean includeInterior) throws IOException, RestClientException {
     // As the registry: the subject as it names it.
     List<SchemaMetadata> history = historyAsNamed(subject);
     subject = QualifiedSubject.normalize(QualifiedSubject.DEFAULT_TENANT, subject);
     return provenance(subject, history, carrying(history, fromId, subject),
-        named(history, String.valueOf(toVersion)), includeInterior, includeMultipleMessages);
+        named(history, String.valueOf(toVersion)), includeInterior);
   }
 
   // The subject's history as the registry names it, without the default context's prefix; else as
@@ -298,8 +294,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
   }
 
   private SchemaProvenance provenance(String subject, List<SchemaMetadata> history,
-      int from, int to, boolean includeInterior,
-      boolean includeMultipleMessages) throws IOException, RestClientException {
+      int from, int to, boolean includeInterior) throws IOException, RestClientException {
     List<SchemaMetadata> range = ProvenanceHistory.range(history, from, to);
     if (includeInterior && range.size() > interiorMaxVersions) {
       throw new RestClientException("The range covers " + range.size() + " versions, more than "
@@ -326,7 +321,7 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
     }
     SchemaProvenance whole;
     try {
-      whole = compute(subject, range, schemas, includeMultipleMessages, includeInterior);
+      whole = compute(subject, range, schemas, includeInterior);
     } catch (Unparsable e) {
       throw new RestClientException(e.getMessage(), 422, UNRESOLVABLE_REFERENCE);
     } catch (RecursiveTypeException e) {
@@ -360,10 +355,8 @@ public class ProvenanceMockSchemaRegistryClient extends MockSchemaRegistryClient
    * the computation fail.
    */
   protected SchemaProvenance compute(String subject, List<SchemaMetadata> range,
-      List<? extends ParsedSchemaHolder> schemas, boolean includeMultipleMessages,
-      boolean includeInterior) {
-    return ProvenanceHistory.compute(subject, range, schemas, includeMultipleMessages,
-        includeInterior);
+      List<? extends ParsedSchemaHolder> schemas, boolean includeInterior) {
+    return ProvenanceHistory.compute(subject, range, schemas, includeInterior);
   }
 
   // A version that could not be parsed, met during the computation.

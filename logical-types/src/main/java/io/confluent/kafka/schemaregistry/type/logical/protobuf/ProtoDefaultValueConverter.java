@@ -26,6 +26,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Map;
 
 /** Encodes/decodes default values for Protobuf as strings (stored in Meta params). */
 public final class ProtoDefaultValueConverter {
@@ -34,6 +36,12 @@ public final class ProtoDefaultValueConverter {
 
   /** Encode a typed Java default value into a string for storage in Meta.params. */
   public static String toProtoValue(final Schema type, final Object value) {
+    return toProtoValue(type, value, Collections.emptyMap());
+  }
+
+  /** As above, a named type, such as a referenced enum, encoded as its body. */
+  public static String toProtoValue(final Schema type, final Object value,
+      final Map<String, Schema> namedTypes) {
     if (value == null) {
       return "";
     }
@@ -86,7 +94,15 @@ public final class ProtoDefaultValueConverter {
         // Encode using the first union branch's schema. Mirrors AvroData's
         // first-branch convention so all formats agree on which value type
         // a union default carries.
-        return toProtoValue(type.getBranches().get(0).getSchema(), value);
+        return toProtoValue(type.getBranches().get(0).getSchema(), value, namedTypes);
+      case NAMED_TYPE_REF: {
+        Schema named = namedTypes.get(type.getQualifiedName());
+        if (named != null) {
+          return toProtoValue(named, value, namedTypes);
+        }
+        throw new ValidationException(
+            "Default values are not supported for type: " + type.getType());
+      }
       default:
         throw new ValidationException(
             "Default values are not supported for type: " + type.getType());
@@ -95,6 +111,12 @@ public final class ProtoDefaultValueConverter {
 
   /** Decode a Meta.params default string back into a typed Java value. */
   public static Object toJavaData(final Schema type, final String value) {
+    return toJavaData(type, value, Collections.emptyMap());
+  }
+
+  /** As above, a named type, such as a referenced enum, decoded as its body. */
+  public static Object toJavaData(final Schema type, final String value,
+      final Map<String, Schema> namedTypes) {
     if (value == null) {
       return null;
     }
@@ -134,7 +156,15 @@ public final class ProtoDefaultValueConverter {
         return value;
       case UNION:
         // Decode using the first union branch's schema (encoder used the same).
-        return toJavaData(type.getBranches().get(0).getSchema(), value);
+        return toJavaData(type.getBranches().get(0).getSchema(), value, namedTypes);
+      case NAMED_TYPE_REF: {
+        Schema named = namedTypes.get(type.getQualifiedName());
+        if (named != null) {
+          return toJavaData(named, value, namedTypes);
+        }
+        throw new ValidationException(
+            "Default values are not supported for type: " + type.getType());
+      }
       default:
         throw new ValidationException(
             "Default values are not supported for type: " + type.getType());

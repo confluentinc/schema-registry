@@ -630,7 +630,9 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aSingleMessageWriterIsReadUnderAMultiMessageReader() throws Exception {
+  void aSingleMessageWriterUnderAMultiMessageReaderIsAReshape() throws Exception {
+    // Read as its one message, then as each of its messages: amount moves under Refund, so it is
+    // new to the reader, as the LOGICAL policy and the Metastore have it.
     ProtobufSchema writer = file(REFUND);
     ProtobufSchema reader = file(ORDER, REFUND);
     byte[] bytes = write(writer, refund(writer, 5, 42));
@@ -638,22 +640,22 @@ class ProtobufProvenanceDeserializerTest {
 
     DynamicMessage row = read(reader, bytes, "enabled");
     assertEquals("p.Refund", row.getDescriptorForType().getFullName());
-    assertEquals(42, get(row, "amount"));
+    assertEquals(0, get(row, "amount"));
   }
 
   @Test
-  void stablePidsHeldForMultipleMessagesReadAOneMessageReader() throws Exception {
-    // Column ids held in multi-message mode, asked for in the one-message reader's: b reuses a's
-    // number after a was dropped, so it is a new column and must not read a's 42.
+  void stablePidsHeldForAOneMessageReaderKeepAReusedNumberNew() throws Exception {
+    // Column ids held for each version: b reuses a's number after a was dropped, so it is a new
+    // column and must not read a's 42.
     ProtobufSchema v1 = row("int32 a = 1;");
     ProtobufSchema v3 = row("int32 b = 1;");
     byte[] bytes = write(v1, set("a", 42));
     client.register(SUBJECT, row());
     client.register(SUBJECT, v3);
     Map<String, Object> config = config("enabled");
-    config.put("provenance.strategy", MultiMessageColumnIds.class);
-    config.put(MultiMessageColumnIds.HELD,
-        client.getProvenanceByVersion(SUBJECT, "1", "3", true, true));
+    config.put("provenance.strategy", HeldColumnIds.class);
+    config.put(HeldColumnIds.HELD,
+        client.getProvenanceByVersion(SUBJECT, "1", "3", true));
     KafkaProtobufDeserializer<DynamicMessage> deserializer =
         new KafkaProtobufDeserializer<>(client, config);
 
@@ -1082,10 +1084,10 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
-  void aRecordOfAnotherThanItsFilesFirstMessageReadBySingleMessageIsReadAsWritten()
+  void aRecordOfAnotherThanItsFilesFirstMessageUnderAOneMessageReaderIsAReshape()
       throws Exception {
-    // The reader's file has one message, so provenance is single-message, rooted at each file's
-    // first message: B, written second, has no locations there, and reads as without provenance.
+    // Each of its file's messages, then the reader's one: B's fields move out from under B, so
+    // they are new to the reader, rather than read as written or through a reused number.
     String head = "syntax = \"proto3\";\npackage p;\nmessage A {\n  int32 a = 1;\n}\n";
     ProtobufSchema v1 = new ProtobufSchema(head + "message B {\n  int32 id = 1;\n"
         + "  string note = 2;\n}\n");
@@ -1102,13 +1104,144 @@ class ProtobufProvenanceDeserializerTest {
     client.register(SUBJECT, reader);
 
     DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(0, get(read, "id"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aRecordOfAWrappersRootIsReadByProvenanceThoughItIsNotItsFilesFirst() throws Exception {
+    // The writer's root param picks B, the second of its file's messages: single-message
+    // provenance is rooted there, so B's reused number 2 reads unset rather than inheriting y.
+    String o = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 x = 1;\n  string y = 2;\n}\n";
+    client.register("o", new ProtobufSchema(o));
+    ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+        Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
+        Collections.singletonMap("o.proto", o), null, null);
+    int id = client.register(SUBJECT, v1);
+    Descriptor b = v1.toDescriptor();
+    byte[] bytes = framed(id, v1, "q.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("x"), 7).setField(b.findFieldByName("y"), "ada").build());
+    client.register(SUBJECT, new ProtobufSchema(
+        "syntax = \"proto3\";\npackage q;\nmessage B {\n  int32 x = 1;\n}\n"));
+    ProtobufSchema reader = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage q;\nmessage B {\n  int32 x = 1;\n  string memo = 2;\n}\n");
+    client.register(SUBJECT, reader);
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "x"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aRecordOfAnotherThanTheReadersRootIsReadAsWritten() throws Exception {
+    // The reader's root param picks B, so its provenance has no locations for A: a record of A
+    // is read without provenance rather than projected onto B's.
+    String o = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 x = 1;\n}\n";
+    client.register("o", new ProtobufSchema(o));
+    ProtobufSchema v1 = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n");
+    int id = client.register(SUBJECT, v1);
+    ProtobufSchema reader = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+        Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
+        Collections.singletonMap("o.proto", o), null, null);
+    client.register(SUBJECT, reader);
+    Descriptor a = v1.toDescriptor();
+    byte[] bytes = framed(id, v1, "q.A",
+        DynamicMessage.newBuilder(a).setField(a.findFieldByName("a"), 7).build());
+
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals("q.A", read.getDescriptorForType().getFullName());
+    assertEquals(7, get(read, "a"));
+  }
+
+  @Test
+  void aReaderNamingNoRootIsReadAsTheRootedVersionItMatches() throws Exception {
+    // The reader, v3 less its root param, reads as both messages, but its locations are v3's,
+    // rooted at Refund: memo's reused number reads unset rather than inheriting note.
+    String root = "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };";
+    String order = "message Order {\n  int32 o = 1;\n}";
+    String refund = "message Refund {\n  int32 id = 1;\n  string memo = 2;\n}";
+    ProtobufSchema v1 = file(root, order,
+        "message Refund {\n  int32 id = 1;\n  string note = 2;\n}");
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, file(root, order, "message Refund {\n  int32 id = 1;\n}"));
+    client.register(SUBJECT, file(root, order, refund));
+    Descriptor r = v1.toDescriptor("p.Refund");
+    byte[] bytes = framed(id, v1, "p.Refund", DynamicMessage.newBuilder(r)
+        .setField(r.findFieldByName("id"), 7).setField(r.findFieldByName("note"), "ada").build());
+    ProtobufSchema reader = file(order, refund);
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
     assertEquals(7, get(read, "id"));
-    assertEquals("old", get(read, "memo"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aReaderOfTheFileAWrapperReExportsIsReadAsTheWrapper() throws Exception {
+    // The reader a generated class for q.B gives: the re-exported file, read as both messages,
+    // its locations those of the wrapper version it matches, rooted at q.B.
+    String a = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n";
+    List<String> files = Arrays.asList(a + "message B {\n  int32 x = 1;\n  string y = 2;\n}\n",
+        a + "message B {\n  int32 x = 1;\n}\n",
+        a + "message B {\n  int32 x = 1;\n  string memo = 2;\n}\n");
+    List<ProtobufSchema> wrappers = new ArrayList<>();
+    for (int i = 0; i < files.size(); i++) {
+      client.register("o", new ProtobufSchema(files.get(i)));
+      wrappers.add(new ProtobufSchema("syntax = \"proto3\";\n"
+          + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
+          + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+          Collections.singletonList(new SchemaReference("o.proto", "o", i + 1)),
+          Collections.singletonMap("o.proto", files.get(i)), null, null));
+    }
+    int id = client.register(SUBJECT, wrappers.get(0));
+    client.register(SUBJECT, wrappers.get(1));
+    client.register(SUBJECT, wrappers.get(2));
+    Descriptor b = wrappers.get(0).toDescriptor();
+    byte[] bytes = framed(id, wrappers.get(0), "q.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("x"), 7).setField(b.findFieldByName("y"), "ada").build());
+    ProtobufSchema reader = new ProtobufSchema(files.get(2));
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "x"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
+  void aRootedReaderIsReadAsTheVersionOfSeveralMessagesItMatches() throws Exception {
+    // The converse: the versions name no root, so their locations start at each message, and
+    // the reader rooted at Refund is walked so rather than failing every record.
+    String order = "message Order {\n  int32 o = 1;\n}";
+    String refund = "message Refund {\n  int32 id = 1;\n  string memo = 2;\n}";
+    ProtobufSchema v1 = file(order, "message Refund {\n  int32 id = 1;\n  string note = 2;\n}");
+    int id = client.register(SUBJECT, v1);
+    client.register(SUBJECT, file(order, "message Refund {\n  int32 id = 1;\n}"));
+    client.register(SUBJECT, file(order, refund));
+    Descriptor r = v1.toDescriptor("p.Refund");
+    byte[] bytes = framed(id, v1, "p.Refund", DynamicMessage.newBuilder(r)
+        .setField(r.findFieldByName("id"), 7).setField(r.findFieldByName("note"), "ada").build());
+    ProtobufSchema reader = file("import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"p.Refund\" } ] };",
+        order, refund);
+
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "id"));
+    assertEquals("", get(read, "memo"));
   }
 
   @Test
   void aRecordOfTheSecondMessageFirstLeavesTheFirstMessagesProvenanceAlone() throws Exception {
-    // One writer id, two messages: B's failure is its own, so A, read after it, still is A.
+    // One writer id, two messages: B's failure is its own, so A, read after it, still is A, its
+    // fields new to a reader of one message, a reshape.
     String b = "message B {\n  int32 x = 1;\n}\n";
     ProtobufSchema v1 = file("message A {\n  int32 id = 1;\n  string note = 2;\n}\n" + b);
     int id = client.register(SUBJECT, v1);
@@ -1128,14 +1261,16 @@ class ProtobufProvenanceDeserializerTest {
         () -> deserializer.deserializeWithSchema(TOPIC, new RecordHeaders(), ofB, w -> reader));
     DynamicMessage read = (DynamicMessage) deserializer.deserializeWithSchema(
         TOPIC, new RecordHeaders(), ofA, w -> reader).getValue();
-    assertEquals(7, get(read, "id"));
+    assertEquals("p.A", read.getDescriptorForType().getFullName());
+    assertEquals(0, get(read, "id"));
     assertEquals("", get(read, "memo"));
   }
 
   @Test
-  void aRecordOfAnotherThanItsFilesFirstMessageUnderRecordNameStrategyIsReadAsWritten()
+  void aRecordOfAnotherThanItsFilesFirstMessageUnderRecordNameStrategyIsAReshape()
       throws Exception {
-    // The writer comes back unnamed by its record's name: the check still sees B, not A.
+    // The writer comes back unnamed by its record's name: B, not A, its fields new to the
+    // reader of one message.
     String a = "message A {\n  int32 a = 1;\n}\n";
     String subject = "p.B";
     ProtobufSchema v1 = file(a + "message B {\n  int32 id = 1;\n  string note = 2;\n}\n");
@@ -1152,8 +1287,8 @@ class ProtobufProvenanceDeserializerTest {
     DynamicMessage read = (DynamicMessage) new KafkaProtobufDeserializer<DynamicMessage>(
         client, config).deserializeWithSchema(TOPIC, new RecordHeaders(), bytes, w -> reader)
         .getValue();
-    assertEquals(7, get(read, "id"));
-    assertEquals("old", get(read, "memo"));
+    assertEquals(0, get(read, "id"));
+    assertEquals("", get(read, "memo"));
   }
 
   @Test
@@ -1875,7 +2010,9 @@ class ProtobufProvenanceDeserializerTest {
         + "message Row { int32 id = 1; A f = 2; }\n",
         Collections.singletonList(new SchemaReference("a.proto", "dep", 1)),
         Collections.singletonMap("a.proto", dep), null, null);
-    ProtobufSchema v2 = file("message Row { int32 id = 1; A f = 2; }",
+    // Rooted at Row, so A and C, its fields' types, do not make it read as all its messages.
+    ProtobufSchema v2 = file(ROOT_PARAM_IMPORT + rootParam("p.Row"),
+        "message Row { int32 id = 1; A f = 2; }",
         "message A { int32 x = 1; C b = 3; }\nmessage C { int32 z = 1; }");
     int id = client.register(SUBJECT, v1);
     Descriptor row = v1.toDescriptor();
@@ -2119,8 +2256,9 @@ class ProtobufProvenanceDeserializerTest {
     ProtobufSchema v1 =
         new ProtobufSchema(p + "message R { string k = 1; string big = 536870911; }");
     ProtobufSchema v2 = new ProtobufSchema(p + "message R { string k = 1; }");
-    ProtobufSchema v3 = new ProtobufSchema(
-        p + "message R { string k = 1; N nu = 3; } message N { string x = 1; }");
+    // Rooted at R, so N, a field's type, does not make it a file read as all its messages.
+    ProtobufSchema v3 = new ProtobufSchema(p + ROOT_PARAM_IMPORT + rootParam("r.R")
+        + "message R { string k = 1; N nu = 3; } message N { string x = 1; }");
     client.register(SUBJECT, v1);
     int id = client.register(SUBJECT, v2);
     client.register(SUBJECT, v3);
@@ -2338,6 +2476,13 @@ class ProtobufProvenanceDeserializerTest {
     return versions;
   }
 
+  private static final String ROOT_PARAM_IMPORT = "import \"confluent/meta.proto\";\n";
+
+  private static String rootParam(String root) {
+    return "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n";
+  }
+
   private static ProtobufSchema file(String... members) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + String.join("\n", members)
         + "\n");
@@ -2360,8 +2505,8 @@ class ProtobufProvenanceDeserializerTest {
     }
   }
 
-  /** Column ids held in multi-message mode, offset from the registry's pids. */
-  public static final class MultiMessageColumnIds extends StablePidProvenanceStrategy {
+  /** Column ids held for each version, offset from the registry's pids. */
+  public static final class HeldColumnIds extends StablePidProvenanceStrategy {
 
     static final String HELD = "test.column.ids";
 
@@ -2374,21 +2519,14 @@ class ProtobufProvenanceDeserializerTest {
     }
 
     @Override
-    protected Map<List<Integer>, Integer> pids(String subject, int version,
-        boolean includeMultipleMessages) {
+    protected Map<List<Integer>, Integer> pids(String subject, int version) {
       for (ProvenanceVersion entry : held.getVersions()) {
         if (entry.getVersion() != version) {
           continue;
         }
         Map<List<Integer>, Integer> pids = new HashMap<>();
         for (ProvenanceField field : entry.getFields()) {
-          // A one-message path p is the multi-message path [0] + p.
-          List<Integer> path = field.getPath();
-          if (includeMultipleMessages) {
-            pids.put(path, field.getPid() + 100);
-          } else if (path.size() > 1 && path.get(0) == 0) {
-            pids.put(path.subList(1, path.size()), field.getPid() + 100);
-          }
+          pids.put(field.getPath(), field.getPid() + 100);
         }
         return pids;
       }

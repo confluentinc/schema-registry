@@ -133,11 +133,11 @@ class JsonProvenancePathConformanceTest {
     if (expected == null) {
       assertThrows(ValidationException.class,
           () -> ProvenanceHistory.compute("s", history,
-              ProvenanceHistory.held(schemas), false));
+              ProvenanceHistory.held(schemas)));
       return;
     }
     SchemaProvenance provenance = ProvenanceHistory.compute("s", history,
-        ProvenanceHistory.held(schemas), false);
+        ProvenanceHistory.held(schemas));
     JsonNode read = MAPPER.readTree(document);
 
     JsonProvenanceProjection.of(ProvenanceMapping.join(provenance, 1, 3), v1, v1).prune(read);

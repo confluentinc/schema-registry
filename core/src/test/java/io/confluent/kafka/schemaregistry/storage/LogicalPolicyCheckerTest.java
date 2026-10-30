@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Type;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import java.time.Duration;
 import java.util.EnumSet;
@@ -178,9 +179,24 @@ class LogicalPolicyCheckerTest {
   }
 
   @Test
-  void formatLogicalShowsAMultiMessageProtobufFilesFirstMessage() {
-    // Only the policy wraps the messages; format=logical keeps its reading.
-    assertEquals(List.of("id"), names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
+  void formatLogicalShowsAMultiMessageProtobufFileAsAllItsMessages() {
+    // Naming no root, its records may carry either message, as the policy reads it.
+    assertEquals(List.of("p.Order", "p.Ship"),
+        names(LogicalPolicyChecker.toLogicalType(proto(ORDER, SHIP))));
+  }
+
+  @Test
+  void aProtobufFileNamingItsRootIsReadAsThatMessage() {
+    ProtobufSchema rooted = rooted("p.Ship", ORDER, SHIP);
+    assertEquals(List.of("to"), names(LogicalPolicyChecker.toPolicyLogicalType(rooted)));
+    assertEquals(List.of("to"), names(LogicalPolicyChecker.toLogicalType(rooted)));
+  }
+
+  private static ProtobufSchema rooted(String root, String... messages) {
+    return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n" + String.join("", messages));
   }
 
   private static List<String> names(LogicalType logical) {
@@ -261,6 +277,51 @@ class LogicalPolicyCheckerTest {
     assertEquals(LogicalPolicyChecker.check(direct, List.of(), CompatibilityLevel.NONE),
         LogicalPolicyChecker.check(wrapper, List.of(), CompatibilityLevel.NONE));
     assertTrue(checkFull(wrapper, direct).isEmpty());
+  }
+
+  @Test
+  void aWrapperRootChangedByItsRootParamIsChecked() {
+    // The root param picks the message records carry, so narrowing it is caught.
+    ProtobufSchema wide = rootedWrapper("google.protobuf.Int64Value");
+    ProtobufSchema narrow = rootedWrapper("google.protobuf.Int32Value");
+    assertEquals(Type.BIGINT,
+        LogicalPolicyChecker.toPolicyLogicalType(wide).getRootSchema().getType());
+    assertFalse(LogicalPolicyChecker.check(narrow, List.of(new SimpleParsedSchemaHolder(wide)),
+        CompatibilityLevel.BACKWARD).isEmpty());
+    assertTrue(LogicalPolicyChecker.check(wide, List.of(new SimpleParsedSchemaHolder(narrow)),
+        CompatibilityLevel.BACKWARD).isEmpty());
+  }
+
+  @Test
+  void aProtobufFileThatOnlyReExportsAnotherIsReadAsTheFileItReExports() {
+    // Naming no root, its records may carry any message of the file it re-exports.
+    String dependency = "syntax = \"proto3\";\npackage d;\n" + ORDER + SHIP;
+    ProtobufSchema reExporting = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage p;\nimport public \"d.proto\";\n",
+        List.of(new SchemaReference("d.proto", "d", 1)), Map.of("d.proto", dependency), null, null);
+    assertEquals(List.of("d.Order", "d.Ship"),
+        names(LogicalPolicyChecker.toPolicyLogicalType(reExporting)));
+  }
+
+  @Test
+  void aWrapperRootIsCheckedAsTheMessageItNames() {
+    // KTable's primitive roots: widening FLOAT to DOUBLE is safe, narrowing BIGINT to INT is not.
+    ProtobufSchema floatRoot = rootedWrapper("google.protobuf.FloatValue");
+    ProtobufSchema doubleRoot = rootedWrapper("google.protobuf.DoubleValue");
+    assertEquals(Type.DOUBLE,
+        LogicalPolicyChecker.toPolicyLogicalType(doubleRoot).getRootSchema().getType());
+    assertTrue(LogicalPolicyChecker.check(doubleRoot,
+        List.of(new SimpleParsedSchemaHolder(floatRoot)), CompatibilityLevel.BACKWARD).isEmpty());
+    assertFalse(LogicalPolicyChecker.check(rootedWrapper("google.protobuf.Int32Value"),
+        List.of(new SimpleParsedSchemaHolder(rootedWrapper("google.protobuf.Int64Value"))),
+        CompatibilityLevel.BACKWARD).isEmpty());
+  }
+
+  private static ProtobufSchema rootedWrapper(String root) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
+        + "import public \"google/protobuf/wrappers.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n");
   }
 
   private static ProtobufSchema reExport(String file) {
