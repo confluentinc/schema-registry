@@ -70,7 +70,7 @@ public class ProtoToLogicalTypeConverter {
   private static final int DEFAULT_DECIMAL_SCALE = 0;
 
   /**
-   * Marks the synthetic root {@link #toLogicalType(ProtobufSchema, boolean)} builds over every
+   * Marks the synthetic root {@link #toMultiMessageLogicalType(ProtobufSchema)} builds over every
    * top-level message. Its fields carry no Protobuf field numbers, so provenance identifies them by
    * name rather than deriving numbers from their position.
    */
