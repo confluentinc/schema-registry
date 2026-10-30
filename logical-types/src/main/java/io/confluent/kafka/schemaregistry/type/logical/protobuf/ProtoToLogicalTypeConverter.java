@@ -352,7 +352,8 @@ public class ProtoToLogicalTypeConverter {
     // schema.name() already does the public-import fall-through (with
     // transitive resolution + cycle protection), so reader and
     // ProtobufSchema agree on which type counts as the root.
-    Descriptor root = isReference(schema, publicImport) ? schema.toDescriptor() : null;
+    // A referenced file, with or without registry coordinates, as built-ins are left out above.
+    Descriptor root = resolvedReferences.containsKey(publicImport) ? schema.toDescriptor() : null;
     // toDescriptor() also finds an imported message by its short name, such as one sharing an
     // enum root's name, so only a message of the root's own name is the root.
     if (root == null || !root.getFullName().equals(schema.name())) {

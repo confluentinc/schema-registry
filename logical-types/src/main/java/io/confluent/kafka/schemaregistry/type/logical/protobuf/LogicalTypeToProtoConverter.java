@@ -223,6 +223,13 @@ public class LogicalTypeToProtoConverter {
               + "publicly, so the schema cannot declare its own types too: "
               + logicalType.getLocalNamedTypes().keySet());
         }
+        // A schema's root is found through one public import, so not through a re-export.
+        if (declaration(logicalType.getResolvedReferences().get(importName), logicalType,
+            fullName) != Declaration.OWN) {
+          throw new ValidationException("Root " + fullName + " would be imported from "
+              + importName + ", which only re-exports it, so the schema could not resolve it; "
+              + "reference the file that declares it");
+        }
         return buildPublicImportFile(logicalType, fullName, importName, version);
       }
     }
@@ -333,7 +340,7 @@ public class LogicalTypeToProtoConverter {
   private static String declaringImport(LogicalType logicalType, String fullName) {
     Map<String, String> resolved = logicalType.getResolvedReferences();
     if (resolved.containsKey(fullName)
-        && declaresMessage(resolved.get(fullName), logicalType, fullName)) {
+        && declaration(resolved.get(fullName), logicalType, fullName) != Declaration.NONE) {
       return fullName;
     }
     Set<String> direct = new LinkedHashSet<>();
@@ -352,7 +359,7 @@ public class LogicalTypeToProtoConverter {
     List<String> declaring = new ArrayList<>();
     for (String name : names) {
       String text = logicalType.getResolvedReferences().get(name);
-      if (text != null && declaresMessage(text, logicalType, fullName)) {
+      if (text != null && declaration(text, logicalType, fullName) != Declaration.NONE) {
         declaring.add(name);
       }
     }
@@ -363,11 +370,16 @@ public class LogicalTypeToProtoConverter {
     return declaring.isEmpty() ? null : declaring.get(0);
   }
 
-  /**
-   * Whether a referenced file declares a message: itself, or as the root of a file of only public
-   * imports, which re-exports it; not merely because it imports a file that declares it.
-   */
-  private static boolean declaresMessage(String text, LogicalType logicalType, String fullName) {
+  /** How a referenced file declares a message, if it does. */
+  private enum Declaration {
+    // Not merely by importing a file that declares it
+    NONE,
+    OWN,
+    // As the root of a file of only public imports
+    RE_EXPORT
+  }
+
+  private static Declaration declaration(String text, LogicalType logicalType, String fullName) {
     try {
       ProtobufSchema schema = new ProtobufSchema(text, logicalType.getReferences(),
           logicalType.getResolvedReferences(), null, null, null, null);
@@ -375,14 +387,15 @@ public class LogicalTypeToProtoConverter {
       String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
       for (DescriptorProto message : file.getMessageTypeList()) {
         if (declaresMessage(message, prefix, fullName)) {
-          return true;
+          return Declaration.OWN;
         }
       }
       return file.getMessageTypeCount() == 0 && file.getEnumTypeCount() == 0
-          && file.getPublicDependencyCount() > 0 && fullName.equals(schema.name());
+          && file.getPublicDependencyCount() > 0 && fullName.equals(schema.name())
+          ? Declaration.RE_EXPORT : Declaration.NONE;
     } catch (RuntimeException e) {
       // a file that does not parse declares nothing to import
-      return false;
+      return Declaration.NONE;
     }
   }
 

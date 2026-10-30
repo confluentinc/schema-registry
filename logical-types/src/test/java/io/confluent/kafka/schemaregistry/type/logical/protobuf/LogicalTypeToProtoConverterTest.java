@@ -3313,9 +3313,9 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
-  void testExternalRootImportedFromAFileReExportingIt() {
-    // A reference that only re-exports the root is where it is imported from: named after the
-    // root, listed as the only reference or not listed at all, and named for its file.
+  void testExternalRootImportedFromAFileReExportingItIsRefused() {
+    // A schema's root is found through one public import, so a reference that only re-exports
+    // it is refused: named after the root, the only reference, unlisted, or named for its file.
     String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
     String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
     String[][] cases = {
@@ -3330,10 +3330,9 @@ class LogicalTypeToProtoConverterTest {
           Schema.createNamedTypeRef("com.Foo").setNullable(false), Collections.emptyMap(), refs,
           resolved);
 
-      ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
-
-      assertEquals(Collections.singletonList(c[0]), emitted.rawSchema().getPublicImports());
-      assertEquals("com.Foo", emitted.name());
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
+      assertTrue(e.getMessage().contains("only re-exports it"), e.getMessage());
     }
   }
 
@@ -3347,6 +3346,14 @@ class LogicalTypeToProtoConverterTest {
     ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
 
     assertEquals(Collections.singletonList("com.Foo"), emitted.rawSchema().getPublicImports());
+    // Read back, as written and as its text, the root resolves without coordinates too.
+    ProtobufSchema reparsed = new ProtobufSchema(emitted.canonicalString(),
+        Collections.emptyList(), lt.getResolvedReferences(), null, null);
+    for (ProtobufSchema schema : Arrays.asList(emitted, reparsed)) {
+      LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
+      assertEquals("com.Foo", read.getRootSchema().getQualifiedName());
+      assertEquals(Schema.Type.STRUCT, read.getNamedTypes().get("com.Foo").getType());
+    }
   }
 
   @Test
