@@ -67,6 +67,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
@@ -774,6 +775,10 @@ public class AvroSchema implements ParsedSchema {
 
   @Override
   public Object copyMessage(Object message) {
+    if (message instanceof SpecificRecord) {
+      // A specific copy loads and instantiates the classes this schema names
+      AvroSchemaUtils.checkSpecificClasses(rawSchema());
+    }
     GenericData data = AvroSchemaUtils.getData(rawSchema(), message, false, false);
     return data.deepCopy(rawSchema(), message);
   }
