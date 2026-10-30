@@ -276,14 +276,14 @@ class JsonReaderDefaultsTest {
   }
 
   @Test
-  void aUnionLedByAReferenceKeepsNoFieldDefault() {
-    // The writer encodes a union's default by its first branch as written, not through a
-    // reference: the default is in the map only, and the schema still writes.
+  void aUnionLedByAReferenceKeepsItsFieldDefault() {
+    // The writer encodes a union's default by its first branch through the reference, so the
+    // default stays on the Field and the schema still writes.
     LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(
         "{\"type\": \"object\", \"properties\": {\"p\": {\"oneOf\": [{\"$ref\":"
             + " \"#/definitions/S\"}, {\"type\": \"integer\"}], \"default\": \"x\"}},"
             + " \"definitions\": {\"S\": {\"type\": \"string\"}}}"), LogicalTypeVersion.V1);
-    assertThat(lt.getRootSchema().getFields().get(0).hasDefaultValue()).isFalse();
+    assertThat(lt.getRootSchema().getFields().get(0).getDefaultValue()).isEqualTo("x");
     LogicalTypeToJsonConverter.fromLogicalType(lt, "R", LogicalTypeVersion.V2);
   }
 

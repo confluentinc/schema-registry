@@ -107,6 +107,35 @@ class EnumDefaultDdlTest {
   }
 
   @Test
+  void aUnionsEnumBranchDefaultIsRegisteredFromTheDdlShown() {
+    // A union's default is a value of its first branch, here a named enum
+    AvroSchema avro = new AvroSchema("{\"type\":\"record\",\"name\":\"Paint\",\"namespace\":\"p\","
+        + "\"fields\":[{\"name\":\"c\",\"type\":[{\"type\":\"enum\",\"name\":\"Color\","
+        + "\"symbols\":[\"RED\",\"BLUE\"]},\"int\"],\"default\":\"BLUE\"}]}");
+    JsonSchema json = new JsonSchema("{\"type\":\"object\",\"title\":\"Paint\",\"properties\":"
+        + "{\"c\":{\"oneOf\":[{\"$ref\":\"#/$defs/Color\"},{\"type\":\"integer\"}],"
+        + "\"default\":\"BLUE\"}},\"$defs\":{\"Color\":{\"type\":\"string\","
+        + "\"enum\":[\"RED\",\"BLUE\"]}}}");
+    for (ParsedSchema schema : List.of(avro, json)) {
+      String ddl = shown(schema);
+      assertTrue(ddl.contains("DEFAULT 'BLUE'"), ddl);
+      ParsedSchema back = registered(schema.schemaType(), ddl);
+      assertEquals("BLUE", defaultOf(back), schema.schemaType());
+      assertEquals(ddl, shown(back));
+    }
+    String ddl = "NAMESPACE p;\nSTRUCT Paint (c UNION(color Color NOT NULL, number INT NOT NULL) "
+        + "NOT NULL DEFAULT '%s');\nENUM Color ('RED', 'BLUE');\n";
+    // Protobuf writes a union as a oneof, which holds no default of any type
+    for (String type : List.of(AvroSchema.TYPE, JsonSchema.TYPE)) {
+      assertEquals("BLUE", defaultOf(registered(type, String.format(ddl, "BLUE"))), type);
+    }
+    for (String type : List.of(AvroSchema.TYPE, ProtobufSchema.TYPE, JsonSchema.TYPE)) {
+      assertThrows(ValidationException.class,
+          () -> registered(type, String.format(ddl, "GREEN")), type);
+    }
+  }
+
+  @Test
   void anEnumDefaultIsOneOfItsSymbolsAsAString() {
     ValidationException wrong = assertThrows(ValidationException.class, () -> registered(
         AvroSchema.TYPE, "STRUCT Paint (c ENUM('RED', 'BLUE') DEFAULT 'GREEN');\n"));
@@ -134,6 +163,15 @@ class EnumDefaultDdlTest {
     ValidationException e = assertThrows(ValidationException.class, () -> registered(
         AvroSchema.TYPE, ddl.replace("'BLUE'", "'GREEN'"), references, resolved));
     assertTrue(e.getMessage().contains("not a symbol of enum q.Color"), e.getMessage());
+    // So too as a union's first branch
+    AvroSchema union = new AvroSchema("{\"type\":\"record\",\"name\":\"Paint\","
+        + "\"namespace\":\"p\",\"fields\":[{\"name\":\"c\",\"type\":[\"q.Color\",\"int\"],"
+        + "\"default\":\"BLUE\"}]}", references, resolved, null);
+    String unionDdl = shown(union);
+    assertEquals("BLUE",
+        defaultOf(registered(AvroSchema.TYPE, unionDdl, references, resolved)));
+    assertThrows(ValidationException.class, () -> registered(AvroSchema.TYPE,
+        unionDdl.replace("'BLUE'", "'GREEN'"), references, resolved));
   }
 
   @Test
