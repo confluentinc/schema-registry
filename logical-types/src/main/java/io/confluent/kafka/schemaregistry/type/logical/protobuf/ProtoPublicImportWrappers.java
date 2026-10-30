@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
@@ -39,6 +40,21 @@ import java.util.Map;
 public final class ProtoPublicImportWrappers {
 
   private ProtoPublicImportWrappers() {
+  }
+
+  /**
+   * The message a public-import wrapper's root param picks, the one its records carry, or null if
+   * {@code schema} is no wrapper or has no such param.
+   */
+  public static String rootParam(ProtobufSchema schema) {
+    ProtoFileElement own = schema.rawSchema();
+    if (own == null || !own.getTypes().isEmpty() || own.getPublicImports().isEmpty()) {
+      return null;
+    }
+    ProtobufMeta meta = ProtobufSchema.findMeta(ProtobufSchema.CONFLUENT_FILE_META,
+        own.getOptions());
+    return meta != null && meta.getParams() != null
+        ? meta.getParams().get(ProtobufSchema.ROOT_KEY) : null;
   }
 
   /**

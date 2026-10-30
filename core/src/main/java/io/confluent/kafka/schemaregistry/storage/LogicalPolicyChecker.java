@@ -131,7 +131,12 @@ public final class LogicalPolicyChecker {
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
     // A file declaring nothing but a public import is written, and read by Flink, as the file it
     // re-exports: checked as that, not as the bare reference format=logical keeps for it.
+    String root = ProtoPublicImportWrappers.rootParam(schema);
     schema = ProtoPublicImportWrappers.resolve(schema);
+    // A root param picks the one message its records carry, of a file that may declare several.
+    if (root != null) {
+      return ProtoToLogicalTypeConverter.toLogicalType(schema.copy(root), false);
+    }
     return ProtoToLogicalTypeConverter.toLogicalType(schema, declaresSeveralMessages(schema));
   }
 
