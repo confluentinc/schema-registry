@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
@@ -123,25 +122,14 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * A Protobuf file as Flink reads it: a single top-level message is its own row, and a file with
-   * several wraps each message, in file order, as the converter's multi-message reading does. So
-   * every message is checked, and a file changing between one and several messages is seen as the
-   * reshaping it is.
+   * A Protobuf file as its records are read, as provenance reads it too: one message when it names
+   * its root or declares just one, and otherwise each message wrapped, in file order. So every
+   * message a record may carry is checked, and a file changing between one and several is seen as
+   * the reshaping it is. A file declaring nothing but a public import is read as the file it
+   * re-exports, its root param kept, rather than as the reference format=logical shows.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    // A file declaring nothing but a public import is written, and read by Flink, as the file it
-    // re-exports: checked as that, not as the bare reference format=logical keeps for it.
-    schema = ProtoPublicImportWrappers.resolve(schema);
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, declaresSeveralMessages(schema));
-  }
-
-  /**
-   * Whether the policy checks a Protobuf file as several messages, each wrapped, rather than as its
-   * one message: {@code schema} as {@link ProtoPublicImportWrappers#resolve} leaves it.
-   */
-  static boolean declaresSeveralMessages(ProtobufSchema schema) {
-    return schema.rawSchema().getTypes().stream()
-        .filter(type -> type instanceof MessageElement).count() > 1;
+    return ProtoPublicImportWrappers.asRead(schema);
   }
 
 

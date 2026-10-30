@@ -746,7 +746,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       Schema writer = writerAvroSchema.rawSchema();
       Schema reader = readerAvroSchema.rawSchema();
       return provenanceProjector().project(getSubject(), schemaId, writerAvroSchema,
-          readerAvroSchema, false, mapping -> AvroProvenanceProjection.of(writer, reader, mapping),
+          readerAvroSchema, mapping -> AvroProvenanceProjection.of(writer, reader, mapping),
           () -> AvroProvenanceProjection.sameVersion(writer, reader)).orElse(null);
     }
 

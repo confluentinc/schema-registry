@@ -3099,13 +3099,6 @@ paths:
         schema:
           type: boolean
           default: false
-      - name: includeMultipleMessages
-        in: query
-        description: Whether to root each Protobuf version at a struct over all its
-          top-level messages; ignored for other formats
-        schema:
-          type: boolean
-          default: false
       - name: compatibilityPolicy
         in: query
         description: "LOGICAL to say, for each version returned, whether it is a valid\

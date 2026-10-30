@@ -230,7 +230,7 @@ class ProvenanceCheckIdTest {
   private static ProvenanceReport report(ParsedSchema... versions) {
     List<LogicalType> types = new ArrayList<>();
     for (ParsedSchema version : versions) {
-      types.add(ProvenanceHistory.logicalTypeOf(version, false));
+      types.add(ProvenanceHistory.logicalTypeOf(version));
     }
     return Pids.report(SchemaType.of(versions[0].schemaType()), types);
   }
