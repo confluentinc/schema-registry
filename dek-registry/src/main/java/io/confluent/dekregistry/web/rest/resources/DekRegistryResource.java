@@ -332,8 +332,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      dekRegistry.validateKmsKeyInfo(
-          request.getKmsType(), request.getKmsKeyId(), request.getKmsProps());
+      dekRegistry.validateCreateKek(request);
       if (request.isShared() && testSharing) {
         KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
             request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
@@ -506,10 +505,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      if (request.getKmsProps() != null) {
-        dekRegistry.validateKmsKeyInfo(
-            oldKek.getKmsType(), oldKek.getKmsKeyId(), request.getKmsProps());
-      }
+      dekRegistry.validateUpdateKek(oldKek, request);
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
         SortedMap<String, String> kmsProps = request.getKmsProps() != null

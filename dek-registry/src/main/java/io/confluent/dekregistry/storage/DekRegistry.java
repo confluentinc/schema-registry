@@ -516,7 +516,7 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : Collections.emptySortedMap();
-    validateKmsKeyInfo(kmsType, request.getKmsKeyId(), kmsProps);
+    validateCreateKek(request);
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
@@ -722,11 +722,28 @@ public class DekRegistry implements Closeable {
     return toKekEntity(kek).toAead(configs);
   }
 
-  public void validateKmsKeyInfo(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
+  public void validateCreateKek(CreateKekRequest request) throws InvalidKeyException {
+    validateKmsKeyInfo(request.getKmsType(), request.getKmsKeyId(), request.getKmsProps(),
+        request.isShared());
+  }
+
+  // Doc-only updates of an existing KEK are not revalidated; getAead rechecks hosts before use.
+  public void validateUpdateKek(KeyEncryptionKey oldKek, UpdateKekRequest request)
       throws InvalidKeyException {
+    boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
+    boolean propsChanged = request.getKmsProps() != null;
+    if (propsChanged || (shared && !oldKek.isShared())) {
+      Map<String, String> kmsProps = propsChanged ? request.getKmsProps() : oldKek.getKmsProps();
+      validateKmsKeyInfo(oldKek.getKmsType(), oldKek.getKmsKeyId(), kmsProps, shared);
+    }
+  }
+
+  // Only shared KEKs' kmsProps reach the server's KMS client, so only those are allowlisted.
+  private void validateKmsKeyInfo(String kmsType, String kmsKeyId, Map<String, String> kmsProps,
+      boolean shared) throws InvalidKeyException {
     validateKmsType(kmsType);
     kmsType = normalizeKmsType(kmsType);
-    if (HCVAULT.equals(kmsType) && kmsProps != null) {
+    if (shared && HCVAULT.equals(kmsType) && kmsProps != null) {
       for (String prop : kmsProps.keySet()) {
         if (!HCVAULT_KMS_PROPS.contains(prop)) {
           throw new InvalidKeyException("Unsupported kmsProps key for " + HCVAULT + ": " + prop);
@@ -849,9 +866,7 @@ public class DekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getKmsProps() != null
         ? new TreeMap<>(request.getKmsProps())
         : key.getKmsProps();
-    if (request.getKmsProps() != null) {
-      validateKmsKeyInfo(key.getKmsType(), key.getKmsKeyId(), kmsProps);
-    }
+    validateUpdateKek(key, request);
     String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),

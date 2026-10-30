@@ -484,12 +484,19 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testHcVaultKmsPropsAllowlist() throws Exception {
-    client.createKek("allowed", "hcvault", "https://vault.internal/transit/keys/x",
-        Collections.singletonMap("namespace", "ns"), null, false);
-
+    client.createKek("shared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("namespace", "ns"), null, true);
     assertInvalidKek(() -> client.createKek("blocked", "hcvault",
         "https://vault.internal/transit/keys/x",
-        Collections.singletonMap("test.client", "x"), null, false));
+        Collections.singletonMap("test.client", "x"), null, true));
+    assertInvalidKek(() -> client.updateKek("shared",
+        Collections.singletonMap("test.client", "x"), null, true));
+
+    // Non-shared KEK props only reach clients, so they are not allowlisted until shared.
+    client.createKek("unshared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("test.client", "x"), null, false);
+    client.updateKek("unshared", null, "doc", false);
+    assertInvalidKek(() -> client.updateKek("unshared", null, null, true));
   }
 
   private static void assertInvalidKek(ThrowingRunnable r) {
