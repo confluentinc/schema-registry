@@ -825,7 +825,7 @@ class ProtoToLogicalTypeConverterTest {
     List<SchemaReference> refs = Arrays.asList(new SchemaReference("com.Foo", "foo", 1));
     ProtobufSchema root = new ProtobufSchema("syntax = \"proto3\";\n"
         + "import \"confluent/meta.proto\";\nimport public \"com.Foo\";\n"
-        + "option (confluent.file_meta) = {\n  params: [\n    {\n      key: \"root\",\n"
+        + "option (confluent.file_meta) = {\n  params: [\n    {\n      key: \"logical.root\",\n"
         + "      value: \"com.Foo\"\n    }\n  ]\n};\n", refs, resolved, 1, null);
 
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(root);

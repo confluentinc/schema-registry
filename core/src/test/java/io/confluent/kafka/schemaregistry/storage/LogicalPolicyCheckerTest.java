@@ -194,7 +194,7 @@ class LogicalPolicyCheckerTest {
   private static ProtobufSchema rooted(String root, String... messages) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\n"
         + "import \"confluent/meta.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n" + String.join("", messages));
   }
 
@@ -268,7 +268,7 @@ class LogicalPolicyCheckerTest {
   private static ProtobufSchema rootedWrapper(String root) {
     return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
         + "import public \"google/protobuf/wrappers.proto\";\n"
-        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n");
   }
 

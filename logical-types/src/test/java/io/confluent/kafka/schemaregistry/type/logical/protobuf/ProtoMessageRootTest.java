@@ -150,7 +150,7 @@ class ProtoMessageRootTest {
   private static final String META = "import \"confluent/meta.proto\";\n";
 
   private static String rootOption(String root) {
-    return "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+    return "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: \"" + root
         + "\" } ] };\n";
   }
 
