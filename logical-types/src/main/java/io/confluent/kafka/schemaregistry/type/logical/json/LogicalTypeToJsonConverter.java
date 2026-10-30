@@ -254,6 +254,17 @@ public class LogicalTypeToJsonConverter {
     return fromLogicalTypeBuilder(schema, rowName, ctx).build();
   }
 
+  // The type a default is written as: a union's first branch, a named type's body.
+  private static Schema defaultType(Schema type, FromLogicalContext<String> ctx) {
+    if (type.getType() == Schema.Type.UNION && !type.getBranches().isEmpty()) {
+      return defaultType(type.getBranches().get(0).getSchema(), ctx);
+    }
+    if (type.getType() == Schema.Type.NAMED_TYPE_REF && ctx.hasNamedType(type.getQualifiedName())) {
+      return ctx.getNamedType(type.getQualifiedName());
+    }
+    return type;
+  }
+
   private static org.everit.json.schema.Schema.Builder<?> fromLogicalTypeBuilder(
       Schema schema, String rowName, FromLogicalContext<String> ctx) {
     org.everit.json.schema.Schema.Builder<?> notNullSchema =
@@ -347,8 +358,8 @@ public class LogicalTypeToJsonConverter {
           final org.everit.json.schema.Schema.Builder<?> fieldSchema =
               fromLogicalTypeBuilder(fieldType, rowName + "_" + fieldName, ctx);
           if (field.hasDefaultValue() && !field.hasDerivedDefault() && !ctx.isV1()) {
-            fieldSchema.defaultValue(
-                JsonDefaultValueConverter.toJsonValue(fieldType, field.getDefaultValue()));
+            fieldSchema.defaultValue(JsonDefaultValueConverter.toJsonValue(
+                defaultType(fieldType, ctx), field.getDefaultValue()));
           }
           final Map<String, Object> extendedProps =
               new HashMap<>(fieldSchema.unprocessedProperties);
