@@ -347,8 +347,12 @@ public class LogicalTypeToJsonConverter {
           final org.everit.json.schema.Schema.Builder<?> fieldSchema =
               fromLogicalTypeBuilder(fieldType, rowName + "_" + fieldName, ctx);
           if (field.hasDefaultValue() && !field.hasDerivedDefault() && !ctx.isV1()) {
+            // A named type's default is its body's: an enum's symbol.
+            Schema defaultType = fieldType.getType() == Schema.Type.NAMED_TYPE_REF
+                && ctx.hasNamedType(fieldType.getQualifiedName())
+                ? ctx.getNamedType(fieldType.getQualifiedName()) : fieldType;
             fieldSchema.defaultValue(
-                JsonDefaultValueConverter.toJsonValue(fieldType, field.getDefaultValue()));
+                JsonDefaultValueConverter.toJsonValue(defaultType, field.getDefaultValue()));
           }
           final Map<String, Object> extendedProps =
               new HashMap<>(fieldSchema.unprocessedProperties);
