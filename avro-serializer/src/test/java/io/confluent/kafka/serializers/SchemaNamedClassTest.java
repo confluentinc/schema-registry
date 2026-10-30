@@ -109,12 +109,14 @@ public class SchemaNamedClassTest {
     assertNotLoaded("array", array(element, value(element)), "ArrayElement");
   }
 
+  // Avro 1.12.2 already refuses the class when writing the map, which it does by reflection
   @Test
   public void testMapValue() {
     Schema valueSchema = record(NAMESPACE, "MapValue", stringField());
     Object map = new NonRecordContainer(Schema.createMap(valueSchema),
         Collections.singletonMap("k", value(valueSchema)));
-    assertNotLoaded("map", map, "MapValue");
+    assertRejected(() -> specificDeserializer.deserialize("map", serializer.serialize("map", map)),
+        "MapValue");
   }
 
   // A record without a class is read from the writer schema, so its fields' types are looked up
