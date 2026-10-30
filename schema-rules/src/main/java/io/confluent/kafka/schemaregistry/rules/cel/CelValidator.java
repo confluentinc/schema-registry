@@ -83,7 +83,9 @@ public final class CelValidator implements ValidationRuleExecutor {
                     CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP)),
                 RegexEngine.RE2);
             CelKind kind = compiled.resultKind;
-            if (kind != CelKind.BOOL && kind != CelKind.STRING) {
+            // A dyn result, such as a JSON field's, is checked when evaluated, as the other
+            // clients check every result.
+            if (kind != CelKind.BOOL && kind != CelKind.STRING && kind != CelKind.DYN) {
               throw new IllegalArgumentException(
                   "Validation rule '" + key.expr + "' must return bool or string; "
                       + "got " + kind);
