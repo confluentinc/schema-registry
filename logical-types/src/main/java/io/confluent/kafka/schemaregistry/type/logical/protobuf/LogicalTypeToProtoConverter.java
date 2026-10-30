@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import com.google.common.base.CaseFormat;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -333,21 +336,16 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
-   * The reference a root is imported from: the one named after it, as a script names it, if it
-   * declares the root; else the one direct reference that does, or failing those the one resolved
-   * file that does. Several are ambiguous, since each could be what was imported.
+   * The reference a root is imported from: the one direct reference that declares it, or failing
+   * any, the one resolved file that does. A file declaring it itself is taken over one that only
+   * re-exports it; several of either are ambiguous, since each could be what was imported.
    */
   private static String declaringImport(LogicalType logicalType, String fullName) {
-    Map<String, String> resolved = logicalType.getResolvedReferences();
-    if (resolved.containsKey(fullName)
-        && declaration(resolved.get(fullName), logicalType, fullName) != Declaration.NONE) {
-      return fullName;
-    }
     Set<String> direct = new LinkedHashSet<>();
     logicalType.getReferences().forEach(reference -> direct.add(reference.getName()));
     String found = onlyDeclaring(direct, logicalType, fullName);
     if (found == null) {
-      Set<String> others = new LinkedHashSet<>(resolved.keySet());
+      Set<String> others = new LinkedHashSet<>(logicalType.getResolvedReferences().keySet());
       others.removeAll(direct);
       found = onlyDeclaring(others, logicalType, fullName);
     }
@@ -356,13 +354,17 @@ public class LogicalTypeToProtoConverter {
 
   private static String onlyDeclaring(Set<String> names, LogicalType logicalType,
       String fullName) {
-    List<String> declaring = new ArrayList<>();
+    Map<Declaration, List<String>> byKind = new EnumMap<>(Declaration.class);
     for (String name : names) {
       String text = logicalType.getResolvedReferences().get(name);
-      if (text != null && declaration(text, logicalType, fullName) != Declaration.NONE) {
-        declaring.add(name);
+      if (text != null) {
+        byKind.computeIfAbsent(declaration(text, logicalType, fullName),
+            kind -> new ArrayList<>()).add(name);
       }
     }
+    List<String> declaring = byKind.containsKey(Declaration.OWN)
+        ? byKind.get(Declaration.OWN)
+        : byKind.getOrDefault(Declaration.RE_EXPORT, Collections.emptyList());
     if (declaring.size() > 1) {
       throw new ValidationException("Root " + fullName + " is declared by more than one "
           + "referenced file, " + declaring + ", so which one it is imported from is ambiguous");
@@ -381,28 +383,32 @@ public class LogicalTypeToProtoConverter {
 
   private static Declaration declaration(String text, LogicalType logicalType, String fullName) {
     try {
-      ProtobufSchema schema = new ProtobufSchema(text, logicalType.getReferences(),
-          logicalType.getResolvedReferences(), null, null, null, null);
-      FileDescriptorProto file = schema.toDynamicSchema().getFileDescriptorProto();
-      String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
-      for (DescriptorProto message : file.getMessageTypeList()) {
-        if (declaresMessage(message, prefix, fullName)) {
+      // A file's own text tells its own messages; only a re-export needs its dependencies.
+      ProtoFileElement file = new ProtobufSchema(text).rawSchema();
+      String packageName = file.getPackageName();
+      String prefix = packageName == null || packageName.isEmpty() ? "" : packageName + ".";
+      for (TypeElement type : file.getTypes()) {
+        if (declaresMessage(type, prefix, fullName)) {
           return Declaration.OWN;
         }
       }
-      return file.getMessageTypeCount() == 0 && file.getEnumTypeCount() == 0
-          && file.getPublicDependencyCount() > 0 && fullName.equals(schema.name())
-          ? Declaration.RE_EXPORT : Declaration.NONE;
+      if (!file.getTypes().isEmpty() || file.getPublicImports().isEmpty()) {
+        return Declaration.NONE;
+      }
+      ProtobufSchema schema = new ProtobufSchema(text, logicalType.getReferences(),
+          logicalType.getResolvedReferences(), null, null, null, null);
+      return fullName.equals(schema.name()) ? Declaration.RE_EXPORT : Declaration.NONE;
     } catch (RuntimeException e) {
       // a file that does not parse declares nothing to import
       return Declaration.NONE;
     }
   }
 
-  private static boolean declaresMessage(DescriptorProto message, String prefix, String fullName) {
-    String name = prefix + message.getName();
-    return name.equals(fullName) || message.getNestedTypeList().stream()
-        .anyMatch(nested -> declaresMessage(nested, name + ".", fullName));
+  private static boolean declaresMessage(TypeElement type, String prefix, String fullName) {
+    String name = prefix + type.getName();
+    return type instanceof MessageElement && name.equals(fullName)
+        || type.getNestedTypes().stream()
+            .anyMatch(nested -> declaresMessage(nested, name + ".", fullName));
   }
 
   /**

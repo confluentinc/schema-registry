@@ -3315,11 +3315,11 @@ class LogicalTypeToProtoConverterTest {
   @Test
   void testExternalRootImportedFromAFileReExportingItIsRefused() {
     // A schema's root is found through one public import, so a reference that only re-exports
-    // it is refused: named after the root, the only reference, unlisted, or named for its file.
+    // it is refused, named after the root or for its file, when no reference declares it itself.
     String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
     String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
     String[][] cases = {
-        {"com.Foo", "com.Foo"}, {"com.Foo", null}, {"wrap.proto", "wrap.proto"}};
+        {"com.Foo", "com.Foo"}, {"wrap.proto", "wrap.proto"}};
     for (String[] c : cases) {
       Map<String, String> resolved = new LinkedHashMap<>();
       resolved.put(c[0], wrap);
@@ -3334,6 +3334,50 @@ class LogicalTypeToProtoConverterTest {
           () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
       assertTrue(e.getMessage().contains("only re-exports it"), e.getMessage());
     }
+  }
+
+  @Test
+  void testExternalRootImportedFromTheFileDeclaringItBesideAReExport() {
+    // A file declaring the root is taken over one only re-exporting it: listed with it, named
+    // after the root or not, or among resolved references without coordinates.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
+    String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    for (String wrapper : Arrays.asList("com.Foo", "alias.proto")) {
+      for (boolean listed : new boolean[] {true, false}) {
+        Map<String, String> resolved = new LinkedHashMap<>();
+        resolved.put(wrapper, wrap);
+        resolved.put("leaf.proto", leaf);
+        List<SchemaReference> refs = listed ? Arrays.asList(new SchemaReference(wrapper, "w", 1),
+            new SchemaReference("leaf.proto", "leaf", 1)) : Collections.emptyList();
+        LogicalType lt = new LogicalType("com",
+            Schema.createNamedTypeRef("com.Foo").setNullable(false), Collections.emptyMap(),
+            refs, resolved);
+
+        ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+
+        assertEquals(Collections.singletonList("leaf.proto"),
+            emitted.rawSchema().getPublicImports());
+        assertEquals("com.Foo",
+            new ProtobufSchema(emitted.canonicalString(), refs, resolved, null, null).name());
+      }
+    }
+  }
+
+  @Test
+  void testExternalRootDeclaredByTheFileNamedAfterItAndAnotherIsRefused() {
+    // The name does not decide between two files declaring the root: either could be imported.
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("com.Foo",
+        "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 a = 1;\n}\n");
+    resolved.put("leaf.proto",
+        "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  string l = 1;\n}\n");
+    LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef("com.Foo").setNullable(false),
+        Collections.emptyMap(), Arrays.asList(new SchemaReference("com.Foo", "foo", 1),
+            new SchemaReference("leaf.proto", "leaf", 1)), resolved);
+
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored"));
+    assertTrue(e.getMessage().contains("ambiguous"), e.getMessage());
   }
 
   @Test
