@@ -1169,6 +1169,38 @@ public class KafkaProtobufSerializerTest {
     }
   }
 
+  @Test(timeout = 30000)
+  public void testStrictIdCheckStopsAtTheRegisteredReferences() throws Exception {
+    // Each message holds the next twice: compared down every path, depth 24 would take minutes.
+    int depth = 24;
+    StringBuilder leaf = new StringBuilder("syntax = \"proto3\";\npackage com.leaf;\n");
+    for (int i = 0; i < depth; i++) {
+      leaf.append("message M").append(i).append(" {\n  M").append(i + 1).append(" a = 1;\n  M")
+          .append(i + 1).append(" b = 2;\n}\n");
+    }
+    leaf.append("message M").append(depth).append(" {\n  int32 f = 1;\n}\n");
+    schemaRegistry.register("leaf-value", new ProtobufSchema(leaf.toString()));
+    SchemaReference ref = new SchemaReference("leaf.proto", "leaf-value", 1);
+    ProtobufSchema registered = new ProtobufSchema("syntax = \"proto3\";\npackage com.app;\n"
+        + "import \"leaf.proto\";\nmessage App {\n  com.leaf.M0 m = 1;\n}\n",
+        ImmutableList.of(ref), ImmutableMap.of("leaf.proto", leaf.toString()), null, null);
+    int id = schemaRegistry.register(topic + "-value", registered);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false,
+        KafkaProtobufSerializerConfig.USE_SCHEMA_ID, id,
+        KafkaProtobufSerializerConfig.ID_COMPATIBILITY_STRICT, true
+    );
+    KafkaProtobufSerializer<DynamicMessage> serializer =
+        new KafkaProtobufSerializer<>(schemaRegistry, configs);
+    DynamicMessage message = DynamicMessage.newBuilder(registered.toDescriptor()).build();
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, message);
+    assertEquals(message, protobufDeserializer.deserialize(topic, headers, bytes));
+  }
+
   @Test
   public void testDependencyPreregisterRefWithNegativeOne() throws Exception {
     String refSubject = "TestProto.proto";

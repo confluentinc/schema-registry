@@ -229,6 +229,54 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     return autoRegisterSchema || useSchemaId < 0 && useSchemaGuid == null && metadata == null;
   }
 
+  @Override
+  protected Schema lookupSchemaEntityBySubjectAndId(
+      String subject, int id, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    Schema lookupSchema = getSchemaEntityBySubjectAndId(subject, id);
+    checkIdCompatible(schemaRegistry.parseSchemaOrElseThrow(lookupSchema), schema, idCompatStrict);
+    return lookupSchema;
+  }
+
+  @Override
+  protected ParsedSchema lookupSchemaByGuid(
+      String guid, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    ParsedSchema lookupSchema = schemaRegistry.getSchemaByGuid(guid, null);
+    checkIdCompatible(lookupSchema, schema, idCompatStrict);
+    return lookupSchema;
+  }
+
+  /**
+   * As the base check, given the registered references when the schema's dependencies are the
+   * registered ones: the comparison then stops at each referenced type, as it does for references
+   * looked up, rather than walking every path to it.
+   */
+  private static void checkIdCompatible(
+      ParsedSchema registered, ParsedSchema schema, boolean idCompatStrict) throws IOException {
+    if (!idCompatStrict) {
+      return;
+    }
+    if (registered instanceof ProtobufSchema && schema instanceof ProtobufSchema
+        && sameDependencies((ProtobufSchema) registered, (ProtobufSchema) schema)) {
+      schema = ((ProtobufSchema) schema).copy(registered.references());
+    }
+    if (!registered.isBackwardCompatible(schema).isEmpty()) {
+      throw new IOException("Incompatible schema of type '" + registered.schemaType()
+          + "'. Set id.compatibility.strict=false to disable this check");
+    }
+  }
+
+  private static boolean sameDependencies(ProtobufSchema registered, ProtobufSchema schema) {
+    for (Map.Entry<String, ProtoFileElement> dependency : registered.dependencies().entrySet()) {
+      ProtoFileElement own = schema.dependencies().get(dependency.getKey());
+      if (own == null || !own.toSchema().equals(dependency.getValue().toSchema())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * Resolve schema dependencies recursively.
    *
