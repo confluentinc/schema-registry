@@ -1098,6 +1098,24 @@ public class LogicalTypeToAvroConverter {
       if (value == null) {
         return JsonProperties.NULL_VALUE;
       }
+      if (fieldType.getType() == Schema.Type.NAMED_TYPE_REF) {
+        String name = fieldType.getQualifiedName();
+        if (ctx.hasNamedType(name)) {
+          // A named type's default is its body's: an enum's symbol.
+          return AvroDefaultValueConverter.toAvroData(ctx.getNamedType(name), value);
+        }
+        Object referenced = ctx.isAlreadyConverted(name) ? ctx.getConverted(name) : null;
+        if (value instanceof String && referenced instanceof org.apache.avro.Schema
+            && ((org.apache.avro.Schema) referenced).getType()
+                == org.apache.avro.Schema.Type.ENUM) {
+          // A referenced enum's symbol, which only its Avro schema lists; Avro doesn't check it.
+          if (!((org.apache.avro.Schema) referenced).getEnumSymbols().contains(value)) {
+            throw new ValidationException("Field '" + field.getName() + "' has a default '"
+                + value + "' that is not a symbol of enum " + name);
+          }
+          return value;
+        }
+      }
       return AvroDefaultValueConverter.toAvroData(fieldType, value);
     }
     if (ctx.isV1() && fieldType.isNullable()) {
