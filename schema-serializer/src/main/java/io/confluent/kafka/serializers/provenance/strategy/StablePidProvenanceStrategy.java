@@ -72,45 +72,43 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
 
   /**
    * The pid of each located path of {@code version} of {@code subject}, the paths as provenance
-   * reports them with {@code includeMultipleMessages}; null if the version has none yet.
+   * reports them, each Protobuf version as its schema names it is read; null if the version has
+   * none yet.
    *
    * @throws ProvenanceRetriableException if the pids cannot be looked up now: the record fails
    *     and the next asks again. Anything else means what {@link ProvenanceStrategy} lists: a
    *     ProvenanceUnavailableException reads the writer without provenance until the outcome
    *     expires, so it is never thrown for pids that are only late
    */
-  protected abstract Map<List<Integer>, Integer> pids(String subject, int version,
-      boolean includeMultipleMessages);
+  protected abstract Map<List<Integer>, Integer> pids(String subject, int version);
 
   @Override
   public SchemaProvenance provenance(SchemaRegistryClient client, String subject, int fromId,
-      int toId, boolean includeMultipleMessages) {
+      int toId) {
     // The registry's pids are replaced.
-    return answered(Arrays.asList(subject, fromId, toId, null, includeMultipleMessages), subject,
-        includeMultipleMessages, () -> super.provenance(
-            client, subject, fromId, toId, includeMultipleMessages));
+    return answered(Arrays.asList(subject, fromId, toId, null), subject,
+        () -> super.provenance(client, subject, fromId, toId));
   }
 
   @Override
   public SchemaProvenance provenanceToVersion(SchemaRegistryClient client, String subject,
-      int fromId, int toVersion, boolean includeMultipleMessages) {
-    return answered(Arrays.asList(subject, fromId, null, toVersion, includeMultipleMessages),
-        subject, includeMultipleMessages, () -> super.provenanceToVersion(
-            client, subject, fromId, toVersion, includeMultipleMessages));
+      int fromId, int toVersion) {
+    return answered(Arrays.asList(subject, fromId, null, toVersion), subject,
+        () -> super.provenanceToVersion(client, subject, fromId, toVersion));
   }
 
   // An answer is kept only while its versions wait for pids; once they have them, the registry is
   // asked again, so the record pairs by its answer of now, as one that never waited does.
   private SchemaProvenance answered(List<Object> key, String subject,
-      boolean includeMultipleMessages, Supplier<SchemaProvenance> ask) {
+      Supplier<SchemaProvenance> ask) {
     SchemaProvenance waiting = answers.getIfPresent(key);
     if (waiting != null) {
-      restamped(subject, waiting, includeMultipleMessages);
+      restamped(subject, waiting);
       answers.invalidate(key);
     }
     SchemaProvenance answer = ask.get();
     try {
-      return restamped(subject, answer, includeMultipleMessages);
+      return restamped(subject, answer);
     } catch (ProvenanceRetriableException e) {
       answers.put(key, answer);
       throw e;
@@ -127,12 +125,10 @@ public abstract class StablePidProvenanceStrategy extends ClientProvenanceStrate
    * @throws IllegalStateException if a location has no pid: the subclass broke the contract, and
    *     every record of the writer fails
    */
-  private SchemaProvenance restamped(String subject, SchemaProvenance provenance,
-      boolean includeMultipleMessages) {
+  private SchemaProvenance restamped(String subject, SchemaProvenance provenance) {
     List<ProvenanceVersion> versions = new ArrayList<>(provenance.getVersions().size());
     for (ProvenanceVersion version : provenance.getVersions()) {
-      Map<List<Integer>, Integer> pids =
-          pids(subject, version.getVersion(), includeMultipleMessages);
+      Map<List<Integer>, Integer> pids = pids(subject, version.getVersion());
       if (pids == null) {
         throw new ProvenanceRetriableException(
             "Version " + version.getVersion() + " of subject " + subject + " has no pids yet");

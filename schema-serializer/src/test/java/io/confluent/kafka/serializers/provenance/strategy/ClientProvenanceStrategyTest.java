@@ -110,12 +110,12 @@ public class ClientProvenanceStrategyTest {
   }
 
   private static SchemaProvenance ask(FailingClient client) {
-    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2, false);
+    return new ClientProvenanceStrategy().provenance(client, "s", 1, 2);
   }
 
   private static SchemaProvenance askToVersion(FailingClient client) {
     return new ClientProvenanceStrategy().provenanceToVersion(
-        client, "s", 1, 2, false);
+        client, "s", 1, 2);
   }
 
   // Answers the provenance request with a response, or fails as set.
@@ -133,14 +133,14 @@ public class ClientProvenanceStrategyTest {
 
     @Override
     public SchemaProvenance getProvenanceById(String subject, int fromId, int toId,
-        boolean includeInterior, boolean includeMultipleMessages)
+        boolean includeInterior)
         throws IOException, RestClientException {
       return answer();
     }
 
     @Override
     public SchemaProvenance getProvenanceToVersion(String subject, int fromId, int toVersion,
-        boolean includeInterior, boolean includeMultipleMessages)
+        boolean includeInterior)
         throws IOException, RestClientException {
       return answer();
     }
