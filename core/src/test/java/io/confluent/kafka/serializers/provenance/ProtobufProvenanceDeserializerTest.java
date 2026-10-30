@@ -1107,6 +1107,34 @@ class ProtobufProvenanceDeserializerTest {
   }
 
   @Test
+  void aRecordOfAWrappersRootIsReadByProvenanceThoughItIsNotItsFilesFirst() throws Exception {
+    // The writer's root param picks B, the second of its file's messages: single-message
+    // provenance is rooted there, so B's reused number 2 reads unset rather than inheriting y.
+    String o = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 x = 1;\n  string y = 2;\n}\n";
+    client.register("o", new ProtobufSchema(o));
+    ProtobufSchema v1 = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport public \"o.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"q.B\" } ] };\n",
+        Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
+        Collections.singletonMap("o.proto", o), null, null);
+    int id = client.register(SUBJECT, v1);
+    Descriptor b = v1.toDescriptor();
+    byte[] bytes = framed(id, v1, "q.B", DynamicMessage.newBuilder(b)
+        .setField(b.findFieldByName("x"), 7).setField(b.findFieldByName("y"), "ada").build());
+    client.register(SUBJECT, new ProtobufSchema(
+        "syntax = \"proto3\";\npackage q;\nmessage B {\n  int32 x = 1;\n}\n"));
+    ProtobufSchema reader = new ProtobufSchema(
+        "syntax = \"proto3\";\npackage q;\nmessage B {\n  int32 x = 1;\n  string memo = 2;\n}\n");
+    client.register(SUBJECT, reader);
+
+    assertEquals("ada", get(read(reader, bytes, null), "memo"));
+    DynamicMessage read = read(reader, bytes, "enabled");
+    assertEquals(7, get(read, "x"));
+    assertEquals("", get(read, "memo"));
+  }
+
+  @Test
   void aRecordOfTheSecondMessageFirstLeavesTheFirstMessagesProvenanceAlone() throws Exception {
     // One writer id, two messages: B's failure is its own, so A, read after it, still is A.
     String b = "message B {\n  int32 x = 1;\n}\n";

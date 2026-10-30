@@ -24,11 +24,13 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.ProvenancePolicyChecker.PairBy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -117,6 +119,29 @@ class ProvenancePolicyCheckerTest {
     assertEquals(LogicalPolicyChecker.check(history.get(1), holders(history, 1),
         CompatibilityLevel.BACKWARD), byName);
     assertEquals(byName, check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID));
+  }
+
+  @Test
+  void aWrappersRootIsPairedByItsOwnCheckIds() {
+    // The root param picks B, the second of the re-exported file's two messages, so its check ids
+    // are B's: renaming x under its number continues it, and B's third field has one too.
+    String file = "syntax = \"proto3\";\npackage q;\nmessage A {\n  int32 a = 1;\n}\n"
+        + "message B {\n  int32 %s = 1;\n  string y = 2;\n  int64 w = 3;\n}\n";
+    List<ParsedSchema> history = Arrays.asList(rootedWrapper(String.format(file, "x"), "q.B"),
+        rootedWrapper(String.format(file, "z"), "q.B"));
+    assertEquals(List.of(), check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID));
+    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.NAME), "FIELD_RENAMED"));
+  }
+
+  @Test
+  void aWrapperRootedInsideAnotherMessageHasNoProvenance() {
+    // A nested root is no member of the file's messages, which check ids are computed over.
+    String file = "syntax = \"proto3\";\npackage q;\n"
+        + "message P {\n  message C {\n    int32 c = 1;\n  }\n  C c = 1;\n}\n";
+    List<ParsedSchema> history = Arrays.asList(rootedWrapper(file, "q.P"),
+        rootedWrapper(file, "q.P.C"));
+    assertTrue(has(check(history, 1, CompatibilityLevel.BACKWARD, PairBy.CHECK_ID),
+        "PROVENANCE_UNAVAILABLE"));
   }
 
   // --- Provenance that cannot be computed -----------------------------------------------------
@@ -276,6 +301,14 @@ class ProvenancePolicyCheckerTest {
   private static ProtobufSchema proto(String body) {
     return new ProtobufSchema("syntax = \"proto3\";\npackage p;\nmessage Row {\n  " + body
         + "\n}\n");
+  }
+
+  private static ProtobufSchema rootedWrapper(String file, String root) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
+        + "import public \"o.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n", Collections.singletonList(new SchemaReference("o.proto", "o", 1)),
+        Collections.singletonMap("o.proto", file), null, null);
   }
 
   private static JsonSchema json(String properties) {

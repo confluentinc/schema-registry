@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -131,17 +132,38 @@ public final class LogicalPolicyChecker {
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
     // A file declaring nothing but a public import is written, and read by Flink, as the file it
     // re-exports: checked as that, not as the bare reference format=logical keeps for it.
-    schema = ProtoPublicImportWrappers.resolve(schema);
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, declaresSeveralMessages(schema));
+    return ProtoToLogicalTypeConverter.toLogicalType(ProtoPublicImportWrappers.resolve(schema),
+        checksSeveralMessages(schema));
   }
 
   /**
    * Whether the policy checks a Protobuf file as several messages, each wrapped, rather than as its
-   * one message: {@code schema} as {@link ProtoPublicImportWrappers#resolve} leaves it.
+   * one message: a file, or the file a wrapper re-exports, of several, where no root param picks
+   * one.
    */
-  static boolean declaresSeveralMessages(ProtobufSchema schema) {
-    return schema.rawSchema().getTypes().stream()
-        .filter(type -> type instanceof MessageElement).count() > 1;
+  static boolean checksSeveralMessages(ProtobufSchema schema) {
+    return ProtoPublicImportWrappers.rootParam(schema) == null
+        && ProtoPublicImportWrappers.resolve(schema).rawSchema().getTypes().stream()
+            .filter(type -> type instanceof MessageElement).count() > 1;
+  }
+
+  /**
+   * The index, among its file's top-level messages, of the one message the policy checks a
+   * Protobuf file as, or -1 when {@link #checksSeveralMessages}.
+   *
+   * @throws IllegalArgumentException for a root param naming a message nested in another, which
+   *     is no row of the file's messages
+   */
+  static int checkedMessage(ProtobufSchema schema) {
+    if (checksSeveralMessages(schema)) {
+      return -1;
+    }
+    Descriptor root = ProtoPublicImportWrappers.resolve(schema).toDescriptor();
+    if (root.getContainingType() != null) {
+      throw new IllegalArgumentException("Its root " + root.getFullName()
+          + " is nested in another message, which provenance has no locations for");
+    }
+    return root.getIndex();
   }
 
 

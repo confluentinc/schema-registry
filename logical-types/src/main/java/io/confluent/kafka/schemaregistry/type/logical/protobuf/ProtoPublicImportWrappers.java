@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
@@ -42,8 +43,24 @@ public final class ProtoPublicImportWrappers {
   }
 
   /**
+   * The message a public-import wrapper's root param picks, the one its records carry, or null if
+   * {@code schema} is no wrapper or has no such param.
+   */
+  public static String rootParam(ProtobufSchema schema) {
+    ProtoFileElement own = schema.rawSchema();
+    if (own == null || !own.getTypes().isEmpty() || own.getPublicImports().isEmpty()) {
+      return null;
+    }
+    ProtobufMeta meta = ProtobufSchema.findMeta(ProtobufSchema.CONFLUENT_FILE_META,
+        own.getOptions());
+    return meta != null && meta.getParams() != null
+        ? meta.getParams().get(ProtobufSchema.ROOT_KEY) : null;
+  }
+
+  /**
    * The file {@code schema} re-exports, converted as a direct registration of it would be, or
-   * {@code schema} itself if it declares a type or no public import.
+   * {@code schema} itself if it declares a type or no public import. A wrapper's root param names
+   * the file's root, so the message it picks is kept rather than the file's first.
    *
    * @throws IllegalArgumentException if Protobuf cannot resolve the re-export, as for a chain of
    *     them or two public imports, which a serializer cannot use either
@@ -65,8 +82,8 @@ public final class ProtoPublicImportWrappers {
       if (root == null) {
         throw new ValidationException("ProtobufSchema has no root descriptor");
       }
-      return new ProtobufSchema(new ProtobufSchema(root).rawSchema(), Collections.emptyList(),
-          Collections.emptyMap());
+      return named(new ProtobufSchema(new ProtobufSchema(root).rawSchema(),
+          Collections.emptyList(), Collections.emptyMap()), rootParam(schema));
     }
     // The parsed file with the same other dependencies, so a well-known import inlines as in the
     // file itself; a descriptor would list it as a reference and make it a named type.
@@ -74,6 +91,10 @@ public final class ProtoPublicImportWrappers {
     references.removeIf(reference -> target.equals(reference.getName()));
     Map<String, ProtoFileElement> dependencies = new LinkedHashMap<>(schema.dependencies());
     dependencies.remove(target);
-    return new ProtobufSchema(file, references, dependencies);
+    return named(new ProtobufSchema(file, references, dependencies), rootParam(schema));
+  }
+
+  private static ProtobufSchema named(ProtobufSchema file, String root) {
+    return root != null ? file.copy(root) : file;
   }
 }

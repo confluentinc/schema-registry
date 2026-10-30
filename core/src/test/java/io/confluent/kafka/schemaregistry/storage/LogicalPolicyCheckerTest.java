@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Type;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import java.time.Duration;
 import java.util.EnumSet;
@@ -261,6 +262,26 @@ class LogicalPolicyCheckerTest {
     assertEquals(LogicalPolicyChecker.check(direct, List.of(), CompatibilityLevel.NONE),
         LogicalPolicyChecker.check(wrapper, List.of(), CompatibilityLevel.NONE));
     assertTrue(checkFull(wrapper, direct).isEmpty());
+  }
+
+  @Test
+  void aWrapperRootChangedByItsRootParamIsChecked() {
+    // The root param picks the message records carry, so narrowing it is caught.
+    ProtobufSchema wide = rootedWrapper("google.protobuf.Int64Value");
+    ProtobufSchema narrow = rootedWrapper("google.protobuf.Int32Value");
+    assertEquals(Type.BIGINT,
+        LogicalPolicyChecker.toPolicyLogicalType(wide).getRootSchema().getType());
+    assertFalse(LogicalPolicyChecker.check(narrow, List.of(new SimpleParsedSchemaHolder(wide)),
+        CompatibilityLevel.BACKWARD).isEmpty());
+    assertTrue(LogicalPolicyChecker.check(wide, List.of(new SimpleParsedSchemaHolder(narrow)),
+        CompatibilityLevel.BACKWARD).isEmpty());
+  }
+
+  private static ProtobufSchema rootedWrapper(String root) {
+    return new ProtobufSchema("syntax = \"proto3\";\nimport \"confluent/meta.proto\";\n"
+        + "import public \"google/protobuf/wrappers.proto\";\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"root\", value: \"" + root
+        + "\" } ] };\n");
   }
 
   private static ProtobufSchema reExport(String file) {
