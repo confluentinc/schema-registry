@@ -126,11 +126,9 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     try {
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
       boolean useLatestForDeps = useLatestVersion && !onlyLookupReferencesBySchema;
-      if (resolvesDependencies()) {
-        schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
-            useLatestForDeps, latestCompatStrict, latestVersionsCache(),
-            skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
-      }
+      schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
+          useLatestForDeps, latestCompatStrict, latestVersionsCache(),
+          skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       SchemaId schemaId;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
@@ -220,14 +218,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
   }
 
-
-  /**
-   * Whether a schema's references are looked up: not when a schema id, guid or metadata selects
-   * a registered schema, which brings its own.
-   */
-  protected boolean resolvesDependencies() {
-    return autoRegisterSchema || useSchemaId < 0 && useSchemaGuid == null && metadata == null;
-  }
 
   /**
    * Resolve schema dependencies recursively.
