@@ -3313,6 +3313,43 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
+  void testExternalRootImportedFromAFileReExportingIt() {
+    // A reference that only re-exports the root is where it is imported from: named after the
+    // root, listed as the only reference or not listed at all, and named for its file.
+    String leaf = "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n";
+    String wrap = "syntax = \"proto3\";\npackage com;\nimport public \"leaf.proto\";\n";
+    String[][] cases = {
+        {"com.Foo", "com.Foo"}, {"com.Foo", null}, {"wrap.proto", "wrap.proto"}};
+    for (String[] c : cases) {
+      Map<String, String> resolved = new LinkedHashMap<>();
+      resolved.put(c[0], wrap);
+      resolved.put("leaf.proto", leaf);
+      List<SchemaReference> refs = c[1] == null ? Collections.emptyList()
+          : Collections.singletonList(new SchemaReference(c[1], "wrap", 1));
+      LogicalType lt = new LogicalType("com",
+          Schema.createNamedTypeRef("com.Foo").setNullable(false), Collections.emptyMap(), refs,
+          resolved);
+
+      ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+
+      assertEquals(Collections.singletonList(c[0]), emitted.rawSchema().getPublicImports());
+      assertEquals("com.Foo", emitted.name());
+    }
+  }
+
+  @Test
+  void testExternalRootOfResolvedReferencesAlone() {
+    // A logical type may carry resolved references without the registry's coordinates.
+    LogicalType lt = new LogicalType("com", Schema.createNamedTypeRef("com.Foo").setNullable(false),
+        Collections.emptyMap(), Collections.emptyList(), Collections.singletonMap("com.Foo",
+            "syntax = \"proto3\";\npackage com;\nmessage Foo {\n  int32 f = 1;\n}\n"));
+
+    ProtobufSchema emitted = LogicalTypeToProtoConverter.fromLogicalType(lt, "ignored");
+
+    assertEquals(Collections.singletonList("com.Foo"), emitted.rawSchema().getPublicImports());
+  }
+
+  @Test
   void testExternalRootDeclaredByTwoFilesIsRefused() {
     // Either could be the one imported, so neither is chosen.
     Map<String, String> resolved = new LinkedHashMap<>();

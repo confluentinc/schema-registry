@@ -326,20 +326,35 @@ public class LogicalTypeToProtoConverter {
   }
 
   /**
-   * The reference whose own file declares a message: one named after it, as a script names it,
-   * or else the only one; several are ambiguous, since each could be what was imported.
+   * The reference a root is imported from: the one named after it, as a script names it, if it
+   * declares the root; else the one direct reference that does, or failing those the one resolved
+   * file that does. Several are ambiguous, since each could be what was imported.
    */
   private static String declaringImport(LogicalType logicalType, String fullName) {
     Map<String, String> resolved = logicalType.getResolvedReferences();
-    List<String> declaring = new ArrayList<>();
-    for (SchemaReference reference : logicalType.getReferences()) {
-      String text = resolved.get(reference.getName());
-      if (text != null && declaresMessage(text, logicalType, fullName)) {
-        declaring.add(reference.getName());
-      }
-    }
-    if (declaring.contains(fullName)) {
+    if (resolved.containsKey(fullName)
+        && declaresMessage(resolved.get(fullName), logicalType, fullName)) {
       return fullName;
+    }
+    Set<String> direct = new LinkedHashSet<>();
+    logicalType.getReferences().forEach(reference -> direct.add(reference.getName()));
+    String found = onlyDeclaring(direct, logicalType, fullName);
+    if (found == null) {
+      Set<String> others = new LinkedHashSet<>(resolved.keySet());
+      others.removeAll(direct);
+      found = onlyDeclaring(others, logicalType, fullName);
+    }
+    return found;
+  }
+
+  private static String onlyDeclaring(Set<String> names, LogicalType logicalType,
+      String fullName) {
+    List<String> declaring = new ArrayList<>();
+    for (String name : names) {
+      String text = logicalType.getResolvedReferences().get(name);
+      if (text != null && declaresMessage(text, logicalType, fullName)) {
+        declaring.add(name);
+      }
     }
     if (declaring.size() > 1) {
       throw new ValidationException("Root " + fullName + " is declared by more than one "
@@ -348,22 +363,27 @@ public class LogicalTypeToProtoConverter {
     return declaring.isEmpty() ? null : declaring.get(0);
   }
 
-  // Whether a referenced file declares a message itself, not through the files it imports.
+  /**
+   * Whether a referenced file declares a message: itself, or as the root of a file of only public
+   * imports, which re-exports it; not merely because it imports a file that declares it.
+   */
   private static boolean declaresMessage(String text, LogicalType logicalType, String fullName) {
     try {
-      FileDescriptorProto file = new ProtobufSchema(text, logicalType.getReferences(),
-          logicalType.getResolvedReferences(), null, null, null, null)
-          .toDynamicSchema().getFileDescriptorProto();
+      ProtobufSchema schema = new ProtobufSchema(text, logicalType.getReferences(),
+          logicalType.getResolvedReferences(), null, null, null, null);
+      FileDescriptorProto file = schema.toDynamicSchema().getFileDescriptorProto();
       String prefix = file.getPackage().isEmpty() ? "" : file.getPackage() + ".";
       for (DescriptorProto message : file.getMessageTypeList()) {
         if (declaresMessage(message, prefix, fullName)) {
           return true;
         }
       }
+      return file.getMessageTypeCount() == 0 && file.getEnumTypeCount() == 0
+          && file.getPublicDependencyCount() > 0 && fullName.equals(schema.name());
     } catch (RuntimeException e) {
       // a file that does not parse declares nothing to import
+      return false;
     }
-    return false;
   }
 
   private static boolean declaresMessage(DescriptorProto message, String prefix, String fullName) {
