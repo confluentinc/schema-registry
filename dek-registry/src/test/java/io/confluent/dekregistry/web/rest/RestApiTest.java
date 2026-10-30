@@ -227,6 +227,46 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testUnsharingKekKeepsAndExposesSecrets() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-unshare";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.storedtoken");
+    kmsProps.put("namespace", "my-namespace");
+    client.createKek(headers, kekName, "test-kms", "myid", kmsProps, null, true, false);
+
+    // KEK write access is trusted with the secrets.
+    Kek unshared = client.updateKek(headers, kekName, null, null, false);
+    assertEquals("s.storedtoken", unshared.getKmsProps().get("token.id"));
+    client.reset();
+    assertEquals("s.storedtoken", client.getKek(kekName, false).getKmsProps().get("token.id"));
+  }
+
+  @Test
+  public void testSharingKekReplacesKmsProps() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-share";
+    Map<String, String> kmsProps = new HashMap<>();
+    kmsProps.put("token.id", "s.oldtoken");
+    kmsProps.put("namespace", "my-namespace");
+    client.createKek(headers, kekName, "test-kms", "myid", kmsProps, null, false, false);
+
+    // Merge keys off the stored kek's shared flag, so an omitted secret is cleared here.
+    Map<String, String> updatedProps = new HashMap<>();
+    updatedProps.put("namespace", "my-namespace");
+    client.updateKek(headers, kekName, updatedProps, null, true);
+    client.reset();
+    assertFalse(client.getKek(kekName, false).getKmsProps().containsKey("token.id"));
+
+    // Unshare to read the stored props back unredacted.
+    Kek unshared = client.updateKek(headers, kekName, null, null, false);
+    assertFalse(unshared.getKmsProps().containsKey("token.id"));
+    assertEquals("my-namespace", unshared.getKmsProps().get("namespace"));
+  }
+
+  @Test
   public void testTestKekResponseIsRedacted() throws Exception {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
