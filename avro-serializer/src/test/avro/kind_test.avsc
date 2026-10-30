@@ -1,0 +1,15 @@
+{
+  "namespace": "io.confluent.kafka.example",
+  "type": "record",
+  "name": "KindTest",
+  "fields": [
+    {
+      "name": "kind",
+      "type": {"type": "enum", "name": "KindTestEnum", "symbols": ["A", "B"]}
+    },
+    {
+      "name": "hash",
+      "type": {"type": "fixed", "name": "KindTestHash", "size": 2}
+    }
+  ]
+}
