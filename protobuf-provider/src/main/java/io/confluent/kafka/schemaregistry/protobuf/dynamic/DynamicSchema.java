@@ -348,7 +348,7 @@ public class DynamicSchema {
     }
     Meta.Builder metaBuilder = Meta.newBuilder();
     String doc = meta.getDoc();
-    if (doc != null) {
+    if (doc != null && !doc.isEmpty()) {
       metaBuilder.setDoc(doc);
     }
     Map<String, String> params = meta.getParams();
@@ -358,6 +358,36 @@ public class DynamicSchema {
     List<String> tags = meta.getTags();
     if (tags != null && !tags.isEmpty()) {
       metaBuilder.addAllTags(tags);
+    }
+    List<Map<String, String>> rules = meta.getRules();
+    if (rules != null && !rules.isEmpty()) {
+      for (Map<String, String> rule : rules) {
+        MetaProto.Rule.Builder ruleBuilder = MetaProto.Rule.newBuilder();
+        String name = rule.get(ProtobufSchema.NAME_FIELD);
+        boolean hasAnyField = false;
+        if (name != null && !name.isEmpty()) {
+          ruleBuilder.setName(name);
+          hasAnyField = true;
+        }
+        String ruleDoc = rule.get(ProtobufSchema.DOC_FIELD);
+        if (ruleDoc != null && !ruleDoc.isEmpty()) {
+          ruleBuilder.setDoc(ruleDoc);
+          hasAnyField = true;
+        }
+        String expr = rule.get(ProtobufSchema.EXPR_FIELD);
+        if (expr != null && !expr.isEmpty()) {
+          ruleBuilder.setExpr(expr);
+          hasAnyField = true;
+        }
+        String sql = rule.get(ProtobufSchema.SQL_FIELD);
+        if (sql != null && !sql.isEmpty()) {
+          ruleBuilder.setSql(sql);
+          hasAnyField = true;
+        }
+        if (hasAnyField) {
+          metaBuilder.addRules(ruleBuilder.build());
+        }
+      }
     }
     return metaBuilder.build();
   }
@@ -567,15 +597,6 @@ public class DynamicSchema {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();
       optionsBuilder.setPyGenericServices(pyGenericServices);
-      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
-      return this;
-    }
-
-    // Note: added
-    public Builder setPhpGenericServices(boolean phpGenericServices) {
-      FileOptions.Builder optionsBuilder =
-          DescriptorProtos.FileOptions.newBuilder();
-      optionsBuilder.setPhpGenericServices(phpGenericServices);
       mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }

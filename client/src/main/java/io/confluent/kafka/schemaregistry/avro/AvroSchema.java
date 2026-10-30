@@ -38,29 +38,38 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.ValidationRule;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.JsonProperties;
+import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +89,7 @@ public class AvroSchema implements ParsedSchema {
   private final Map<String, String> resolvedReferences;
   private final Metadata metadata;
   private final RuleSet ruleSet;
-  private final boolean isNew;
+  private final boolean validateAsNew;
 
   private transient volatile int hashCode = NO_HASHCODE;
 
@@ -103,8 +112,8 @@ public class AvroSchema implements ParsedSchema {
                     List<SchemaReference> references,
                     Map<String, String> resolvedReferences,
                     Integer version,
-                    boolean isNew) {
-    this(schemaString, references, resolvedReferences, null, null, version, isNew);
+                    boolean validateAsNew) {
+    this(schemaString, references, resolvedReferences, null, null, version, validateAsNew);
   }
 
   public AvroSchema(String schemaString,
@@ -113,13 +122,21 @@ public class AvroSchema implements ParsedSchema {
                     Metadata metadata,
                     RuleSet ruleSet,
                     Integer version,
-                    boolean isNew) {
-    this.isNew = isNew;
+                    boolean validateAsNew) {
+    this.validateAsNew = validateAsNew;
     Schema.Parser parser = getParser();
     for (String schema : resolvedReferences.values()) {
       parser.parse(schema);
     }
     this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
+    if (!validateAsNew) {
+      // For new schemas, strict validation is already applied.
+      // For non-new schemas, validation is skipped.
+      // The NO_VALIDATION parser path skips both name and namespace checks;
+      // we still want strict name validation for non-new schemas, so apply it
+      // here on the main schema only (references are already-registered schemas).
+      AvroSchemaUtils.validateNames(this.schemaObj);
+    }
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = metadata;
@@ -132,10 +149,25 @@ public class AvroSchema implements ParsedSchema {
   }
 
   public AvroSchema(Schema schemaObj, Integer version) {
-    this.isNew = false;
+    this.validateAsNew = false;
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
+    this.metadata = null;
+    this.ruleSet = null;
+    this.version = version;
+  }
+
+  public AvroSchema(
+      Schema schemaObj,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    this.validateAsNew = false;
+    this.schemaObj = schemaObj;
+    this.references = Collections.unmodifiableList(references);
+    this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = null;
     this.ruleSet = null;
     this.version = version;
@@ -149,9 +181,9 @@ public class AvroSchema implements ParsedSchema {
       Metadata metadata,
       RuleSet ruleSet,
       Integer version,
-      boolean isNew
+      boolean validateAsNew
   ) {
-    this.isNew = isNew;
+    this.validateAsNew = validateAsNew;
     this.schemaObj = schemaObj;
     this.canonicalString = canonicalString;
     this.references = references;
@@ -171,7 +203,7 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
@@ -185,7 +217,7 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
@@ -199,13 +231,20 @@ public class AvroSchema implements ParsedSchema {
         metadata,
         ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
@@ -213,19 +252,23 @@ public class AvroSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-    modifySchemaTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
     return new AvroSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
       schemaCopy.version(),
-      schemaCopy.isNew());
+      schemaCopy.isValidateAsNew());
   }
 
   protected Schema.Parser getParser() {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew());
+    boolean validateAsNew = isValidateAsNew();
+    NameValidator nameValidator = validateAsNew
+        ? NameValidator.STRICT_VALIDATOR
+        : NameValidator.NO_VALIDATION;
+    Schema.Parser parser = new Schema.Parser(nameValidator);
+    parser.setValidateDefaults(validateAsNew);
     return parser;
   }
 
@@ -321,8 +364,13 @@ public class AvroSchema implements ParsedSchema {
     return ruleSet;
   }
 
+  @Deprecated
   public boolean isNew() {
-    return isNew;
+    return validateAsNew;
+  }
+
+  public boolean isValidateAsNew() {
+    return validateAsNew;
   }
 
   @Override
@@ -335,14 +383,175 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
+  }
+
+  @Override
+  public void validate(boolean strict) {
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return;
+    }
+    Set<String> buildable = buildableRecords(schema);
+    if (!isBuildable(schema, buildable)) {
+      throw new IllegalArgumentException(
+          "Schema has no finite value: " + unbuildablePath(schema, buildable));
+    }
+  }
+
+  // Worklist over the records reachable through fields and unions, linear in their size:
+  // a record is buildable once each of its fields has a buildable alternative
+  private static Set<String> buildableRecords(Schema root) {
+    Map<String, Schema> records = new LinkedHashMap<>();
+    collectRecords(root, records);
+    Map<String, Integer> unbuilt = new HashMap<>();
+    Map<String, List<PendingField>> waiting = new HashMap<>();
+    Deque<String> ready = new ArrayDeque<>();
+    for (Schema record : records.values()) {
+      int count = 0;
+      for (Schema.Field field : record.getFields()) {
+        List<String> alternatives = recordAlternatives(field.schema());
+        if (alternatives != null) {
+          count++;
+          PendingField pending = new PendingField(record.getFullName());
+          for (String name : alternatives) {
+            waiting.computeIfAbsent(name, k -> new ArrayList<>()).add(pending);
+          }
+        }
+      }
+      unbuilt.put(record.getFullName(), count);
+      if (count == 0) {
+        ready.push(record.getFullName());
+      }
+    }
+    Set<String> buildable = new HashSet<>();
+    while (!ready.isEmpty()) {
+      String name = ready.pop();
+      buildable.add(name);
+      for (PendingField pending : waiting.getOrDefault(name, Collections.emptyList())) {
+        if (!pending.met) {
+          pending.met = true;
+          if (unbuilt.merge(pending.record, -1, Integer::sum) == 0) {
+            ready.push(pending.record);
+          }
+        }
+      }
+    }
+    return buildable;
+  }
+
+  // The records a field needs one of, or null if it is buildable without any
+  private static List<String> recordAlternatives(Schema schema) {
+    List<Schema> branches = schema.getType() == Schema.Type.UNION
+        ? schema.getTypes()
+        : Collections.singletonList(schema);
+    List<String> names = new ArrayList<>();
+    for (Schema branch : branches) {
+      if (branch.getType() == Schema.Type.RECORD) {
+        names.add(branch.getFullName());
+      } else if (isBuildable(branch, Collections.emptySet())) {
+        return null;
+      }
+    }
+    return names;
+  }
+
+  private static final class PendingField {
+    private final String record;
+    private boolean met;
+
+    private PendingField(String record) {
+      this.record = record;
+    }
+  }
+
+  // Iterative, since a chain of named references can be far deeper than the schema JSON
+  private static void collectRecords(Schema root, Map<String, Schema> records) {
+    Deque<Schema> pending = new ArrayDeque<>();
+    pending.push(root);
+    while (!pending.isEmpty()) {
+      Schema schema = pending.pop();
+      switch (schema.getType()) {
+        case RECORD:
+          if (records.putIfAbsent(schema.getFullName(), schema) == null) {
+            for (Schema.Field field : schema.getFields()) {
+              pending.push(field.schema());
+            }
+          }
+          break;
+        case UNION:
+          for (Schema branch : schema.getTypes()) {
+            pending.push(branch);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  private static boolean isBuildable(Schema schema, Set<String> buildable) {
+    switch (schema.getType()) {
+      case RECORD:
+        return buildable.contains(schema.getFullName());
+      case UNION:
+        return schema.getTypes().stream().anyMatch(t -> isBuildable(t, buildable));
+      case ENUM:
+        return !schema.getEnumSymbols().isEmpty();
+      default:
+        return true;
+    }
+  }
+
+  // Follows the first unbuildable field from the root until a record repeats,
+  // or until an empty union or enum ends the chain
+  private static String unbuildablePath(Schema root, Set<String> buildable) {
+    List<String> names = new ArrayList<>();
+    List<String> fields = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    String reason = null;
+    Schema schema = root;
+    while (true) {
+      if (schema.getType() == Schema.Type.UNION) {
+        if (schema.getTypes().isEmpty()) {
+          reason = "an empty union";
+          break;
+        }
+        schema = schema.getTypes().get(0);
+        continue;
+      }
+      names.add(schema.getFullName());
+      if (schema.getType() == Schema.Type.ENUM) {
+        reason = "an enum with no symbols";
+        break;
+      }
+      if (!seen.add(schema.getFullName())) {
+        break;
+      }
+      for (Schema.Field field : schema.getFields()) {
+        if (!isBuildable(field.schema(), buildable)) {
+          fields.add("'" + field.name() + "'");
+          schema = field.schema();
+          break;
+        }
+      }
+    }
+    if (names.isEmpty()) {
+      return reason;
+    }
+    String path = String.join(" -> ", names);
+    if (!fields.isEmpty()) {
+      path += " through fields " + String.join(", ", fields);
+    }
+    return reason != null ? path + " (" + reason + ")" : path;
   }
 
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return Lists.newArrayList("Incompatible because of different schema type");
+      return Lists.newArrayList("{errorType:\"DIFFERENT_SCHEMA_TYPE\", description:\""
+              + "Incompatible because of different schema type\", additionalInfo:\"\"}");
     }
     try {
       SchemaCompatibility.SchemaPairCompatibility result =
@@ -355,8 +564,9 @@ public class AvroSchema implements ParsedSchema {
               .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
-      return Lists.newArrayList(
-              "Unexpected exception during compatibility check: " + e.getMessage());
+      return Lists.newArrayList("{errorType:\"UNEXPECTED_ERROR\", description:\""
+              + "Unexpected exception during compatibility check: " + e.getMessage()
+              + "\", additionalInfo:\"\"}");
     }
   }
 
@@ -641,7 +851,7 @@ public class AvroSchema implements ParsedSchema {
           String fullName = recordSchema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
               message, fullName, f.name(),
-              getType(originalField.schema()), getInlineTags(originalField))) {
+              getType(originalField.schema()), getInlineTags(originalField), originalField)) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
               value = value.toString();
@@ -691,6 +901,232 @@ public class AvroSchema implements ParsedSchema {
     return result;
   }
 
+  /**
+   * Walk {@code message} against this schema and evaluate every inline
+   * {@code confluent:rules} CHECK constraint encountered, collecting all
+   * failures into the returned list. Read-only — does not modify the
+   * message.
+   *
+   * <p>Two kinds of rules are evaluated:
+   * <ul>
+   *   <li><b>Record-level</b> ({@code confluent:rules} on a RECORD schema)
+   *       — {@code this} = the record value.</li>
+   *   <li><b>Field-level</b> ({@code confluent:rules} on a record's
+   *       {@code Schema.Field}) — {@code this} = the field value. Honors
+   *       the column-level skip-on-null contract: when a field's schema
+   *       is a UNION containing {@code null} and the runtime value is
+   *       {@code null}, field-level rules are skipped.</li>
+   * </ul>
+   *
+   * <p>Failures (rules evaluating to {@code false}, returning a non-empty
+   * string, OR throwing during CEL evaluation) are appended to the
+   * returned list with their dotted-path location (e.g. {@code addr.zip},
+   * {@code tags[3]}, {@code scores["foo"]}). The walk continues after
+   * each failure so callers see the full set rather than only the first.
+   */
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    List<ValidationRuleError> violations = new ArrayList<>();
+    if (executor == null || message == null) {
+      return violations;
+    }
+    toValidatedMessage(rawSchema(), message, "", executor, failFast, violations);
+    return violations;
+  }
+
+  /**
+   * Mirrors {@link #toTransformedMessage}'s switch-on-{@link Schema.Type}
+   * dispatch shape. Each call receives a {@code (schema, value)} pair and
+   * dispatches on the schema type:
+   * <ul>
+   *   <li>{@code UNION} — resolve the concrete member; if {@code NULL},
+   *       return immediately (skip-on-null); otherwise recurse into the
+   *       resolved member.</li>
+   *   <li>{@code ARRAY} / {@code MAP} — recurse on each element / value
+   *       with an indexed or keyed path.</li>
+   *   <li>{@code RECORD} — evaluate record-level rules with
+   *       {@code this = message}; iterate fields, evaluate field-level
+   *       rules with {@code this = fieldValue} (skipping when the field
+   *       is nullable and the value is null), then recurse on each
+   *       field's value.</li>
+   *   <li>otherwise — primitive leaf; field-level rules were already
+   *       evaluated by the parent {@code RECORD} case.</li>
+   * </ul>
+   */
+  private static void toValidatedMessage(
+      Schema schema, Object value, String path,
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    if (schema == null) {
+      return;
+    }
+    switch (schema.getType()) {
+      case UNION:
+        if (value == null) {
+          return;
+        }
+        GenericData unionData = AvroSchemaUtils.getData(schema, value, false, false);
+        int unionIndex = unionData.resolveUnion(schema, value);
+        Schema member = schema.getTypes().get(unionIndex);
+        if (member.getType() == Schema.Type.NULL) {
+          return;
+        }
+        toValidatedMessage(member, value, path, executor, failFast, out);
+        return;
+      case ARRAY:
+        if (!(value instanceof Iterable)) {
+          return;
+        }
+        int i = 0;
+        for (Object element : (Iterable<?>) value) {
+          toValidatedMessage(schema.getElementType(), element,
+              path + "[" + i + "]", executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+          i++;
+        }
+        return;
+      case MAP:
+        if (!(value instanceof Map)) {
+          return;
+        }
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) value).entrySet()) {
+          toValidatedMessage(schema.getValueType(), e.getValue(),
+              path + "[\"" + e.getKey() + "\"]", executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+        return;
+      case RECORD:
+        if (value == null) {
+          return;
+        }
+        // Record-level rules: this = the record value.
+        for (ValidationRule rule : readRulesProp(schema)) {
+          evaluateOne(rule, schema, value, path, executor, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+        // Iterate fields — same pattern as toTransformedMessage's RECORD
+        // case: use the runtime schema for field iteration (handles
+        // schema evolution) but the declared schema's field for inline
+        // metadata (rules/props live on the declared schema).
+        Schema recordSchema = schema;
+        if (value instanceof GenericContainer) {
+          recordSchema = ((GenericContainer) value).getSchema();
+        }
+        GenericData recordData = AvroSchemaUtils.getData(recordSchema, value, false, false);
+        for (Schema.Field f : recordSchema.getFields()) {
+          Schema.Field originalField = schema.getField(f.name());
+          if (originalField == null) {
+            originalField = f;
+          }
+          Object fieldValue = recordData.getField(value, f.name(), f.pos());
+          if (fieldValue instanceof Utf8) {
+            fieldValue = fieldValue.toString();
+          }
+          String childPath = path.isEmpty() ? f.name() : path + "." + f.name();
+          Schema fieldSchema = originalField.schema();
+          // Skip-on-null for column-level rules: nullable union with null
+          // value → skip CEL invocation. The recursion below still enters
+          // the UNION case, resolves to NULL, and returns without doing
+          // any work.
+          if (fieldValue != null || !isNullable(fieldSchema)) {
+            for (ValidationRule rule : readRulesProp(originalField)) {
+              evaluateOne(rule, fieldSchema, fieldValue, childPath, executor, out);
+              if (failFast && !out.isEmpty()) {
+                return;
+              }
+            }
+          }
+          toValidatedMessage(fieldSchema, fieldValue, childPath, executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+        return;
+      default:
+        // Primitive leaf — no rules at this level (field-level rules
+        // were evaluated by the parent RECORD case).
+    }
+  }
+
+  /**
+   * True if {@code schema} is a UNION containing the {@code NULL} member.
+   * Used by the skip-on-null contract: a nullable field whose value is
+   * {@code null} at runtime should not have its field-level CHECK
+   * constraints invoked.
+   */
+  private static boolean isNullable(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      for (Schema member : schema.getTypes()) {
+        if (member.getType() == Schema.Type.NULL) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Read the {@code confluent:rules} JSON-array property off a record
+   * schema or field. Empty / missing / malformed entries return an empty
+   * list. {@link Schema} and {@link Schema.Field} both implement
+   * {@link JsonProperties}, so the same reader handles both.
+   */
+  private static List<ValidationRule> readRulesProp(JsonProperties source) {
+    Object propValue = source.getObjectProp("confluent:rules");
+    if (!(propValue instanceof List<?>)) {
+      return Collections.emptyList();
+    }
+    List<ValidationRule> rules = new ArrayList<>();
+    for (Object entry : (List<?>) propValue) {
+      if (entry instanceof Map) {
+        Map<?, ?> m = (Map<?, ?>) entry;
+        rules.add(new ValidationRule(
+            (String) m.get("name"),
+            (String) m.get("doc"),
+            (String) m.get("expr"),
+            (String) m.get("sql")));
+      }
+    }
+    return rules;
+  }
+
+  private static void evaluateOne(
+      ValidationRule rule, Schema schema, Object value,
+      String path, ValidationRuleExecutor executor,
+      List<ValidationRuleError> out) {
+    try {
+      Object result = executor.execute(rule, schema, value);
+      if (result instanceof Boolean) {
+        if (Boolean.FALSE.equals(result)) {
+          out.add(new ValidationRuleError(rule, path, null, null));
+        }
+      } else if (result instanceof String) {
+        String msg = (String) result;
+        if (!msg.isEmpty()) {
+          out.add(new ValidationRuleError(rule, path, msg, null));
+        }
+      } else {
+        throw new SerializationException(
+            "Validation rule '" + rule.getName() + "' resolved to an unexpected type: "
+                + (result == null ? "null" : result.getClass().getName()));
+      }
+    } catch (RuleException e) {
+      out.add(new ValidationRuleError(rule, path, null, e));
+    }
+  }
+
   private RuleContext.Type getType(Schema schema) {
     switch (schema.getType()) {
       case RECORD:
@@ -702,6 +1138,12 @@ public class AvroSchema implements ParsedSchema {
       case MAP:
         return Type.MAP;
       case UNION:
+        // Check if the schema is a nullable type
+        List<Schema> types = schema.getTypes();
+        if (types.size() == 2
+            && types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+          return Type.NULLABLE;
+        }
         return Type.COMBINED;
       case FIXED:
         return Type.FIXED;
@@ -737,7 +1179,7 @@ public class AvroSchema implements ParsedSchema {
       getInlineTagsRecursively(tags, jsonNode);
       return tags;
     } catch (IOException e) {
-      throw new IllegalStateException("Could not parse schema: " + canonicalString());
+      throw new IllegalArgumentException("Could not parse Avro schema");
     }
   }
 
@@ -832,7 +1274,8 @@ public class AvroSchema implements ParsedSchema {
 
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
@@ -841,13 +1284,22 @@ public class AvroSchema implements ParsedSchema {
       Set<String> allTags = getInlineTags(nodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        allTags.addAll(tagsToAdd);
-      }
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        allTags.removeAll(tagsToRemove);
+
+      if (addBeforeRemove) {
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+      } else {
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
       }
 
       if (allTags.isEmpty()) {
@@ -926,7 +1378,7 @@ public class AvroSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {

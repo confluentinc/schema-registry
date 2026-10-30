@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
@@ -85,10 +86,18 @@ public abstract class SchemaRegistryMojo extends AbstractMojo implements Closeab
     return this.client;
   }
 
+  /**
+   * Loads the configured providers, each wrapped so that it reads logical types DDL as well as
+   * its own format. Wrapping rather than requiring the caller to name the logical variants keeps
+   * DDL working the same across every goal: registering one sends the DDL whatever is configured
+   * here, so validating one should not quietly depend on it.
+   */
   private List<SchemaProvider> schemaProviders() {
     return schemaProviders.stream().map(s -> {
       try {
-        return Utils.newInstance(s, SchemaProvider.class);
+        SchemaProvider provider = Utils.newInstance(s, SchemaProvider.class);
+        return provider instanceof LogicalSchemaProvider
+            ? provider : new LogicalSchemaProvider(provider);
       } catch (ClassNotFoundException e) {
         throw new RuntimeException(e);
       }

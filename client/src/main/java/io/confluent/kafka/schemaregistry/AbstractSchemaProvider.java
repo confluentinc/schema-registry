@@ -20,7 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,16 +28,24 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import java.util.Set;
 
 public abstract class AbstractSchemaProvider implements SchemaProvider {
 
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG = "reference.versions.strict";
+
   private SchemaVersionFetcher schemaVersionFetcher;
+  private boolean referenceVersionsStrict = false;
 
   @Override
   public void configure(Map<String, ?> configs) {
     schemaVersionFetcher =
         (SchemaVersionFetcher) configs.get(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG);
+    Object strict = configs.get(REFERENCE_VERSIONS_STRICT_CONFIG);
+    if (strict instanceof Boolean) {
+      referenceVersionsStrict = (Boolean) strict;
+    } else if (strict instanceof String) {
+      referenceVersionsStrict = Boolean.parseBoolean((String) strict);
+    }
   }
 
   public SchemaVersionFetcher schemaVersionFetcher() {
@@ -48,33 +56,58 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
     return resolveReferences(schema, false);
   }
 
-  protected Map<String, String> resolveReferences(Schema schema, boolean isNew) {
-    List<SchemaReference> references = schema.getReferences();
+  protected Map<String, String> resolveReferences(Schema schema, boolean validateAsNew) {
+    return resolveReferences(
+        schemaVersionFetcher(), schema.getSubject(), schema.getReferences(),
+        validateAsNew, referenceVersionsStrict);
+  }
+
+  /**
+   * Recursively resolves a schema's references into a map of reference name to schema text,
+   * matching the behavior of the instance-level resolution: each unqualified reference subject is
+   * qualified relative to {@code subject}'s parent context, and each referenced schema's own
+   * references are resolved before it is added, so the map contains the full transitive closure.
+   *
+   * @param fetcher                 used to look up referenced schemas by subject and version
+   * @param subject                 the referencing schema's subject, the parent for qualification
+   * @param references              the referencing schema's references, or {@code null} for none
+   * @param validateAsNew           when true, deleted referenced versions are not looked up
+   * @param referenceVersionsStrict when true, a reference name bound to two different versions
+   *                                across the graph is an error rather than being ignored
+   */
+  public static Map<String, String> resolveReferences(
+      SchemaVersionFetcher fetcher, String subject, List<SchemaReference> references,
+      boolean validateAsNew, boolean referenceVersionsStrict) {
     if (references == null) {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
-    Set<String> visited = new HashSet<>();
-    resolveReferences(schema, result, visited, isNew);
+    Map<String, Integer> visited = new HashMap<>();
+    resolveReferences(
+        fetcher, subject, references, result, visited, validateAsNew, referenceVersionsStrict);
     return result;
   }
 
-  private void resolveReferences(
-      Schema schema, Map<String, String> schemas, Set<String> visited, boolean isNew) {
-    boolean lookupDeletedSchema = !isNew;
-    List<SchemaReference> references = schema.getReferences();
+  private static void resolveReferences(
+      SchemaVersionFetcher fetcher, String subject, List<SchemaReference> references,
+      Map<String, String> schemas, Map<String, Integer> visited,
+      boolean validateAsNew, boolean referenceVersionsStrict) {
+    boolean lookupDeletedSchema = !validateAsNew;
+    if (references == null) {
+      return;
+    }
     for (SchemaReference reference : references) {
       if (reference.getName() == null
           || reference.getSubject() == null
           || reference.getVersion() == null) {
-        throw new IllegalStateException("Invalid reference: " + reference);
+        throw new IllegalArgumentException("Invalid reference: " + reference);
       }
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-              schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
-      Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
+              fetcher.tenant(), subject, reference.getSubject());
+      Schema s = fetcher.getByVersion(refSubject.toQualifiedSubject(),
               reference.getVersion(), lookupDeletedSchema);
       if (s == null) {
-        throw new IllegalStateException("No schema reference found for subject \""
+        throw new IllegalArgumentException("No schema reference found for subject \""
                 + refSubject
                 + "\" and version "
                 + reference.getVersion());
@@ -83,13 +116,23 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         // Update the version with the latest
         reference.setVersion(s.getVersion());
       }
-      if (visited.contains(reference.getName())) {
+      if (visited.containsKey(reference.getName())) {
+        if (referenceVersionsStrict) {
+          Integer previousVersion = visited.get(reference.getName());
+          if (!previousVersion.equals(reference.getVersion())) {
+            throw new IllegalStateException(
+                "Conflicting reference versions for \"" + reference.getName()
+                + "\": version " + previousVersion
+                + " and version " + reference.getVersion());
+          }
+        }
         continue;
       } else {
-        visited.add(reference.getName());
+        visited.put(reference.getName(), reference.getVersion());
       }
       if (!schemas.containsKey(reference.getName())) {
-        resolveReferences(s, schemas, visited, isNew);
+        resolveReferences(fetcher, s.getSubject(), s.getReferences(), schemas, visited,
+            validateAsNew, referenceVersionsStrict);
         schemas.put(reference.getName(), s.getSchema());
       }
     }

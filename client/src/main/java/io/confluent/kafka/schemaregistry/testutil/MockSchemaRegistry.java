@@ -46,7 +46,7 @@ import java.util.Map;
  */
 public final class MockSchemaRegistry {
   private static final String MOCK_URL_PREFIX = "mock://";
-  private static final Map<String, SchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
+  private static final Map<String, MockSchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
 
   // Not instantiable. All access is via static methods.
   private MockSchemaRegistry() {
@@ -86,7 +86,9 @@ public final class MockSchemaRegistry {
   public static SchemaRegistryClient getClientForScope(final String scope,
                                                        List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
-      if (!SCOPED_CLIENTS.containsKey(scope)) {
+      if (SCOPED_CLIENTS.containsKey(scope)) {
+        SCOPED_CLIENTS.get(scope).addProviders(providers);
+      } else {
         SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
       }
     }
@@ -108,7 +110,9 @@ public final class MockSchemaRegistry {
                                                        List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
       for (String scope : scopes) {
-        if (!SCOPED_CLIENTS.containsKey(scope)) {
+        if (SCOPED_CLIENTS.containsKey(scope)) {
+          SCOPED_CLIENTS.get(scope).addProviders(providers);
+        } else {
           SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
         }
       }
@@ -136,6 +140,7 @@ public final class MockSchemaRegistry {
     }
   }
 
+  @Deprecated
   public static String validateAndMaybeGetMockScope(final List<String> urls) {
     final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
@@ -159,9 +164,18 @@ public final class MockSchemaRegistry {
     }
   }
 
+  @Deprecated
   public static List<String> validateAndMaybeGetMockScope(final String baseUrls) {
-    final List<String> mockScopes = new LinkedList<>();
+    return validateAndMaybeGetMockScopes(baseUrls);
+  }
+
+  public static List<String> validateAndMaybeGetMockScopes(final String baseUrls) {
     List<String> urls = parseBaseUrl(baseUrls);
+    return validateAndMaybeGetMockScopes(urls);
+  }
+
+  public static List<String> validateAndMaybeGetMockScopes(final List<String> urls) {
+    final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
       if (url.startsWith(MOCK_URL_PREFIX)) {
         mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
@@ -172,7 +186,7 @@ public final class MockSchemaRegistry {
       return null;
     } else if (urls.size() > mockScopes.size()) {
       throw new ConfigException(
-              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+          "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
       );
     } else {
       return mockScopes;

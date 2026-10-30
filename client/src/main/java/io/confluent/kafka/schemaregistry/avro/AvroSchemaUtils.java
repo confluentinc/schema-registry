@@ -26,14 +26,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.avro.type.LogicalMapConversion;
+import io.confluent.avro.type.LogicalMapFactory;
+import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalTypeFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -48,7 +50,10 @@ import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.NameValidator;
+import org.apache.avro.NameValidator.Result;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaParseException;
 import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -79,6 +84,7 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -96,10 +102,23 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
+    registerLogicalTypeIfAbsent(new LogicalMapFactory());
+    registerLogicalTypeIfAbsent(new VariantLogicalTypeFactory());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
+  }
+
+  // Avro's LogicalTypes registry is a single JVM-global map keyed by name, so an
+  // unconditional register() would clobber another library's factory for the same name
+  // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
+  // unconditional, so leaving ours conditional lets whichever library claimed the name first
+  // keep owning it, while still registering when no other library has.
+  private static void registerLogicalTypeIfAbsent(LogicalTypes.LogicalTypeFactory factory) {
+    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(factory.getTypeName())) {
+      LogicalTypes.register(factory);
+    }
   }
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
@@ -128,6 +147,61 @@ public class AvroSchemaUtils {
     genericData.remove();
     reflectData.remove();
     specificData.remove();
+  }
+
+  // Walks a parsed Schema and validates simple names of named types, field names,
+  // and enum symbols against Avro's STRICT_VALIDATOR rules. Namespaces and aliases
+  // are intentionally not validated. Used in the NO_VALIDATION parser path so
+  // that callers can keep strict name checks while leaving namespaces unchecked.
+  public static void validateNames(Schema schema) {
+    if (schema == null) {
+      return;
+    }
+    validateNames(schema, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  private static void validateNames(Schema schema, Set<Schema> seen) {
+    if (schema == null || !seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        validateName(schema.getName());
+        for (Schema.Field field : schema.getFields()) {
+          validateName(field.name());
+          validateNames(field.schema(), seen);
+        }
+        break;
+      case ENUM:
+        validateName(schema.getName());
+        for (String symbol : schema.getEnumSymbols()) {
+          validateName(symbol);
+        }
+        break;
+      case FIXED:
+        validateName(schema.getName());
+        break;
+      case ARRAY:
+        validateNames(schema.getElementType(), seen);
+        break;
+      case MAP:
+        validateNames(schema.getValueType(), seen);
+        break;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          validateNames(branch, seen);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void validateName(String name) {
+    Result result = NameValidator.UTF_VALIDATOR.validate(name);
+    if (!result.isOK()) {
+      throw new SchemaParseException(result.getErrors());
+    }
   }
 
   public static GenericData getGenericData(boolean useLogicalTypes) {
@@ -193,7 +267,7 @@ public class AvroSchemaUtils {
       case FIXED:
         // Avro also tries the context class loader, so a lookup holds only for the one it used
         ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
-        SpecificClassLookup lookup = specificClasses.get(schema.getFullName());
+        SpecificClassLookup lookup = specificClasses.getIfPresent(schema.getFullName());
         if (lookup != null && lookup.isFor(contextLoader)) {
           if (!lookup.found()) {
             return null;
@@ -371,7 +445,11 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new LogicalMapConversion());
+    avroData.addLogicalTypeConversion(new VariantConversion());
+    avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
     avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
@@ -381,9 +459,11 @@ public class AvroSchemaUtils {
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampNanosConversion());
   }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -407,11 +487,15 @@ public class AvroSchemaUtils {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final Map<String, Schema> primitiveSchemas;
-  private static final Map<Schema, Schema> transformedSchemas =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<Schema, Schema> transformedSchemas =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
   // Like Avro's class cache, keyed by full name, and remembering a missing class
-  private static final Map<String, SpecificClassLookup> specificClasses =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<String, SpecificClassLookup> specificClasses =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
   // Schemas that passed checkSpecificClasses, by identity, with the context class loader they
   // were checked under
   private static final Cache<Schema, ContextLoaderRef> checkedSpecificSchemas =
@@ -494,7 +578,11 @@ public class AvroSchemaUtils {
       Schema schema = ((GenericContainer) object).getSchema();
       if (removeJavaProperties) {
         final Schema s = schema;
-        schema = transformedSchemas.computeIfAbsent(s, k -> removeJavaProperties(s));
+        try {
+          schema = transformedSchemas.get(s, () -> removeJavaProperties(s));
+        } catch (java.util.concurrent.ExecutionException e) {
+          schema = removeJavaProperties(s);
+        }
       }
       return schema;
     } else if (object instanceof Map) {
@@ -536,7 +624,7 @@ public class AvroSchemaUtils {
       AvroSchema avroSchema = new AvroSchema(node.toString());
       return avroSchema.rawSchema();
     } catch (IOException e) {
-      throw new SerializationException("Could not parse schema: " + schema.toString());
+      throw new SerializationException("Could not parse Avro schema");
     }
   }
 
@@ -618,7 +706,7 @@ public class AvroSchemaUtils {
     if (message instanceof SpecificRecord) {
       SpecificData data = AvroSchemaUtils.getThreadLocalSpecificData();
       return data != null ? data : getSpecificDataForSchema(schema, useLogicalTypes);
-    } else if (message instanceof GenericRecord) {
+    } else if (message instanceof GenericContainer) {
       GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
       return data != null ? data : getGenericData(useLogicalTypes);
     } else if (message != null) {
@@ -641,7 +729,7 @@ public class AvroSchemaUtils {
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
-    } else if (value instanceof GenericRecord) {
+    } else if (value instanceof GenericContainer) {
       return new GenericDatumWriter<>(schema, data);
     } else {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
@@ -757,6 +845,9 @@ public class AvroSchemaUtils {
         } else {
           build(env, s.getValueType(), o.append(",\"values\":"));
         }
+        if (lt != null) {
+          setLogicalProps(o, lt);
+        }
         setSimpleProps(o, s.getObjectProps());
         return o.append("}");
 
@@ -784,11 +875,6 @@ public class AvroSchemaUtils {
           o.append("]");
         } else if (st == Schema.Type.FIXED) {
           o.append(",\"size\":").append(Integer.toString(s.getFixedSize()));
-          lt = s.getLogicalType();
-          // adding the logical property
-          if (lt != null) {
-            setLogicalProps(o, lt);
-          }
         } else { // st == Schema.Type.RECORD
           o.append(",\"fields\":[");
           for (Schema.Field f : s.getFields()) {
@@ -803,6 +889,9 @@ public class AvroSchemaUtils {
             o.append("}");
           }
           o.append("]");
+        }
+        if (lt != null) {
+          setLogicalProps(o, lt);
         }
         setComplexProps(o, s);
         setSimpleProps(o, s.getObjectProps());
@@ -940,7 +1029,19 @@ public class AvroSchemaUtils {
   }
 
   static class NameAwareGenericData extends GenericData {
+    // Records whose fields already line up with the writer schema. Positional
+    // access, and the identical-schema path never touches fieldIndexes.
+    private static final Object SAME_INDEX = new Object();
+
     private final GenericData delegate;
+
+    // Identity-keyed so a schema pair is not interned by Schema.equals.
+    // 1000 matches transformedSchemas. These instances are constructed before
+    // DEFAULT_CACHE_CAPACITY is assigned, so the bound is inlined.
+    private final Cache<SchemaPair, int[]> fieldIndexes =
+        CacheBuilder.newBuilder()
+            .maximumSize(1000)
+            .build();
 
     public NameAwareGenericData() {
       this(null);
@@ -950,24 +1051,139 @@ public class AvroSchemaUtils {
       this.delegate = delegate;
     }
 
-    // The following methods override methods that use position instead of name
+    // The following methods override methods that use position instead of name.
+    // Name resolution is cached once per schema pair; aligned records skip it.
 
     @Override
-    public void setField(Object record, String name, int position, Object value) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
-        ((GenericRecord) record).put(name, value);
+    protected Object getRecordState(Object record, Schema schema) {
+      if (!(record instanceof GenericRecord)) {
+        return null;
+      }
+      Schema recordSchema = ((GenericRecord) record).getSchema();
+      if (recordSchema == schema) {
+        return SAME_INDEX;
+      }
+      if (schema.getType() != Schema.Type.RECORD
+          || recordSchema.getType() != Schema.Type.RECORD) {
+        return null;
+      }
+      List<Schema.Field> writerFields = schema.getFields();
+      List<Schema.Field> recordFields = recordSchema.getFields();
+      if (fieldsMatchByIndex(writerFields, recordFields)) {
+        return SAME_INDEX;
+      }
+      return fieldIndex(schema, recordSchema);
+    }
+
+    private static boolean fieldsMatchByIndex(
+        List<Schema.Field> writerFields, List<Schema.Field> recordFields) {
+      int writerCount = writerFields.size();
+      if (writerCount > recordFields.size()) {
+        return false;
+      }
+      for (int i = 0; i < writerCount; i++) {
+        if (!writerFields.get(i).name().equals(recordFields.get(i).name())) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Matches Avro resolution: aliases on the target (writer schema) field are
+    // looked up as names on the record, after the canonical name.
+    private static int indexOf(Schema recordSchema, Schema.Field writerField) {
+      Schema.Field recordField = recordSchema.getField(writerField.name());
+      if (recordField != null) {
+        return recordField.pos();
+      }
+      for (String alias : writerField.aliases()) {
+        recordField = recordSchema.getField(alias);
+        if (recordField != null) {
+          return recordField.pos();
+        }
+      }
+      return -1;
+    }
+
+    private int[] fieldIndex(Schema writerSchema, Schema recordSchema) {
+      try {
+        return fieldIndexes.get(new SchemaPair(writerSchema, recordSchema), () -> {
+          List<Schema.Field> writerFields = writerSchema.getFields();
+          int[] index = new int[writerFields.size()];
+          for (int i = 0; i < index.length; i++) {
+            index[i] = indexOf(recordSchema, writerFields.get(i));
+          }
+          return index;
+        });
+      } catch (java.util.concurrent.ExecutionException e) {
+        throw new AvroRuntimeException(e);
+      }
+    }
+
+    // SAME_INDEX keeps the writer position. A cached slot of -1, a null state,
+    // and a non-record all fall through to the 3-arg method.
+    private static int mappedPosition(int position, Object state) {
+      if (state == SAME_INDEX) {
+        return position;
+      }
+      if (state instanceof int[]) {
+        return ((int[]) state)[position];
+      }
+      return -1;
+    }
+
+    @Override
+    protected void setField(
+        Object record, String name, int position, Object value, Object state) {
+      int mapped = mappedPosition(position, state);
+      if (mapped >= 0) {
+        ((IndexedRecord) record).put(mapped, value);
       } else {
-        ((IndexedRecord) record).put(position, value);
+        setField(record, name, position, value);
       }
     }
 
     @Override
-    public Object getField(Object record, String name, int position) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
-        return ((GenericRecord) record).get(name);
-      } else {
-        return ((IndexedRecord) record).get(position);
+    public void setField(Object record, String name, int position, Object value) {
+      if (record instanceof GenericRecord) {
+        GenericRecord genericRecord = (GenericRecord) record;
+        List<Schema.Field> fields = genericRecord.getSchema().getFields();
+        if (position >= 0 && position < fields.size()
+            && name.equals(fields.get(position).name())) {
+          ((IndexedRecord) record).put(position, value);
+          return;
+        }
+        if (genericRecord.hasField(name)) {
+          genericRecord.put(name, value);
+          return;
+        }
       }
+      ((IndexedRecord) record).put(position, value);
+    }
+
+    @Override
+    protected Object getField(Object record, String name, int position, Object state) {
+      int mapped = mappedPosition(position, state);
+      if (mapped >= 0) {
+        return ((IndexedRecord) record).get(mapped);
+      }
+      return getField(record, name, position);
+    }
+
+    @Override
+    public Object getField(Object record, String name, int position) {
+      if (record instanceof GenericRecord) {
+        GenericRecord genericRecord = (GenericRecord) record;
+        List<Schema.Field> fields = genericRecord.getSchema().getFields();
+        if (position >= 0 && position < fields.size()
+            && name.equals(fields.get(position).name())) {
+          return ((IndexedRecord) record).get(position);
+        }
+        if (genericRecord.hasField(name)) {
+          return genericRecord.get(name);
+        }
+      }
+      return ((IndexedRecord) record).get(position);
     }
 
     // The following methods override all methods that rely on logical conversions
@@ -1023,6 +1239,33 @@ public class AvroSchemaUtils {
         return this.delegate.resolveUnion(union, datum);
       } else {
         return super.resolveUnion(union, datum);
+      }
+    }
+
+    private static final class SchemaPair {
+      private final Schema writer;
+      private final Schema record;
+
+      private SchemaPair(Schema writer, Schema record) {
+        this.writer = writer;
+        this.record = record;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        if (this == o) {
+          return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+          return false;
+        }
+        SchemaPair other = (SchemaPair) o;
+        return writer == other.writer && record == other.record;
+      }
+
+      @Override
+      public int hashCode() {
+        return System.identityHashCode(writer) + System.identityHashCode(record);
       }
     }
   }

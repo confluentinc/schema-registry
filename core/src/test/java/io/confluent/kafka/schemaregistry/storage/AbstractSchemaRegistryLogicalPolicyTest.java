@@ -1,0 +1,217 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.storage;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mock;
+
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+/**
+ * Verifies the {@code CompatibilityPolicy.LOGICAL} branch inside
+ * {@link AbstractSchemaRegistry#isCompatibleWithPrevious} -- that the logical checks run only under
+ * that policy and are layered additively on top of the native compatibility check.
+ *
+ * <p>Uses {@code CALLS_REAL_METHODS} to exercise the real method body while bypassing the registry
+ * constructor, the pattern established by {@code AbstractSchemaRegistryNullEncoderTest}.
+ */
+class AbstractSchemaRegistryLogicalPolicyTest {
+
+  // old has a field that new drops. Native Avro treats a field removal as backward-compatible,
+  // but the logical Iceberg check rejects FIELD_DELETED -- so this pair isolates the additive
+  // logical behavior from the native check.
+  private static final String RECORD_A_B =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"int\"},"
+          + "{\"name\":\"b\",\"type\":\"int\"}]}";
+  private static final String RECORD_A =
+      "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+          + "{\"name\":\"a\",\"type\":\"int\"}]}";
+
+  // An open content model gaining an optional property: incompatible under STRICT only, since an
+  // old record may hold an undeclared property of that name, which no logical type can see.
+  private static final String OPEN_OBJECT_A =
+      "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}";
+  private static final String OPEN_OBJECT_A_B =
+      "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},"
+          + "\"b\":{\"type\":\"string\"}}}";
+
+  private static List<String> check(String policy, ParsedSchema newSchema,
+      List<ParsedSchemaHolder> previous) {
+    return check("BACKWARD", policy, newSchema, previous);
+  }
+
+  private static List<String> check(String level, String policy, ParsedSchema newSchema,
+      List<ParsedSchemaHolder> previous) {
+    return check(level, policy, Rule.defaults(), newSchema, previous);
+  }
+
+  private static List<String> check(String level, String policy, Set<Rule> logicalChecks,
+      ParsedSchema newSchema, List<ParsedSchemaHolder> previous) {
+    AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
+    // The mock skips the constructor, which is what normally resolves schema.logical.checks.
+    setField(registry, "logicalChecks", logicalChecks);
+    Config config = new Config();
+    config.setCompatibilityLevel(level);
+    config.setCompatibilityPolicy(policy);
+    return registry.isCompatibleWithPrevious(config, newSchema, previous);
+  }
+
+  @Test
+  void logicalPolicyRunsTheLogicalChecks() {
+    List<String> errors = check(
+        "LOGICAL",
+        new AvroSchema(RECORD_A),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    // FIELD_DELETED is a logical-checker-only Rule (native Avro treats a dropped field as
+    // backward-compatible and never reports this), so its presence isolates the LOGICAL branch.
+    assertTrue(errors.stream().anyMatch(e -> e.contains("FIELD_DELETED")),
+        "expected a logical finding under LOGICAL policy: " + errors);
+  }
+
+  @Test
+  void nonLogicalPolicyDoesNotRunTheLogicalChecks() {
+    List<String> errors = check(
+        "STRICT",
+        new AvroSchema(RECORD_A),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.stream().noneMatch(e -> e.contains("FIELD_DELETED")),
+        "logical checks must not run unless policy is LOGICAL: " + errors);
+  }
+
+  @Test
+  void logicalPolicyPassesAValidCompatibleSchema() {
+    // Identical schema, so both native and logical see no change -- no findings at all.
+    List<String> errors = check(
+        "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void allErrorTypeFindingsStayContiguous() {
+    // new(A_B) adding required field 'b' (no default) trips both checks: native Avro reports
+    // READER_FIELD_MISSING_DEFAULT_VALUE, and the logical checker reports REQUIRED_FIELD_ADDED.
+    // The native check also appends an {oldSchema...} context entry after its own finding -- that
+    // context entry (and the trailing {validateFields...} debug entry) must not land in between
+    // the two checks' {errorType...} findings and split them apart.
+    List<String> errors = check(
+        "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A))));
+
+    List<Integer> errorTypeIndexes = new ArrayList<>();
+    for (int i = 0; i < errors.size(); i++) {
+      if (errors.get(i).contains("errorType")) {
+        errorTypeIndexes.add(i);
+      }
+    }
+    assertTrue(errorTypeIndexes.size() >= 2, "expected findings from both checks: " + errors);
+    int first = errorTypeIndexes.get(0);
+    int last = errorTypeIndexes.get(errorTypeIndexes.size() - 1);
+    assertTrue(last - first + 1 == errorTypeIndexes.size(),
+        "errorType findings are not contiguous: " + errors);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"NONE", "FORWARD", "FORWARD_TRANSITIVE"})
+  void logicalPolicyRejectsNonBackwardCompatibility(String level) {
+    // LOGICAL requires a backward-compatible level, so these are rejected before either check
+    // runs -- even for a pair with no other findings.
+    List<String> errors = check(
+        level, "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityPolicy='LOGICAL'"), errors.toString());
+    assertTrue(errors.get(0).contains("compatibilityLevel='" + level + "'"), errors.toString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"BACKWARD", "BACKWARD_TRANSITIVE", "FULL", "FULL_TRANSITIVE"})
+  void logicalPolicyAllowsBackwardCompatibility(String level) {
+    List<String> errors = check(
+        level, "LOGICAL",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void nonLogicalPolicyAllowsForwardCompatibility() {
+    // The rejection is specific to LOGICAL; FORWARD is otherwise a perfectly ordinary level.
+    List<String> errors = check(
+        "FORWARD", "STRICT",
+        new AvroSchema(RECORD_A_B),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void strictPolicyRejectsAnOptionalPropertyAddedToAnOpenModel() {
+    List<String> errors = check(
+        "STRICT",
+        new JsonSchema(OPEN_OBJECT_A_B),
+        List.of(new SimpleParsedSchemaHolder(new JsonSchema(OPEN_OBJECT_A))));
+    assertTrue(errors.stream()
+            .anyMatch(e -> e.contains("OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL")),
+        errors.toString());
+  }
+
+  @Test
+  void logicalPolicyRunsTheNativeCheckAsLenient() {
+    List<String> errors = check(
+        "LOGICAL",
+        new JsonSchema(OPEN_OBJECT_A_B),
+        List.of(new SimpleParsedSchemaHolder(new JsonSchema(OPEN_OBJECT_A))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  @Test
+  void logicalPolicyHonorsADisabledCheck() {
+    List<String> errors = check(
+        "BACKWARD", "LOGICAL", LogicalPolicyChecker.parseChecks(List.of("-FIELD_DELETED")),
+        new AvroSchema(RECORD_A),
+        List.of(new SimpleParsedSchemaHolder(new AvroSchema(RECORD_A_B))));
+    assertTrue(errors.isEmpty(), errors.toString());
+  }
+
+  private static void setField(Object target, String name, Object value) {
+    try {
+      Field field = AbstractSchemaRegistry.class.getDeclaredField(name);
+      field.setAccessible(true);
+      field.set(target, value);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError(e);
+    }
+  }
+}

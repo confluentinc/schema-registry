@@ -203,6 +203,52 @@ public class SchemaDiffTest {
     SchemaDiff.compare(badMessageSchema, badMessageSchema);
   }
 
+  // An empty public-import wrapper compares as the file it imports, so a copy of that file, as a
+  // generated class or older logical types DDL registers, and the wrapper are the same schema.
+  @Test
+  public void checkPublicImportWrapperAgainstACopyOfItsFile() {
+    String wrappers = "import public \"google/protobuf/wrappers.proto\";\n";
+    ProtobufSchema doubleWrapper = new ProtobufSchema("syntax = \"proto3\";\n" + wrappers);
+    ProtobufSchema int64Wrapper = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\n" + wrappers
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", "
+        + "value: \"google.protobuf.Int64Value\" } ] };\n");
+    ProtobufSchema variantWrapper = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"confluent/type/variant.proto\";\n");
+    for (ProtobufSchema wrapper : new ProtobufSchema[] {
+        doubleWrapper, int64Wrapper, variantWrapper}) {
+      ProtobufSchema copy = new ProtobufSchema(
+          new ProtobufSchema(wrapper.toDescriptor()).canonicalString());
+      assertEquals(wrapper.name(), Collections.emptyList(), wrapper.isBackwardCompatible(copy));
+      assertEquals(wrapper.name(), Collections.emptyList(), copy.isBackwardCompatible(wrapper));
+    }
+    // Another type space still differs
+    assertTrue(variantWrapper.isBackwardCompatible(doubleWrapper).toString()
+        .contains("PACKAGE_CHANGED"));
+
+    // A referenced file whose fields refer to its own messages, by its package
+    String leaf = "syntax = \"proto3\";\n"
+        + "package com.acme;\n"
+        + "message Outer {\n"
+        + "  Inner inner = 1;\n"
+        + "  repeated Inner more = 2;\n"
+        + "  Kind kind = 3;\n"
+        + "}\n"
+        + "enum Kind {\n"
+        + "  UNKNOWN = 0;\n"
+        + "}\n"
+        + "message Inner {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    ProtobufSchema leafWrapper = new ProtobufSchema(
+        "syntax = \"proto3\";\nimport public \"leaf.proto\";\n",
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf", 1)),
+        Collections.singletonMap("leaf.proto", leaf), null, null);
+    ProtobufSchema leafCopy = new ProtobufSchema(leaf);
+    assertEquals(Collections.emptyList(), leafWrapper.isBackwardCompatible(leafCopy));
+    assertEquals(Collections.emptyList(), leafCopy.isBackwardCompatible(leafWrapper));
+  }
+
   private static String readFile(String fileName) {
     ResourceLoader resourceLoader = new ResourceLoader("/");
     return resourceLoader.toString(fileName);

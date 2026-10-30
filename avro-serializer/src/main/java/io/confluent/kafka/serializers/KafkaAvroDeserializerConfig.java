@@ -61,6 +61,10 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
   public static final String AVRO_TRUSTED_PACKAGES_DOC = "Packages, with their subpackages, "
       + "whose classes a reflection deserializer may load when a schema names them. '*' trusts "
       + "every class. See avro.trusted.classes";
+  public static final String AVRO_FAIL_ON_TRAILING_DATA_CONFIG = "avro.fail.on.trailing.data";
+  public static final boolean AVRO_FAIL_ON_TRAILING_DATA_DEFAULT = false;
+  public static final String AVRO_FAIL_ON_TRAILING_DATA_DOC =
+      "If true, fail if extra data is found after deserializing an Avro message";
 
   private static ConfigDef config;
 
@@ -84,7 +88,10 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
         .define(AVRO_TRUSTED_CLASSES_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.MEDIUM, AVRO_TRUSTED_CLASSES_DOC)
         .define(AVRO_TRUSTED_PACKAGES_CONFIG, ConfigDef.Type.LIST, "",
-            ConfigDef.Importance.MEDIUM, AVRO_TRUSTED_PACKAGES_DOC);
+            ConfigDef.Importance.MEDIUM, AVRO_TRUSTED_PACKAGES_DOC)
+        .define(AVRO_FAIL_ON_TRAILING_DATA_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_FAIL_ON_TRAILING_DATA_DEFAULT, ConfigDef.Importance.LOW,
+            AVRO_FAIL_ON_TRAILING_DATA_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {

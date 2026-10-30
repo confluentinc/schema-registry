@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -24,7 +25,7 @@ import java.util.List;
 
 public class MessageIndexes {
 
-  private static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
+  public static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
 
   private List<Integer> indexes;
 
@@ -65,6 +66,10 @@ public class MessageIndexes {
 
   public static MessageIndexes readFrom(ByteBuffer buffer) {
     int size = ByteUtils.readVarint(buffer);
+    // each index takes at least one byte
+    if (size < 0 || size > buffer.remaining()) {
+      throw new SerializationException("Invalid message index count: " + size);
+    }
     if (size == 0) {
       // optimization
       return new MessageIndexes(DEFAULT_INDEX);
