@@ -19,6 +19,7 @@ import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -41,6 +42,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.dekregistry.storage.DekRegistryConfig;
+import org.junit.function.ThrowingRunnable;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -77,6 +80,10 @@ public class RestApiTest extends ClusterTestHarness {
     props.put(
         SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
         DekRegistryRestService.X_FORWARD_HEADER
+    );
+    props.put(
+        DekRegistryConfig.DEK_REGISTRY_KMS_ALLOWED_HOSTS_CONFIG,
+        "vault.internal,.trusted.example.com"
     );
     return props;
   }
@@ -448,6 +455,58 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
     }
+  }
+
+  @Test
+  public void testKmsHostAllowlist() throws Exception {
+    client.createKek("allowed", "hcvault", "https://vault.internal:8200/transit/keys/x",
+        null, null, false);
+    client.createKek("subdomain", "hcvault", "https://a.trusted.example.com/transit/keys/x",
+        null, null, false);
+
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://attacker.example.com/transit/keys/x", null, null, true));
+    client.createKek("schemeless", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "vault.internal/transit/keys/y"), null, false);
+
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault://https",
+        "attacker.example.com/transit/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "azure-kms://https",
+        "attacker.example.com/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "HCVAULT",
+        "https://attacker.example.com/transit/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "azure-kms",
+        "https://attacker.example.com/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "https://attacker.example.com/transit/keys/x"), null, false));
+    assertInvalidKek(() -> client.updateKek("allowed",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "https://attacker.example.com/transit/keys/x"), null, false));
+  }
+
+  @Test
+  public void testHcVaultKmsPropsAllowlist() throws Exception {
+    client.createKek("shared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("namespace", "ns"), null, true);
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("test.client", "x"), null, true));
+    assertInvalidKek(() -> client.updateKek("shared",
+        Collections.singletonMap("test.client", "x"), null, true));
+
+    // Non-shared KEK props only reach clients, so they are not allowlisted until shared.
+    client.createKek("unshared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("test.client", "x"), null, false);
+    client.updateKek("unshared", null, "doc", false);
+    assertInvalidKek(() -> client.updateKek("unshared", null, null, true));
+  }
+
+  private static void assertInvalidKek(ThrowingRunnable r) {
+    RestClientException e = assertThrows(RestClientException.class, r);
+    assertEquals(422, e.getStatus());
   }
 
   @Test

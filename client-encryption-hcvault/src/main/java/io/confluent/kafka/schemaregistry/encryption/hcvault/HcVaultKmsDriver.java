@@ -25,9 +25,14 @@ import io.github.jopenlibs.vault.VaultException;
 import io.github.jopenlibs.vault.api.Auth;
 import io.github.jopenlibs.vault.api.Logical;
 import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 public class HcVaultKmsDriver implements KmsDriver {
@@ -46,8 +51,21 @@ public class HcVaultKmsDriver implements KmsDriver {
   public static final String VAULT_SSL_TRUSTSTORE_LOCATION = "VAULT_SSL_TRUSTSTORE_LOCATION";
   public static final String VAULT_APPROLE_ROLE_ID = "VAULT_APPROLE_ROLE_ID";
   public static final String VAULT_APPROLE_SECRET_ID = "VAULT_APPROLE_SECRET_ID";
+  public static final String VAULT_TOKEN = "VAULT_TOKEN";
+  public static final String VAULT_ADDR = "VAULT_ADDR";
+  // Comma-separated Vault addresses, besides VAULT_ADDR, that may receive ambient credentials.
+  public static final String VAULT_TRUSTED_ADDRESSES = "VAULT_TRUSTED_ADDRESSES";
+  public static final String VAULT_RESTRICT_AMBIENT_CREDENTIALS =
+      "VAULT_RESTRICT_AMBIENT_CREDENTIALS";
+
+  private final EnvironmentLoader envLoader;
 
   public HcVaultKmsDriver() {
+    this(new EnvironmentLoader());
+  }
+
+  HcVaultKmsDriver(EnvironmentLoader envLoader) {
+    this.envLoader = envLoader;
   }
 
   @Override
@@ -93,7 +111,9 @@ public class HcVaultKmsDriver implements KmsDriver {
     if (roleId != null && secretId != null) {
       return new SimpleEntry<>(roleId, secretId);
     }
-    EnvironmentLoader envLoader = new EnvironmentLoader();
+    if (getToken(configs) != null) {
+      return null;
+    }
     roleId = envLoader.loadVariable(VAULT_APPROLE_ROLE_ID);
     secretId = envLoader.loadVariable(VAULT_APPROLE_SECRET_ID);
     if (roleId != null && secretId != null) {
@@ -114,6 +134,9 @@ public class HcVaultKmsDriver implements KmsDriver {
       Optional<String> creds = testClient != null
           ? Optional.empty()
           : Optional.ofNullable(getToken(configs));
+      if (testClient == null && !creds.isPresent() && restrictAmbientCredentials(configs)) {
+        checkAmbientCredentialsAllowed(configs, kekUrl);
+      }
       SslConfig sslConfig = getSslConfig(configs);
       Optional<String> namespace = Optional.ofNullable(getNamespace(configs));
       KmsClient client = newKmsClientWithHcVaultKms(kekUrl, sslConfig, creds, namespace,
@@ -128,6 +151,72 @@ public class HcVaultKmsDriver implements KmsDriver {
       return client;
     } catch (VaultException e) {
       throw new GeneralSecurityException("unable to create vault client", e);
+    }
+  }
+
+  // A config value can only turn the restriction on, since configs may carry tenant input.
+  private boolean restrictAmbientCredentials(Map<String, ?> configs) {
+    return Boolean.parseBoolean(String.valueOf(configs.get(RESTRICT_AMBIENT_CREDENTIALS)))
+        || Boolean.parseBoolean(envLoader.loadVariable(VAULT_RESTRICT_AMBIENT_CREDENTIALS));
+  }
+
+  // Without an explicit token, the Vault client falls back to VAULT_TOKEN or VAULT_APPROLE_*,
+  // so only allow that when the key's Vault address is one the process operator trusts.
+  private void checkAmbientCredentialsAllowed(Map<String, ?> configs, Optional<String> kekUrl)
+      throws GeneralSecurityException {
+    boolean explicitRoleId = configs.get(APPROLE_ROLE_ID) != null
+        && configs.get(APPROLE_SECRET_ID) != null;
+    // Same presence tests as VaultConfig.build() and getRoleId().
+    boolean hasAmbientToken = envLoader.loadVariable(VAULT_TOKEN) != null;
+    boolean hasAmbientRoleId = envLoader.loadVariable(VAULT_APPROLE_ROLE_ID) != null
+        && envLoader.loadVariable(VAULT_APPROLE_SECRET_ID) != null;
+    if (explicitRoleId || (!hasAmbientToken && !hasAmbientRoleId)) {
+      return;
+    }
+    if (!kekUrl.isPresent()) {
+      throw new GeneralSecurityException(
+          "a key URI is required when using ambient Vault credentials");
+    }
+    String address = toAddress(HcVaultKmsClient.toHcVaultUri(kekUrl.get()));
+    if (address == null) {
+      throw new GeneralSecurityException("invalid Vault address in key URI " + kekUrl.get());
+    }
+    boolean trusted = Objects.equals(address, toAddress(envLoader.loadVariable(VAULT_ADDR)));
+    String trustedAddresses = envLoader.loadVariable(VAULT_TRUSTED_ADDRESSES);
+    if (!trusted && isSet(trustedAddresses)) {
+      trusted = Arrays.stream(trustedAddresses.split("\\s*,\\s*"))
+          .anyMatch(a -> Objects.equals(address, toAddress(a)));
+    }
+    if (!trusted) {
+      throw new GeneralSecurityException("Vault address " + address
+          + " is not trusted for ambient Vault credentials; set " + TOKEN_ID
+          + " or add the address to " + VAULT_ADDR + " or " + VAULT_TRUSTED_ADDRESSES);
+    }
+  }
+
+  private static boolean isSet(String value) {
+    return value != null && !value.isEmpty();
+  }
+
+  // Normalizes to scheme://host[:port], or null if not a valid absolute URI.
+  static String toAddress(String url) {
+    if (!isSet(url)) {
+      return null;
+    }
+    try {
+      URI uri = new URI(url.trim());
+      if (uri.getScheme() == null || uri.getHost() == null) {
+        return null;
+      }
+      String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
+      int port = uri.getPort();
+      if (port == -1) {
+        port = "https".equals(scheme) ? 443 : "http".equals(scheme) ? 80 : -1;
+      }
+      return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT)
+          + (port != -1 ? ":" + port : "");
+    } catch (URISyntaxException e) {
+      return null;
     }
   }
 
