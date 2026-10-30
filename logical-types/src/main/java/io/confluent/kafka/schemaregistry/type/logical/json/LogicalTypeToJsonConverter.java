@@ -42,10 +42,12 @@ import org.everit.json.schema.StringSchema;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstants.CONNECT_INDEX_PROP;
@@ -254,15 +256,22 @@ public class LogicalTypeToJsonConverter {
     return fromLogicalTypeBuilder(schema, rowName, ctx).build();
   }
 
-  // The type a default is written as: a union's first branch, a named type's body.
+  // The type a default is written as: a union's first branch and a named type's body, followed as
+  // the reader follows them, a cycle of references stopping where it repeats.
   private static Schema defaultType(Schema type, FromLogicalContext<String> ctx) {
-    if (type.getType() == Schema.Type.UNION && !type.getBranches().isEmpty()) {
-      return defaultType(type.getBranches().get(0).getSchema(), ctx);
+    Set<String> seen = new HashSet<>();
+    Schema current = type;
+    while (true) {
+      if (current.getType() == Schema.Type.UNION && !current.getBranches().isEmpty()) {
+        current = current.getBranches().get(0).getSchema();
+      } else if (current.getType() == Schema.Type.NAMED_TYPE_REF
+          && seen.add(current.getQualifiedName())
+          && ctx.hasNamedType(current.getQualifiedName())) {
+        current = ctx.getNamedType(current.getQualifiedName());
+      } else {
+        return current;
+      }
     }
-    if (type.getType() == Schema.Type.NAMED_TYPE_REF && ctx.hasNamedType(type.getQualifiedName())) {
-      return ctx.getNamedType(type.getQualifiedName());
-    }
-    return type;
   }
 
   private static org.everit.json.schema.Schema.Builder<?> fromLogicalTypeBuilder(
