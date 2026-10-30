@@ -32,6 +32,11 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.rules.FieldRedactionExecutor;
+import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -151,6 +156,29 @@ public class SchemaNamedClassTest {
     schemaRegistry.register(topic + "-value", new AvroSchema(latest));
 
     assertRejected(() -> latestSpecificDeserializer.deserialize(topic, bytes), "LatestVersion");
+  }
+
+  // A transform that preserves the source copies a specific record into the registry's schema
+  @Test
+  public void testPreservedSourceCopy() throws Exception {
+    String topic = "preserved-copy";
+    Schema latest = record(NAMESPACE, "CopyTarget", new Schema.Field("name",
+        Schema.create(Schema.Type.STRING)));
+    schemaRegistry.register(topic + "-value", redactedPreservingSource(latest));
+
+    assertRejected(() -> latestRedactingSerializer().serialize(topic, new User("name")),
+        "CopyTarget");
+  }
+
+  @Test
+  public void testPreservedSourceCopyOfGeneratedRecord() throws Exception {
+    String topic = "preserved-copy-generated";
+    schemaRegistry.register(topic + "-value", redactedPreservingSource(User.getClassSchema()));
+    User user = new User("name");
+
+    byte[] bytes = latestRedactingSerializer().serialize(topic, user);
+    assertEquals(new User("<REDACTED>"), specificDeserializer.deserialize(topic, bytes));
+    assertEquals("name", user.getName().toString());
   }
 
   @Test
@@ -295,6 +323,28 @@ public class SchemaNamedClassTest {
     assertSame(SpecificData.getForClass(User.class),
         AvroSchemaUtils.getSpecificDataForSchema(User.getClassSchema()));
     AvroSchemaUtils.checkSpecificClasses(User.getClassSchema());
+  }
+
+  private KafkaAvroSerializer latestRedactingSerializer() {
+    Map<String, Object> props = new HashMap<>();
+    props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, false);
+    props.put(KafkaAvroSerializerConfig.USE_LATEST_VERSION, true);
+    props.put(KafkaAvroSerializerConfig.LATEST_COMPATIBILITY_STRICT, false);
+    props.put(KafkaAvroSerializerConfig.RULE_EXECUTORS, "redact");
+    props.put(KafkaAvroSerializerConfig.RULE_EXECUTORS + ".redact.class",
+        FieldRedactionExecutor.class.getName());
+    return new KafkaAvroSerializer(schemaRegistry, props);
+  }
+
+  private static AvroSchema redactedPreservingSource(Schema schema) {
+    // Named in full, since JUnit's Rule is imported
+    io.confluent.kafka.schemaregistry.client.rest.entities.Rule rule =
+        new io.confluent.kafka.schemaregistry.client.rest.entities.Rule("redact", null,
+        RuleKind.TRANSFORM, RuleMode.WRITE, FieldRedactionExecutor.TYPE, null,
+        Collections.singletonMap(FieldRuleExecutor.PRESERVE_SOURCE_FIELDS, "true"),
+        null, null, null, false);
+    return new AvroSchema(schema).copy(null, new RuleSet(null, Collections.singletonList(rule)));
   }
 
   private void assertNotLoaded(String topic, Object value, String className) {

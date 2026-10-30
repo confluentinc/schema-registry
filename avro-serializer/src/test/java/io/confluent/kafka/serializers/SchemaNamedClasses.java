@@ -77,4 +77,10 @@ public class SchemaNamedClasses {
       initialized.add("SpecificDataChoice");
     }
   }
+
+  public static class CopyTarget {
+    static {
+      initialized.add("CopyTarget");
+    }
+  }
 }
