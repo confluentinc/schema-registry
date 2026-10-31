@@ -565,8 +565,14 @@ final class ConstraintEmitter {
     }
     boolean negated = ctx.NOT() != null;
     if (ConstraintResolver.isHasCompatible(ctx.check_expr_compare(), EMIT_VCTX.get())) {
-      StringBuilder lhs = new StringBuilder();
-      visitCompare(ctx.check_expr_compare(), lhs);
+      StringBuilder emitted = new StringBuilder();
+      visitCompare(ctx.check_expr_compare(), emitted);
+      String lhs = presencePath(ConstraintResolver.tryExtractLeafColumnRefCompare(
+          ctx.check_expr_compare()), emitted.toString());
+      if (lhs.isEmpty()) {
+        sb.append(negated ? "true" : "false");
+        return;
+      }
       if (negated) {
         sb.append("(has(").append(lhs).append(") && dyn(")
             .append(lhs).append(") != null)");
@@ -1788,7 +1794,13 @@ final class ConstraintEmitter {
     //
     // The vctx is non-null at this point — the public translate() entry
     // requires it.
-    String name = colidName(ctx.colid());
+    emitColumnRoot(colidName(ctx.colid()), sb);
+    if (ctx.indirection() != null) {
+      visitIndirection(ctx.indirection(), sb);
+    }
+  }
+
+  private static void emitColumnRoot(String name, StringBuilder sb) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (vctx != null && vctx.isColumn(name)) {
       if (vctx.isColumnLevel()) {
@@ -1804,9 +1816,29 @@ final class ConstraintEmitter {
     } else {
       sb.append(name);
     }
-    if (ctx.indirection() != null) {
-      visitIndirection(ctx.indirection(), sb);
+  }
+
+  /**
+   * The selection a null test of a has()-compatible column reference covers: its path up to the
+   * deepest nullable step ({@link ConstraintResolver#presenceSteps}), "" when the path is never
+   * null, or {@code emitted}, the whole reference, when that can't be told.
+   */
+  static String presencePath(LogicalTypesParser.ColumnrefContext col, String emitted) {
+    int steps = col == null ? -1 : ConstraintResolver.presenceSteps(col, EMIT_VCTX.get());
+    int all = 1 + (col == null || col.indirection() == null
+        ? 0 : col.indirection().indirection_el().size());
+    if (steps < 0 || steps == all) {
+      return emitted;
     }
+    if (steps == 0) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+    emitColumnRoot(colidName(col.colid()), sb);
+    for (int i = 0; i < steps - 1; i++) {
+      sb.append('.').append(colidName(col.indirection().indirection_el(i)));
+    }
+    return sb.toString();
   }
 
   private static void visitIndirection(

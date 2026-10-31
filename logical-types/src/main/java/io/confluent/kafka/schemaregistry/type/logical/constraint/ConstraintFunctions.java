@@ -531,8 +531,14 @@ final class ConstraintFunctions {
   private static void emitIsNotNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(has(").append(emitted).append(") && dyn(")
-          .append(emitted).append(") != null)");
+      String path = ConstraintEmitter.presencePath(
+          ConstraintResolver.tryExtractLeafColumnRef(arg), emitted);
+      if (path.isEmpty()) {
+        sb.append("true");
+        return;
+      }
+      sb.append("(has(").append(path).append(") && dyn(")
+          .append(path).append(") != null)");
     } else {
       sb.append("dyn(").append(emitted).append(") != null");
     }
@@ -547,8 +553,14 @@ final class ConstraintFunctions {
   private static void emitIsNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(!has(").append(emitted).append(") || dyn(")
-          .append(emitted).append(") == null)");
+      String path = ConstraintEmitter.presencePath(
+          ConstraintResolver.tryExtractLeafColumnRef(arg), emitted);
+      if (path.isEmpty()) {
+        sb.append("false");
+        return;
+      }
+      sb.append("(!has(").append(path).append(") || dyn(")
+          .append(path).append(") == null)");
     } else {
       sb.append("dyn(").append(emitted).append(") == null");
     }

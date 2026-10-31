@@ -2866,6 +2866,33 @@ class CheckConstraintTest {
   }
 
   @Test
+  void nullTestsCoverOnlyTheNullableSteps() {
+    // A NOT NULL step is present whenever its parent is, and Protobuf's has() is false for a
+    // zero, so only the deepest nullable step of a path is tested.
+    String columns = "a INT NOT NULL, n INT, r STRUCT(x INT NOT NULL, y INT)";
+    assertEquals("(true ? this.a : 7) == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
+    assertEquals("((has(this.n) && dyn(this.n) != null) ? this.n : 7) == 0",
+        translateCheckOver(columns, "COALESCE(n, 7) = 0"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
+        translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
+    assertEquals("(false ? this.n : ((!has(this.n) || dyn(this.n) == null) ? this.a : "
+        + "math.greatest(this.a, this.n))) == 0",
+        translateCheckOver(columns, "GREATEST(a, n) = 0"));
+    assertEquals("(!has(this.r) || dyn(this.r) == null)",
+        translateCheckOver(columns, "r.x IS NULL"));
+    assertEquals("(has(this.r.y) && dyn(this.r.y) != null)",
+        translateCheckOver(columns, "r.y IS NOT NULL"));
+  }
+
+  private String translateCheckOver(String columns, String checkExpr) {
+    Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
+        .getRootSchema();
+    String cel = schema.getRules().get(0).getExpr();
+    CelValidator.assertValidStrict(cel, schema);
+    return cel;
+  }
+
+  @Test
   void integerOperandsAreCombinedBeforeWidening() {
     // SQL types each operator by its own operands: the INTs are divided, then widened.
     assertEquals("decimals.eq(decimal(this.x / 2), this.amount)",

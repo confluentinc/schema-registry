@@ -1923,4 +1923,40 @@ final class ConstraintResolver {
     }
     return current != null;
   }
+
+  /**
+   * How many steps of {@code col}'s field chain, root included, a null test should cover: up to
+   * the deepest nullable step, since a NOT NULL step is present whenever its parent is. 0 means
+   * the path is never null, -1 unknown. Testing a NOT NULL leaf itself misfires on Protobuf,
+   * whose has() is false for a zero.
+   */
+  static int presenceSteps(
+      LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
+    String rootName = colidName(col.colid());
+    Schema rootField = vctx != null && vctx.isColumn(rootName) ? vctx.schemaOf(rootName) : null;
+    if (rootField == null) {
+      return -1;
+    }
+    // A column-level CHECK is skipped when its column is null, so `this` is never null there.
+    int last = rootField.isNullable() && !vctx.isColumnLevel() ? 1 : 0;
+    Schema current = resolveIfNamedRef(rootField, vctx);
+    if (col.indirection() != null) {
+      int step = 1;
+      for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
+        if (el.colid() == null || current == null || current.getType() != Schema.Type.STRUCT) {
+          return -1;
+        }
+        Schema.Field nested = current.getField(colidName(el));
+        if (nested == null) {
+          return -1;
+        }
+        step++;
+        if (nested.getSchema().isNullable()) {
+          last = step;
+        }
+        current = resolveIfNamedRef(nested.getSchema(), vctx);
+      }
+    }
+    return last;
+  }
 }
