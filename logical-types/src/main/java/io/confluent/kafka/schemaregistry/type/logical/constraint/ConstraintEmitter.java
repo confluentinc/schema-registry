@@ -567,13 +567,8 @@ final class ConstraintEmitter {
     if (ConstraintResolver.isHasCompatible(ctx.check_expr_compare(), EMIT_VCTX.get())) {
       StringBuilder emitted = new StringBuilder();
       visitCompare(ctx.check_expr_compare(), emitted);
-      String lhs = presencePath(ConstraintResolver.selectionPathCompare(
-          ctx.check_expr_compare()), emitted.toString());
-      if (lhs.isEmpty()) {
-        sb.append(negated ? "true" : "false");
-        return;
-      }
-      sb.append(negated ? isNotNullTest(lhs) : isNullTest(lhs));
+      sb.append(nullTest(ConstraintResolver.selectionPathCompare(ctx.check_expr_compare()),
+          emitted.toString(), !negated));
       return;
     }
     sb.append("dyn(");
@@ -1813,18 +1808,30 @@ final class ConstraintEmitter {
   }
 
   /**
-   * The selection a null test of a has()-compatible reference covers: its path up to the deepest
-   * nullable step ({@link ConstraintResolver#presenceSteps}), "" when the path is never null, or
-   * {@code emitted}, the whole reference, when that can't be told.
+   * The null (or not-null) test of a has()-compatible reference: each nullable step of its path
+   * ({@link ConstraintResolver#nullableSteps}), outermost first, so a null struct decides it
+   * before anything is selected from it; a constant for a path that is never null; or a test of
+   * {@code emitted}, the whole reference, when the steps can't be told.
    */
-  static String presencePath(List<String> path, String emitted) {
-    int steps = path == null ? -1 : ConstraintResolver.presenceSteps(path, EMIT_VCTX.get());
-    if (steps < 0 || steps == path.size()) {
-      return emitted;
+  static String nullTest(List<String> path, String emitted, boolean isNull) {
+    List<Integer> steps =
+        path == null ? null : ConstraintResolver.nullableSteps(path, EMIT_VCTX.get());
+    if (steps == null) {
+      return stepTest(emitted, isNull);
     }
-    if (steps == 0) {
-      return "";
+    if (steps.isEmpty()) {
+      return isNull ? "false" : "true";
     }
+    List<String> tests = new ArrayList<>();
+    for (int step : steps) {
+      tests.add(stepTest(step == path.size() ? emitted : prefix(path, step), isNull));
+    }
+    return tests.size() == 1 ? tests.get(0)
+        : "(" + String.join(isNull ? " || " : " && ", tests) + ")";
+  }
+
+  // The first steps of a selection path, emitted.
+  private static String prefix(List<String> path, int steps) {
     StringBuilder sb = new StringBuilder();
     emitColumnRoot(path.get(0), sb);
     for (int i = 1; i < steps; i++) {
@@ -1833,16 +1840,14 @@ final class ConstraintEmitter {
     return sb.toString();
   }
 
-  /** A selection's not-null test; a bare iteration variable, which has() can't take, compared. */
-  static String isNotNullTest(String path) {
-    return path.indexOf('.') < 0 ? "dyn(" + path + ") != null"
-        : "(has(" + path + ") && dyn(" + path + ") != null)";
-  }
-
-  /** A selection's null test; a bare iteration variable, which has() can't take, is compared. */
-  static String isNullTest(String path) {
-    return path.indexOf('.') < 0 ? "dyn(" + path + ") == null"
-        : "(!has(" + path + ") || dyn(" + path + ") == null)";
+  // One step's test: has() of a selection, or a null comparison of a bare iteration variable,
+  // which has() can't take.
+  private static String stepTest(String selection, boolean isNull) {
+    if (selection.indexOf('.') < 0) {
+      return "dyn(" + selection + (isNull ? ") == null" : ") != null");
+    }
+    return isNull ? "(!has(" + selection + ") || dyn(" + selection + ") == null)"
+        : "(has(" + selection + ") && dyn(" + selection + ") != null)";
   }
 
   private static void visitIndirection(

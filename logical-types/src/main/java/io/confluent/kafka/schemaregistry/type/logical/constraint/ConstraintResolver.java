@@ -1982,34 +1982,37 @@ final class ConstraintResolver {
   }
 
   /**
-   * How many steps of a selection path ({@link #selectionPath}), root included, a null test
-   * should cover: up to the deepest nullable step, since a NOT NULL step is present whenever its
-   * parent is. 0 means the path is never null, -1 unknown. The root is a column or a macro's
-   * typed iteration variable. Testing a NOT NULL leaf itself misfires on Protobuf, whose has()
-   * is false for a zero.
+   * The nullable steps of a selection path ({@link #selectionPath}), as step counts from the
+   * root, which a null test covers: a NOT NULL step is present whenever its parent is. Empty means
+   * the path is never null, null unknown. The root is a column or a macro's typed iteration
+   * variable. Testing a NOT NULL leaf misfires on Protobuf, whose has() is false for a zero, and
+   * selecting below a null struct fails on Avro and JSON.
    */
-  static int presenceSteps(List<String> path, ConstraintValidationContext vctx) {
+  static List<Integer> nullableSteps(List<String> path, ConstraintValidationContext vctx) {
     String root = path.get(0);
     Schema rootField = vctx == null ? null : vctx.schemaOf(root);
     if (rootField == null) {
-      return -1;
+      return null;
     }
+    List<Integer> steps = new ArrayList<>();
     // A column-level CHECK is skipped when its column is null, so `this` is never null there.
-    int last = rootField.isNullable() && !(vctx.isColumnLevel() && vctx.isColumn(root)) ? 1 : 0;
+    if (rootField.isNullable() && !(vctx.isColumnLevel() && vctx.isColumn(root))) {
+      steps.add(1);
+    }
     Schema current = resolveIfNamedRef(rootField, vctx);
     for (int step = 2; step <= path.size(); step++) {
       if (current == null || current.getType() != Schema.Type.STRUCT) {
-        return -1;
+        return null;
       }
       Schema.Field nested = current.getField(path.get(step - 1));
       if (nested == null) {
-        return -1;
+        return null;
       }
       if (nested.getSchema().isNullable()) {
-        last = step;
+        steps.add(step);
       }
       current = resolveIfNamedRef(nested.getSchema(), vctx);
     }
-    return last;
+    return steps;
   }
 }

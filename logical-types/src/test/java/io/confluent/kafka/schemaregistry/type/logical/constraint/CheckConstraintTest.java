@@ -35,6 +35,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -2880,8 +2881,8 @@ class CheckConstraintTest {
         translateCheckOver(columns, "GREATEST(a, n) = 0"));
     assertEquals("(!has(this.r) || dyn(this.r) == null)",
         translateCheckOver(columns, "r.x IS NULL"));
-    assertEquals("(has(this.r.y) && dyn(this.r.y) != null)",
-        translateCheckOver(columns, "r.y IS NOT NULL"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) && (has(this.r.y) "
+        + "&& dyn(this.r.y) != null))", translateCheckOver(columns, "r.y IS NOT NULL"));
     // A parenthesized selection, and a macro variable's fields, the same way.
     assertEquals("((has(this.r) && dyn(this.r) != null) ? (this.r).x : 7) == 0",
         translateCheckOver(columns, "COALESCE((r).x, 7) = 0"));
@@ -2891,6 +2892,24 @@ class CheckConstraintTest {
         translateCheckOver(arrays, "EVERY(items, e, COALESCE(e.x, 7) = 0)"));
     assertEquals("this.maybe.all(e, (dyn(e) != null ? e.x : 7) == 0)",
         translateCheckOver(arrays, "EVERY(maybe, e, COALESCE(e.x, 7) = 0)"));
+  }
+
+  @Test
+  void aNullStructDecidesANullTestOfItsFields() throws Exception {
+    // Avro and JSON give a null struct as null, which no field can be selected from, so each
+    // nullable step is tested, outermost first.
+    String columns = "r STRUCT(f0 INT, q STRUCT(g INT))";
+    assertEquals("((!has(this.r) || dyn(this.r) == null) || (!has(this.r.f0) "
+        + "|| dyn(this.r.f0) == null))", translateCheckOver(columns, "r.f0 IS NULL"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("r", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("r.f0 IS NULL", "NOT (r.q.g IS NOT NULL)", "COALESCE(r.f0, 7) = 7",
+        "GREATEST(r.q.g, 1) = 1", "CASE WHEN r.f0 IS NULL THEN 1 ELSE 2 END = 1")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
   }
 
   private String translateCheckOver(String columns, String checkExpr) {

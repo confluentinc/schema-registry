@@ -531,13 +531,7 @@ final class ConstraintFunctions {
   private static void emitIsNotNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      String path = ConstraintEmitter.presencePath(
-          ConstraintResolver.selectionPath(arg), emitted);
-      if (path.isEmpty()) {
-        sb.append("true");
-        return;
-      }
-      sb.append(ConstraintEmitter.isNotNullTest(path));
+      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, false));
     } else {
       sb.append("dyn(").append(emitted).append(") != null");
     }
@@ -552,13 +546,7 @@ final class ConstraintFunctions {
   private static void emitIsNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      String path = ConstraintEmitter.presencePath(
-          ConstraintResolver.selectionPath(arg), emitted);
-      if (path.isEmpty()) {
-        sb.append("false");
-        return;
-      }
-      sb.append(ConstraintEmitter.isNullTest(path));
+      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, true));
     } else {
       sb.append("dyn(").append(emitted).append(") == null");
     }
