@@ -16,6 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.extensions.CelExtensions;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelRuntimeFactory;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -23,13 +30,18 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1852,6 +1864,65 @@ class CheckConstraintTest {
         translateCheck("POSITION('@' IN name) * 2 = 4"));
   }
 
+  @Test
+  void positionParsesAnywhereAsBareCheckExpr() {
+    // Parsed on its own (as KTable does), a check_expr needle let ANTLR take
+    // `'@' IN name` as the needle and then fail at the closing parenthesis.
+    for (String sql : List.of("2 = POSITION('@' IN name)",
+        "qty BETWEEN 1 AND POSITION('@' IN name)", "POSITION('@' IN name) = 2")) {
+      for (PredictionMode mode : List.of(PredictionMode.SLL, PredictionMode.LL)) {
+        LogicalTypesParser parser = LogicalTypesParserFactory.newParser(sql);
+        parser.getInterpreter().setPredictionMode(mode);
+        parser.check_expr();
+        assertEquals(Token.EOF, parser.getCurrentToken().getType(), sql + " in " + mode);
+      }
+    }
+  }
+
+  @Test
+  void positionNeedleWithAnOperatorNeedsParentheses() {
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("POSITION('a' || 'b' IN name) > 0"));
+    assertEquals("(this.name.indexOf(('a' + 'b')) + 1) > 0",
+        translateCheck("POSITION(('a' || 'b') IN name) > 0"));
+  }
+
+  @Test
+  void positionFrom() {
+    assertEquals("('@' == '' ? 1 : (this.qty > size(this.name) ? 0 : "
+            + "this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
+        translateCheck("POSITION('@' IN name FROM qty) > 0"));
+  }
+
+  @Test
+  void positionFromMatchesFlink() throws Exception {
+    // Each answer is Flink's SqlFunctionUtils.position for the same arguments.
+    for (String sql : List.of("POSITION('b' IN 'abcb' FROM 3) = 4",
+        "POSITION('b' IN 'abcb' FROM 0) = 2", "POSITION('b' IN 'abcb' FROM -5) = 2",
+        "POSITION('b' IN 'abcb' FROM 4) = 4", "POSITION('b' IN 'abcb' FROM 5) = 0",
+        "POSITION('b' IN 'abcb' FROM 9) = 0", "POSITION('' IN 'abc' FROM 9) = 1",
+        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5",
+        "POSITION('b' IN 'abcb' FROM -9223372036854775807 - 1) = 2")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalConstant(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalConstant(String cel) throws Exception {
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    CelRuntime runtime = CelRuntimeFactory.standardCelRuntimeBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    return runtime.createProgram(compiler.compile(cel).getAst()).eval();
+  }
+
+  @Test
+  void dashDashStartsALineComment() {
+    assertEquals("this.x > 1", translateCheck("x > 1 -- not 1 - -1\n"));
+    assertEquals("this.x - -1 > 0", translateCheck("x - -1 > 0"));
+  }
+
   // ---------------------------------------------------------------------
   // Phase 4: special-syntax — TRIM
   // ---------------------------------------------------------------------
@@ -2792,6 +2863,73 @@ class CheckConstraintTest {
     // x (int) + 1.5e0 (double) → DOUBLE; > 10 (int) → DOUBLE.
     assertEquals("double(this.x) + 1.5e0 > 10.0",
         translateCheck("x + 1.5e0 > 10"));
+  }
+
+  @Test
+  void nullTestsCoverOnlyTheNullableSteps() {
+    // A NOT NULL step is present whenever its parent is, and Protobuf's has() is false for a
+    // zero, so only the deepest nullable step of a path is tested.
+    String columns = "a INT NOT NULL, n INT, r STRUCT(x INT NOT NULL, y INT)";
+    assertEquals("(true ? this.a : 7) == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
+    assertEquals("((has(this.n) && dyn(this.n) != null) ? this.n : 7) == 0",
+        translateCheckOver(columns, "COALESCE(n, 7) = 0"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
+        translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
+    assertEquals("(false ? this.n : ((!has(this.n) || dyn(this.n) == null) ? this.a : "
+        + "math.greatest(this.a, this.n))) == 0",
+        translateCheckOver(columns, "GREATEST(a, n) = 0"));
+    assertEquals("(!has(this.r) || dyn(this.r) == null)",
+        translateCheckOver(columns, "r.x IS NULL"));
+    assertEquals("(has(this.r.y) && dyn(this.r.y) != null)",
+        translateCheckOver(columns, "r.y IS NOT NULL"));
+  }
+
+  private String translateCheckOver(String columns, String checkExpr) {
+    Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
+        .getRootSchema();
+    String cel = schema.getRules().get(0).getExpr();
+    CelValidator.assertValidStrict(cel, schema);
+    return cel;
+  }
+
+  @Test
+  void integerOperandsAreCombinedBeforeWidening() {
+    // SQL types each operator by its own operands: the INTs are divided, then widened.
+    assertEquals("decimals.eq(decimal(this.x / 2), this.amount)",
+        translateCheck("x / 2 = amount"));
+    assertEquals("double(this.x / 2) == this.ratio", translateCheck("x / 2 = ratio"));
+    assertEquals("double(this.x % 2) == this.ratio", translateCheck("x % 2 = ratio"));
+    assertEquals("decimals.gt(decimals.add(this.amount, decimal(this.x / 2)), decimal(\"0\"))",
+        translateCheck("amount + x / 2 > 0"));
+    assertEquals("double(decimals.add(this.amount, decimal(\"1\"))) == this.ratio",
+        translateCheck("amount + 1 = ratio"));
+  }
+
+  @Test
+  void narrowerOperandsKeepTheirOwnArithmetic() throws Exception {
+    // Each answer is Flink's: INT / INT truncates, BIGINT and DECIMAL sums are exact.
+    for (String sql : List.of("7 / 2 = 3.0", "7 / 2 = 3.0E0", "-7 / 2 = -3.0", "7 % 4 = 3.0E0",
+        "7 / 2 + 0.5 = 3.5", "0.5 + 7 / 2 = 3.5", "-(7 / 2) = -3.0",
+        "CASE WHEN TRUE THEN 7 / 2 ELSE 1.5 END = 3.0", "7 / 2 BETWEEN 3.0 AND 3.0",
+        "7 / 2 IN (3.5, 3.0)", "GREATEST(7 / 2, 1.5) = 3.0",
+        "9007199254740993 + 1 = 9007199254740994E0", "0.10 + 0.20 = 0.3E0")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void narrowerOperandsStillOverflowAndDivideByZero() {
+    for (String sql : List.of("9223372036854775807 + 1 > 0.0",
+        "9223372036854775807 + 1 > 0.0E0", "-(-9223372036854775807 - 1) > 0.0",
+        "1 / 0 <> 0.0E0", "1 % 0 <> 0.0E0")) {
+      String cel = translateCheck(sql);
+      assertThrows(CelEvaluationException.class, () -> evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalWithDecimals(String cel) throws Exception {
+    return CelUtils.buildProgram(CelUtils.ScriptType.AVRO, cel, null, List.of()).eval(Map.of());
   }
 
   // ---- numeric coercion: BETWEEN / IN ----
