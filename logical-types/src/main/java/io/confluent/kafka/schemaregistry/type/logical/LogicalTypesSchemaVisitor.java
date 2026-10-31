@@ -204,6 +204,13 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * {@code TYPE} for nullable named roots so their nullability is preserved.
    */
   private void maybeUnwrapNamedRoot() {
+    // A Protobuf root declared after another struct keeps its place among them, as the file's
+    // messages, which only its namedTypes entry records.
+    if (rootsSeveralMessages && rootSchema != null
+        && rootSchema.getType() == Schema.Type.NAMED_TYPE_REF
+        && topLevelStructs().indexOf(rootSchema.getQualifiedName()) > 0) {
+      return;
+    }
     // The visitor never places external bodies in namedTypes (externals are inferred from usage and
     // held via externalImports), so there is no external root to guard against here — pass empty.
     LogicalType.RootUnwrap unwrap =

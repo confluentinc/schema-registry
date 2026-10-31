@@ -125,8 +125,8 @@ public class LogicalTypeToProtoConverter {
   }
 
   private static Descriptor rootMessage(LogicalType logicalType, String rowName) {
-    // The writer emits the root message first.
-    return fromLogicalType(logicalType, rowName).toDescriptor().getFile().getMessageTypes().get(0);
+    // The written file names its root wherever it is placed.
+    return fromLogicalType(logicalType, rowName).toDescriptor();
   }
 
   private static boolean isNamedTypeRef(LogicalType logicalType, String fieldName) {
@@ -702,20 +702,20 @@ public class LogicalTypeToProtoConverter {
     try {
       final Set<String> dependencies = new TreeSet<>();
       Map<String, List<String>> nestingTree = logicalType.nestingTree();
-      // Build the root message first so it lands at index 0 — the reader
-      // identifies it by position. If the root resolved to a named type,
-      // embed its nested children too. An anonymous root has no nested
-      // children — note that `nestedChildrenOf(null, ...)` would return the
-      // top-level types (which live under the `null` key in the tree), so we
-      // must guard against that.
+      // Build the root message first, so the names generated for its fields don't change. If the
+      // root resolved to a named type, embed its nested children too. An anonymous root has no
+      // nested children — note that `nestedChildrenOf(null, ...)` would return the top-level
+      // types (which live under the `null` key in the tree), so we must guard against that.
       List<NestedChild> rootChildren = rootResolvedFromFqn == null
           ? List.of()
           : nestedChildrenOf(rootResolvedFromFqn, namedTypes, nestingTree);
       final DescriptorProto rootMessage = fromStructType(
           schema, rowName, dependencies, rootChildren, ctx);
       FileDescriptorProto.Builder fileBuilder = FileDescriptorProto.newBuilder()
-          .addMessageType(rootMessage)
           .setSyntax("proto3");
+      // A root that is a top-level named type keeps its place among the messages, as the reader
+      // found it, and the root param below names it there; any other root comes first.
+      int rootIndex = 0;
 
       // Hoist every TOP-LEVEL local named type as a file-level peer of the
       // root. Nested types are embedded inside their parent message, not
@@ -724,6 +724,9 @@ public class LogicalTypeToProtoConverter {
       for (Map.Entry<String, Schema> entry : namedTypes.entrySet()) {
         String fqn = entry.getKey();
         if (fqn.equals(rootResolvedFromFqn)) {
+          if (LogicalType.parentOf(fqn, namedTypes.keySet()) == null) {
+            rootIndex = fileBuilder.getMessageTypeCount();
+          }
           continue;
         }
         if (LogicalType.parentOf(fqn, namedTypes.keySet()) != null) {
@@ -744,6 +747,7 @@ public class LogicalTypeToProtoConverter {
                   + " (" + fqn + ")");
         }
       }
+      fileBuilder.addMessageType(rootIndex, rootMessage);
       // A root sharing its file with other messages is named, as a file of several messages
       // naming no root is read as all of them.
       if (writeRoot && fileBuilder.getMessageTypeCount() > 1) {

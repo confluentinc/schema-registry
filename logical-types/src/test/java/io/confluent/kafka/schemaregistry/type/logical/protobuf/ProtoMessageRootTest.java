@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +60,12 @@ class ProtoMessageRootTest {
   }
 
   private static List<String> rootFields(LogicalType logicalType) {
-    return logicalType.getRootSchema().getFields().stream()
+    io.confluent.kafka.schemaregistry.type.logical.Schema root = logicalType.getRootSchema();
+    if (root.getType()
+        == io.confluent.kafka.schemaregistry.type.logical.Schema.Type.NAMED_TYPE_REF) {
+      root = logicalType.getNamedTypes().get(root.getQualifiedName());
+    }
+    return root.getFields().stream()
         .map(io.confluent.kafka.schemaregistry.type.logical.Schema.Field::getName)
         .collect(Collectors.toList());
   }
@@ -84,8 +90,9 @@ class ProtoMessageRootTest {
 
   @Test
   void aScriptNamingItsRootBesideOtherStructsRecordsIt() {
+    // Declared after Address, the root stays there: its root param names it
     ProtobufSchema schema = fromDdl(STRUCTS + "TYPE Person NOT NULL;\n");
-    assertEquals(List.of("Person", "Address"), messages(schema));
+    assertEquals(List.of("Address", "Person"), messages(schema));
     assertEquals("p.Person", schema.rootParam());
     assertFalse(schema.readsAsSeveralMessages());
     LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
@@ -184,6 +191,36 @@ class ProtoMessageRootTest {
     assertEquals(List.of("p.C", "p.D"), readAs(wrapperOf("f2.proto", unrooted, null)));
     assertEquals(List.of("p.C"), readAs(wrapperOf("f2.proto", unrooted, "p.C")));
     assertEquals(List.of("p.A"), readAs(wrapperOf("f1.proto", rooted, "p.A")));
+  }
+
+  @Test
+  void aRootAfterAnotherMessageKeepsItsPlace() {
+    // Written back, directly or through DDL, in either edition, B stays second
+    for (String b : List.of("message B { int32 b = 1; }", "message B { B next = 1; }")) {
+      ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + META
+          + rootOption("p.B") + "message A { int32 a = 1; }\n" + b + "\n");
+      LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
+      ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(read, "ignored");
+      ProtobufSchema throughDdl = fromDdl(LogicalTypeToDdlConverter.toDdl(read));
+      ProtobufSchema v1 = LogicalTypeToProtoConverter.fromLogicalType(read, "ignored",
+          LogicalTypeVersion.V1);
+      for (ProtobufSchema out : List.of(written, throughDdl, v1)) {
+        assertEquals(List.of("A", "B"), messages(out), b);
+        assertEquals("p.B", out.rootParam(), b);
+      }
+      assertEquals(written.canonicalString(), throughDdl.canonicalString(), b);
+    }
+  }
+
+  @Test
+  void aRootThatIsFirstIsReadAsItsBareStruct() {
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage p;\n" + META
+        + rootOption("p.B") + "message B { int32 b = 1; }\nmessage A { int32 a = 1; }\n");
+    LogicalType read = ProtoToLogicalTypeConverter.toLogicalType(schema);
+    assertEquals(io.confluent.kafka.schemaregistry.type.logical.Schema.Type.STRUCT,
+        read.getRootSchema().getType());
+    assertEquals(List.of("B", "A"),
+        messages(LogicalTypeToProtoConverter.fromLogicalType(read, "ignored")));
   }
 
   @Test
