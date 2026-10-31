@@ -198,9 +198,14 @@ class LogicalPolicyCheckerTest {
         + "\" } ] };\n" + String.join("", messages));
   }
 
+  // The root's fields, a root kept as a reference, as one after another message, resolved.
   private static List<String> names(LogicalType logical) {
-    return logical.getRootSchema().getFields().stream().map(Field::getName)
-        .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.type.logical.Schema root = logical.getRootSchema();
+    if (root.getType()
+        == io.confluent.kafka.schemaregistry.type.logical.Schema.Type.NAMED_TYPE_REF) {
+      root = logical.getNamedTypes().get(root.getQualifiedName());
+    }
+    return root.getFields().stream().map(Field::getName).collect(Collectors.toList());
   }
 
   // -- validity runs regardless of level / previous versions -------------------------------------

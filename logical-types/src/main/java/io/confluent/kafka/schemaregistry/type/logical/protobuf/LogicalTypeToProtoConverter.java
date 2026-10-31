@@ -125,8 +125,8 @@ public class LogicalTypeToProtoConverter {
   }
 
   private static Descriptor rootMessage(LogicalType logicalType, String rowName) {
-    // The writer emits the root message first.
-    return fromLogicalType(logicalType, rowName).toDescriptor().getFile().getMessageTypes().get(0);
+    // The written file names its root wherever it is placed.
+    return fromLogicalType(logicalType, rowName).toDescriptor();
   }
 
   private static boolean isNamedTypeRef(LogicalType logicalType, String fieldName) {
@@ -702,20 +702,20 @@ public class LogicalTypeToProtoConverter {
     try {
       final Set<String> dependencies = new TreeSet<>();
       Map<String, List<String>> nestingTree = logicalType.nestingTree();
-      // Build the root message first so it lands at index 0 — the reader
-      // identifies it by position. If the root resolved to a named type,
-      // embed its nested children too. An anonymous root has no nested
-      // children — note that `nestedChildrenOf(null, ...)` would return the
-      // top-level types (which live under the `null` key in the tree), so we
-      // must guard against that.
+      // Build the root message first, so the names generated for its fields don't change. If the
+      // root resolved to a named type, embed its nested children too. An anonymous root has no
+      // nested children — note that `nestedChildrenOf(null, ...)` would return the top-level
+      // types (which live under the `null` key in the tree), so we must guard against that.
       List<NestedChild> rootChildren = rootResolvedFromFqn == null
           ? List.of()
           : nestedChildrenOf(rootResolvedFromFqn, namedTypes, nestingTree);
       final DescriptorProto rootMessage = fromStructType(
           schema, rowName, dependencies, rootChildren, ctx);
       FileDescriptorProto.Builder fileBuilder = FileDescriptorProto.newBuilder()
-          .addMessageType(rootMessage)
           .setSyntax("proto3");
+      // A root that is a top-level named type keeps its place among the messages, as the reader
+      // found it, and the root param below names it there; any other root comes first.
+      int rootIndex = 0;
 
       // Hoist every TOP-LEVEL local named type as a file-level peer of the
       // root. Nested types are embedded inside their parent message, not
@@ -724,6 +724,9 @@ public class LogicalTypeToProtoConverter {
       for (Map.Entry<String, Schema> entry : namedTypes.entrySet()) {
         String fqn = entry.getKey();
         if (fqn.equals(rootResolvedFromFqn)) {
+          if (LogicalType.parentOf(fqn, namedTypes.keySet()) == null) {
+            rootIndex = fileBuilder.getMessageTypeCount();
+          }
           continue;
         }
         if (LogicalType.parentOf(fqn, namedTypes.keySet()) != null) {
@@ -744,6 +747,7 @@ public class LogicalTypeToProtoConverter {
                   + " (" + fqn + ")");
         }
       }
+      fileBuilder.addMessageType(rootIndex, rootMessage);
       // A root sharing its file with other messages is named, as a file of several messages
       // naming no root is read as all of them.
       if (writeRoot && fileBuilder.getMessageTypeCount() > 1) {
@@ -1075,8 +1079,7 @@ public class LogicalTypeToProtoConverter {
                 ctx);
         if (!ctx.isV1()) {
           addFieldTagsAndParams(fieldProtoBuilder, field);
-          applyDefaultIfPresent(fieldProtoBuilder, field,
-              ctx.getLogicalType().getNamedTypes());
+          applyDefaultIfPresent(fieldProtoBuilder, field, ctx);
         }
         builder.addField(fieldProtoBuilder.build());
       }
@@ -1479,17 +1482,41 @@ public class LogicalTypeToProtoConverter {
    * If the field has a default value, encode it and store under Meta.params
    * with key "connect.default".
    */
-  private static void applyDefaultIfPresent(
-      FieldDescriptorProto.Builder fieldBuilder, Field field, Map<String, Schema> namedTypes) {
+  private static void applyDefaultIfPresent(FieldDescriptorProto.Builder fieldBuilder,
+      Field field, FromLogicalContext<GenericDescriptor> ctx) {
     // Skip when value is null — Meta.params is Map<String,String> with no
     // unambiguous null sentinel; emitting "" would conflict with valid empty
     // string defaults. Round-trip silently loses the explicit-null distinction.
     if (field.hasDefaultValue() && field.getDefaultValue() != null
         && !field.hasDerivedDefault()) {
-      String encoded = ProtoDefaultValueConverter.toProtoValue(
-          field.getSchema(), field.getDefaultValue(), namedTypes);
+      String encoded = referencedEnumDefault(field, ctx);
+      if (encoded == null) {
+        encoded = ProtoDefaultValueConverter.toProtoValue(
+            field.getSchema(), field.getDefaultValue(), ctx.getLogicalType().getNamedTypes());
+      }
       addMetaParam(fieldBuilder, CommonConstants.LOGICAL_DEFAULT_PROP, encoded);
     }
+  }
+
+  // The default of a field of a referenced enum, whose values only its descriptor lists: one of
+  // them. Null for a field of any other type.
+  private static String referencedEnumDefault(
+      Field field, FromLogicalContext<GenericDescriptor> ctx) {
+    Schema type = field.getSchema();
+    if (type.getType() != Schema.Type.NAMED_TYPE_REF) {
+      return null;
+    }
+    String name = type.getQualifiedName();
+    if (ctx.hasNamedType(name) || !ctx.isAlreadyConverted(name)
+        || !(ctx.getConverted(name) instanceof EnumDescriptor)) {
+      return null;
+    }
+    String symbol = String.valueOf(field.getDefaultValue());
+    if (((EnumDescriptor) ctx.getConverted(name)).findValueByName(symbol) == null) {
+      throw new ValidationException("Field '" + field.getName() + "' has a default '" + symbol
+          + "' that is not a value of enum " + name);
+    }
+    return symbol;
   }
 
   /**

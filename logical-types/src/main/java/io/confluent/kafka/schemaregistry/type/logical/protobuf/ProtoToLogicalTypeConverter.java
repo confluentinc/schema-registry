@@ -350,14 +350,16 @@ public class ProtoToLogicalTypeConverter {
     // Decide the rootSchema shape. Keep the root as a NAMED_TYPE_REF (body in namedTypes) when:
     //   - recursive (self/mutual cycle) — cyclic field references need the body present;
     //   - it has nested types in namedTypes — they use parentOf(), which needs the root present;
-    //   - a peer references it — unwrapping would remove the body and dangle that reference.
+    //   - a peer references it — unwrapping would remove the body and dangle that reference;
+    //   - it isn't the file's first message — its namedTypes entry keeps its place among them.
     // Otherwise unwrap to a bare STRUCT and remove the root from namedTypes, preserving the
     // historical "namedTypes = peers; root is direct" convention for the simple case.
     final Schema rootSchema;
     final String rootName;
     if (LogicalType.isCyclic(rootFqn, ctx.getNamedTypes())
         || hasNestedNamedTypes(rootFqn, ctx.getNamedTypes())
-        || LogicalType.isReferencedByPeer(rootFqn, ctx.getNamedTypes())) {
+        || LogicalType.isReferencedByPeer(rootFqn, ctx.getNamedTypes())
+        || messageTypes.get(0) != rootMessage) {
       rootSchema = Schema.createNamedTypeRef(rootFqn).setNullable(false);
       // Root kept as a NAMED_TYPE_REF: its name is the namedTypes key, so don't duplicate it.
       rootName = null;

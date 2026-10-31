@@ -74,6 +74,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private final Set<String> declaredUsingNames = new LinkedHashSet<>();
   private final Set<String> usedAliases = new LinkedHashSet<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
+  // Defaults naming a local enum's symbol, checked once every body is built.
+  private final List<Runnable> symbolChecks = new ArrayList<>();
   private Schema rootSchema;
   private final boolean rootsSeveralMessages;
 
@@ -187,6 +189,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
         inferAndRegisterRoot(ctx);
       }
     }
+    symbolChecks.forEach(Runnable::run);
     maybeUnwrapNamedRoot();
     validateAliases();
     return null;
@@ -201,6 +204,13 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * {@code TYPE} for nullable named roots so their nullability is preserved.
    */
   private void maybeUnwrapNamedRoot() {
+    // A Protobuf root declared after another struct keeps its place among them, as the file's
+    // messages, which only its namedTypes entry records.
+    if (rootsSeveralMessages && rootSchema != null
+        && rootSchema.getType() == Schema.Type.NAMED_TYPE_REF
+        && topLevelStructs().indexOf(rootSchema.getQualifiedName()) > 0) {
+      return;
+    }
     // The visitor never places external bodies in namedTypes (externals are inferred from usage and
     // held via externalImports), so there is no external root to guard against here — pass empty.
     LogicalType.RootUnwrap unwrap =
@@ -1260,16 +1270,50 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
           return buildLiteralForType(ctx, targetType.getBranches().get(0).getSchema());
         }
         throw error(ctx, "Default values are not supported for type: " + type);
+      case ENUM:
+        return enumDefault(ctx, targetType);
+      case NAMED_TYPE_REF:
+        return namedDefault(ctx, targetType);
       case VARIANT:
       case STRUCT:
-      case ENUM:
       case ARRAY:
       case MAP:
       case MULTISET:
-      case NAMED_TYPE_REF:
       default:
         throw error(ctx, "Default values are not supported for type: " + type);
     }
+  }
+
+  // An enum's default is one of its symbols, written as a string.
+  private String enumDefault(LogicalTypesParser.LiteralContext ctx, Schema enumType) {
+    if (ctx.stringLiteral() == null) {
+      throw typeMismatch(Schema.Type.ENUM, ctx);
+    }
+    String symbol = stripStringLiteral(ctx.stringLiteral().getText());
+    if (enumType.getEnumValues().stream().noneMatch(value -> symbol.equals(value.getSymbol()))) {
+      throw error(ctx, "ENUM default value '" + symbol + "' is not one of its symbols");
+    }
+    return symbol;
+  }
+
+  /**
+   * A named type's default: a local enum's symbol, checked once every body is built, as the enum
+   * may be declared after the field. A referenced type's body isn't the script's, so the schema
+   * built from its reference checks the symbol.
+   */
+  private String namedDefault(LogicalTypesParser.LiteralContext ctx, Schema ref) {
+    String name = ref.getQualifiedName();
+    Schema named = namedTypes.get(name);
+    if (named != null && named.getType() != Schema.Type.ENUM) {
+      throw error(ctx, "Default values are not supported for type: " + named.getType());
+    }
+    if (ctx.stringLiteral() == null) {
+      throw typeMismatch(Schema.Type.ENUM, ctx);
+    }
+    if (named != null) {
+      symbolChecks.add(() -> enumDefault(ctx, namedTypes.get(name)));
+    }
+    return stripStringLiteral(ctx.stringLiteral().getText());
   }
 
   /**
