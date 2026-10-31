@@ -609,6 +609,19 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testLineComments() {
+    LogicalTypesSchemaVisitor v = parseScript(
+        "-- an address\n"
+        + "STRUCT Address (\n"
+        + "  street STRING, -- SQL style\n"
+        + "  city STRING // DDL style\n"
+        + ");\n"
+        + "TYPE INT"
+    );
+    assertEquals(2, v.getNamedTypes().get("Address").getFields().size());
+  }
+
+  @Test
   void testInferredExternals() {
     // Externals are inferred from usage — any NAMED_TYPE_REF FQN not declared
     // locally is treated as external. No syntactic marker needed.
