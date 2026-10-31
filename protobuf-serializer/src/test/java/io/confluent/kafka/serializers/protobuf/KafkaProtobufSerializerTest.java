@@ -881,6 +881,29 @@ public class KafkaProtobufSerializerTest {
   }
 
   @Test
+  public void testRecordOfAMessageBesideOneNamedLikeThePackage() throws Exception {
+    // A record of the second message is written with its own index, not that of the message
+    // named like the package, and reads back as itself.
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\npackage q;\n"
+        + "message q {\n  int32 a = 1;\n}\n"
+        + "message M1 {\n  string note = 1;\n  int32 id = 2;\n}\n");
+    Descriptors.Descriptor m1 = schema.toDescriptor("q.M1");
+    DynamicMessage record = DynamicMessage.newBuilder(m1)
+        .setField(m1.findFieldByName("note"), "x").setField(m1.findFieldByName("id"), 7).build();
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    KafkaProtobufSerializer<DynamicMessage> serializer =
+        new KafkaProtobufSerializer<>(schemaRegistry, configs);
+    KafkaProtobufDeserializer<DynamicMessage> deserializer =
+        new KafkaProtobufDeserializer<>(schemaRegistry, configs);
+    DynamicMessage read = deserializer.deserialize(topic, serializer.serialize(topic, record));
+    assertEquals("q.M1", read.getDescriptorForType().getFullName());
+    assertEquals("x", read.getField(read.getDescriptorForType().findFieldByName("note")));
+    assertEquals(7, read.getField(read.getDescriptorForType().findFieldByName("id")));
+  }
+
+  @Test
   public void testDependencyPreregisterRefWithNegativeOne() throws Exception {
     String refSubject = "TestProto.proto";
     String refSchemaString = "syntax = \"proto3\";\n"

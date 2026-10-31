@@ -1583,6 +1583,23 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testMessageIndexesWithAMessageNamedLikeAPackagePart() {
+    // The message named "orders", like the package's last part, must not take the indexes of
+    // the others, whose full names start with that part.
+    ProtobufSchema schema = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "package com.orders;\n"
+        + "message orders { int32 a = 1; }\n"
+        + "message Order { orders x = 1; message com { int32 z = 1; } }\n");
+    assertEquals(Collections.singletonList(0),
+        schema.toMessageIndexes("com.orders.orders").indexes());
+    assertEquals(Collections.singletonList(1),
+        schema.toMessageIndexes("com.orders.Order").indexes());
+    assertEquals(Arrays.asList(1, 0), schema.toMessageIndexes("com.orders.Order.com").indexes());
+    assertEquals("com.orders.Order",
+        schema.toMessageName(schema.toMessageIndexes("com.orders.Order")));
+  }
+
+  @Test
   public void testNativeTypeImports() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
