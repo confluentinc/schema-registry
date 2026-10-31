@@ -1083,14 +1083,32 @@ final class ConstraintFunctions {
     }
   }
 
-  /** POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). */
+  /**
+   * POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). With FROM, the
+   * guards give Flink's answers (an empty needle is 1, a start past the end 0) and
+   * never pass indexOf an offset out of range, where the CEL runtimes disagree.
+   */
   private static void visitPosition(
       LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_exprContext haystack = ctx.check_expr(0);
     sb.append('(');
-    emitWrappedReceiver(ctx.check_expr(), sb);
+    if (ctx.FROM() == null) {
+      emitWrappedReceiver(haystack, sb);
+      sb.append(".indexOf(");
+      visitCExpr(ctx.c_expr(), sb);
+      sb.append(") + 1)");
+      return;
+    }
+    StringBuilder start = new StringBuilder();
+    emitWrappedReceiver(ctx.check_expr(1), start);
+    visitCExpr(ctx.c_expr(), sb);
+    sb.append(" == '' ? 1 : (").append(start).append(" - 1 >= size(");
+    visitCheckExpr(haystack, sb);
+    sb.append(") ? 0 : ");
+    emitWrappedReceiver(haystack, sb);
     sb.append(".indexOf(");
     visitCExpr(ctx.c_expr(), sb);
-    sb.append(") + 1)");
+    sb.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
   }
 
   /** TRIM(x) → x.trim() (whitespace, both ends). */

@@ -16,6 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.extensions.CelExtensions;
+import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelRuntimeFactory;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -1877,6 +1882,34 @@ class CheckConstraintTest {
         () -> translateCheck("POSITION('a' || 'b' IN name) > 0"));
     assertEquals("(this.name.indexOf(('a' + 'b')) + 1) > 0",
         translateCheck("POSITION(('a' || 'b') IN name) > 0"));
+  }
+
+  @Test
+  void positionFrom() {
+    assertEquals("('@' == '' ? 1 : (this.qty - 1 >= size(this.name) ? 0 : "
+            + "this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
+        translateCheck("POSITION('@' IN name FROM qty) > 0"));
+  }
+
+  @Test
+  void positionFromMatchesFlink() throws Exception {
+    // Each answer is Flink's SqlFunctionUtils.position for the same arguments.
+    for (String sql : List.of("POSITION('b' IN 'abcb' FROM 3) = 4",
+        "POSITION('b' IN 'abcb' FROM 0) = 2", "POSITION('b' IN 'abcb' FROM -5) = 2",
+        "POSITION('b' IN 'abcb' FROM 4) = 4", "POSITION('b' IN 'abcb' FROM 5) = 0",
+        "POSITION('b' IN 'abcb' FROM 9) = 0", "POSITION('' IN 'abc' FROM 9) = 1",
+        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalConstant(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalConstant(String cel) throws Exception {
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    CelRuntime runtime = CelRuntimeFactory.standardCelRuntimeBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    return runtime.createProgram(compiler.compile(cel).getAst()).eval();
   }
 
   @Test

@@ -282,7 +282,7 @@ func_expr_common_subexpr
     | SUBSTRING '(' check_expr ',' check_expr ( ',' check_expr )? ')'      # FuncSubstringCommas
     // The needle is narrower than check_expr, so its own `x IN y` cannot take
     // the separator IN (Flink restricts it the same way).
-    | POSITION '(' c_expr IN check_expr ')'                                # FuncPosition
+    | POSITION '(' c_expr IN check_expr ( FROM check_expr )? ')'           # FuncPosition
     | TRIM '(' ( BOTH | LEADING | TRAILING )? check_expr ( FROM check_expr )? ')'  # FuncTrim
     | CURRENT_TIMESTAMP                                                    # FuncCurrentTimestamp
     // Variant path access. The optional RETURNING clause extracts and casts the
