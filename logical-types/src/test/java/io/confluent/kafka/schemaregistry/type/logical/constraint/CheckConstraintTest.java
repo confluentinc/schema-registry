@@ -23,6 +23,9 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -1850,6 +1853,36 @@ class CheckConstraintTest {
     // binds tighter), losing the `* 2` factor on the indexOf part.
     assertEquals("(this.name.indexOf('@') + 1) * 2 == 4",
         translateCheck("POSITION('@' IN name) * 2 = 4"));
+  }
+
+  @Test
+  void positionParsesAnywhereAsBareCheckExpr() {
+    // Parsed on its own (as KTable does), a check_expr needle let ANTLR take
+    // `'@' IN name` as the needle and then fail at the closing parenthesis.
+    for (String sql : List.of("2 = POSITION('@' IN name)",
+        "qty BETWEEN 1 AND POSITION('@' IN name)", "POSITION('@' IN name) = 2")) {
+      for (PredictionMode mode : List.of(PredictionMode.SLL, PredictionMode.LL)) {
+        LogicalTypesParser parser = LogicalTypesParserFactory.newParser(sql);
+        parser.getInterpreter().setPredictionMode(mode);
+        parser.check_expr();
+        assertEquals(Token.EOF, parser.getCurrentToken().getType(), sql + " in " + mode);
+      }
+    }
+  }
+
+  @Test
+  void positionNeedleWithAnOperatorNeedsParentheses() {
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("POSITION('a' || 'b' IN name) > 0"));
+    assertEquals("(this.name.indexOf(('a' + 'b')) + 1) > 0",
+        translateCheck("POSITION(('a' || 'b') IN name) > 0"));
+  }
+
+  @Test
+  void dashDashStartsALineComment() {
+    assertEquals("this.x > 1", translateCheck("x > 1 -- not 1 - -1\n"));
+    assertEquals("this.x - -1 > 0", translateCheck("x - -1 > 0"));
   }
 
   // ---------------------------------------------------------------------

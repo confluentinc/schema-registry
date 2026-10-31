@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.emitWrappedReceiver;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.resolveCollectionElementType;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.tryAsLiteral;
@@ -1086,9 +1087,9 @@ final class ConstraintFunctions {
   private static void visitPosition(
       LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
     sb.append('(');
-    emitWrappedReceiver(ctx.check_expr(1), sb);
+    emitWrappedReceiver(ctx.check_expr(), sb);
     sb.append(".indexOf(");
-    visitCheckExpr(ctx.check_expr(0), sb);
+    visitCExpr(ctx.c_expr(), sb);
     sb.append(") + 1)");
   }
 
