@@ -37,9 +37,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.rules.FieldRedactionExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -50,7 +53,10 @@ import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.common.errors.SerializationException;
 import javax.tools.JavaCompiler;
@@ -110,11 +116,11 @@ public class SchemaNamedClassTest {
   }
 
   @Test
-  public void testMapValue() {
+  public void testMapValue() throws Exception {
     Schema valueSchema = record(NAMESPACE, "MapValue", stringField());
-    Object map = new NonRecordContainer(Schema.createMap(valueSchema),
+    byte[] bytes = genericBytes("map", Schema.createMap(valueSchema),
         Collections.singletonMap("k", value(valueSchema)));
-    assertNotLoaded("map", map, "MapValue");
+    assertRejected(() -> specificDeserializer.deserialize("map", bytes), "MapValue");
   }
 
   // A record without a class is read from the writer schema, so its fields' types are looked up
@@ -388,6 +394,19 @@ public class SchemaNamedClassTest {
     GenericRecord value = new GenericData.Record(schema);
     value.put("f", "value");
     return value;
+  }
+
+  // A message written by a generic writer. The serializer writes a map by reflection, which since
+  // Avro 1.12 loads the classes its schema names.
+  private byte[] genericBytes(String topic, Schema schema, Object value) throws Exception {
+    int id = schemaRegistry.register(topic + "-value", new AvroSchema(schema));
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(SchemaId.MAGIC_BYTE_V0);
+    out.write(ByteBuffer.allocate(Integer.BYTES).putInt(id).array());
+    BinaryEncoder encoder = EncoderFactory.get().directBinaryEncoder(out, null);
+    new GenericDatumWriter<>(schema).write(value, encoder);
+    encoder.flush();
+    return out.toByteArray();
   }
 
   @SafeVarargs
