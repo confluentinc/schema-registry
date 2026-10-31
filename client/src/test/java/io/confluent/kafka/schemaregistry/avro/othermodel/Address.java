@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers.reflecttrust;
+package io.confluent.kafka.schemaregistry.avro.othermodel;
 
-public class JavaClassArrayTarget {
-
-  static {
-    ReflectTrustFixtures.initialized.add("JavaClassArrayTarget");
-  }
+// A type in another package, referenced by AvroTrustedClassesTest.Order
+public class Address {
+  public String city = "Springfield";
 }

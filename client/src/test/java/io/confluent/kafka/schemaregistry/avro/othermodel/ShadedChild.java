@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers.reflecttrust;
+package io.confluent.kafka.schemaregistry.avro.othermodel;
 
-public class ElementClassTarget {
-
-  static {
-    ReflectTrustFixtures.initialized.add("ElementClassTarget");
-  }
+// The relocated child of ShadedRecord, named by its schema
+public class ShadedChild {
+  public int x;
 }
