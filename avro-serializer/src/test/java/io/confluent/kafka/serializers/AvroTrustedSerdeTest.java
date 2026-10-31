@@ -63,10 +63,6 @@ public class AvroTrustedSerdeTest {
     public String name = "g";
   }
 
-  public static class Gizmo {
-    public String name = "z";
-  }
-
   public static class Doohickey {
     public String name = "d";
   }
@@ -116,6 +112,30 @@ public class AvroTrustedSerdeTest {
     @Override
     public Schema getSchema() {
       return SCHEMA$;
+    }
+  }
+
+  // A hand-written specific record, which passes the class kind check but is not generated
+  public static class Cog extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = SchemaBuilder.record("Cog")
+        .namespace(AvroTrustedSerdeTest.class.getName()).fields().requiredString("name")
+        .endRecord();
+
+    public Object name;
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Object get(int field) {
+      return name;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+      name = value;
     }
   }
 
@@ -280,11 +300,11 @@ public class AvroTrustedSerdeTest {
   @Test
   public void readerSchemaDoesNotTrustOtherClasses() {
     // A reader schema may come from anywhere, so a class it names is trusted only if generated
-    Schema schema = ReflectData.get().getSchema(Gizmo.class);
-    byte[] bytes = serialize("gizmos", record(schema, "name", "z"));
+    Schema schema = Cog.SCHEMA$;
+    byte[] bytes = serialize("cogs", record(schema, "name", "z"));
     assertForbidden(() -> new KafkaAvroDeserializer(schemaRegistry,
         config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"))
-        .deserialize("gizmos", bytes, schema));
+        .deserialize("cogs", bytes, schema));
   }
 
   @Test
