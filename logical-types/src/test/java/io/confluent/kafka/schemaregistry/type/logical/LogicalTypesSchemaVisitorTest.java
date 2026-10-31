@@ -251,9 +251,8 @@ class LogicalTypesSchemaVisitorTest {
     Schema s = parseTypeExpr("DECIMAL");
     assertEquals(Schema.Type.DECIMAL, s.getType());
     assertEquals(Schema.DEFAULT_DECIMAL_PRECISION, s.getPrecision());
-    // Scale stays NO_PARAM ("scale omitted") — coercing to 0 here would
-    // lose the user's intent and round-trip `DECIMAL` as `DECIMAL(p, 0)`.
-    assertEquals(Schema.NO_PARAM, s.getScale());
+    // An omitted scale is SQL's default, 0: no writer may emit -1.
+    assertEquals(Schema.DEFAULT_DECIMAL_SCALE, s.getScale());
   }
 
   @Test
@@ -261,8 +260,8 @@ class LogicalTypesSchemaVisitorTest {
     Schema s = parseTypeExpr("DECIMAL(10)");
     assertEquals(Schema.Type.DECIMAL, s.getType());
     assertEquals(10, s.getPrecision());
-    // Scale stays NO_PARAM so toDdl can round-trip `DECIMAL(10)`.
-    assertEquals(Schema.NO_PARAM, s.getScale());
+    // DECIMAL(p) is DECIMAL(p, 0).
+    assertEquals(Schema.DEFAULT_DECIMAL_SCALE, s.getScale());
   }
 
   @Test
@@ -275,15 +274,11 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testDecimalDdlRoundTripsScaleOmitted() {
-    // Round-trip: parsed `DECIMAL(10)` → schema → toDdl must yield
-    // `DECIMAL(10)`, not the previously-emitted `DECIMAL(10, 0)` (the
-    // constructor used to coerce NO_PARAM scale to DEFAULT_DECIMAL_SCALE).
-    assertEquals("DECIMAL(10)", parseTypeExpr("DECIMAL(10)").toDdl());
+    // An omitted precision and scale print back as their defaults, as every
+    // format's reader gives them.
+    assertEquals("DECIMAL(10, 0)", parseTypeExpr("DECIMAL(10)").toDdl());
     assertEquals("DECIMAL(10, 2)", parseTypeExpr("DECIMAL(10, 2)").toDdl());
-    // Bare `DECIMAL` still coerces precision to DEFAULT_DECIMAL_PRECISION
-    // (separate concern); round-trip emits `DECIMAL(10)` rather than
-    // `DECIMAL`.
-    assertEquals("DECIMAL(10)", parseTypeExpr("DECIMAL").toDdl());
+    assertEquals("DECIMAL(10, 0)", parseTypeExpr("DECIMAL").toDdl());
   }
 
   @Test
@@ -1453,13 +1448,22 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testDefaultDecimalFromString() {
     assertEquals(new java.math.BigDecimal("12.34567890123456789"),
-        firstField("DECIMAL DEFAULT '12.34567890123456789'").getDefaultValue());
+        firstField("DECIMAL(38, 17) DEFAULT '12.34567890123456789'").getDefaultValue());
   }
 
   @Test
   void testDefaultDecimalFromNumeric() {
     assertEquals(new java.math.BigDecimal("12.34"),
-        firstField("DECIMAL DEFAULT 12.34").getDefaultValue());
+        firstField("DECIMAL(10, 2) DEFAULT 12.34").getDefaultValue());
+  }
+
+  @Test
+  void testDefaultDecimalBeyondAnOmittedScaleRejected() {
+    // An omitted scale is 0, so bare DECIMAL takes no fraction digits, as DECIMAL(10, 0) doesn't.
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> firstField("DECIMAL DEFAULT 12.34"));
+    assertTrue(e.getMessage().contains("more digits after the decimal point"),
+        "got: " + e.getMessage());
   }
 
   @Test
