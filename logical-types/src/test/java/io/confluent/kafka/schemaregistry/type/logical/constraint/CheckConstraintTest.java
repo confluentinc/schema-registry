@@ -19,8 +19,10 @@ package io.confluent.kafka.schemaregistry.type.logical.constraint;
 import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelExtensions;
+import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeFactory;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -34,10 +36,12 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -2859,6 +2863,46 @@ class CheckConstraintTest {
     // x (int) + 1.5e0 (double) → DOUBLE; > 10 (int) → DOUBLE.
     assertEquals("double(this.x) + 1.5e0 > 10.0",
         translateCheck("x + 1.5e0 > 10"));
+  }
+
+  @Test
+  void integerOperandsAreCombinedBeforeWidening() {
+    // SQL types each operator by its own operands: the INTs are divided, then widened.
+    assertEquals("decimals.eq(decimal(this.x / 2), this.amount)",
+        translateCheck("x / 2 = amount"));
+    assertEquals("double(this.x / 2) == this.ratio", translateCheck("x / 2 = ratio"));
+    assertEquals("double(this.x % 2) == this.ratio", translateCheck("x % 2 = ratio"));
+    assertEquals("decimals.gt(decimals.add(this.amount, decimal(this.x / 2)), decimal(\"0\"))",
+        translateCheck("amount + x / 2 > 0"));
+    assertEquals("double(decimals.add(this.amount, decimal(\"1\"))) == this.ratio",
+        translateCheck("amount + 1 = ratio"));
+  }
+
+  @Test
+  void narrowerOperandsKeepTheirOwnArithmetic() throws Exception {
+    // Each answer is Flink's: INT / INT truncates, BIGINT and DECIMAL sums are exact.
+    for (String sql : List.of("7 / 2 = 3.0", "7 / 2 = 3.0E0", "-7 / 2 = -3.0", "7 % 4 = 3.0E0",
+        "7 / 2 + 0.5 = 3.5", "0.5 + 7 / 2 = 3.5", "-(7 / 2) = -3.0",
+        "CASE WHEN TRUE THEN 7 / 2 ELSE 1.5 END = 3.0", "7 / 2 BETWEEN 3.0 AND 3.0",
+        "7 / 2 IN (3.5, 3.0)", "GREATEST(7 / 2, 1.5) = 3.0",
+        "9007199254740993 + 1 = 9007199254740994E0", "0.10 + 0.20 = 0.3E0")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void narrowerOperandsStillOverflowAndDivideByZero() {
+    for (String sql : List.of("9223372036854775807 + 1 > 0.0",
+        "9223372036854775807 + 1 > 0.0E0", "-(-9223372036854775807 - 1) > 0.0",
+        "1 / 0 <> 0.0E0", "1 % 0 <> 0.0E0")) {
+      String cel = translateCheck(sql);
+      assertThrows(CelEvaluationException.class, () -> evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalWithDecimals(String cel) throws Exception {
+    return CelUtils.buildProgram(CelUtils.ScriptType.AVRO, cel, null, List.of()).eval(Map.of());
   }
 
   // ---- numeric coercion: BETWEEN / IN ----
