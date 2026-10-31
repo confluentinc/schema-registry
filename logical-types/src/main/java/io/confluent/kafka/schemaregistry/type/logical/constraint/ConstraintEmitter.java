@@ -1585,7 +1585,7 @@ final class ConstraintEmitter {
     visitCExpr(ctx.c_expr(), sb);
   }
 
-  private static void visitCExpr(
+  static void visitCExpr(
       LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
       visitColumnRef(
