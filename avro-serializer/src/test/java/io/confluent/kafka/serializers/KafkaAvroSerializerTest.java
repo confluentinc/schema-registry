@@ -937,20 +937,25 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testKafkaAvroDeserializerSpecificNullableUnion() {
     Schema union = Schema.createUnion(Schema.create(Schema.Type.NULL), User.getClassSchema());
-    byte[] bytes = avroSerializer.serialize("nullable-union",
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize("nullable-union", headers,
         new NonRecordContainer(union, new User("testUser")));
     assertEquals(new User("testUser"),
-        specificAvroDeserializer.deserialize("nullable-union", bytes));
-    bytes = avroSerializer.serialize("nullable-union", new NonRecordContainer(union, null));
-    assertNull(specificAvroDeserializer.deserialize("nullable-union", bytes));
+        specificAvroDeserializer.deserialize("nullable-union", headers, bytes));
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize("nullable-union", headers,
+        new NonRecordContainer(union, null));
+    assertNull(specificAvroDeserializer.deserialize("nullable-union", headers, bytes));
   }
 
   @Test
   public void testKafkaAvroDeserializerSpecificArrayOfStrings() {
     Schema array = Schema.createArray(Schema.create(Schema.Type.STRING));
-    byte[] bytes = avroSerializer.serialize("string-array",
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize("string-array", headers,
         new NonRecordContainer(array, Arrays.asList("a", "b")));
-    List<?> result = (List<?>) specificAvroDeserializer.deserialize("string-array", bytes);
+    List<?> result =
+        (List<?>) specificAvroDeserializer.deserialize("string-array", headers, bytes);
     assertEquals(Arrays.asList("a", "b"),
         result.stream().map(Object::toString).collect(Collectors.toList()));
   }
@@ -958,9 +963,10 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testKafkaAvroDeserializerSpecificMapOfInts() {
     Schema map = Schema.createMap(Schema.create(Schema.Type.INT));
-    byte[] bytes = avroSerializer.serialize("int-map",
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize("int-map", headers,
         new NonRecordContainer(map, Collections.singletonMap("k", 1)));
-    Map<?, ?> result = (Map<?, ?>) specificAvroDeserializer.deserialize("int-map", bytes);
+    Map<?, ?> result = (Map<?, ?>) specificAvroDeserializer.deserialize("int-map", headers, bytes);
     assertEquals(1, result.size());
     assertEquals(1, result.get(new Utf8("k")));
   }
