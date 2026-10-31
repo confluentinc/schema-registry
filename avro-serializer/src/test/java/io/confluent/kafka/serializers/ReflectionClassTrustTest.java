@@ -36,11 +36,14 @@ import io.confluent.kafka.serializers.reflecttrust.ReflectTrustFixtures;
 import io.confluent.kafka.serializers.reflecttrust.RejectedElement;
 import io.confluent.kafka.serializers.reflecttrust.RejectedRoot;
 import io.confluent.kafka.serializers.reflecttrust.sub.TrustedPojo;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -51,7 +54,10 @@ import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.common.errors.SerializationException;
@@ -117,20 +123,21 @@ public class ReflectionClassTrustTest {
 
   // ReflectData.getClass loads the class that a java-class property names
   @Test
-  public void testUntrustedJavaClassOnString() {
+  public void testUntrustedJavaClassOnString() throws Exception {
     Schema schema = Schema.create(Schema.Type.STRING);
     schema.addProp(SpecificData.CLASS_PROP, JavaClassTarget.class.getName());
-    byte[] bytes = serializer.serialize("java-class", new NonRecordContainer(schema, "value"));
+    byte[] bytes = genericBytes("java-class", schema, "value");
     KafkaAvroDeserializer deserializer = deserializer(null, OTHER_PACKAGE);
     assertRejected(() -> deserializer.deserialize("java-class", bytes), JavaClassTarget.class);
   }
 
+  // An Avro array is written generically, without loading its java-class
   @Test
   public void testUntrustedJavaClassOnArray() {
     Schema schema = Schema.createArray(Schema.create(Schema.Type.INT));
     schema.addProp(SpecificData.CLASS_PROP, JavaClassArrayTarget.class.getName());
     byte[] bytes = serializer.serialize("java-class-array",
-        new NonRecordContainer(schema, Collections.singletonList(1)));
+        new GenericData.Array<>(schema, Collections.singletonList(1)));
     KafkaAvroDeserializer deserializer = deserializer(null, OTHER_PACKAGE);
     assertRejected(() -> deserializer.deserialize("java-class-array", bytes),
         JavaClassArrayTarget.class);
@@ -424,5 +431,18 @@ public class ReflectionClassTrustTest {
     GenericRecord value = new GenericData.Record(schema);
     value.put("f", "value");
     return value;
+  }
+
+  // A message written by a generic writer. The serializer writes a value that is not an Avro
+  // container by reflection, which since Avro 1.12 loads the class a java-class property names.
+  private byte[] genericBytes(String topic, Schema schema, Object value) throws Exception {
+    int id = schemaRegistry.register(topic + "-value", new AvroSchema(schema));
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(SchemaId.MAGIC_BYTE_V0);
+    out.write(ByteBuffer.allocate(Integer.BYTES).putInt(id).array());
+    BinaryEncoder encoder = EncoderFactory.get().directBinaryEncoder(out, null);
+    new GenericDatumWriter<>(schema).write(value, encoder);
+    encoder.flush();
+    return out.toByteArray();
   }
 }
