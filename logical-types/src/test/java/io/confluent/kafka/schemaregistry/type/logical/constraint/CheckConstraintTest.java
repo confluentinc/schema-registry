@@ -1886,7 +1886,7 @@ class CheckConstraintTest {
 
   @Test
   void positionFrom() {
-    assertEquals("('@' == '' ? 1 : (this.qty - 1 >= size(this.name) ? 0 : "
+    assertEquals("('@' == '' ? 1 : (this.qty > size(this.name) ? 0 : "
             + "this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
         translateCheck("POSITION('@' IN name FROM qty) > 0"));
   }
@@ -1898,7 +1898,8 @@ class CheckConstraintTest {
         "POSITION('b' IN 'abcb' FROM 0) = 2", "POSITION('b' IN 'abcb' FROM -5) = 2",
         "POSITION('b' IN 'abcb' FROM 4) = 4", "POSITION('b' IN 'abcb' FROM 5) = 0",
         "POSITION('b' IN 'abcb' FROM 9) = 0", "POSITION('' IN 'abc' FROM 9) = 1",
-        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5")) {
+        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5",
+        "POSITION('b' IN 'abcb' FROM -9223372036854775807 - 1) = 2")) {
       String cel = translateCheck(sql);
       assertEquals(true, evalConstant(cel), sql + " -> " + cel);
     }

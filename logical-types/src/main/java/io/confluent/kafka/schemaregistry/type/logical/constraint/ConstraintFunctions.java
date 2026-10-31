@@ -1102,7 +1102,7 @@ final class ConstraintFunctions {
     StringBuilder start = new StringBuilder();
     emitWrappedReceiver(ctx.check_expr(1), start);
     visitCExpr(ctx.c_expr(), sb);
-    sb.append(" == '' ? 1 : (").append(start).append(" - 1 >= size(");
+    sb.append(" == '' ? 1 : (").append(start).append(" > size(");
     visitCheckExpr(haystack, sb);
     sb.append(") ? 0 : ");
     emitWrappedReceiver(haystack, sb);
