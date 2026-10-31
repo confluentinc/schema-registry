@@ -37,7 +37,9 @@ class ProtoCheckPresenceTest {
   @Test
   void aNotNullZeroIsNotNull() {
     String ddl = "STRUCT T (a INT NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
-        + "r STRUCT(x INT NOT NULL), "
+        + "r STRUCT(x INT NOT NULL), items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c7 CHECK (COALESCE((r).x, 7) = 0), "
+        + "CONSTRAINT c8 CHECK (EVERY(items, e, COALESCE(e.x, 7) = 0)), "
         + "CONSTRAINT c1 CHECK (COALESCE(a, 7) = 0), "
         + "CONSTRAINT c2 CHECK (GREATEST(a, -3) = 0), "
         + "CONSTRAINT c3 CHECK (COALESCE(s, 'x') = ''), "
@@ -48,11 +50,13 @@ class ProtoCheckPresenceTest {
     visitor.visit(LogicalTypesParserFactory.parse(ddl));
     ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
         visitor.toLogicalType(), "T");
-    // Every scalar left at its zero value, and r present with x = 0.
+    // Every scalar left at its zero value, r present with x = 0, and one item with x = 0.
     Descriptor descriptor = schema.toDescriptor();
     FieldDescriptor r = descriptor.findFieldByName("r");
+    FieldDescriptor items = descriptor.findFieldByName("items");
     DynamicMessage message = DynamicMessage.newBuilder(descriptor)
         .setField(r, DynamicMessage.newBuilder(r.getMessageType()).build())
+        .addRepeatedField(items, DynamicMessage.newBuilder(items.getMessageType()).build())
         .build();
     assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
   }

@@ -1814,6 +1814,13 @@ final class ConstraintResolver {
    */
   static LogicalTypesParser.ColumnrefContext tryExtractLeafColumnRef(
       LogicalTypesParser.Check_exprContext ctx) {
+    LogicalTypesParser.Check_expr_compareContext compare = leafCompare(ctx);
+    return compare == null ? null : tryExtractLeafColumnRefCompare(compare);
+  }
+
+  // The comparison level of a pass-through cascade, or null if a level branches.
+  private static LogicalTypesParser.Check_expr_compareContext leafCompare(
+      LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
     if (or.check_expr_and().size() > 1) {
       return null;
@@ -1831,7 +1838,7 @@ final class ConstraintResolver {
     if (is.IS() != null) {
       return null;
     }
-    return tryExtractLeafColumnRefCompare(is.check_expr_compare());
+    return is.check_expr_compare();
   }
 
   /**
@@ -1839,6 +1846,56 @@ final class ConstraintResolver {
    * level — used by the IS NULL operand validator.
    */
   static LogicalTypesParser.ColumnrefContext tryExtractLeafColumnRefCompare(
+      LogicalTypesParser.Check_expr_compareContext ctx) {
+    LogicalTypesParser.C_exprContext c = leafCExpr(ctx);
+    return c == null ? null : columnRefOfCExpr(c);
+  }
+
+  /**
+   * The root and field names of a selection at the leaf of a pass-through cascade, plain
+   * ({@code r.x}) or parenthesized ({@code (r).x}); null if the leaf is not one.
+   */
+  static List<String> selectionPath(LogicalTypesParser.Check_exprContext ctx) {
+    LogicalTypesParser.Check_expr_compareContext compare = leafCompare(ctx);
+    return compare == null ? null : selectionPathCompare(compare);
+  }
+
+  /**
+   * {@link #selectionPath} starting from a {@code check_expr_compare} level.
+   */
+  static List<String> selectionPathCompare(LogicalTypesParser.Check_expr_compareContext ctx) {
+    LogicalTypesParser.C_exprContext c = leafCExpr(ctx);
+    List<String> path;
+    LogicalTypesParser.IndirectionContext indirection;
+    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
+      LogicalTypesParser.ColumnrefContext col =
+          ((LogicalTypesParser.CheckColumnRefContext) c).columnref();
+      path = new ArrayList<>(List.of(colidName(col.colid())));
+      indirection = col.indirection();
+    } else if (c instanceof LogicalTypesParser.CheckParenContext) {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
+      List<String> inner = selectionPath(paren.check_expr());
+      if (inner == null) {
+        return null;
+      }
+      path = new ArrayList<>(inner);
+      indirection = paren.indirection();
+    } else {
+      return null;
+    }
+    if (indirection != null) {
+      for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
+        if (el.colid() == null) {
+          return null;
+        }
+        path.add(colidName(el));
+      }
+    }
+    return path;
+  }
+
+  // The primary at the leaf of a pass-through cascade from the comparison level, or null.
+  private static LogicalTypesParser.C_exprContext leafCExpr(
       LogicalTypesParser.Check_expr_compareContext ctx) {
     if (ctx.check_expr_between().size() > 1) {
       return null;
@@ -1871,7 +1928,7 @@ final class ConstraintResolver {
         return null;
       }
     }
-    return columnRefOfCExpr(sign.c_expr());
+    return sign.c_expr();
   }
 
   private static LogicalTypesParser.ColumnrefContext columnRefOfCExpr(
@@ -1925,37 +1982,33 @@ final class ConstraintResolver {
   }
 
   /**
-   * How many steps of {@code col}'s field chain, root included, a null test should cover: up to
-   * the deepest nullable step, since a NOT NULL step is present whenever its parent is. 0 means
-   * the path is never null, -1 unknown. Testing a NOT NULL leaf itself misfires on Protobuf,
-   * whose has() is false for a zero.
+   * How many steps of a selection path ({@link #selectionPath}), root included, a null test
+   * should cover: up to the deepest nullable step, since a NOT NULL step is present whenever its
+   * parent is. 0 means the path is never null, -1 unknown. The root is a column or a macro's
+   * typed iteration variable. Testing a NOT NULL leaf itself misfires on Protobuf, whose has()
+   * is false for a zero.
    */
-  static int presenceSteps(
-      LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
-    String rootName = colidName(col.colid());
-    Schema rootField = vctx != null && vctx.isColumn(rootName) ? vctx.schemaOf(rootName) : null;
+  static int presenceSteps(List<String> path, ConstraintValidationContext vctx) {
+    String root = path.get(0);
+    Schema rootField = vctx == null ? null : vctx.schemaOf(root);
     if (rootField == null) {
       return -1;
     }
     // A column-level CHECK is skipped when its column is null, so `this` is never null there.
-    int last = rootField.isNullable() && !vctx.isColumnLevel() ? 1 : 0;
+    int last = rootField.isNullable() && !(vctx.isColumnLevel() && vctx.isColumn(root)) ? 1 : 0;
     Schema current = resolveIfNamedRef(rootField, vctx);
-    if (col.indirection() != null) {
-      int step = 1;
-      for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
-        if (el.colid() == null || current == null || current.getType() != Schema.Type.STRUCT) {
-          return -1;
-        }
-        Schema.Field nested = current.getField(colidName(el));
-        if (nested == null) {
-          return -1;
-        }
-        step++;
-        if (nested.getSchema().isNullable()) {
-          last = step;
-        }
-        current = resolveIfNamedRef(nested.getSchema(), vctx);
+    for (int step = 2; step <= path.size(); step++) {
+      if (current == null || current.getType() != Schema.Type.STRUCT) {
+        return -1;
       }
+      Schema.Field nested = current.getField(path.get(step - 1));
+      if (nested == null) {
+        return -1;
+      }
+      if (nested.getSchema().isNullable()) {
+        last = step;
+      }
+      current = resolveIfNamedRef(nested.getSchema(), vctx);
     }
     return last;
   }

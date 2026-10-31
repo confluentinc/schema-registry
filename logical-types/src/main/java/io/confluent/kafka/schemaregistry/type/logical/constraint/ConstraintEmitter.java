@@ -567,19 +567,13 @@ final class ConstraintEmitter {
     if (ConstraintResolver.isHasCompatible(ctx.check_expr_compare(), EMIT_VCTX.get())) {
       StringBuilder emitted = new StringBuilder();
       visitCompare(ctx.check_expr_compare(), emitted);
-      String lhs = presencePath(ConstraintResolver.tryExtractLeafColumnRefCompare(
+      String lhs = presencePath(ConstraintResolver.selectionPathCompare(
           ctx.check_expr_compare()), emitted.toString());
       if (lhs.isEmpty()) {
         sb.append(negated ? "true" : "false");
         return;
       }
-      if (negated) {
-        sb.append("(has(").append(lhs).append(") && dyn(")
-            .append(lhs).append(") != null)");
-      } else {
-        sb.append("(!has(").append(lhs).append(") || dyn(")
-            .append(lhs).append(") == null)");
-      }
+      sb.append(negated ? isNotNullTest(lhs) : isNullTest(lhs));
       return;
     }
     sb.append("dyn(");
@@ -1819,26 +1813,36 @@ final class ConstraintEmitter {
   }
 
   /**
-   * The selection a null test of a has()-compatible column reference covers: its path up to the
-   * deepest nullable step ({@link ConstraintResolver#presenceSteps}), "" when the path is never
-   * null, or {@code emitted}, the whole reference, when that can't be told.
+   * The selection a null test of a has()-compatible reference covers: its path up to the deepest
+   * nullable step ({@link ConstraintResolver#presenceSteps}), "" when the path is never null, or
+   * {@code emitted}, the whole reference, when that can't be told.
    */
-  static String presencePath(LogicalTypesParser.ColumnrefContext col, String emitted) {
-    int steps = col == null ? -1 : ConstraintResolver.presenceSteps(col, EMIT_VCTX.get());
-    int all = 1 + (col == null || col.indirection() == null
-        ? 0 : col.indirection().indirection_el().size());
-    if (steps < 0 || steps == all) {
+  static String presencePath(List<String> path, String emitted) {
+    int steps = path == null ? -1 : ConstraintResolver.presenceSteps(path, EMIT_VCTX.get());
+    if (steps < 0 || steps == path.size()) {
       return emitted;
     }
     if (steps == 0) {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    emitColumnRoot(colidName(col.colid()), sb);
-    for (int i = 0; i < steps - 1; i++) {
-      sb.append('.').append(colidName(col.indirection().indirection_el(i)));
+    emitColumnRoot(path.get(0), sb);
+    for (int i = 1; i < steps; i++) {
+      sb.append('.').append(path.get(i));
     }
     return sb.toString();
+  }
+
+  /** A selection's not-null test; a bare iteration variable, which has() can't take, compared. */
+  static String isNotNullTest(String path) {
+    return path.indexOf('.') < 0 ? "dyn(" + path + ") != null"
+        : "(has(" + path + ") && dyn(" + path + ") != null)";
+  }
+
+  /** A selection's null test; a bare iteration variable, which has() can't take, is compared. */
+  static String isNullTest(String path) {
+    return path.indexOf('.') < 0 ? "dyn(" + path + ") == null"
+        : "(!has(" + path + ") || dyn(" + path + ") == null)";
   }
 
   private static void visitIndirection(

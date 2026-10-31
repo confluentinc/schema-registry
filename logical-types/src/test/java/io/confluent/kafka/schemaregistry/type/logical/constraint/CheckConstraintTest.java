@@ -2882,6 +2882,15 @@ class CheckConstraintTest {
         translateCheckOver(columns, "r.x IS NULL"));
     assertEquals("(has(this.r.y) && dyn(this.r.y) != null)",
         translateCheckOver(columns, "r.y IS NOT NULL"));
+    // A parenthesized selection, and a macro variable's fields, the same way.
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? (this.r).x : 7) == 0",
+        translateCheckOver(columns, "COALESCE((r).x, 7) = 0"));
+    String arrays = "items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
+        + "maybe STRUCT(x INT NOT NULL) ARRAY NOT NULL";
+    assertEquals("this.items.all(e, (true ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(items, e, COALESCE(e.x, 7) = 0)"));
+    assertEquals("this.maybe.all(e, (dyn(e) != null ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(maybe, e, COALESCE(e.x, 7) = 0)"));
   }
 
   private String translateCheckOver(String columns, String checkExpr) {

@@ -532,13 +532,12 @@ final class ConstraintFunctions {
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
       String path = ConstraintEmitter.presencePath(
-          ConstraintResolver.tryExtractLeafColumnRef(arg), emitted);
+          ConstraintResolver.selectionPath(arg), emitted);
       if (path.isEmpty()) {
         sb.append("true");
         return;
       }
-      sb.append("(has(").append(path).append(") && dyn(")
-          .append(path).append(") != null)");
+      sb.append(ConstraintEmitter.isNotNullTest(path));
     } else {
       sb.append("dyn(").append(emitted).append(") != null");
     }
@@ -554,13 +553,12 @@ final class ConstraintFunctions {
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
       String path = ConstraintEmitter.presencePath(
-          ConstraintResolver.tryExtractLeafColumnRef(arg), emitted);
+          ConstraintResolver.selectionPath(arg), emitted);
       if (path.isEmpty()) {
         sb.append("false");
         return;
       }
-      sb.append("(!has(").append(path).append(") || dyn(")
-          .append(path).append(") == null)");
+      sb.append(ConstraintEmitter.isNullTest(path));
     } else {
       sb.append("dyn(").append(emitted).append(") == null");
     }
