@@ -1164,6 +1164,19 @@ class LogicalTypeToAvroConverterTest {
     }
   }
 
+  @Test
+  void testDecimalWithoutScaleIsWrittenWithScaleZero() {
+    // DECIMAL(p) and bare DECIMAL are DECIMAL(p, 0); Avro refuses a scale of -1.
+    for (Schema d : Arrays.asList(Schema.createDecimal(18, Schema.NO_PARAM),
+        Schema.createDecimal(Schema.NO_PARAM, Schema.NO_PARAM))) {
+      Schema rootSchema = Schema.createStruct(Arrays.asList(
+          new Field("d", d.setNullable(false), 0))).setNullable(false);
+      Schema rt = AvroToLogicalTypeConverter.toLogicalType(convert(rootSchema))
+          .getRootSchema().getField("d").getSchema();
+      assertEquals(Schema.DEFAULT_DECIMAL_SCALE, rt.getScale());
+    }
+  }
+
   // =========================================================================
   // Length-constrained primitives round-trip
   // =========================================================================

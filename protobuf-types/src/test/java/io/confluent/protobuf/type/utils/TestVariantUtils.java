@@ -52,6 +52,18 @@ public class TestVariantUtils {
   }
 
   @Test
+  public void testFromKafkaVariantLeavesTheVariantAsItWas() {
+    // Converting used to consume the Variant's buffers, so a second conversion was empty.
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendString("hello");
+    Variant variant = vb.build();
+    io.confluent.protobuf.type.Variant first = VariantUtils.fromKafkaVariant(variant);
+    io.confluent.protobuf.type.Variant second = VariantUtils.fromKafkaVariant(variant);
+    Assert.assertEquals(first, second);
+    Assert.assertEquals("hello", VariantUtils.toKafkaVariant(second).getString());
+  }
+
+  @Test
   public void testRoundTripScalar() {
     VariantBuilder vb = new VariantBuilder();
     vb.appendString("hello");
