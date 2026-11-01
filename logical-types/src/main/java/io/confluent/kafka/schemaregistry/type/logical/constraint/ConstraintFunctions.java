@@ -502,7 +502,20 @@ final class ConstraintFunctions {
       emitIsNotNullCheck(args.get(i), nullCheck, sb);
       sb.append(" ? ").append(valueEmit[i]).append(" : ");
     }
-    sb.append(valueEmit[n - 1]);
+    // A last argument that may be NULL gives NULL, not a widened NULL or, on
+    // JSON, which leaves a NULL field out, a missing key. (The validator checks
+    // the arguments share a category, as the dyn branch no longer makes the
+    // strict check unify them.)
+    LogicalTypesParser.Check_exprContext last = args.get(n - 1);
+    if (tryAsLiteral(last) != null) {
+      sb.append(valueEmit[n - 1]);
+    } else {
+      String nullCheck = ConstraintResolver.isHasCompatible(last, vctx)
+          ? nativeEmit[n - 1] : ownTypeValue(last, nativeEmit[n - 1], valueEmit[n - 1], vctx);
+      sb.append('(');
+      emitIsNotNullCheck(last, nullCheck, sb);
+      sb.append(" ? ").append(valueEmit[n - 1]).append(" : dyn(null))");
+    }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
     }

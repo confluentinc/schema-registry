@@ -1339,8 +1339,11 @@ class CheckConstraintTest {
 
   @Test
   void coalesceTwoArgs() {
+    // A last argument that may be NULL gives NULL rather than being read: JSON
+    // leaves a NULL field out.
     assertEquals(
-        "((has(this.a) && dyn(this.a) != null) ? this.a : this.b) > 0",
+        "((has(this.a) && dyn(this.a) != null) ? this.a : "
+            + "((has(this.b) && dyn(this.b) != null) ? this.b : dyn(null))) > 0",
         translateCheck("COALESCE(a, b) > 0"));
   }
 
@@ -1348,7 +1351,8 @@ class CheckConstraintTest {
   void coalesceThreeArgs() {
     assertEquals(
         "((has(this.a) && dyn(this.a) != null) ? this.a : "
-            + "((has(this.b) && dyn(this.b) != null) ? this.b : this.c)) > 0",
+            + "((has(this.b) && dyn(this.b) != null) ? this.b : "
+            + "((has(this.c) && dyn(this.c) != null) ? this.c : dyn(null)))) > 0",
         translateCheck("COALESCE(a, b, c) > 0"));
   }
 
@@ -2990,12 +2994,17 @@ class CheckConstraintTest {
     present.put("b", null);
     present.put("x", 0.5);
     present.put("d", null);
-    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(present));
-    for (String sql : List.of("COALESCE(GREATEST(a, b), x) = x",
-        "COALESCE(COALESCE(a, b), x) = x", "COALESCE(LEAST(a, b), d, 7) = 7")) {
-      String cel = translateCheckOver(columns, sql);
-      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
-          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    // JSON leaves a NULL field out, so a NULL last argument is read guarded too.
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("COALESCE(GREATEST(a, b), x) = x",
+          "COALESCE(COALESCE(a, b), x) = x", "COALESCE(LEAST(a, b), d, 7) = 7",
+          "COALESCE(COALESCE(d, a), x) = x")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
     }
   }
 
@@ -3572,7 +3581,7 @@ class CheckConstraintTest {
         ValidationException.class,
         () -> translateCheck("COALESCE(x, name) = 'a'"));
     assertTrue(
-        t.getMessage().contains("strict type-check")
+        t.getMessage().contains("not comparable")
             || t.getMessage().contains("Cannot compare"),
         "expected type-mismatch rejection, got: " + t.getMessage());
   }
@@ -4895,7 +4904,8 @@ class CheckConstraintTest {
   void coalesceDoubleCommonRegardlessOfOrder() {
     // int-first with a double later arg resolves to double (was int → wrong).
     assertEquals(
-        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : this.ratio) > 1.0",
+        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : "
+            + "((has(this.ratio) && dyn(this.ratio) != null) ? this.ratio : dyn(null))) > 1.0",
         translateCheck("COALESCE(x, ratio) > 1.0"));
   }
 

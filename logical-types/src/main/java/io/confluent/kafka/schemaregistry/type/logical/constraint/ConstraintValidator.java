@@ -1124,6 +1124,9 @@ final class ConstraintValidator {
       if (NULL_REJECTING_FUNCS.contains(name) && !args.isEmpty()) {
         rejectLiteralNullArgs(name, args);
       }
+      if ("COALESCE".equals(name)) {
+        requireComparableArgs(name, args, vctx);
+      }
       // Column-level skip-on-null contract: COALESCE(<constrained-col>,
       // fallback) is dead because `this` is guaranteed non-null at
       // evaluation time, so the fallback args never run. Fires only when
@@ -1151,6 +1154,31 @@ final class ConstraintValidator {
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       validateFunctionArgs(node.getChild(i), vctx);
+    }
+  }
+
+  /**
+   * Reject arguments of incomparable types, as SQL does. COALESCE's emit ends
+   * in a {@code dyn} branch, so the strict check no longer unifies them.
+   */
+  private static void requireComparableArgs(
+      String name, List<LogicalTypesParser.Check_exprContext> args,
+      ConstraintValidationContext vctx) {
+    Schema first = null;
+    for (LogicalTypesParser.Check_exprContext arg : args) {
+      Schema t = ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+      if (t == null) {
+        continue;
+      }
+      if (first == null) {
+        first = t;
+      } else if (!ConstraintResolver.areComparable(first.getType(), t.getType())) {
+        throw locatedError(arg,
+            name + "() argument type " + t.getType() + " is not comparable with the "
+                + "earlier argument type " + first.getType() + "; make the arguments "
+                + "share a category (numeric, string, bytes, or date/time), CAST if "
+                + "needed.");
+      }
     }
   }
 
