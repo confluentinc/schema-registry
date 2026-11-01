@@ -255,6 +255,48 @@ public class TestVariantScalarBuilder {
   }
 
   @Test
+  public void testDecimalBuilderRejectsMoreThan38Digits() {
+    // DECIMAL16 holds 38 digits; a 40-digit value used to wrap into another number.
+    for (String d : Arrays.asList("1000000000000000000000000000000000000007",
+        "0.000000000000000000000000000000000000001")) {
+      try {
+        new VariantBuilder().appendDecimal(new BigDecimal(d));
+        Assert.fail("expected " + d + " to be rejected");
+      } catch (IllegalArgumentException e) {
+        Assert.assertTrue(e.getMessage(), e.getMessage().contains("at most 38"));
+      }
+    }
+    VariantBuilder ok = new VariantBuilder();
+    BigDecimal widest = new BigDecimal("99999999999999999999999999999999999999");
+    ok.appendDecimal(widest);
+    Assert.assertEquals(widest, ok.build().getDecimal());
+  }
+
+  @Test
+  public void testDecimalReaderRejectsAScaleBeyond38() {
+    // A writer that did not check could store scale 39 in DECIMAL16's scale byte.
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendDecimal(new BigDecimal("1.00000000000000000000"));
+    Variant v = vb.build();
+    byte[] value = bytes(v.getValueBuffer());
+    Assert.assertEquals(VariantFormat.HEADER_DECIMAL16, value[0]);
+    value[1] = 39;
+    try {
+      new Variant(value, bytes(v.getMetadataBuffer())).getDecimal();
+      Assert.fail("expected a scale of 39 to be rejected");
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(e.getMessage(), e.getMessage().contains("Malformed decimal"));
+    }
+  }
+
+  private static byte[] bytes(ByteBuffer buffer) {
+    ByteBuffer copy = buffer.duplicate();
+    byte[] bytes = new byte[copy.remaining()];
+    copy.get(bytes);
+    return bytes;
+  }
+
+  @Test
   public void testDecimalBuilder() {
     // decimal4
     Arrays.asList(new BigDecimal("123.456"), new BigDecimal("-987.654")).forEach(d -> {
