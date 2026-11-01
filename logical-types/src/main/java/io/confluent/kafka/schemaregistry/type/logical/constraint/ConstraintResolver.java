@@ -1495,7 +1495,7 @@ final class ConstraintResolver {
    *       CEL-reserved names).</li>
    * </ul>
    */
-  private static boolean isHasCompatibleCExpr(
+  static boolean isHasCompatibleCExpr(
       LogicalTypesParser.C_exprContext c, ConstraintValidationContext vctx) {
     if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
       return isHasCompatibleColumnRef(
@@ -1824,6 +1824,14 @@ final class ConstraintResolver {
   }
 
   // The comparison level of a pass-through cascade, or null if a level branches.
+  /**
+   * The primary at the leaf of a pass-through cascade, or null.
+   */
+  static LogicalTypesParser.C_exprContext leafPrimary(LogicalTypesParser.Check_exprContext ctx) {
+    LogicalTypesParser.Check_expr_compareContext compare = leafCompare(ctx);
+    return compare == null ? null : leafCExpr(compare);
+  }
+
   private static LogicalTypesParser.Check_expr_compareContext leafCompare(
       LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
@@ -1870,6 +1878,13 @@ final class ConstraintResolver {
    */
   static List<String> selectionPathCompare(LogicalTypesParser.Check_expr_compareContext ctx) {
     LogicalTypesParser.C_exprContext c = leafCExpr(ctx);
+    return c == null ? null : selectionPathCExpr(c);
+  }
+
+  /**
+   * {@link #selectionPath} of a primary.
+   */
+  static List<String> selectionPathCExpr(LogicalTypesParser.C_exprContext c) {
     List<String> path;
     LogicalTypesParser.IndirectionContext indirection;
     if (c instanceof LogicalTypesParser.CheckColumnRefContext) {

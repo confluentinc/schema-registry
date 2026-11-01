@@ -62,6 +62,21 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anExpressionOfAnUnsetFieldIsNull() {
+    // An unset nullable field makes an expression of it NULL, but a NOT NULL zero does not.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (ni + 1 IS NULL), "
+        + "CONSTRAINT c2 CHECK (COALESCE(ni + 1, 0) = 0), "
+        + "CONSTRAINT c3 CHECK (COALESCE(i + 1, 0) = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

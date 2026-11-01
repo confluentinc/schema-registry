@@ -571,8 +571,23 @@ final class ConstraintEmitter {
           emitted.toString(), !negated));
       return;
     }
+    // An expression is tested by its inputs, as evaluating it on a NULL one fails; the strict
+    // check still types it, in its own numeric type, as DECIMAL arithmetic has no native form.
+    LogicalTypesParser.Check_expr_compareContext operand = ctx.check_expr_compare();
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String byInputs = ConstraintNullTest.of(operand);
+    if (byInputs != null && (vctx == null || !vctx.isTypeOnly())) {
+      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
+      return;
+    }
+    String category = operand.check_expr_between().size() == 1 && vctx != null
+        ? ConstraintResolver.coercedNumericCategory(operand.check_expr_between(0), vctx) : null;
     sb.append("dyn(");
-    visitCompare(ctx.check_expr_compare(), sb);
+    if ("decimal".equals(category) || "double".equals(category)) {
+      emitNumericBetweenAs(operand.check_expr_between(0), category, sb);
+    } else {
+      visitCompare(operand, sb);
+    }
     sb.append(negated ? ") != null" : ") == null");
   }
 

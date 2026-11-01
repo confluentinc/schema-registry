@@ -1362,18 +1362,19 @@ class CheckConstraintTest {
 
   @Test
   void aCheckTooLargeForCelSaysSo() {
-    // A nested GREATEST repeats its arguments at each level: six deep fits, seven does not.
-    String columns = "c0 INT, c1 INT, c2 INT, c3 INT, c4 INT, c5 INT, c6 INT, c7 INT";
-    String nested = "c7";
-    for (int i = 0; i < 7; i++) {
-      if (i == 6) {
+    // A nested GREATEST repeats its arguments at each level: eight deep fits, nine does not.
+    String columns = "c0 INT, c1 INT, c2 INT, c3 INT, c4 INT, c5 INT, c6 INT, c7 INT, c8 INT, "
+        + "c9 INT";
+    String nested = "c9";
+    for (int i = 0; i < 9; i++) {
+      if (i == 8) {
         translateCheckOver(columns, nested + " > 0");
       }
       nested = "GREATEST(c" + i + ", " + nested + ")";
     }
-    String seven = nested;
+    String nine = nested;
     ValidationException e = assertThrows(ValidationException.class,
-        () -> translateCheckOver(columns, seven + " > 0"));
+        () -> translateCheckOver(columns, nine + " > 0"));
     assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
   }
 
@@ -3066,6 +3067,34 @@ class CheckConstraintTest {
   }
 
   @Test
+  void anExpressionOfANullIsNull() throws Exception {
+    // An operator or function of a NULL is NULL, so it is tested by its inputs rather than
+    // evaluated, which fails on a NULL or, as JSON leaves a NULL field out, a missing key.
+    String columns = "ni INT, ns STRING, nd DECIMAL(10, 2), arr INT ARRAY NOT NULL";
+    assertEquals("(!has(this.ni) || dyn(this.ni) == null)",
+        translateCheckOver(columns, "ni + 1 IS NULL"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1));
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "ns", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("ni + 1 IS NULL", "NOT (ni + 1 IS NOT NULL)",
+          "COALESCE(ni + 1, 0) = 0", "COALESCE(UPPER(ns), 'x') = 'x'",
+          "LEAST(LENGTH(ns), 2.5) > 0", "(ni = 1) IS NULL", "-ni IS NULL",
+          "(ns || 'x') IS NULL", "(ns LIKE 'a%') IS NULL", "nd * 2 IS NULL",
+          "EVERY(arr, e, (e > nd) IS NULL)")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
@@ -3074,6 +3103,7 @@ class CheckConstraintTest {
         {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
         {"a INT, b INT", "UPPER(NULLIF(a, b)) = 'X'"},
         {"a INT, b INT", "NULLIF('A', UPPER(COALESCE(a, b))) IS NULL"},
+        {"a INT, b INT", "(UPPER(COALESCE(a, b)) = 'X') IS NULL"},
         {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
         {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
         {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},
@@ -5041,15 +5071,14 @@ class CheckConstraintTest {
   void mixedNumericArithmeticInsideCoalesceAndGreatestResolves() {
     // COALESCE/GREATEST/LEAST null checks used the native emit of each branch;
     // for a mixed-numeric arithmetic branch that native emit is an
-    // un-coercible int+Decimal add. The null check now uses the coerced value
-    // for non-field-selection branches, while plain column branches still use
-    // has(). Both arg orders work.
+    // un-coercible int+Decimal add. Such a branch is now tested by its inputs,
+    // and plain column branches by has(). Both arg orders work.
     String c = translateCheck("COALESCE(x + amount, x) = 1");
-    assertTrue(c.startsWith("decimals.eq(") && c.contains("dyn(decimals.add("),
-        "got: " + c);
+    assertTrue(c.startsWith("decimals.eq(") && c.contains("decimals.add(decimal(this.x), "
+        + "this.amount)") && !c.contains("this.x + this.amount"), "got: " + c);
     String g = translateCheck("GREATEST(x + amount, x) > 1");
-    assertTrue(g.startsWith("decimals.gt(") && g.contains("dyn(decimals.add("),
-        "got: " + g);
+    assertTrue(g.startsWith("decimals.gt(") && g.contains("decimals.add(decimal(this.x), "
+        + "this.amount)") && !g.contains("this.x + this.amount"), "got: " + g);
   }
 
   // ---------------------------------------------------------------------

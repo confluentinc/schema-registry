@@ -447,8 +447,8 @@ final class ConstraintFunctions {
 
   /**
    * COALESCE(a, b, c, ...) → {@code (a != null ? a : (b != null ? b : c))}.
-   * Each per-arg null check uses {@link #emitIsNotNullCheck}, which wraps
-   * with a {@code has()} guard when the arg is a CEL field-selection chain.
+   * Each per-arg null check uses {@link #notNullTestOf}, a {@code has()} guard
+   * when the arg is a CEL field-selection chain.
    */
   private static void emitCoalesce(
       LogicalTypesParser.Func_applicationContext fctx,
@@ -492,15 +492,8 @@ final class ConstraintFunctions {
       }
     }
     for (int i = 0; i < n - 1; i++) {
-      sb.append('(');
-      // has() requires a bare field selection (nativeEmit); a non-selection
-      // branch (e.g. mixed-numeric arithmetic, whose native emit is an
-      // un-coercible int+Decimal add) is tested in its own type, which
-      // type-checks and, unlike valueEmit, does not widen a NULL.
-      String nullCheck = ConstraintResolver.isHasCompatible(args.get(i), vctx)
-          ? nativeEmit[i] : ownTypeValue(args.get(i), nativeEmit[i], valueEmit[i], vctx);
-      emitIsNotNullCheck(args.get(i), nullCheck, sb);
-      sb.append(" ? ").append(valueEmit[i]).append(" : ");
+      sb.append('(').append(notNullTestOf(args.get(i), nativeEmit[i], valueEmit[i]))
+          .append(" ? ").append(valueEmit[i]).append(" : ");
     }
     // A last argument that may be NULL gives NULL, not a widened NULL or, on
     // JSON, which leaves a NULL field out, a missing key. (The validator checks
@@ -518,62 +511,29 @@ final class ConstraintFunctions {
   }
 
   /**
-   * Emit {@code dyn(<arg>) != null}, optionally wrapped with a presence
-   * check ({@code (has(<arg>) && dyn(<arg>) != null)}) when the arg is a
-   * CEL field-selection chain. {@code emitted} is the cached emit of the
-   * arg so we don't re-visit the parse tree per use site.
-   *
-   * <p>The {@code dyn(...)} wrapper makes the null comparison portable
-   * across CEL checkers that would otherwise reject {@code <typed> != null}
-   * (e.g., consumers compiling against concrete proto types). {@code dyn}
-   * is a no-op at runtime. {@code has()}'s argument stays a bare selection
-   * per CEL spec.
-   *
-   * <p>The has-rewrite output is paren-wrapped so the helper is safe to
-   * splice into any context. Today both call sites (COALESCE,
-   * GREATEST/LEAST) use it as a ternary condition where CEL's grammar
-   * naturally groups the {@code &&}/{@code ||} chain — but a future call
-   * site that splices into an {@code ||}/{@code &&} expression would
-   * silently mis-bind without the parens (same root cause as
-   * {@link ConstraintEmitter#visitIs}).
-   */
-  private static void emitIsNotNullCheck(
-      LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
-    if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, false));
-    } else {
-      sb.append("dyn(").append(emitted).append(") != null");
-    }
-  }
-
-  /**
-   * Emit {@code dyn(<arg>) == null}, optionally wrapped with a presence
-   * check ({@code (!has(<arg>) || dyn(<arg>) == null)}) when the arg is a
-   * CEL field-selection chain. Companion to {@link #emitIsNotNullCheck};
-   * same paren-wrap and dyn-wrap rationale.
-   */
-  private static void emitIsNullCheck(
-      LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
-    if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, true));
-    } else {
-      sb.append("dyn(").append(emitted).append(") == null");
-    }
-  }
-
-  /**
    * {@code value}, {@code arg} converted to the common type, or NULL when {@code arg} is NULL:
    * tested before the conversion, in its own type or by has(), as converting a NULL fails and
    * JSON leaves a NULL field out.
    */
   static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
       String value, StringBuilder sb) {
-    emitNullOr(nullTestOf(arg, nativeEmit, value), true, value, sb);
+    emitNullOrValue(arg, nativeEmit, value, nullTestOf(arg, nativeEmit, value), sb);
+  }
+
+  private static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg,
+      String nativeEmit, String value, String nullTest, StringBuilder sb) {
+    // COALESCE, GREATEST and LEAST give NULL as null, so one not converted is not tested again.
+    if (value.equals(nativeEmit) && ConstraintNullTest.givesNullAsNull(arg)) {
+      sb.append(value);
+    } else {
+      emitNullOr(nullTest, true, value, sb);
+    }
   }
 
   /**
-   * The test that {@code arg} is NULL: by has() for a selection, else of its value in its own
-   * type, before it is converted to {@code value}'s; {@code false} for a path never NULL.
+   * The test that {@code arg} is NULL, before it is converted to {@code value}'s type: by has()
+   * for a selection, by its inputs ({@link ConstraintNullTest}) if they tell, else of its value in
+   * its own type; {@code false} when it is never NULL.
    */
   private static String nullTestOf(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
       String value) {
@@ -581,7 +541,23 @@ final class ConstraintFunctions {
     if (ConstraintResolver.isHasCompatible(arg, vctx)) {
       return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, true);
     }
-    return "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
+    String byInputs = ConstraintNullTest.of(arg);
+    return byInputs != null ? byInputs
+        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
+  }
+
+  /**
+   * The test that {@code arg} is not NULL, as {@link #nullTestOf} tells it.
+   */
+  private static String notNullTestOf(LogicalTypesParser.Check_exprContext arg,
+      String nativeEmit, String value) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ConstraintResolver.isHasCompatible(arg, vctx)) {
+      return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, false);
+    }
+    String byInputs = ConstraintNullTest.of(arg);
+    return byInputs != null ? ConstraintNullTest.not(byInputs)
+        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") != null";
   }
 
   /**
@@ -702,8 +678,8 @@ final class ConstraintFunctions {
   /**
    * GREATEST(a, b) / LEAST(a, b) — emit a NULL-skipping comparison.
    * Limited to 2 arguments in v1. Per-arg null guards use
-   * {@link #emitIsNullCheck}, which wraps with a {@code has()} guard when
-   * the arg is a CEL field-selection chain.
+   * {@link #nullTestOf}, a {@code has()} guard when the arg is a CEL
+   * field-selection chain.
    */
   private static void emitGreatestLeast(
       LogicalTypesParser.Func_applicationContext fctx,
@@ -758,22 +734,14 @@ final class ConstraintFunctions {
       a = tsA.toString();
       b = tsB.toString();
     }
-    // has() requires a bare field selection (nativeA/B); a non-selection
-    // operand (e.g. mixed-numeric arithmetic) is tested in its own type, which
-    // type-checks where the native emit may not, and does not convert a NULL.
-    final String nullA = ConstraintResolver.isHasCompatible(args.get(0), vctx)
-        ? nativeA : ownTypeValue(args.get(0), nativeA, a, vctx);
-    final String nullB = ConstraintResolver.isHasCompatible(args.get(1), vctx)
-        ? nativeB : ownTypeValue(args.get(1), nativeB, b, vctx);
-    StringBuilder nullTestB = new StringBuilder();
-    emitIsNullCheck(args.get(1), nullB, nullTestB);
-    sb.append('(');
-    emitIsNullCheck(args.get(0), nullA, sb);
+    // Each operand is tested before it is converted, so a NULL is not.
+    String nullTestB = nullTestOf(args.get(1), nativeB, b);
+    sb.append('(').append(nullTestOf(args.get(0), nativeA, a));
     // With both NULL the result is NULL (dyn, to type-check against the other
     // branches), not B converted or read: converting a NULL fails, and JSON
     // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
     sb.append(" ? ");
-    emitNullOr(nullTestB.toString(), true, b, sb);
+    emitNullOrValue(args.get(1), nativeB, b, nullTestB, sb);
     sb.append(" : (").append(nullTestB).append(" ? ").append(a).append(" : ");
     if (decimal) {
       sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
