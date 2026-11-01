@@ -1216,11 +1216,10 @@ final class ConstraintValidator {
    * Walk every {@code IS NULL} / {@code IS NOT NULL} test and reject when
    * the operand can never be null. Three shapes are detected:
    * <ul>
-   *   <li>Function call to a never-null-returning function (e.g.
-   *       {@code LENGTH(name) IS NULL}) — the emit produces a well-typed
-   *       CEL expression ({@code dyn(size(this.name)) == null}) that
-   *       strict cel-java accepts, but the comparison is unconditionally
-   *       false at runtime.</li>
+   *   <li>Function call to a function never NULL for non-NULL arguments
+   *       (e.g. {@code LENGTH(name) IS NULL}) where no argument can be
+   *       NULL, or whose inputs can't tell — the test is unconditionally
+   *       false.</li>
    *   <li>Bare column reference at column-level placement — the runtime
    *       guarantees {@code this} is non-null when the CHECK fires (the
    *       skip-on-null contract: column-level CHECKs are not invoked for
@@ -1251,11 +1250,15 @@ final class ConstraintValidator {
             is.check_expr_compare());
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
-          throw locatedError(is,
-              "IS NULL on " + funcName + "(...) is dead code — the function "
-                  + "always returns a non-null value, so the comparison is "
-                  + "unconditionally false. Drop the IS NULL test, or apply "
-                  + "IS NULL to a column reference instead.");
+          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          if (byInputs == null || ConstraintNullTest.NEVER.equals(byInputs)) {
+            throw locatedError(is,
+                "IS NULL on " + funcName + "(...) is dead code — the function "
+                    + "returns a non-null value here, as no argument can be "
+                    + "NULL, so the comparison is unconditionally false. Drop "
+                    + "the IS NULL test, or apply IS NULL to a column reference "
+                    + "instead.");
+          }
         }
         LogicalTypesParser.ColumnrefContext col =
             ConstraintResolver.tryExtractLeafColumnRefCompare(is.check_expr_compare());

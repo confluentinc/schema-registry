@@ -146,6 +146,24 @@ final class ConstraintNullTest {
   }
 
   /**
+   * {@link #of} outside an emission, as during validation.
+   */
+  static String of(LogicalTypesParser.Check_expr_compareContext ctx,
+      ConstraintValidationContext vctx) {
+    ConstraintValidationContext emitting = EMIT_VCTX.get();
+    EMIT_VCTX.set(vctx);
+    try {
+      return of(ctx);
+    } finally {
+      if (emitting == null) {
+        EMIT_VCTX.remove();
+      } else {
+        EMIT_VCTX.set(emitting);
+      }
+    }
+  }
+
+  /**
    * The test that {@code test}'s expression is not NULL.
    */
   static String not(String test) {

@@ -4420,12 +4420,12 @@ class CheckConstraintTest {
 
   @Test
   void isNullOnLengthRejected() {
-    // LENGTH(name) always returns a BIGINT — the IS NULL test is
+    // LENGTH of a NOT NULL name is never NULL — the IS NULL test is
     // unconditionally false. Strict accepts as well-typed; we reject for
     // the user.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("LENGTH(name) IS NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "LENGTH(name) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected dead-code rejection, got: " + t.getMessage());
   }
@@ -4436,7 +4436,7 @@ class CheckConstraintTest {
     // true.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("LENGTH(name) IS NOT NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "LENGTH(name) IS NOT NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected dead-code rejection, got: " + t.getMessage());
   }
@@ -4445,7 +4445,7 @@ class CheckConstraintTest {
   void isNullOnUpperRejected() {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("UPPER(name) IS NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "UPPER(name) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected UPPER dead-code rejection, got: " + t.getMessage());
   }
@@ -4454,7 +4454,7 @@ class CheckConstraintTest {
   void isNullOnCastRejected() {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("CAST(x AS STRING) IS NULL"));
+        () -> translateCheckOver("x INT NOT NULL", "CAST(x AS STRING) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected CAST dead-code rejection, got: " + t.getMessage());
   }
@@ -4467,6 +4467,35 @@ class CheckConstraintTest {
     assertTrue(t.getMessage().contains("dead code"),
         "expected CURRENT_TIMESTAMP dead-code rejection, got: "
             + t.getMessage());
+  }
+
+  @Test
+  void isNullOnAFunctionOfANullableArgumentAccepted() throws Exception {
+    // A function NULL only for a NULL argument can be NULL when an argument can.
+    String columns = "ns STRING, ni INT, nd DECIMAL(10, 2), s STRING NOT NULL";
+    Map<String, Object> absent = Map.of("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ns", "ni", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("UPPER(ns) IS NULL", "NOT (LENGTH(ns) IS NOT NULL)",
+          "SUBSTRING(ns FROM 1) IS NULL", "TRIM(ns) IS NULL", "REPLACE(s, ns, 'x') IS NULL",
+          "POSITION(ns IN s) IS NULL", "ABS(ni) IS NULL", "CAST(ni AS BIGINT) IS NULL",
+          "GREATEST(nd, ni) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+    // GREATEST skips a NULL argument, so with one never NULL it never is; and a column-level
+    // CHECK never sees its column NULL.
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "GREATEST(nd, 1) IS NULL"));
+    assertThrows(ValidationException.class,
+        () -> parseScript("STRUCT T (ns STRING CHECK (UPPER(ns) IS NULL));"));
   }
 
   @Test
@@ -4487,7 +4516,7 @@ class CheckConstraintTest {
   void isNullOnLengthInsideMacroRejected() {
     // The pass threads through macro bodies via recurseIntoMacro.
     String script = "STRUCT T ("
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (EVERY(tags, t, LENGTH(t) IS NULL))"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -4910,7 +4939,7 @@ class CheckConstraintTest {
     for (String expr : new String[] {"ABS(x) IS NULL", "TYPE_OF_VARIANT(data) IS NULL"}) {
       Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
           ValidationException.class,
-          () -> translateCheck(expr),
+          () -> translateCheckOver("x INT NOT NULL, data VARIANT", expr),
           "expected dead-code rejection for: " + expr);
       assertTrue(t.getMessage().contains("dead code"),
           "expected dead-code rejection, got: " + t.getMessage());

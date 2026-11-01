@@ -1603,11 +1603,11 @@ final class ConstraintResolver {
   // ---------------------------------------------------------------------
 
   /**
-   * Functions and special-syntax forms whose return type is statically
-   * non-nullable. Used by the IS NULL validator to reject dead-code
-   * constraints like {@code LENGTH(name) IS NULL} — the emit produces
-   * {@code dyn(size(this.name)) == null} which is well-typed but
-   * unconditionally false at runtime.
+   * Functions and special-syntax forms that are never NULL for non-NULL
+   * arguments. Used by the IS NULL validator to reject dead-code
+   * constraints like {@code LENGTH(name) IS NULL} over a NOT NULL
+   * {@code name}, whose test is unconditionally false; with an argument
+   * that can be NULL ({@link ConstraintNullTest}) the test stands.
    *
    * <p>NULLIF is NOT in this set — it returns null when its two args
    * compare equal. COALESCE is also not in this set: it returns the first
