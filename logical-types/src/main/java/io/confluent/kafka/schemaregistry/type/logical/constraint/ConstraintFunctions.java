@@ -507,14 +507,14 @@ final class ConstraintFunctions {
     // the arguments share a category, as the dyn branch no longer makes the
     // strict check unify them.)
     LogicalTypesParser.Check_exprContext last = args.get(n - 1);
-    if (tryAsLiteral(last) != null || vctx != null && vctx.isTypeOnly()) {
+    if (tryAsLiteral(last) != null) {
       sb.append(valueEmit[n - 1]);
     } else {
       String nullCheck = ConstraintResolver.isHasCompatible(last, vctx)
           ? nativeEmit[n - 1] : ownTypeValue(last, nativeEmit[n - 1], valueEmit[n - 1], vctx);
-      sb.append('(');
-      emitIsNotNullCheck(last, nullCheck, sb);
-      sb.append(" ? ").append(valueEmit[n - 1]).append(" : dyn(null))");
+      StringBuilder isNull = new StringBuilder();
+      emitIsNullCheck(last, nullCheck, isNull);
+      emitNullOr(isNull.toString(), valueEmit[n - 1], sb);
     }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
@@ -566,8 +566,22 @@ final class ConstraintFunctions {
   }
 
   /**
-   * NULLIF(x, y) → {@code (x == y ? dyn(null) : dyn(x))}. The {@code dyn(...)}
-   * wraps make the ternary branches type-unify under CEL's strict checker
+   * {@code (nullTest ? dyn(null) : value)}. Just {@code value} when the test only asks whether
+   * it is null, or in the emission the strict check types, where the dyn branch would pass any
+   * use of the result.
+   */
+  private static void emitNullOr(String nullTest, String value, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (vctx != null && vctx.isTypeOnly() || nullTest.equals("dyn(" + value + ") == null")) {
+      sb.append(value);
+    } else {
+      sb.append('(').append(nullTest).append(" ? dyn(null) : ").append(value).append(')');
+    }
+  }
+
+  /**
+   * NULLIF(x, y) → {@code (x == y ? dyn(null) : x)}. The {@code dyn(null)}
+   * makes the ternary branches type-unify under CEL's strict checker
    * — a bare {@code (cond ? null : typed)} fails with "no matching
    * overload for '_?_:_' applied to '(bool, null, type)'" because CEL
    * ternary requires both branches to share a type.
@@ -584,37 +598,37 @@ final class ConstraintFunctions {
         ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
     boolean temporal = !ConstraintResolver.isNumericCategory(common)
         && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
-    sb.append('(');
+    StringBuilder equal = new StringBuilder();
     if ("decimal".equals(common)) {
       // Opaque Decimal has no native `==`.
-      sb.append("decimals.eq(");
-      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
-      sb.append(", ");
-      ConstraintEmitter.emitDecimalValue(args.get(1), sb);
-      sb.append(')');
+      equal.append("decimals.eq(");
+      ConstraintEmitter.emitDecimalValue(args.get(0), equal);
+      equal.append(", ");
+      ConstraintEmitter.emitDecimalValue(args.get(1), equal);
+      equal.append(')');
     } else if ("double".equals(common)) {
-      ConstraintEmitter.emitNumericAs(args.get(0), "double", sb);
-      sb.append(" == ");
-      ConstraintEmitter.emitNumericAs(args.get(1), "double", sb);
+      ConstraintEmitter.emitNumericAs(args.get(0), "double", equal);
+      equal.append(" == ");
+      ConstraintEmitter.emitNumericAs(args.get(1), "double", equal);
     } else if (temporal) {
       // Native `==`, operands timestamp-normalized.
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
-      sb.append(" == ");
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), sb);
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), equal);
+      equal.append(" == ");
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), equal);
     } else {
-      visitCheckExpr(args.get(0), sb);
-      sb.append(" == ");
-      visitCheckExpr(args.get(1), sb);
+      visitCheckExpr(args.get(0), equal);
+      equal.append(" == ");
+      visitCheckExpr(args.get(1), equal);
     }
-    sb.append(" ? dyn(null) : dyn(");
     // Normalize the returned value too (so a temporal NULLIF result is a CEL
     // timestamp), keeping the decimal/native paths unchanged.
+    StringBuilder value = new StringBuilder();
     if (temporal) {
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), value);
     } else {
-      visitCheckExpr(args.get(0), sb);
+      visitCheckExpr(args.get(0), value);
     }
-    sb.append("))");
+    emitNullOr(equal.toString(), value.toString(), sb);
   }
 
   /**
@@ -712,21 +726,16 @@ final class ConstraintFunctions {
         ? nativeA : ownTypeValue(args.get(0), nativeA, a, vctx);
     final String nullB = ConstraintResolver.isHasCompatible(args.get(1), vctx)
         ? nativeB : ownTypeValue(args.get(1), nativeB, b, vctx);
+    StringBuilder nullTestB = new StringBuilder();
+    emitIsNullCheck(args.get(1), nullB, nullTestB);
     sb.append('(');
     emitIsNullCheck(args.get(0), nullA, sb);
     // With both NULL the result is NULL (dyn, to type-check against the other
     // branches), not B converted or read: converting a NULL fails, and JSON
     // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
-    if (vctx != null && vctx.isTypeOnly()) {
-      sb.append(" ? ").append(b);
-    } else {
-      sb.append(" ? (");
-      emitIsNullCheck(args.get(1), nullB, sb);
-      sb.append(" ? dyn(null) : ").append(b).append(')');
-    }
-    sb.append(" : (");
-    emitIsNullCheck(args.get(1), nullB, sb);
-    sb.append(" ? ").append(a).append(" : ");
+    sb.append(" ? ");
+    emitNullOr(nullTestB.toString(), b, sb);
+    sb.append(" : (").append(nullTestB).append(" ? ").append(a).append(" : ");
     if (decimal) {
       sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
           .append('(').append(a).append(", ").append(b).append(')');

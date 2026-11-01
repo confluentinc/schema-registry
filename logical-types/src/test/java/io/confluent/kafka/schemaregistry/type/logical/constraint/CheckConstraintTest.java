@@ -1343,7 +1343,7 @@ class CheckConstraintTest {
     // leaves a NULL field out.
     assertEquals(
         "((has(this.a) && dyn(this.a) != null) ? this.a : "
-            + "((has(this.b) && dyn(this.b) != null) ? this.b : dyn(null))) > 0",
+            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b)) > 0",
         translateCheck("COALESCE(a, b) > 0"));
   }
 
@@ -1352,13 +1352,20 @@ class CheckConstraintTest {
     assertEquals(
         "((has(this.a) && dyn(this.a) != null) ? this.a : "
             + "((has(this.b) && dyn(this.b) != null) ? this.b : "
-            + "((has(this.c) && dyn(this.c) != null) ? this.c : dyn(null)))) > 0",
+            + "((!has(this.c) || dyn(this.c) == null) ? dyn(null) : this.c))) > 0",
         translateCheck("COALESCE(a, b, c) > 0"));
   }
 
   @Test
+  void aNestedLastCoalesceIsWrittenOnce() {
+    // Its NULL is already null, so it is not tested again, which would double it at each level.
+    assertEquals(translateCheck("COALESCE(a, b, c) > 0"),
+        translateCheck("COALESCE(a, COALESCE(b, c)) > 0"));
+  }
+
+  @Test
   void nullif() {
-    assertEquals("(this.a == this.b ? dyn(null) : dyn(this.a)) == 0",
+    assertEquals("(this.a == this.b ? dyn(null) : this.a) == 0",
         translateCheck("NULLIF(a, b) = 0"));
   }
 
@@ -2986,11 +2993,12 @@ class CheckConstraintTest {
 
   @Test
   void aNullGuardDoesNotHideATypeError() {
-    // The dyn branch a NULL GREATEST, LEAST or COALESCE gives would pass any type; the strict
-    // check sees each call's own result type instead.
+    // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
+    // strict check sees each call's own result type instead.
     for (String[] c : new String[][] {
         {"a INT, b INT", "UPPER(COALESCE(a, b)) = 'X'"},
         {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
+        {"a INT, b INT", "UPPER(NULLIF(a, b)) = 'X'"},
         {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
         {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
         {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},
@@ -4920,7 +4928,7 @@ class CheckConstraintTest {
     // int-first with a double later arg resolves to double (was int → wrong).
     assertEquals(
         "((has(this.x) && dyn(this.x) != null) ? double(this.x) : "
-            + "((has(this.ratio) && dyn(this.ratio) != null) ? this.ratio : dyn(null))) > 1.0",
+            + "((!has(this.ratio) || dyn(this.ratio) == null) ? dyn(null) : this.ratio)) > 1.0",
         translateCheck("COALESCE(x, ratio) > 1.0"));
   }
 
