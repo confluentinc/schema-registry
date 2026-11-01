@@ -693,24 +693,20 @@ final class ConstraintFunctions {
       b = tsB.toString();
     }
     // has() requires a bare field selection (nativeA/B); a non-selection
-    // operand (e.g. mixed-numeric arithmetic) uses the type-coerced value so
-    // the null check type-checks.
-    final String nullA =
-        ConstraintResolver.isHasCompatible(args.get(0), vctx) ? nativeA : a;
-    final String nullB =
-        ConstraintResolver.isHasCompatible(args.get(1), vctx) ? nativeB : b;
+    // operand (e.g. mixed-numeric arithmetic) is tested in its own type, which
+    // type-checks where the native emit may not, and does not convert a NULL.
+    final String nullA = ConstraintResolver.isHasCompatible(args.get(0), vctx)
+        ? nativeA : ownTypeValue(args.get(0), nativeA, a, vctx);
+    final String nullB = ConstraintResolver.isHasCompatible(args.get(1), vctx)
+        ? nativeB : ownTypeValue(args.get(1), nativeB, b, vctx);
     sb.append('(');
     emitIsNullCheck(args.get(0), nullA, sb);
-    sb.append(" ? ");
-    if (b.equals(nativeB)) {
-      sb.append(b);
-    } else {
-      // Converting a NULL fails, so with both NULL the result is NULL (dyn, to type-check
-      // against the converted value), which an outer GREATEST, LEAST or COALESCE skips.
-      sb.append('(');
-      emitIsNullCheck(args.get(1), nullB, sb);
-      sb.append(" ? dyn(null) : ").append(b).append(')');
-    }
+    // With both NULL the result is NULL (dyn, to type-check against the other
+    // branches), not B converted or read: converting a NULL fails, and JSON
+    // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
+    sb.append(" ? (");
+    emitIsNullCheck(args.get(1), nullB, sb);
+    sb.append(" ? dyn(null) : ").append(b).append(')');
     sb.append(" : (");
     emitIsNullCheck(args.get(1), nullB, sb);
     sb.append(" ? ").append(a).append(" : ");
@@ -726,6 +722,30 @@ final class ConstraintFunctions {
           .append(" ? ").append(a).append(" : ").append(b).append(')');
     }
     sb.append("))");
+  }
+
+  /**
+   * An operand's value in its own numeric type, to test it for NULL before it is
+   * converted to the common type: INT natively, DOUBLE and DECIMAL by their
+   * cascades. Any other operand is tested as {@code converted}.
+   */
+  private static String ownTypeValue(
+      LogicalTypesParser.Check_exprContext arg, String nativeEmit, String converted,
+      ConstraintValidationContext vctx) {
+    Schema t = vctx == null ? null : ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+    String cat = t == null ? null : ConstraintResolver.categoryOf(t.getType());
+    if ("int".equals(cat)) {
+      return nativeEmit;
+    }
+    StringBuilder own = new StringBuilder();
+    if ("double".equals(cat)) {
+      ConstraintEmitter.emitNumericAs(arg, "double", own);
+    } else if ("decimal".equals(cat)) {
+      ConstraintEmitter.emitDecimalValue(arg, own);
+    } else {
+      return converted;
+    }
+    return own.toString();
   }
 
   // -------------------------------------------------------------------------

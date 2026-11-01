@@ -1364,7 +1364,8 @@ class CheckConstraintTest {
     // NULL. Translator emits a NULL-skipping nested ternary so a single
     // NULL operand doesn't cause CEL to error on the relational compare.
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
+        "((!has(this.a) || dyn(this.a) == null) ? "
+            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
             + "math.greatest(this.a, this.b))) > 10",
         translateCheck("GREATEST(a, b) > 10"));
@@ -1373,7 +1374,8 @@ class CheckConstraintTest {
   @Test
   void leastTwoArgs() {
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
+        "((!has(this.a) || dyn(this.a) == null) ? "
+            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
             + "math.least(this.a, this.b))) > 0",
         translateCheck("LEAST(a, b) > 0"));
@@ -2896,8 +2898,8 @@ class CheckConstraintTest {
         translateCheckOver(columns, "COALESCE(n, 7) = 0"));
     assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
         translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
-    assertEquals("(false ? this.n : ((!has(this.n) || dyn(this.n) == null) ? this.a : "
-        + "math.greatest(this.a, this.n))) == 0",
+    assertEquals("(false ? ((!has(this.n) || dyn(this.n) == null) ? dyn(null) : this.n) : "
+        + "((!has(this.n) || dyn(this.n) == null) ? this.a : math.greatest(this.a, this.n))) == 0",
         translateCheckOver(columns, "GREATEST(a, n) = 0"));
     assertEquals("(!has(this.r) || dyn(this.r) == null)",
         translateCheckOver(columns, "r.x IS NULL"));
@@ -2951,6 +2953,30 @@ class CheckConstraintTest {
       String cel = translateCheckOver(columns, sql);
       assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
           CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void greatestOfANestedOrAbsentNullIsNull() throws Exception {
+    // A NULL nested GREATEST or LEAST of a narrower type is tested before it is widened, and a
+    // NULL second argument JSON leaves out is not read, so an outer call or COALESCE skips it.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2), r STRUCT(x INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    present.put("r", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("GREATEST(x, GREATEST(a, b)) < 5", "LEAST(x, LEAST(b, a)) = x",
+          "COALESCE(LEAST(d, LEAST(a, b)), 7) = 7", "COALESCE(GREATEST(a, d), 7) = 7",
+          "COALESCE(GREATEST(r.x, d), 7) = 7", "COALESCE(LEAST(b, d), 7) = 7")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
     }
   }
 
