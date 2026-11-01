@@ -507,7 +507,7 @@ final class ConstraintFunctions {
     // the arguments share a category, as the dyn branch no longer makes the
     // strict check unify them.)
     LogicalTypesParser.Check_exprContext last = args.get(n - 1);
-    if (tryAsLiteral(last) != null) {
+    if (tryAsLiteral(last) != null || vctx != null && vctx.isTypeOnly()) {
       sb.append(valueEmit[n - 1]);
     } else {
       String nullCheck = ConstraintResolver.isHasCompatible(last, vctx)
@@ -717,9 +717,13 @@ final class ConstraintFunctions {
     // With both NULL the result is NULL (dyn, to type-check against the other
     // branches), not B converted or read: converting a NULL fails, and JSON
     // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
-    sb.append(" ? (");
-    emitIsNullCheck(args.get(1), nullB, sb);
-    sb.append(" ? dyn(null) : ").append(b).append(')');
+    if (vctx != null && vctx.isTypeOnly()) {
+      sb.append(" ? ").append(b);
+    } else {
+      sb.append(" ? (");
+      emitIsNullCheck(args.get(1), nullB, sb);
+      sb.append(" ? dyn(null) : ").append(b).append(')');
+    }
     sb.append(" : (");
     emitIsNullCheck(args.get(1), nullB, sb);
     sb.append(" ? ").append(a).append(" : ");

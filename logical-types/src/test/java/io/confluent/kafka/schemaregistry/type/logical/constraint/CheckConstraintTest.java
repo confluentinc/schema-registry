@@ -2985,6 +2985,21 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullGuardDoesNotHideATypeError() {
+    // The dyn branch a NULL GREATEST, LEAST or COALESCE gives would pass any type; the strict
+    // check sees each call's own result type instead.
+    for (String[] c : new String[][] {
+        {"a INT, b INT", "UPPER(COALESCE(a, b)) = 'X'"},
+        {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
+        {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
+        {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
+        {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},
+        {"xs INT ARRAY", "EVERY(xs, e, UPPER(COALESCE(e, e)) = 'X')"}}) {
+      assertThrows(ValidationException.class, () -> translateCheckOver(c[0], c[1]), c[1]);
+    }
+  }
+
+  @Test
   void coalesceSkipsANullNestedCall() throws Exception {
     // A NULL argument that is not a plain column is tested before it is widened, so COALESCE
     // reaches its fallback.
