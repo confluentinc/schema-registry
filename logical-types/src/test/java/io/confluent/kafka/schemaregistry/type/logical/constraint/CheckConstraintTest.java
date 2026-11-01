@@ -64,6 +64,9 @@ class CheckConstraintTest {
     return visitor;
   }
 
+  // The null test of translateCheck's nullable x.
+  private static final String X_NULL = "(!has(this.x) || dyn(this.x) == null)";
+
   /**
    * Parse a single CHECK expression as a table-level constraint over a
    * comprehensive test struct, and return its CEL translation. The test
@@ -645,7 +648,8 @@ class CheckConstraintTest {
   void searchedCase() {
     // Searched-form WHEN condition is now defensively wrapped in parens
     // (so a low-precedence operator inside it can't mis-bind in CEL).
-    assertEquals("((this.x > 0) ? 'pos' : 'neg') == 'pos'",
+    // A condition that may be NULL is false then, as SQL takes a branch only when TRUE.
+    assertEquals("((" + X_NULL + " ? false : (this.x > 0)) ? 'pos' : 'neg') == 'pos'",
         translateCheck("CASE WHEN x > 0 THEN 'pos' ELSE 'neg' END = 'pos'"));
   }
 
@@ -653,9 +657,8 @@ class CheckConstraintTest {
   void searchedCaseMultipleWhens() {
     String result = translateCheck(
         "CASE WHEN x > 100 THEN 'big' WHEN x > 0 THEN 'small' ELSE 'zero' END = 'big'");
-    assertEquals(
-        "((this.x > 100) ? 'big' : ((this.x > 0) ? 'small' : 'zero')) == 'big'",
-        result);
+    assertEquals("((" + X_NULL + " ? false : (this.x > 100)) ? 'big' : ((" + X_NULL
+        + " ? false : (this.x > 0)) ? 'small' : 'zero')) == 'big'", result);
   }
 
   @Test
@@ -664,10 +667,9 @@ class CheckConstraintTest {
         "CASE x WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END = 'one'");
     // Simple CASE: subject and each WHEN value are individually wrapped in
     // parens around the implicit `==`, so a low-precedence operator inside
-    // either side can't mis-bind in CEL.
-    assertEquals(
-        "(this.x == 1 ? 'one' : (this.x == 2 ? 'two' : 'other')) == 'one'",
-        result);
+    // either side can't mis-bind in CEL. A NULL subject matches no WHEN value.
+    assertEquals("((" + X_NULL + " ? false : this.x == 1) ? 'one' : ((" + X_NULL
+        + " ? false : this.x == 2) ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -701,8 +703,8 @@ class CheckConstraintTest {
     // STRING vs CHAR → same category ("string"); should NOT be rejected.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN name ELSE 'default' END = 'foo'");
-    assertEquals("((this.x > 0) ? ((!has(this.name) || dyn(this.name) == null) ? dyn(null) "
-        + ": this.name) : 'default') == 'foo'", result);
+    assertEquals("((" + X_NULL + " ? false : (this.x > 0)) ? ((!has(this.name) "
+        + "|| dyn(this.name) == null) ? dyn(null) : this.name) : 'default') == 'foo'", result);
   }
 
   @Test
@@ -710,8 +712,8 @@ class CheckConstraintTest {
     // INT and DOUBLE both fall in the "numeric" category — accepted.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN x ELSE 0 END > 0");
-    assertEquals("((this.x > 0) ? ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : this.x) "
-        + ": 0) > 0", result);
+    assertEquals("((" + X_NULL + " ? false : (this.x > 0)) ? (" + X_NULL + " ? dyn(null) "
+        + ": this.x) : 0) > 0", result);
   }
 
   @Test
@@ -729,9 +731,8 @@ class CheckConstraintTest {
   void simpleCaseSubjectAndWhenValuesMatchAccepted() {
     String result = translateCheck(
         "CASE x WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END = 'one'");
-    assertEquals(
-        "(this.x == 1 ? 'one' : (this.x == 2 ? 'two' : 'other')) == 'one'",
-        result);
+    assertEquals("((" + X_NULL + " ? false : this.x == 1) ? 'one' : ((" + X_NULL
+        + " ? false : this.x == 2) ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -742,9 +743,8 @@ class CheckConstraintTest {
     String result = translateCheck(
         "(CASE WHEN x > 0 THEN (CASE WHEN x > 100 THEN 'big' ELSE 'small' END)"
             + " ELSE 'neg' END) = 'small'");
-    assertEquals(
-        "(((this.x > 0) ? (((this.x > 100) ? 'big' : 'small')) : 'neg')) == 'small'",
-        result);
+    assertEquals("(((" + X_NULL + " ? false : (this.x > 0)) ? (((" + X_NULL
+        + " ? false : (this.x > 100)) ? 'big' : 'small')) : 'neg')) == 'small'", result);
   }
 
   @Test
@@ -3095,6 +3095,34 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullCaseConditionFallsThrough() throws Exception {
+    // A condition, or a simple CASE's match, that is NULL takes no branch, as SQL takes one only
+    // when TRUE; NOT, AND and OR keep SQL's three values.
+    String columns = "ni INT, nt BOOLEAN, nd DECIMAL(10, 2), ns STRING, t BOOLEAN NOT NULL";
+    Map<String, Object> absent = Map.of("t", true);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nt", "nd", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("CASE WHEN ni > 0 THEN 1 ELSE 2 END = 2",
+          "CASE WHEN nt THEN 1 ELSE 2 END = 2", "CASE nd WHEN 1.5 THEN 1 ELSE 2 END = 2",
+          "CASE ns WHEN 'a' THEN 1 ELSE 2 END = 2",
+          "NOT (CASE ns WHEN ns THEN 1 WHEN 'a' THEN 2 ELSE 3 END <= 2.5)",
+          "CASE WHEN NOT (ni > 0) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN ni > 0 OR t THEN 1 ELSE 2 END = 1",
+          "CASE WHEN ni > 0 AND t THEN 1 ELSE 2 END = 2",
+          "CASE WHEN (ni > 0 OR NOT t) THEN 1 ELSE 2 END = 2")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
@@ -5010,9 +5038,9 @@ class CheckConstraintTest {
     // coerces its branches AND resolves to the common numeric type, so the
     // surrounding comparison coerces too.
     assertEquals(
-        "decimals.eq(((this.x > 0) ? ((!has(this.amount) || dyn(this.amount) == null) "
-            + "? dyn(null) : this.amount) : ((!has(this.x) || dyn(this.x) == null) ? dyn(null) "
-            + ": decimal(this.x))), decimal(\"1\"))",
+        "decimals.eq(((" + X_NULL + " ? false : (this.x > 0)) ? ((!has(this.amount) "
+            + "|| dyn(this.amount) == null) ? dyn(null) : this.amount) : (" + X_NULL
+            + " ? dyn(null) : decimal(this.x))), decimal(\"1\"))",
         translateCheck("CASE WHEN x > 0 THEN amount ELSE x END = 1"));
   }
 

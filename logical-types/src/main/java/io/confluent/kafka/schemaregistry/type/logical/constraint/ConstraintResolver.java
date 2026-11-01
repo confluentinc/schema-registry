@@ -1832,6 +1832,14 @@ final class ConstraintResolver {
     return compare == null ? null : leafCExpr(compare);
   }
 
+  /**
+   * {@link #leafPrimary} from a comparison level.
+   */
+  static LogicalTypesParser.C_exprContext leafPrimary(
+      LogicalTypesParser.Check_expr_compareContext ctx) {
+    return leafCExpr(ctx);
+  }
+
   private static LogicalTypesParser.Check_expr_compareContext leafCompare(
       LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();

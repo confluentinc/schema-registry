@@ -77,6 +77,22 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetCaseConditionFallsThrough() {
+    // An unset nullable field makes a condition NULL, which takes no branch, but a NOT NULL zero
+    // subject still matches.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN ni >= 0 THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c2 CHECK (CASE ni WHEN 0 THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c3 CHECK (CASE i WHEN 0 THEN 1 ELSE 2 END = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

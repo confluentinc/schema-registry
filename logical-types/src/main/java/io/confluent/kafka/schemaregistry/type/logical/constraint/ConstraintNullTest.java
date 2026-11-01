@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.Constrai
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -175,6 +176,13 @@ final class ConstraintNullTest {
       return test.substring(0, test.length() - 8) + " != null";
     }
     return test.startsWith("(") ? "!" + test : "!(" + test + ")";
+  }
+
+  /**
+   * The test that either of two expressions is NULL.
+   */
+  static String either(String a, String b) {
+    return any(Arrays.asList(a, b));
   }
 
   /**

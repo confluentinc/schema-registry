@@ -2175,6 +2175,13 @@ final class ConstraintEmitter {
       // refs, literals, function calls, already-paren'd) emit unwrapped.
       if (caseArg != null) {
         ConstraintValidationContext vctx = EMIT_VCTX.get();
+        // SQL's `=` matches no NULL, so a subject or WHEN value that may be NULL is tested first.
+        String eitherNull = ConstraintNullTest.either(
+            ConstraintNullTest.of(caseArg), ConstraintNullTest.of(when.check_expr(0)));
+        boolean guarded = eitherNull != null && !ConstraintNullTest.NEVER.equals(eitherNull);
+        if (guarded) {
+          sb.append('(').append(eitherNull).append(" ? false : ");
+        }
         // The implicit `caseArg == whenValue` comparison coerces to the
         // common numeric type of the two operands.
         String common = (vctx != null)
@@ -2203,8 +2210,11 @@ final class ConstraintEmitter {
           sb.append(" == ");
           emitWrappedReceiver(when.check_expr(0), sb);
         }
+        if (guarded) {
+          sb.append(')');
+        }
       } else {
-        emitWrappedReceiver(when.check_expr(0), sb);
+        emitCondition(when.check_expr(0), sb);
       }
       sb.append(" ? ");
       emitCaseResult(when.check_expr(1), resultCommon, resultTemporal, sb);
@@ -2224,6 +2234,90 @@ final class ConstraintEmitter {
       sb.append(")");
     }
     sb.append(")");
+  }
+
+  /**
+   * A searched CASE's condition, taken only when SQL's is TRUE, not FALSE or NULL. One with
+   * nothing that may be NULL is emitted as before.
+   */
+  private static void emitCondition(
+      LogicalTypesParser.Check_exprContext cond, StringBuilder sb) {
+    StringBuilder whenTrue = new StringBuilder();
+    if (emitTruth(cond.check_expr_or(), true, whenTrue)) {
+      sb.append(whenTrue);
+    } else {
+      emitWrappedReceiver(cond, sb);
+    }
+  }
+
+  /**
+   * A condition true only when SQL's is {@code truth} (TRUE, or with {@code truth} false,
+   * FALSE): a predicate that may be NULL is false then, while NOT, AND and OR keep SQL's three
+   * values. Returns whether any predicate may be NULL; one whose inputs don't tell is emitted as
+   * is, as a NULL or missing input fails it either way.
+   */
+  static boolean emitTruth(
+      LogicalTypesParser.Check_expr_orContext or, boolean truth, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_andContext> ands = or.check_expr_and();
+    if (ands.size() == 1) {
+      return emitTruth(ands.get(0), truth, sb);
+    }
+    boolean guarded = false;
+    sb.append('(');
+    for (int i = 0; i < ands.size(); i++) {
+      if (i > 0) {
+        sb.append(truth ? " || " : " && ");
+      }
+      guarded |= emitTruth(ands.get(i), truth, sb);
+    }
+    sb.append(')');
+    return guarded;
+  }
+
+  private static boolean emitTruth(
+      LogicalTypesParser.Check_expr_andContext and, boolean truth, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_unary_notContext> nots = and.check_expr_unary_not();
+    if (nots.size() == 1) {
+      return emitTruth(nots.get(0), truth, sb);
+    }
+    boolean guarded = false;
+    sb.append('(');
+    for (int i = 0; i < nots.size(); i++) {
+      if (i > 0) {
+        sb.append(truth ? " && " : " || ");
+      }
+      guarded |= emitTruth(nots.get(i), truth, sb);
+    }
+    sb.append(')');
+    return guarded;
+  }
+
+  private static boolean emitTruth(
+      LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
+    if (not instanceof LogicalTypesParser.CheckExprNotContext) {
+      return emitTruth(
+          ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(), !truth, sb);
+    }
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
+    if (is.IS() == null) {
+      LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(is.check_expr_compare());
+      if (c instanceof LogicalTypesParser.CheckParenContext
+          && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
+        return emitTruth(
+            ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
+      }
+    }
+    String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
+    boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
+    sb.append('(');
+    if (guarded) {
+      sb.append(isNull).append(" ? false : ");
+    }
+    sb.append(truth ? "(" : "!(");
+    visitIs(is, sb);
+    sb.append("))");
+    return guarded;
   }
 
   /**
