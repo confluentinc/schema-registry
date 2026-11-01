@@ -1357,6 +1357,23 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCheckTooLargeForCelSaysSo() {
+    // A nested GREATEST repeats its arguments at each level: six deep fits, seven does not.
+    String columns = "c0 INT, c1 INT, c2 INT, c3 INT, c4 INT, c5 INT, c6 INT, c7 INT";
+    String nested = "c7";
+    for (int i = 0; i < 7; i++) {
+      if (i == 6) {
+        translateCheckOver(columns, nested + " > 0");
+      }
+      nested = "GREATEST(c" + i + ", " + nested + ")";
+    }
+    String seven = nested;
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, seven + " > 0"));
+    assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
+  }
+
+  @Test
   void aNestedLastCoalesceIsWrittenOnce() {
     // Its NULL is already null, so it is not tested again, which would double it at each level.
     assertEquals(translateCheck("COALESCE(a, b, c) > 0"),
