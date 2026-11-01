@@ -2981,6 +2981,25 @@ class CheckConstraintTest {
   }
 
   @Test
+  void coalesceSkipsANullNestedCall() throws Exception {
+    // A NULL argument that is not a plain column is tested before it is widened, so COALESCE
+    // reaches its fallback.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(present));
+    for (String sql : List.of("COALESCE(GREATEST(a, b), x) = x",
+        "COALESCE(COALESCE(a, b), x) = x", "COALESCE(LEAST(a, b), d, 7) = 7")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
   void anEnumComparesAsItsSymbol() throws Exception {
     // An ENUM is its symbol's text, as IN, CASE and COALESCE already took it, so it compares,
     // orders and concatenates as a string.

@@ -495,10 +495,10 @@ final class ConstraintFunctions {
       sb.append('(');
       // has() requires a bare field selection (nativeEmit); a non-selection
       // branch (e.g. mixed-numeric arithmetic, whose native emit is an
-      // un-coercible int+Decimal add) uses the type-coerced valueEmit so the
-      // null check itself type-checks.
+      // un-coercible int+Decimal add) is tested in its own type, which
+      // type-checks and, unlike valueEmit, does not widen a NULL.
       String nullCheck = ConstraintResolver.isHasCompatible(args.get(i), vctx)
-          ? nativeEmit[i] : valueEmit[i];
+          ? nativeEmit[i] : ownTypeValue(args.get(i), nativeEmit[i], valueEmit[i], vctx);
       emitIsNotNullCheck(args.get(i), nullCheck, sb);
       sb.append(" ? ").append(valueEmit[i]).append(" : ");
     }
