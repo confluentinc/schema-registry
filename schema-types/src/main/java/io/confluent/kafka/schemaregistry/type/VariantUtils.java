@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -380,10 +381,15 @@ public class VariantUtils {
       builder.appendFloat(node.floatValue());
     } else if (node.isDouble()) {
       builder.appendDouble(node.doubleValue());
-    } else if (node.isBigDecimal()) {
-      builder.appendDecimal(node.decimalValue());
-    } else if (node.isBigInteger()) {
-      builder.appendDecimal(new java.math.BigDecimal(node.bigIntegerValue()));
+    } else if (node.isBigDecimal() || node.isBigInteger()) {
+      // A number wider than DECIMAL16's 38 digits is a double, as Flink parses it.
+      BigDecimal d = node.decimalValue();
+      if (d.precision() > VariantFormat.MAX_DECIMAL16_PRECISION
+          || d.scale() > VariantFormat.MAX_DECIMAL16_PRECISION) {
+        builder.appendDouble(node.doubleValue());
+      } else {
+        builder.appendDecimal(d);
+      }
     } else if (node.isShort()) {
       builder.appendShort(node.shortValue());
     } else {

@@ -649,7 +649,17 @@ class VariantFormat {
                 Variant.Type.DECIMAL8, Variant.Type.DECIMAL16},
             value);
     }
+    checkDecimal(result, scale);
     return result;
+  }
+
+  // A decimal wider than DECIMAL16 allows is malformed, from a writer that did not check it.
+  private static void checkDecimal(BigDecimal d, int scale) {
+    if (d.precision() > MAX_DECIMAL16_PRECISION || scale > MAX_DECIMAL16_PRECISION) {
+      throw new IllegalArgumentException(String.format(
+          "Malformed decimal: precision %d and scale %d exceed %d",
+          d.precision(), scale, MAX_DECIMAL16_PRECISION));
+    }
   }
 
   static BigDecimal getDecimal(ByteBuffer value) {
