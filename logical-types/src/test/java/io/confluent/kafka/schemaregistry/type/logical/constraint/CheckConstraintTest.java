@@ -23,6 +23,7 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeFactory;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -35,6 +36,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1384,7 +1386,8 @@ class CheckConstraintTest {
 
   @Test
   void nullif() {
-    assertEquals("(this.a == this.b ? dyn(null) : this.a) == 0",
+    assertEquals("((!has(this.a) || dyn(this.a) == null) ? dyn(null) : ((!has(this.b) "
+        + "|| dyn(this.b) == null) ? this.a : (this.a == this.b ? dyn(null) : this.a))) == 0",
         translateCheck("NULLIF(a, b) = 0"));
   }
 
@@ -3031,6 +3034,33 @@ class CheckConstraintTest {
         assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
             CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
             sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullNullifArgumentIsTestedFirst() throws Exception {
+    // A NULL first argument gives NULL and a NULL second gives the first, before either is
+    // compared, widened or, as JSON leaves a NULL field out, read.
+    String columns = "d DECIMAL(10, 2) NOT NULL, nd DECIMAL(10, 2), i INT NOT NULL, ni INT, "
+        + "s STRING NOT NULL, ns STRING, nx DOUBLE, nb BIGINT";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("d", CelDecimal.of(new BigDecimal("1.50")));
+    absent.put("i", 1);
+    absent.put("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String c : List.of("nd", "ni", "ns", "nx", "nb")) {
+      present.put(c, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("NULLIF(d, nd) = d", "NULLIF(i, ni) = i", "NULLIF(s, ns) = s",
+          "NULLIF(nd, d) IS NULL", "NULLIF(ni, nd) IS NULL",
+          "COALESCE(NULLIF(nx, nb), -1) <> 2.5")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
       }
     }
   }

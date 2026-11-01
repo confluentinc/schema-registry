@@ -62,6 +62,20 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetNullifArgumentIsNull() {
+    // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (NULLIF(i, ni) = i), "
+        + "CONSTRAINT c2 CHECK (NULLIF(ni, 5) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetCaseResultIsNull() {
     // An unset nullable field reads as its zero; a CASE gives it as NULL, as has() says.
     String ddl = "STRUCT T (t BOOLEAN NOT NULL, ni INT, "

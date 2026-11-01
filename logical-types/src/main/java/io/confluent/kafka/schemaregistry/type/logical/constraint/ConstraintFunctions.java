@@ -568,12 +568,20 @@ final class ConstraintFunctions {
    */
   static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
       String value, StringBuilder sb) {
+    emitNullOr(nullTestOf(arg, nativeEmit, value), true, value, sb);
+  }
+
+  /**
+   * The test that {@code arg} is NULL: by has() for a selection, else of its value in its own
+   * type, before it is converted to {@code value}'s; {@code false} for a path never NULL.
+   */
+  private static String nullTestOf(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
+      String value) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    String nullCheck = ConstraintResolver.isHasCompatible(arg, vctx)
-        ? nativeEmit : ownTypeValue(arg, nativeEmit, value, vctx);
-    StringBuilder isNull = new StringBuilder();
-    emitIsNullCheck(arg, nullCheck, isNull);
-    emitNullOr(isNull.toString(), true, value, sb);
+    if (ConstraintResolver.isHasCompatible(arg, vctx)) {
+      return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, true);
+    }
+    return "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
   }
 
   /**
@@ -595,7 +603,8 @@ final class ConstraintFunctions {
   }
 
   /**
-   * NULLIF(x, y) → {@code (x == y ? dyn(null) : x)}. The {@code dyn(null)}
+   * NULLIF(x, y) → {@code (x == y ? dyn(null) : x)}, after a NULL x gives NULL and a NULL y
+   * gives x, as SQL's {@code CASE WHEN x = y THEN NULL ELSE x END} does. The {@code dyn(null)}
    * makes the ternary branches type-unify under CEL's strict checker
    * — a bare {@code (cond ? null : typed)} fails with "no matching
    * overload for '_?_:_' applied to '(bool, null, type)'" because CEL
@@ -643,7 +652,22 @@ final class ConstraintFunctions {
     } else {
       visitCheckExpr(args.get(0), value);
     }
-    emitNullOr(equal.toString(), false, value.toString(), sb);
+    // Each argument is tested before it is compared or converted.
+    StringBuilder nativeA = new StringBuilder();
+    visitCheckExpr(args.get(0), nativeA);
+    StringBuilder nativeB = new StringBuilder();
+    visitCheckExpr(args.get(1), nativeB);
+    String nullB = nullTestOf(args.get(1), nativeB.toString(), nativeB.toString());
+    StringBuilder unlessNullA = new StringBuilder();
+    if (!"false".equals(nullB)) {
+      unlessNullA.append('(').append(nullB).append(" ? ").append(value).append(" : ");
+    }
+    emitNullOr(equal.toString(), false, value.toString(), unlessNullA);
+    if (!"false".equals(nullB)) {
+      unlessNullA.append(')');
+    }
+    emitNullOr(nullTestOf(args.get(0), nativeA.toString(), value.toString()), true,
+        unlessNullA.toString(), sb);
   }
 
   /**
