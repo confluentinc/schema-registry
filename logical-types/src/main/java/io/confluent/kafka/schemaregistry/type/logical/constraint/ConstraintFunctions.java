@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.emitWrappedReceiver;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.resolveCollectionElementType;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.tryAsLiteral;
@@ -494,14 +495,27 @@ final class ConstraintFunctions {
       sb.append('(');
       // has() requires a bare field selection (nativeEmit); a non-selection
       // branch (e.g. mixed-numeric arithmetic, whose native emit is an
-      // un-coercible int+Decimal add) uses the type-coerced valueEmit so the
-      // null check itself type-checks.
+      // un-coercible int+Decimal add) is tested in its own type, which
+      // type-checks and, unlike valueEmit, does not widen a NULL.
       String nullCheck = ConstraintResolver.isHasCompatible(args.get(i), vctx)
-          ? nativeEmit[i] : valueEmit[i];
+          ? nativeEmit[i] : ownTypeValue(args.get(i), nativeEmit[i], valueEmit[i], vctx);
       emitIsNotNullCheck(args.get(i), nullCheck, sb);
       sb.append(" ? ").append(valueEmit[i]).append(" : ");
     }
-    sb.append(valueEmit[n - 1]);
+    // A last argument that may be NULL gives NULL, not a widened NULL or, on
+    // JSON, which leaves a NULL field out, a missing key. (The validator checks
+    // the arguments share a category, as the dyn branch no longer makes the
+    // strict check unify them.)
+    LogicalTypesParser.Check_exprContext last = args.get(n - 1);
+    if (tryAsLiteral(last) != null) {
+      sb.append(valueEmit[n - 1]);
+    } else {
+      String nullCheck = ConstraintResolver.isHasCompatible(last, vctx)
+          ? nativeEmit[n - 1] : ownTypeValue(last, nativeEmit[n - 1], valueEmit[n - 1], vctx);
+      sb.append('(');
+      emitIsNotNullCheck(last, nullCheck, sb);
+      sb.append(" ? ").append(valueEmit[n - 1]).append(" : dyn(null))");
+    }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
     }
@@ -530,8 +544,7 @@ final class ConstraintFunctions {
   private static void emitIsNotNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(has(").append(emitted).append(") && dyn(")
-          .append(emitted).append(") != null)");
+      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, false));
     } else {
       sb.append("dyn(").append(emitted).append(") != null");
     }
@@ -546,8 +559,7 @@ final class ConstraintFunctions {
   private static void emitIsNullCheck(
       LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
     if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(!has(").append(emitted).append(") || dyn(")
-          .append(emitted).append(") == null)");
+      sb.append(ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), emitted, true));
     } else {
       sb.append("dyn(").append(emitted).append(") == null");
     }
@@ -694,15 +706,21 @@ final class ConstraintFunctions {
       b = tsB.toString();
     }
     // has() requires a bare field selection (nativeA/B); a non-selection
-    // operand (e.g. mixed-numeric arithmetic) uses the type-coerced value so
-    // the null check type-checks.
-    final String nullA =
-        ConstraintResolver.isHasCompatible(args.get(0), vctx) ? nativeA : a;
-    final String nullB =
-        ConstraintResolver.isHasCompatible(args.get(1), vctx) ? nativeB : b;
+    // operand (e.g. mixed-numeric arithmetic) is tested in its own type, which
+    // type-checks where the native emit may not, and does not convert a NULL.
+    final String nullA = ConstraintResolver.isHasCompatible(args.get(0), vctx)
+        ? nativeA : ownTypeValue(args.get(0), nativeA, a, vctx);
+    final String nullB = ConstraintResolver.isHasCompatible(args.get(1), vctx)
+        ? nativeB : ownTypeValue(args.get(1), nativeB, b, vctx);
     sb.append('(');
     emitIsNullCheck(args.get(0), nullA, sb);
-    sb.append(" ? ").append(b).append(" : (");
+    // With both NULL the result is NULL (dyn, to type-check against the other
+    // branches), not B converted or read: converting a NULL fails, and JSON
+    // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
+    sb.append(" ? (");
+    emitIsNullCheck(args.get(1), nullB, sb);
+    sb.append(" ? dyn(null) : ").append(b).append(')');
+    sb.append(" : (");
     emitIsNullCheck(args.get(1), nullB, sb);
     sb.append(" ? ").append(a).append(" : ");
     if (decimal) {
@@ -717,6 +735,30 @@ final class ConstraintFunctions {
           .append(" ? ").append(a).append(" : ").append(b).append(')');
     }
     sb.append("))");
+  }
+
+  /**
+   * An operand's value in its own numeric type, to test it for NULL before it is
+   * converted to the common type: INT natively, DOUBLE and DECIMAL by their
+   * cascades. Any other operand is tested as {@code converted}.
+   */
+  private static String ownTypeValue(
+      LogicalTypesParser.Check_exprContext arg, String nativeEmit, String converted,
+      ConstraintValidationContext vctx) {
+    Schema t = vctx == null ? null : ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+    String cat = t == null ? null : ConstraintResolver.categoryOf(t.getType());
+    if ("int".equals(cat)) {
+      return nativeEmit;
+    }
+    StringBuilder own = new StringBuilder();
+    if ("double".equals(cat)) {
+      ConstraintEmitter.emitNumericAs(arg, "double", own);
+    } else if ("decimal".equals(cat)) {
+      ConstraintEmitter.emitDecimalValue(arg, own);
+    } else {
+      return converted;
+    }
+    return own.toString();
   }
 
   // -------------------------------------------------------------------------
@@ -1082,14 +1124,32 @@ final class ConstraintFunctions {
     }
   }
 
-  /** POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). */
+  /**
+   * POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). With FROM, the
+   * guards give Flink's answers (an empty needle is 1, a start past the end 0) and
+   * never pass indexOf an offset out of range, where the CEL runtimes disagree.
+   */
   private static void visitPosition(
       LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_exprContext haystack = ctx.check_expr(0);
     sb.append('(');
-    emitWrappedReceiver(ctx.check_expr(1), sb);
+    if (ctx.FROM() == null) {
+      emitWrappedReceiver(haystack, sb);
+      sb.append(".indexOf(");
+      visitCExpr(ctx.c_expr(), sb);
+      sb.append(") + 1)");
+      return;
+    }
+    StringBuilder start = new StringBuilder();
+    emitWrappedReceiver(ctx.check_expr(1), start);
+    visitCExpr(ctx.c_expr(), sb);
+    sb.append(" == '' ? 1 : (").append(start).append(" > size(");
+    visitCheckExpr(haystack, sb);
+    sb.append(") ? 0 : ");
+    emitWrappedReceiver(haystack, sb);
     sb.append(".indexOf(");
-    visitCheckExpr(ctx.check_expr(0), sb);
-    sb.append(") + 1)");
+    visitCExpr(ctx.c_expr(), sb);
+    sb.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
   }
 
   /** TRIM(x) → x.trim() (whitespace, both ends). */
