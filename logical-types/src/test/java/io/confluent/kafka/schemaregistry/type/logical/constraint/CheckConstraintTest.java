@@ -3016,6 +3016,7 @@ class CheckConstraintTest {
         {"a INT, b INT", "UPPER(COALESCE(a, b)) = 'X'"},
         {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
         {"a INT, b INT", "UPPER(NULLIF(a, b)) = 'X'"},
+        {"a INT, b INT", "NULLIF('A', UPPER(COALESCE(a, b))) IS NULL"},
         {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
         {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
         {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},

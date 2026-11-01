@@ -514,7 +514,7 @@ final class ConstraintFunctions {
           ? nativeEmit[n - 1] : ownTypeValue(last, nativeEmit[n - 1], valueEmit[n - 1], vctx);
       StringBuilder isNull = new StringBuilder();
       emitIsNullCheck(last, nullCheck, isNull);
-      emitNullOr(isNull.toString(), valueEmit[n - 1], sb);
+      emitNullOr(isNull.toString(), true, valueEmit[n - 1], sb);
     }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
@@ -566,16 +566,19 @@ final class ConstraintFunctions {
   }
 
   /**
-   * {@code (nullTest ? dyn(null) : value)}. Just {@code value} when the test only asks whether
-   * it is null, or in the emission the strict check types, where the dyn branch would pass any
-   * use of the result.
+   * {@code (nullTest ? dyn(null) : value)}, or just {@code value} when the test only asks whether
+   * it is null. The strict check, which the dyn branch would pass, types
+   * {@code (nullTest ? value : value)}, or just {@code value} when the test reads nothing else.
    */
-  private static void emitNullOr(String nullTest, String value, StringBuilder sb) {
+  private static void emitNullOr(String nullTest, boolean testsOnlyValue, String value,
+      StringBuilder sb) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    if (vctx != null && vctx.isTypeOnly() || nullTest.equals("dyn(" + value + ") == null")) {
+    boolean typeOnly = vctx != null && vctx.isTypeOnly();
+    if (nullTest.equals("dyn(" + value + ") == null") || typeOnly && testsOnlyValue) {
       sb.append(value);
     } else {
-      sb.append('(').append(nullTest).append(" ? dyn(null) : ").append(value).append(')');
+      sb.append('(').append(nullTest).append(" ? ").append(typeOnly ? value : "dyn(null)")
+          .append(" : ").append(value).append(')');
     }
   }
 
@@ -628,7 +631,7 @@ final class ConstraintFunctions {
     } else {
       visitCheckExpr(args.get(0), value);
     }
-    emitNullOr(equal.toString(), value.toString(), sb);
+    emitNullOr(equal.toString(), false, value.toString(), sb);
   }
 
   /**
@@ -734,7 +737,7 @@ final class ConstraintFunctions {
     // branches), not B converted or read: converting a NULL fails, and JSON
     // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
     sb.append(" ? ");
-    emitNullOr(nullTestB.toString(), b, sb);
+    emitNullOr(nullTestB.toString(), true, b, sb);
     sb.append(" : (").append(nullTestB).append(" ? ").append(a).append(" : ");
     if (decimal) {
       sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
