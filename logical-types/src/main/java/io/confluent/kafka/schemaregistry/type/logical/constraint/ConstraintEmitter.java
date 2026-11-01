@@ -565,15 +565,10 @@ final class ConstraintEmitter {
     }
     boolean negated = ctx.NOT() != null;
     if (ConstraintResolver.isHasCompatible(ctx.check_expr_compare(), EMIT_VCTX.get())) {
-      StringBuilder lhs = new StringBuilder();
-      visitCompare(ctx.check_expr_compare(), lhs);
-      if (negated) {
-        sb.append("(has(").append(lhs).append(") && dyn(")
-            .append(lhs).append(") != null)");
-      } else {
-        sb.append("(!has(").append(lhs).append(") || dyn(")
-            .append(lhs).append(") == null)");
-      }
+      StringBuilder emitted = new StringBuilder();
+      visitCompare(ctx.check_expr_compare(), emitted);
+      sb.append(nullTest(ConstraintResolver.selectionPathCompare(ctx.check_expr_compare()),
+          emitted.toString(), !negated));
       return;
     }
     sb.append("dyn(");
@@ -941,20 +936,35 @@ final class ConstraintEmitter {
   private static void emitAddAsDecimal(
       LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
+    emitAddRangeAsDecimal(muls, operators(add), muls.size(), sb);
+  }
+
+  /**
+   * Fold the first {@code count} operands of an additive chain into decimals.add/sub calls.
+   * Leading integer operands are added natively and widened once, as SQL types each operator
+   * by its own operands.
+   */
+  private static void emitAddRangeAsDecimal(
+      List<LogicalTypesParser.Check_expr_mulContext> muls, List<String> ops, int count,
+      StringBuilder sb) {
     StringBuilder acc = new StringBuilder();
-    emitMulAsDecimal(muls.get(0), acc);
-    int mulIdx = 1;
-    for (int i = 0; i < add.getChildCount(); i++) {
-      ParseTree child = add.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        String fn = "-".equals(op) ? "decimals.sub" : "decimals.add";
-        StringBuilder rhs = new StringBuilder();
-        emitMulAsDecimal(muls.get(mulIdx++), rhs);
-        String folded = fn + "(" + acc + ", " + rhs + ")";
-        acc.setLength(0);
-        acc.append(folded);
-      }
+    int run = Math.min(narrowerRun(muls, "decimal"), count);
+    int next = 1;
+    if (run >= 2) {
+      acc.append("decimal(");
+      emitNativeRun(muls, ops, run, acc);
+      acc.append(')');
+      next = run;
+    } else {
+      emitMulAsDecimal(muls.get(0), acc);
+    }
+    for (int i = next; i < count; i++) {
+      String fn = "-".equals(ops.get(i - 1)) ? "decimals.sub" : "decimals.add";
+      StringBuilder rhs = new StringBuilder();
+      emitMulAsDecimal(muls.get(i), rhs);
+      String folded = fn + "(" + acc + ", " + rhs + ")";
+      acc.setLength(0);
+      acc.append(folded);
     }
     sb.append(acc);
   }
@@ -963,38 +973,61 @@ final class ConstraintEmitter {
   private static void emitMulAsDecimal(
       LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
+    emitMulRangeAsDecimal(mul, signs, operators(mul), signs.size(), sb);
+  }
+
+  /**
+   * Fold the first {@code count} operands of a multiplicative chain into decimals.mul/div/mod
+   * calls. Leading integer operands are combined natively (so `/` truncates) and widened once.
+   */
+  private static void emitMulRangeAsDecimal(
+      LogicalTypesParser.Check_expr_mulContext mul,
+      List<LogicalTypesParser.Check_expr_unary_signContext> signs, List<String> ops, int count,
+      StringBuilder sb) {
     StringBuilder acc = new StringBuilder();
-    emitSignAsDecimal(signs.get(0), acc);
-    int signIdx = 1;
-    for (int i = 0; i < mul.getChildCount(); i++) {
-      ParseTree child = mul.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        String fn;
-        if ("*".equals(op)) {
-          fn = "decimals.mul";
-        } else if ("/".equals(op)) {
-          fn = "decimals.div";
-        } else if ("%".equals(op)) {
-          // Modulo → decimals.mod (remainder with the sign of the dividend).
-          fn = "decimals.mod";
-        } else {
-          // `||` is string/bytes concat — never valid on a DECIMAL value.
-          throw locatedError(mul,
-              "Operator '||' (string concat) is not supported on DECIMAL operands.");
-        }
-        StringBuilder rhs = new StringBuilder();
-        emitSignAsDecimal(signs.get(signIdx++), rhs);
-        String folded = fn + "(" + acc + ", " + rhs + ")";
-        acc.setLength(0);
-        acc.append(folded);
+    int run = Math.min(narrowerRun(signs, "decimal"), count);
+    int next = 1;
+    if (run >= 2) {
+      acc.append("decimal(");
+      emitNativeRun(signs, ops, run, acc);
+      acc.append(')');
+      next = run;
+    } else {
+      emitSignAsDecimal(signs.get(0), acc);
+    }
+    for (int i = next; i < count; i++) {
+      String op = ops.get(i - 1);
+      String fn;
+      if ("*".equals(op)) {
+        fn = "decimals.mul";
+      } else if ("/".equals(op)) {
+        fn = "decimals.div";
+      } else if ("%".equals(op)) {
+        // Modulo → decimals.mod (remainder with the sign of the dividend).
+        fn = "decimals.mod";
+      } else {
+        // `||` is string/bytes concat — never valid on a DECIMAL value.
+        throw locatedError(mul,
+            "Operator '||' (string concat) is not supported on DECIMAL operands.");
       }
+      StringBuilder rhs = new StringBuilder();
+      emitSignAsDecimal(signs.get(i), rhs);
+      String folded = fn + "(" + acc + ", " + rhs + ")";
+      acc.setLength(0);
+      acc.append(folded);
     }
     sb.append(acc);
   }
 
   private static void emitSignAsDecimal(
       LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+    if (sign.getChildCount() > 1 && narrowerThan(numericCategory(sign), "decimal")) {
+      // A negated integer is negated natively, then widened.
+      sb.append("decimal(");
+      visitUnarySign(sign, sb);
+      sb.append(')');
+      return;
+    }
     boolean negate = false;
     for (int i = 0; i < sign.getChildCount(); i++) {
       ParseTree child = sign.getChild(i);
@@ -1325,45 +1358,79 @@ final class ConstraintEmitter {
     }
   }
 
+  // Leading integer or decimal operands are combined in their own type and converted once:
+  // SQL types each operator by its own operands, so `a / 4` truncates and `0.10 + 0.20` is exact.
   private static void emitDoubleValueAdd(
       LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
-    emitDoubleValueMul(muls.get(0), sb);
-    int mulIdx = 1;
-    for (int i = 0; i < add.getChildCount(); i++) {
-      ParseTree child = add.getChild(i);
-      if (child instanceof TerminalNode) {
-        sb.append(' ').append(child.getText()).append(' ');
-        emitDoubleValueMul(muls.get(mulIdx++), sb);
+    List<String> ops = operators(add);
+    int run = narrowerRun(muls, "double");
+    int next = 1;
+    if (run >= 2) {
+      sb.append("double(");
+      if ("int".equals(runCategory(muls, run))) {
+        emitNativeRun(muls, ops, run, sb);
+      } else {
+        emitAddRangeAsDecimal(muls, ops, run, sb);
       }
+      sb.append(')');
+      next = run;
+    } else {
+      emitDoubleValueMul(muls.get(0), sb);
+    }
+    for (int i = next; i < muls.size(); i++) {
+      sb.append(' ').append(ops.get(i - 1)).append(' ');
+      emitDoubleValueMul(muls.get(i), sb);
     }
   }
 
   private static void emitDoubleValueMul(
       LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
-    emitDoubleValueSign(signs.get(0), sb);
-    int signIdx = 1;
-    for (int i = 0; i < mul.getChildCount(); i++) {
-      ParseTree child = mul.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        if ("%".equals(op)) {
-          // No double-modulo operator is available; modulo needs integer or
-          // decimal operands.
-          throw locatedError(mul,
-              "Operator '%' (modulo) is not supported on DOUBLE operands; "
-                  + "use integer or decimal operands.");
-        }
-        // `||` (string concat) → `+`; not expected for double values.
-        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
-        emitDoubleValueSign(signs.get(signIdx++), sb);
+    List<String> ops = operators(mul);
+    int run = narrowerRun(signs, "double");
+    int next = 1;
+    if (run >= 2) {
+      sb.append("double(");
+      if ("int".equals(runCategory(signs, run))) {
+        emitNativeRun(signs, ops, run, sb);
+      } else {
+        emitMulRangeAsDecimal(mul, signs, ops, run, sb);
       }
+      sb.append(')');
+      next = run;
+    } else {
+      emitDoubleValueSign(signs.get(0), sb);
+    }
+    for (int i = next; i < signs.size(); i++) {
+      String op = ops.get(i - 1);
+      if ("%".equals(op)) {
+        // No double-modulo operator is available; modulo needs integer or
+        // decimal operands.
+        throw locatedError(mul,
+            "Operator '%' (modulo) is not supported on DOUBLE operands; "
+                + "use integer or decimal operands.");
+      }
+      // `||` (string concat) → `+`; not expected for double values.
+      sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
+      emitDoubleValueSign(signs.get(i), sb);
     }
   }
 
   private static void emitDoubleValueSign(
       LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+    String category = numericCategory(sign);
+    if (sign.getChildCount() > 1 && narrowerThan(category, "double")) {
+      // A negated integer or decimal is negated in its own type, then converted.
+      sb.append("double(");
+      if ("int".equals(category)) {
+        visitUnarySign(sign, sb);
+      } else {
+        emitSignAsDecimal(sign, sb);
+      }
+      sb.append(')');
+      return;
+    }
     for (int i = 0; i < sign.getChildCount(); i++) {
       ParseTree child = sign.getChild(i);
       if (child instanceof TerminalNode && "-".equals(child.getText())) {
@@ -1445,6 +1512,74 @@ final class ConstraintEmitter {
     sb.append("double(");
     visitCExpr(ctx, sb);
     sb.append(')');
+  }
+
+  /** The numeric category ("int"/"decimal"/"double") of a subtree, or null when not numeric. */
+  private static String numericCategory(ParseTree node) {
+    return ConstraintResolver.coercedNumericCategory(node, EMIT_VCTX.get());
+  }
+
+  /**
+   * Whether {@code category} widens to {@code target}: int to decimal or double, decimal to
+   * double.
+   */
+  private static boolean narrowerThan(String category, String target) {
+    return category != null && !category.equals(target)
+        && target.equals(ConstraintResolver.numericCommon(category, target));
+  }
+
+  /**
+   * How many leading operands combine to a category narrower than {@code target}.
+   */
+  private static int narrowerRun(List<? extends ParseTree> operands, String target) {
+    String prefix = null;
+    int run = 0;
+    for (ParseTree operand : operands) {
+      String category = numericCategory(operand);
+      prefix = prefix == null || category == null
+          ? category : ConstraintResolver.numericCommon(prefix, category);
+      if (!narrowerThan(prefix, target)) {
+        break;
+      }
+      run++;
+    }
+    return run;
+  }
+
+  /**
+   * The category the first {@code count} operands combine to.
+   */
+  private static String runCategory(List<? extends ParseTree> operands, int count) {
+    return numericCommonOf(operands.subList(0, count), EMIT_VCTX.get());
+  }
+
+  /** The operators between a chain's operands, in order. */
+  private static List<String> operators(ParseTree chain) {
+    List<String> ops = new ArrayList<>();
+    for (int i = 0; i < chain.getChildCount(); i++) {
+      if (chain.getChild(i) instanceof TerminalNode) {
+        ops.add(chain.getChild(i).getText());
+      }
+    }
+    return ops;
+  }
+
+  /**
+   * The first {@code count} operands of an additive or multiplicative chain, emitted natively.
+   */
+  private static void emitNativeRun(
+      List<? extends ParseTree> operands, List<String> ops, int count, StringBuilder sb) {
+    for (int i = 0; i < count; i++) {
+      if (i > 0) {
+        sb.append(' ').append(ops.get(i - 1)).append(' ');
+      }
+      ParseTree operand = operands.get(i);
+      if (operand instanceof LogicalTypesParser.Check_expr_mulContext) {
+        visitMul((LogicalTypesParser.Check_expr_mulContext) operand, sb);
+      } else {
+        visitUnarySign((LogicalTypesParser.Check_expr_unary_signContext) operand, sb);
+      }
+    }
   }
 
   private static boolean isDoubleCategory(io.confluent.kafka.schemaregistry.type.logical.Schema s) {
@@ -1585,7 +1720,7 @@ final class ConstraintEmitter {
     visitCExpr(ctx.c_expr(), sb);
   }
 
-  private static void visitCExpr(
+  static void visitCExpr(
       LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
       visitColumnRef(
@@ -1648,7 +1783,13 @@ final class ConstraintEmitter {
     //
     // The vctx is non-null at this point — the public translate() entry
     // requires it.
-    String name = colidName(ctx.colid());
+    emitColumnRoot(colidName(ctx.colid()), sb);
+    if (ctx.indirection() != null) {
+      visitIndirection(ctx.indirection(), sb);
+    }
+  }
+
+  private static void emitColumnRoot(String name, StringBuilder sb) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (vctx != null && vctx.isColumn(name)) {
       if (vctx.isColumnLevel()) {
@@ -1664,9 +1805,49 @@ final class ConstraintEmitter {
     } else {
       sb.append(name);
     }
-    if (ctx.indirection() != null) {
-      visitIndirection(ctx.indirection(), sb);
+  }
+
+  /**
+   * The null (or not-null) test of a has()-compatible reference: each nullable step of its path
+   * ({@link ConstraintResolver#nullableSteps}), outermost first, so a null struct decides it
+   * before anything is selected from it; a constant for a path that is never null; or a test of
+   * {@code emitted}, the whole reference, when the steps can't be told.
+   */
+  static String nullTest(List<String> path, String emitted, boolean isNull) {
+    List<Integer> steps =
+        path == null ? null : ConstraintResolver.nullableSteps(path, EMIT_VCTX.get());
+    if (steps == null) {
+      return stepTest(emitted, isNull);
     }
+    if (steps.isEmpty()) {
+      return isNull ? "false" : "true";
+    }
+    List<String> tests = new ArrayList<>();
+    for (int step : steps) {
+      tests.add(stepTest(step == path.size() ? emitted : prefix(path, step), isNull));
+    }
+    return tests.size() == 1 ? tests.get(0)
+        : "(" + String.join(isNull ? " || " : " && ", tests) + ")";
+  }
+
+  // The first steps of a selection path, emitted.
+  private static String prefix(List<String> path, int steps) {
+    StringBuilder sb = new StringBuilder();
+    emitColumnRoot(path.get(0), sb);
+    for (int i = 1; i < steps; i++) {
+      sb.append('.').append(path.get(i));
+    }
+    return sb.toString();
+  }
+
+  // One step's test: has() of a selection, or a null comparison of a bare iteration variable,
+  // which has() can't take.
+  private static String stepTest(String selection, boolean isNull) {
+    if (selection.indexOf('.') < 0) {
+      return "dyn(" + selection + (isNull ? ") == null" : ") != null");
+    }
+    return isNull ? "(!has(" + selection + ") || dyn(" + selection + ") == null)"
+        : "(has(" + selection + ") && dyn(" + selection + ") != null)";
   }
 
   private static void visitIndirection(
