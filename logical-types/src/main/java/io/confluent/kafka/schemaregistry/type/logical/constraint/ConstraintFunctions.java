@@ -510,11 +510,7 @@ final class ConstraintFunctions {
     if (tryAsLiteral(last) != null) {
       sb.append(valueEmit[n - 1]);
     } else {
-      String nullCheck = ConstraintResolver.isHasCompatible(last, vctx)
-          ? nativeEmit[n - 1] : ownTypeValue(last, nativeEmit[n - 1], valueEmit[n - 1], vctx);
-      StringBuilder isNull = new StringBuilder();
-      emitIsNullCheck(last, nullCheck, isNull);
-      emitNullOr(isNull.toString(), true, valueEmit[n - 1], sb);
+      emitNullOrValue(last, nativeEmit[n - 1], valueEmit[n - 1], sb);
     }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
@@ -566,15 +562,31 @@ final class ConstraintFunctions {
   }
 
   /**
-   * {@code (nullTest ? dyn(null) : value)}, or just {@code value} when the test only asks whether
-   * it is null. The strict check, which the dyn branch would pass, types
+   * {@code value}, {@code arg} converted to the common type, or NULL when {@code arg} is NULL:
+   * tested before the conversion, in its own type or by has(), as converting a NULL fails and
+   * JSON leaves a NULL field out.
+   */
+  static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
+      String value, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String nullCheck = ConstraintResolver.isHasCompatible(arg, vctx)
+        ? nativeEmit : ownTypeValue(arg, nativeEmit, value, vctx);
+    StringBuilder isNull = new StringBuilder();
+    emitIsNullCheck(arg, nullCheck, isNull);
+    emitNullOr(isNull.toString(), true, value, sb);
+  }
+
+  /**
+   * {@code (nullTest ? dyn(null) : value)}, or just {@code value} when the test is false or only
+   * asks whether it is null. The strict check, which the dyn branch would pass, types
    * {@code (nullTest ? value : value)}, or just {@code value} when the test reads nothing else.
    */
   private static void emitNullOr(String nullTest, boolean testsOnlyValue, String value,
       StringBuilder sb) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     boolean typeOnly = vctx != null && vctx.isTypeOnly();
-    if (nullTest.equals("dyn(" + value + ") == null") || typeOnly && testsOnlyValue) {
+    if (nullTest.equals("false") || nullTest.equals("dyn(" + value + ") == null")
+        || typeOnly && testsOnlyValue) {
       sb.append(value);
     } else {
       sb.append('(').append(nullTest).append(" ? ").append(typeOnly ? value : "dyn(null)")

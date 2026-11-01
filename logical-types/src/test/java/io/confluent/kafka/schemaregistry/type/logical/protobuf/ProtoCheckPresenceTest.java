@@ -60,4 +60,18 @@ class ProtoCheckPresenceTest {
         .build();
     assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
   }
+
+  @Test
+  void anUnsetCaseResultIsNull() {
+    // An unset nullable field reads as its zero; a CASE gives it as NULL, as has() says.
+    String ddl = "STRUCT T (t BOOLEAN NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN t THEN ni ELSE ni END IS NULL), "
+        + "CONSTRAINT c2 CHECK (CASE WHEN t THEN 1.5 ELSE ni END IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
 }

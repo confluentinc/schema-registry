@@ -2220,14 +2220,23 @@ final class ConstraintEmitter {
   private static void emitCaseResult(
       LogicalTypesParser.Check_exprContext branch, String common,
       boolean temporal, StringBuilder sb) {
+    StringBuilder nativeEmit = new StringBuilder();
+    visitCheckExpr(branch, nativeEmit);
+    StringBuilder value = new StringBuilder();
     if ("decimal".equals(common)) {
-      emitDecimalValue(branch, sb);
+      emitDecimalValue(branch, value);
     } else if ("double".equals(common)) {
-      emitNumericAs(branch, "double", sb);
+      emitNumericAs(branch, "double", value);
     } else if (temporal) {
-      emitTimestampValueCheckExpr(branch, sb);
+      emitTimestampValueCheckExpr(branch, value);
     } else {
-      visitCheckExpr(branch, sb);
+      value = nativeEmit;
+    }
+    // A NULL result is NULL, as a COALESCE argument is, not converted or read.
+    if (ConstraintResolver.tryAsLiteral(branch) != null) {
+      sb.append(value);
+    } else {
+      ConstraintFunctions.emitNullOrValue(branch, nativeEmit.toString(), value.toString(), sb);
     }
   }
 

@@ -699,7 +699,8 @@ class CheckConstraintTest {
     // STRING vs CHAR → same category ("string"); should NOT be rejected.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN name ELSE 'default' END = 'foo'");
-    assertEquals("((this.x > 0) ? this.name : 'default') == 'foo'", result);
+    assertEquals("((this.x > 0) ? ((!has(this.name) || dyn(this.name) == null) ? dyn(null) "
+        + ": this.name) : 'default') == 'foo'", result);
   }
 
   @Test
@@ -707,7 +708,8 @@ class CheckConstraintTest {
     // INT and DOUBLE both fall in the "numeric" category — accepted.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN x ELSE 0 END > 0");
-    assertEquals("((this.x > 0) ? this.x : 0) > 0", result);
+    assertEquals("((this.x > 0) ? ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : this.x) "
+        + ": 0) > 0", result);
   }
 
   @Test
@@ -3009,6 +3011,31 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullCaseResultIsNull() throws Exception {
+    // A NULL branch is tested before it is widened and, as JSON leaves a NULL field out, before
+    // it is read, so IS NULL and COALESCE see the CASE's NULL.
+    String columns = "t BOOLEAN NOT NULL, nd DECIMAL(10, 2), i INT, ni INT, x DOUBLE";
+    Map<String, Object> present = new HashMap<>();
+    present.put("t", false);
+    present.put("nd", null);
+    present.put("i", 0);
+    present.put("ni", null);
+    present.put("x", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("t", false, "i", 0))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("CASE WHEN t THEN nd ELSE NULLIF(i, 0) END IS NULL",
+          "CASE WHEN t THEN nd ELSE ni END IS NULL",
+          "COALESCE(CASE WHEN t THEN nd ELSE ni END, -1) = -1",
+          "CASE WHEN t THEN x ELSE ni END IS NULL", "CASE WHEN t THEN ni ELSE ni END IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
@@ -4894,7 +4921,9 @@ class CheckConstraintTest {
     // coerces its branches AND resolves to the common numeric type, so the
     // surrounding comparison coerces too.
     assertEquals(
-        "decimals.eq(((this.x > 0) ? this.amount : decimal(this.x)), decimal(\"1\"))",
+        "decimals.eq(((this.x > 0) ? ((!has(this.amount) || dyn(this.amount) == null) "
+            + "? dyn(null) : this.amount) : ((!has(this.x) || dyn(this.x) == null) ? dyn(null) "
+            + ": decimal(this.x))), decimal(\"1\"))",
         translateCheck("CASE WHEN x > 0 THEN amount ELSE x END = 1"));
   }
 
