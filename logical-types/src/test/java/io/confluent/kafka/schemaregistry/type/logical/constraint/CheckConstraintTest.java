@@ -2954,6 +2954,24 @@ class CheckConstraintTest {
     }
   }
 
+  @Test
+  void anEnumComparesAsItsSymbol() throws Exception {
+    // An ENUM is its symbol's text, as IN, CASE and COALESCE already took it, so it compares,
+    // orders and concatenates as a string.
+    String columns = "e ENUM('A', 'B', 'C') NOT NULL, s STRING";
+    assertEquals("this.e == 'A'", translateCheckOver(columns, "e = 'A'"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("e", "A");
+    self.put("s", "B");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("e = 'A'", "'A' = e", "e <> s", "e < 'B'", "s >= e",
+        "e || 'x' = 'Ax'", "CASE e WHEN 'A' THEN 1 ELSE 2 END = 1", "e IN ('A', 'C')")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
   private String translateCheckOver(String columns, String checkExpr) {
     Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
         .getRootSchema();

@@ -987,10 +987,12 @@ final class ConstraintResolver {
   // Type-category helpers
   // ---------------------------------------------------------------------
 
+  // An ENUM is its symbol's text, as Flink and the Avro and JSON values give it.
   static boolean isStringOrBytes(Schema.Type t) {
     switch (t) {
       case CHAR:
       case VARCHAR:
+      case ENUM:
       case BINARY:
       case VARBINARY:
         return true;
@@ -1022,6 +1024,7 @@ final class ConstraintResolver {
       case DECIMAL:
       case CHAR:
       case VARCHAR:
+      case ENUM:
       case BINARY:
       case VARBINARY:
       case DATE:
@@ -1073,6 +1076,7 @@ final class ConstraintResolver {
         return "decimal";
       case CHAR:
       case VARCHAR:
+      case ENUM:
         return "string";
       case BINARY:
       case VARBINARY:
