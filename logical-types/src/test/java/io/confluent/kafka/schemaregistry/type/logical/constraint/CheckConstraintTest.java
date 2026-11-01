@@ -16,6 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.extensions.CelExtensions;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelRuntimeFactory;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -23,13 +30,19 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1326,8 +1339,11 @@ class CheckConstraintTest {
 
   @Test
   void coalesceTwoArgs() {
+    // A last argument that may be NULL gives NULL rather than being read: JSON
+    // leaves a NULL field out.
     assertEquals(
-        "((has(this.a) && dyn(this.a) != null) ? this.a : this.b) > 0",
+        "((has(this.a) && dyn(this.a) != null) ? this.a : "
+            + "((has(this.b) && dyn(this.b) != null) ? this.b : dyn(null))) > 0",
         translateCheck("COALESCE(a, b) > 0"));
   }
 
@@ -1335,7 +1351,8 @@ class CheckConstraintTest {
   void coalesceThreeArgs() {
     assertEquals(
         "((has(this.a) && dyn(this.a) != null) ? this.a : "
-            + "((has(this.b) && dyn(this.b) != null) ? this.b : this.c)) > 0",
+            + "((has(this.b) && dyn(this.b) != null) ? this.b : "
+            + "((has(this.c) && dyn(this.c) != null) ? this.c : dyn(null)))) > 0",
         translateCheck("COALESCE(a, b, c) > 0"));
   }
 
@@ -1351,7 +1368,8 @@ class CheckConstraintTest {
     // NULL. Translator emits a NULL-skipping nested ternary so a single
     // NULL operand doesn't cause CEL to error on the relational compare.
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
+        "((!has(this.a) || dyn(this.a) == null) ? "
+            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
             + "math.greatest(this.a, this.b))) > 10",
         translateCheck("GREATEST(a, b) > 10"));
@@ -1360,7 +1378,8 @@ class CheckConstraintTest {
   @Test
   void leastTwoArgs() {
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
+        "((!has(this.a) || dyn(this.a) == null) ? "
+            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
             + "math.least(this.a, this.b))) > 0",
         translateCheck("LEAST(a, b) > 0"));
@@ -1852,6 +1871,65 @@ class CheckConstraintTest {
         translateCheck("POSITION('@' IN name) * 2 = 4"));
   }
 
+  @Test
+  void positionParsesAnywhereAsBareCheckExpr() {
+    // Parsed on its own (as KTable does), a check_expr needle let ANTLR take
+    // `'@' IN name` as the needle and then fail at the closing parenthesis.
+    for (String sql : List.of("2 = POSITION('@' IN name)",
+        "qty BETWEEN 1 AND POSITION('@' IN name)", "POSITION('@' IN name) = 2")) {
+      for (PredictionMode mode : List.of(PredictionMode.SLL, PredictionMode.LL)) {
+        LogicalTypesParser parser = LogicalTypesParserFactory.newParser(sql);
+        parser.getInterpreter().setPredictionMode(mode);
+        parser.check_expr();
+        assertEquals(Token.EOF, parser.getCurrentToken().getType(), sql + " in " + mode);
+      }
+    }
+  }
+
+  @Test
+  void positionNeedleWithAnOperatorNeedsParentheses() {
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("POSITION('a' || 'b' IN name) > 0"));
+    assertEquals("(this.name.indexOf(('a' + 'b')) + 1) > 0",
+        translateCheck("POSITION(('a' || 'b') IN name) > 0"));
+  }
+
+  @Test
+  void positionFrom() {
+    assertEquals("('@' == '' ? 1 : (this.qty > size(this.name) ? 0 : "
+            + "this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
+        translateCheck("POSITION('@' IN name FROM qty) > 0"));
+  }
+
+  @Test
+  void positionFromMatchesFlink() throws Exception {
+    // Each answer is Flink's SqlFunctionUtils.position for the same arguments.
+    for (String sql : List.of("POSITION('b' IN 'abcb' FROM 3) = 4",
+        "POSITION('b' IN 'abcb' FROM 0) = 2", "POSITION('b' IN 'abcb' FROM -5) = 2",
+        "POSITION('b' IN 'abcb' FROM 4) = 4", "POSITION('b' IN 'abcb' FROM 5) = 0",
+        "POSITION('b' IN 'abcb' FROM 9) = 0", "POSITION('' IN 'abc' FROM 9) = 1",
+        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5",
+        "POSITION('b' IN 'abcb' FROM -9223372036854775807 - 1) = 2")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalConstant(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalConstant(String cel) throws Exception {
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    CelRuntime runtime = CelRuntimeFactory.standardCelRuntimeBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    return runtime.createProgram(compiler.compile(cel).getAst()).eval();
+  }
+
+  @Test
+  void dashDashStartsALineComment() {
+    assertEquals("this.x > 1", translateCheck("x > 1 -- not 1 - -1\n"));
+    assertEquals("this.x - -1 > 0", translateCheck("x - -1 > 0"));
+  }
+
   // ---------------------------------------------------------------------
   // Phase 4: special-syntax — TRIM
   // ---------------------------------------------------------------------
@@ -2198,6 +2276,26 @@ class CheckConstraintTest {
     Schema schema = parseScript(script).getRootSchema();
     assertEquals("this.emails.all(e, e.isEmail())",
         schema.getRules().get(0).getExpr());
+  }
+
+  @Test
+  void aMapQuantifierBindsEachKey() throws Exception {
+    // CEL's all/exists/exists_one over a map bind its keys; a value is reached by m[k].
+    String columns = "m MAP<STRING, INT NOT NULL> NOT NULL, s STRING";
+    assertEquals("this.m.all(k, k != 'zz')", translateCheckOver(columns, "EVERY(m, k, k <> 'zz')"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("m", Map.of("a", 1, "b", 2));
+    self.put("s", "b");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("EVERY(m, k, k <> 'zz')", "ANY(m, k, k = s)",
+        "ONE(m, k, k = 'a')", "EVERY(m, k, m[k] > 0)", "ONE(m, k, LENGTH(k) = 1 AND m[k] = 2)")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+    // A key compared as its value is refused.
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "EVERY(m, k, k > 0)"));
   }
 
   @Test
@@ -2794,6 +2892,203 @@ class CheckConstraintTest {
         translateCheck("x + 1.5e0 > 10"));
   }
 
+  @Test
+  void nullTestsCoverOnlyTheNullableSteps() {
+    // A NOT NULL step is present whenever its parent is, and Protobuf's has() is false for a
+    // zero, so only the deepest nullable step of a path is tested.
+    String columns = "a INT NOT NULL, n INT, r STRUCT(x INT NOT NULL, y INT)";
+    assertEquals("(true ? this.a : 7) == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
+    assertEquals("((has(this.n) && dyn(this.n) != null) ? this.n : 7) == 0",
+        translateCheckOver(columns, "COALESCE(n, 7) = 0"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
+        translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
+    assertEquals("(false ? ((!has(this.n) || dyn(this.n) == null) ? dyn(null) : this.n) : "
+        + "((!has(this.n) || dyn(this.n) == null) ? this.a : math.greatest(this.a, this.n))) == 0",
+        translateCheckOver(columns, "GREATEST(a, n) = 0"));
+    assertEquals("(!has(this.r) || dyn(this.r) == null)",
+        translateCheckOver(columns, "r.x IS NULL"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) && (has(this.r.y) "
+        + "&& dyn(this.r.y) != null))", translateCheckOver(columns, "r.y IS NOT NULL"));
+    // A parenthesized selection, and a macro variable's fields, the same way.
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? (this.r).x : 7) == 0",
+        translateCheckOver(columns, "COALESCE((r).x, 7) = 0"));
+    String arrays = "items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
+        + "maybe STRUCT(x INT NOT NULL) ARRAY NOT NULL";
+    assertEquals("this.items.all(e, (true ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(items, e, COALESCE(e.x, 7) = 0)"));
+    assertEquals("this.maybe.all(e, (dyn(e) != null ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(maybe, e, COALESCE(e.x, 7) = 0)"));
+  }
+
+  @Test
+  void aNullStructDecidesANullTestOfItsFields() throws Exception {
+    // Avro and JSON give a null struct as null, which no field can be selected from, so each
+    // nullable step is tested, outermost first.
+    String columns = "r STRUCT(f0 INT, q STRUCT(g INT))";
+    assertEquals("((!has(this.r) || dyn(this.r) == null) || (!has(this.r.f0) "
+        + "|| dyn(this.r.f0) == null))", translateCheckOver(columns, "r.f0 IS NULL"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("r", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("r.f0 IS NULL", "NOT (r.q.g IS NOT NULL)", "COALESCE(r.f0, 7) = 7",
+        "GREATEST(r.q.g, 1) = 1", "CASE WHEN r.f0 IS NULL THEN 1 ELSE 2 END = 1")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void greatestOfTwoNullsWithACastIsNull() throws Exception {
+    // With both arguments NULL the result is NULL, not a cast of NULL, so an outer GREATEST,
+    // LEAST or COALESCE skips it.
+    String columns = "a INT, x DOUBLE, d DECIMAL(10, 2), t TIMESTAMP_LTZ(3), u TIMESTAMP_LTZ(3)";
+    Map<String, Object> self = new HashMap<>();
+    self.put("a", 5);
+    self.put("x", null);
+    self.put("d", null);
+    self.put("t", null);
+    self.put("u", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("GREATEST(a, GREATEST(x, d)) > 1", "LEAST(a, LEAST(d, x)) = 5",
+        "COALESCE(GREATEST(x, a), 7) = 5", "COALESCE(LEAST(d, x), 7) = 7",
+        "COALESCE(GREATEST(x, d), 7) = 7", "COALESCE(LEAST(t, u), TIMESTAMP '2020-01-01 00:00:00') "
+            + "= TIMESTAMP '2020-01-01 00:00:00'")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void greatestOfANestedOrAbsentNullIsNull() throws Exception {
+    // A NULL nested GREATEST or LEAST of a narrower type is tested before it is widened, and a
+    // NULL second argument JSON leaves out is not read, so an outer call or COALESCE skips it.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2), r STRUCT(x INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    present.put("r", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("GREATEST(x, GREATEST(a, b)) < 5", "LEAST(x, LEAST(b, a)) = x",
+          "COALESCE(LEAST(d, LEAST(a, b)), 7) = 7", "COALESCE(GREATEST(a, d), 7) = 7",
+          "COALESCE(GREATEST(r.x, d), 7) = 7", "COALESCE(LEAST(b, d), 7) = 7")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullGuardDoesNotHideATypeError() {
+    // The dyn branch a NULL GREATEST, LEAST or COALESCE gives would pass any type; the strict
+    // check sees each call's own result type instead.
+    for (String[] c : new String[][] {
+        {"a INT, b INT", "UPPER(COALESCE(a, b)) = 'X'"},
+        {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
+        {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
+        {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
+        {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},
+        {"xs INT ARRAY", "EVERY(xs, e, UPPER(COALESCE(e, e)) = 'X')"}}) {
+      assertThrows(ValidationException.class, () -> translateCheckOver(c[0], c[1]), c[1]);
+    }
+  }
+
+  @Test
+  void coalesceSkipsANullNestedCall() throws Exception {
+    // A NULL argument that is not a plain column is tested before it is widened, so COALESCE
+    // reaches its fallback.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    // JSON leaves a NULL field out, so a NULL last argument is read guarded too.
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("COALESCE(GREATEST(a, b), x) = x",
+          "COALESCE(COALESCE(a, b), x) = x", "COALESCE(LEAST(a, b), d, 7) = 7",
+          "COALESCE(COALESCE(d, a), x) = x")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anEnumComparesAsItsSymbol() throws Exception {
+    // An ENUM is its symbol's text, as IN, CASE and COALESCE already took it, so it compares,
+    // orders and concatenates as a string.
+    String columns = "e ENUM('A', 'B', 'C') NOT NULL, s STRING";
+    assertEquals("this.e == 'A'", translateCheckOver(columns, "e = 'A'"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("e", "A");
+    self.put("s", "B");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("e = 'A'", "'A' = e", "e <> s", "e < 'B'", "s >= e",
+        "e || 'x' = 'Ax'", "CASE e WHEN 'A' THEN 1 ELSE 2 END = 1", "e IN ('A', 'C')")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  private String translateCheckOver(String columns, String checkExpr) {
+    Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
+        .getRootSchema();
+    String cel = schema.getRules().get(0).getExpr();
+    CelValidator.assertValidStrict(cel, schema);
+    return cel;
+  }
+
+  @Test
+  void integerOperandsAreCombinedBeforeWidening() {
+    // SQL types each operator by its own operands: the INTs are divided, then widened.
+    assertEquals("decimals.eq(decimal(this.x / 2), this.amount)",
+        translateCheck("x / 2 = amount"));
+    assertEquals("double(this.x / 2) == this.ratio", translateCheck("x / 2 = ratio"));
+    assertEquals("double(this.x % 2) == this.ratio", translateCheck("x % 2 = ratio"));
+    assertEquals("decimals.gt(decimals.add(this.amount, decimal(this.x / 2)), decimal(\"0\"))",
+        translateCheck("amount + x / 2 > 0"));
+    assertEquals("double(decimals.add(this.amount, decimal(\"1\"))) == this.ratio",
+        translateCheck("amount + 1 = ratio"));
+  }
+
+  @Test
+  void narrowerOperandsKeepTheirOwnArithmetic() throws Exception {
+    // Each answer is Flink's: INT / INT truncates, BIGINT and DECIMAL sums are exact.
+    for (String sql : List.of("7 / 2 = 3.0", "7 / 2 = 3.0E0", "-7 / 2 = -3.0", "7 % 4 = 3.0E0",
+        "7 / 2 + 0.5 = 3.5", "0.5 + 7 / 2 = 3.5", "-(7 / 2) = -3.0",
+        "CASE WHEN TRUE THEN 7 / 2 ELSE 1.5 END = 3.0", "7 / 2 BETWEEN 3.0 AND 3.0",
+        "7 / 2 IN (3.5, 3.0)", "GREATEST(7 / 2, 1.5) = 3.0",
+        "9007199254740993 + 1 = 9007199254740994E0", "0.10 + 0.20 = 0.3E0")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void narrowerOperandsStillOverflowAndDivideByZero() {
+    for (String sql : List.of("9223372036854775807 + 1 > 0.0",
+        "9223372036854775807 + 1 > 0.0E0", "-(-9223372036854775807 - 1) > 0.0",
+        "1 / 0 <> 0.0E0", "1 % 0 <> 0.0E0")) {
+      String cel = translateCheck(sql);
+      assertThrows(CelEvaluationException.class, () -> evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalWithDecimals(String cel) throws Exception {
+    return CelUtils.buildProgram(CelUtils.ScriptType.AVRO, cel, null, List.of()).eval(Map.of());
+  }
+
   // ---- numeric coercion: BETWEEN / IN ----
 
   @Test
@@ -3301,7 +3596,7 @@ class CheckConstraintTest {
         ValidationException.class,
         () -> translateCheck("COALESCE(x, name) = 'a'"));
     assertTrue(
-        t.getMessage().contains("strict type-check")
+        t.getMessage().contains("not comparable")
             || t.getMessage().contains("Cannot compare"),
         "expected type-mismatch rejection, got: " + t.getMessage());
   }
@@ -4624,7 +4919,8 @@ class CheckConstraintTest {
   void coalesceDoubleCommonRegardlessOfOrder() {
     // int-first with a double later arg resolves to double (was int → wrong).
     assertEquals(
-        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : this.ratio) > 1.0",
+        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : "
+            + "((has(this.ratio) && dyn(this.ratio) != null) ? this.ratio : dyn(null))) > 1.0",
         translateCheck("COALESCE(x, ratio) > 1.0"));
   }
 
