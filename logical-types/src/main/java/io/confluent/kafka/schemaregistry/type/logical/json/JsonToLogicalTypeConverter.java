@@ -232,14 +232,13 @@ public class JsonToLogicalTypeConverter {
       final Schema type, final ToLogicalContext<String> ctx, final Object rawDefault) {
     switch (type.getType()) {
       case UNION:
-        // Decoded by its first branch, so map-only as that branch would be; the writer encodes
-        // that branch as written, so one that is a reference keeps no Field default either.
+        // Decoded by its first branch, so map-only as that branch would be, a reference as the
+        // type it names; one naming a type not here, such as another document's, keeps none.
         if (type.getBranches().isEmpty()) {
           return false;
         }
-        Schema first = type.getBranches().get(0).getSchema();
-        return first.getType() == Schema.Type.NAMED_TYPE_REF
-            || isMapOnly(named(ctx, first), ctx, rawDefault);
+        Schema first = named(ctx, type.getBranches().get(0).getSchema());
+        return first.getType() == Schema.Type.NAMED_TYPE_REF || isMapOnly(first, ctx, rawDefault);
       case ARRAY:
       case MAP:
       case MULTISET:
