@@ -701,7 +701,17 @@ final class ConstraintFunctions {
         ConstraintResolver.isHasCompatible(args.get(1), vctx) ? nativeB : b;
     sb.append('(');
     emitIsNullCheck(args.get(0), nullA, sb);
-    sb.append(" ? ").append(b).append(" : (");
+    sb.append(" ? ");
+    if (b.equals(nativeB)) {
+      sb.append(b);
+    } else {
+      // Converting a NULL fails, so with both NULL the result is NULL (dyn, to type-check
+      // against the converted value), which an outer GREATEST, LEAST or COALESCE skips.
+      sb.append('(');
+      emitIsNullCheck(args.get(1), nullB, sb);
+      sb.append(" ? dyn(null) : ").append(b).append(')');
+    }
+    sb.append(" : (");
     emitIsNullCheck(args.get(1), nullB, sb);
     sb.append(" ? ").append(a).append(" : ");
     if (decimal) {

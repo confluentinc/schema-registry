@@ -2932,6 +2932,28 @@ class CheckConstraintTest {
     }
   }
 
+  @Test
+  void greatestOfTwoNullsWithACastIsNull() throws Exception {
+    // With both arguments NULL the result is NULL, not a cast of NULL, so an outer GREATEST,
+    // LEAST or COALESCE skips it.
+    String columns = "a INT, x DOUBLE, d DECIMAL(10, 2), t TIMESTAMP_LTZ(3), u TIMESTAMP_LTZ(3)";
+    Map<String, Object> self = new HashMap<>();
+    self.put("a", 5);
+    self.put("x", null);
+    self.put("d", null);
+    self.put("t", null);
+    self.put("u", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("GREATEST(a, GREATEST(x, d)) > 1", "LEAST(a, LEAST(d, x)) = 5",
+        "COALESCE(GREATEST(x, a), 7) = 5", "COALESCE(LEAST(d, x), 7) = 7",
+        "COALESCE(GREATEST(x, d), 7) = 7", "COALESCE(LEAST(t, u), TIMESTAMP '2020-01-01 00:00:00') "
+            + "= TIMESTAMP '2020-01-01 00:00:00'")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
   private String translateCheckOver(String columns, String checkExpr) {
     Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
         .getRootSchema();
