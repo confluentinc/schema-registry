@@ -2273,6 +2273,26 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aMapQuantifierBindsEachKey() throws Exception {
+    // CEL's all/exists/exists_one over a map bind its keys; a value is reached by m[k].
+    String columns = "m MAP<STRING, INT NOT NULL> NOT NULL, s STRING";
+    assertEquals("this.m.all(k, k != 'zz')", translateCheckOver(columns, "EVERY(m, k, k <> 'zz')"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("m", Map.of("a", 1, "b", 2));
+    self.put("s", "b");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("EVERY(m, k, k <> 'zz')", "ANY(m, k, k = s)",
+        "ONE(m, k, k = 'a')", "EVERY(m, k, m[k] > 0)", "ONE(m, k, LENGTH(k) = 1 AND m[k] = 2)")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+    // A key compared as its value is refused.
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "EVERY(m, k, k > 0)"));
+  }
+
+  @Test
   void macroRejectsExpressionAsIterVar() {
     String script = "STRUCT T ("
         + "tags STRING ARRAY,"

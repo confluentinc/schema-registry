@@ -66,8 +66,9 @@ final class ConstraintResolver {
         || collType.getType() == Schema.Type.MULTISET) {
       return collType.getElementType();
     }
+    // CEL's all/exists/exists_one over a map bind its keys.
     if (collType.getType() == Schema.Type.MAP) {
-      return collType.getValueType();
+      return collType.getKeyType();
     }
     return null;
   }
