@@ -3402,6 +3402,24 @@ class CheckConstraintTest {
   }
 
   @Test
+  void anInOverAMultisetOfNonStringsIsRefused() throws Exception {
+    // A MULTISET is held as entries of a value and its count, which no value matches, except
+    // one of strings, which Avro and JSON hold as a map of them.
+    String columns = "i INT NOT NULL, s STRING NOT NULL, ms INT MULTISET NOT NULL, "
+        + "nms DECIMAL(10, 2) NOT NULL MULTISET, sms STRING NOT NULL MULTISET NOT NULL";
+    for (String sql : List.of("i IN ms", "1.5 NOT IN nms", "(i IN ms) IS NULL")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("IN over a MULTISET of"), e.getMessage());
+    }
+    String cel = translateCheckOver(columns, "s IN sms");
+    Map<String, Object> vars = Map.of("this",
+        CelUtils.toCelValue(Map.of("i", 0, "s", "a", "sms", Map.of("a", 2))));
+    assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+        CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), cel);
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.

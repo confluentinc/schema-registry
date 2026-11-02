@@ -74,19 +74,23 @@ final class ConstraintResolver {
   }
 
   /**
+   * The type of the collection an IN tests, or {@code null} when it doesn't resolve.
+   */
+  static Schema inTargetType(
+      LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
+    LogicalTypesParser.Check_expr_likeContext target =
+        ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
+    return target.LIKE() != null ? null
+        : resolveIfNamedRef(tryResolveAddType(target.check_expr_add(), vctx), vctx);
+  }
+
+  /**
    * The element type of the array an IN tests, or {@code null} when it doesn't resolve.
    */
   static Schema inArrayElementType(
       LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
-    LogicalTypesParser.Check_expr_likeContext array =
-        ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
-    Schema type = array.LIKE() != null ? null
-        : resolveIfNamedRef(tryResolveAddType(array.check_expr_add(), vctx), vctx);
-    if (type == null
-        || type.getType() != Schema.Type.ARRAY && type.getType() != Schema.Type.MULTISET) {
-      return null;
-    }
-    return type.getElementType();
+    Schema type = inTargetType(ctx, vctx);
+    return type != null && type.getType() == Schema.Type.ARRAY ? type.getElementType() : null;
   }
 
   /**

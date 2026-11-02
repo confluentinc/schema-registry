@@ -1031,6 +1031,16 @@ final class ConstraintValidator {
           && in.in_target() instanceof LogicalTypesParser.InTargetParenListContext) {
         validateInParenList(
             (LogicalTypesParser.InTargetParenListContext) in.in_target(), vctx);
+      } else if (in.IN() != null) {
+        // Avro and JSON hold a MULTISET of strings as a map, whose keys `in` tests.
+        Schema target = ConstraintResolver.inTargetType(in, vctx);
+        if (target != null && target.getType() == Schema.Type.MULTISET
+            && target.getElementType().getType() != Schema.Type.VARCHAR
+            && target.getElementType().getType() != Schema.Type.CHAR) {
+          throw locatedError(in, "IN over a MULTISET of " + target.getElementType().getType()
+              + " is not supported: it is held as entries of a value and its count, so no "
+              + "value would ever match. A MULTISET of strings, held as a map, is supported.");
+        }
       }
     }
     if (recurseIntoMacro(node, vctx,
