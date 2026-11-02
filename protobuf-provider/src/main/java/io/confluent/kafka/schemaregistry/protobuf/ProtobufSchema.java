@@ -2233,6 +2233,12 @@ public class ProtobufSchema implements ParsedSchema {
 
   public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
+    // Walk only the name within the package, so that a message named like a package part
+    // doesn't match before the message named.
+    String packageName = schemaObj.getPackageName();
+    if (packageName != null && !packageName.isEmpty() && name.startsWith(packageName + ".")) {
+      name = name.substring(packageName.length() + 1);
+    }
     String[] parts = name.split("\\.");
     List<TypeElement> types = schemaObj.getTypes();
     for (String part : parts) {

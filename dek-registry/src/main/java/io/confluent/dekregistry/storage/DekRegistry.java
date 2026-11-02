@@ -354,6 +354,23 @@ public class DekRegistry implements Closeable {
     }
   }
 
+  /**
+   * The kmsProps a write will persist. Reads of a shared kek omit its secrets, so for one
+   * an omitted secret means "unchanged"; otherwise the request replaces them in full.
+   * {@code null} keeps the stored props.
+   */
+  public static SortedMap<String, String> resolveKmsProps(
+      KeyEncryptionKey oldKey, Map<String, String> requestedKmsProps) {
+    if (requestedKmsProps == null) {
+      return oldKey != null ? oldKey.getKmsProps() : Collections.emptySortedMap();
+    }
+    if (oldKey != null && !oldKey.isShared()) {
+      return new TreeMap<>(requestedKmsProps);
+    }
+    return KmsPropsRedactor.merge(
+        requestedKmsProps, oldKey != null ? oldKey.getKmsProps() : null);
+  }
+
   public Kek toKekEntity(KeyEncryptionKey kek) {
     return kek.toKekEntity();
   }
@@ -533,14 +550,14 @@ public class DekRegistry implements Closeable {
 
     String kmsType = normalizeKmsType(request.getKmsType());
 
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
-        : Collections.emptySortedMap();
+    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
+    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
+
+    SortedMap<String, String> kmsProps = resolveKmsProps(oldKey,
+        request.getKmsProps() != null ? request.getKmsProps() : Collections.emptyMap());
     KeyEncryptionKey key = new KeyEncryptionKey(request.getName(), kmsType,
         request.getKmsKeyId(), kmsProps, request.getDoc(), request.isShared(), request.isDeleted());
 
-    KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
-    KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the kek is deleted
     if (oldKey != null
         && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
@@ -788,7 +805,9 @@ public class DekRegistry implements Closeable {
       return null;
     }
     SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
-        ? (request.getOptionalKmsProps().isPresent() ? new TreeMap<>(request.getKmsProps()) : null)
+        ? (request.getOptionalKmsProps().isPresent()
+            ? resolveKmsProps(key, request.getKmsProps())
+            : null)
         : key.getKmsProps();
     String doc = request.getOptionalDoc() != null ? request.getDoc() : key.getDoc();
     boolean shared = request.isOptionalShared() != null ? request.isShared() : key.isShared();
