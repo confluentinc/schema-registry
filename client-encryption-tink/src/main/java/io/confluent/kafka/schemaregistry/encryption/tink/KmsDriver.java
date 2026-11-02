@@ -27,6 +27,8 @@ public interface KmsDriver {
 
   String KMS_TYPE_SUFFIX = "://";
   String TEST_CLIENT = "test.client";
+  // When true, drivers only use ambient (environment) credentials for trusted KMS endpoints.
+  String RESTRICT_AMBIENT_CREDENTIALS = "restrict.ambient.credentials";
 
   String getKeyUrlPrefix();
 
