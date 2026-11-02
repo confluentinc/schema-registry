@@ -337,11 +337,10 @@ final class ConstraintNullTest {
   // A column, a macro variable or a field of either, by its nullable steps.
   private static String ofSelection(LogicalTypesParser.C_exprContext c) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    // A field of a parenthesized receiver that isn't a plain path, (e).x or (arr[1]).x, is
-    // tested step by step from the receiver's own test.
-    if (hasSubscript(c) || c instanceof LogicalTypesParser.CheckParenContext
-        && ((LogicalTypesParser.CheckParenContext) c).indirection() != null
-        && !ConstraintResolver.isHasCompatibleCExpr(c, vctx)) {
+    // A path has() can't take, (e).x, (arr[1]).x or r.`in`, is tested step by step from its
+    // root, so a NULL step above isn't read through.
+    if (hasSubscript(c)
+        || indirectionOf(c) != null && !ConstraintResolver.isHasCompatibleCExpr(c, vctx)) {
       return ConstraintEmitter.subscriptNullTest(c);
     }
     List<String> path = ConstraintResolver.selectionPathCExpr(c);
@@ -360,13 +359,17 @@ final class ConstraintNullTest {
   }
 
   private static boolean hasSubscript(LogicalTypesParser.C_exprContext c) {
-    LogicalTypesParser.IndirectionContext indirection =
-        c instanceof LogicalTypesParser.CheckColumnRefContext
-            ? ((LogicalTypesParser.CheckColumnRefContext) c).columnref().indirection()
-            : c instanceof LogicalTypesParser.CheckParenContext
-                ? ((LogicalTypesParser.CheckParenContext) c).indirection() : null;
+    LogicalTypesParser.IndirectionContext indirection = indirectionOf(c);
     return indirection != null && indirection.indirection_el().stream()
         .anyMatch(el -> el.check_expr() != null);
+  }
+
+  private static LogicalTypesParser.IndirectionContext indirectionOf(
+      LogicalTypesParser.C_exprContext c) {
+    return c instanceof LogicalTypesParser.CheckColumnRefContext
+        ? ((LogicalTypesParser.CheckColumnRefContext) c).columnref().indirection()
+        : c instanceof LogicalTypesParser.CheckParenContext
+            ? ((LogicalTypesParser.CheckParenContext) c).indirection() : null;
   }
 
   /**

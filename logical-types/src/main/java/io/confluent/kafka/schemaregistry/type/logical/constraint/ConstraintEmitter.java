@@ -2595,16 +2595,8 @@ final class ConstraintEmitter {
     if (ands.size() == 1) {
       return emitTruth(ands.get(0), truth, sb);
     }
-    int flags = 0;
-    sb.append('(');
-    for (int i = 0; i < ands.size(); i++) {
-      if (i > 0) {
-        sb.append(truth ? " || " : " && ");
-      }
-      flags |= emitTruth(ands.get(i), truth, sb);
-    }
-    sb.append(')');
-    return flags;
+    return emitJunction(ands.size(), (i, t, out) -> emitTruth(ands.get(i), t, out), !truth,
+        truth, sb);
   }
 
   private static int emitTruth(
@@ -2613,15 +2605,43 @@ final class ConstraintEmitter {
     if (nots.size() == 1) {
       return emitTruth(nots.get(0), truth, sb);
     }
+    return emitJunction(nots.size(), (i, t, out) -> emitTruth(nots.get(i), t, out), truth,
+        truth, sb);
+  }
+
+  // emitTruth of operand i in a truth.
+  private interface OperandTruth {
+    int emit(int i, boolean truth, StringBuilder sb);
+  }
+
+  /**
+   * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there,
+   * which cel-java's && lets swallow another's error, so one that may be NULL is joined only
+   * once no operand decides it the other way.
+   */
+  private static int emitJunction(
+      int count, OperandTruth operand, boolean all, boolean truth, StringBuilder sb) {
+    StringBuilder joined = new StringBuilder("(");
     int flags = 0;
-    sb.append('(');
-    for (int i = 0; i < nots.size(); i++) {
+    for (int i = 0; i < count; i++) {
       if (i > 0) {
-        sb.append(truth ? " && " : " || ");
+        joined.append(all ? " && " : " || ");
       }
-      flags |= emitTruth(nots.get(i), truth, sb);
+      flags |= operand.emit(i, truth, joined);
     }
-    sb.append(')');
+    joined.append(')');
+    if (!all || (flags & MAY_BE_NULL) == 0) {
+      sb.append(joined);
+      return flags;
+    }
+    sb.append("((");
+    for (int i = 0; i < count; i++) {
+      if (i > 0) {
+        sb.append(" || ");
+      }
+      operand.emit(i, !truth, sb);
+    }
+    sb.append(") ? false : ").append(joined).append(')');
     return flags;
   }
 
@@ -2754,6 +2774,18 @@ final class ConstraintEmitter {
               + bodyFalse + "))"
           : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
               + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
+    } else if ("EVERY".equals(name) == truth && (flags & MAY_BE_NULL) != 0) {
+      // all() lets a NULL element, false there, swallow another's error, so it's taken only
+      // once no element decides it the other way.
+      StringBuilder decides = new StringBuilder();
+      EMIT_VCTX.set(body);
+      try {
+        cachedTruth(args.get(2).check_expr_or(), !truth, decides);
+      } finally {
+        EMIT_VCTX.set(outer);
+      }
+      fold = "(" + coll + ".exists(" + iterVar + ", " + decides + ") ? false : " + coll
+          + ".all(" + iterVar + ", " + bodyTruth + "))";
     } else {
       fold = coll + ("EVERY".equals(name) == truth ? ".all(" : ".exists(") + iterVar + ", "
           + bodyTruth + ")";
@@ -2871,12 +2903,11 @@ final class ConstraintEmitter {
     return last == ']' || last == ')' ? "dyn(" + prefix + ")" : prefix.toString();
   }
 
-  // An operand of size() or in given as dyn when it's a subscript, as typedCollection gives
-  // one; any other, or any in the type-only pass, keeps its type for the strict check.
+  // An operand of size() or in, given as typedCollection gives one, parenthesized or not;
+  // the type-only pass keeps its type for the strict check.
   static String typedSubscript(CharSequence cel) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    return cel.charAt(cel.length() - 1) == ']' && (vctx == null || !vctx.isTypeOnly())
-        ? "dyn(" + cel + ")" : cel.toString();
+    return vctx != null && vctx.isTypeOnly() ? cel.toString() : typedCollection(cel);
   }
 
   // An IN whose three-valued CEL gives NULL as null.
@@ -2918,8 +2949,17 @@ final class ConstraintEmitter {
       sb.append('(').append(anyNull).append(" ? false : ").append(holds ? "" : "!")
           .append(ordered).append(')');
     } else if (holds) {
-      sb.append('(').append(anyNull).append(" ? false : (").append(lower).append(" && ")
-          .append(upper).append("))");
+      // TRUE when both comparisons are, taken only once neither fails, so a NULL operand
+      // doesn't hide another's error.
+      sb.append("((");
+      falseIfNull(ConstraintNullTest.either(lo, a), "!(" + lower + ")", sb);
+      sb.append(" || ");
+      falseIfNull(ConstraintNullTest.either(a, hi), "!(" + upper + ")", sb);
+      sb.append(") ? false : (");
+      falseIfNull(ConstraintNullTest.either(lo, a), lower.toString(), sb);
+      sb.append(" && ");
+      falseIfNull(ConstraintNullTest.either(a, hi), upper.toString(), sb);
+      sb.append("))");
     } else {
       sb.append('(');
       falseIfNull(ConstraintNullTest.either(lo, a), "!(" + lower + ")", sb);
