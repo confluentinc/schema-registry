@@ -280,7 +280,9 @@ func_expr_common_subexpr
     | EXTRACT '(' identifier FROM check_expr ')'                           # FuncExtract
     | SUBSTRING '(' check_expr FROM check_expr ( FOR check_expr )? ')'     # FuncSubstringFromFor
     | SUBSTRING '(' check_expr ',' check_expr ( ',' check_expr )? ')'      # FuncSubstringCommas
-    | POSITION '(' check_expr IN check_expr ')'                            # FuncPosition
+    // The needle is narrower than check_expr, so its own `x IN y` cannot take
+    // the separator IN (Flink restricts it the same way).
+    | POSITION '(' c_expr IN check_expr ( FROM check_expr )? ')'           # FuncPosition
     | TRIM '(' ( BOTH | LEADING | TRAILING )? check_expr ( FROM check_expr )? ')'  # FuncTrim
     | CURRENT_TIMESTAMP                                                    # FuncCurrentTimestamp
     // Variant path access. The optional RETURNING clause extracts and casts the
@@ -597,8 +599,9 @@ WS
     : [ \t\r\n]+ -> skip
     ;
 
+// `--` as in SQL (Flink takes both).
 LINE_COMMENT
-    : '//' ~[\r\n]* -> skip
+    : ( '//' | '--' ) ~[\r\n]* -> skip
     ;
 
 BLOCK_COMMENT
