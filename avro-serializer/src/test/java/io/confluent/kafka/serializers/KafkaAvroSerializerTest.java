@@ -35,9 +35,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -69,6 +72,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -650,6 +654,39 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(deserializerConfigs, false);
     byte[] bytes1 = avroSerializer.serialize(topic, record);
     assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  // A specific reader without a configured type reads the branches of a union, array or map
+  // that are not records from the writer's schema
+  @Test
+  public void testKafkaAvroDeserializerSpecificNullableUnion() {
+    Schema union = Schema.createUnion(Schema.create(Schema.Type.NULL), User.getClassSchema());
+    byte[] bytes = avroSerializer.serialize("nullable-union",
+        new NonRecordContainer(union, new User("testUser")));
+    assertEquals(new User("testUser"),
+        specificAvroDeserializer.deserialize("nullable-union", bytes));
+    bytes = avroSerializer.serialize("nullable-union", new NonRecordContainer(union, null));
+    assertNull(specificAvroDeserializer.deserialize("nullable-union", bytes));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerSpecificArrayOfStrings() {
+    Schema array = Schema.createArray(Schema.create(Schema.Type.STRING));
+    byte[] bytes = avroSerializer.serialize("string-array",
+        new NonRecordContainer(array, Arrays.asList("a", "b")));
+    List<?> result = (List<?>) specificAvroDeserializer.deserialize("string-array", bytes);
+    assertEquals(Arrays.asList("a", "b"),
+        result.stream().map(Object::toString).collect(Collectors.toList()));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerSpecificMapOfInts() {
+    Schema map = Schema.createMap(Schema.create(Schema.Type.INT));
+    byte[] bytes = avroSerializer.serialize("int-map",
+        new NonRecordContainer(map, Collections.singletonMap("k", 1)));
+    Map<?, ?> result = (Map<?, ?>) specificAvroDeserializer.deserialize("int-map", bytes);
+    assertEquals(1, result.size());
+    assertEquals(1, result.get(new Utf8("k")));
   }
 
   @Test
