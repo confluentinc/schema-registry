@@ -267,11 +267,9 @@ final class ConstraintFunctions {
     // Push the iter-var binding onto EMIT_VCTX so visitColumnRef and
     // visitIndirection see it during the body emit.
     ConstraintValidationContext outer = EMIT_VCTX.get();
-    ConstraintValidationContext bodyCtx = outer;
-    if (outer != null) {
-      Schema elemType = resolveCollectionElementType(args.get(0), outer);
-      bodyCtx = outer.withBinding(iterVar, elemType);
-    }
+    ConstraintValidationContext bodyCtx = outer == null ? null : ConstraintEmitter.bodyContext(
+        fctx, outer, () -> outer.withBinding(iterVar,
+            resolveCollectionElementType(args.get(0), outer)));
     EMIT_VCTX.set(bodyCtx);
     try {
       visitCheckExpr(args.get(2), sb);

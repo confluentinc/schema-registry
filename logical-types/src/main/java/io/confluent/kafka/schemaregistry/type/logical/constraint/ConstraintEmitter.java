@@ -32,6 +32,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Cascade visitors for the CHECK→CEL translator. Each visitor walks one
@@ -70,6 +71,10 @@ final class ConstraintEmitter {
     private final String sourceSql;
     private final Map<ConstraintValidationContext, Map<ParseTree, String[]>> emitted =
         new IdentityHashMap<>();
+    private final Map<ConstraintValidationContext, Map<ParseTree, String[]>> nullTests =
+        new IdentityHashMap<>();
+    private final Map<ConstraintValidationContext, Map<ParseTree, ConstraintValidationContext>>
+        bodies = new IdentityHashMap<>();
 
     EmitCache(String sourceSql) {
       this.sourceSql = sourceSql;
@@ -82,7 +87,7 @@ final class ConstraintEmitter {
 
   // ctx's CEL in a form, emitted once per translation and context. One over CEL's size limit is
   // refused at once, as nesting may multiply it further.
-  private static void emitCached(LogicalTypesParser.Check_exprContext ctx, Form form,
+  private static void emitCached(ParseTree ctx, Form form,
       StringBuilder sb, Consumer<StringBuilder> emit) {
     EmitCache cache = EMIT_CACHE.get();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
@@ -104,6 +109,43 @@ final class ConstraintEmitter {
   static void visitCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
     emitCached(ctx, Form.NATIVE, sb, out -> visitOr(ctx.check_expr_or(), out));
+  }
+
+  /**
+   * A node's NULL test, computed once per translation and context, and refused at once over
+   * CEL's size limit; null when it can't be told.
+   */
+  static String cachedNullTest(ParseTree node, Supplier<String> test) {
+    EmitCache cache = EMIT_CACHE.get();
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (cache == null || vctx == null) {
+      return test.get();
+    }
+    Map<ParseTree, String[]> tests =
+        cache.nullTests.computeIfAbsent(vctx, k -> new IdentityHashMap<>());
+    String[] held = tests.get(node);
+    if (held == null) {
+      held = new String[] {test.get()};
+      if (held[0] != null) {
+        ConstraintCelChecker.checkSize(held[0], true, cache.sourceSql);
+      }
+      tests.put(node, held);
+    }
+    return held[0];
+  }
+
+  /**
+   * The context a quantifier's body is emitted in, made once per translation and outer context,
+   * so the body's emissions are cached across its quantifier's.
+   */
+  static ConstraintValidationContext bodyContext(ParseTree quantifier,
+      ConstraintValidationContext outer, Supplier<ConstraintValidationContext> make) {
+    EmitCache cache = EMIT_CACHE.get();
+    if (cache == null) {
+      return make.get();
+    }
+    return cache.bodies.computeIfAbsent(outer, k -> new IdentityHashMap<>())
+        .computeIfAbsent(quantifier, k -> make.get());
   }
 
   private static void visitOr(
@@ -2332,6 +2374,11 @@ final class ConstraintEmitter {
   }
 
   private static void visitCase(
+      LogicalTypesParser.Case_exprContext ctx, StringBuilder sb) {
+    emitCached(ctx, Form.NATIVE, sb, out -> emitCase(ctx, out));
+  }
+
+  private static void emitCase(
       LogicalTypesParser.Case_exprContext ctx, StringBuilder sb) {
     // Two flavors:
     //   searched: CASE WHEN c1 THEN r1 WHEN c2 THEN r2 ELSE d END

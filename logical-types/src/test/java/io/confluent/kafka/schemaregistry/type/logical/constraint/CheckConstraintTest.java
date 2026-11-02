@@ -1368,7 +1368,8 @@ class CheckConstraintTest {
   void aNestedCheckIsEmittedOnceAtEachLevel() {
     // A NULL test or a common type emits a subexpression again, which multiplied the work at
     // each level of nesting; one over CEL's limit is refused before it grows further.
-    String columns = "t BOOLEAN NOT NULL, d DECIMAL(10, 2), i INT, x DOUBLE";
+    String columns = "t BOOLEAN NOT NULL, d DECIMAL(10, 2), i INT, x DOUBLE, "
+        + "an INT ARRAY NOT NULL";
     assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
       translateCheckOver(columns, nest("d", "CASE WHEN t THEN %s ELSE d END") + " = d");
       translateCheckOver(columns, nest("i", "CASE WHEN t THEN %s ELSE x END") + " = x");
@@ -1378,8 +1379,13 @@ class CheckConstraintTest {
       // The IS NULL lint's NULL analysis emits too.
       translateCheckOver(columns, "ABS(" + nest("d", "CASE WHEN t THEN %s ELSE d END")
           + ") IS NULL");
+      // So do the NULL tests of AND and OR, a CASE, and a quantifier's body.
+      translateCheckOver(columns, nest("t", "((%s) AND t) IS NULL"));
+      translateCheckOver(columns, nest("i", "CASE WHEN %s + an[1] > 0 THEN i ELSE 2 END") + " = 1");
+      translateCheckOver(columns,
+          nest("i", "CASE WHEN EVERY(an, e, (%s) = e) THEN i ELSE 2 END", 20) + " = 1");
       for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
-          nest("d", "NULLIF(d, %s)") + " = d",
+          nest("d", "NULLIF(d, %s)") + " = d", nest("t", "((%s) AND i > 0) IS NULL"),
           nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {
         ValidationException e = assertThrows(ValidationException.class,
             () -> translateCheckOver(columns, tooLarge));
@@ -1390,8 +1396,12 @@ class CheckConstraintTest {
 
   // leaf nested 30 deep in a call or CASE, %s marking where.
   private static String nest(String leaf, String wrap) {
+    return nest(leaf, wrap, 30);
+  }
+
+  private static String nest(String leaf, String wrap, int depth) {
     String nested = leaf;
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < depth; i++) {
       nested = String.format(wrap, nested);
     }
     return nested;

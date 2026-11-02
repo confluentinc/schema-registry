@@ -59,22 +59,7 @@ final class ConstraintNullTest {
   }
 
   static String of(LogicalTypesParser.Check_exprContext ctx) {
-    LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
-    if (or.check_expr_and().size() > 1
-        || or.check_expr_and(0).check_expr_unary_not().size() > 1) {
-      StringBuilder whenTrue = new StringBuilder();
-      StringBuilder whenFalse = new StringBuilder();
-      return neither(ConstraintEmitter.emitTruth(or, true, whenTrue)
-          | ConstraintEmitter.emitTruth(or, false, whenFalse), whenTrue, whenFalse);
-    }
-    LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
-    LogicalTypesParser.Check_expr_unary_notContext not = and.check_expr_unary_not(0);
-    while (not instanceof LogicalTypesParser.CheckExprNotContext) {
-      not = ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not();
-    }
-    LogicalTypesParser.Check_expr_isnullContext is =
-        ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
-    return is.IS() != null ? NEVER : of(is.check_expr_compare());
+    return ConstraintEmitter.cachedNullTest(ctx, () -> ofExpr(ctx));
   }
 
   static String of(LogicalTypesParser.Check_expr_compareContext ctx) {
@@ -195,6 +180,25 @@ final class ConstraintNullTest {
         EMIT_VCTX.set(emitting);
       }
     }
+  }
+
+  private static String ofExpr(LogicalTypesParser.Check_exprContext ctx) {
+    LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
+    if (or.check_expr_and().size() > 1
+        || or.check_expr_and(0).check_expr_unary_not().size() > 1) {
+      StringBuilder whenTrue = new StringBuilder();
+      StringBuilder whenFalse = new StringBuilder();
+      return neither(ConstraintEmitter.emitTruth(or, true, whenTrue)
+          | ConstraintEmitter.emitTruth(or, false, whenFalse), whenTrue, whenFalse);
+    }
+    LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
+    LogicalTypesParser.Check_expr_unary_notContext not = and.check_expr_unary_not(0);
+    while (not instanceof LogicalTypesParser.CheckExprNotContext) {
+      not = ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not();
+    }
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
+    return is.IS() != null ? NEVER : of(is.check_expr_compare());
   }
 
   /**
