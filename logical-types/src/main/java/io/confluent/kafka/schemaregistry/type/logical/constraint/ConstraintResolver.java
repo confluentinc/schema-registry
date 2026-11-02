@@ -74,6 +74,23 @@ final class ConstraintResolver {
   }
 
   /**
+   * Whether an element of the array an IN tests may be NULL, or {@code null} when its type
+   * doesn't resolve.
+   */
+  static Boolean inArrayElementNullable(
+      LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
+    LogicalTypesParser.Check_expr_likeContext array =
+        ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
+    Schema type = array.LIKE() != null ? null
+        : resolveIfNamedRef(tryResolveAddType(array.check_expr_add(), vctx), vctx);
+    if (type == null
+        || type.getType() != Schema.Type.ARRAY && type.getType() != Schema.Type.MULTISET) {
+      return null;
+    }
+    return type.getElementType().isNullable();
+  }
+
+  /**
    * Best-effort type resolution for a {@code check_expr_mul}. For a single
    * {@code unary_sign} leaf, delegates to the c_expr resolver below. For a
    * multi-operator chain ({@code a * b}, {@code a / b}, etc.), unifies the

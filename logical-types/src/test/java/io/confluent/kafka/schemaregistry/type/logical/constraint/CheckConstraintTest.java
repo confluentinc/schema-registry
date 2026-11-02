@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1073,7 +1074,7 @@ class CheckConstraintTest {
     // x IN <field-name> — parses as InTargetExpr (no parens)
     String script = "STRUCT T ("
         + "value STRING,"
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (value IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
@@ -1084,7 +1085,7 @@ class CheckConstraintTest {
   void notInListField() {
     String script = "STRUCT T ("
         + "value STRING,"
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (value NOT IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
@@ -3263,6 +3264,37 @@ class CheckConstraintTest {
           "CASE WHEN x BETWEEN nx AND 1 THEN 1 ELSE 2 END = 2",
           "CASE WHEN NOT (x BETWEEN nx AND 0) THEN 1 ELSE 2 END = 1",
           "COALESCE((ns LIKE 'a%') AND t, FALSE) = FALSE")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anInOverAnArrayWithANullIsThreeValued() throws Exception {
+    // An IN over an array is TRUE on a match, else NULL when its subject, the array or an
+    // element is NULL, as an IN over a list is; with elements never NULL, NULL exactly when its
+    // subject or the array is.
+    String columns = "i INT NOT NULL, ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "an INT ARRAY NOT NULL, na INT NOT NULL ARRAY";
+    assertEquals("((this.i in this.an) ? true : ((this.an).exists(v, dyn(v) == null) ? "
+        + "dyn(null) : false))", translateCheckOver(columns, "i IN an"));
+    // One whose elements are never NULL is emitted as before.
+    assertEquals("!(this.ni in this.arr)", translateCheckOver(columns, "ni NOT IN arr"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("i", 2);
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(1, null));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    present.put("na", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(i IN an) IS NULL", "(ni NOT IN arr) IS NULL",
+          "CASE WHEN i NOT IN an THEN 1 ELSE 2 END = 2", "(3 IN na) IS NULL", "1 IN an",
+          "COALESCE(i IN an, TRUE) = TRUE", "(i IN arr) IS NOT NULL")) {
         String cel = translateCheckOver(columns, sql);
         assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
             CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),

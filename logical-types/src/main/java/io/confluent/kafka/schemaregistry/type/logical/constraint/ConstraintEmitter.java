@@ -348,6 +348,10 @@ final class ConstraintEmitter {
       emitInMayBeNull(ctx, negated, sb);
       return;
     }
+    if (inArrayElementMayBeNull(ctx)) {
+      emitInArrayMayBeNull(ctx, negated, sb);
+      return;
+    }
     if (vctx != null) {
       LogicalTypesParser.In_targetContext target = ctx.in_target();
       if (target instanceof LogicalTypesParser.InTargetParenListContext) {
@@ -489,6 +493,63 @@ final class ConstraintEmitter {
     } else {
       sb.append('(').append(subjectNull).append(" ? dyn(null) : ").append(unlessSubjectNull)
           .append(')');
+    }
+  }
+
+  /**
+   * True if an element of the array an IN tests may be NULL, and the inputs of its subject and
+   * array tell. One whose elements never are is NULL exactly when its subject or array is, so
+   * is emitted as before.
+   */
+  static boolean inArrayElementMayBeNull(LogicalTypesParser.Check_expr_inContext ctx) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (vctx == null || ctx.IN() == null
+        || !(ctx.in_target() instanceof LogicalTypesParser.InTargetExprContext)
+        || likeHasDecimal(ctx.check_expr_like(), vctx)) {
+      return false;
+    }
+    String subject = ConstraintNullTest.of(ctx.check_expr_like());
+    String array = ConstraintNullTest.of(
+        ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like());
+    Boolean elementNullable = ConstraintResolver.inArrayElementNullable(ctx, vctx);
+    return subject != null && array != null && Boolean.TRUE.equals(elementNullable);
+  }
+
+  /**
+   * SQL's {@code x IN arr}: NULL when {@code x} or {@code arr} is, else TRUE on a match, else
+   * NULL when an element is NULL, else FALSE; NOT IN negates it, keeping NULL.
+   */
+  private static void emitInArrayMayBeNull(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    LogicalTypesParser.Check_expr_likeContext array =
+        ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
+    StringBuilder match = new StringBuilder();
+    if (inTargetHasTemporal(ctx, vctx)) {
+      emitTimestampValueLike(ctx.check_expr_like(), match);
+      match.append(" in ");
+      emitTimestampInTarget(ctx.in_target(), match);
+    } else {
+      visitLike(ctx.check_expr_like(), match);
+      match.append(" in ");
+      visitInTarget(ctx.in_target(), match);
+    }
+    if (vctx.isTypeOnly()) {
+      sb.append(negated ? "!(" + match + ")" : match);
+      return;
+    }
+    StringBuilder noMatch = new StringBuilder("((");
+    visitLike(array, noMatch);
+    noMatch.append(").exists(v, dyn(v) == null) ? dyn(null) : ")
+        .append(negated ? "true" : "false").append(')');
+    String unlessNull = "((" + match + ") ? " + (negated ? "false" : "true") + " : "
+        + noMatch + ")";
+    String isNull = ConstraintNullTest.either(ConstraintNullTest.of(ctx.check_expr_like()),
+        ConstraintNullTest.of(array));
+    if (ConstraintNullTest.NEVER.equals(isNull)) {
+      sb.append(unlessNull);
+    } else {
+      sb.append('(').append(isNull).append(" ? dyn(null) : ").append(unlessNull).append(')');
     }
   }
 
@@ -2473,7 +2534,7 @@ final class ConstraintEmitter {
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
         && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
-        && inElementMayBeNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
+        && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
       // Its CEL gives NULL as null, which equals neither true nor false.
       sb.append("(dyn(");
       visitIs(is, sb);
@@ -2494,6 +2555,11 @@ final class ConstraintEmitter {
     visitIs(is, sb);
     sb.append("))");
     return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+  }
+
+  // An IN whose three-valued CEL gives NULL as null.
+  static boolean givesNullAsNull(LogicalTypesParser.Check_expr_inContext in) {
+    return inElementMayBeNull(in) || inArrayElementMayBeNull(in);
   }
 
   /**

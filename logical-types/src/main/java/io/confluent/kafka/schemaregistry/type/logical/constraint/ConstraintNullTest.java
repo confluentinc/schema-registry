@@ -35,9 +35,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * tell. COALESCE is NULL when all its arguments are.
  *
  * <p>CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so are tested by
- * their value. AND, OR and BETWEEN are NULL when neither definitely TRUE nor definitely FALSE.
+ * their value; an IN over an array of elements never NULL is NULL when its subject or array is.
+ * AND, OR and BETWEEN are NULL when neither definitely TRUE nor definitely FALSE.
  * {@code "false"} means the expression is never NULL. Null means it can't be told without
- * evaluating it: an IN over an array or whose inputs don't tell, a subscript, a quantifier, a
+ * evaluating it: an IN whose inputs or array type don't tell, a subscript, a quantifier, a
  * VARIANT function or cast, or any of these over one.
  */
 final class ConstraintNullTest {
@@ -84,8 +85,9 @@ final class ConstraintNullTest {
         continue;
       }
       LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-      if (in.IN() != null && !elementsNeverNull(in)) {
-        if (!ConstraintEmitter.inElementMayBeNull(in)) {
+      String elements = in.IN() == null ? NEVER : ofElements(in);
+      if (elements == null) {
+        if (!ConstraintEmitter.givesNullAsNull(in)) {
           return null;
         }
         StringBuilder emitted = new StringBuilder();
@@ -93,7 +95,8 @@ final class ConstraintNullTest {
         tests.add("dyn(" + emitted + ") == null");
         continue;
       }
-      // An IN over elements never NULL is NULL exactly when its subject is.
+      // An IN over elements never NULL is NULL exactly when its subject or array is.
+      tests.add(elements);
       tests.add(of(in.check_expr_like()));
     }
     return any(tests);
@@ -321,18 +324,23 @@ final class ConstraintNullTest {
         : "(!" + whenTrue + " && !" + whenFalse + ")";
   }
 
-  private static boolean elementsNeverNull(LogicalTypesParser.Check_expr_inContext in) {
-    if (!(in.in_target() instanceof LogicalTypesParser.InTargetParenListContext)) {
-      return false;
+  // An IN's test beyond its subject's when its elements are never NULL: the array's, or none.
+  private static String ofElements(LogicalTypesParser.Check_expr_inContext in) {
+    if (in.in_target() instanceof LogicalTypesParser.InTargetExprContext) {
+      ConstraintValidationContext vctx = EMIT_VCTX.get();
+      boolean neverNull = vctx != null
+          && Boolean.FALSE.equals(ConstraintResolver.inArrayElementNullable(in, vctx));
+      return neverNull
+          ? of(((LogicalTypesParser.InTargetExprContext) in.in_target()).check_expr_like()) : null;
     }
     for (LogicalTypesParser.Check_exprContext item
         : ((LogicalTypesParser.InTargetParenListContext) in.in_target())
             .check_expr_list().check_expr()) {
       if (!NEVER.equals(of(item))) {
-        return false;
+        return null;
       }
     }
-    return true;
+    return NEVER;
   }
 
   // NULL when any input is.
