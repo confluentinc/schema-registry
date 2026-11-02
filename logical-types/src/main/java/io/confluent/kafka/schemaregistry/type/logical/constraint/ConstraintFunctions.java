@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.emitWrappedReceiver;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.resolveCollectionElementType;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.tryAsLiteral;
@@ -446,8 +447,8 @@ final class ConstraintFunctions {
 
   /**
    * COALESCE(a, b, c, ...) → {@code (a != null ? a : (b != null ? b : c))}.
-   * Each per-arg null check uses {@link #emitIsNotNullCheck}, which wraps
-   * with a {@code has()} guard when the arg is a CEL field-selection chain.
+   * Each per-arg null check uses {@link #notNullTestOf}, a {@code has()} guard
+   * when the arg is a CEL field-selection chain.
    */
   private static void emitCoalesce(
       LogicalTypesParser.Func_applicationContext fctx,
@@ -491,71 +492,96 @@ final class ConstraintFunctions {
       }
     }
     for (int i = 0; i < n - 1; i++) {
-      sb.append('(');
-      // has() requires a bare field selection (nativeEmit); a non-selection
-      // branch (e.g. mixed-numeric arithmetic, whose native emit is an
-      // un-coercible int+Decimal add) uses the type-coerced valueEmit so the
-      // null check itself type-checks.
-      String nullCheck = ConstraintResolver.isHasCompatible(args.get(i), vctx)
-          ? nativeEmit[i] : valueEmit[i];
-      emitIsNotNullCheck(args.get(i), nullCheck, sb);
-      sb.append(" ? ").append(valueEmit[i]).append(" : ");
+      sb.append('(').append(notNullTestOf(args.get(i), nativeEmit[i], valueEmit[i]))
+          .append(" ? ").append(valueEmit[i]).append(" : ");
     }
-    sb.append(valueEmit[n - 1]);
+    // A last argument that may be NULL gives NULL, not a widened NULL or, on
+    // JSON, which leaves a NULL field out, a missing key. (The validator checks
+    // the arguments share a category, as the dyn branch no longer makes the
+    // strict check unify them.)
+    LogicalTypesParser.Check_exprContext last = args.get(n - 1);
+    if (tryAsLiteral(last) != null) {
+      sb.append(valueEmit[n - 1]);
+    } else {
+      emitNullOrValue(last, nativeEmit[n - 1], valueEmit[n - 1], sb);
+    }
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
     }
   }
 
   /**
-   * Emit {@code dyn(<arg>) != null}, optionally wrapped with a presence
-   * check ({@code (has(<arg>) && dyn(<arg>) != null)}) when the arg is a
-   * CEL field-selection chain. {@code emitted} is the cached emit of the
-   * arg so we don't re-visit the parse tree per use site.
-   *
-   * <p>The {@code dyn(...)} wrapper makes the null comparison portable
-   * across CEL checkers that would otherwise reject {@code <typed> != null}
-   * (e.g., consumers compiling against concrete proto types). {@code dyn}
-   * is a no-op at runtime. {@code has()}'s argument stays a bare selection
-   * per CEL spec.
-   *
-   * <p>The has-rewrite output is paren-wrapped so the helper is safe to
-   * splice into any context. Today both call sites (COALESCE,
-   * GREATEST/LEAST) use it as a ternary condition where CEL's grammar
-   * naturally groups the {@code &&}/{@code ||} chain — but a future call
-   * site that splices into an {@code ||}/{@code &&} expression would
-   * silently mis-bind without the parens (same root cause as
-   * {@link ConstraintEmitter#visitIs}).
+   * {@code value}, {@code arg} converted to the common type, or NULL when {@code arg} is NULL:
+   * tested before the conversion, in its own type or by has(), as converting a NULL fails and
+   * JSON leaves a NULL field out.
    */
-  private static void emitIsNotNullCheck(
-      LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
-    if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(has(").append(emitted).append(") && dyn(")
-          .append(emitted).append(") != null)");
+  static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
+      String value, StringBuilder sb) {
+    emitNullOrValue(arg, nativeEmit, value, nullTestOf(arg, nativeEmit, value), sb);
+  }
+
+  private static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg,
+      String nativeEmit, String value, String nullTest, StringBuilder sb) {
+    // COALESCE, GREATEST and LEAST give NULL as null, so one not converted is not tested again.
+    if (value.equals(nativeEmit) && ConstraintNullTest.givesNullAsNull(arg)) {
+      sb.append(value);
     } else {
-      sb.append("dyn(").append(emitted).append(") != null");
+      emitNullOr(nullTest, true, value, sb);
     }
   }
 
   /**
-   * Emit {@code dyn(<arg>) == null}, optionally wrapped with a presence
-   * check ({@code (!has(<arg>) || dyn(<arg>) == null)}) when the arg is a
-   * CEL field-selection chain. Companion to {@link #emitIsNotNullCheck};
-   * same paren-wrap and dyn-wrap rationale.
+   * The test that {@code arg} is NULL, before it is converted to {@code value}'s type: by has()
+   * for a selection, by its inputs ({@link ConstraintNullTest}) if they tell, else of its value in
+   * its own type; {@code false} when it is never NULL.
    */
-  private static void emitIsNullCheck(
-      LogicalTypesParser.Check_exprContext arg, String emitted, StringBuilder sb) {
-    if (ConstraintResolver.isHasCompatible(arg, EMIT_VCTX.get())) {
-      sb.append("(!has(").append(emitted).append(") || dyn(")
-          .append(emitted).append(") == null)");
+  private static String nullTestOf(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
+      String value) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ConstraintResolver.isHasCompatible(arg, vctx)) {
+      return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, true);
+    }
+    String byInputs = ConstraintNullTest.of(arg);
+    return byInputs != null ? byInputs
+        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
+  }
+
+  /**
+   * The test that {@code arg} is not NULL, as {@link #nullTestOf} tells it.
+   */
+  private static String notNullTestOf(LogicalTypesParser.Check_exprContext arg,
+      String nativeEmit, String value) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ConstraintResolver.isHasCompatible(arg, vctx)) {
+      return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, false);
+    }
+    String byInputs = ConstraintNullTest.of(arg);
+    return byInputs != null ? ConstraintNullTest.not(byInputs)
+        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") != null";
+  }
+
+  /**
+   * {@code (nullTest ? dyn(null) : value)}, or just {@code value} when the test is false or only
+   * asks whether it is null. The strict check, which the dyn branch would pass, types
+   * {@code (nullTest ? value : value)}, or just {@code value} when the test reads nothing else.
+   */
+  private static void emitNullOr(String nullTest, boolean testsOnlyValue, String value,
+      StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    boolean typeOnly = vctx != null && vctx.isTypeOnly();
+    if (nullTest.equals("false") || nullTest.equals("dyn(" + value + ") == null")
+        || typeOnly && testsOnlyValue) {
+      sb.append(value);
     } else {
-      sb.append("dyn(").append(emitted).append(") == null");
+      sb.append('(').append(nullTest).append(" ? ").append(typeOnly ? value : "dyn(null)")
+          .append(" : ").append(value).append(')');
     }
   }
 
   /**
-   * NULLIF(x, y) → {@code (x == y ? dyn(null) : dyn(x))}. The {@code dyn(...)}
-   * wraps make the ternary branches type-unify under CEL's strict checker
+   * NULLIF(x, y) → {@code (x == y ? dyn(null) : x)}, after a NULL x gives NULL and a NULL y
+   * gives x, as SQL's {@code CASE WHEN x = y THEN NULL ELSE x END} does. The {@code dyn(null)}
+   * makes the ternary branches type-unify under CEL's strict checker
    * — a bare {@code (cond ? null : typed)} fails with "no matching
    * overload for '_?_:_' applied to '(bool, null, type)'" because CEL
    * ternary requires both branches to share a type.
@@ -572,37 +598,52 @@ final class ConstraintFunctions {
         ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
     boolean temporal = !ConstraintResolver.isNumericCategory(common)
         && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
-    sb.append('(');
+    StringBuilder equal = new StringBuilder();
     if ("decimal".equals(common)) {
       // Opaque Decimal has no native `==`.
-      sb.append("decimals.eq(");
-      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
-      sb.append(", ");
-      ConstraintEmitter.emitDecimalValue(args.get(1), sb);
-      sb.append(')');
+      equal.append("decimals.eq(");
+      ConstraintEmitter.emitDecimalValue(args.get(0), equal);
+      equal.append(", ");
+      ConstraintEmitter.emitDecimalValue(args.get(1), equal);
+      equal.append(')');
     } else if ("double".equals(common)) {
-      ConstraintEmitter.emitNumericAs(args.get(0), "double", sb);
-      sb.append(" == ");
-      ConstraintEmitter.emitNumericAs(args.get(1), "double", sb);
+      ConstraintEmitter.emitNumericAs(args.get(0), "double", equal);
+      equal.append(" == ");
+      ConstraintEmitter.emitNumericAs(args.get(1), "double", equal);
     } else if (temporal) {
       // Native `==`, operands timestamp-normalized.
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
-      sb.append(" == ");
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), sb);
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), equal);
+      equal.append(" == ");
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), equal);
     } else {
-      visitCheckExpr(args.get(0), sb);
-      sb.append(" == ");
-      visitCheckExpr(args.get(1), sb);
+      visitCheckExpr(args.get(0), equal);
+      equal.append(" == ");
+      visitCheckExpr(args.get(1), equal);
     }
-    sb.append(" ? dyn(null) : dyn(");
     // Normalize the returned value too (so a temporal NULLIF result is a CEL
     // timestamp), keeping the decimal/native paths unchanged.
+    StringBuilder value = new StringBuilder();
     if (temporal) {
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), value);
     } else {
-      visitCheckExpr(args.get(0), sb);
+      visitCheckExpr(args.get(0), value);
     }
-    sb.append("))");
+    // Each argument is tested before it is compared or converted.
+    StringBuilder nativeA = new StringBuilder();
+    visitCheckExpr(args.get(0), nativeA);
+    StringBuilder nativeB = new StringBuilder();
+    visitCheckExpr(args.get(1), nativeB);
+    String nullB = nullTestOf(args.get(1), nativeB.toString(), nativeB.toString());
+    StringBuilder unlessNullA = new StringBuilder();
+    if (!"false".equals(nullB)) {
+      unlessNullA.append('(').append(nullB).append(" ? ").append(value).append(" : ");
+    }
+    emitNullOr(equal.toString(), false, value.toString(), unlessNullA);
+    if (!"false".equals(nullB)) {
+      unlessNullA.append(')');
+    }
+    emitNullOr(nullTestOf(args.get(0), nativeA.toString(), value.toString()), true,
+        unlessNullA.toString(), sb);
   }
 
   /**
@@ -637,8 +678,8 @@ final class ConstraintFunctions {
   /**
    * GREATEST(a, b) / LEAST(a, b) — emit a NULL-skipping comparison.
    * Limited to 2 arguments in v1. Per-arg null guards use
-   * {@link #emitIsNullCheck}, which wraps with a {@code has()} guard when
-   * the arg is a CEL field-selection chain.
+   * {@link #nullTestOf}, a {@code has()} guard when the arg is a CEL
+   * field-selection chain.
    */
   private static void emitGreatestLeast(
       LogicalTypesParser.Func_applicationContext fctx,
@@ -693,18 +734,15 @@ final class ConstraintFunctions {
       a = tsA.toString();
       b = tsB.toString();
     }
-    // has() requires a bare field selection (nativeA/B); a non-selection
-    // operand (e.g. mixed-numeric arithmetic) uses the type-coerced value so
-    // the null check type-checks.
-    final String nullA =
-        ConstraintResolver.isHasCompatible(args.get(0), vctx) ? nativeA : a;
-    final String nullB =
-        ConstraintResolver.isHasCompatible(args.get(1), vctx) ? nativeB : b;
-    sb.append('(');
-    emitIsNullCheck(args.get(0), nullA, sb);
-    sb.append(" ? ").append(b).append(" : (");
-    emitIsNullCheck(args.get(1), nullB, sb);
-    sb.append(" ? ").append(a).append(" : ");
+    // Each operand is tested before it is converted, so a NULL is not.
+    String nullTestB = nullTestOf(args.get(1), nativeB, b);
+    sb.append('(').append(nullTestOf(args.get(0), nativeA, a));
+    // With both NULL the result is NULL (dyn, to type-check against the other
+    // branches), not B converted or read: converting a NULL fails, and JSON
+    // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
+    sb.append(" ? ");
+    emitNullOrValue(args.get(1), nativeB, b, nullTestB, sb);
+    sb.append(" : (").append(nullTestB).append(" ? ").append(a).append(" : ");
     if (decimal) {
       sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
           .append('(').append(a).append(", ").append(b).append(')');
@@ -717,6 +755,30 @@ final class ConstraintFunctions {
           .append(" ? ").append(a).append(" : ").append(b).append(')');
     }
     sb.append("))");
+  }
+
+  /**
+   * An operand's value in its own numeric type, to test it for NULL before it is
+   * converted to the common type: INT natively, DOUBLE and DECIMAL by their
+   * cascades. Any other operand is tested as {@code converted}.
+   */
+  private static String ownTypeValue(
+      LogicalTypesParser.Check_exprContext arg, String nativeEmit, String converted,
+      ConstraintValidationContext vctx) {
+    Schema t = vctx == null ? null : ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+    String cat = t == null ? null : ConstraintResolver.categoryOf(t.getType());
+    if ("int".equals(cat)) {
+      return nativeEmit;
+    }
+    StringBuilder own = new StringBuilder();
+    if ("double".equals(cat)) {
+      ConstraintEmitter.emitNumericAs(arg, "double", own);
+    } else if ("decimal".equals(cat)) {
+      ConstraintEmitter.emitDecimalValue(arg, own);
+    } else {
+      return converted;
+    }
+    return own.toString();
   }
 
   // -------------------------------------------------------------------------
@@ -1082,14 +1144,32 @@ final class ConstraintFunctions {
     }
   }
 
-  /** POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). */
+  /**
+   * POSITION(needle IN haystack) → (haystack.indexOf(needle) + 1). With FROM, the
+   * guards give Flink's answers (an empty needle is 1, a start past the end 0) and
+   * never pass indexOf an offset out of range, where the CEL runtimes disagree.
+   */
   private static void visitPosition(
       LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_exprContext haystack = ctx.check_expr(0);
     sb.append('(');
-    emitWrappedReceiver(ctx.check_expr(1), sb);
+    if (ctx.FROM() == null) {
+      emitWrappedReceiver(haystack, sb);
+      sb.append(".indexOf(");
+      visitCExpr(ctx.c_expr(), sb);
+      sb.append(") + 1)");
+      return;
+    }
+    StringBuilder start = new StringBuilder();
+    emitWrappedReceiver(ctx.check_expr(1), start);
+    visitCExpr(ctx.c_expr(), sb);
+    sb.append(" == '' ? 1 : (").append(start).append(" > size(");
+    visitCheckExpr(haystack, sb);
+    sb.append(") ? 0 : ");
+    emitWrappedReceiver(haystack, sb);
     sb.append(".indexOf(");
-    visitCheckExpr(ctx.check_expr(0), sb);
-    sb.append(") + 1)");
+    visitCExpr(ctx.c_expr(), sb);
+    sb.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
   }
 
   /** TRIM(x) → x.trim() (whitespace, both ends). */
