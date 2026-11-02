@@ -3420,6 +3420,26 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCoalesceWithAnArgumentNeverNullIsNeverNull() throws Exception {
+    // COALESCE with an argument never NULL never is, whatever the others are.
+    String columns = "s STRING NOT NULL, ni INT";
+    String vg = "VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "{\"a\": 1}");
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "{\"a\": 1}"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(COALESCE(" + vg + ", 0) > 0 AND ni > 0) IS NULL",
+          "(COALESCE(" + vg + ", 0) + ni) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.

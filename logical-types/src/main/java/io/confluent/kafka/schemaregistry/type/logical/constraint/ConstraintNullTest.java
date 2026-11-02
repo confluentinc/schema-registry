@@ -364,11 +364,11 @@ final class ConstraintNullTest {
 
   // NULL when every input is.
   private static String all(List<String> tests) {
-    if (tests.contains(null)) {
-      return null;
-    }
     if (tests.isEmpty() || tests.contains(NEVER)) {
       return NEVER;
+    }
+    if (tests.contains(null)) {
+      return null;
     }
     Set<String> nullable = new LinkedHashSet<>(tests);
     nullable.remove("true");
