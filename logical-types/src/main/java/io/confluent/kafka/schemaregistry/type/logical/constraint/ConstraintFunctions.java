@@ -443,12 +443,13 @@ final class ConstraintFunctions {
   }
 
   // Flink takes ROUND's and TRUNCATE's scale as an INT, refusing a BIGINT one or a literal out
-  // of range.
+  // of range. Only a column's or variable's BIGINT is told: an expression's integer resolves
+  // as CEL's int64 whatever its width, as CAST(x AS INT) or LENGTH(s) does.
   private static void refuseNonIntScale(LogicalTypesParser.Check_exprContext scale,
       ConstraintValidationContext vctx, String sqlName) {
     Long literal = tryLiteralIntValue(scale);
-    Schema type = vctx == null || literal != null ? null
-        : ConstraintResolver.tryResolveCheckExprType(scale, vctx);
+    Schema type = vctx == null || literal != null || ConstraintResolver.selectionPath(scale) == null
+        ? null : ConstraintResolver.tryResolveCheckExprType(scale, vctx);
     boolean outOfRange = literal != null
         && (literal < Integer.MIN_VALUE || literal > Integer.MAX_VALUE);
     if (outOfRange || type != null && type.getType() == Schema.Type.BIGINT) {

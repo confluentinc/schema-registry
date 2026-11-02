@@ -3830,7 +3830,7 @@ class CheckConstraintTest {
     // took time growing with the scale; the declared scale doesn't bound it, as a JSON or
     // Protobuf value carries its own.
     String columns = "d DECIMAL(10, 2) NOT NULL, i INT NOT NULL, ti TINYINT NOT NULL, "
-        + "bi BIGINT NOT NULL";
+        + "bi BIGINT NOT NULL, s STRING NOT NULL, abi BIGINT NOT NULL ARRAY NOT NULL";
     assertTrue(translateCheckOver(columns, "ROUND(d, 1) > 0")
         .contains("decimals.round(this.d, 1)"));
     assertTrue(translateCheckOver(columns, "ROUND(d, 50) > 0")
@@ -3843,14 +3843,20 @@ class CheckConstraintTest {
     String three = translateCheckOver(columns, "ROUND(d, 3) = d");
     assertEquals(true, evalOver(three, Map.of("d", CelDecimal.of(new BigDecimal("1.234")))),
         three);
-    // Flink takes the scale as an INT.
+    // Flink takes the scale as an INT: a column's or variable's BIGINT is refused, while an
+    // expression's integer, which resolves as CEL's int64, isn't.
     for (String sql : List.of("ROUND(d, 3000000000) > 0", "TRUNCATE(d, -2147483649) > 0",
-        "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0")) {
+        "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0", "EVERY(abi, e, ROUND(d, e) > 0)")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("takes an INT scale"), e.getMessage());
     }
-    translateCheckOver(columns, "ROUND(d, ti) > 0 AND TRUNCATE(d, -2) > 0");
+    for (String sql : List.of("ROUND(d, ti) > 0 AND TRUNCATE(d, -2) > 0",
+        "ROUND(d, CAST(2 AS INT)) > 0", "TRUNCATE(d, CAST(2 AS SMALLINT)) > 0",
+        "ROUND(d, CAST(bi AS INT)) > 0", "ROUND(d, LENGTH(s)) > 0",
+        "ROUND(d, CASE WHEN i > 0 THEN 1 ELSE 2 END) > 0")) {
+      translateCheckOver(columns, sql);
+    }
   }
 
   @Test
