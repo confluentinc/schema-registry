@@ -171,10 +171,10 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   @Test
   void aMultiMessageRootHasEachMessagesDefaultsUnderItsColumn() {
-    LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(new ProtobufSchema(
+    LogicalType lt = ProtoToLogicalTypeConverter.toMultiMessageLogicalType(new ProtobufSchema(
         "syntax = \"proto3\";\npackage p;\n"
             + "message Row {\n  int32 id = 1;\n  Foo foo = 2;\n}\n"
-            + "message Foo {\n  string s = 1;\n}\n"), true);
+            + "message Foo {\n  string s = 1;\n}\n"));
 
     assertThat(lt.getDefaultValues()).containsOnly(
         Map.entry(List.of(0, 0), 0), Map.entry(List.of(0, 1, 0), ""),
@@ -350,7 +350,7 @@ class ProtoReaderProto3ImplicitDefaultsTest {
 
   // As one message, the file's first: these files declare several only to be referenced.
   private static LogicalType read(ProtobufSchema schema) {
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, false);
+    return ProtoToLogicalTypeConverter.toLogicalType(schema, schema.name());
   }
 
   // M0 .. M<n-1>, each holding the next as a and b; M<n> holds the only default.
