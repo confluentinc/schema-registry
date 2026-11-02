@@ -252,6 +252,67 @@ public class CelValidatorJsonSchemaSerializerTest {
     }
   }
 
+  /**
+   * A rule that is a bare field is typed dyn on JSON, so it is judged by the value it returns:
+   * a boolean passes or fails the record, anything else is refused when evaluated.
+   */
+  @Test
+  void aBareFieldRuleIsJudgedByItsValue() throws Exception {
+    for (String[] rule : new String[][] {{"flag", "isSet", "this.t"},
+        {"count", "bareCount", "this.count"}}) {
+      client.register(rule[0] + "-value", new JsonSchema("{"
+          + "\"type\":\"object\",\"title\":\"Flag\","
+          + "\"confluent:rules\":[{\"name\":\"" + rule[1] + "\",\"expr\":\"" + rule[2] + "\"}],"
+          + "\"properties\":{\"t\":{\"type\":\"boolean\"},\"count\":{\"type\":\"integer\"}}"
+          + "}"));
+    }
+    Map<String, Object> props = new HashMap<>();
+    props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+    props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    props.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_CACHE_SIZE, "0");
+    props.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    props.put("validation.rules.execution", "AFTER_DOMAIN_RULES");
+    KafkaJsonSchemaSerializer<Flag> serializer = new KafkaJsonSchemaSerializer<>(client, props);
+
+    assertNotNull(serializer.serialize("flag", new Flag(true, null)));
+    String failed = causeMessage(assertThrows(SerializationException.class,
+        () -> serializer.serialize("flag", new Flag(false, null))));
+    assertTrue(failed.contains("isSet"), "Expected the rule to fail, got: " + failed);
+    String refused = causeMessage(assertThrows(SerializationException.class,
+        () -> serializer.serialize("count", new Flag(true, 3))));
+    assertTrue(refused.contains("bareCount") && refused.contains("unexpected type"),
+        "Expected a non-boolean result to be refused, got: " + refused);
+  }
+
+  public static class Flag {
+    private boolean t;
+    private Integer count;
+
+    public Flag() {}
+
+    public Flag(boolean t, Integer count) {
+      this.t = t;
+      this.count = count;
+    }
+
+    public boolean getT() {
+      return t;
+    }
+
+    public void setT(boolean t) {
+      this.t = t;
+    }
+
+    public Integer getCount() {
+      return count;
+    }
+
+    public void setCount(Integer count) {
+      this.count = count;
+    }
+  }
+
   /** The serializer wraps our SerializationException(violations) as the cause. */
   private static String causeMessage(Throwable t) {
     Throwable cause = t.getCause();

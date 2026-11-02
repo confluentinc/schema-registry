@@ -952,6 +952,27 @@ class LogicalTypeToProtoConverterTest {
     }
   }
 
+  @Test
+  void testDecimalWithoutScaleIsWrittenWithScaleZero() {
+    // DECIMAL(p) and bare DECIMAL are DECIMAL(p, 0), never a scale of -1.
+    for (Schema d : Arrays.asList(Schema.createDecimal(18, Schema.NO_PARAM),
+        Schema.createDecimal(Schema.NO_PARAM, Schema.NO_PARAM))) {
+      Schema rootSchema = Schema.createStruct(Arrays.asList(
+          new Field("d", d.setNullable(false), 0))).setNullable(false);
+      ProtobufSchema proto = convertSchema(rootSchema);
+      assertFalse(proto.canonicalString().contains("\"-1\""), proto.canonicalString());
+      assertEquals(Schema.DEFAULT_DECIMAL_SCALE, ProtoToLogicalTypeConverter.toLogicalType(proto)
+          .getRootSchema().getField("d").getSchema().getScale());
+    }
+    // A schema registered with the old -1 reads as scale 0.
+    ProtobufSchema old = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "import \"confluent/meta.proto\";\nimport \"confluent/type/decimal.proto\";\n"
+        + "message T {\n  confluent.type.Decimal d = 1 [(confluent.field_meta) = { params: ["
+        + " { key: \"precision\", value: \"10\" }, { key: \"scale\", value: \"-1\" } ] }];\n}\n");
+    assertEquals(Schema.DEFAULT_DECIMAL_SCALE, ProtoToLogicalTypeConverter.toLogicalType(old)
+        .getRootSchema().getField("d").getSchema().getScale());
+  }
+
   // =========================================================================
   // Length-constrained primitives round-trip
   // =========================================================================
