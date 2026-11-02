@@ -1046,6 +1046,7 @@ final class ConstraintValidator {
       } else if (in.IN() != null) {
         // Avro and JSON hold a MULTISET of strings as a map, whose keys `in` tests.
         Schema target = ConstraintResolver.inTargetType(in, vctx);
+        refuseEntryMap(target, in, "IN over", vctx);
         if (target != null && target.getType() == Schema.Type.MULTISET
             && target.getElementType().getType() != Schema.Type.VARCHAR
             && target.getElementType().getType() != Schema.Type.CHAR) {
@@ -1218,9 +1219,10 @@ final class ConstraintValidator {
   /**
    * Reject literal NULL args in GREATEST/LEAST/NULLIF/COALESCE. Strict
    * cel-java accepts {@code null} as a typed value, but our SQL semantic
-   * is that a literal NULL in these contexts is dead code (NULLIF: never
-   * matches; COALESCE: never the first non-null; GREATEST/LEAST: always
-   * NULL). Direct the user to IS NULL or to drop the NULL argument.
+   * is that a literal NULL in these contexts is dead code (NULLIF: always
+   * NULL first, never matches second; COALESCE: never the first non-null;
+   * GREATEST/LEAST: always NULL). Direct the user to IS NULL or to drop
+   * the NULL argument.
    */
   private static void rejectLiteralNullArgs(
       String name, List<LogicalTypesParser.Check_exprContext> args) {
@@ -1228,9 +1230,10 @@ final class ConstraintValidator {
       if (ConstraintResolver.isLiteralNull(arg)) {
         throw locatedError(arg,
             name + "() cannot take a literal NULL, which is dead code there: "
-                + "COALESCE skips it, NULLIF never matches it, and it makes "
-                + "GREATEST and LEAST always NULL. Drop the NULL argument or "
-                + "use IS NULL to test for null.");
+                + "COALESCE skips it, NULLIF is always NULL with it first and "
+                + "never matches it second, and it makes GREATEST and LEAST "
+                + "always NULL. Drop the NULL argument or use IS NULL to test "
+                + "for null.");
       }
     }
   }

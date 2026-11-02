@@ -72,8 +72,8 @@ final class ConstraintNullTest {
         continue;
       }
       LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-      String elements = in.IN() == null ? NEVER : ofElements(in);
-      if (elements == null) {
+      String test = in.IN() == null ? of(in.check_expr_like()) : ofIn(in);
+      if (test == null && in.IN() != null) {
         if (!ConstraintEmitter.givesNullAsNull(in)) {
           return null;
         }
@@ -82,9 +82,7 @@ final class ConstraintNullTest {
         tests.add("dyn(" + emitted + ") == null");
         continue;
       }
-      // An IN over elements never NULL is NULL exactly when its subject or array is.
-      tests.add(elements);
-      tests.add(of(in.check_expr_like()));
+      tests.add(test);
     }
     return any(tests);
   }
@@ -121,10 +119,13 @@ final class ConstraintNullTest {
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       LogicalTypesParser.CheckFuncContext func = (LogicalTypesParser.CheckFuncContext) c;
       if (isQuantifier(func)) {
-        StringBuilder whenTrue = new StringBuilder();
-        StringBuilder whenFalse = new StringBuilder();
-        return neither(ConstraintEmitter.emitQuantifierTruth(func, true, whenTrue)
-            | ConstraintEmitter.emitQuantifierTruth(func, false, whenFalse), whenTrue, whenFalse);
+        // Cached, as each nested quantifier's would otherwise be emitted twice per level.
+        return ConstraintEmitter.cachedNullTest(func, () -> {
+          StringBuilder whenTrue = new StringBuilder();
+          StringBuilder whenFalse = new StringBuilder();
+          return neither(ConstraintEmitter.emitQuantifierTruth(func, true, whenTrue)
+              | ConstraintEmitter.emitQuantifierTruth(func, false, whenFalse), whenTrue, whenFalse);
+        });
       }
       List<LogicalTypesParser.Check_exprContext> inputs = valueTestedInputs(func.func_expr());
       if (inputs != null) {
@@ -512,13 +513,13 @@ final class ConstraintNullTest {
         : "(!" + whenTrue + " && !" + whenFalse + ")";
   }
 
-  // An IN's test beyond its subject's when its elements are never NULL: the array's, or none.
-  private static String ofElements(LogicalTypesParser.Check_expr_inContext in) {
+  // An IN's test when its elements are never NULL; null when one may be.
+  private static String ofIn(LogicalTypesParser.Check_expr_inContext in) {
+    String subject = of(in.check_expr_like());
     if (in.in_target() instanceof LogicalTypesParser.InTargetExprContext) {
       ConstraintValidationContext vctx = EMIT_VCTX.get();
-      Schema element = vctx == null ? null : ConstraintResolver.inArrayElementType(in, vctx);
-      return element != null && !element.isNullable()
-          ? of(((LogicalTypesParser.InTargetExprContext) in.in_target()).check_expr_like()) : null;
+      Schema type = vctx == null ? null : ConstraintResolver.inTargetType(in, vctx);
+      return type != null && holdsNoNull(type) ? ofCollectionIn(in, subject) : null;
     }
     for (LogicalTypesParser.Check_exprContext item
         : ((LogicalTypesParser.InTargetParenListContext) in.in_target())
@@ -527,7 +528,41 @@ final class ConstraintNullTest {
         return null;
       }
     }
-    return NEVER;
+    return subject;
+  }
+
+  // An array of elements never NULL, or a MULTISET of strings or a MAP with string keys, held
+  // as a map whose keys never are.
+  private static boolean holdsNoNull(Schema type) {
+    switch (type.getType()) {
+      case ARRAY:
+        return !type.getElementType().isNullable();
+      case MULTISET:
+        return isString(type.getElementType());
+      case MAP:
+        return isString(type.getKeyType());
+      default:
+        return false;
+    }
+  }
+
+  private static boolean isString(Schema type) {
+    return type.getType() == Schema.Type.VARCHAR || type.getType() == Schema.Type.CHAR;
+  }
+
+  /**
+   * The test of an IN over a collection: NULL when the collection is, or when the subject is
+   * and the collection isn't empty, as SQL's = ANY over no elements is FALSE whatever it is.
+   */
+  static String ofCollectionIn(LogicalTypesParser.Check_expr_inContext in, String subject) {
+    LogicalTypesParser.Check_expr_likeContext target =
+        ((LogicalTypesParser.InTargetExprContext) in.in_target()).check_expr_like();
+    String collection = of(target);
+    if (subject == null || collection == null) {
+      return null;
+    }
+    return either(collection, NEVER.equals(subject) ? NEVER
+        : "(" + subject + " && " + ConstraintEmitter.collectionSize(target) + " > 0)");
   }
 
   // NULL when any input is.

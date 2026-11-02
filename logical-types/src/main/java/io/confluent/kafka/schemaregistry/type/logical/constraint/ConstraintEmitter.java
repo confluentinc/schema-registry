@@ -419,27 +419,43 @@ final class ConstraintEmitter {
     // Timestamp: CEL's native `in` works on timestamps once the column LHS and
     // any column elements are normalized — emit the same `x in [...]` shape via
     // the timestamp-value cascade (no per-element rewrite needed, unlike decimal).
+    String guard = emptyGuard(ctx);
+    boolean wrapped = negated || !guard.isEmpty();
+    if (wrapped) {
+      sb.append(negated ? "!(" : "(");
+    }
+    sb.append(guard);
     if (vctx != null && inTargetHasTemporal(ctx, vctx)) {
-      if (negated) {
-        sb.append("!(");
-      }
       emitTimestampValueLike(ctx.check_expr_like(), sb);
       sb.append(" in ");
       emitTimestampInTarget(ctx.in_target(), sb);
-      if (negated) {
-        sb.append(")");
-      }
-      return;
+    } else {
+      visitLike(ctx.check_expr_like(), sb);
+      sb.append(" in ");
+      visitInTarget(ctx.in_target(), sb);
     }
-    if (negated) {
-      sb.append("!(");
-    }
-    visitLike(ctx.check_expr_like(), sb);
-    sb.append(" in ");
-    visitInTarget(ctx.in_target(), sb);
-    if (negated) {
+    if (wrapped) {
       sb.append(")");
     }
+  }
+
+  // Before a match against a collection: false over an empty one, without evaluating a subject
+  // that may be NULL, or absent on JSON, as SQL's = ANY over no elements is FALSE.
+  private static String emptyGuard(LogicalTypesParser.Check_expr_inContext ctx) {
+    if (EMIT_VCTX.get() == null
+        || !(ctx.in_target() instanceof LogicalTypesParser.InTargetExprContext)
+        || ConstraintNullTest.NEVER.equals(ConstraintNullTest.of(ctx.check_expr_like()))) {
+      return "";
+    }
+    return collectionSize(((LogicalTypesParser.InTargetExprContext) ctx.in_target())
+        .check_expr_like()) + " == 0 ? false : ";
+  }
+
+  // The size of the collection an IN tests.
+  static String collectionSize(LogicalTypesParser.Check_expr_likeContext target) {
+    StringBuilder cel = new StringBuilder();
+    visitLike(target, cel);
+    return "size(" + typedCollection(cel) + ")";
   }
 
   /**
@@ -540,8 +556,7 @@ final class ConstraintEmitter {
 
   /**
    * True if an element of the array an IN tests may be NULL, and the inputs of its subject and
-   * array tell. One whose elements never are is NULL exactly when its subject or array is, so
-   * is emitted as before.
+   * array tell. One whose elements never are is emitted as before, NULL as its inputs tell.
    */
   static boolean inArrayElementMayBeNull(LogicalTypesParser.Check_expr_inContext ctx) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
@@ -558,15 +573,16 @@ final class ConstraintEmitter {
   }
 
   /**
-   * SQL's {@code x IN arr}: NULL when {@code x} or {@code arr} is, else TRUE on a match, else
-   * NULL when an element is NULL, else FALSE; NOT IN negates it, keeping NULL.
+   * SQL's {@code x IN arr}: NULL when {@code arr} is, or {@code x} is and {@code arr} isn't
+   * empty, else TRUE on a match, else NULL when an element is NULL, else FALSE; NOT IN negates
+   * it, keeping NULL.
    */
   private static void emitInArrayMayBeNull(
       LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     LogicalTypesParser.Check_expr_likeContext array =
         ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
-    StringBuilder match = new StringBuilder();
+    StringBuilder match = new StringBuilder(emptyGuard(ctx));
     if (inTargetHasTemporal(ctx, vctx)) {
       emitTimestampValueLike(ctx.check_expr_like(), match);
       match.append(" in ");
@@ -577,7 +593,7 @@ final class ConstraintEmitter {
       visitInTarget(ctx.in_target(), match);
     }
     if (vctx.isTypeOnly()) {
-      sb.append(negated ? "!(" + match + ")" : match);
+      sb.append(negated ? "!(" : "(").append(match).append(')');
       return;
     }
     StringBuilder noMatch = new StringBuilder("((");
@@ -586,8 +602,8 @@ final class ConstraintEmitter {
         .append(negated ? "true" : "false").append(')');
     String unlessNull = "((" + match + ") ? " + (negated ? "false" : "true") + " : "
         + noMatch + ")";
-    String isNull = ConstraintNullTest.either(ConstraintNullTest.of(ctx.check_expr_like()),
-        ConstraintNullTest.of(array));
+    String isNull = ConstraintNullTest.ofCollectionIn(ctx,
+        ConstraintNullTest.of(ctx.check_expr_like()));
     if (ConstraintNullTest.NEVER.equals(isNull)) {
       sb.append(unlessNull);
     } else {
