@@ -1224,9 +1224,14 @@ class CheckConstraintTest {
 
   @Test
   void betweenWithLogical() {
-    assertEquals("!((((!has(this.age) || dyn(this.age) == null) ? false : !(0 <= this.age)) ||"
-            + " ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <= 150))) &&"
-            + " (!((!has(this.age) || dyn(this.age) == null))))",
+    assertEquals("!((((((!has(this.age) || dyn(this.age) == null) ? false : !(0 <= this.age)) ||"
+            + " ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <= 150))) ? false"
+            + " : (((!has(this.age) || dyn(this.age) == null) ? false : 0 <= this.age) &&"
+            + " ((!has(this.age) || dyn(this.age) == null) ? false : this.age <= 150))) ||"
+            + " (((!has(this.age) || dyn(this.age) == null)))) ? false : ((((!has(this.age) ||"
+            + " dyn(this.age) == null) ? false : !(0 <= this.age)) || ((!has(this.age) ||"
+            + " dyn(this.age) == null) ? false : !(this.age <= 150))) && (!((!has(this.age) ||"
+            + " dyn(this.age) == null)))))",
         translateCheck("age BETWEEN 0 AND 150 OR age IS NULL"));
   }
 
@@ -2401,8 +2406,9 @@ class CheckConstraintTest {
         + "CHECK (ANY(tags, t, t = 'admin'))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : this.tags.all(t,"
-            + " (dyn(t) == null ? false : !(t == 'admin'))))", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : (this.tags.exists(t,"
+            + " (dyn(t) == null ? false : (t == 'admin'))) ? false : this.tags.all(t, (dyn(t) =="
+            + " null ? false : !(t == 'admin')))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2448,8 +2454,11 @@ class CheckConstraintTest {
         + "CHECK (ANY(ages, a, a BETWEEN 18 AND 65))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : this.ages.all(a,"
-            + " ((dyn(a) == null ? false : !(18 <= a)) || (dyn(a) == null ? false : !(a <= 65)))))",
+    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : (this.ages.exists(a,"
+            + " (((dyn(a) == null ? false : !(18 <= a)) || (dyn(a) == null ? false : !(a <= 65)))"
+            + " ? false : ((dyn(a) == null ? false : 18 <= a) && (dyn(a) == null ? false : a <="
+            + " 65)))) ? false : this.ages.all(a, ((dyn(a) == null ? false : !(18 <= a)) ||"
+            + " (dyn(a) == null ? false : !(a <= 65))))))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -3751,6 +3760,45 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullDoesNotHideAnError() throws Exception {
+    // A NULL operand decides neither AND nor OR, nor a quantifier or BETWEEN, so another's error
+    // still fails the CHECK, as SQL's does; a TRUE or FALSE one still decides it.
+    String columns = "ni INT, z INT NOT NULL, i INT NOT NULL, an INT ARRAY NOT NULL";
+    Map<String, Object> absent = Map.of("z", 0, "i", 5, "an", Arrays.asList(null, 0));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    for (String sql : List.of("ni > 0 OR 1 / z > 0", "NOT (ni > 0 AND 1 / z > 0)",
+        "ANY(an, e, 1 / e > 0)", "NOT EVERY(an, e, 1 / e > 0)",
+        "NOT ((1 / z) BETWEEN ni AND 5)", "CASE WHEN ni > 0 AND 1 / z > 0 THEN 1 ELSE 2 END = 2")) {
+      String cel = translateCheckOver(columns, sql);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        assertThrows(CelEvaluationException.class, () -> evalOver(cel, self),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+    for (String sql : List.of("i > 0 OR ni > 0 OR 1 / z > 0",
+        "NOT (i < 0 AND ni > 0 AND 1 / z > 0)")) {
+      String cel = translateCheckOver(columns, sql);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        assertEquals(true, evalOver(cel, self), sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aReservedNameOfANullStructIsNull() throws Exception {
+    // has() can't take r["in"], so the path is tested step by step: a NULL r gives NULL.
+    String columns = "r STRUCT(`in` INT NOT NULL)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("r", null);
+    String cel = translateCheckOver(columns, "COALESCE(r.`in`, 7) = 7");
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of())) {
+      assertEquals(true, evalOver(cel, self), self + " -> " + cel);
+    }
+    assertEquals(false, evalOver(cel, Map.of("r", Map.of("in", 5))), cel);
+  }
+
+  @Test
   void anIsNullOfAPredicateKeepsItsOperandsErrors() throws Exception {
     // A predicate's CEL may be || or &&, which hide an error once compared, so IS NULL tests its
     // value as a ternary's condition, and a division by zero or bad JSON fails as SQL's does.
@@ -3786,7 +3834,7 @@ class CheckConstraintTest {
         + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL, "
         + "mi MAP<STRING, INT> NOT NULL, ai INT NOT NULL ARRAY NOT NULL";
     for (String sql : List.of("i NOT IN mm['k']", "s NOT IN ma['k']", "LENGTH(mi['k']) = 1",
-        "i IN ai[1]")) {
+        "i IN ai[1]", "LENGTH((mi['k'])) = 1")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("strict type-check"), e.getMessage());
@@ -3795,7 +3843,7 @@ class CheckConstraintTest {
         "mms", Map.of("k", Map.of("a", 1)), "ma", Map.of("k", List.of(5)));
     for (String sql : List.of("s IN mm['k']", "(s IN mm['k']) IS NOT NULL",
         "COALESCE(s IN mm['k'], s = 'b')", "COALESCE(ns IN mms['k'], FALSE)",
-        "LENGTH(ma['k']) = 1")) {
+        "LENGTH(ma['k']) = 1", "LENGTH((ma['k'])) = 1")) {
       String cel = translateCheckOver(columns, sql);
       assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
     }
