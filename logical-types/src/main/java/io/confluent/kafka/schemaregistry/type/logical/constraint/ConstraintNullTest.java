@@ -370,7 +370,8 @@ final class ConstraintNullTest {
   }
 
   /**
-   * True if {@code func} is EVERY or ANY, whose three values emitTruth folds over the elements.
+   * True if {@code func} is EVERY, ANY or ONE, whose three values emitTruth folds over the
+   * elements.
    */
   static boolean isQuantifier(LogicalTypesParser.CheckFuncContext func) {
     LogicalTypesParser.Func_applicationContext app = func.func_expr().func_application();
@@ -379,7 +380,7 @@ final class ConstraintNullTest {
       return false;
     }
     String name = app.identifier().getText().toUpperCase(Locale.ROOT);
-    return "EVERY".equals(name) || "ANY".equals(name);
+    return "EVERY".equals(name) || "ANY".equals(name) || "ONE".equals(name);
   }
 
   // The inputs of a function NULL either when one is or when its value is missing, which its

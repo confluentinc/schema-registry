@@ -75,9 +75,22 @@ final class ConstraintEmitter {
         new IdentityHashMap<>();
     private final Map<ConstraintValidationContext, Map<ParseTree, ConstraintValidationContext>>
         bodies = new IdentityHashMap<>();
+    private final Map<ConstraintValidationContext, Map<ParseTree, Truth[]>> truths =
+        new IdentityHashMap<>();
 
     EmitCache(String sourceSql) {
       this.sourceSql = sourceSql;
+    }
+  }
+
+  // A quantifier body's emitTruth in one truth, with its flags.
+  private static final class Truth {
+    private final String cel;
+    private final int flags;
+
+    Truth(String cel, int flags) {
+      this.cel = cel;
+      this.flags = flags;
     }
   }
 
@@ -645,8 +658,10 @@ final class ConstraintEmitter {
     } else {
       // IN <list-field>: the field is a list of timestamps; CEL `in` handles it
       // natively. The receiver still normalizes via the cascade (field ref).
+      StringBuilder target = new StringBuilder();
       emitTimestampValueLike(
-          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), sb);
+          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
+      sb.append(typedCollection(target));
     }
   }
 
@@ -737,8 +752,9 @@ final class ConstraintEmitter {
       }
       sb.append("]");
     } else if (ctx instanceof LogicalTypesParser.InTargetExprContext) {
-      visitLike(
-          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), sb);
+      StringBuilder target = new StringBuilder();
+      visitLike(((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
+      sb.append(typedCollection(target));
     } else {
       throw new ValidationException(
           "Unrecognized in_target subtype: " + ctx.getClass().getSimpleName());
@@ -851,22 +867,29 @@ final class ConstraintEmitter {
         : ConstraintNullTest.told(ConstraintNullTest.of(operand), operand);
     String category = operand.check_expr_between().size() == 1 && vctx != null
         ? ConstraintResolver.coercedNumericCategory(operand.check_expr_between(0), vctx) : null;
-    StringBuilder value = new StringBuilder("dyn(");
+    StringBuilder emitted = new StringBuilder();
     if ("decimal".equals(category) || "double".equals(category)) {
-      emitNumericBetweenAs(operand.check_expr_between(0), category, value);
+      emitNumericBetweenAs(operand.check_expr_between(0), category, emitted);
     } else {
-      visitCompare(operand, value);
+      visitCompare(operand, emitted);
     }
-    value.append(") == null");
+    String value = "dyn(" + emitted + ") == null";
     if (byInputs == null || vctx != null && vctx.isTypeOnly()) {
-      sb.append(negated ? ConstraintNullTest.not(value.toString()) : value);
+      sb.append(negated ? ConstraintNullTest.not(value) : value);
     } else if (byInputs.contains(value)) {
-      // The test evaluates it already, as a VARIANT_GET's or a subscript's does.
-      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
+      // The test evaluates it already, as a VARIANT_GET's or a subscript's does. Ternaries, as
+      // cel-java's || and && hide an error once their result is compared.
+      sb.append('(').append(byInputs).append(negated ? " ? false : true)" : " ? true : false)");
     } else {
-      // A ternary, as cel-java's || hides an error once its result is compared.
+      // A predicate's CEL may be || or && itself, so its value is a ternary's condition too:
+      // its inputs tell it isn't NULL there.
+      Schema type = vctx == null ? null
+          : ConstraintResolver.tryResolveCompareValueType(operand, vctx);
+      String ofValue = type != null && type.getType() == Schema.Type.BOOLEAN
+          ? "(" + emitted + (negated ? " ? true : true)" : " ? false : false)")
+          : negated ? ConstraintNullTest.not(value) : value;
       sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ")
-          .append(negated ? ConstraintNullTest.not(value.toString()) : value).append(')');
+          .append(ofValue).append(')');
     }
   }
 
@@ -2635,9 +2658,9 @@ final class ConstraintEmitter {
   }
 
   /**
-   * {@link #emitTruth} of EVERY or ANY: EVERY is TRUE when its body is TRUE for every element and
-   * FALSE when it is FALSE for any, ANY the other way round, and both are NULL over a NULL
-   * collection. One with nothing that may be NULL is emitted as before.
+   * {@link #emitTruth} of EVERY, ANY or ONE: EVERY is TRUE when its body is TRUE for every element
+   * and FALSE when it is FALSE for any, ANY the other way round, ONE TRUE for exactly one, and
+   * all are NULL over a NULL collection. One with nothing that may be NULL is emitted as before.
    */
   static int emitQuantifierTruth(
       LogicalTypesParser.CheckFuncContext func, boolean truth, StringBuilder sb) {
@@ -2655,11 +2678,17 @@ final class ConstraintEmitter {
     String iterVar = ConstraintFunctions.extractIterationVar(args.get(1), name);
     ConstraintValidationContext body = bodyContext(app, outer, () -> outer.withBinding(iterVar,
         ConstraintResolver.resolveCollectionElementType(args.get(0), outer)));
+    // ONE takes both of its body's truths.
+    boolean one = "ONE".equals(name);
     StringBuilder bodyTruth = new StringBuilder();
+    StringBuilder bodyFalse = new StringBuilder();
     int flags;
     EMIT_VCTX.set(body);
     try {
-      flags = emitTruth(args.get(2).check_expr_or(), truth, bodyTruth);
+      flags = cachedTruth(args.get(2).check_expr_or(), truth || one, bodyTruth);
+      if (one) {
+        flags |= cachedTruth(args.get(2).check_expr_or(), false, bodyFalse);
+      }
     } finally {
       EMIT_VCTX.set(outer);
     }
@@ -2669,12 +2698,46 @@ final class ConstraintEmitter {
       sb.append(')');
       return 0;
     }
-    StringBuilder fold = new StringBuilder();
-    emitWrappedReceiver(args.get(0), fold);
-    fold.append("EVERY".equals(name) == truth ? ".all(" : ".exists(").append(iterVar)
-        .append(", ").append(bodyTruth).append(')');
-    falseIfNull(collectionNull, fold.toString(), sb);
+    StringBuilder coll = new StringBuilder();
+    emitWrappedReceiver(args.get(0), coll);
+    String fold;
+    if (one) {
+      // TRUE when exactly one body is TRUE and every other FALSE; FALSE when two or more are
+      // TRUE, or all are FALSE.
+      String exactlyOne = coll + ".exists_one(" + iterVar + ", " + bodyTruth + ")";
+      fold = truth
+          ? "(" + exactlyOne + " && " + coll + ".all(" + iterVar + ", " + bodyTruth + " || "
+              + bodyFalse + "))"
+          : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
+              + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
+    } else {
+      fold = coll + ("EVERY".equals(name) == truth ? ".all(" : ".exists(") + iterVar + ", "
+          + bodyTruth + ")";
+    }
+    falseIfNull(collectionNull, fold, sb);
     return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
+  }
+
+  // A quantifier body's emitTruth, once per translation, context and truth. ONE repeats it, so
+  // one over CEL's size limit is refused at once, before nesting multiplies it.
+  private static int cachedTruth(
+      LogicalTypesParser.Check_expr_orContext body, boolean truth, StringBuilder sb) {
+    EmitCache cache = EMIT_CACHE.get();
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (cache == null || vctx == null) {
+      return emitTruth(body, truth, sb);
+    }
+    Truth[] held = cache.truths.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
+        .computeIfAbsent(body, k -> new Truth[2]);
+    int at = truth ? 0 : 1;
+    if (held[at] == null) {
+      StringBuilder cel = new StringBuilder();
+      int flags = emitTruth(body, truth, cel);
+      held[at] = new Truth(cel.toString(), flags);
+      ConstraintCelChecker.checkSize(held[at].cel, true, cache.sourceSql);
+    }
+    sb.append(held[at].cel);
+    return held[at].flags;
   }
 
   /**
@@ -2759,7 +2822,7 @@ final class ConstraintEmitter {
 
   // A collection for size() or in: cel-java types a subscript of dyn as the first overload's
   // argument (size(m['k']) as a string's), unless it's dyn() itself.
-  private static String typedCollection(CharSequence prefix) {
+  static String typedCollection(CharSequence prefix) {
     char last = prefix.charAt(prefix.length() - 1);
     return last == ']' || last == ')' ? "dyn(" + prefix + ")" : prefix.toString();
   }

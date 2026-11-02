@@ -452,8 +452,8 @@ final class ConstraintValidator {
     }
   }
 
-  // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
-  // subscript or quantifier would read as a list.
+  // Avro and JSON hold a MAP without string keys, or a MULTISET of non-strings, as entries,
+  // which a subscript, quantifier, IN or comparison would read as a list.
   private static void refuseEntryMap(
       Schema map, ParserRuleContext node, String use,
       ConstraintValidationContext vctx) {
@@ -464,6 +464,13 @@ final class ConstraintValidator {
       throw locatedError(node, use + " a MAP with " + resolved.getKeyType().getType()
           + " keys is not supported: it is held as entries of a key and its value, so it "
           + "would be read as a list. A MAP with string keys is supported.");
+    }
+    if (resolved != null && resolved.getType() == Schema.Type.MULTISET
+        && resolved.getElementType().getType() != Schema.Type.VARCHAR
+        && resolved.getElementType().getType() != Schema.Type.CHAR) {
+      throw locatedError(node, use + " a MULTISET of " + resolved.getElementType().getType()
+          + " is not supported: it is held as entries of a value and its count, so it would "
+          + "be read as a list. A MULTISET of strings is supported.");
     }
   }
 
@@ -573,6 +580,11 @@ final class ConstraintValidator {
     }
     Schema lhsType = ConstraintResolver.tryResolveCompareOperandType(lhs, vctx);
     Schema rhsType = ConstraintResolver.tryResolveCompareOperandType(rhs, vctx);
+    if (isEquality) {
+      // Entries compare in their order, but a MAP's or MULTISET's don't have one.
+      refuseEntryMap(lhsType, cmp, "Comparing", vctx);
+      refuseEntryMap(rhsType, cmp, "Comparing", vctx);
+    }
     // Cross-category check for EQUALITY operators only. CEL spec: `==`/`!=`
     // accept any two types and return false for type mismatch — strict
     // cel-java accepts `int == string`. SQL semantics treats this as a
@@ -1046,7 +1058,6 @@ final class ConstraintValidator {
       } else if (in.IN() != null) {
         // Avro and JSON hold a MULTISET of strings as a map, whose keys `in` tests.
         Schema target = ConstraintResolver.inTargetType(in, vctx);
-        refuseEntryMap(target, in, "IN over", vctx);
         if (target != null && target.getType() == Schema.Type.MULTISET
             && target.getElementType().getType() != Schema.Type.VARCHAR
             && target.getElementType().getType() != Schema.Type.CHAR) {
@@ -1054,6 +1065,7 @@ final class ConstraintValidator {
               + " is not supported: it is held as entries of a value and its count, so no "
               + "value would ever match. A MULTISET of strings, held as a map, is supported.");
         }
+        refuseEntryMap(target, in, "IN over", vctx);
       }
     }
     if (recurseIntoMacro(node, vctx,
