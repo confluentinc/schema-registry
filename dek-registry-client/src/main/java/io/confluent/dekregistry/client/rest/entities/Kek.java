@@ -16,6 +16,7 @@
 
 package io.confluent.dekregistry.client.rest.entities;
 
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.RESTRICT_AMBIENT_CREDENTIALS;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -134,6 +135,9 @@ public class Kek {
     Map<String, Object> props = new HashMap<>(getKmsProps());
     if (configs.containsKey(TEST_CLIENT)) {
       props.put(TEST_CLIENT, configs.get(TEST_CLIENT));
+    }
+    if (configs.containsKey(RESTRICT_AMBIENT_CREDENTIALS)) {
+      props.put(RESTRICT_AMBIENT_CREDENTIALS, configs.get(RESTRICT_AMBIENT_CREDENTIALS));
     }
     return new AeadWrapper(props, getKmsType(), getKmsKeyId());
   }
