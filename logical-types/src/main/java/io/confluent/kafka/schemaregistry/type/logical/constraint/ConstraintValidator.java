@@ -192,9 +192,10 @@ final class ConstraintValidator {
       return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // CASE branches' types are not tracked in v1; assume the user knows
-      // what they're doing and accept (defer to runtime CEL type-check).
-      return true;
+      // One whose branches' type doesn't resolve is accepted, as before.
+      Schema type = ConstraintResolver.tryResolveCaseExprType(
+          ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
+      return type == null || type.getType() == Schema.Type.BOOLEAN;
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);

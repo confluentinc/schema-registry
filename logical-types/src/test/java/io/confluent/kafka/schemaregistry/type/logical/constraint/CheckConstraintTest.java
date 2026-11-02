@@ -3359,6 +3359,21 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNumericCaseIsNotACheck() {
+    // A CASE, or a COALESCE or NULLIF of them, is a CHECK only when its branches are BOOLEANs.
+    String columns = "t BOOLEAN NOT NULL, nt BOOLEAN";
+    for (String sql : List.of("CASE WHEN t THEN 1 ELSE 2 END",
+        "COALESCE(CASE WHEN t THEN 1 ELSE 2 END, CASE WHEN t THEN 3 ELSE 4 END)",
+        "NULLIF(CASE WHEN t THEN 1 ELSE 2 END, 1)")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("must yield a boolean"), e.getMessage());
+    }
+    translateCheckOver(columns, "CASE WHEN t THEN t ELSE NOT t END");
+    translateCheckOver(columns, "COALESCE(CASE WHEN t THEN nt ELSE t END, FALSE)");
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
