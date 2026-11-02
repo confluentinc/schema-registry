@@ -661,7 +661,7 @@ final class ConstraintEmitter {
       StringBuilder target = new StringBuilder();
       emitTimestampValueLike(
           ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
-      sb.append(typedCollection(target));
+      sb.append(typedSubscript(target));
     }
   }
 
@@ -754,7 +754,7 @@ final class ConstraintEmitter {
     } else if (ctx instanceof LogicalTypesParser.InTargetExprContext) {
       StringBuilder target = new StringBuilder();
       visitLike(((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
-      sb.append(typedCollection(target));
+      sb.append(typedSubscript(target));
     } else {
       throw new ValidationException(
           "Unrecognized in_target subtype: " + ctx.getClass().getSimpleName());
@@ -876,6 +876,8 @@ final class ConstraintEmitter {
     String value = "dyn(" + emitted + ") == null";
     if (byInputs == null || vctx != null && vctx.isTypeOnly()) {
       sb.append(negated ? ConstraintNullTest.not(value) : value);
+    } else if (byInputs.equals(value)) {
+      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
     } else if (byInputs.contains(value)) {
       // The test evaluates it already, as a VARIANT_GET's or a subscript's does. Ternaries, as
       // cel-java's || and && hide an error once their result is compared.
@@ -2822,9 +2824,15 @@ final class ConstraintEmitter {
 
   // A collection for size() or in: cel-java types a subscript of dyn as the first overload's
   // argument (size(m['k']) as a string's), unless it's dyn() itself.
-  static String typedCollection(CharSequence prefix) {
+  private static String typedCollection(CharSequence prefix) {
     char last = prefix.charAt(prefix.length() - 1);
     return last == ']' || last == ')' ? "dyn(" + prefix + ")" : prefix.toString();
+  }
+
+  // An operand of size() or in given as dyn when it's a subscript, as typedCollection gives
+  // one; any other keeps its type, for the strict check.
+  static String typedSubscript(CharSequence cel) {
+    return cel.charAt(cel.length() - 1) == ']' ? "dyn(" + cel + ")" : cel.toString();
   }
 
   // An IN whose three-valued CEL gives NULL as null.

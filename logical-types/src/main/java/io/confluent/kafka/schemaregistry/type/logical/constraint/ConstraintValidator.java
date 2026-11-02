@@ -326,7 +326,7 @@ final class ConstraintValidator {
           }
           // Validate the collection (arg 0) in the outer context.
           validateColumnRefs(args.get(0), vctx);
-          refuseEntryMap(ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx),
+          refuseEntryCollection(ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx),
               args.get(0), name + " over", vctx);
           // Skip arg 1 (the iteration var binding name itself); validate the
           // predicate body (arg 2) in a context that includes the binding,
@@ -452,8 +452,8 @@ final class ConstraintValidator {
     }
   }
 
-  // Avro and JSON hold a MAP without string keys, or a MULTISET of non-strings, as entries,
-  // which a subscript, quantifier, IN or comparison would read as a list.
+  // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
+  // subscript, quantifier, IN or comparison would read as a list.
   private static void refuseEntryMap(
       Schema map, ParserRuleContext node, String use,
       ConstraintValidationContext vctx) {
@@ -465,6 +465,14 @@ final class ConstraintValidator {
           + " keys is not supported: it is held as entries of a key and its value, so it "
           + "would be read as a list. A MAP with string keys is supported.");
     }
+  }
+
+  // Likewise a MULTISET of non-strings, held as entries of a value and its count.
+  private static void refuseEntryCollection(
+      Schema collection, ParserRuleContext node, String use,
+      ConstraintValidationContext vctx) {
+    refuseEntryMap(collection, node, use, vctx);
+    Schema resolved = ConstraintResolver.resolveIfNamedRef(collection, vctx);
     if (resolved != null && resolved.getType() == Schema.Type.MULTISET
         && resolved.getElementType().getType() != Schema.Type.VARCHAR
         && resolved.getElementType().getType() != Schema.Type.CHAR) {
@@ -582,8 +590,8 @@ final class ConstraintValidator {
     Schema rhsType = ConstraintResolver.tryResolveCompareOperandType(rhs, vctx);
     if (isEquality) {
       // Entries compare in their order, but a MAP's or MULTISET's don't have one.
-      refuseEntryMap(lhsType, cmp, "Comparing", vctx);
-      refuseEntryMap(rhsType, cmp, "Comparing", vctx);
+      refuseEntryCollection(lhsType, cmp, "Comparing", vctx);
+      refuseEntryCollection(rhsType, cmp, "Comparing", vctx);
     }
     // Cross-category check for EQUALITY operators only. CEL spec: `==`/`!=`
     // accept any two types and return false for type mismatch — strict

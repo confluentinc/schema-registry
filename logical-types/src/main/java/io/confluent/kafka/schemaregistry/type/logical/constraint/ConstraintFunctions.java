@@ -84,7 +84,7 @@ final class ConstraintFunctions {
         if (args.size() == 1) {
           StringBuilder arg = new StringBuilder();
           visitCheckExpr(args.get(0), arg);
-          sb.append("size(").append(ConstraintEmitter.typedCollection(arg)).append(')');
+          sb.append("size(").append(ConstraintEmitter.typedSubscript(arg)).append(')');
         } else {
           emitMethodCall(ctx, args, "size", -1, sb, name);
         }
