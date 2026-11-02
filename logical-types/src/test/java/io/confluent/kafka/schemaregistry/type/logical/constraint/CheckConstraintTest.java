@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -3301,6 +3302,35 @@ class CheckConstraintTest {
             sql + " on " + self.keySet() + " -> " + cel);
       }
     }
+  }
+
+  @Test
+  void aBooleanCoalesceOrNullifMayBeTheWholeCheck() throws Exception {
+    // A COALESCE or NULLIF of BOOLEANs is a BOOLEAN, as a CASE of them is.
+    String columns = "i INT NOT NULL, ni INT, nt BOOLEAN, nx DOUBLE, "
+        + "arr INT NOT NULL ARRAY NOT NULL";
+    for (Object[] c : new Object[][] {{"COALESCE(i IN arr, TRUE)", 1, null, true},
+        {"COALESCE(i IN arr, TRUE)", 5, null, false}, {"COALESCE(nt, TRUE)", 1, null, true},
+        {"NULLIF(i IN arr, TRUE)", 5, null, false},
+        {"COALESCE(nx BETWEEN SYMMETRIC (LENGTH('a')) AND nx, FALSE)", 1, null, false},
+        {"COALESCE(nx BETWEEN SYMMETRIC (LENGTH('a')) AND nx, FALSE)", 1, 1.0, true}}) {
+      Map<String, Object> present = new HashMap<>();
+      present.put("i", c[1]);
+      present.put("arr", List.of(1, -2));
+      present.put("ni", null);
+      present.put("nt", null);
+      present.put("nx", c[2]);
+      Map<String, Object> absent = new HashMap<>(present);
+      absent.values().removeIf(Objects::isNull);
+      String cel = translateCheckOver(columns, (String) c[0]);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+        assertEquals(c[3], CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            c[0] + " on " + self + " -> " + cel);
+      }
+    }
+    assertThrows(ValidationException.class, () -> translateCheckOver(columns, "COALESCE(ni, 0)"));
   }
 
   @Test

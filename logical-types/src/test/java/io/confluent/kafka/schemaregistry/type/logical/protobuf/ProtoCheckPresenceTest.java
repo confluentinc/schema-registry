@@ -170,6 +170,20 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void aBooleanCoalesceMayBeTheWholeCheck() {
+    // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback.
+    String ddl = "STRUCT T (ni INT, nt BOOLEAN, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (COALESCE(ni IN arr, TRUE)), "
+        + "CONSTRAINT c2 CHECK (COALESCE(nt, TRUE)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

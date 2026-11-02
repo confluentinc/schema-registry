@@ -197,7 +197,7 @@ final class ConstraintValidator {
       return true;
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr());
+      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);
     }
     return false;
   }
@@ -217,7 +217,8 @@ final class ConstraintValidator {
    * functions only; everything else assumed non-boolean (CASE handled
    * separately via "assume true" above).
    */
-  private static boolean isBooleanFunc(LogicalTypesParser.Func_exprContext fctx) {
+  private static boolean isBooleanFunc(
+      LogicalTypesParser.Func_exprContext fctx, ConstraintValidationContext vctx) {
     if (fctx.func_application() == null) {
       // Special-syntax forms: CAST(x AS BOOLEAN) and VARIANT_GET/TRY_VARIANT_GET
       // with RETURNING BOOLEAN are the boolean-returning ones; EXTRACT,
@@ -256,6 +257,11 @@ final class ConstraintValidator {
       case "ONE":
       case "VARIANT_IS_NULL":
         return true;
+      case "COALESCE":
+      case "NULLIF":
+        // Of BOOLEANs, a BOOLEAN; a NULL result is refused, as a NULL CASE result is.
+        LogicalTypesParser.Check_expr_listContext args = fctx.func_application().check_expr_list();
+        return args != null && args.check_expr().stream().allMatch(a -> isBooleanShaped(a, vctx));
       default:
         return false;
     }
