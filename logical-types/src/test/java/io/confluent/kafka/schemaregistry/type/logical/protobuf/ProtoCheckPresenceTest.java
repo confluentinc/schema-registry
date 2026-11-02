@@ -175,6 +175,23 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetFieldInAOneBodyIsNull() {
+    // ONE over an unset nullable field is NULL, rather than matching its zero.
+    String ddl = "STRUCT T (ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN ONE(arr, e, e > ni) THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c2 CHECK (ONE(arr, e, e > ni) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    FieldDescriptor arr = descriptor.findFieldByName("arr");
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(arr, 1).addRepeatedField(arr, -2).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void aBooleanCoalesceMayBeTheWholeCheck() {
     // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback, but an
     // IN over an empty array is FALSE.

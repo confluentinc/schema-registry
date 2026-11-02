@@ -2325,7 +2325,7 @@ class CheckConstraintTest {
   @Test
   void oneExistsOne() {
     String script = "STRUCT T ("
-        + "addresses STRING ARRAY,"
+        + "addresses STRING NOT NULL ARRAY NOT NULL,"
         + "CHECK (ONE(addresses, a, STARTS_WITH(a, 'primary:')))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
@@ -3288,7 +3288,7 @@ class CheckConstraintTest {
     String columns = "i INT NOT NULL, x DOUBLE NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
         + "ni INT, nb BIGINT, nd DECIMAL(10, 2), nx DOUBLE, ns STRING";
     assertEquals("((!has(this.ni) || dyn(this.ni) == null) ? true"
-            + " : dyn((1 <= this.ni && this.ni <= 2)) == null)",
+            + " : ((1 <= this.ni && this.ni <= 2) ? false : false))",
         translateCheckOver(columns, "(ni BETWEEN 1 AND 2) IS NULL"));
     Map<String, Object> absent = Map.of("i", 0, "x", 0.5, "s", "a", "t", true);
     Map<String, Object> present = new HashMap<>(absent);
@@ -3514,7 +3514,7 @@ class CheckConstraintTest {
     // missing, as SQL gives it.
     String columns = "mv MAP<STRING, INT> NOT NULL, nm MAP<STRING, INT>, na INT NOT NULL ARRAY, "
         + "an INT ARRAY NOT NULL, i INT NOT NULL, ni INT";
-    assertEquals("(size(this.an) < 5 || dyn(this.an[(5) - 1]) == null)",
+    assertEquals("((size(this.an) < 5 || dyn(this.an[(5) - 1]) == null) ? true : false)",
         translateCheckOver(columns, "an[5] IS NULL"));
     Map<String, Object> mv = new HashMap<>();
     mv.put("k", null);
@@ -3569,12 +3569,11 @@ class CheckConstraintTest {
 
   @Test
   void anExpressionWhoseNullCantBeToldIsRefusedWhereTested() {
-    // Evaluated instead, ONE or VARIANT_IS_NULL could answer as if its NULL were a value, so a
-    // NULL test of one over a nullable input is refused; one over none is dead code.
+    // Evaluated instead, VARIANT_IS_NULL could answer as if its NULL were a value, so a NULL
+    // test of one over a nullable input is refused; ONE's is told, and one over none is dead.
     String columns = "ni INT, i INT NOT NULL, arr INT NOT NULL ARRAY NOT NULL, nv VARIANT";
-    for (String sql : List.of("ONE(arr, e, e > ni) IS NULL",
-        "COALESCE(ONE(arr, e, e > ni), TRUE) = TRUE", "VARIANT_IS_NULL(nv) IS NULL",
-        "CASE ONE(arr, e, e > ni) WHEN TRUE THEN 1 ELSE 2 END = 2")) {
+    for (String sql : List.of("VARIANT_IS_NULL(nv) IS NULL",
+        "COALESCE(VARIANT_IS_NULL(nv), TRUE) = TRUE")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("can't tell when"), e.getMessage());
@@ -3586,6 +3585,84 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aOneIsThreeValued() throws Exception {
+    // ONE is TRUE when exactly one body is TRUE and every other FALSE, FALSE when two or more are
+    // TRUE or all are FALSE, and NULL otherwise, as EVERY and ANY fold theirs.
+    String columns = "ni INT, nt BOOLEAN, arr INT NOT NULL ARRAY NOT NULL, "
+        + "an INT ARRAY NOT NULL, ae INT NOT NULL ARRAY NOT NULL";
+    assertEquals("this.arr.exists_one(e, e > 0)",
+        translateCheckOver(columns, "ONE(arr, e, e > 0)"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(0, null, 2));
+    absent.put("ae", List.of());
+    absent.put("nt", false);
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    Map<String, Object> one = new HashMap<>(absent);
+    one.put("ni", 1);
+    Map<List<Map<String, Object>>, List<String>> rows = Map.of(List.of(present, absent),
+        List.of("CASE WHEN ONE(an, e, e = ni OR nt) THEN 1 ELSE 2 END = 2",
+            "CASE WHEN ONE(arr, e, e > ni) THEN 1 ELSE 2 END = 2", "ONE(arr, e, e > ni) IS NULL",
+            "CASE ONE(arr, e, e > ni) WHEN TRUE THEN 1 ELSE 2 END = 2",
+            "COALESCE(ONE(arr, e, e > ni), TRUE)", "COALESCE(ONE(an, e, e = 0), FALSE) = FALSE",
+            "NOT ONE(ae, e, e > ni)", "ONE(an, e, e > 1) IS NULL"),
+        List.of(one), List.of("NOT ONE(an, e, e + ni > 0)", "ONE(arr, e, e >= ni)",
+            "NOT ONE(arr, e, e > ni)", "ONE(an, e, e > ni) IS NULL"));
+    for (Map.Entry<List<Map<String, Object>>, List<String>> row : rows.entrySet()) {
+      for (Map<String, Object> self : row.getKey()) {
+        for (String sql : row.getValue()) {
+          String cel = translateCheckOver(columns, sql);
+          assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+        }
+      }
+    }
+  }
+
+  @Test
+  void anIsNullOfAPredicateKeepsItsOperandsErrors() throws Exception {
+    // A predicate's CEL may be || or &&, which hide an error once compared, so IS NULL tests its
+    // value as a ternary's condition, and a division by zero or bad JSON fails as SQL's does.
+    String columns = "nb BIGINT, ni INT, ns STRING, an INT ARRAY NOT NULL, z INT NOT NULL";
+    Map<String, Object> bad = Map.of("nb", 40000L, "ni", 5, "ns", "not-json",
+        "an", Arrays.asList(1, null), "z", 0);
+    for (String sql : List.of("((nb / 0.00) IN (-1, 2.5)) IS NOT NULL",
+        "((nb / 0.00) BETWEEN 1 AND 2) IS NOT NULL", "((ni / z) BETWEEN 1 AND 2) IS NULL",
+        "NOT ((VARIANT_GET(PARSE_JSON(ns), '$.a') IS NULL) = TRUE)",
+        "NOT ((an[1 / z] IS NULL) = TRUE)")) {
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+    }
+    Map<String, Object> good = Map.of("nb", 5L, "ni", 4, "ns", "{}",
+        "an", Arrays.asList(1, null), "z", 2);
+    for (String sql : List.of("((nb / 2.5) IN (-1, 2.0)) IS NOT NULL",
+        "((nb / 2.5) BETWEEN 1 AND 2) IS NOT NULL", "((ni / z) BETWEEN 1 AND 2) IS NOT NULL",
+        "NOT ((VARIANT_GET(PARSE_JSON(ns), '$.a') IS NULL) = FALSE)",
+        "(an[4 / z] IS NULL) = TRUE")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, good), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void anInOrLengthOfASubscriptIsTypedAsDyn() throws Exception {
+    // cel-java types in and size() of a subscript by their first overload, a list's or a
+    // string's, so a map's or multiset's reached by one is given as dyn.
+    String columns = "s STRING NOT NULL, ns STRING, "
+        + "mm MAP<STRING, MAP<STRING, INT> NOT NULL> NOT NULL, "
+        + "mms MAP<STRING, STRING NOT NULL MULTISET NOT NULL> NOT NULL, "
+        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL";
+    Map<String, Object> self = Map.of("s", "a", "ns", "a", "mm", Map.of("k", Map.of("a", 1)),
+        "mms", Map.of("k", Map.of("a", 1)), "ma", Map.of("k", List.of(5)));
+    for (String sql : List.of("s IN mm['k']", "(s IN mm['k']) IS NOT NULL",
+        "COALESCE(s IN mm['k'], s = 'b')", "COALESCE(ns IN mms['k'], FALSE)",
+        "LENGTH(ma['k']) = 1")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
+    }
+  }
+
+  @Test
   void aNullInAnEmptyCollectionIsFalse() throws Exception {
     // SQL's = ANY over no elements is FALSE whatever its subject, as ANY() is, so a NULL IN an
     // empty array, MULTISET or MAP is FALSE, and NULL only in a non-empty one.
@@ -3593,7 +3670,7 @@ class CheckConstraintTest {
         + "ms STRING NOT NULL MULTISET NOT NULL, nms STRING NOT NULL MULTISET, "
         + "mv MAP<STRING, INT> NOT NULL";
     assertEquals("(((!has(this.ni) || dyn(this.ni) == null) && size(this.arr) > 0) ? true"
-            + " : dyn(((size(this.arr) == 0 ? false : this.ni in this.arr))) == null)",
+            + " : (((size(this.arr) == 0 ? false : this.ni in this.arr)) ? false : false))",
         translateCheckOver(columns, "(ni IN arr) IS NULL"));
     List<String> empty = List.of("ni NOT IN arr", "ni NOT IN an", "NOT (ni IN an)",
         "COALESCE(ni NOT IN arr, FALSE)", "(ni NOT IN arr) IS NOT NULL",
@@ -3660,14 +3737,19 @@ class CheckConstraintTest {
   @Test
   void aMapWithoutStringKeysIsNotReadAsAMap() {
     // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
-    // subscript, quantifier or IN would read as a list.
+    // subscript, quantifier, IN or comparison would read as a list, as a quantifier or
+    // comparison would a MULTISET of non-strings.
     String columns = "m MAP<INT, STRING> NOT NULL, nm MAP<INT, STRING>, "
-        + "sm MAP<STRING, INT> NOT NULL, r STRUCT(m MAP<BIGINT, INT>) NOT NULL";
+        + "sm MAP<STRING, INT> NOT NULL, r STRUCT(m MAP<BIGINT, INT>) NOT NULL, "
+        + "m2 MAP<INT, STRING> NOT NULL, msi INT NOT NULL MULTISET NOT NULL, "
+        + "msi2 INT NOT NULL MULTISET NOT NULL";
     for (String sql : List.of("m[1] = 'a'", "EVERY(m, k, k > 0)", "ANY(nm, k, k > 0)",
-        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))", "1 IN m")) {
+        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))", "1 IN m",
+        "ANY(msi, x, x = 5)", "EVERY(msi, x, x > 0)", "m = m2", "msi <> msi2")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
-      assertTrue(e.getMessage().contains("keys is not supported"), e.getMessage());
+      assertTrue(e.getMessage().contains("is not supported: it is held as entries"),
+          e.getMessage());
     }
     for (String sql : List.of("nm IS NULL", "sm['a'] > 0",
         "EVERY(sm, k, sm[k] > 0)", "'a' IN sm")) {
@@ -3915,16 +3997,16 @@ class CheckConstraintTest {
   @Test
   void variantTryParseJson() {
     // NULL when its input is, or for invalid JSON, which its CEL gives as null.
-    assertEquals("!((!has(this.value) || dyn(this.value) == null) "
-            + "|| dyn(variants.tryParseJson(this.value)) == null)",
+    assertEquals("(((!has(this.value) || dyn(this.value) == null) "
+            + "|| dyn(variants.tryParseJson(this.value)) == null) ? false : true)",
         translateCheck("TRY_PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantGetUntyped() {
     // 2-arg VARIANT_GET returns a sub-variant; IS NOT NULL is the existence test.
-    assertEquals("!((!has(this.data) || dyn(this.data) == null) "
-            + "|| dyn(variants.path(this.data, '$.addr')) == null)",
+    assertEquals("(((!has(this.data) || dyn(this.data) == null) "
+            + "|| dyn(variants.path(this.data, '$.addr')) == null) ? false : true)",
         translateCheck("VARIANT_GET(data, '$.addr') IS NOT NULL"));
   }
 
