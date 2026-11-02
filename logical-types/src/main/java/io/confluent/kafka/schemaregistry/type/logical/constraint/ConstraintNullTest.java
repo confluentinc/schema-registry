@@ -171,6 +171,11 @@ final class ConstraintNullTest {
     if (sub instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return NEVER;
     }
+    // A literal NULL has no type, so isn't taken for a VARIANT: its CAST is always NULL.
+    if (sub instanceof LogicalTypesParser.FuncCastContext && ConstraintResolver.isLiteralNull(
+        ((LogicalTypesParser.FuncCastContext) sub).check_expr())) {
+      return "true";
+    }
     if (sub instanceof LogicalTypesParser.FuncVariantGetContext
         || sub instanceof LogicalTypesParser.FuncTryVariantGetContext
         || sub instanceof LogicalTypesParser.FuncCastContext && isVariant(

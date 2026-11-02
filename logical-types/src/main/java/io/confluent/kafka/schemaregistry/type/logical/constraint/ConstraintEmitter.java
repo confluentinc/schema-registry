@@ -2517,10 +2517,13 @@ final class ConstraintEmitter {
         } else if (vctx != null
             && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
                 || ConstraintResolver.subtreeHasTemporal(when.check_expr(0), vctx))) {
-          // Native `==`, operands timestamp-normalized.
+          // Native `==`, operands timestamp-normalized and grouped, as a BETWEEN's && would
+          // otherwise bind to the last comparison.
+          sb.append('(');
           emitTimestampValueCheckExpr(caseArg, sb);
-          sb.append(" == ");
+          sb.append(") == (");
           emitTimestampValueCheckExpr(when.check_expr(0), sb);
+          sb.append(')');
         } else {
           emitWrappedReceiver(caseArg, sb);
           sb.append(" == ");

@@ -947,6 +947,12 @@ final class ConstraintFunctions {
       LogicalTypesParser.FuncCastContext ctx, StringBuilder sb) {
     LogicalTypesParser.PrimitiveTypeContext pt = ctx.castType().primitiveType();
     LogicalTypesParser.Check_exprContext arg = ctx.check_expr();
+    // A NULL's CAST is null, as int(null) would fail; the strict check still types it.
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ConstraintResolver.isLiteralNull(arg) && vctx != null && !vctx.isTypeOnly()) {
+      sb.append("dyn(null)");
+      return;
+    }
     boolean argDecimal = argIsDecimal(arg);
 
     if (isDecimalCastTarget(pt)) {
