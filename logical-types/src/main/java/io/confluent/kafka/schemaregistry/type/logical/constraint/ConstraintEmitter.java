@@ -2612,6 +2612,54 @@ final class ConstraintEmitter {
         truth, truth, sb);
   }
 
+  private static int emitTruth(
+      LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
+    if (not instanceof LogicalTypesParser.CheckExprNotContext) {
+      return emitTruth(
+          ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(), !truth, sb);
+    }
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
+    if (is.IS() == null) {
+      LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(is.check_expr_compare());
+      if (c instanceof LogicalTypesParser.CheckParenContext
+          && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
+        // Cached and size-checked, as nested AND and OR may repeat their operands.
+        return cachedTruth(
+            ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
+      }
+    }
+    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
+        && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
+        && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
+      // Its CEL gives NULL as null, which equals neither true nor false.
+      sb.append("(dyn(");
+      visitIs(is, sb);
+      sb.append(") == ").append(truth).append(')');
+      return MAY_BE_NULL;
+    }
+    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
+        && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
+      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
+    }
+    LogicalTypesParser.C_exprContext leaf =
+        is.IS() == null ? ConstraintResolver.leafPrimary(is.check_expr_compare()) : null;
+    if (leaf instanceof LogicalTypesParser.CheckFuncContext
+        && ConstraintNullTest.isQuantifier((LogicalTypesParser.CheckFuncContext) leaf)) {
+      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, sb);
+    }
+    String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
+    boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
+    sb.append('(');
+    if (guarded) {
+      sb.append(isNull).append(" ? false : ");
+    }
+    sb.append(truth ? "(" : "!(");
+    visitIs(is, sb);
+    sb.append("))");
+    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+  }
+
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
   // VARIANT_GET, or TRY_VARIANT_GET with a path that isn't a literal, so isn't checked
   // beforehand. Flink raises for neither a bad regex nor ROUND's or TRUNCATE's scale.
@@ -2679,54 +2727,6 @@ final class ConstraintEmitter {
     }
     sb.append(") ? false : ").append(joined).append(')');
     return flags;
-  }
-
-  private static int emitTruth(
-      LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
-    if (not instanceof LogicalTypesParser.CheckExprNotContext) {
-      return emitTruth(
-          ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(), !truth, sb);
-    }
-    LogicalTypesParser.Check_expr_isnullContext is =
-        ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
-    if (is.IS() == null) {
-      LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(is.check_expr_compare());
-      if (c instanceof LogicalTypesParser.CheckParenContext
-          && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
-        // Cached and size-checked, as nested AND and OR may repeat their operands.
-        return cachedTruth(
-            ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
-      }
-    }
-    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
-        && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
-        && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
-      // Its CEL gives NULL as null, which equals neither true nor false.
-      sb.append("(dyn(");
-      visitIs(is, sb);
-      sb.append(") == ").append(truth).append(')');
-      return MAY_BE_NULL;
-    }
-    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
-        && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
-      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
-    }
-    LogicalTypesParser.C_exprContext leaf =
-        is.IS() == null ? ConstraintResolver.leafPrimary(is.check_expr_compare()) : null;
-    if (leaf instanceof LogicalTypesParser.CheckFuncContext
-        && ConstraintNullTest.isQuantifier((LogicalTypesParser.CheckFuncContext) leaf)) {
-      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, sb);
-    }
-    String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
-    boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
-    sb.append('(');
-    if (guarded) {
-      sb.append(isNull).append(" ? false : ");
-    }
-    sb.append(truth ? "(" : "!(");
-    visitIs(is, sb);
-    sb.append("))");
-    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
   }
 
   /**
